@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -64,7 +65,7 @@ abstract class DreComics :
             .addQueryParameter("limit", "10")
             .build()
 
-        val result = client.get(url).parseAs<RankingResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<RankingResponse>()
         val mangas = result.items.map { it.series.toSManga() }
         return MangasPage(mangas, result.pagination.hasNextPage())
     }
@@ -77,7 +78,7 @@ abstract class DreComics :
             .addQueryParameter("limit", "18")
             .build()
 
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.XHR).toMangasPage()
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -87,7 +88,7 @@ abstract class DreComics :
             .addQueryParameter("limit", "18")
             .build()
 
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.XHR).toMangasPage()
     }
 
     private fun Response.toMangasPage(): MangasPage {
@@ -106,7 +107,7 @@ abstract class DreComics :
     ): SMangaUpdate = coroutineScope {
         val details = async {
             if (!fetchDetails) return@async manga
-            client.get("$apiUrl/series/${manga.url}").parseAs<DetailsResponse>().toSManga()
+            client.get("$apiUrl/series/${manga.url}", Fetch.XHR).parseAs<DetailsResponse>().toSManga()
         }
 
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
@@ -126,7 +127,7 @@ abstract class DreComics :
                             .addQueryParameter("order", "desc")
                             .build()
 
-                        val result = client.get(url, authHeaders).parseAs<ChapterResponse>()
+                        val result = client.get(url, authHeaders, Fetch.XHR).parseAs<ChapterResponse>()
                         result.items
                             .filter { !hideLocked || !it.isLocked }
                             .mapTo(this) { it.toSChapter(manga.url, "episodes") }
@@ -144,7 +145,7 @@ abstract class DreComics :
                     .addQueryParameter("order", "desc")
                     .build()
 
-                client.get(url, authHeaders).parseAs<ChapterResponse>().items
+                client.get(url, authHeaders, Fetch.XHR).parseAs<ChapterResponse>().items
                     .filter { !hideLocked || (!it.isLocked && !it.isPreview) }
                     .map { it.toSChapter(manga.url, "volumes") }
             }
@@ -165,7 +166,7 @@ abstract class DreComics :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val session = if (chapter.memo["isPreview"]!!.boolean) "trial-session" else "session"
-        val result = client.post("$apiUrl/viewer/${chapter.memo["type"]!!.string}/${chapter.url}/$session", apiHeaders(), EMPTY_BODY).parseAs<ViewerResponse>()
+        val result = client.post("$apiUrl/viewer/${chapter.memo["type"]!!.string}/${chapter.url}/$session", apiHeaders(), Fetch.XHR, EMPTY_BODY).parseAs<ViewerResponse>()
         return result.pages.map {
             Page(it.pageNumber, imageUrl = "${it.imageUrl}#${result.sessionKey}:${it.iv}")
         }
@@ -234,7 +235,7 @@ abstract class DreComics :
         if (email.isBlank() || password.isBlank()) return null
 
         return try {
-            client.post("$apiUrl/auth/login", LoginRequest(email, password).toJsonRequestBody()).parseAs<LoginResponse>()
+            client.post("$apiUrl/auth/login", Fetch.XHR, LoginRequest(email, password).toJsonRequestBody()).parseAs<LoginResponse>()
         } catch (_: HttpException) {
             loginFailed = true
             null
@@ -242,7 +243,7 @@ abstract class DreComics :
     }
 
     private suspend fun refresh(refreshToken: String): LoginResponse? = try {
-        client.post("$apiUrl/auth/refresh", RefreshRequest(refreshToken).toJsonRequestBody()).parseAs<LoginResponse>()
+        client.post("$apiUrl/auth/refresh", Fetch.XHR, RefreshRequest(refreshToken).toJsonRequestBody()).parseAs<LoginResponse>()
     } catch (_: HttpException) {
         null
     }

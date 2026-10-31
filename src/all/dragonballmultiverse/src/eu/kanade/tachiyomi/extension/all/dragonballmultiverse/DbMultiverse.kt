@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -78,7 +79,7 @@ abstract class DbMultiverse : KeiSource() {
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addNetworkInterceptor(::drawBalloonsOnImage)
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/$internalLang/read.html").asJsoup()
+        val document = client.get("$baseUrl/$internalLang/read.html", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("#dbm-reads .dbm-read").map { element ->
             SManga.create().apply {
                 title = element.selectFirst("h3")!!.text()
@@ -104,7 +105,7 @@ abstract class DbMultiverse : KeiSource() {
     ): SMangaUpdate {
         if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val newChapters = document.select(chapterListSelector).map {
             SChapter.create().apply {
                 setUrlWithoutDomain(it.selectFirst("a[href]")!!.attr("abs:href"))
@@ -130,14 +131,14 @@ abstract class DbMultiverse : KeiSource() {
     )
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(".pageslist a[href]").mapIndexed { index, a ->
             Page(index, url = a.attr("abs:href"))
         }
     }
 
     override suspend fun getImageUrl(page: Page): String {
-        val document = client.get(page.url).asJsoup()
+        val document = client.get(page.url, Fetch.DOCUMENT).asJsoup()
         val element = document.selectFirst("#balloonsimg")!!
 
         val rawImageUrl = when {

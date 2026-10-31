@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -28,7 +29,6 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class MangaTek : KeiSource() {
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(SpeechBubblePainterInterceptor({ baseUrl }, id))
         rateLimit(3)
@@ -53,14 +53,14 @@ abstract class MangaTek : KeiSource() {
     // ============================== Popular ==============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$baseUrl/manga-list?sort=views&page=$page")
+        val response = client.get("$baseUrl/manga-list?sort=views&page=$page", Fetch.DOCUMENT)
         return response.toMangasPage()
     }
 
     // ============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val response = client.get("$baseUrl/manga-list?page=$page")
+        val response = client.get("$baseUrl/manga-list?page=$page", Fetch.DOCUMENT)
         return response.toMangasPage()
     }
 
@@ -76,7 +76,7 @@ abstract class MangaTek : KeiSource() {
                 it.addUrlParameter(this)
             }
         }.build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     // ============================== Filters ==============================
@@ -84,7 +84,7 @@ abstract class MangaTek : KeiSource() {
     override val supportsFilterFetching: Boolean get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val response = client.get("$API_BASE/api/tags?limit=500")
+        val response = client.get("$API_BASE/api/tags?limit=500", Fetch.XHR)
         return response.parseAs<JsonElement>()
     }
 
@@ -121,7 +121,7 @@ abstract class MangaTek : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val url = getMangaUrl(manga).toHttpUrl()
-        val data: MangaDto = client.get(url).asJsoup().extractAstroProp("manga")
+        val data: MangaDto = client.get(url, Fetch.DOCUMENT).asJsoup().extractAstroProp("manga")
         val slug = url.pathSegments[1]
 
         return SMangaUpdate(
@@ -150,7 +150,7 @@ abstract class MangaTek : KeiSource() {
     //  ============================== Page ==============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val props: ChapterProps = document.extractAstroProp("imageUrls")
 
         val embedded = props.imageUrls.toReaderImages()
@@ -186,7 +186,7 @@ abstract class MangaTek : KeiSource() {
         val token = props.unlockToken!!
         val proof = OverlayCrypto.proof(readerSeeds(document).proofSalt, token, chapterId)
         val request = PagesRequest(chapterId, props.mangaSlug!!, props.chapterRef!!, token, proof)
-        return client.post(PAGES_API_URL, body = request.toJsonRequestBody())
+        return client.post(PAGES_API_URL, Fetch.XHR, body = request.toJsonRequestBody())
             .parseAs<PagesResponse>().data.toReaderImages()
     }
 
@@ -199,12 +199,12 @@ abstract class MangaTek : KeiSource() {
         val esid = OverlayCrypto.esid(seeds.readerSeed)
         val request = UnlockRequest(chapterId, token, proof, esid)
 
-        var response = client.post(UNLOCK_API_URL, body = request.toJsonRequestBody()).parseAs<UnlockResponse>()
+        var response = client.post(UNLOCK_API_URL, Fetch.XHR, body = request.toJsonRequestBody()).parseAs<UnlockResponse>()
         val nonce = response.nonce
         if (response.needsChallenge && nonce != null) {
             val pow = response.powBits?.let { OverlayCrypto.pow(nonce, it) }
             val retry = UnlockRequest(chapterId, token, proof, esid, nonce, pow)
-            response = client.post(UNLOCK_API_URL, body = retry.toJsonRequestBody()).parseAs<UnlockResponse>()
+            response = client.post(UNLOCK_API_URL, Fetch.XHR, body = retry.toJsonRequestBody()).parseAs<UnlockResponse>()
         }
 
         val overlay = response.overlay ?: return null
@@ -222,7 +222,7 @@ abstract class MangaTek : KeiSource() {
             ?: throw Exception("Unable to find the reader script")
         cachedSeeds?.takeIf { it.first == bundleUrl }?.let { return it.second }
 
-        val script = client.get(bundleUrl).body.string()
+        val script = client.get(bundleUrl, Fetch.SCRIPT).body.string()
         val seeds = BundleSeeds.extract(script)
         cachedSeeds = bundleUrl to seeds
         return seeds

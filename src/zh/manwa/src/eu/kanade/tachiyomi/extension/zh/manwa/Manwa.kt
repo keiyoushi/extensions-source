@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.aesCbc
@@ -72,7 +73,7 @@ abstract class Manwa :
 
     // Popular
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/rank").asJsoup()
+        val document = client.get("$baseUrl/rank", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("#rankList_2 > a").map { element ->
             SManga.create().apply {
                 title = element.attr("title")
@@ -86,10 +87,10 @@ abstract class Manwa :
     // Latest
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val currentOffset = page * 15 - 15
-        val responseData = client.get("$baseUrl/getUpdate?page=$currentOffset&date=").parseAs<LatestUpdatesDto>()
+        val responseData = client.get("$baseUrl/getUpdate?page=$currentOffset&date=", Fetch.XHR).parseAs<LatestUpdatesDto>()
 
         // Get image host
-        val document = client.get("$baseUrl/update${preferences.getString(IMAGE_HOST_KEY, "")}").asJsoup()
+        val document = client.get("$baseUrl/update${preferences.getString(IMAGE_HOST_KEY, "")}", Fetch.DOCUMENT).asJsoup()
         val imgHost = document.selectFirst(".manga-list-2-cover-img")?.attr(":src")?.drop(1)?.substringBefore("'") ?: ""
 
         val mangas = responseData.books.map { it.toSManga(imgHost) }
@@ -119,7 +120,7 @@ abstract class Manwa :
             }
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = if (isBookList) {
             document.select("ul.manga-list-2 > li").map { li ->
                 SManga.create().apply {
@@ -149,7 +150,7 @@ abstract class Manwa :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val details = SManga.create().apply {
             url = manga.url
             title = document.selectFirst(".detail-main-info-title")?.text() ?: ""
@@ -179,8 +180,8 @@ abstract class Manwa :
 
     // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        client.get("$baseUrl/static/images/pv.gif", ensureSuccess = false).close()
-        val document = client.get("$baseUrl${chapter.url}${preferences.getString(IMAGE_HOST_KEY, "")}").asJsoup()
+        client.get("$baseUrl/static/images/pv.gif", Fetch.IMAGE, ensureSuccess = false).close()
+        val document = client.get("$baseUrl${chapter.url}${preferences.getString(IMAGE_HOST_KEY, "")}", Fetch.DOCUMENT).asJsoup()
         return document.select("#cp_img > div.img-content > img[data-r-src]").mapIndexed { index, it ->
             Page(index, imageUrl = it.attr("abs:data-r-src"))
         }
@@ -190,7 +191,7 @@ abstract class Manwa :
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/booklist").asJsoup()
+        val document = client.get("$baseUrl/booklist", Fetch.DOCUMENT).asJsoup()
         val tags = LinkedHashMap<String, String>()
         document.select("div.manga-filter-row.tags > a").forEach { a ->
             tags[a.text()] = a.attr("data-val")

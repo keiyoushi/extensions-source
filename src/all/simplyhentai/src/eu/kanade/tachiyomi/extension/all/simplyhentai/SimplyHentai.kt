@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
@@ -54,7 +55,7 @@ abstract class SimplyHentai :
             sort?.let { addQueryParameter("sort", it) }
         }.build()
 
-        return client.get(url).parseAs<SHList<SHDataAlbum>>().run {
+        return client.get(url, Fetch.XHR).parseAs<SHList<SHDataAlbum>>().run {
             MangasPage(
                 data.albums.map(SHObject::toSManga),
                 pagination.next != null,
@@ -99,7 +100,7 @@ abstract class SimplyHentai :
             }
         }.build()
 
-        return client.get(url).parseAs<SHList<List<SHWrapper>>>().run {
+        return client.get(url, Fetch.XHR).parseAs<SHList<List<SHWrapper>>>().run {
             MangasPage(
                 data.map { it.`object`.toSManga() },
                 pagination.next != null,
@@ -113,7 +114,7 @@ abstract class SimplyHentai :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val album = client.get("$apiUrl/manga/${manga.url.split('/')[2]}").parseAs<SHAlbum>().data
+        val album = client.get("$apiUrl/manga/${manga.url.split('/')[2]}", Fetch.XHR).parseAs<SHAlbum>().data
 
         val updatedManga = manga.apply {
             url = album.path
@@ -141,7 +142,7 @@ abstract class SimplyHentai :
         return SMangaUpdate(updatedManga, listOf(chapter))
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/manga/${chapter.url.split('/')[2]}/pages")
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/manga/${chapter.url.split('/')[2]}/pages", Fetch.XHR)
         .parseAs<SHAlbumPages>().data.pages.map {
             Page(it.pageNum, "", it.sizes.full)
         }

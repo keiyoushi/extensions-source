@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -26,7 +27,7 @@ abstract class NoraScans : KeiSource() {
         val url = "$baseUrl/seri/".toHttpUrl().newBuilder().apply {
             if (page > 1) addPathSegment("page").addPathSegment(page.toString())
         }.build()
-        return parseMangasPage(client.get(url))
+        return parseMangasPage(client.get(url, Fetch.DOCUMENT))
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = getPopularManga(page)
@@ -37,7 +38,7 @@ abstract class NoraScans : KeiSource() {
             .addQueryParameter("post_type", "manga")
             .apply { if (page > 1) addQueryParameter("paged", page.toString()) }
             .build()
-        return parseMangasPage(client.get(url))
+        return parseMangasPage(client.get(url, Fetch.DOCUMENT))
     }
 
     private fun parseMangasPage(response: Response): MangasPage {
@@ -72,7 +73,7 @@ abstract class NoraScans : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = SManga.create().apply {
             title = document.selectFirst("h1")!!.text()
@@ -95,7 +96,7 @@ abstract class NoraScans : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
         return document.select("img[src*=init-manga]").mapIndexed { index, img ->
             Page(index, imageUrl = img.attr("abs:src"))
         }

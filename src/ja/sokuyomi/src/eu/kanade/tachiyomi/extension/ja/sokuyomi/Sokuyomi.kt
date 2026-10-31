@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.GraphQLErrorInterceptor
@@ -64,6 +65,7 @@ abstract class Sokuyomi :
 
     override suspend fun getPopularManga(page: Int): MangasPage = client.post(
         apiUrl,
+        Fetch.XHR,
         graphQLBody(
             LIST_QUERY,
             "ListTitle",
@@ -73,6 +75,7 @@ abstract class Sokuyomi :
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = client.post(
         apiUrl,
+        Fetch.XHR,
         graphQLBody(
             LIST_QUERY,
             "ListTitle",
@@ -90,6 +93,7 @@ abstract class Sokuyomi :
 
         return client.post(
             apiUrl,
+            Fetch.XHR,
             graphQLBody(
                 LIST_QUERY,
                 "ListTitle",
@@ -115,6 +119,7 @@ abstract class Sokuyomi :
         val result = client.post(
             apiUrl,
             apiHeaders(),
+            Fetch.XHR,
             graphQLBody(
                 DETAILS_QUERY,
                 "GetTitle",
@@ -150,7 +155,7 @@ abstract class Sokuyomi :
         }
 
         val result = try {
-            client.post(apiUrl, apiHeaders(), body).parseGraphQLAs<ViewerResponse>()
+            client.post(apiUrl, apiHeaders(), Fetch.XHR, body).parseGraphQLAs<ViewerResponse>()
         } catch (e: GraphQLException) {
             if (loginFailed) throw IOException("Invalid E-Mail or Password")
             throw IOException(e.message?.substringAfter("Viewer ") + " (Log in via Settings.)")
@@ -198,6 +203,7 @@ abstract class Sokuyomi :
         return try {
             client.post(
                 apiUrl,
+                Fetch.XHR,
                 graphQLBody(
                     LOGIN_QUERY,
                     "Signin",
@@ -213,6 +219,7 @@ abstract class Sokuyomi :
     private suspend fun refresh(refreshToken: String): Signin? = try {
         client.post(
             apiUrl,
+            Fetch.XHR,
             graphQLBody(
                 REFRESH_QUERY,
                 "Token",

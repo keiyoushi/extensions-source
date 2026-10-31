@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.utils.asJsoup
@@ -69,7 +70,7 @@ abstract class Madara : MadaraBase() {
                 BrowseMode.Search -> addFilters(query, filters, if (filterNonMangaItems) 1 else 0)
             }
         }.build()
-        val mangas = parseArchive(client.post("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, body).asJsoup())
+        val mangas = parseArchive(client.post("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, Fetch.XHR, body).asJsoup())
         return MangasPage(mangas, mangas.size == pageSize)
     }
 
@@ -152,6 +153,6 @@ abstract class Madara : MadaraBase() {
             add("vars[tax_query][0][field]", "slug")
             genres.forEachIndexed { i, genre -> add("vars[tax_query][0][terms][$i]", genre.slug) }
         }.build()
-        return parseArchive(client.post("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, body).asJsoup())
+        return parseArchive(client.post("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, Fetch.XHR, body).asJsoup())
     }
 }

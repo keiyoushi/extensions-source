@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -23,7 +24,6 @@ import java.util.Locale
 
 @Source
 abstract class DoujinHentai : KeiSource() {
-
     private val chapterDateFormat = DateTimeFormatter.ofPattern("d MMM. yyyy", Locale.ENGLISH)
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -48,11 +48,11 @@ abstract class DoujinHentai : KeiSource() {
 
     // ── Popular ───────────────────────────────────────────────────────────────
 
-    override suspend fun getPopularManga(page: Int): MangasPage = mangasPageFromDocument(client.get("$baseUrl/lista-manga-hentai?orderby=views&page=$page").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = mangasPageFromDocument(client.get("$baseUrl/lista-manga-hentai?orderby=views&page=$page", Fetch.DOCUMENT).asJsoup())
 
     // ── Latest ────────────────────────────────────────────────────────────────
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = mangasPageFromDocument(client.get("$baseUrl/lista-manga-hentai?orderby=last&page=$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = mangasPageFromDocument(client.get("$baseUrl/lista-manga-hentai?orderby=last&page=$page", Fetch.DOCUMENT).asJsoup())
 
     // ── Search ────────────────────────────────────────────────────────────────
     // El endpoint /search?query= devuelve JSON (live-search), no HTML.
@@ -69,7 +69,7 @@ abstract class DoujinHentai : KeiSource() {
             url.addPathSegment("lista-manga-hentai")
             url.addQueryParameter("search", query)
             url.addQueryParameter("page", page.toString())
-            return mangasPageFromDocument(client.get(url.build()).asJsoup())
+            return mangasPageFromDocument(client.get(url.build(), Fetch.DOCUMENT).asJsoup())
         }
 
         var genre = ""
@@ -107,7 +107,7 @@ abstract class DoujinHentai : KeiSource() {
         }
 
         url.addQueryParameter("page", page.toString())
-        return mangasPageFromDocument(client.get(url.build()).asJsoup())
+        return mangasPageFromDocument(client.get(url.build(), Fetch.DOCUMENT).asJsoup())
     }
 
     // ── Manga details ──────────────────────────────────────────────────────────
@@ -162,7 +162,7 @@ abstract class DoujinHentai : KeiSource() {
         val mangaSlug = url.encodedPathSegments.getOrNull(1) ?: return null
         val mangaUrl = "$baseUrl/manga-hentai/$mangaSlug".toHttpUrl()
 
-        return mangaDetailsParse(client.get(mangaUrl).asJsoup()).apply {
+        return mangaDetailsParse(client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()).apply {
             setUrlWithoutDomain(mangaUrl.toString())
         }
     }
@@ -173,7 +173,7 @@ abstract class DoujinHentai : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document))
     }
 
@@ -202,7 +202,7 @@ abstract class DoujinHentai : KeiSource() {
 
     // ── Pages ──────────────────────────────────────────────────────────────────
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         // Estrategia 1: JSON embebido → const pageUrls = {"1":"url",...};
         document.select("script").asSequence()

@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -35,7 +36,7 @@ abstract class FlowerComics :
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val data = client.get("$baseUrl/ranking", rscHeaders).extractNextJs<List<RankingBlock>>()
+        val data = client.get("$baseUrl/ranking", rscHeaders, Fetch.XHR).extractNextJs<List<RankingBlock>>()
         val mangas = data.orEmpty().firstOrNull { it.rankingTypeName == "総合" }?.titles.orEmpty().map { it.toSManga() }
         return MangasPage(mangas, false)
     }
@@ -57,7 +58,7 @@ abstract class FlowerComics :
             }
         }
 
-        val mangas = client.get(url).asJsoup().select("div.grid > a[href^=/title/]").map {
+        val mangas = client.get(url, Fetch.DOCUMENT).asJsoup().select("div.grid > a[href^=/title/]").map {
             SManga.create().apply {
                 this.url = it.absUrl("href").toHttpUrl().pathSegments.last()
                 title = it.selectFirst("p.text-black")!!.text()
@@ -68,7 +69,7 @@ abstract class FlowerComics :
     }
 
     private suspend fun getUpdateDay(day: String): MangasPage {
-        val data = client.get("$baseUrl/rensai", rscHeaders).extractNextJs<LatestData>()
+        val data = client.get("$baseUrl/rensai", rscHeaders, Fetch.XHR).extractNextJs<LatestData>()
         val mangas = data?.weekdays?.get(day).orEmpty().map { it.toSManga() }
         return MangasPage(mangas, false)
     }
@@ -79,7 +80,7 @@ abstract class FlowerComics :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val details = SManga.create().apply {
             title = document.selectFirst("h1")!!.text()
@@ -106,7 +107,7 @@ abstract class FlowerComics :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get(getChapterUrl(chapter), rscHeaders).extractNextJs<List<PageEntry>>()
+        val data = client.get(getChapterUrl(chapter), rscHeaders, Fetch.XHR).extractNextJs<List<PageEntry>>()
             ?: throw Exception("Log in via WebView and rent or purchase this chapter to read.")
 
         return data.filter { it.crypto != null }.mapIndexed { i, page ->

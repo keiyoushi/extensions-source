@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -23,7 +24,7 @@ abstract class HentaiMan : KeiSource() {
 
     private val dateFormat = DateTimeFormatter.ofPattern("d/M/yy")
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/manga?page=$page"))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/manga?page=$page", Fetch.DOCUMENT))
 
     private fun parseMangaList(response: Response): MangasPage {
         val doc = response.asJsoup()
@@ -44,14 +45,14 @@ abstract class HentaiMan : KeiSource() {
         return MangasPage(mangas, mangas.isNotEmpty())
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/?page=$page"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/?page=$page", Fetch.DOCUMENT))
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/manga".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("search", query)
             .build()
-        return parseMangaList(client.get(url))
+        return parseMangaList(client.get(url, Fetch.DOCUMENT))
     }
 
     override suspend fun fetchMangaUpdate(
@@ -60,7 +61,7 @@ abstract class HentaiMan : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         val mangaPath = response.request.url.encodedPath
         val doc = response.asJsoup()
 
@@ -99,7 +100,7 @@ abstract class HentaiMan : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val doc = client.get(getChapterUrl(chapter)).asJsoup()
+        val doc = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return doc.select("#reader img.reader-page").mapIndexed { i, img ->
             val src = img.attr("abs:src").ifEmpty { img.attr("abs:data-src") }
             Page(i, imageUrl = src)

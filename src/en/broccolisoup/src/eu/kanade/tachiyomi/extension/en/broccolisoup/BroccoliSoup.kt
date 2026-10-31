@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -52,7 +53,7 @@ abstract class BroccoliSoup : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val chapterList = if (fetchChapters) {
-            chapterListParse(client.get(getMangaUrl(manga)).asJsoup())
+            chapterListParse(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup())
         } else {
             chapters
         }
@@ -152,7 +153,7 @@ abstract class BroccoliSoup : KeiSource() {
         }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter))
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         val isCharacterSummary = response.request.url.pathSegments.lastOrNull() == characterSummaryPathSlug
         val document = response.asJsoup()
 

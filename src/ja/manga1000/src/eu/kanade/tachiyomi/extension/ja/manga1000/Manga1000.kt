@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -37,7 +38,7 @@ abstract class Manga1000 : KeiSource() {
     }
 
     private suspend fun getMangaList(url: HttpUrl): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select("article.post.manga").mapNotNull { element ->
             val a = element.selectFirst(".entry-title a") ?: return@mapNotNull null
@@ -100,7 +101,7 @@ abstract class Manga1000 : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document))
     }
@@ -132,7 +133,7 @@ abstract class Manga1000 : KeiSource() {
 
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         return document.select(".entry-content img").mapIndexedNotNull { i, img ->
             val url = img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }

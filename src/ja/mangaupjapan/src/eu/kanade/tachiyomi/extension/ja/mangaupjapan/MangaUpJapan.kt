@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -22,7 +23,7 @@ import okhttp3.Response
 
 @Source
 abstract class MangaUpJapan : KeiSource() {
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/rankings/1"))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/rankings/1", Fetch.DOCUMENT))
 
     private fun parseMangaList(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -36,7 +37,7 @@ abstract class MangaUpJapan : KeiSource() {
         return MangasPage(mangas, false)
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/series"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/series", Fetch.DOCUMENT))
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url: HttpUrl = if (query.isNotEmpty()) {
@@ -47,7 +48,7 @@ abstract class MangaUpJapan : KeiSource() {
             val filter = filters.firstInstance<CategoryFilter>()
             "$baseUrl/series/${filter.value}".toHttpUrl()
         }
-        return parseMangaList(client.get(url))
+        return parseMangaList(client.get(url, Fetch.DOCUMENT))
     }
 
     override suspend fun fetchMangaUpdate(
@@ -58,7 +59,7 @@ abstract class MangaUpJapan : KeiSource() {
     ): SMangaUpdate = coroutineScope {
         val details = async {
             if (!fetchDetails) return@async manga
-            val document = client.get(baseUrl + manga.url).asJsoup()
+            val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
             SManga.create().apply {
                 title = document.selectFirst("h2")!!.text()
                 thumbnail_url = document.selectFirst("section > img")?.absUrl("src")
@@ -74,7 +75,7 @@ abstract class MangaUpJapan : KeiSource() {
         }
         val chapterList = async {
             if (!fetchChapters) return@async chapters
-            val response = client.get(baseUrl + manga.url, rscHeaders)
+            val response = client.get(baseUrl + manga.url, rscHeaders, Fetch.XHR)
             val titleId = response.request.url.pathSegments[1]
             val bodyText = response.use { it.body.string() }
             val dataLine = bodyText.lines().first { it.contains("\"chapters\":[") }
@@ -96,7 +97,7 @@ abstract class MangaUpJapan : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = chapterPageUrl(chapter)
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val bodyText = client.get(chapterPageUrl(chapter), rscHeaders).use { it.body.string() }
+        val bodyText = client.get(chapterPageUrl(chapter), rscHeaders, Fetch.XHR).use { it.body.string() }
         val dataLine = bodyText.lines().first { it.contains("\"pages\":[") }
         val pagesJson = dataLine.substringAfter("\"pages\":").substringBefore("],\"") + "]"
         val pages = pagesJson.parseAs<List<PageData>>()

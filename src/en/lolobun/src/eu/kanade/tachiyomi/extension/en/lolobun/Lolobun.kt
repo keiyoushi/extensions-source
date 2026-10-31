@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -28,14 +29,13 @@ import java.util.Locale
 abstract class Lolobun :
     KeiSource(),
     ConfigurableSource {
-
     private val preferences by getPreferencesLazy()
 
     // The homepage section is the site's only comic listing
     override val supportsLatest = false
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".section-item:has(a.name[href^=/c/])").map { element ->
             val link = element.selectFirst("a.name")!!
             SManga.create().apply {
@@ -59,7 +59,7 @@ abstract class Lolobun :
             .addQueryParameter("type", "comic")
             .addQueryParameter("pi", (page - 1).toString())
             .build()
-        val result = client.get(url).parseAs<ResponseDto<SearchDto>>().requireData()
+        val result = client.get(url, Fetch.XHR).parseAs<ResponseDto<SearchDto>>().requireData()
 
         return MangasPage(result.items.map { it.toSManga() }, result.hasMore)
     }
@@ -69,7 +69,7 @@ abstract class Lolobun :
         if (url.pathSegments.getOrNull(0) != "c") return null
         val id = url.pathSegments.getOrNull(1)?.toIntOrNull() ?: return null
 
-        return client.get("$baseUrl/c/$id").asJsoup().toSManga().apply {
+        return client.get("$baseUrl/c/$id", Fetch.DOCUMENT).asJsoup().toSManga().apply {
             this.url = id.toString()
         }
     }
@@ -82,7 +82,7 @@ abstract class Lolobun :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(
             manga = document.toSManga().apply { url = manga.url },
@@ -147,7 +147,7 @@ abstract class Lolobun :
             .build()
 
         // Locked chapters come back as an empty list
-        return client.post("$baseUrl/ajax/comic.ashx?op=getChapterPic", body)
+        return client.post("$baseUrl/ajax/comic.ashx?op=getChapterPic", Fetch.XHR, body)
             .parseAs<ResponseDto<List<String>>>()
             .requireData()
             .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }

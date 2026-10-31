@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -91,7 +92,7 @@ abstract class TomiloLib :
     }
 
     private suspend fun getMangasPage(url: HttpUrl): MangasPage {
-        val data = client.get(url, apiHeaders).parseAs<ApiResponse<TitlesData>>().data
+        val data = client.get(url, apiHeaders, Fetch.XHR).parseAs<ApiResponse<TitlesData>>().data
         val mangas = data.titles
             .filter { showAdult || !it.isAdult }
             .map { it.toSManga(baseUrl) }
@@ -111,7 +112,7 @@ abstract class TomiloLib :
         val titleId = manga.titleId()
         val details = async {
             if (fetchDetails) {
-                client.get("$apiUrl/titles/$titleId", apiHeaders)
+                client.get("$apiUrl/titles/$titleId", apiHeaders, Fetch.XHR)
                     .parseAs<ApiResponse<TitleDto>>().data.toSManga(baseUrl)
             } else {
                 manga
@@ -131,7 +132,7 @@ abstract class TomiloLib :
         var page = 1
         var totalPages: Int
         do {
-            val data = client.get("$apiUrl/chapters?titleId=$titleId&page=$page&limit=$CHAPTERS_PER_PAGE", apiHeaders)
+            val data = client.get("$apiUrl/chapters?titleId=$titleId&page=$page&limit=$CHAPTERS_PER_PAGE", apiHeaders, Fetch.XHR)
                 .parseAs<ApiResponse<ChaptersData>>().data
             chapters += data.chapters
             totalPages = data.pagination.pages
@@ -147,7 +148,7 @@ abstract class TomiloLib :
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get("$apiUrl/chapters/${chapter.url}", apiHeaders)
+        val data = client.get("$apiUrl/chapters/${chapter.url}", apiHeaders, Fetch.XHR)
             .parseAs<ApiResponse<ChapterDetailDto>>().data
         if (data.pages.isEmpty()) {
             if (data.isPaid) throw Exception("Глава платная и ещё не открыта бесплатно")

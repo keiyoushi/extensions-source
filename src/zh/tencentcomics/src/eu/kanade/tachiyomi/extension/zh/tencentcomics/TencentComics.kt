@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -31,9 +32,9 @@ abstract class TencentComics : KeiSource() {
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36")
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parsePopularMangaPage(client.get("$desktopUrl/Comic/all/search/hot/page/$page").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parsePopularMangaPage(client.get("$desktopUrl/Comic/all/search/hot/page/$page", Fetch.DOCUMENT).asJsoup())
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parsePopularMangaPage(client.get("$desktopUrl/Comic/all/search/time/page/$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parsePopularMangaPage(client.get("$desktopUrl/Comic/all/search/time/page/$page", Fetch.DOCUMENT).asJsoup())
 
     // desktop version of the site has more info
     override suspend fun fetchMangaUpdate(
@@ -42,7 +43,7 @@ abstract class TencentComics : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$desktopUrl/Comic/comicInfo/" + manga.url.substringAfter("/index/")).asJsoup()
+        val document = client.get("$desktopUrl/Comic/comicInfo/" + manga.url.substringAfter("/index/"), Fetch.DOCUMENT).asJsoup()
         val details = mangaDetailsParse(document).apply { url = manga.url }
         val chapterList = document.select(".chapter-page-all .works-chapter-item").map { element ->
             SChapter.create().apply {
@@ -93,7 +94,7 @@ abstract class TencentComics : KeiSource() {
 
     // convert url to desktop since some chapters are blocked on mobile
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val html = client.get(desktopUrl + chapter.url).use { it.body.string() }
+        val html = client.get(desktopUrl + chapter.url, Fetch.DOCUMENT).use { it.body.string() }
 
         // The nonce is a JS expression that probes browser globals, e.g. eval("!!document.children")
         val nonce = html.substringAfterLast("window[").substringAfter("] = ").substringBefore("</script>").trim()
@@ -109,7 +110,7 @@ abstract class TencentComics : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val id = url.pathSegments[3]
-        val document = client.get("$baseUrl/comic/index/id/$id").asJsoup()
+        val document = client.get("$baseUrl/comic/index/id/$id", Fetch.DOCUMENT).asJsoup()
         return mangaDetailsParse(document).apply { this.url = "/comic/index/id/$id" }
     }
 
@@ -117,14 +118,14 @@ abstract class TencentComics : KeiSource() {
         // impossible to search a manga use the filters
         val response = if (query.isNotEmpty()) {
             // mobile search redirects to the JS-only desktop search when a desktop UA is sent
-            client.get("$baseUrl/search/result?word=$query&page=$page", headersBuilder().set("User-Agent", MOBILE_UA).build())
+            client.get("$baseUrl/search/result?word=$query&page=$page", headersBuilder().set("User-Agent", MOBILE_UA).build(), Fetch.DOCUMENT)
         } else {
             var genre = filters.firstInstance<GenreFilter>().toUriPart()
             if (genre.isNotEmpty()) genre = "theme/$genre/"
             val status = filters.firstInstance<StatusFilter>().toUriPart()
             val popularity = filters.firstInstance<PopularityFilter>().toUriPart()
             val vip = filters.firstInstance<VipFilter>().toUriPart()
-            client.get("$desktopUrl/Comic/all/$genre${status}search/$popularity${vip}page/$page")
+            client.get("$desktopUrl/Comic/all/$genre${status}search/$popularity${vip}page/$page", Fetch.DOCUMENT)
         }
         val isMobile = response.request.url.host.contains("m.ac.qq.com")
         val document = response.asJsoup()

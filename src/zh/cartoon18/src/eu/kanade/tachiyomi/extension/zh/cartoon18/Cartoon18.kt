@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -56,12 +57,12 @@ abstract class Cartoon18 :
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$baseUrlWithLang?sort=hits&page=$page", headers)
+        val response = client.get("$baseUrlWithLang?sort=hits&page=$page", headers, Fetch.DOCUMENT)
         return mangaParse(response)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val response = client.get("$baseUrlWithLang?sort=created&page=$page", headers)
+        val response = client.get("$baseUrlWithLang?sort=created&page=$page", headers, Fetch.DOCUMENT)
         return mangaParse(response)
     }
 
@@ -81,7 +82,7 @@ abstract class Cartoon18 :
             }
         }.build()
 
-        val response = client.get(url, headers)
+        val response = client.get(url, headers, Fetch.DOCUMENT)
         return mangaParse(response)
     }
 
@@ -119,7 +120,7 @@ abstract class Cartoon18 :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga), headers).asJsoup()
+        val document = client.get(getMangaUrl(manga), headers, Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = mangaDetailsParse(document, manga),
             chapters = chapterListParse(document),
@@ -170,7 +171,7 @@ abstract class Cartoon18 :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter), headers).asJsoup()
+        val document = client.get(getChapterUrl(chapter), headers, Fetch.DOCUMENT).asJsoup()
         val images = document.select("div#app > div > a img, div#app img")
         return images.mapIndexed { index, image ->
             val url = image.attr("abs:src").ifEmpty { image.attr("abs:data-src") }
@@ -181,7 +182,7 @@ abstract class Cartoon18 :
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrlWithLang/category", headers).asJsoup()
+        val document = client.get("$baseUrlWithLang/category", headers, Fetch.DOCUMENT).asJsoup()
         val items = document.select("div.content a.btn")
         val keywords = items.mapNotNull { btn ->
             val href = btn.attr("href")

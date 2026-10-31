@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -24,7 +25,6 @@ import java.util.Locale
 
 @Source
 abstract class GirlsTop : KeiSource() {
-
     private val dateFormat = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
 
     // Enforce a desktop User-Agent to prevent redirects to the mobile site (me.girlstop.info)
@@ -38,7 +38,7 @@ abstract class GirlsTop : KeiSource() {
         } else {
             "$baseUrl/filter.php?srt=viw&page=${page - 1}"
         }
-        return extractMangasFromDocument(client.get(url).asJsoup())
+        return extractMangasFromDocument(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // ============================== Latest ===============================
@@ -49,7 +49,7 @@ abstract class GirlsTop : KeiSource() {
         } else {
             "$baseUrl/index.php?page=${page - 1}"
         }
-        return extractMangasFromDocument(client.get(url).asJsoup())
+        return extractMangasFromDocument(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // ============================== Search ===============================
@@ -59,7 +59,7 @@ abstract class GirlsTop : KeiSource() {
             val formBody = FormBody.Builder()
                 .add("text", query)
                 .build()
-            return extractMangasFromDocument(client.post("$baseUrl/models.php", formBody).asJsoup())
+            return extractMangasFromDocument(client.post("$baseUrl/models.php", Fetch.DOCUMENT, formBody).asJsoup())
         }
 
         val sortPath = filters.firstInstanceOrNull<Filters>()?.toUriPart() ?: "filter.php?srt=viw"
@@ -68,7 +68,7 @@ abstract class GirlsTop : KeiSource() {
         } else {
             "$baseUrl/$sortPath&page=${page - 1}"
         }
-        return extractMangasFromDocument(client.get(url).asJsoup())
+        return extractMangasFromDocument(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // ============================== Details ==============================
@@ -80,7 +80,7 @@ abstract class GirlsTop : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         if (manga.url.contains("psto.php")) {
-            val details = if (fetchDetails) mangaDetailsParse(client.get(getMangaUrl(manga))) else manga
+            val details = if (fetchDetails) mangaDetailsParse(client.get(getMangaUrl(manga), Fetch.DOCUMENT)) else manga
             val gallery = SChapter.create().apply {
                 url = manga.url
                 name = "Gallery"
@@ -89,7 +89,7 @@ abstract class GirlsTop : KeiSource() {
             return SMangaUpdate(details, listOf(gallery))
         }
 
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         val isModel = response.request.url.toString().contains("models.php")
         val document = response.asJsoup()
         val details = mangaDetailsParse(document, isModel)
@@ -145,7 +145,7 @@ abstract class GirlsTop : KeiSource() {
             }
 
             val nextUrl = document.selectFirst("li.next a")?.attr("href") ?: break
-            document = client.get("$baseUrl/$nextUrl").asJsoup()
+            document = client.get("$baseUrl/$nextUrl", Fetch.DOCUMENT).asJsoup()
         }
 
         return chapters
@@ -154,7 +154,7 @@ abstract class GirlsTop : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("a.fullimg").mapIndexed { index, a ->
             Page(index, imageUrl = a.absUrl("href"))
         }

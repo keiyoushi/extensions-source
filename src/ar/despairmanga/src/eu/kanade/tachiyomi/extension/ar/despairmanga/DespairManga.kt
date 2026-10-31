@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -19,7 +20,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
 abstract class DespairManga : KeiSource() {
-
     private val apiUrl get() = "$baseUrl/supabase-api/rest/v1"
 
     private val apiHeaders: Headers
@@ -51,7 +51,7 @@ abstract class DespairManga : KeiSource() {
             .addQueryParameter("limit", PAGE_SIZE.toString())
             .addQueryParameter("offset", ((page - 1) * PAGE_SIZE).toString())
             .build()
-        val works = client.get(url, apiHeaders).parseAs<List<WorkDto>>()
+        val works = client.get(url, apiHeaders, Fetch.XHR).parseAs<List<WorkDto>>()
         return MangasPage(works.map { it.toSManga() }, works.size == PAGE_SIZE)
     }
 
@@ -72,7 +72,7 @@ abstract class DespairManga : KeiSource() {
             .addQueryParameter("slug", "eq.$slug")
             .addQueryParameter("limit", "1")
             .build()
-        return client.get(url, apiHeaders).parseAs<List<WorkDto>>().firstOrNull()
+        return client.get(url, apiHeaders, Fetch.XHR).parseAs<List<WorkDto>>().firstOrNull()
     }
 
     override suspend fun fetchMangaUpdate(
@@ -97,7 +97,7 @@ abstract class DespairManga : KeiSource() {
             .addQueryParameter("work_id", "eq.$workId")
             .addQueryParameter("order", "chapter_number.desc,id.desc")
             .build()
-        return client.get(url, apiHeaders).parseAs<List<ChapterDto>>().map { it.toSChapter(slug) }
+        return client.get(url, apiHeaders, Fetch.XHR).parseAs<List<ChapterDto>>().map { it.toSChapter(slug) }
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -107,7 +107,7 @@ abstract class DespairManga : KeiSource() {
             .addQueryParameter("select", "pages")
             .addQueryParameter("id", "eq.$chapterId")
             .build()
-        return client.get(url, apiHeaders).parseAs<List<PagesDto>>()
+        return client.get(url, apiHeaders, Fetch.XHR).parseAs<List<PagesDto>>()
             .firstOrNull()?.pages.orEmpty()
             .mapIndexed { i, imageUrl -> Page(i, imageUrl = imageUrl) }
     }

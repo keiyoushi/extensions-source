@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -25,7 +26,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class MangaToon : KeiSource() {
-
     private val urlLang: String get() = if (lang == "zh") {
         "cn"
     } else if (lang == "pt-BR") {
@@ -51,7 +51,7 @@ abstract class MangaToon : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage {
         // Portuguese website doesn't seem to have popular titles.
         val path = if (lang == "pt-BR") "comic" else "hot"
-        return mangaListParse(client.get("$baseUrl/$urlLang/genre/$path?type=1&page=${page - 1}"))
+        return mangaListParse(client.get("$baseUrl/$urlLang/genre/$path?type=1&page=${page - 1}", Fetch.DOCUMENT))
     }
 
     private fun mangaListParse(response: Response): MangasPage {
@@ -61,13 +61,13 @@ abstract class MangaToon : KeiSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaListParse(client.get("$baseUrl/$urlLang/genre/new?type=1&page=${page - 1}"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaListParse(client.get("$baseUrl/$urlLang/genre/new?type=1&page=${page - 1}", Fetch.DOCUMENT))
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val searchUrl = "$baseUrl/$urlLang/search".toHttpUrl().newBuilder()
             .addQueryParameter("word", query)
             .build()
-        val document = client.get(searchUrl).asJsoup()
+        val document = client.get(searchUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div.comics-result div.recommend-item:has(a[abs:href^=$baseUrl])").map { element ->
             SManga.create().apply {
                 title = element.select("div.recommend-comics-title").text()
@@ -91,7 +91,7 @@ abstract class MangaToon : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetailsParse(manga, document), chapterListParse(document))
     }
 
@@ -134,7 +134,7 @@ abstract class MangaToon : KeiSource() {
         }.reversed()
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter)).asJsoup())
+    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup())
 
     private fun pageListParse(document: Document): List<Page> = document.select("div.pictures div img:first-child")
         .mapIndexed { i, element -> Page(i, imageUrl = element.imgAttr()) }

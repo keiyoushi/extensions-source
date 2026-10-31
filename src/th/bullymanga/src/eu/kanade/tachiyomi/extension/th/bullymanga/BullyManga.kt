@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -27,12 +28,12 @@ abstract class BullyManga : KeiSource() {
 
     // ========================= Popular =========================
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/").asJsoup()
+        val document = client.get("$baseUrl/", Fetch.DOCUMENT).asJsoup()
         return MangasPage(parsePopular(document), hasNextPage = false)
     }
 
     // ========================= Latest =========================
-    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get("$baseUrl/genres/all/$page").asJsoup().parseMangaList()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get("$baseUrl/genres/all/$page", Fetch.DOCUMENT).asJsoup().parseMangaList()
 
     // ========================= Search =========================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -41,11 +42,11 @@ abstract class BullyManga : KeiSource() {
                 .addQueryParameter("keyword", query)
                 .addQueryParameter("page", page.toString())
                 .build()
-            return client.get(url).asJsoup().parseMangaList()
+            return client.get(url, Fetch.DOCUMENT).asJsoup().parseMangaList()
         }
 
         val genre = filters.firstInstance<GenreFilter>().selected
-        return client.get("$baseUrl/genres/${genre.slug}/$page").asJsoup().parseMangaList()
+        return client.get("$baseUrl/genres/${genre.slug}/$page", Fetch.DOCUMENT).asJsoup().parseMangaList()
     }
 
     // ========================= Filters =========================
@@ -57,7 +58,7 @@ abstract class BullyManga : KeiSource() {
 
         // chapter URLs point at the same series, strip the "-epNNNN" suffix
         val path = CHAPTER_PATH_REGEX.find(url.encodedPath)?.groupValues?.get(1) ?: url.encodedPath
-        val document = client.get("$baseUrl$path").asJsoup()
+        val document = client.get("$baseUrl$path", Fetch.DOCUMENT).asJsoup()
         if (document.selectFirst("img.sh-cover") == null) return null
 
         return document.parseDetails(
@@ -75,7 +76,7 @@ abstract class BullyManga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         // details and chapters come from the same page, so parse both regardless of the flags
         return SMangaUpdate(
@@ -86,7 +87,7 @@ abstract class BullyManga : KeiSource() {
 
     // ========================= Pages =========================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val imageMap = IMAGE_MAP_REGEX.find(document.html())?.groupValues?.get(1).orEmpty()
 
         return IMAGE_URL_REGEX.findAll(imageMap)

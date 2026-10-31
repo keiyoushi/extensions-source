@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -18,7 +19,6 @@ import org.jsoup.nodes.Document
 
 @Source
 abstract class Guazimanhua : KeiSource() {
-
     // The site serves a "download our app" page (no images) for the latest chapter when
     // it detects an Android mobile browser UA; a desktop UA returns the actual pages.
     override fun Headers.Builder.configureHeaders(): Headers.Builder = set(
@@ -27,12 +27,12 @@ abstract class Guazimanhua : KeiSource() {
     )
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/category.php?sort=hits&page=$page").asJsoup()
+        val document = client.get("$baseUrl/category.php?sort=hits&page=$page", Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/category.php?sort=update&page=$page").asJsoup()
+        val document = client.get("$baseUrl/category.php?sort=update&page=$page", Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document)
     }
 
@@ -56,7 +56,7 @@ abstract class Guazimanhua : KeiSource() {
         }
         builder.addQueryParameter("sort", sort)
         builder.addQueryParameter("page", page.toString())
-        val document = client.get(builder.build()).asJsoup()
+        val document = client.get(builder.build(), Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document)
     }
 
@@ -88,7 +88,7 @@ abstract class Guazimanhua : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         manga.apply {
             document.selectFirst("div.mobile-comic-title")?.text()?.let { title = it }
             document.selectFirst("img.mobile-comic-cover")?.absUrl("src")?.let { thumbnail_url = it }
@@ -117,7 +117,7 @@ abstract class Guazimanhua : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
         return document.select("section.reader-images img").mapIndexed { index, it ->
             Page(index, imageUrl = it.attr("abs:src"))
         }

@@ -7,6 +7,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -72,7 +74,7 @@ abstract class NexusMangas : KeiSource() {
         val fragment = request.url.fragment
         if (fragment == null || request.url.host == API_HOST) return chain.proceed(request)
 
-        val response = pageClient.newCall(request).execute()
+        val response = pageClient.newCall(request.newBuilder().fetch(Fetch.IMAGE).build()).execute()
         val index = fragment.substringAfter('/').toIntOrNull()
         if (response.code != 403 || index == null) return response
 
@@ -81,12 +83,13 @@ abstract class NexusMangas : KeiSource() {
             .url("$functionsUrl/read-chapter")
             .headers(readerHeaders)
             .post(ReadChapterRequestDto(fragment.substringBefore('/')).toJsonRequestBody())
+            .fetch(Fetch.XHR)
             .build()
         val pageUrl = client.newCall(readRequest).execute()
             .parseAs<ReadChapterDto>()
             .pageUrl(index)
 
-        return pageClient.newCall(request.newBuilder().url(pageUrl).build()).execute()
+        return pageClient.newCall(request.newBuilder().url(pageUrl).fetch(Fetch.IMAGE).build()).execute()
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage = fetchWorks(page, order = POPULAR_ORDER)
@@ -132,7 +135,7 @@ abstract class NexusMangas : KeiSource() {
             }
             .build()
 
-        val works = client.get(url).parseAs<List<WorkDto>>()
+        val works = client.get(url, Fetch.XHR).parseAs<List<WorkDto>>()
 
         return MangasPage(works.map { it.toSManga(mediaUrl) }, works.size == PAGE_SIZE)
     }
@@ -162,7 +165,7 @@ abstract class NexusMangas : KeiSource() {
             .addQueryParameter("limit", "1")
             .build()
 
-        val work = client.get(url).parseAs<List<WorkDto>>().firstOrNull()
+        val work = client.get(url, Fetch.XHR).parseAs<List<WorkDto>>().firstOrNull()
             ?: throw IOException("Obra não encontrada")
 
         return SMangaUpdate(manga = work.toSManga(mediaUrl), chapters = work.chapterList)
@@ -180,10 +183,10 @@ abstract class NexusMangas : KeiSource() {
             .addQueryParameter("limit", "1")
             .build()
 
-        val chapterId = client.get(url).parseAs<List<ChapterIdDto>>().firstOrNull()?.id
+        val chapterId = client.get(url, Fetch.XHR).parseAs<List<ChapterIdDto>>().firstOrNull()?.id
             ?: throw IOException("Capítulo não encontrado")
 
-        return client.post("$functionsUrl/read-chapter", readerHeaders, ReadChapterRequestDto(chapterId).toJsonRequestBody())
+        return client.post("$functionsUrl/read-chapter", readerHeaders, Fetch.XHR, ReadChapterRequestDto(chapterId).toJsonRequestBody())
             .parseAs<ReadChapterDto>()
             .toPageList(chapterId)
     }
@@ -197,7 +200,7 @@ abstract class NexusMangas : KeiSource() {
             .addQueryParameter("limit", "200")
             .build()
 
-        val genres = client.get(url).parseAs<List<GenreDto>>().map(GenreDto::name)
+        val genres = client.get(url, Fetch.XHR).parseAs<List<GenreDto>>().map(GenreDto::name)
 
         return FilterData(genres).toJsonElement()
     }

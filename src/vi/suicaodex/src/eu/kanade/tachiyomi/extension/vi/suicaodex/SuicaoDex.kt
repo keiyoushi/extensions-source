@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -42,7 +43,7 @@ abstract class SuicaoDex : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage {
         if (page > 1) return MangasPage(emptyList(), false)
 
-        val document = client.get("$baseUrl/").asJsoup()
+        val document = client.get("$baseUrl/", Fetch.DOCUMENT).asJsoup()
         val section = document.selectFirst("section[aria-labelledby=home-manga-ranking-heading]")
             ?: return MangasPage(emptyList(), false)
 
@@ -120,7 +121,7 @@ abstract class SuicaoDex : KeiSource() {
             )
         }.build()
 
-        val result = client.get(url).parseAs<ListResponse<MangaDto>>()
+        val result = client.get(url, Fetch.XHR).parseAs<ListResponse<MangaDto>>()
         val mangas = result.data.map { it.toListSManga() }
         return MangasPage(mangas, hasNextPage = result.meta.page < result.meta.totalPages)
     }
@@ -131,14 +132,14 @@ abstract class SuicaoDex : KeiSource() {
         return when (url.pathSegments.getOrNull(0)) {
             "manga" -> {
                 val id = url.pathSegments.getOrNull(1) ?: return null
-                client.get("$apiUrl/v1/manga/$id").parseAs<MangaDto>().toSManga()
+                client.get("$apiUrl/v1/manga/$id", Fetch.XHR).parseAs<MangaDto>().toSManga()
             }
             "chapter" -> {
                 val chapterId = url.pathSegments.getOrNull(1) ?: return null
-                val chapter = client.get("$apiUrl/v1/chapters/$chapterId")
+                val chapter = client.get("$apiUrl/v1/chapters/$chapterId", Fetch.XHR)
                     .parseAs<ChapterDetailDto>()
                 val mangaId = chapter.manga?.id ?: return null
-                client.get("$apiUrl/v1/manga/$mangaId").parseAs<MangaDto>().toSManga()
+                client.get("$apiUrl/v1/manga/$mangaId", Fetch.XHR).parseAs<MangaDto>().toSManga()
             }
             else -> null
         }
@@ -153,7 +154,7 @@ abstract class SuicaoDex : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
         val detailsDeferred = if (fetchDetails) {
-            async { client.get("$apiUrl/v1/manga/${manga.url}").parseAs<MangaDto>().toSManga() }
+            async { client.get("$apiUrl/v1/manga/${manga.url}", Fetch.XHR).parseAs<MangaDto>().toSManga() }
         } else {
             null
         }
@@ -176,12 +177,12 @@ abstract class SuicaoDex : KeiSource() {
             .addQueryParameter("limit", "100")
             .build()
 
-        val first = client.get(chapterUrl(1)).parseAs<ListResponse<ChapterDto>>()
+        val first = client.get(chapterUrl(1), Fetch.XHR).parseAs<ListResponse<ChapterDto>>()
         val chapters = first.data.map { it.toSChapter() }.toMutableList()
 
         if (first.meta.totalPages > 1) {
             val rest = (2..first.meta.totalPages).map { page ->
-                async { client.get(chapterUrl(page)).parseAs<ListResponse<ChapterDto>>() }
+                async { client.get(chapterUrl(page), Fetch.XHR).parseAs<ListResponse<ChapterDto>>() }
             }.awaitAll()
             rest.forEach { result -> chapters += result.data.map { it.toSChapter() } }
         }
@@ -199,7 +200,7 @@ abstract class SuicaoDex : KeiSource() {
     // ============================== Pages =========================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get("$apiUrl/v1/chapters/${chapter.url}")
+        val data = client.get("$apiUrl/v1/chapters/${chapter.url}", Fetch.XHR)
             .parseAs<ChapterDetailDto>()
 
         return data.pages.sortedBy { it.position }.mapIndexed { index, page ->
@@ -212,7 +213,7 @@ abstract class SuicaoDex : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/v1/tags").parseAs<JsonElement>()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/v1/tags", Fetch.XHR).parseAs<JsonElement>()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val tags = data?.get("data")?.parseAs<List<TagDto>>().orEmpty()

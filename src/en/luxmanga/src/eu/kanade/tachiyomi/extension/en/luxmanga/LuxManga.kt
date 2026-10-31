@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -52,7 +53,7 @@ abstract class LuxManga :
             else -> api("works").addQueryParameter("limit", "24")
         }.addQueryParameter("page", page.toString()).build()
 
-        val list = client.get(url).parseAs<WorkList>()
+        val list = client.get(url, Fetch.XHR).parseAs<WorkList>()
         return MangasPage(list.data.map { it.toSManga(apiUrl) }, page < list.meta.totalPages)
     }
 
@@ -66,7 +67,7 @@ abstract class LuxManga :
         }.build()
 
         val workId = try {
-            client.get(lookupUrl).parseAs<WorkId>().workId
+            client.get(lookupUrl, Fetch.XHR).parseAs<WorkId>().workId
         } catch (e: HttpException) {
             if (e.code != 404) throw e
             return null
@@ -90,13 +91,13 @@ abstract class LuxManga :
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/reader/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val images = client.get(api("chapters", chapter.url).build()).parseAs<Chapter>().images
+        val images = client.get(api("chapters", chapter.url).build(), Fetch.XHR).parseAs<Chapter>().images
         return images.mapIndexed { index, path ->
             Page(index, imageUrl = apiUrl.resolve(path)!!.toString())
         }
     }
 
-    override suspend fun fetchFilterData(): JsonElement = client.get(api("genres").build())
+    override suspend fun fetchFilterData(): JsonElement = client.get(api("genres").build(), Fetch.XHR)
         .parseAs<GenreList>().data
         .filter { it.workCount > 0 }
         .toJsonElement()
@@ -120,14 +121,14 @@ abstract class LuxManga :
 
     private suspend fun fetchRanking(path: String, limit: String): MangasPage {
         val url = api("works", path).addQueryParameter("limit", limit).build()
-        val works = client.get(url).parseAs<RankingList>().data
+        val works = client.get(url, Fetch.XHR).parseAs<RankingList>().data
         return MangasPage(works.map { it.toSManga(apiUrl) }, false)
     }
 
     private suspend fun getDetails(id: String): SManga = coroutineScope {
-        val work = async { client.get(api("works", id).build()).parseAs<Work>() }
-        val metadata = async { client.get(api("works", id, "metadata").build()).parseAs<Metadata>() }
-        val genres = async { client.get(api("works", id, "genres").build()).parseAs<GenreList>() }
+        val work = async { client.get(api("works", id).build(), Fetch.XHR).parseAs<Work>() }
+        val metadata = async { client.get(api("works", id, "metadata").build(), Fetch.XHR).parseAs<Metadata>() }
+        val genres = async { client.get(api("works", id, "genres").build(), Fetch.XHR).parseAs<GenreList>() }
         work.await().toSManga(apiUrl, metadata.await(), genres.await().data)
     }
 
@@ -147,7 +148,7 @@ abstract class LuxManga :
             .addQueryParameter("limit", "100")
             .addQueryParameter("order", "desc")
             .build()
-        return client.get(url).parseAs()
+        return client.get(url, Fetch.XHR).parseAs()
     }
 
     companion object {

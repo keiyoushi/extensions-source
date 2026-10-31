@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -40,7 +41,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class AllManga :
     KeiSource(),
     ConfigurableSource {
-
     private val apiDomain get() = "api.mkissa.net"
 
     private val apiUrl get() = "https://$apiDomain/api"
@@ -67,7 +67,7 @@ abstract class AllManga :
             ),
         )
 
-        client.post(apiUrl, payload).use { response ->
+        client.post(apiUrl, Fetch.XHR, payload).use { response ->
             val data = response.parseGraphQLAs<PopularData>()
 
             val mangaList = data.popular.mangas
@@ -101,7 +101,7 @@ abstract class AllManga :
             ),
         )
 
-        client.post(apiUrl, payload).use { response ->
+        client.post(apiUrl, Fetch.XHR, payload).use { response ->
             val data = response.parseGraphQLAs<SearchData>()
 
             val mangaList = data.mangas.edges
@@ -168,7 +168,7 @@ abstract class AllManga :
         for (attempt in 0..MAX_RETRIES) {
             if (attempt > 0) delay(retryDelay)
             try {
-                val result = client.post(apiUrl, payload).parseGraphQLAs<MangaUpdateData>()
+                val result = client.post(apiUrl, Fetch.XHR, payload).parseGraphQLAs<MangaUpdateData>()
                 if (result.manga != null) {
                     data = result
                     break
@@ -225,7 +225,7 @@ abstract class AllManga :
             ),
         )
 
-        val data = client.post(apiUrl, payload).parseGraphQLAs<RelatedData>()
+        val data = client.post(apiUrl, Fetch.XHR, payload).parseGraphQLAs<RelatedData>()
 
         return (data.mangasWithIds.orEmpty() + data.search?.edges.orEmpty() + data.fewerGenresSearch?.edges.orEmpty())
             .distinctBy { it.id }
@@ -253,7 +253,7 @@ abstract class AllManga :
         val mangaUrl = "$baseUrl/manga/$mangaId?fromSearch=1"
         val chapterUrl = getChapterUrl(chapter).toHttpUrl().encodedPath
 
-        val document = client.get(mangaUrl, ensureSuccess = false).use { response ->
+        val document = client.get(mangaUrl, Fetch.DOCUMENT, ensureSuccess = false).use { response ->
             if (!response.isSuccessful) {
                 if (response.code == 403 || response.code == 503) {
                     throw Exception("Solve captcha in WebView and retry")

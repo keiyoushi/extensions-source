@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.intOrNull
@@ -38,7 +39,7 @@ abstract class ArabToons : KeiSource() {
             .addQueryParameter("page", page.toString())
             .apply(params)
             .build()
-        val data = client.get(url).parseAs<Data<BrowseDto>>().data
+        val data = client.get(url, Fetch.XHR).parseAs<Data<BrowseDto>>().data
         return MangasPage(data.items.map { it.toSManga(baseUrl) }, data.pagination.hasNextPage)
     }
 
@@ -70,7 +71,7 @@ abstract class ArabToons : KeiSource() {
             .addPathSegment(id.toString())
             .addPathSegment("chapters")
             .build()
-        return client.get(url).parseAs<Data<ChapterListDto>>().data.items.map { it.toSChapter(slug) }
+        return client.get(url, Fetch.XHR).parseAs<Data<ChapterListDto>>().data.items.map { it.toSChapter(slug) }
     }
 
     override val supportsRelatedMangas = true
@@ -82,7 +83,7 @@ abstract class ArabToons : KeiSource() {
             .addPathSegment("manga")
             .addPathSegment(slug)
             .build()
-        return client.get(url).parseAs<Data<DetailsDto>>().data
+        return client.get(url, Fetch.XHR).parseAs<Data<DetailsDto>>().data
     }
 
     // Madara-era entries: a post id with memo["path"], or a "/manga/<slug>/" url
@@ -104,7 +105,7 @@ abstract class ArabToons : KeiSource() {
             .addPathSegment("manga")
             .addPathSegments(chapter.path)
             .build()
-        val data = client.get(url).parseAs<Data<ChapterPagesDto>>().data
+        val data = client.get(url, Fetch.XHR).parseAs<Data<ChapterPagesDto>>().data
         return data.images.mapIndexed { index, image ->
             val imageUrl = baseUrl.toHttpUrl().newBuilder()
                 .addPathSegments("storage/mangas")
@@ -120,7 +121,7 @@ abstract class ArabToons : KeiSource() {
 
     override suspend fun fetchFilterData(): JsonElement {
         val url = apiUrl.newBuilder().addPathSegments("browse/genres").build()
-        return client.get(url).parseAs<JsonElement>()
+        return client.get(url, Fetch.XHR).parseAs<JsonElement>()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {

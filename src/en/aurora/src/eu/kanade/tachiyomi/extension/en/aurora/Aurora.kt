@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -31,7 +32,7 @@ abstract class Aurora : KeiSource() {
      * @return List of all Chapters as separate mangas
      */
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val chapterOverviewDoc = client.get("$baseUrl/archive/").asJsoup()
+        val chapterOverviewDoc = client.get("$baseUrl/archive/", Fetch.DOCUMENT).asJsoup()
         val chapterBlockElements = chapterOverviewDoc.select(".wp-block-image:has(a)")
         val mangasFromChapters = chapterBlockElements
             .mapIndexed { chapterIndex, chapter ->
@@ -84,12 +85,12 @@ abstract class Aurora : KeiSource() {
     }
 
     private suspend fun fetchChapterListTR(currentUrl: String): List<SChapter> {
-        val firstPage = client.get(currentUrl).asJsoup()
+        val firstPage = client.get(currentUrl, Fetch.DOCUMENT).asJsoup()
 
         return coroutineScope {
             listOf(async { firstPage }) +
                 firstPage.select("#paginav a[title]").drop(1)
-                    .map { async { client.get(it.attr("href")).asJsoup() } }
+                    .map { async { client.get(it.attr("href"), Fetch.DOCUMENT).asJsoup() } }
         }.awaitAll().flatMap { page ->
             page.select(".post-content").map { postContent ->
                 val chapterUrl = postContent.select("a.webcomic-link").attr("href")
@@ -110,7 +111,7 @@ abstract class Aurora : KeiSource() {
             .toMutableList().reversed()
     }
 
-    override suspend fun getPageList(chapter: SChapter) = client.get(baseUrl + chapter.url).asJsoup().select(
+    override suspend fun getPageList(chapter: SChapter) = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup().select(
         ".webcomic-media .webcomic-link .attachment-full",
     ).mapIndexed { idx, page ->
         Page(idx, imageUrl = page.attr("src"))

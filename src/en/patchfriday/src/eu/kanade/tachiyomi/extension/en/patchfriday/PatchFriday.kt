@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -15,7 +16,6 @@ import keiyoushi.utils.asJsoup
 abstract class PatchFriday : KeiSource() {
 
     override val supportsLatest = false
-
     private fun createManga(): SManga = SManga.create().apply {
         initialized = true
         title = "Patch Friday"
@@ -55,7 +55,7 @@ abstract class PatchFriday : KeiSource() {
 
     private suspend fun fetchChapterList(): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
-        var document = client.get("$baseUrl/search/?search=").asJsoup()
+        var document = client.get("$baseUrl/search/?search=", Fetch.DOCUMENT).asJsoup()
         var page = document.select("div > div:first-of-type > div:first-of-type > a").attr("abs:href").replace(baseUrl, "").replace("/", "").trim().toInt()
         while (page > 0) {
             val element = document.select("div > div > div:first-of-type > a")
@@ -68,7 +68,7 @@ abstract class PatchFriday : KeiSource() {
                 chapters.add(chapter)
             }
             page -= 10
-            document = client.get("$baseUrl/search/?search=&id=$page").asJsoup()
+            document = client.get("$baseUrl/search/?search=&id=$page", Fetch.DOCUMENT).asJsoup()
         }
         // Add First Chapter becouse for some reason it does not show up in chapter search
         chapters.add(
@@ -86,5 +86,5 @@ abstract class PatchFriday : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = listOf(Page(0, baseUrl + chapter.url))
 
-    override suspend fun getImageUrl(page: Page): String = client.get(page.url).asJsoup().select("div#strip_image img").attr("abs:src")
+    override suspend fun getImageUrl(page: Page): String = client.get(page.url, Fetch.DOCUMENT).asJsoup().select("div#strip_image img").attr("abs:src")
 }

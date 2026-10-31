@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.clipstudioreader.ClipStudioReaderInterceptor
 import keiyoushi.lib.clipstudioreader.fetchPages
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -53,7 +54,7 @@ abstract class FireCross :
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(ClipStudioReaderInterceptor())
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/ebook/comics?sort=1&page=$page").asJsoup()
+        val document = client.get("$baseUrl/ebook/comics?sort=1&page=$page", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("ul.seriesList li.seriesList_item").map {
             SManga.create().apply {
                 val list = it.selectFirst("a.seriesList_itemTitle")!!
@@ -77,7 +78,7 @@ abstract class FireCross :
             filters.firstInstance<LabelFilter>().state.filter { it.state }.forEach { addQueryParameter("label[]", it.value) }
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("ul.seriesList#search-result li.seriesList_item").map {
             SManga.create().apply {
                 title = it.selectFirst("a.seriesList_itemTitle")!!.text()
@@ -92,7 +93,7 @@ abstract class FireCross :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || !url.encodedPath.startsWith("/ebook/series/")) return null
 
-        return parseDetails(client.get(url).asJsoup()).apply { this.url = url.encodedPath }
+        return parseDetails(client.get(url, Fetch.DOCUMENT).asJsoup()).apply { this.url = url.encodedPath }
     }
 
     override suspend fun fetchMangaUpdate(
@@ -102,7 +103,7 @@ abstract class FireCross :
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
         val seriesUrl = (baseUrl + manga.url).toHttpUrl().newBuilder().addQueryParameter("sort", "latest").build()
-        val firstPage = client.get(seriesUrl).asJsoup()
+        val firstPage = client.get(seriesUrl, Fetch.DOCUMENT).asJsoup()
         val details = parseDetails(firstPage)
 
         if (!fetchChapters) return@coroutineScope SMangaUpdate(details, chapters)
@@ -112,7 +113,7 @@ abstract class FireCross :
         }.maxOrNull() ?: 1
 
         val otherPages = (2..lastPage).map { page ->
-            async { client.get(seriesUrl.newBuilder().addQueryParameter("page", page.toString()).build()).asJsoup() }
+            async { client.get(seriesUrl.newBuilder().addQueryParameter("page", page.toString()).build(), Fetch.DOCUMENT).asJsoup() }
         }
 
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
@@ -151,7 +152,7 @@ abstract class FireCross :
 
     override fun getChapterUrl(chapter: SChapter): String = runBlocking { fetchReaderUrl(chapter) }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.fetchPages(client.get(fetchReaderUrl(chapter)).asJsoup())
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.fetchPages(client.get(fetchReaderUrl(chapter), Fetch.DOCUMENT).asJsoup())
 
     private suspend fun fetchReaderUrl(chapter: SChapter): String {
         if ("locked" in chapter.memo) throw Exception("Log in via WebView and purchase this chapter to read.")
@@ -165,7 +166,7 @@ abstract class FireCross :
             .add("ebook_id", chapter.url)
             .build()
 
-        val response = client.post("$apiUrl/reader", apiHeaders, body, ensureSuccess = false)
+        val response = client.post("$apiUrl/reader", apiHeaders, Fetch.XHR, body, ensureSuccess = false)
         if (response.code == 419) {
             response.close()
             throw Exception("Refresh the chapter list.")

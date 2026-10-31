@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
 import keiyoushi.lib.synchrony.Deobfuscator
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -59,7 +60,7 @@ abstract class MangasNoSekai : MadaraNoAjax() {
             form.add(key, value)
         }
 
-        return client.post(baseUrl + url, xhrHeaders, form.build()).parseAs<ChapterWrapper>()
+        return client.post(baseUrl + url, xhrHeaders, Fetch.XHR, form.build()).parseAs<ChapterWrapper>()
     }
 
     override suspend fun fetchChapters(
@@ -68,7 +69,7 @@ abstract class MangasNoSekai : MadaraNoAjax() {
         mangaPage: Document?,
     ): List<SChapter> {
         val coreScript = mangaPage!!.selectFirst("script#wp-manga-js")!!.attr("abs:src")
-        val coreScriptBody = Deobfuscator.deobfuscateScript(client.get(coreScript, headers).body.string())
+        val coreScriptBody = Deobfuscator.deobfuscateScript(client.get(coreScript, headers, Fetch.SCRIPT).body.string())
             ?: throw Exception("No se pudo deobfuscar el script")
 
         val regexCapture = ACTION_REGEX.find(coreScriptBody)?.groupValues

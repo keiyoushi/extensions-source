@@ -17,6 +17,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -136,7 +138,7 @@ abstract class Zaimanhua :
                 "$accountApiUrl/userInfo/get",
                 headersBuilder().setToken(token).build(),
                 cache = USE_CACHE,
-            ),
+            ).newBuilder().fetch(Fetch.XHR).build(),
         ).execute().parseAs<SimpleResponseDto>()
         return response.errno == 0
     }
@@ -152,7 +154,7 @@ abstract class Zaimanhua :
                 "$accountApiUrl/login/passwd",
                 headers,
                 formBody,
-            ),
+            ).newBuilder().fetch(Fetch.XHR).build(),
         ).execute().parseAs<ResponseDto<UserDto>>()
         return response.data.user?.token ?: ""
     }
@@ -170,15 +172,15 @@ abstract class Zaimanhua :
     // path: "/comic/detail/mangaId"
     private fun getMangaUrl(id: String): HttpUrl = "$apiUrl/comic/detail/$id?_v=2.2.5".toHttpUrl()
 
-    private suspend fun fetchMangaDetails(id: String): SManga = client.get(getMangaUrl(id), apiHeaders)
+    private suspend fun fetchMangaDetails(id: String): SManga = client.get(getMangaUrl(id), apiHeaders, Fetch.XHR)
         .parseAs<ResponseDto<DataWrapperDto<MangaDto>>>().unwrap().toSManga()
 
     // Chapter
     private suspend fun fetchChapterList(mangaId: String): List<SChapter> {
-        var data = client.get(getMangaUrl(mangaId), pcHeaders)
+        var data = client.get(getMangaUrl(mangaId), pcHeaders, Fetch.XHR)
             .parseAs<ResponseDto<DataWrapperDto<ChapterDataDto>>>().unwrap()
         if (data.isHideChapter == 1 && data.canRead == true) {
-            data = client.get("$pcDetailUrl?id=$mangaId", pcHeaders)
+            data = client.get("$pcDetailUrl?id=$mangaId", pcHeaders, Fetch.XHR)
                 .parseAs<ResponseDto<DataWrapperDto<ChapterDataDto>>>().unwrap()
         }
         if (data.chapterList.isNullOrEmpty()) {
@@ -210,7 +212,7 @@ abstract class Zaimanhua :
     private val h5Headers get() = apiHeaders.newBuilder().set("Platform", "h5").build()
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get(pageListApiUrl(chapter.url), h5Headers, USE_CACHE)
+        val data = client.get(pageListApiUrl(chapter.url), h5Headers, Fetch.XHR, USE_CACHE)
             .parseAs<ResponseDto<DataWrapperDto<ChapterImagesDto>>>().unwrap()
         if (!data.canRead) {
             throw Exception("用户权限不足，请提升用户等级")
@@ -235,7 +237,7 @@ abstract class Zaimanhua :
         response.close()
 
         val params = fragment.parseAs<ImageRetryParamsDto>()
-        val pageListResponse = client.newCall(GET(pageListApiUrl(params.url), h5Headers, USE_CACHE)).execute()
+        val pageListResponse = client.newCall(GET(pageListApiUrl(params.url), h5Headers, USE_CACHE).newBuilder().fetch(Fetch.XHR).build()).execute()
         val result = pageListResponse.parseAs<ResponseDto<DataWrapperDto<ChapterImagesDto>>>()
         if (result.errmsg.isNotBlank()) {
             throw IOException(result.errmsg)
@@ -263,6 +265,7 @@ abstract class Zaimanhua :
                 addQueryParameter("page", page.toString())
             }.build(),
             apiHeaders,
+            Fetch.XHR,
         ),
     )
 
@@ -285,6 +288,7 @@ abstract class Zaimanhua :
                         addQueryParameter("page", page.toString())
                     }.build(),
                     apiHeaders,
+                    Fetch.XHR,
                 ),
             )
 
@@ -294,6 +298,7 @@ abstract class Zaimanhua :
                     addQueryParameter("page", page.toString())
                 }.build(),
                 apiHeaders,
+                Fetch.XHR,
             ).parseAs<ResponseDto<PageDto>>().data.toMangasPage(page)
 
             query.isNotBlank() && searchById && query.toIntOrNull()?.let { it > 0 } ?: false ->
@@ -305,13 +310,14 @@ abstract class Zaimanhua :
                     addQueryParameter("page", page.toString())
                 }.build(),
                 apiHeaders,
+                Fetch.XHR,
             ).parseAs<ResponseDto<PageDto>>().data.toMangasPage(page)
         }
     }
 
     // Latest
     // "$apiUrl/comic/update/list/1/$page" is same content
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$apiUrl/comic/update/list/0/$page", apiHeaders))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$apiUrl/comic/update/list/0/$page", apiHeaders, Fetch.XHR))
 
     private fun parseMangaList(response: Response): MangasPage {
         val mangas = response.parseAs<ResponseDto<List<PageItemDto>?>>().data

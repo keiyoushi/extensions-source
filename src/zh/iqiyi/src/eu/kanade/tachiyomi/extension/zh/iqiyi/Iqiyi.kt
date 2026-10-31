@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.md5
@@ -88,7 +89,7 @@ abstract class Iqiyi : KeiSource() {
             .build()
         // Same request signature as the H5 site: md5(path + query + key)
         val sign = (url.encodedPath + url.encodedQuery + API_KEY).md5().toHexString()
-        return client.get(url, headersBuilder().set("md5", sign).build())
+        return client.get(url, headersBuilder().set("md5", sign).build(), Fetch.XHR)
     }
 
     companion object {

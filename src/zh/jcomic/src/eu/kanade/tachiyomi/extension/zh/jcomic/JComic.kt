@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -79,10 +80,10 @@ abstract class JComic : KeiSource() {
     }
 
     // Popular
-    override suspend fun getPopularManga(page: Int) = mangaPageParse(client.get("$baseUrl/cat/%E9%9A%A8%E6%A9%9F/$page"))
+    override suspend fun getPopularManga(page: Int) = mangaPageParse(client.get("$baseUrl/cat/%E9%9A%A8%E6%A9%9F/$page", Fetch.DOCUMENT))
 
     // Updates
-    override suspend fun getLatestUpdates(page: Int) = mangaPageParse(client.get("$baseUrl/cat/%E6%9C%80%E8%BF%91%E6%9B%B4%E6%96%B0/$page"))
+    override suspend fun getLatestUpdates(page: Int) = mangaPageParse(client.get("$baseUrl/cat/%E6%9C%80%E8%BF%91%E6%9B%B4%E6%96%B0/$page", Fetch.DOCUMENT))
 
     // Search
     override fun getFilterList(data: JsonElement?) = FilterList(
@@ -111,7 +112,7 @@ abstract class JComic : KeiSource() {
         } else {
             url.addPathSegments("cat/${filters[1]}/$page").build()
         }
-        return mangaPageParse(client.get(finalUrl))
+        return mangaPageParse(client.get(finalUrl, Fetch.DOCUMENT))
     }
 
     // Manga & Chapter
@@ -123,7 +124,7 @@ abstract class JComic : KeiSource() {
     ) = supervisorScope {
         val asyncManga = if (fetchDetails) {
             async {
-                val doc = client.get(baseUrl + manga.url.replace("/page", "/eps")).asJsoup()
+                val doc = client.get(baseUrl + manga.url.replace("/page", "/eps"), Fetch.DOCUMENT).asJsoup()
                 SManga.create().apply {
                     thumbnail_url = doc.selectFirst(".col-md-6:nth-child(1) img")?.absUrl("src")
                 }
@@ -144,7 +145,7 @@ abstract class JComic : KeiSource() {
                         },
                     )
                 } else {
-                    val doc = client.get(baseUrl + manga.url).asJsoup()
+                    val doc = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
                     doc.select(".col-md-6:nth-child(2) a").map {
                         SChapter.create().apply {
                             url = it.attr("href")
@@ -163,7 +164,7 @@ abstract class JComic : KeiSource() {
 
     // Page
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(baseUrl + chapter.url)
+        val response = client.get(baseUrl + chapter.url, Fetch.DOCUMENT)
         return response.asJsoup().select(".comic-thumb").mapIndexed { i, img ->
             val locked = img.attr("data-locked")
             val url = if (locked.isNotEmpty()) {

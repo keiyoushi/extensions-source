@@ -144,14 +144,13 @@ abstract class KeiSource : HttpSource() {
      * Customizes the base Headers builder. Subclasses can override this to append source-specific
      * headers.
      *
-     * Note: `User-Agent`, `Referer` and `Origin` are set here. The other browser headers are added per request
-     * kind, which also drops this `Origin` where browsers send none; headers set here or on a request are kept.
+     * Note: `User-Agent` and `Referer` are set here. The other browser headers, `Origin` included, are added per
+     * request kind; headers set here or on a request are kept.
      */
     protected open fun Headers.Builder.configureHeaders(): Headers.Builder = this
 
     final override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
-        .set("Origin", baseUrl)
         .configureHeaders()
 
     /**
@@ -452,10 +451,10 @@ abstract class KeiSource : HttpSource() {
     abstract override suspend fun getPageList(chapter: SChapter): List<Page>
 
     /**
-     * How page images and the covers the app loads go out. Set [Fetch.IMAGE] to send the headers a browser sends for
-     * them; [Fetch.NONE] sends them as built.
+     * How page images and the covers the app loads go out: [Fetch.IMAGE] sends the headers a browser sends for them;
+     * [Fetch.NONE] sends them as built.
      */
-    protected open val imageFetch: Fetch get() = Fetch.NONE
+    protected open val imageFetch: Fetch get() = Fetch.IMAGE
 
     /**
      * Builds the request for a page's image. A GET without a [Fetch] is sent with [imageFetch].

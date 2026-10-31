@@ -11,6 +11,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -99,7 +101,7 @@ abstract class NoyAcg :
             .set("Origin", WEB_BASE_URL)
             .set("Referer", "$WEB_BASE_URL/")
             .build()
-        val request = POST("$WEB_BASE_URL/api/login", loginHeaders, body)
+        val request = POST("$WEB_BASE_URL/api/login", loginHeaders, body).newBuilder().fetch(Fetch.XHR).build()
         network.client.newCall(request).execute().use { response ->
             val status = response.parseAs<LoginResponseDto>().status
             when (status) {
@@ -136,7 +138,7 @@ abstract class NoyAcg :
     override suspend fun getPopularManga(page: Int): MangasPage {
         val type = pref.getString(POPULAR_MANGAS_PREF, "day")!!
         val body = FormBody.Builder().addEncoded("type", type).addEncoded("page", page.toString())
-        val response = client.post("$baseUrl/api/readLeaderboard", body.build())
+        val response = client.post("$baseUrl/api/readLeaderboard", Fetch.XHR, body.build())
         return mangaPageParse(response, page)
     }
 
@@ -144,7 +146,7 @@ abstract class NoyAcg :
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val body = FormBody.Builder().addEncoded("page", page.toString()).addEncoded("sort", "new")
-        val response = client.post("$baseUrl/api/b1/booklist", body.build())
+        val response = client.post("$baseUrl/api/b1/booklist", Fetch.XHR, body.build())
         return mangaPageParse(response, page)
     }
 
@@ -155,7 +157,7 @@ abstract class NoyAcg :
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val body = FormBody.Builder().addEncoded("value", query).addEncoded("page", page.toString()).addEncoded("type", "book")
         filters.filterIsInstance<SearchFilter>().forEach { it.addTo(body) }
-        val response = client.post("$baseUrl/api/v4/search/fetch", body.build())
+        val response = client.post("$baseUrl/api/v4/search/fetch", Fetch.XHR, body.build())
         return mangaPageParse(response, page)
     }
 
@@ -166,7 +168,7 @@ abstract class NoyAcg :
     override fun getChapterUrl(chapter: SChapter) = "${getHomeUrl()}/reader/${chapter.url}"
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? = url.pathSegments.last().toIntOrNull()?.let {
-        val comic = client.get("$baseUrl/api/v4/book/$it?comment=false").parseManga()
+        val comic = client.get("$baseUrl/api/v4/book/$it?comment=false", Fetch.XHR).parseManga()
         comic.book.toSManga(imgBaseUrl)
     }
 
@@ -176,7 +178,7 @@ abstract class NoyAcg :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get("$baseUrl/api/v4/book/${manga.url}?comment=false")
+        val response = client.get("$baseUrl/api/v4/book/${manga.url}?comment=false", Fetch.XHR)
         val comic = response.parseManga()
 
         val sManga = comic.book.toSManga(imgBaseUrl)
@@ -213,7 +215,7 @@ abstract class NoyAcg :
     override val supportsRelatedMangas = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val comic = client.get("$baseUrl/api/v4/book/${manga.url}?comment=false").parseManga()
+        val comic = client.get("$baseUrl/api/v4/book/${manga.url}?comment=false", Fetch.XHR).parseManga()
         return comic.recommend.map { it.toSManga(imgBaseUrl) }
     }
 

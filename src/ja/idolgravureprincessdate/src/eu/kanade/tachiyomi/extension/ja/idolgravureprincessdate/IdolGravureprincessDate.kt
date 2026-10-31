@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -23,10 +24,9 @@ import kotlin.time.Instant
 
 @Source
 abstract class IdolGravureprincessDate : KeiSource() {
-
     override val supportsLatest = false
 
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get(apiUrlBuilder(page).build()).parseAs<BloggerDto>().toMangasPage()
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get(apiUrlBuilder(page).build(), Fetch.XHR).parseAs<BloggerDto>().toMangasPage()
 
     private fun BloggerDto.toMangasPage(): MangasPage {
         val manga = feed.entry.map { entry ->
@@ -70,7 +70,7 @@ abstract class IdolGravureprincessDate : KeiSource() {
             .addQueryParameter("q", searchQuery)
             .build()
 
-        return client.get(url).parseAs<BloggerDto>().toMangasPage()
+        return client.get(url, Fetch.XHR).parseAs<BloggerDto>().toMangasPage()
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}".substringBefore("#")
@@ -93,7 +93,7 @@ abstract class IdolGravureprincessDate : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         return document.select("div.post-body a:has(> img)").mapIndexed { i, it ->
             Page(i, imageUrl = it.absUrl("href"))
@@ -194,7 +194,7 @@ abstract class IdolGravureprincessDate : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get(apiUrlBuilder(1).build()).parseAs<BloggerDto>()
+    override suspend fun fetchFilterData(): JsonElement = client.get(apiUrlBuilder(1).build(), Fetch.XHR).parseAs<BloggerDto>()
         .feed.category.map { it.term }
         .toJsonElement()
 

@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -46,7 +47,6 @@ import okio.IOException
 abstract class Kagane :
     KeiSource(),
     ConfigurableSource {
-
     private val kaganeLangs: List<String>
         get() = listOf(lang)
 
@@ -277,7 +277,7 @@ abstract class Kagane :
             if (sortParam.isNotEmpty()) addQueryParameter("sort", sortParam)
         }.build()
 
-        val response = client.post(url, body)
+        val response = client.post(url, Fetch.XHR, body)
         val dto = response.parseAs<SearchDto>()
         val mangas = dto.content.map { it.toSManga(apiUrl, showSource, sources, cleanTitle) }
         return MangasPage(mangas, hasNextPage = dto.hasNextPage())
@@ -302,7 +302,7 @@ abstract class Kagane :
 
     private suspend fun searchStaff(name: String): List<String> {
         val body = buildJsonObject { put("name", name) }.toJsonRequestBody()
-        return client.post("$apiUrl/search/staff", body)
+        return client.post("$apiUrl/search/staff", Fetch.XHR, body)
             .parseAs<StaffSearchDto>()
             .content
             .filter { staff ->
@@ -318,7 +318,7 @@ abstract class Kagane :
             .addQueryParameter("q", name)
             .addQueryParameter("limit", "8")
             .build()
-        return client.get(url)
+        return client.get(url, Fetch.XHR)
             .parseAs<GroupSearchDto>()
             .items
             .filter { it.title.equals(name, ignoreCase = true) }
@@ -329,7 +329,7 @@ abstract class Kagane :
 
     private suspend fun getMangaById(seriesId: String): DetailsDto {
         val url = "$apiUrl/series/$seriesId"
-        return client.get(url).parseAs<DetailsDto>()
+        return client.get(url, Fetch.XHR).parseAs<DetailsDto>()
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -381,7 +381,7 @@ abstract class Kagane :
             manga
         }
         val updatedChapters = if (fetchChapters) {
-            val index = client.get("$apiUrl/series/$seriesId/books/index?fields=List")
+            val index = client.get("$apiUrl/series/$seriesId/books/index?fields=List", Fetch.XHR)
                 .parseAs<BookIndexDto>()
             val slug = updatedManga.memoString("slug")
             parseChapterList(index.toBooks(), chapterFormat(updatedManga), seriesId, slug)
@@ -423,7 +423,7 @@ abstract class Kagane :
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val trackerId = manga.memo["trackerId"]?.string ?: return emptyList()
 
-        val series = client.get("$apiUrl/trackers/$trackerId/series")
+        val series = client.get("$apiUrl/trackers/$trackerId/series", Fetch.XHR)
             .parseAs<TrackerDto>()
             .bookSeries
         return series
@@ -465,10 +465,11 @@ abstract class Kagane :
 
     private suspend fun getIntegrityToken(): String {
         if (integrityExp < System.currentTimeMillis()) {
-            client.get("$baseUrl/").close()
+            client.get("$baseUrl/", Fetch.DOCUMENT).close()
 
             val res = client.post(
                 "$baseUrl/api/integrity",
+                Fetch.XHR,
                 "".toJsonRequestBody(),
             ).parseAs<IntegrityDto>()
             integrityToken = res.token
@@ -489,7 +490,7 @@ abstract class Kagane :
 
         val headers = headers.newBuilder().add("x-integrity-token", integrityToken).build()
 
-        val response = client.post(challengeUrl.toString(), headers, challengeBody)
+        val response = client.post(challengeUrl.toString(), headers, Fetch.XHR, challengeBody)
 
         return response.parseAs<ChallengeDto>()
     }
@@ -744,19 +745,20 @@ abstract class Kagane :
 
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
         val genresDeferred = async {
-            client.get("$apiUrl/genres/list")
+            client.get("$apiUrl/genres/list", Fetch.XHR)
                 .parseAs<List<GenreDto>>()
                 .associate { it.id to it.genreName }
         }
 
         val tagsDeferred = async {
-            client.get("$apiUrl/tags/list")
+            client.get("$apiUrl/tags/list", Fetch.XHR)
                 .parseAs<List<TagDto>>()
                 .associate { it.tagName.lowercase() to it.id }
         }
         val sourcesDeferred = async {
             client.post(
                 "$apiUrl/sources/list",
+                Fetch.XHR,
                 buildJsonObject { put("source_types", null) }.toJsonRequestBody(),
             )
                 .parseAs<SourcesDto>().sources

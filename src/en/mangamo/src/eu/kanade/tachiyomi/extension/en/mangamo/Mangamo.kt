@@ -21,6 +21,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -69,7 +70,7 @@ abstract class Mangamo :
         val request = firestore.getDocument("Users/$userToken") {
             fields = listOf(UserDto::isSubscribed.name)
         }
-        return client.get(request.url, request.headers).use { response ->
+        return client.get(request.url, request.headers, Fetch.XHR).use { response ->
             response.body.string().parseJson<DocumentDto<UserDto>>().fields
         }
     }
@@ -164,7 +165,7 @@ abstract class Mangamo :
             )
         }
 
-        return client.post(request.url, request.headers, request.body!!).use { response ->
+        return client.post(request.url, request.headers, Fetch.XHR, request.body!!).use { response ->
             parseMangaPage(response) {
                 !(coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_IN_BROWSE) && it.onlyTransactional == true)
             }
@@ -198,7 +199,7 @@ abstract class Mangamo :
             // Therefore, all filtering has to be done on the client in the parse method.
         }
 
-        return client.post(request.url, request.headers, request.body!!).use { response ->
+        return client.post(request.url, request.headers, Fetch.XHR, request.body!!).use { response ->
             parseMangaPage(response) {
                 it.enabled == true &&
                     !(coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_IN_BROWSE) && it.onlyTransactional == true) &&
@@ -235,7 +236,7 @@ abstract class Mangamo :
             )
         }
 
-        return client.post(request.url, request.headers, request.body!!).use { response ->
+        return client.post(request.url, request.headers, Fetch.XHR, request.body!!).use { response ->
             parseMangaPage(response) {
                 !(coinMangaPref.contains(MangamoConstants.HIDE_COIN_MANGA_OPTION_IN_SEARCH) && it.onlyTransactional == true) &&
                     !(exclusivesOnlyPref.contains(MangamoConstants.EXCLUSIVES_ONLY_OPTION_IN_SEARCH) && it.onlyOnMangamo != true)
@@ -270,7 +271,7 @@ abstract class Mangamo :
                         }
                     }
                 }
-                client.get(request.url, request.headers).use { response ->
+                client.get(request.url, request.headers, Fetch.XHR).use { response ->
                     response.body.string().parseJson<DocumentDto<SeriesDto>>().fields
                 }
             } else {
@@ -294,7 +295,7 @@ abstract class Mangamo :
 
                     orderBy = listOf(descending(ChapterDto::chapterNumber.name))
                 }
-                client.post(request.url, request.headers, request.body!!).use { response ->
+                client.post(request.url, request.headers, Fetch.XHR, request.body!!).use { response ->
                     response.body.string().parseJson<QueryResultDto<ChapterDto>>().elements
                 }
             } else {
@@ -358,6 +359,7 @@ abstract class Mangamo :
         val response = client.post(
             "${MangamoConstants.FIREBASE_FUNCTION_BASE_PATH}/page/$seriesId/$chapterId",
             helper.jsonHeaders,
+            Fetch.XHR,
             "{\"idToken\":\"${auth.getIdToken()}\"}".toRequestBody(),
         )
         val data = response.use { it.body.string().parseJson<List<PageDto>>() }

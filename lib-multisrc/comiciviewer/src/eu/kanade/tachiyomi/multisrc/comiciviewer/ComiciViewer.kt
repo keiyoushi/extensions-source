@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -31,6 +32,7 @@ import okhttp3.Response
 abstract class ComiciViewer :
     KeiSource(),
     ConfigurableSource {
+
     protected open val apiUrl get() = "$baseUrl/api"
     protected open val preferences by getPreferencesLazy()
     protected open val rscHeaders get() = headersBuilder()
@@ -40,7 +42,7 @@ abstract class ComiciViewer :
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val result = client.get("$baseUrl$RANKING_PATH", rscHeaders).extractNextJs<RankingResponse> {
+        val result = client.get("$baseUrl$RANKING_PATH", rscHeaders, Fetch.XHR).extractNextJs<RankingResponse> {
             it is JsonObject && (it["className"] as? JsonPrimitive)?.content == "series-list mode-ranking"
         }
 
@@ -48,7 +50,7 @@ abstract class ComiciViewer :
         return MangasPage(mangas, false)
     }
 
-    override suspend fun getLatestUpdates(page: Int) = client.get("$baseUrl/series/list/up/$page").toMangasPage()
+    override suspend fun getLatestUpdates(page: Int) = client.get("$baseUrl/series/list/up/$page", Fetch.DOCUMENT).toMangasPage()
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
@@ -58,7 +60,7 @@ abstract class ComiciViewer :
                 .addQueryParameter("size", SEARCH_PAGE_SIZE.toString())
                 .build()
 
-            val result = client.get(url).parseAs<SearchApiResponse>().searchResult.series
+            val result = client.get(url, Fetch.XHR).parseAs<SearchApiResponse>().searchResult.series
             val mangas = result.series.map { it.toSManga() }
             val hasNextPage = result.total > page * SEARCH_PAGE_SIZE
             return MangasPage(mangas, hasNextPage)
@@ -70,7 +72,7 @@ abstract class ComiciViewer :
             return getPopularManga(page)
         }
 
-        return client.get("$baseUrl$path/$page").toMangasPage()
+        return client.get("$baseUrl$path/$page", Fetch.DOCUMENT).toMangasPage()
     }
 
     protected open fun Response.toMangasPage(): MangasPage {
@@ -104,11 +106,11 @@ abstract class ComiciViewer :
     ): SMangaUpdate = coroutineScope {
         val hash = manga.url.substringAfter("/series/") // for old url compatibility
         val seriesAsync = async {
-            client.get(seriesApiUrl("episodes", hash), CacheControl.FORCE_NETWORK)
+            client.get(seriesApiUrl("episodes", hash), Fetch.XHR, CacheControl.FORCE_NETWORK)
                 .parseAs<ApiResponse>().series
         }
         val accessAsync = async {
-            client.get(seriesApiUrl("series/access", hash), CacheControl.FORCE_NETWORK)
+            client.get(seriesApiUrl("series/access", hash), Fetch.XHR, CacheControl.FORCE_NETWORK)
                 .parseAs<AccessApiResponse>().seriesAccess.episodeAccesses.associateBy { it.episodeId }
         }
 
@@ -146,7 +148,7 @@ abstract class ComiciViewer :
             throw Exception("This chapter is free but you need to log in via WebView and refresh the entry.")
         }
 
-        val episode = client.get("$apiUrl/episodes/${chapter.url}", CacheControl.FORCE_NETWORK).parseAs<EpisodeDetailsApiResponse>().episode
+        val episode = client.get("$apiUrl/episodes/${chapter.url}", Fetch.XHR, CacheControl.FORCE_NETWORK).parseAs<EpisodeDetailsApiResponse>().episode
         val viewerId = episode.viewerId
             ?: return episode.content
                 .mapNotNull { if (it.type == "image") it.url else null }
@@ -154,7 +156,7 @@ abstract class ComiciViewer :
                 .ifEmpty { throw Exception("Log in via WebView and purchase this chapter to read.") }
 
         val memberJwt = try {
-            client.get("$apiUrl/user/info", CacheControl.FORCE_NETWORK).parseAs<UserInfoApiResponse>().user?.id
+            client.get("$apiUrl/user/info", Fetch.XHR, CacheControl.FORCE_NETWORK).parseAs<UserInfoApiResponse>().user?.id
         } catch (_: Exception) {
             null
         }
@@ -167,11 +169,13 @@ abstract class ComiciViewer :
 
         val totalPages = client.get(
             contentsInfoUrl.addQueryParameter("page-to", "0").build(),
+            Fetch.XHR,
             CacheControl.FORCE_NETWORK,
         ).parseAs<ViewerResponse>().totalPages
 
         val result = client.get(
             contentsInfoUrl.setQueryParameter("page-to", totalPages.toString()).build(),
+            Fetch.XHR,
             CacheControl.FORCE_NETWORK,
         ).parseAs<ViewerResponse>().result
 

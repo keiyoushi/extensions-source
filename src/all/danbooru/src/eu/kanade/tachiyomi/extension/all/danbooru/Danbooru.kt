@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -97,7 +98,7 @@ abstract class Danbooru :
             url.addQueryParameter("search[name_contains]", query)
         }
 
-        val document = client.get(url.build()).asJsoup()
+        val document = client.get(url.build(), Fetch.DOCUMENT).asJsoup()
 
         val entries = document.select("article.post-preview").map {
             searchMangaFromElement(it)
@@ -144,7 +145,7 @@ abstract class Danbooru :
     }
 
     private suspend fun mangaDetails(manga: SManga): SManga {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return manga.apply {
             title = document.selectFirst(".pool-category-series, .pool-category-collection")?.text()
@@ -163,7 +164,7 @@ abstract class Danbooru :
     // ============================= Chapters ==============================
 
     private suspend fun chapterList(manga: SManga): List<SChapter> {
-        val data = client.get("$baseUrl${manga.url}.json").parseAs<Pool>()
+        val data = client.get("$baseUrl${manga.url}.json", Fetch.XHR).parseAs<Pool>()
 
         return if (preference.splitChaptersPref) {
             data.postIds.mapIndexed { index, id ->
@@ -199,7 +200,7 @@ abstract class Danbooru :
                 Page(index = 0, imageUrl = fetchImageUrl(url)),
             )
         } else {
-            val data = client.get(url).parseAs<Pool>()
+            val data = client.get(url, Fetch.XHR).parseAs<Pool>()
 
             data.postIds.mapIndexed { index, id ->
                 Page(index, url = "/posts/$id")
@@ -210,7 +211,7 @@ abstract class Danbooru :
     override suspend fun getImageUrl(page: Page): String = fetchImageUrl("$baseUrl${page.url}.json")
 
     private suspend fun fetchImageUrl(url: String): String {
-        val imageUrl = client.get(url).parseAs<Post>().bestUrl
+        val imageUrl = client.get(url, Fetch.XHR).parseAs<Post>().bestUrl
         return if (imageUrl.startsWith("http")) imageUrl else "$baseUrl$imageUrl"
     }
 

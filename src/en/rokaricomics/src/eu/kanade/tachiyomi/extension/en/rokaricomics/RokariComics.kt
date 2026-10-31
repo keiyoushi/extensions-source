@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import kotlinx.serialization.json.JsonElement
@@ -15,7 +16,7 @@ import okhttp3.Response
 abstract class RokariComics : MangaThemesiaAlt() {
     // Popular - Use homepage "Popular Today" section (first page only, no pagination)
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         // Select manga from "Popular Today" section (first listupd on homepage)
         val mangas = document.select(".bixbox:has(h2:contains(Popular)) .bs .bsx").map { element ->
             SManga.create().apply {
@@ -36,7 +37,7 @@ abstract class RokariComics : MangaThemesiaAlt() {
     }
 
     // Latest - Use homepage pagination which shows latest updates
-    override suspend fun getLatestUpdates(page: Int) = latestUpdatesParse(client.get(if (page == 1) baseUrl else "$baseUrl/page/$page/"))
+    override suspend fun getLatestUpdates(page: Int) = latestUpdatesParse(client.get(if (page == 1) baseUrl else "$baseUrl/page/$page/", Fetch.DOCUMENT))
 
     private fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()

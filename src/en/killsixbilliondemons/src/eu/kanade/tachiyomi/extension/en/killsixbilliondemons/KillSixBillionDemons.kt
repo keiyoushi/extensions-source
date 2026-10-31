@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -66,7 +67,7 @@ abstract class KillSixBillionDemons :
      * @return a list of all books in form of multiple manga
      */
     private suspend fun fetchBooksAsMangas(): List<SManga> {
-        val doc = client.get(baseUrl).asJsoup()
+        val doc = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val bookElements = doc.select("#chapter option").filter { it.isBookOption }
         return bookElements.map { bookElement ->
             val bookOverviewUrl = bookElement.attr("value")
@@ -92,7 +93,7 @@ abstract class KillSixBillionDemons :
      * @return url to the cover of the book
      */
     private suspend fun fetchThumbnailUrl(bookOverviewUrl: String): String {
-        val overviewDoc = client.get(bookOverviewUrl + PAGES_ORDER).asJsoup()
+        val overviewDoc = client.get(bookOverviewUrl + PAGES_ORDER, Fetch.DOCUMENT).asJsoup()
         return overviewDoc.selectFirst(".comic-thumbnail-in-archive a img")!!.attr("src")
     }
 
@@ -136,7 +137,7 @@ abstract class KillSixBillionDemons :
     }
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
-        val doc = client.get(baseUrl + manga.url).asJsoup()
+        val doc = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
         val options = doc.select("#chapter option")
 
         val allOptions = options.filter { it.isValidOption }
@@ -203,7 +204,7 @@ abstract class KillSixBillionDemons :
         var currentUrl = baseUrl + chapterUrl + PAGES_ORDER
 
         while (true) {
-            val currentPage = client.get(currentUrl).asJsoup()
+            val currentPage = client.get(currentUrl, Fetch.DOCUMENT).asJsoup()
 
             val links = currentPage.select(".comic-thumbnail-in-archive a")
             for (link in links) {
@@ -231,7 +232,7 @@ abstract class KillSixBillionDemons :
     // ========================= Pages =========================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        var document = client.get(baseUrl + chapter.url + PAGES_ORDER).asJsoup()
+        var document = client.get(baseUrl + chapter.url + PAGES_ORDER, Fetch.DOCUMENT).asJsoup()
 
         val imageUrls = if (document.selectFirst(".comic-thumbnail-in-archive") == null) {
             document.comicImageUrls()
@@ -241,11 +242,11 @@ abstract class KillSixBillionDemons :
                 while (true) {
                     document.select(".comic-thumbnail-in-archive a").mapTo(this) { it.absUrl("href") }
                     val nextUrl = document.selectFirst(".paginav-next a")?.absUrl("href") ?: break
-                    document = client.get(nextUrl).asJsoup()
+                    document = client.get(nextUrl, Fetch.DOCUMENT).asJsoup()
                 }
             }
             coroutineScope {
-                postUrls.map { async { client.get(it).asJsoup().comicImageUrls() } }.awaitAll().flatten()
+                postUrls.map { async { client.get(it, Fetch.DOCUMENT).asJsoup().comicImageUrls() } }.awaitAll().flatten()
             }
         }
 

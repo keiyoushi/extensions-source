@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Kodoku Studio"
-    versionCode = 56
+    versionCode = 57
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

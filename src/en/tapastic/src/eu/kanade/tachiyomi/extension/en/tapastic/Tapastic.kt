@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
@@ -63,7 +64,7 @@ abstract class Tapastic :
             .addQueryParameter("page", (page - 1).toString())
             .build()
 
-        return parseMangaList(client.get(url))
+        return parseMangaList(client.get(url, Fetch.XHR))
     }
 
     private fun parseMangaList(response: Response): MangasPage {
@@ -83,7 +84,7 @@ abstract class Tapastic :
             .addQueryParameter("page", (page - 1).toString())
             .build()
 
-        return parseMangaList(client.get(url))
+        return parseMangaList(client.get(url, Fetch.XHR))
     }
 
     // ============================== Search ====================================
@@ -94,7 +95,7 @@ abstract class Tapastic :
             .addQueryParameter("q", query)
             .addQueryParameter("t", "COMICS")
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".search-item-wrap").map { element ->
             SManga.create().apply {
                 title = element.select(".item__thumb img").firstOrNull()?.attr("alt") ?: element.select(".title-section .title a").text()
@@ -116,7 +117,7 @@ abstract class Tapastic :
         val mangaUrl = if (slug.toIntOrNull() != null) {
             "/series/$slug"
         } else {
-            val document = client.get(url).asJsoup()
+            val document = client.get(url, Fetch.DOCUMENT).asJsoup()
             val id = document.selectFirst("meta[content^=tapastic://series]")
                 ?.attr("content")
                 ?.substringAfterLast('/')
@@ -156,7 +157,7 @@ abstract class Tapastic :
     }
 
     private suspend fun getMangaDetails(manga: SManga): SManga {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SManga.create().apply {
             title = document.selectFirst(".info__right .title")!!.text()
             thumbnail_url = document.selectFirst(".thumb.js-thumbnail img")?.absUrl("src")
@@ -199,7 +200,7 @@ abstract class Tapastic :
                 .addQueryParameter("last_access", "0")
                 .addQueryParameter("", "") // make the same request as the browser
                 .build()
-            val response = client.get(url)
+            val response = client.get(url, Fetch.XHR)
             val dto = response.parseAs<DataWrapper<ChapterListDto>>()
             chapters += dto.data.episodes
                 .filter { it.isPaywalledVisible() && it.isScheduledVisible() }
@@ -216,7 +217,7 @@ abstract class Tapastic :
     // ============================== Pages =====================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
 
         // check if the "Style" button is in the toolbar, because it is even present on locked chapters, so even those are detected correctly
         val isNovel = document.selectFirst(".toolbar a[data-type=\"style\"]") != null

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
@@ -53,7 +54,7 @@ abstract class AllHentai : GroupLe() {
     // =========================== Related Manga (Komikku) ============================
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val url = "$baseUrl/list/like${manga.url.substringBefore("__")}"
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return document.select(".tiles .tile").mapNotNull {
             SManga.create().apply {
                 setUrlWithoutDomain(it.selectFirst(".desc h3 a")?.absUrl("href") ?: return@mapNotNull null)
@@ -80,7 +81,7 @@ abstract class AllHentai : GroupLe() {
     ).toJsonElement()
 
     private suspend fun getTags(): List<Pair<String, String>>? {
-        val result = client.get("$baseUrl/api/catalog/elementsByType?type=40").parseAs<FiltersAPIResponse>()
+        val result = client.get("$baseUrl/api/catalog/elementsByType?type=40", Fetch.XHR).parseAs<FiltersAPIResponse>()
         return result.results?.map { it.text to it.id }
     }
     private val getAdditionalFilters = listOf(

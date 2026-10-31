@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -35,6 +36,7 @@ import okhttp3.OkHttpClient
 abstract class GigaViewer :
     KeiSource(),
     ConfigurableSource {
+
     protected open val apiUrl get() = "$baseUrl/graphql"
     protected open val preferences by getPreferencesLazy()
 
@@ -77,7 +79,7 @@ abstract class GigaViewer :
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
-            val mangas = client.post(apiUrl, body = graphQLBody(SEARCH_QUERY, variables = SearchVariables(query)))
+            val mangas = client.post(apiUrl, Fetch.XHR, body = graphQLBody(SEARCH_QUERY, variables = SearchVariables(query)))
                 .parseGraphQLAs<SearchResponse>().searchSeries.edges
                 .map { it.node }
                 .sortedBy { it.isVolumeOnly }
@@ -97,7 +99,7 @@ abstract class GigaViewer :
             "id$i" to Base64.encodeToString(nodeId.toByteArray(), Base64.NO_WRAP)
         }
 
-        return client.post(apiUrl, body = graphQLBody(seriesListQuery(variables.keys), variables = variables))
+        return client.post(apiUrl, Fetch.XHR, body = graphQLBody(seriesListQuery(variables.keys), variables = variables))
             .parseGraphQLAs<Map<String, SeriesListNode>>()
             .values
             .flatMap { node -> node.series.edges.map { it.node } }
@@ -155,9 +157,9 @@ abstract class GigaViewer :
         )
     }
 
-    private suspend fun fetchSeriesId(url: String): String = client.get(url).asJsoup().selectFirst("script.js-valve")!!.attr("data-giga_series")
+    private suspend fun fetchSeriesId(url: String): String = client.get(url, Fetch.DOCUMENT).asJsoup().selectFirst("script.js-valve")!!.attr("data-giga_series")
 
-    private suspend fun fetchSeries(id: String): SeriesDetails = client.post(apiUrl, body = graphQLBody(SERIES_QUERY, variables = SeriesVariables(id))).parseGraphQLAs<SeriesResponse>().series
+    private suspend fun fetchSeries(id: String): SeriesDetails = client.post(apiUrl, Fetch.XHR, body = graphQLBody(SERIES_QUERY, variables = SeriesVariables(id))).parseGraphQLAs<SeriesResponse>().series
 
     private suspend fun fetchReadableProducts(seriesId: String, type: String, count: Int): List<ReadableProduct> {
         val products = mutableListOf<ReadableProduct>()
@@ -168,7 +170,7 @@ abstract class GigaViewer :
                 .addQueryParameter("sort_order", "desc")
                 .addQueryParameter("offset", products.size.toString())
                 .build()
-            val result = client.get(url).parseAs<List<ReadableProduct>>()
+            val result = client.get(url, Fetch.XHR).parseAs<List<ReadableProduct>>()
             if (result.isEmpty()) break
             products += result
         }
@@ -181,7 +183,7 @@ abstract class GigaViewer :
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.memo["type"]!!.string}/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val pageStructure = client.get(getChapterUrl(chapter)).asJsoup()
+        val pageStructure = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
             .selectFirst("script#episode-json")!!.attr("data-value")
             .parseAs<ViewerDto>().readableProduct.pageStructure
 

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -42,7 +43,7 @@ abstract class TuSachXinhXinh : KeiSource() {
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/nhieu-xem-nhat/").asJsoup()
+        val document = client.get("$baseUrl/nhieu-xem-nhat/", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("ul.most-views.single-list-comic li.position-relative").map { element ->
             SManga.create().apply {
                 val linkElement = element.selectFirst("p.super-title a")!!
@@ -58,7 +59,7 @@ abstract class TuSachXinhXinh : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = if (page == 1) baseUrl else "$baseUrl/page/$page/"
-        return parseLatestPage(client.get(url).asJsoup())
+        return parseLatestPage(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private fun parseLatestPage(document: Document): MangasPage {
@@ -86,13 +87,13 @@ abstract class TuSachXinhXinh : KeiSource() {
                 .add("action", "searchtax")
                 .add("keyword", query)
                 .build()
-            return parseSearchApiResponse(client.post("$baseUrl/wp-admin/admin-ajax.php", formBody))
+            return parseSearchApiResponse(client.post("$baseUrl/wp-admin/admin-ajax.php", Fetch.XHR, formBody))
         }
 
         val filterPath = filters.filterIsInstance<UriPartFilter>()
             .firstNotNullOfOrNull { it.toUriPart() }
         if (filterPath != null) {
-            return parseFilterPage(client.get(baseUrl.toHttpUrl().resolve(filterPath)!!).asJsoup())
+            return parseFilterPage(client.get(baseUrl.toHttpUrl().resolve(filterPath)!!, Fetch.DOCUMENT).asJsoup())
         }
 
         return getLatestUpdates(page)
@@ -134,7 +135,7 @@ abstract class TuSachXinhXinh : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangaUrl = if (url.pathSegments.firstOrNull() == "truyen-tranh") {
             url
         } else {
@@ -159,7 +160,7 @@ abstract class TuSachXinhXinh : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
             chapters = parseChapterList(document),
@@ -220,7 +221,7 @@ abstract class TuSachXinhXinh : KeiSource() {
     // ============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val html = client.get(getChapterUrl(chapter)).use { it.body.string() }
+        val html = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).use { it.body.string() }
 
         if (html.contains("đăng nhập</strong> để xem nội dung chương này")) {
             throw Exception("Chương này cần đăng nhập vào tài khoản phù hợp bằng webview để xem")
@@ -237,7 +238,7 @@ abstract class TuSachXinhXinh : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get(baseUrl).asJsoup().let { document ->
+    override suspend fun fetchFilterData(): JsonElement = client.get(baseUrl, Fetch.DOCUMENT).asJsoup().let { document ->
         FilterData(
             genres = document.parseFilterOptions("#nav-tags"),
             groups = document.parseFilterOptions("#nav-teams"),
@@ -259,7 +260,7 @@ abstract class TuSachXinhXinh : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val relatedSection = document.select("h3.blue-title")
             .firstOrNull { it.text() == "Truyện liên quan" }
             ?.parent()

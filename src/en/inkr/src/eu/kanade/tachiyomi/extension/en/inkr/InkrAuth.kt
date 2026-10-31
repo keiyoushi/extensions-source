@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.inkr
 
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.utils.parseAs
@@ -108,7 +109,7 @@ internal class InkrAuth(
             .set("Accept", "application/json")
             .build()
         val response = runCatching {
-            client().get("https://inkr-payment-api.inkr.com/v1/user/my-info", headers)
+            client().get("https://inkr-payment-api.inkr.com/v1/user/my-info", headers, Fetch.XHR)
         }.getOrNull() ?: return null
 
         if (!response.isSuccessful) {
@@ -153,7 +154,7 @@ internal class InkrAuth(
             .addQueryParameter("key", apiKey)
             .build()
         val response = runCatching {
-            client().post(url, headers, body).parseAs<TokenRefreshDto>()
+            client().post(url, headers, Fetch.XHR, body).parseAs<TokenRefreshDto>()
         }.getOrNull() ?: return false
 
         if (response.idToken.isEmpty()) return false

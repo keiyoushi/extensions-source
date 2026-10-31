@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferences
@@ -36,7 +37,7 @@ abstract class InsanosScan :
         page: Int,
         query: String,
         filters: FilterList,
-    ) = client.get("$baseUrl/series").parseAs<List<Series>>().map {
+    ) = client.get("$baseUrl/series", Fetch.XHR).parseAs<List<Series>>().map {
         it.toSManga(baseUrl)
     }.filter { query in it.title }
         .let { MangasPage(it, false) }
@@ -63,7 +64,7 @@ abstract class InsanosScan :
     ) = coroutineScope {
         val updatedManga = async {
             if (fetchDetails) {
-                client.get("$baseUrl/series/${manga.url}")
+                client.get("$baseUrl/series/${manga.url}", Fetch.XHR)
                     .parseAs<Series>().toSManga(baseUrl)
             } else {
                 manga
@@ -72,7 +73,7 @@ abstract class InsanosScan :
 
         val updatedChapters = async {
             if (fetchChapters) {
-                client.get("$baseUrl/series/${manga.url}/chapters")
+                client.get("$baseUrl/series/${manga.url}/chapters", Fetch.XHR)
                     .parseAs<List<Chapter>>().mapNotNull {
                         it.toSChapter(showPaidChapters)
                     }.reversed()
@@ -93,6 +94,7 @@ abstract class InsanosScan :
 
         return client.get(
             "$baseUrl/series/$seriesId/chapters/$cid/pages",
+            Fetch.XHR,
         ).parseAs<Pages>().pages.mapIndexed { i, url ->
             val imageUrl = if (url.startsWith("/")) baseUrl + url else url
             Page(i, imageUrl = imageUrl)

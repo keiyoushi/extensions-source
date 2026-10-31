@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.codearc
 
 import android.util.Base64
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.utils.getTurnstileToken
@@ -42,12 +43,12 @@ internal suspend fun fetchReaderPages(
     val batchSize = 100
     val firstOffset = offset ?: 0
     val url = endpoint.newBuilder().addQueryParameter("offset", firstOffset.toString()).build()
-    var response = client.get(url, headers, ensureSuccess = false)
+    var response = client.get(url, headers, Fetch.XHR, ensureSuccess = false)
     if (response.code == 403 && !needsReaderAccess) {
         val error = response.parseAs<ReaderPagesErrorDto>().error
         check(error == "READER_ACCESS_REQUIRED") { "Reader pages HTTP 403: $error" }
         requestReaderAccess(client, headers, chapterUrl)
-        response = client.get(url, headers, ensureSuccess = false)
+        response = client.get(url, headers, Fetch.XHR, ensureSuccess = false)
     }
     check(response.isSuccessful) { "Reader pages HTTP ${response.code}" }
     val firstBatch = response.parseAs<ReaderPagesDto>()
@@ -59,7 +60,7 @@ internal suspend fun fetchReaderPages(
         val pendingBatches = remainingOffsets.map { batchOffset ->
             async {
                 val batchUrl = endpoint.newBuilder().addQueryParameter("offset", batchOffset.toString()).build()
-                client.get(batchUrl, headers).parseAs<ReaderPagesDto>()
+                client.get(batchUrl, headers, Fetch.XHR).parseAs<ReaderPagesDto>()
             }
         }
         val pages = firstBatch.items.toMutableList()
@@ -77,14 +78,14 @@ private suspend fun requestReaderAccess(
 ) {
     val accessUrl = chapterUrl.toHttpUrl().newBuilder().encodedPath("/api/mangas/reader-access").query(null).build()
     val accessHeaders = headers.newBuilder().add("X-Codearc-Reader", "1").build()
-    val accessResponse = client.post(accessUrl, accessHeaders, ReaderAccessRequest().toJsonRequestBody(), ensureSuccess = false)
+    val accessResponse = client.post(accessUrl, accessHeaders, Fetch.XHR, ReaderAccessRequest().toJsonRequestBody(), ensureSuccess = false)
     val access = accessResponse.parseAs<ReaderAccessDto>()
     if (access.ok) {
         return
     }
     val sitekey = access.sitekey?.takeIf { access.challenge } ?: error("Reader access was not granted")
     val token = getTurnstileToken(chapterUrl, sitekey, action = "reader")
-    val verified = client.post(accessUrl, accessHeaders, ReaderAccessRequest(token).toJsonRequestBody())
+    val verified = client.post(accessUrl, accessHeaders, Fetch.XHR, ReaderAccessRequest(token).toJsonRequestBody())
         .parseAs<ReaderAccessDto>()
     check(verified.ok) { "Reader verification failed" }
 }

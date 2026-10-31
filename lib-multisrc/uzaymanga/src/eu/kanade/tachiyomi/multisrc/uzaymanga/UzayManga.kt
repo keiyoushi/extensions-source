@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -37,7 +38,7 @@ abstract class UzayManga : KeiSource() {
         val url = "$baseUrl/__data.json".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
-        val (svelte, root) = client.get(url).parseSvelteRoot() ?: return MangasPage(emptyList(), false)
+        val (svelte, root) = client.get(url, Fetch.XHR).parseSvelteRoot() ?: return MangasPage(emptyList(), false)
 
         val lastEpisodes = svelte.resolveObject(root, "lastEpisodes") ?: return MangasPage(emptyList(), false)
         val seriesArray = svelte.resolveArray(lastEpisodes, "data") ?: return MangasPage(emptyList(), false)
@@ -68,7 +69,7 @@ abstract class UzayManga : KeiSource() {
             }
         }
 
-        val (svelte, root) = client.get(url.build()).parseSvelteRoot() ?: return MangasPage(emptyList(), false)
+        val (svelte, root) = client.get(url.build(), Fetch.XHR).parseSvelteRoot() ?: return MangasPage(emptyList(), false)
         val seriesArray = svelte.resolveArray(root, "series") ?: return MangasPage(emptyList(), false)
 
         return MangasPage(svelte.toSMangaList(seriesArray, baseUrl, cdnUrl), seriesArray.size == PAGE_SIZE)
@@ -153,7 +154,7 @@ abstract class UzayManga : KeiSource() {
         val url = "$baseUrl${manga.url}/__data.json".toHttpUrl().newBuilder()
             .addQueryParameter("x-sveltekit-invalidated", "001")
             .build()
-        val (svelte, root) = client.get(url).parseSvelteRoot() ?: return SMangaUpdate(manga, chapters)
+        val (svelte, root) = client.get(url, Fetch.XHR).parseSvelteRoot() ?: return SMangaUpdate(manga, chapters)
         val seriesObj = svelte.resolveObject(root, "series") ?: return SMangaUpdate(manga, chapters)
 
         val updatedManga = parseMangaDetails(seriesObj, svelte)?.apply { this.url = manga.url } ?: manga
@@ -167,7 +168,7 @@ abstract class UzayManga : KeiSource() {
         val url = "$baseUrl${chapter.url}/__data.json".toHttpUrl().newBuilder()
             .addQueryParameter("x-sveltekit-invalidated", "001")
             .build()
-        val (svelte, root) = client.get(url).parseSvelteRoot() ?: return emptyList()
+        val (svelte, root) = client.get(url, Fetch.XHR).parseSvelteRoot() ?: return emptyList()
         val episodeObj = svelte.resolveObject(root, "episode") ?: return emptyList()
         val imagesArray = svelte.resolveArray(episodeObj, "images") ?: return emptyList()
 

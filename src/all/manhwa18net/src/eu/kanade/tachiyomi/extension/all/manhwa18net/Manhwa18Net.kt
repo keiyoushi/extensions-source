@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -38,9 +39,9 @@ abstract class Manhwa18Net : KeiSource() {
     // LISTS
     // ============================================================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseList(client.get("$baseUrl/manga-list?sort=top&page=$page"))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseList(client.get("$baseUrl/manga-list?sort=top&page=$page", Fetch.DOCUMENT))
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseList(client.get("$baseUrl/manga-list?sort=update&page=$page"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseList(client.get("$baseUrl/manga-list?sort=update&page=$page", Fetch.DOCUMENT))
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val builder = if (query.isNotEmpty()) {
@@ -68,7 +69,7 @@ abstract class Manhwa18Net : KeiSource() {
             }
         }
 
-        return parseList(client.get(builder.build()))
+        return parseList(client.get(builder.build(), Fetch.DOCUMENT))
     }
 
     private suspend fun parseList(response: Response): MangasPage {
@@ -107,7 +108,7 @@ abstract class Manhwa18Net : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val props = extractPageDto(client.get(getMangaUrl(manga))).props
+        val props = extractPageDto(client.get(getMangaUrl(manga), Fetch.DOCUMENT)).props
 
         if (fetchDetails && props.manga == null) throw Exception("Manga details not found")
         if (fetchChapters && props.chapters == null) throw Exception("Chapters not found")
@@ -152,7 +153,7 @@ abstract class Manhwa18Net : KeiSource() {
     // ============================================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val props = extractPageDto(client.get(getChapterUrl(chapter))).props
+        val props = extractPageDto(client.get(getChapterUrl(chapter), Fetch.DOCUMENT)).props
         val chapterContent = props.chapterContent
             ?: throw Exception("Chapter content not found")
 

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -23,7 +24,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class CodeArc : KeiSource() {
-
     override fun OkHttpClient.Builder.configureClient() = connectTimeout(15.seconds)
         .readTimeout(30.seconds)
         .addInterceptor(ReaderPageRefresh(::client, ::headers, ::baseUrl))
@@ -35,7 +35,7 @@ abstract class CodeArc : KeiSource() {
             .addQueryParameter("mode", "popular")
             .addQueryParameter("page", page.toString())
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return popularMangaParse(document, page)
     }
 
@@ -49,7 +49,7 @@ abstract class CodeArc : KeiSource() {
         val url = "$baseUrl/list".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseMangasPage(document)
     }
 
@@ -62,7 +62,7 @@ abstract class CodeArc : KeiSource() {
                 .addQueryParameter("q", query)
                 .addQueryParameter("limit", "50")
                 .build()
-            val mangas = client.get(searchUrl).parseAs<SearchResponseDto>().items.map { it.toSManga(baseUrl) }
+            val mangas = client.get(searchUrl, Fetch.XHR).parseAs<SearchResponseDto>().items.map { it.toSManga(baseUrl) }
             return MangasPage(mangas, false)
         }
 
@@ -97,7 +97,7 @@ abstract class CodeArc : KeiSource() {
                 }
             }
         }
-        val document = client.get(url.build()).asJsoup()
+        val document = client.get(url.build(), Fetch.DOCUMENT).asJsoup()
         return parseMangasPage(document)
     }
 
@@ -124,7 +124,7 @@ abstract class CodeArc : KeiSource() {
         }?.takeIf { it.isNotEmpty() } ?: return null
         val mangaUrl = "$baseUrl/$slug"
 
-        return client.get(mangaUrl, rscHeaders).extractNextJs<DetailsResponseDto>()?.toSManga()?.apply {
+        return client.get(mangaUrl, rscHeaders, Fetch.XHR).extractNextJs<DetailsResponseDto>()?.toSManga()?.apply {
             setUrlWithoutDomain(mangaUrl)
             initialized = true
         }
@@ -135,7 +135,7 @@ abstract class CodeArc : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = client.get(getMangaUrl(manga), rscHeaders).extractNextJs<DetailsResponseDto>()!!.let { details ->
+    ): SMangaUpdate = client.get(getMangaUrl(manga), rscHeaders, Fetch.XHR).extractNextJs<DetailsResponseDto>()!!.let { details ->
         SMangaUpdate(details.toSManga(), details.toSChapterList())
     }
 
@@ -158,7 +158,7 @@ abstract class CodeArc : KeiSource() {
 
     override val supportsRelatedMangas = true
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga), rscHeaders)
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga), rscHeaders, Fetch.XHR)
         .extractNextJs<List<RelatedItemDto>>()
         ?.map { it.toSManga() }
         .orEmpty()

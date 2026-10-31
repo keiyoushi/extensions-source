@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -83,7 +84,7 @@ abstract class EroMuse : KeiSource() {
                 internalDocument.select(albumSelector).let { elements ->
                     elements.reversed().map { pageStack.addLast(StackItem(it.attr("abs:href"), AUTHOR)) }
                 }
-                client.get(stackUrl()).asJsoup()
+                client.get(stackUrl(), Fetch.DOCUMENT).asJsoup()
             } else {
                 internalDocument
             }
@@ -116,12 +117,12 @@ abstract class EroMuse : KeiSource() {
                                 when (depth) {
                                     1 -> { // eg. /comics/album/Fakku-Comics
                                         pageStack.addLast(StackItem(url, VARIOUS_AUTHORS))
-                                        if (searchMangas.isEmpty()) searchMangas += internalParse(client.get(stackUrl()).asJsoup()) else null
+                                        if (searchMangas.isEmpty()) searchMangas += internalParse(client.get(stackUrl(), Fetch.DOCUMENT).asJsoup()) else null
                                     }
 
                                     2 -> { // eg. /comics/album/Fakku-Comics/Bosshi
                                         pageStack.addLast(StackItem(url, AUTHOR))
-                                        if (searchMangas.isEmpty()) searchMangas += internalParse(client.get(stackUrl()).asJsoup()) else null
+                                        if (searchMangas.isEmpty()) searchMangas += internalParse(client.get(stackUrl(), Fetch.DOCUMENT).asJsoup()) else null
                                     }
 
                                     else -> {
@@ -136,7 +137,7 @@ abstract class EroMuse : KeiSource() {
                             AUTHOR -> {
                                 if (depth == 1) { // eg. /comics/album/ShadBase-Comics
                                     pageStack.addLast(StackItem(url, AUTHOR))
-                                    if (searchMangas.isEmpty()) searchMangas += internalParse(client.get(stackUrl()).asJsoup()) else null
+                                    if (searchMangas.isEmpty()) searchMangas += internalParse(client.get(stackUrl(), Fetch.DOCUMENT).asJsoup()) else null
                                 } else {
                                     // eg. 2 -> /comics/album/ShadBase-Comics/RickMorty
                                     // eg. 3 -> /comics/album/Incase-Comics/Comic/Alfie
@@ -173,7 +174,7 @@ abstract class EroMuse : KeiSource() {
             currentSortingMode = sortingMode
         }
 
-        return parseManga(client.get(stackUrl()).asJsoup())
+        return parseManga(client.get(stackUrl(), Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage = fetchManga("$baseUrl/porn/album/Various-Authors", page, "")
@@ -206,13 +207,13 @@ abstract class EroMuse : KeiSource() {
             }
         }
 
-        return parseManga(client.get(stackUrl()).asJsoup())
+        return parseManga(client.get(stackUrl(), Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseDetails(document).apply {
             title = document.title().substringBefore(" | ")
         }
@@ -227,7 +228,7 @@ abstract class EroMuse : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         // Details and chapters come from the same page
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val details = parseDetails(document).apply { title = manga.title }
         return SMangaUpdate(details, if (fetchChapters) parseChapters(document) else chapters)
     }
@@ -283,7 +284,7 @@ abstract class EroMuse : KeiSource() {
                 }
             }
 
-            document.nextPageOrNull()?.let { url -> parseChapters(client.get(url).asJsoup(), false, chapters) }
+            document.nextPageOrNull()?.let { url -> parseChapters(client.get(url, Fetch.DOCUMENT).asJsoup(), false, chapters) }
             return chapters
         }
 
@@ -305,7 +306,7 @@ abstract class EroMuse : KeiSource() {
             document.select(linkedChapterSelector)
                 .mapNotNull {
                     nestedChapterDocuments.add(
-                        client.get(it.attr("abs:href")).asJsoup(),
+                        client.get(it.attr("abs:href"), Fetch.DOCUMENT).asJsoup(),
                     )
                 }
 
@@ -317,7 +318,7 @@ abstract class EroMuse : KeiSource() {
             )
 
             document.nextPageOrNull()?.let { url ->
-                pages.addAll(parsePages(client.get(url).asJsoup(), nestedChapterDocuments, pages))
+                pages.addAll(parsePages(client.get(url, Fetch.DOCUMENT).asJsoup(), nestedChapterDocuments, pages))
             }
 
             while (!nestedChapterDocuments.isEmpty()) {
@@ -327,7 +328,7 @@ abstract class EroMuse : KeiSource() {
             return pages
         }
 
-        return parsePages(client.get(getChapterUrl(chapter)).asJsoup())
+        return parsePages(client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup())
     }
 
     // Filters

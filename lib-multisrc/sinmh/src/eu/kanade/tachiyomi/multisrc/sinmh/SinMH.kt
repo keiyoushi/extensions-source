@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -56,7 +57,7 @@ abstract class SinMH : KeiSource() {
     // Popular
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/list/click/?page=$page").asJsoup()
+        val document = client.get("$baseUrl/list/click/?page=$page", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(popularMangaSelector()).map(::popularMangaFromElement)
         val hasNextPage = popularMangaNextPageSelector()?.let { document.selectFirst(it) } != null
         return MangasPage(mangas, hasNextPage)
@@ -69,7 +70,7 @@ abstract class SinMH : KeiSource() {
     // Latest
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/list/update/?page=$page").asJsoup()
+        val document = client.get("$baseUrl/list/update/?page=$page", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(latestUpdatesSelector()).map(::latestUpdatesFromElement)
         val hasNextPage = latestUpdatesNextPageSelector()?.let { document.selectFirst(it) } != null
         return MangasPage(mangas, hasNextPage)
@@ -103,7 +104,7 @@ abstract class SinMH : KeiSource() {
                 append(sort).append("?page=").append(page)
             }
         }
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(searchMangaSelector()).map(::searchMangaFromElement)
         val hasNextPage = searchMangaNextPageSelector()?.let { document.selectFirst(it) } != null
         return MangasPage(mangas, hasNextPage)
@@ -120,7 +121,7 @@ abstract class SinMH : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(mobileUrl + manga.url).asJsoup()
+        val document = client.get(mobileUrl + manga.url, Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document))
     }
 
@@ -178,11 +179,11 @@ abstract class SinMH : KeiSource() {
 
     private var imageHost: String? = null
 
-    private suspend fun getImageHost(): String = imageHost ?: client.get("$baseUrl/js/config.js").body.string().let { script ->
+    private suspend fun getImageHost(): String = imageHost ?: client.get("$baseUrl/js/config.js", Fetch.SCRIPT).body.string().let { script ->
         Regex("""resHost:.+?"?domain"?:\["(.+?)"""").find(script)?.groupValues?.get(1).orEmpty()
     }.also { imageHost = it }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(pageListUrl(chapter)).asJsoup(), getImageHost())
+    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(pageListUrl(chapter), Fetch.DOCUMENT).asJsoup(), getImageHost())
 
     // baseUrl/js/common.js/getChapterImage()
     protected open fun pageListParse(document: Document, imageHost: String): List<Page> {
@@ -210,7 +211,7 @@ abstract class SinMH : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = parseCategories(client.get("$baseUrl/list/").asJsoup()).toJsonElement()
+    override suspend fun fetchFilterData(): JsonElement = parseCategories(client.get("$baseUrl/list/", Fetch.DOCUMENT).asJsoup()).toJsonElement()
 
     protected open fun parseCategories(document: Document): List<Category> {
         val labelSelector = "label"

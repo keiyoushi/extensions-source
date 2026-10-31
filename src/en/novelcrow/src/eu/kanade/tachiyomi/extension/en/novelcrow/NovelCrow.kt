@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.toJsonElement
@@ -30,7 +31,7 @@ abstract class NovelCrow : MadaraNoAjax() {
         archivePage(page, "", query = query)
     }
 
-    override suspend fun fetchFilterData(): JsonElement = client.get(searchUrlBuilder(1, "").build()).asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get(searchUrlBuilder(1, "").build(), Fetch.DOCUMENT).asJsoup()
         .select("input[name='genre[]']")
         .map { GenreRoute(it.parent()!!.text(), it.attr("value"), "/$genreDirectory/${it.attr("value")}/") }
         .toJsonElement()

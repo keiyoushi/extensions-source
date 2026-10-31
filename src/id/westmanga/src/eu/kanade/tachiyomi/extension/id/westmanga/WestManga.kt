@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getLocalStorage
@@ -147,7 +148,7 @@ abstract class WestManga : KeiSource() {
 
         val url = "$baseUrl/api/visit-token".toHttpUrl()
         val response = runCatching {
-            client.get(url).parseAs<VisitTokenResponse>()
+            client.get(url, Fetch.XHR).parseAs<VisitTokenResponse>()
         }.getOrNull()
 
         if (response?.status == true && !response.token.isNullOrBlank()) {
@@ -171,11 +172,11 @@ abstract class WestManga : KeiSource() {
     }.build()
 
     private suspend inline fun <reified T> apiGet(url: HttpUrl, includeToken: Boolean = true): T = try {
-        client.get(url, apiHeaders(includeToken)).parseAs<T>()
+        client.get(url, apiHeaders(includeToken), Fetch.XHR).parseAs<T>()
     } catch (e: Exception) {
         if (e is HttpException && (e.code == 403 || e.code == 404)) {
             getVisitToken(forceRefresh = true)
-            client.get(url, apiHeaders(includeToken)).parseAs<T>()
+            client.get(url, apiHeaders(includeToken), Fetch.XHR).parseAs<T>()
         } else {
             throw e
         }

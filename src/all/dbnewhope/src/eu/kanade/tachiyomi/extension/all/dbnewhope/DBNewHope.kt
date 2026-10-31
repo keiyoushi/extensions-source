@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -67,8 +68,8 @@ abstract class DBNewHope : KeiSource() {
     ): SMangaUpdate {
         val entry = languages.firstOrNull { it.listPath == manga.url } ?: languages.first()
         return coroutineScope {
-            val details = async { parseMangaDetails(client.get(baseUrl + entry.landingPath).asJsoup(), entry) }
-            val chapterList = async { parseChapterList(client.get(baseUrl + entry.listPath).asJsoup()) }
+            val details = async { parseMangaDetails(client.get(baseUrl + entry.landingPath, Fetch.DOCUMENT).asJsoup(), entry) }
+            val chapterList = async { parseChapterList(client.get(baseUrl + entry.listPath, Fetch.DOCUMENT).asJsoup()) }
             SMangaUpdate(details.await(), chapterList.await())
         }
     }
@@ -109,12 +110,12 @@ abstract class DBNewHope : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterBase = chapter.url.substringBefore("?page=")
-        val firstDocument = client.get(chapterBase).asJsoup()
+        val firstDocument = client.get(chapterBase, Fetch.DOCUMENT).asJsoup()
         val pageCount = firstDocument.select("div.nav select option").size.coerceAtLeast(1)
         val firstUrl = pageImage(firstDocument)
         val restUrls = coroutineScope {
             (2..pageCount).map { page ->
-                async { pageImage(client.get("$chapterBase?page=$page").asJsoup()) }
+                async { pageImage(client.get("$chapterBase?page=$page", Fetch.DOCUMENT).asJsoup()) }
             }.awaitAll()
         }
         return (listOf(firstUrl) + restUrls)

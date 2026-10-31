@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -31,11 +32,11 @@ abstract class DuaLeoTruyen : KeiSource() {
 
     // ============================== Popular ===============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = mangaListParse(client.get("$baseUrl/truyen-tranh-hot?page=$page").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = mangaListParse(client.get("$baseUrl/truyen-tranh-hot?page=$page", Fetch.DOCUMENT).asJsoup())
 
     // ============================== Latest ================================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaListParse(client.get("$baseUrl/truyen-moi-cap-nhat?page=$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaListParse(client.get("$baseUrl/truyen-moi-cap-nhat?page=$page", Fetch.DOCUMENT).asJsoup())
 
     // ============================== Search ================================
 
@@ -44,12 +45,12 @@ abstract class DuaLeoTruyen : KeiSource() {
             val url = "$baseUrl/tim-kiem".toHttpUrl().newBuilder()
                 .addQueryParameter("key", query)
                 .build()
-            return mangaListParse(client.get(url).asJsoup())
+            return mangaListParse(client.get(url, Fetch.DOCUMENT).asJsoup())
         }
 
         val genrePath = filters.firstInstanceOrNull<GenreFilter>()?.toUriPart()
         return if (genrePath != null) {
-            mangaListParse(client.get("$baseUrl$genrePath?page=$page").asJsoup())
+            mangaListParse(client.get("$baseUrl$genrePath?page=$page", Fetch.DOCUMENT).asJsoup())
         } else {
             getPopularManga(page)
         }
@@ -59,7 +60,7 @@ abstract class DuaLeoTruyen : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get(baseUrl).asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         .select(".main_menu .sub_menu a[href*=/the-loai/]")
         .mapNotNull { element ->
             val name = element.text().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
@@ -149,7 +150,7 @@ abstract class DuaLeoTruyen : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = mangaDetailsParse(document, manga),
             chapters = chapterListParse(document),
@@ -161,7 +162,7 @@ abstract class DuaLeoTruyen : KeiSource() {
     private val imageDecryptor = ImageDecryptor()
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
         imageDecryptor.extractSecret(document)
 
         return document.select(".content_view_chap img, .content_view_chap canvas")

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.tryParseDate
@@ -51,7 +52,7 @@ abstract class ReadComicsOnline : MMRCMS() {
     override fun searchMangaSelector(): String = "div a:has(img)"
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val resDoc = client.get(searchMangaUrl(page, query, filters)).asJsoup()
+        val resDoc = client.get(searchMangaUrl(page, query, filters), Fetch.DOCUMENT).asJsoup()
         val mangas = resDoc.select(searchMangaSelector()).map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))

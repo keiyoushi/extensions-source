@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -63,7 +64,7 @@ abstract class MangaRawClub :
                 addQueryParameter("results", page.toString())
             }.build()
 
-            val document = client.get(url).asJsoup()
+            val document = client.get(url, Fetch.DOCUMENT).asJsoup()
             val mangas = document.select(".novel-item").map { element ->
                 SManga.create().apply {
                     title = element.selectFirst(".novel-title")!!.text()
@@ -135,7 +136,7 @@ abstract class MangaRawClub :
     }
 
     private suspend fun browseMangaList(url: HttpUrl): MangasPage {
-        val data = client.get(url).parseAs<Dto>()
+        val data = client.get(url, Fetch.XHR).parseAs<Dto>()
         val document = Jsoup.parseBodyFragment(data.html, baseUrl)
         val mangas = document.select(".comic-card").map { searchMangaFromElement(it) }
 
@@ -164,7 +165,7 @@ abstract class MangaRawClub :
     }
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga = SManga.create().apply {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         document.selectFirst(".novel-header") ?: throw Exception("Page not found")
 
         url = manga.url
@@ -217,7 +218,7 @@ abstract class MangaRawClub :
 
     // ============================= Chapters ==============================
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
-        val document = client.get(baseUrl + manga.url + "all-chapters/").asJsoup()
+        val document = client.get(baseUrl + manga.url + "all-chapters/", Fetch.DOCUMENT).asJsoup()
         return document.select("ul.chapter-list > li").map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
@@ -238,7 +239,7 @@ abstract class MangaRawClub :
 
     // =============================== Pages ===============================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("#chapter-reader img")
             .filterNot { it.absUrl("src").contains("credits-mgeko.png") }
             .mapIndexed { i, img ->

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -57,7 +58,7 @@ abstract class FastScan : KeiSource() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        return parseMangaListPage(client.get(url))
+        return parseMangaListPage(client.get(url, Fetch.DOCUMENT))
     }
 
     private fun parseMangaListPage(response: Response): MangasPage {
@@ -86,7 +87,7 @@ abstract class FastScan : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host) return null
 
         val detailUrl = if (url.pathSegments.getOrNull(1)?.startsWith("chuong-") == true) {
-            client.get(url).asJsoup().select(".breadcrumb a[href]")
+            client.get(url, Fetch.DOCUMENT).asJsoup().select(".breadcrumb a[href]")
                 .map { it.absUrl("href").toHttpUrl() }
                 .firstOrNull { detailPathRegex.matches(it.encodedPath) }
                 ?: return null
@@ -108,7 +109,7 @@ abstract class FastScan : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
             chapters = parseChapterList(document),
@@ -154,7 +155,7 @@ abstract class FastScan : KeiSource() {
     // ============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         return document.select("#chapter_content img, .page-chapter img, img.lozad")
             .mapNotNull { element ->
@@ -171,7 +172,7 @@ abstract class FastScan : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get(baseUrl).asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         .select("a[href*=/the-loai/]")
         .mapIndexedNotNull { index, element ->
             val name = element.text().takeIf { it.isNotEmpty() } ?: return@mapIndexedNotNull null
@@ -187,7 +188,7 @@ abstract class FastScan : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val relatedList = document.select("h3")
             .firstOrNull { it.text().contains("liên quan", ignoreCase = true) }
             ?.nextElementSibling()

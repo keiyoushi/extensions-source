@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -23,7 +24,7 @@ abstract class ScantradUnion : KeiSource() {
     // ========================= Popular =========================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/projets/").asJsoup()
+        val document = client.get("$baseUrl/projets/", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".index-top3-a").map { element ->
             SManga.create().apply {
                 title = formatMangaTitle(element.select(".index-top3-title").text())
@@ -39,7 +40,7 @@ abstract class ScantradUnion : KeiSource() {
     // ========================= Latest =========================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".dernieresmaj .colonne").map { element ->
             SManga.create().apply {
                 val titleLink = element.selectFirst("a.text-truncate")!!
@@ -69,7 +70,7 @@ abstract class ScantradUnion : KeiSource() {
             else -> return null
         }
 
-        val document = client.get(mangaUrl).asJsoup()
+        val document = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
         if (document.selectFirst(".projet-description") == null) return null
 
         return document.toSManga().apply {
@@ -85,7 +86,7 @@ abstract class ScantradUnion : KeiSource() {
             addQueryParameter("p_asp_data", SEARCH_URL_SUFFIX_DATA)
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select("article.post-outer").map { element ->
             SManga.create().apply {
@@ -107,7 +108,7 @@ abstract class ScantradUnion : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(document.toSManga(), document.toChapterList())
     }
 
@@ -144,7 +145,7 @@ abstract class ScantradUnion : KeiSource() {
     // ========================= Pages =========================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("#webtoon a img")
             .map { imgElem ->
                 val imgElemDataSrc = imgElem.attr("data-src")

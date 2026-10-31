@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -37,7 +38,7 @@ abstract class ScansGG : KeiSource() {
             .addQueryParameter("limit", POPULAR_LIMIT.toString())
             .addQueryParameter("offset", ((page - 1) * POPULAR_LIMIT).toString())
             .build()
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         return popularMangaParse(response)
     }
 
@@ -61,7 +62,7 @@ abstract class ScansGG : KeiSource() {
             .addQueryParameter("group_details", "true")
             .addQueryParameter("sort", "date")
             .build()
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         return latestUpdatesParse(response)
     }
 
@@ -89,7 +90,7 @@ abstract class ScansGG : KeiSource() {
             addQueryParameter("q_status", statuses.joinToString(",", "[", "]"))
             addQueryParameter("q_tags", tags.joinToString(",", "[", "]"))
         }.build()
-        val response = client.get(url)
+        val response = client.get(url, Fetch.DOCUMENT)
         return popularMangaParse(response)
     }
 
@@ -113,7 +114,7 @@ abstract class ScansGG : KeiSource() {
             .addQueryParameter("sources", "true")
             .build()
 
-        return client.get(url)
+        return client.get(url, Fetch.XHR)
             .parseAs<ResponseDto<SeriesDto>>()
             .data.toSManga(cdnUrl, tagsMap)
     }
@@ -138,7 +139,7 @@ abstract class ScansGG : KeiSource() {
                 .addQueryParameter("group_details", "true")
                 .build()
 
-            val dto = client.get(url)
+            val dto = client.get(url, Fetch.XHR)
                 .parseAs<ResponseDto<List<ChapterDto>>>()
 
             chapters += dto.data.map { it.toSChapter(manga.url, dateFormat) }
@@ -151,7 +152,7 @@ abstract class ScansGG : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(apiUrl + chapter.url)
+        val response = client.get(apiUrl + chapter.url, Fetch.XHR)
         val dto = response.parseAs<ResponseDto<PageListDto>>()
         return dto.data.toPages(cdnUrl)
     }

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -34,11 +35,11 @@ abstract class TeleTruyen : KeiSource() {
 
     // ============================== Popular ===============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/danh-sach/xem-nhieu?page=$page"))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/danh-sach/xem-nhieu?page=$page", Fetch.DOCUMENT))
 
     // =============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/danh-sach/truyen-moi-cap-nhat?page=$page"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/danh-sach/truyen-moi-cap-nhat?page=$page", Fetch.DOCUMENT))
 
     // =============================== Search ===============================
 
@@ -49,14 +50,14 @@ abstract class TeleTruyen : KeiSource() {
             genre != null -> "$baseUrl/the-loai/$genre?page=$page"
             else -> "$baseUrl/tim-kiem-nang-cao?page=$page"
         }
-        return parseMangaList(client.get(url))
+        return parseMangaList(client.get(url, Fetch.DOCUMENT))
     }
 
     // ============================== Filter ================================
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get(baseUrl).asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         .select("a[href*='/the-loai/']")
         .mapNotNull { link ->
             val slug = link.attr("href").substringAfterLast("/the-loai/").substringBefore("?")
@@ -97,7 +98,7 @@ abstract class TeleTruyen : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
             chapters = parseChapterList(document),
@@ -141,7 +142,7 @@ abstract class TeleTruyen : KeiSource() {
     // ================================ Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
         val imageUrls = document.select("#view-chapter img[data-src]").mapNotNull { image ->
             image.absUrl("data-src").takeIf { it.isNotBlank() }
         }
@@ -154,7 +155,7 @@ abstract class TeleTruyen : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         val heading = document.select("h3.blue-title")
             .firstOrNull { it.text().equals("Truyện liên quan", ignoreCase = true) }
             ?: return emptyList()

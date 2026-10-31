@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -55,7 +56,7 @@ abstract class DarkLegacyComics : KeiSource() {
 
         val updatedChapters = if (manga.url == "/archive") {
             // The archive lists every comic twice (ascending and descending) for its JS reorder toggle
-            client.get(baseUrl + manga.url).asJsoup().select(".archive_link").map {
+            client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup().select(".archive_link").map {
                 val index = it.selectFirst(".index")!!.text()
                 val date = it.selectFirst(".date")!!.ownText()
                 val title = it.selectFirst(".name")!!.text()
@@ -89,7 +90,7 @@ abstract class DarkLegacyComics : KeiSource() {
         return SMangaUpdate(manga, updatedChapters)
     }
 
-    override suspend fun getPageList(chapter: SChapter) = client.get(baseUrl + chapter.url).asJsoup().select(".comic > img").mapIndexed { idx, img ->
+    override suspend fun getPageList(chapter: SChapter) = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup().select(".comic > img").mapIndexed { idx, img ->
         Page(idx, imageUrl = img.absUrl("src"))
     }
 

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.array
@@ -27,7 +28,6 @@ import java.time.format.DateTimeFormatter
 
 @Source
 abstract class LanorTrad : KeiSource() {
-
     override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(fetchSeries().map { it.toSManga(baseUrl) }, false)
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -77,7 +77,7 @@ abstract class LanorTrad : KeiSource() {
         val seriesNode = chapterData.index[seriesId]?.obj ?: return emptyList()
         val defaultPrefix = seriesNode.getStringOrNull("p") ?: ""
         val folder = seriesNode["c"]?.array?.let { findFolder(it, defaultPrefix, num) } ?: return emptyList()
-        val pagesFile = client.get("$baseUrl/$pagesPath").parseAs<JsonObject> {
+        val pagesFile = client.get("$baseUrl/$pagesPath", Fetch.SCRIPT).parseAs<JsonObject> {
             it.substringAfterLast("=").substringBeforeLast(";")
         }
         val files = runCatching {
@@ -114,7 +114,7 @@ abstract class LanorTrad : KeiSource() {
         return dto.toSManga(baseUrl)
     }
 
-    private suspend fun fetchSeries(): List<Dto> = client.get("$baseUrl/js/data/series.js").parseAs {
+    private suspend fun fetchSeries(): List<Dto> = client.get("$baseUrl/js/data/series.js", Fetch.SCRIPT).parseAs {
         quoteUnquotedKeys(
             it.replace(COMMENT_REGEX, "")
                 .substringAfter("window.SERIES =")
@@ -124,7 +124,7 @@ abstract class LanorTrad : KeiSource() {
 
     // Single read: chapter index and page map share one response.
     private suspend fun fetchChapterData(): ChapterData {
-        val body = client.get("$baseUrl/js/data/chapters.js").use { it.body.string() }
+        val body = client.get("$baseUrl/js/data/chapters.js", Fetch.SCRIPT).use { it.body.string() }
         val index = body.substringAfter("return expand(")
             .substringBeforeLast("})();")
             .substringBeforeLast(");")

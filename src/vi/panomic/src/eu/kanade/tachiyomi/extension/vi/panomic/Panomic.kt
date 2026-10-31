@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.post
@@ -60,7 +61,7 @@ abstract class Panomic : KeiSource() {
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/nhieu-xem-nhat/").asJsoup()
+        val document = client.get("$baseUrl/nhieu-xem-nhat/", Fetch.DOCUMENT).asJsoup()
         val mangas = parseListManga(document.select("ul.most-views.single-list-comic li.position-relative"))
         return MangasPage(mangas, hasNextPage = false)
     }
@@ -69,7 +70,7 @@ abstract class Panomic : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = if (page == 1) baseUrl else "$baseUrl/page/$page/"
-        return parseLatestPage(client.get(url).asJsoup())
+        return parseLatestPage(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private fun parseLatestPage(document: Document): MangasPage {
@@ -108,14 +109,14 @@ abstract class Panomic : KeiSource() {
                 .add("keyword", query)
                 .build()
 
-            return parseSearchApiResponse(client.post(searchAjaxUrl, searchHeaders, formBody))
+            return parseSearchApiResponse(client.post(searchAjaxUrl, searchHeaders, Fetch.XHR, formBody))
         }
 
         val filterUri = filters.firstSelectedFilterUri()
         if (filterUri != null) {
             val pageSuffix = if (page == 1) "" else "page/$page/"
             val filterUrl = "$baseUrl${filterUri.ensureTrailingSlash()}$pageSuffix"
-            return parseFilterPage(client.get(filterUrl).asJsoup())
+            return parseFilterPage(client.get(filterUrl, Fetch.DOCUMENT).asJsoup())
         }
 
         return getLatestUpdates(page)
@@ -187,7 +188,7 @@ abstract class Panomic : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
             chapters = parseChapterList(document),
@@ -262,7 +263,7 @@ abstract class Panomic : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = "$baseUrl${chapter.url}"
-        var html = client.get(chapterUrl).body.string()
+        var html = client.get(chapterUrl, Fetch.DOCUMENT).body.string()
 
         val loginButton = Jsoup.parse(html).selectFirst(
             "button.v-btn.v-big-btn[data-toggle=modal][data-target='#info-modal']",
@@ -297,7 +298,7 @@ abstract class Panomic : KeiSource() {
                 .set("Referer", chapterUrl)
                 .build()
 
-            val postResponse = client.post(postAction, postHeaders, formBody, ensureSuccess = false)
+            val postResponse = client.post(postAction, postHeaders, Fetch.DOCUMENT, formBody, ensureSuccess = false)
             val postHtml = postResponse.body.string()
 
             val setCookieHeaders = postResponse.headers("Set-Cookie") +
@@ -311,7 +312,7 @@ abstract class Panomic : KeiSource() {
             html = if (postResponse.isSuccessful && !postHtml.contains("entered_secret_code")) {
                 postHtml
             } else {
-                client.get(chapterUrl).body.string()
+                client.get(chapterUrl, Fetch.DOCUMENT).body.string()
             }
 
             if ("entered_secret_code" in html) {
@@ -330,7 +331,7 @@ abstract class Panomic : KeiSource() {
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         return FilterData(
             genres = document.parseFilterOptions("#nav-tags"),
             groups = document.parseFilterOptions("#nav-teams"),
@@ -353,7 +354,7 @@ abstract class Panomic : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         val relatedSection = document.select("h3.blue-title")
             .firstOrNull { it.text() == "Truyện liên quan" }
             ?.parent()

@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -59,7 +60,7 @@ abstract class Viz :
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$baseUrl/manga-books/$servicePath/section/trending-manga", cacheControl = CacheControl.FORCE_NETWORK)
+        val response = client.get("$baseUrl/manga-books/$servicePath/section/trending-manga", Fetch.DOCUMENT, cacheControl = CacheControl.FORCE_NETWORK)
         return parseMangaPage(response)
     }
 
@@ -70,7 +71,7 @@ abstract class Viz :
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val response = client.get("$baseUrl/manga-books/$servicePath/section/free-chapters", cacheControl = CacheControl.FORCE_NETWORK)
+        val response = client.get("$baseUrl/manga-books/$servicePath/section/free-chapters", Fetch.DOCUMENT, cacheControl = CacheControl.FORCE_NETWORK)
         return parseMangaPage(response)
     }
 
@@ -79,7 +80,7 @@ abstract class Viz :
             .addQueryParameter("search", query)
             .addQueryParameter("category", searchPath)
             .build()
-        val document = client.get(url, cacheControl = CacheControl.FORCE_NETWORK).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT, cacheControl = CacheControl.FORCE_NETWORK).asJsoup()
         val mangas = document.select("div.p-cs-tile a.o_property-link").map(::mangaFromElement)
             .filter { manga -> manga.title.contains(query, true) }
         return MangasPage(mangas, false)
@@ -119,7 +120,7 @@ abstract class Viz :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga), cacheControl = CacheControl.FORCE_NETWORK).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT, cacheControl = CacheControl.FORCE_NETWORK).asJsoup()
 
         val seriesIntro = document.selectFirst("section#series-intro")!!
         val sManga = SManga.create().apply {
@@ -179,7 +180,7 @@ abstract class Viz :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val pageCount = document.selectFirst("script:containsData(var pages)")!!.data()
             .substringAfter("= ")
             .substringBefore(";")
@@ -218,13 +219,13 @@ abstract class Viz :
             .addQueryParameter("pages", index)
             .build()
 
-        return client.get(pageUrl, newHeaders, CacheControl.FORCE_NETWORK).parseAs()
+        return client.get(pageUrl, newHeaders, Fetch.XHR, CacheControl.FORCE_NETWORK).parseAs()
     }
 
     private val subscription = Regex("""var $subscriber\s*=\s*(true|false)""")
 
     private suspend fun checkIfIsLoggedIn(): Boolean = try {
-        val document = client.get("$baseUrl/account/refresh_login_links").asJsoup()
+        val document = client.get("$baseUrl/account/refresh_login_links", Fetch.DOCUMENT).asJsoup()
         loggedIn = document.selectFirst("div#o_account-links-content")
             ?.attr("logged_in")?.toBoolean() ?: false
 

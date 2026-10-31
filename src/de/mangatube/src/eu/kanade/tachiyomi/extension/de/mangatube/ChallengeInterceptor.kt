@@ -2,6 +2,8 @@ package eu.kanade.tachiyomi.extension.de.mangatube
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.utils.parseAs
 import okhttp3.CookieJar
 import okhttp3.Headers
@@ -51,12 +53,12 @@ class ChallengeInterceptor(
     }
 
     private fun bootstrapSession() {
-        val response = client.newCall(GET(baseUrl, headers)).execute()
+        val response = client.newCall(GET(baseUrl, headers).newBuilder().fetch(Fetch.DOCUMENT).build()).execute()
         val bodyString = response.peekBody(Long.MAX_VALUE).string()
         if (isChallengePage(bodyString)) {
             response.close()
             solveChallenge(bodyString)
-            client.newCall(GET(baseUrl, headers)).execute().close()
+            client.newCall(GET(baseUrl, headers).newBuilder().fetch(Fetch.DOCUMENT).build()).execute().close()
             return
         }
         response.close()
@@ -77,7 +79,7 @@ class ChallengeInterceptor(
             .build()
 
         Thread.sleep(CHALLENGE_DELAY_MS)
-        client.newCall(POST("$baseUrl/", challengeHeaders))
+        client.newCall(POST("$baseUrl/", challengeHeaders).newBuilder().fetch(Fetch.DOCUMENT).build())
             .execute()
             .use { response ->
                 if (!response.isSuccessful) {

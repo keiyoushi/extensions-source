@@ -14,6 +14,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.lib.publus.PublusContent
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
@@ -68,7 +69,7 @@ abstract class PixivComic :
             .addQueryParameter("count", count.toString())
             .build()
 
-        val ranking = client.get(url).parseAs<ApiResponse<PopularResponse>>().data.ranking
+        val ranking = client.get(url, Fetch.XHR).parseAs<ApiResponse<PopularResponse>>().data.ranking
         val mangas = ranking
             .filter { alreadyLoadedPopularMangaIds.add(it.id) }
             .map { it.toSManga() }
@@ -80,7 +81,7 @@ abstract class PixivComic :
         val url = "$apiUrl/works/recent_updates/v2".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.XHR).toMangasPage()
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = coroutineScope {
@@ -100,7 +101,7 @@ abstract class PixivComic :
                     .addQueryParameter("page", page.toString())
                     .build()
             }
-            return@coroutineScope client.get(url).toMangasPage()
+            return@coroutineScope client.get(url, Fetch.XHR).toMangasPage()
         }
 
         if (page == 1) {
@@ -114,7 +115,7 @@ abstract class PixivComic :
                     .addPathSegment(query)
                     .addQueryParameter("page", page.toString())
                     .build()
-                client.get(url).parseAs<ApiResponse<SeriesResponse>>().data
+                client.get(url, Fetch.XHR).parseAs<ApiResponse<SeriesResponse>>().data
             }
         } else {
             null
@@ -125,7 +126,7 @@ abstract class PixivComic :
                     .addPathSegment(query)
                     .addQueryParameter("page", page.toString())
                     .build()
-                client.get(url).parseAs<ApiResponse<StoreSearchResponse>>().data
+                client.get(url, Fetch.XHR).parseAs<ApiResponse<StoreSearchResponse>>().data
             }
         } else {
             null
@@ -160,7 +161,7 @@ abstract class PixivComic :
         )
     }
 
-    override suspend fun fetchFilterData() = client.get("$apiUrl/categories").parseAs<ApiResponse<CategoryResponse>>().data.categories.map { it.name }.toJsonElement()
+    override suspend fun fetchFilterData() = client.get("$apiUrl/categories", Fetch.XHR).parseAs<ApiResponse<CategoryResponse>>().data.categories.map { it.name }.toJsonElement()
 
     override fun getMangaUrl(manga: SManga): String = if (manga.memo["store"]?.stringOrNull == "1") {
         "$baseUrl/store/products/${manga.url}"
@@ -222,13 +223,13 @@ abstract class PixivComic :
         )
     }
 
-    private suspend fun fetchOfficialWork(mangaId: String): OfficialWork = client.get("$apiUrl/works/v5/$mangaId").parseAs<ApiResponse<DetailsResponse>>().data.officialWork
+    private suspend fun fetchOfficialWork(mangaId: String): OfficialWork = client.get("$apiUrl/works/v5/$mangaId", Fetch.XHR).parseAs<ApiResponse<DetailsResponse>>().data.officialWork
 
     private suspend fun fetchEpisodes(mangaId: String): List<Episode> {
         val url = "$apiUrl/works/$mangaId/episodes/v2".toHttpUrl().newBuilder()
             .addQueryParameter("order", "desc")
             .build()
-        return client.get(url)
+        return client.get(url, Fetch.XHR)
             .parseAs<ApiResponse<ChapterResponse>>()
             .data.episodes
             .mapNotNull { it.episode }
@@ -239,12 +240,12 @@ abstract class PixivComic :
             .addQueryParameter("order", "desc")
             .addQueryParameter("view_type", "product_detail")
             .build()
-        return client.get(url, ensureSuccess = false)
+        return client.get(url, Fetch.XHR, ensureSuccess = false)
             .parseAs<ApiResponse<VolumeResponse>>()
             .data.variants
     }
 
-    private suspend fun fetchProduct(storeProductKey: String): ProductResponse = client.get("$apiUrl/store/products/v2/$storeProductKey", ensureSuccess = false).parseAs<ApiResponse<ProductResponse>>().data
+    private suspend fun fetchProduct(storeProductKey: String): ProductResponse = client.get("$apiUrl/store/products/v2/$storeProductKey", Fetch.XHR, ensureSuccess = false).parseAs<ApiResponse<ProductResponse>>().data
 
     override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.any { it.isLetter() }) {
         "$baseUrl/store/viewers/${chapter.url}/master"
@@ -254,7 +255,7 @@ abstract class PixivComic :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         if (chapter.url.any { it.isLetter() }) {
-            val authUrl = client.get(getChapterUrl(chapter)).use { response ->
+            val authUrl = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).use { response ->
                 generateSequence(response) { it.priorResponse }
                     .map { it.request.url }
                     .firstOrNull { it.queryParameter("u1") != null || it.queryParameter("u2") != null }
@@ -274,7 +275,7 @@ abstract class PixivComic :
                     }
                 }.build()
 
-            val content = client.get(cUrl).parseAs<PublusContent>()
+            val content = client.get(cUrl, Fetch.XHR).parseAs<PublusContent>()
             if (content.url.isNullOrEmpty()) {
                 throw Exception("Log in via WebView and purchase this volume to read.")
             }
@@ -282,13 +283,13 @@ abstract class PixivComic :
             return client.fetchPages(content.url!!, content.authInfo?.toAuth(), hashFilenames = false)
         }
 
-        val salt = client.get(getChapterUrl(chapter)).extractNextJs<PageProps>()?.salt.orEmpty()
+        val salt = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).extractNextJs<PageProps>()?.salt.orEmpty()
         val (time, hash) = getTimeAndHash(salt)
         val header = headersBuilder()
             .add("X-Client-Time", time)
             .add("X-Client-Hash", hash)
             .build()
-        val pages = client.get("$apiUrl/episodes/${chapter.url}/read_v4", header)
+        val pages = client.get("$apiUrl/episodes/${chapter.url}/read_v4", header, Fetch.XHR)
             .parseAs<ApiResponse<ViewerResponse>>()
             .data.readingEpisode.pages
         if (pages.isNullOrEmpty()) {

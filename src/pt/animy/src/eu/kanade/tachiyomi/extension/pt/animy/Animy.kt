@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -22,7 +23,7 @@ abstract class Animy : KeiSource() {
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/mangas/meta/genres").parseAs<GenresDto>().genres.toJsonElement()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/mangas/meta/genres", Fetch.XHR).parseAs<GenresDto>().genres.toJsonElement()
 
     override suspend fun getPopularManga(page: Int): MangasPage = listMangas(page) {
         addQueryParameter("sort", "popular")
@@ -44,7 +45,7 @@ abstract class Animy : KeiSource() {
             params()
         }.build()
 
-        val response = client.get(url).parseAs<MangaListResponse>()
+        val response = client.get(url, Fetch.XHR).parseAs<MangaListResponse>()
         val offset = (page - 1) * PAGE_SIZE
         return MangasPage(response.items.map { it.toSManga() }, offset + response.items.size < response.total)
     }
@@ -85,7 +86,7 @@ abstract class Animy : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = client.get("$apiUrl/mangas/${manga.url}").parseAs<MangaDetails>()
+        val details = client.get("$apiUrl/mangas/${manga.url}", Fetch.XHR).parseAs<MangaDetails>()
         return SMangaUpdate(
             details.toSManga(),
             details.chapters.map { it.toSChapter(manga.url.toLong()) }.asReversed(),
@@ -96,12 +97,12 @@ abstract class Animy : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "manga") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
-        return client.get("$apiUrl/mangas/slug/$slug").parseAs<MangaRef>().toSManga()
+        return client.get("$apiUrl/mangas/slug/$slug", Fetch.XHR).parseAs<MangaRef>().toSManga()
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (mangaId, number) = chapter.url.split("/")
-        return client.get("$apiUrl/mangas/$mangaId/chapters/$number")
+        return client.get("$apiUrl/mangas/$mangaId/chapters/$number", Fetch.XHR)
             .parseAs<ChapterDetails>()
             .toPageList()
     }

@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -26,7 +27,6 @@ import kotlin.time.Instant
 
 @Source
 abstract class HoraHentai : KeiSource() {
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         rateLimit(2) { !it.encodedPath.startsWith("/wp-content/uploads/") }
     }
@@ -41,7 +41,7 @@ abstract class HoraHentai : KeiSource() {
                 .addQueryParameter("s", query.trim())
                 .build()
 
-            return parseListing(client.get(url).asJsoup())
+            return parseListing(client.get(url, Fetch.DOCUMENT).asJsoup())
         }
 
         val tag = filters.firstInstanceOrNull<TagFilter>()?.selected().orEmpty()
@@ -54,7 +54,7 @@ abstract class HoraHentai : KeiSource() {
         }
     }
 
-    private suspend fun fetchListing(listingUrl: String, page: Int): MangasPage = parseListing(client.get(listingUrl + pagePath(page)).asJsoup())
+    private suspend fun fetchListing(listingUrl: String, page: Int): MangasPage = parseListing(client.get(listingUrl + pagePath(page), Fetch.DOCUMENT).asJsoup())
 
     private fun pagePath(page: Int): String = if (page > 1) "page/$page/" else ""
 
@@ -90,7 +90,7 @@ abstract class HoraHentai : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val galleries = document.select("div.galeriaTabItem")
         val date = document.selectFirst("meta[property=article:published_time]")
@@ -144,7 +144,7 @@ abstract class HoraHentai : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val galleryId = chapter.url.substringAfter('#', "")
-        val document = client.get(baseUrl + chapter.url.substringBefore('#')).asJsoup()
+        val document = client.get(baseUrl + chapter.url.substringBefore('#'), Fetch.DOCUMENT).asJsoup()
 
         val images = when {
             galleryId.isEmpty() -> document.select("ul.post-fotos li img")
@@ -159,7 +159,7 @@ abstract class HoraHentai : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tags/").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tags/", Fetch.DOCUMENT).asJsoup()
         .select(".lista-tags a[href*=/tag/]")
         .mapNotNull { element ->
             val slug = element.absUrl("href").toHttpUrl().pathSegments.getOrNull(1)

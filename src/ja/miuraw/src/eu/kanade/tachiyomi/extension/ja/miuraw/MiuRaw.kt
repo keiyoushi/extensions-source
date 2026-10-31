@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -17,12 +18,12 @@ import java.util.Calendar
 @Source
 abstract class MiuRaw : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/manga/page/$page/?orderby=views").asJsoup()
+        val document = client.get("$baseUrl/manga/page/$page/?orderby=views", Fetch.DOCUMENT).asJsoup()
         return parseMangasPage(document)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/manga/page/$page/?orderby=date").asJsoup()
+        val document = client.get("$baseUrl/manga/page/$page/?orderby=date", Fetch.DOCUMENT).asJsoup()
         return parseMangasPage(document)
     }
 
@@ -37,7 +38,7 @@ abstract class MiuRaw : KeiSource() {
             addQueryParameter("post_type", "manga")
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseMangasPage(document)
     }
 
@@ -60,7 +61,7 @@ abstract class MiuRaw : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(parseDetails(document), parseChapters(document))
     }
 
@@ -94,7 +95,7 @@ abstract class MiuRaw : KeiSource() {
             throw Exception("この章のURLは古くなっています。マンガを更新してください。")
         }
 
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         return document.select(".reader-page img").mapIndexed { index, img ->
             Page(

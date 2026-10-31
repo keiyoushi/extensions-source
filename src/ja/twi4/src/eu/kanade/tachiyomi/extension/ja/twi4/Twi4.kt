@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -31,7 +32,7 @@ abstract class Twi4 : KeiSource() {
     // As the full catalog is consists of less than 50 manga, it is not worth implementing
     // We'll just list all manga in the catalog instead
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val doc = client.get(baseUrl).asJsoup()
+        val doc = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         // Manga that are recently updated don't show up on the full catalog
         // So we'll need to parse the recent updates section as well
         val mangas = doc.select("#lineup_recent > div > section, #lineup > div > section:not(.zadankai):not([id])")
@@ -80,7 +81,7 @@ abstract class Twi4 : KeiSource() {
         }
 
         val searchUrl = "$baseUrl/$slug/"
-        return mangaDetailsParse(client.get(searchUrl).asJsoup()).apply {
+        return mangaDetailsParse(client.get(searchUrl, Fetch.DOCUMENT).asJsoup()).apply {
             setUrlWithoutDomain(searchUrl)
         }
     }
@@ -96,9 +97,9 @@ abstract class Twi4 : KeiSource() {
         // While the status can be obtained at the home page, there is no such info at the details page
         val status = async {
             if (!fetchDetails) return@async manga.status
-            parseStatus(client.get(baseUrl).asJsoup(), manga.url)
+            parseStatus(client.get(baseUrl, Fetch.DOCUMENT).asJsoup(), manga.url)
         }
-        val document = client.get(hostRoot + manga.url).asJsoup()
+        val document = client.get(hostRoot + manga.url, Fetch.DOCUMENT).asJsoup()
         val details = mangaDetailsParse(document)
 
         SMangaUpdate(
@@ -178,7 +179,7 @@ abstract class Twi4 : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = hostRoot + chapter.url
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val doc = client.get(hostRoot + chapter.url).asJsoup()
+        val doc = client.get(hostRoot + chapter.url, Fetch.DOCUMENT).asJsoup()
         // The site interprets 1 page == 1 chapter
         // There should only be 1 article in the document
         val page = doc.selectFirst("article.comic") ?: return emptyList()

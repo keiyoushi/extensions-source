@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -66,7 +67,7 @@ abstract class Buttsmithy : KeiSource() {
     }
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga = if (manga.title.contains(alfieTitle)) {
-        val pageDoc = client.get(baseUrlAlfie).asJsoup()
+        val pageDoc = client.get(baseUrlAlfie, Fetch.DOCUMENT).asJsoup()
         val mostRecentChapTitle = extractChapterTitleFromPageDoc(pageDoc)
         val chapTitle = manga.title.substringAfter("Alfie - ").trim()
 
@@ -89,7 +90,7 @@ abstract class Buttsmithy : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = chapter.url
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val comicPageDoc = client.get(chapter.url).asJsoup()
+        val comicPageDoc = client.get(chapter.url, Fetch.DOCUMENT).asJsoup()
         val imageUrl = comicPageDoc.select("#comic img").attr("src")
 
         return listOf(Page(0, imageUrl = imageUrl))
@@ -111,7 +112,7 @@ abstract class Buttsmithy : KeiSource() {
         pageNr: Float = 0f,
         allChapters: MutableList<SChapter> = mutableListOf(),
     ): MutableList<SChapter> {
-        val currentDoc = client.get(currentPageUrl).asJsoup()
+        val currentDoc = client.get(currentPageUrl, Fetch.DOCUMENT).asJsoup()
         val currentPageComicPage = currentDoc.select("#comic img").first()!!
         val chapterTitle = currentPageComicPage.attr("alt")
 
@@ -161,7 +162,7 @@ abstract class Buttsmithy : KeiSource() {
         lastPageNr: Float = 0f,
         allChapters: MutableList<SChapter> = mutableListOf(),
     ): MutableList<SChapter> {
-        val currentDoc = client.get(currentPageUrl).asJsoup()
+        val currentDoc = client.get(currentPageUrl, Fetch.DOCUMENT).asJsoup()
         val pagesAsChapters = currentDoc.select("article.has-post-thumbnail .post-content")
             .mapIndexed { index, postElement ->
                 val postTitleElement = postElement.select(".post-info .post-title a")
@@ -206,7 +207,7 @@ abstract class Buttsmithy : KeiSource() {
      * @return a list of all comics currently hosted on buttsmithy with alfies chapters separated into separate mangas
      */
     private suspend fun fetchAllComics(): List<SManga> {
-        val mainDoc = client.get(baseUrl).asJsoup()
+        val mainDoc = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         // Incases choose your own adventure comics
         val cyoaSelector = "#menu-item-331"
         // Incase other comics (ignoring alfie because alfie has its own subdomain)
@@ -230,7 +231,7 @@ abstract class Buttsmithy : KeiSource() {
      * @return all of Alfies chapters as separate SManga
      */
     private suspend fun fetchAlfieSMangas(): List<SManga> {
-        val pageDoc = client.get(baseUrlAlfie).asJsoup()
+        val pageDoc = client.get(baseUrlAlfie, Fetch.DOCUMENT).asJsoup()
         val mostRecentChapTitle = extractChapterTitleFromPageDoc(pageDoc)
 
         val chaptersAsSManga: List<SManga> =

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -28,7 +29,7 @@ abstract class MangaLivreBlog : KeiSource() {
 
     // ============================== Popular ================================
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/manga/page/$page/?ordem=popular").asJsoup()
+        val document = client.get("$baseUrl/manga/page/$page/?ordem=popular", Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select(".manga-archive-grid article.home-manga-card").map(::mangaFromCard)
         val hasNextPage = document.selectFirst(".manga-archive-pagination a.next") != null
@@ -38,7 +39,7 @@ abstract class MangaLivreBlog : KeiSource() {
 
     // ============================== Latest ================================
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/?atualizacoes=$page").asJsoup()
+        val document = client.get("$baseUrl/?atualizacoes=$page", Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select(".home-latest-grid article.home-manga-card").map(::mangaFromCard)
         val hasNextPage = document.selectFirst(".home-latest-pagination span.is-current + a") != null
@@ -77,7 +78,7 @@ abstract class MangaLivreBlog : KeiSource() {
             }
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".manga-grid.search-results-grid .manga-card").map { el ->
             SManga.create().apply {
                 val img = el.selectFirst("img")
@@ -100,7 +101,7 @@ abstract class MangaLivreBlog : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = manga.apply {
             title = document.selectFirst("h1.manga-title")!!.text()
@@ -140,7 +141,7 @@ abstract class MangaLivreBlog : KeiSource() {
                 .addQueryParameter("page", page.toString())
                 .addQueryParameter("search", "")
                 .build()
-            val markup = client.get(url).parseAs<ChaptersResponse>().data.markup
+            val markup = client.get(url, Fetch.XHR).parseAs<ChaptersResponse>().data.markup
             chapters += parseChapters(Jsoup.parseBodyFragment(markup, baseUrl))
         }
 
@@ -165,7 +166,7 @@ abstract class MangaLivreBlog : KeiSource() {
 
     // ============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(".chapter-image-container img").mapIndexed { index, img ->
             Page(index, imageUrl = img.attr("abs:src"))
         }

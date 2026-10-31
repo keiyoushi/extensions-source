@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -26,7 +27,7 @@ abstract class FoamGirl : KeiSource() {
 
     // ============================== Popular ======================================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/page/$page").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/page/$page", Fetch.DOCUMENT).asJsoup())
 
     private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select(".update_area .i_list").map { element ->
@@ -55,7 +56,7 @@ abstract class FoamGirl : KeiSource() {
             addQueryParameter("s", query)
         }.build()
 
-        return parseMangaList(client.get(url).asJsoup())
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // ============================== Details ======================================
@@ -68,7 +69,7 @@ abstract class FoamGirl : KeiSource() {
     ): SMangaUpdate {
         if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val chapter = SChapter.create().apply {
             setUrlWithoutDomain(document.select("link[rel=canonical]").attr("abs:href"))
             chapter_number = 0F
@@ -83,7 +84,7 @@ abstract class FoamGirl : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val allPages = mutableListOf<Page>()
-        var document = client.get(getChapterUrl(chapter)).asJsoup()
+        var document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         var pageIndex = 0
 
         while (true) {
@@ -96,7 +97,7 @@ abstract class FoamGirl : KeiSource() {
                 ?.takeIf { HAS_NEXT_PAGE_REGEX in it }
                 ?: break
 
-            document = client.get(nextPageUrl).asJsoup()
+            document = client.get(nextPageUrl, Fetch.DOCUMENT).asJsoup()
         }
 
         return allPages

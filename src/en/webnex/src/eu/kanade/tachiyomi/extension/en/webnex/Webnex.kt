@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -53,7 +54,6 @@ import kotlin.time.Instant
 abstract class Webnex :
     KeiSource(),
     ConfigurableSource {
-
     private val preferences by getPreferencesLazy()
 
     // The site rejects the app's default Cache-Control (max-age=600)
@@ -79,7 +79,7 @@ abstract class Webnex :
     }
 
     private suspend fun getCards(url: HttpUrl, section: String = ""): MangasPage {
-        val document = client.get(url).asDocument()
+        val document = client.get(url, Fetch.DOCUMENT).asDocument()
         val mangas = document.select("$section li.card-item a.card-link").map { element ->
             SManga.create().apply {
                 this.url = element.absUrl("href").toHttpUrl().pathSegments[1]
@@ -111,7 +111,7 @@ abstract class Webnex :
         if (url.host != baseUrl.toHttpUrl().host) return null
         val slug = when (url.pathSegments[0]) {
             "manga" -> url.pathSegments.getOrNull(1) ?: return null
-            "read" -> client.get(url.newBuilder().query(null).build()).extractNextJs<ReaderPropsDto> {
+            "read" -> client.get(url.newBuilder().query(null).build(), Fetch.DOCUMENT).extractNextJs<ReaderPropsDto> {
                 it is JsonObject && "chapter" in it && "series" in it
             }?.series?.id ?: return null
             else -> return null
@@ -133,7 +133,7 @@ abstract class Webnex :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asDocument()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asDocument()
         val details = SManga.create().apply {
             url = manga.url
             title = document.selectFirst("h1.series-title")!!.text()
@@ -175,7 +175,7 @@ abstract class Webnex :
         val mangaUrl = getMangaUrl(manga).toHttpUrl()
         val otherPages = coroutineScope {
             (2..lastPage).map { page ->
-                async { client.get(mangaUrl.newBuilder().addQueryParameter("page", page.toString()).build()).asDocument() }
+                async { client.get(mangaUrl.newBuilder().addQueryParameter("page", page.toString()).build(), Fetch.DOCUMENT).asDocument() }
             }.awaitAll()
         }
 

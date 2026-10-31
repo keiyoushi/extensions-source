@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -73,7 +74,7 @@ abstract class Comicaso : KeiSource() {
 
     // ============================== Popular ==============================
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$baseUrl/api/trending.php?period=all&limit=$PAGE_SIZE")
+        val response = client.get("$baseUrl/api/trending.php?period=all&limit=$PAGE_SIZE", Fetch.XHR)
         val res = response.parseAs<TrendingResponseDto>()
         return MangasPage(res.data.map { it.toSManga() }, false)
     }
@@ -90,7 +91,7 @@ abstract class Comicaso : KeiSource() {
             addQueryParameter("offset", offset.toString())
         }.build()
 
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         val res = response.parseAs<HomeResponseDto>()
         return MangasPage(res.data.map { it.toSManga() }, res.hasMore)
     }
@@ -112,7 +113,7 @@ abstract class Comicaso : KeiSource() {
             addQueryParameter("offset", offset.toString())
         }.build()
 
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         val res = response.parseAs<HomeResponseDto>()
         return MangasPage(res.data.map { it.toSManga() }, res.hasMore)
     }
@@ -161,7 +162,7 @@ abstract class Comicaso : KeiSource() {
         val segments = manga.urlSegments()
         val source = segments.getOrNull(0) ?: "all"
         val slug = segments.getOrNull(1) ?: ""
-        val response = client.get("$baseUrl/api/manga.php?source=$source&slug=$slug&platform=web")
+        val response = client.get("$baseUrl/api/manga.php?source=$source&slug=$slug&platform=web", Fetch.XHR)
         val res = response.parseAs<MangaDetailResponseDto>()
         val parsedChapters = res.data.chapters?.map { it.toSChapter(source, res.data.slug) }
             ?.sortedWith(
@@ -194,7 +195,7 @@ abstract class Comicaso : KeiSource() {
             addQueryParameter("token", token)
         }.build()
 
-        val response = client.get(apiUri)
+        val response = client.get(apiUri, Fetch.XHR)
         val res = response.parseAs<ChapterResponseDto>()
         return res.data.images.orEmpty().mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)

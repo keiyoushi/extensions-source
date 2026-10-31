@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -65,12 +66,12 @@ abstract class Milftoon : KeiSource() {
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val html = client.get("$baseUrl/ranking/hottest?page=$page").asJsoup().html()
+        val html = client.get("$baseUrl/ranking/hottest?page=$page", Fetch.DOCUMENT).asJsoup().html()
         return parseList(html)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val html = client.get("$baseUrl/manga_list/all?page=$page").asJsoup().html()
+        val html = client.get("$baseUrl/manga_list/all?page=$page", Fetch.DOCUMENT).asJsoup().html()
         return parseList(html)
     }
 
@@ -80,7 +81,7 @@ abstract class Milftoon : KeiSource() {
             .addQueryParameter("q", query)
             .addQueryParameter("page", page.toString())
             .build()
-        val html = client.get(url).asJsoup().html()
+        val html = client.get(url, Fetch.DOCUMENT).asJsoup().html()
         return parseList(html)
     }
 
@@ -90,7 +91,7 @@ abstract class Milftoon : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
         val data = document.html().parseRouteData<DetailWrapper>().data
         val details = SManga.create().apply {
             url = manga.url
@@ -113,7 +114,7 @@ abstract class Milftoon : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get(baseUrl + chapter.url).asJsoup().html().parseRouteData<DetailWrapper>().data
+        val data = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup().html().parseRouteData<DetailWrapper>().data
         return data.pages.mapIndexed { index, page ->
             Page(index, imageUrl = page.src)
         }

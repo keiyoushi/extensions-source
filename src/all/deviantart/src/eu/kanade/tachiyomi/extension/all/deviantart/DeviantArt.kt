@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -53,7 +54,7 @@ abstract class DeviantArt :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val path = url.toGalleryPath(baseUrl) ?: return null
         val link = "$baseUrl$path"
-        val document = client.get(link).asJsoup()
+        val document = client.get(link, Fetch.DOCUMENT).asJsoup()
 
         return parseGalleryDetails(document, link)
     }
@@ -65,7 +66,7 @@ abstract class DeviantArt :
         val username = matchGroups[1]
         val folderId = matchGroups[2].ifEmpty { "all" }
         val link = "$baseUrl/$username/gallery/$folderId"
-        val document = client.get(link).asJsoup()
+        val document = client.get(link, Fetch.DOCUMENT).asJsoup()
 
         return MangasPage(listOf(parseGalleryDetails(document, link)), false)
     }
@@ -85,7 +86,7 @@ abstract class DeviantArt :
 
         coroutineScope {
             val mangaDeferred = if (fetchDetails) {
-                async { parseGalleryDetails(client.get(link).asJsoup(), link) }
+                async { parseGalleryDetails(client.get(link, Fetch.DOCUMENT).asJsoup(), link) }
             } else {
                 null
             }
@@ -139,12 +140,12 @@ abstract class DeviantArt :
             .addQueryParameter("q", query)
             .build()
 
-        val document = client.get(url).asJsoupXml()
+        val document = client.get(url, Fetch.XHR).asJsoupXml()
         val chapterList = parseToChapterList(document).toMutableList()
         var nextUrl = document.selectFirst("[rel=next]")?.absUrl("href")
 
         while (nextUrl != null) {
-            val newDocument = client.get(nextUrl).asJsoupXml()
+            val newDocument = client.get(nextUrl, Fetch.XHR).asJsoupXml()
             chapterList.addAll(parseToChapterList(newDocument))
 
             nextUrl = newDocument.selectFirst("[rel=next]")?.absUrl("href")
@@ -178,7 +179,7 @@ abstract class DeviantArt :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = getChapterUrl(chapter).toHttpUrl()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return document.parsePages(url.pathSegments.last().substringAfterLast('-'))
     }
 

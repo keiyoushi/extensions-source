@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
@@ -24,14 +25,14 @@ abstract class KitsuneDawn : Keyoapp() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        return parseSearchManga(client.get(url))
+        return parseSearchManga(client.get(url, Fetch.DOCUMENT))
     }
 
-    override suspend fun getLatestUpdates(page: Int) = latestUpdatesParse(client.get("$baseUrl/latest?page=$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int) = latestUpdatesParse(client.get("$baseUrl/latest?page=$page", Fetch.DOCUMENT).asJsoup())
 
     override fun latestUpdatesNextPageSelector() = "a[href*='?page=']"
 
-    override suspend fun requestGeneres() = client.get("$baseUrl/search")
+    override suspend fun requestGeneres() = client.get("$baseUrl/search", Fetch.DOCUMENT)
 
     override fun parseGenres(document: Document) = document.select("[wire:model.live=genre] option:not(:contains(All))").associate {
         it.text() to it.attr("value")

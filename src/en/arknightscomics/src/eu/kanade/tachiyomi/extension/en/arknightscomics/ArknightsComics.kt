@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -62,7 +63,7 @@ abstract class ArknightsComics : KeiSource() {
             .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
 
-    private suspend fun fetchComics(): List<Comic> = client.get("$baseUrl/api/resource/comic/list").parseAs<ApiResponse<Comic>>().data.rows
+    private suspend fun fetchComics(): List<Comic> = client.get("$baseUrl/api/resource/comic/list", Fetch.XHR).parseAs<ApiResponse<Comic>>().data.rows
 
     // index and size are required, the site itself asks for size=9999 to get every chapter at once
     private suspend fun fetchChapters(name: String, chapter: String? = null): List<ComicChapter> {
@@ -72,7 +73,7 @@ abstract class ArknightsComics : KeiSource() {
             .addQueryParameter("size", "9999")
             .apply { if (chapter != null) addQueryParameter("chapter", chapter) }
             .build()
-        return client.get(url).parseAs<ApiResponse<ComicChapter>>().data.rows
+        return client.get(url, Fetch.XHR).parseAs<ApiResponse<ComicChapter>>().data.rows
     }
 
     private fun comicName(url: String): String = (baseUrl + url).toHttpUrl().queryParameter("name")!!

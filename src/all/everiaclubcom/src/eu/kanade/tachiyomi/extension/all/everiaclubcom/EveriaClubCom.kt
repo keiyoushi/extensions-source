@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -39,7 +40,7 @@ abstract class EveriaClubCom : KeiSource() {
     }
 
     // Latest
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/?page=$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/?page=$page", Fetch.DOCUMENT).asJsoup())
 
     private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select(".mainleft .leftp > a").map {
@@ -51,7 +52,7 @@ abstract class EveriaClubCom : KeiSource() {
 
     // Popular
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".mainright li a").map {
             mangaFromElement(it)
         }
@@ -78,7 +79,7 @@ abstract class EveriaClubCom : KeiSource() {
 
             else -> "$baseUrl/?page=$page".toHttpUrl().newBuilder()
         }
-        return parseMangaList(client.get(url.build()).asJsoup())
+        return parseMangaList(client.get(url.build(), Fetch.DOCUMENT).asJsoup())
     }
 
     // Details
@@ -89,7 +90,7 @@ abstract class EveriaClubCom : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         if (fetchDetails) {
-            val document = client.get(getMangaUrl(manga)).asJsoup()
+            val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
             manga.apply {
                 genre = document.select("div.end span:contains(Tags:) ~ a > p.tags").joinToString {
                     it.ownText()
@@ -108,7 +109,7 @@ abstract class EveriaClubCom : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val images = document.select(".mainleft img")
         return images.mapIndexed { index, image ->
             Page(index, imageUrl = image.imgSrc)

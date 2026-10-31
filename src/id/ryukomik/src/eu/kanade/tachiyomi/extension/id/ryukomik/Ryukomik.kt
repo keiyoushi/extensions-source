@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -38,14 +39,14 @@ abstract class Ryukomik : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        val response = client.get(url).parseAs<ListResponseDto>()
+        val response = client.get(url, Fetch.XHR).parseAs<ListResponseDto>()
         val mangas = response.data.mapNotNull { it.toSManga("komiku") }
         val hasNextPage = response.meta?.let { it.currentPage < it.totalPages } ?: false
         return MangasPage(mangas, hasNextPage)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = parseCoverCards(document)
         return MangasPage(mangas, false)
     }
@@ -99,7 +100,7 @@ abstract class Ryukomik : KeiSource() {
             if (page > 1) {
                 return MangasPage(emptyList(), false)
             }
-            val document = client.get("$baseUrl/genre/$genreValue".toHttpUrl()).asJsoup()
+            val document = client.get("$baseUrl/genre/$genreValue".toHttpUrl(), Fetch.DOCUMENT).asJsoup()
             val mangas = parseCoverCards(document)
             return MangasPage(mangas, false)
         }
@@ -112,7 +113,7 @@ abstract class Ryukomik : KeiSource() {
         if (letterValue.isNotBlank()) urlBuilder.addQueryParameter("huruf", letterValue)
         if (statusValue.isNotBlank()) urlBuilder.addQueryParameter("status", statusValue)
 
-        val response = client.get(urlBuilder.build()).parseAs<ListResponseDto>()
+        val response = client.get(urlBuilder.build(), Fetch.XHR).parseAs<ListResponseDto>()
         val mangas = response.data.mapNotNull { it.toSManga("komiku") }
         val hasNextPage = response.meta?.let { it.currentPage < it.totalPages } ?: false
         return MangasPage(mangas, hasNextPage)
@@ -129,14 +130,14 @@ abstract class Ryukomik : KeiSource() {
                 .build()
         }
 
-        val response = client.get(url).parseAs<ListResponseDto>()
+        val response = client.get(url, Fetch.XHR).parseAs<ListResponseDto>()
         return response.data.mapNotNull { it.toSManga(source) }
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? = runCatching {
         if (url.host != baseUrl.toHttpUrl().host) return null
         if (url.pathSegments.size < 3 || url.pathSegments[0] != "komik") return null
-        mangaDetailsParse(client.get(url).asJsoup())
+        mangaDetailsParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }.getOrNull()
 
     override suspend fun fetchMangaUpdate(
@@ -145,7 +146,7 @@ abstract class Ryukomik : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetailsParse(doc), chapterListParse(doc))
     }
 
@@ -185,7 +186,7 @@ abstract class Ryukomik : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
-        val html = client.get(chapterUrl).body.string()
+        val html = client.get(chapterUrl, Fetch.DOCUMENT).body.string()
 
         val imagesMatch = IMAGES_REGEX.find(html)?.groupValues?.get(1) ?: return emptyList()
 

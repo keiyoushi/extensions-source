@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -29,9 +30,9 @@ abstract class AcervoEremita : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3, 1.seconds)
 
-    override suspend fun getPopularManga(page: Int) = parseMangasPage(client.get("$baseUrl/explore?page=$page"))
+    override suspend fun getPopularManga(page: Int) = parseMangasPage(client.get("$baseUrl/explore?page=$page", Fetch.DOCUMENT))
 
-    override suspend fun getLatestUpdates(page: Int) = parseMangasPage(client.get("$baseUrl/explore?page=$page&sort=release&dir=desc"))
+    override suspend fun getLatestUpdates(page: Int) = parseMangasPage(client.get("$baseUrl/explore?page=$page&sort=release&dir=desc", Fetch.DOCUMENT))
 
     private val mangaSubString = "work"
 
@@ -40,7 +41,7 @@ abstract class AcervoEremita : KeiSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("q", query)
             .build()
-        return parseMangasPage(client.get(url))
+        return parseMangasPage(client.get(url, Fetch.DOCUMENT))
     }
 
     private fun parseMangasPage(response: Response): MangasPage {
@@ -57,7 +58,7 @@ abstract class AcervoEremita : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host || !url.pathSegments.contains(mangaSubString)) {
             return null
         }
-        return parseSManga(client.get(url).asJsoup()).apply {
+        return parseSManga(client.get(url, Fetch.DOCUMENT).asJsoup()).apply {
             initialized = true
         }
     }
@@ -66,7 +67,7 @@ abstract class AcervoEremita : KeiSource() {
 
     override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate {
         val manga = when {
-            fetchDetails -> parseSManga(client.get(getMangaUrl(manga)).asJsoup())
+            fetchDetails -> parseSManga(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup())
             else -> manga
         }
 
@@ -94,7 +95,7 @@ abstract class AcervoEremita : KeiSource() {
         var cursor = 0.0
         val chapters = mutableListOf<SChapter>()
         do {
-            val dto = client.get("$baseUrl/api/$mangaSubString/chapters?workId=${manga.url}&cursor=$cursor&limit=30")
+            val dto = client.get("$baseUrl/api/$mangaSubString/chapters?workId=${manga.url}&cursor=$cursor&limit=30", Fetch.XHR)
                 .parseAs<PageableChapters>()
             cursor += offset
             chapters += dto.chapters.map { it.toSChapter(manga) }
@@ -103,7 +104,7 @@ abstract class AcervoEremita : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("[data-component*=ReaderScreen] > img").mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("src"))
         }

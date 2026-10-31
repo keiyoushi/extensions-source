@@ -8,6 +8,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -24,7 +26,6 @@ import java.net.URLDecoder
 
 @Source
 abstract class Yabai : KeiSource() {
-
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(::tokenInterceptor)
@@ -87,7 +88,7 @@ abstract class Yabai : KeiSource() {
     private fun updateTokens() {
         // We do a normal GET to baseUrl (without X-Requested-With) so that client
         // can successfully handle the DDOS-Guard challenge via WebView if needed.
-        val request = GET(baseUrl, headers)
+        val request = GET(baseUrl, headers).newBuilder().fetch(Fetch.DOCUMENT).build()
         val response = client.newCall(request).execute()
         val requestUrl = response.request.url
 
@@ -153,7 +154,7 @@ abstract class Yabai : KeiSource() {
             cursor = if (page == 1) null else cursors[page],
         )
 
-        val data = client.post("$baseUrl/g", inertiaHeaders, queryBody.toJsonRequestBody())
+        val data = client.post("$baseUrl/g", inertiaHeaders, Fetch.XHR, queryBody.toJsonRequestBody())
             .parseAs<DataResponse<IndexProps>>()
 
         val galleries = data.props.postList.data.map { it.toSManga() }
@@ -174,11 +175,11 @@ abstract class Yabai : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val gallery = client.get("$baseUrl${manga.url}", inertiaHeaders)
+        val gallery = client.get("$baseUrl${manga.url}", inertiaHeaders, Fetch.XHR)
             .parseAs<DataResponse<DetailProps>>().props.post.data
         return SMangaUpdate(gallery.toSManga(), listOf(gallery.toSChapter()))
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl${chapter.url}/read", inertiaHeaders)
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl${chapter.url}/read", inertiaHeaders, Fetch.XHR)
         .parseAs<DataResponse<ReaderProps>>().props.pages.data.list.toPages()
 }

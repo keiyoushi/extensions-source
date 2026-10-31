@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -32,7 +33,7 @@ abstract class HentaiFC : KeiSource() {
     // The site only publishes a "Latest Updates" listing, so it is served here.
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = if (page == 1) baseUrl else "$baseUrl/page/$page"
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("#book_list .wrap_item").map(::parseEntry)
         return MangasPage(mangas, document.selectFirst("a.next.page-numbers") != null)
     }
@@ -45,7 +46,7 @@ abstract class HentaiFC : KeiSource() {
             .addQueryParameter("search", query)
             .addQueryParameter("search_by", "title")
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("#book_list .wrap_item").map(::parseEntry)
         return MangasPage(mangas, false)
     }
@@ -56,7 +57,7 @@ abstract class HentaiFC : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl/${manga.url}").asJsoup()
+        val document = client.get("$baseUrl/${manga.url}", Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = manga.apply {
             val rawTitle = document.selectFirst("h1.heading")?.text().orEmpty().trim()
@@ -103,7 +104,7 @@ abstract class HentaiFC : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterNumber = chapter.url.substringAfterLast("/c")
         val galleryUrl = chapter.url.substringBeforeLast("/c")
-        return client.get("$baseUrl/$galleryUrl").asJsoup()
+        return client.get("$baseUrl/$galleryUrl", Fetch.DOCUMENT).asJsoup()
             .select(".thumbs .wrap_item")
             .mapNotNull { item ->
                 val href = item.selectFirst("a[href]")?.attr("abs:href")

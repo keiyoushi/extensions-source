@@ -33,6 +33,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -110,7 +111,7 @@ abstract class NamiComi :
             .addCommonIncludeParameters()
             .addCommonTypeParameters()
             .build()
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
 
         return mangaListParse(response)
     }
@@ -124,7 +125,7 @@ abstract class NamiComi :
             .addCommonIncludeParameters()
             .addCommonTypeParameters()
             .build()
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
 
         return mangaListParse(response)
     }
@@ -211,7 +212,7 @@ abstract class NamiComi :
                 .forEach { filter -> filter.addQueryParameter(this, extLang) }
         }.build()
 
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
 
         return mangaListParse(response)
     }
@@ -221,7 +222,7 @@ abstract class NamiComi :
     override suspend fun fetchFilterData(): JsonElement {
         val groupOrder = listOf("content-warnings", "format", "genre", "theme")
 
-        val tags = client.get("$apiUrl/title/tags")
+        val tags = client.get("$apiUrl/title/tags", Fetch.XHR)
             .parseAs<PaginatedResponseDto<TagDto>>(json).data
             .groupBy { it.attributes!!.group }
             .filterKeys { it in groupOrder }
@@ -304,7 +305,7 @@ abstract class NamiComi :
                 .addCommonIncludeParameters()
                 .build()
 
-            client.get(url).parseAs<MangaDto>(json).data?.toSManga() ?: manga
+            client.get(url, Fetch.XHR).parseAs<MangaDto>(json).data?.toSManga() ?: manga
         }
         val updatedChapters = async {
             if (!fetchChapters) {
@@ -318,7 +319,7 @@ abstract class NamiComi :
     }
 
     private suspend fun getChapterList(mangaId: String): List<SChapter> {
-        val firstPage = client.get(chapterListUrl(mangaId, 0)).parseAs<ChapterListDto>(json)
+        val firstPage = client.get(chapterListUrl(mangaId, 0), Fetch.XHR).parseAs<ChapterListDto>(json)
 
         val limit = firstPage.meta.limit
         val total = firstPage.meta.total
@@ -326,7 +327,7 @@ abstract class NamiComi :
         val remainingPages = coroutineScope {
             (limit until total step limit).map { offset ->
                 async {
-                    client.get(chapterListUrl(mangaId, offset)).parseAs<ChapterListDto>(json)
+                    client.get(chapterListUrl(mangaId, offset), Fetch.XHR).parseAs<ChapterListDto>(json)
                 }
             }.awaitAll()
         }
@@ -346,7 +347,7 @@ abstract class NamiComi :
                     val body = EntityAccessRequestDto(
                         entities = chapterIds.map { EntityAccessRequestItemDto(it, "chapter") },
                     ).toJsonRequestBody(json)
-                    val response = client.post(url, body)
+                    val response = client.post(url, Fetch.XHR, body)
 
                     response.parseAs<EntityAccessMapDto>(json)
                         .data?.attributes?.map ?: emptyMap()
@@ -415,12 +416,12 @@ abstract class NamiComi :
         val url = "$apiUrl/images/chapter/${chapter.url}?newQualities=true"
 
         val response = if (needsAuth) {
-            client.get(url, authHeaders(), ensureSuccess = false)
+            client.get(url, authHeaders(), Fetch.XHR, ensureSuccess = false)
         } else {
-            client.get(url, ensureSuccess = false).let {
+            client.get(url, Fetch.XHR, ensureSuccess = false).let {
                 if (it.code == 402) {
                     it.close()
-                    client.get(url, authHeaders(), ensureSuccess = false)
+                    client.get(url, authHeaders(), Fetch.XHR, ensureSuccess = false)
                 } else {
                     it
                 }
@@ -528,6 +529,7 @@ abstract class NamiComi :
 
             val response = client.post(
                 "https://auth.$domain/realms/namicomi/protocol/openid-connect/token",
+                Fetch.XHR,
                 body,
                 ensureSuccess = false,
             )

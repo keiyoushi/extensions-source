@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -54,7 +55,7 @@ abstract class Dynasty : KeiSource() {
     }
 
     private suspend fun mangaPageParse(url: HttpUrl, page: Int): MangasPage {
-        val result = client.get(url).parseAs<MangaPaginatedResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<MangaPaginatedResponse>()
         val sortType = url.queryParameter("sort")
 
         var mangasData = result.getMangas().filter {
@@ -90,7 +91,7 @@ abstract class Dynasty : KeiSource() {
     }
 
     private suspend fun fetchDetails(mangaId: String): SManga {
-        val json = client.get("$baseUrl/api/mangas/$mangaId").parseAs<JsonElement>()
+        val json = client.get("$baseUrl/api/mangas/$mangaId", Fetch.XHR).parseAs<JsonElement>()
         val data = if (json is JsonObject && json.containsKey("data")) {
             json["data"]!!
         } else {
@@ -105,7 +106,7 @@ abstract class Dynasty : KeiSource() {
         var totalPages: Int
 
         do {
-            val res = client.get("$baseUrl/api/chapters/paginated?manga_id=$mangaId&page=$page&limit=100&sort=desc")
+            val res = client.get("$baseUrl/api/chapters/paginated?manga_id=$mangaId&page=$page&limit=100&sort=desc", Fetch.XHR)
                 .parseAs<ChapterPaginatedResponse>()
             totalPages = res.getTotalPages()
             allChapters.addAll(res.getChapters().map { it.toSChapter() })
@@ -116,7 +117,7 @@ abstract class Dynasty : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val pages = client.get(getChapterUrl(chapter)).parseAs<List<PageDto>>()
+        val pages = client.get(getChapterUrl(chapter), Fetch.XHR).parseAs<List<PageDto>>()
         return pages.mapIndexed { index, page ->
             Page(index, imageUrl = page.getUrl())
         }

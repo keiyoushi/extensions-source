@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -97,7 +98,7 @@ abstract class Mangadusleri : KeiSource() {
             }
         }
 
-        return parseBrowsePage(client.get(url))
+        return parseBrowsePage(client.get(url, Fetch.DOCUMENT))
     }
 
     // ============================== Manga List ============================
@@ -131,7 +132,7 @@ abstract class Mangadusleri : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(parseDetails(doc), parseChapters(doc))
     }
@@ -174,7 +175,7 @@ abstract class Mangadusleri : KeiSource() {
     }.reversed()
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val images = document.select("img[alt*='Manga Sayfası'], img[alt*='Resmi']")
 
         return images.mapIndexedNotNull { index, element ->

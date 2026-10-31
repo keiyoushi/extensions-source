@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -41,7 +42,7 @@ abstract class LectorJpg : KeiSource() {
     private var searchMangaCursor: String? = null
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val result = client.get("$apiUrl/home/trending").parseAs<SeriesQueryDto>()
+        val result = client.get("$apiUrl/home/trending", Fetch.XHR).parseAs<SeriesQueryDto>()
         val mangas = result.data.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
@@ -52,7 +53,7 @@ abstract class LectorJpg : KeiSource() {
         val url = "$apiUrl/home/lastest-updates".toHttpUrl().newBuilder()
             .addQueryParameter("cursor", cursor)
 
-        val response = client.get(url.build())
+        val response = client.get(url.build(), Fetch.XHR)
 
         val result = response.parseAs<SeriesQueryDto>()
         latestMangaCursor = result.nextCursor
@@ -64,7 +65,7 @@ abstract class LectorJpg : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val slug = url.pathSegments.getOrNull(1) ?: return null
 
-        return mangaDetailsParse(client.get(url).asJsoup()).apply {
+        return mangaDetailsParse(client.get(url, Fetch.DOCUMENT).asJsoup()).apply {
             this.url = slug
         }
     }
@@ -87,7 +88,7 @@ abstract class LectorJpg : KeiSource() {
             url.addQueryParameter("genres", genresParam)
         }
 
-        return parseSearchManga(client.get(url.build()))
+        return parseSearchManga(client.get(url.build(), Fetch.XHR))
     }
 
     private fun parseSearchManga(response: Response): MangasPage {
@@ -105,7 +106,7 @@ abstract class LectorJpg : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetailsParse(doc), chapterListParse(doc))
     }
 
@@ -128,7 +129,7 @@ abstract class LectorJpg : KeiSource() {
     private val pagesRegex = """images:(\[.*?])""".toRegex()
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val scripts = document.select("script:containsData(svelteKit)").joinToString("\n") { it.data() }
         val match = pagesRegex.find(scripts) ?: return emptyList()
         val pagesJson = match.groupValues[1]

@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -20,7 +21,6 @@ abstract class Bakamh : Madara() {
     override val chapterDateFormat = DateTimeFormatter.ofPattern("yyyy 年 M 月 d 日", Locale.CHINESE)
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor(UserAgentClientHintsInterceptor())
         rateLimit(2) // Rate limit added to prevent 429 errors during library updates
     }
 
@@ -56,14 +56,14 @@ abstract class Bakamh : Madara() {
         if (document.selectFirst(READER_CONFIG_SELECTOR) == null) return@also
         sendReaderBeacon(chapterUrl)
         val url = document.selectFirst("script#mkjp-reader-window-js")!!.absUrl("src")
-        if (readerScript?.url != url) readerScript = ReaderScript(url, client.get(url).body.string())
+        if (readerScript?.url != url) readerScript = ReaderScript(url, client.get(url, Fetch.SCRIPT).body.string())
     }
 
     // The reader's mkjp_rv beacon; chapters read without it end in the site's third-party tool warning
     private suspend fun sendReaderBeacon(chapterUrl: String) {
         val headers = headersBuilder().set("Referer", chapterUrl).build()
         val body = FormBody.Builder().add("action", "mkjp_rv").build()
-        client.post("$baseUrl/wp-admin/admin-ajax.php", headers, body, ensureSuccess = false).close()
+        client.post("$baseUrl/wp-admin/admin-ajax.php", headers, Fetch.XHR, body, ensureSuccess = false).close()
     }
 
     override fun parsePages(document: Document): List<Page> {

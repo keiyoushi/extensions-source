@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -25,7 +26,7 @@ abstract class Kiutaku : KeiSource() {
     // ============================== Popular ===============================
     private fun getPage(page: Int) = (page - 1) * 20
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/hot?start=${getPage(page)}").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/hot?start=${getPage(page)}", Fetch.DOCUMENT).asJsoup())
 
     private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select("div.blog > div.items-row").map(::mangaFromElement)
@@ -40,13 +41,13 @@ abstract class Kiutaku : KeiSource() {
     }
 
     // =============================== Latest ===============================
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/?start=${getPage(page)}").asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/?start=${getPage(page)}", Fetch.DOCUMENT).asJsoup())
 
     // =============================== Search ===============================
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val id = url.pathSegments.first()
-        val document = client.get("$baseUrl/$id").asJsoup()
+        val document = client.get("$baseUrl/$id", Fetch.DOCUMENT).asJsoup()
         return mangaDetailsParse(
             document,
             SManga.create().apply {
@@ -62,7 +63,7 @@ abstract class Kiutaku : KeiSource() {
             .addQueryParameter("start", getPage(page).toString())
             .build()
 
-        return parseMangaList(client.get(url).asJsoup())
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // =========================== Manga Details ============================
@@ -72,7 +73,7 @@ abstract class Kiutaku : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val details = mangaDetailsParse(document, manga)
 
         val chapterList = document
@@ -95,7 +96,7 @@ abstract class Kiutaku : KeiSource() {
 
     override val supportsRelatedMangas = true
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga)).asJsoup()
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         .select("div.bottom-articles .items-row")
         .map(::mangaFromElement)
 
@@ -108,7 +109,7 @@ abstract class Kiutaku : KeiSource() {
     }
 
     // =============================== Pages ================================
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select("div.article-fulltext img[src]")
         .mapIndexed { index, item ->
             Page(index, imageUrl = item.absUrl("src"))

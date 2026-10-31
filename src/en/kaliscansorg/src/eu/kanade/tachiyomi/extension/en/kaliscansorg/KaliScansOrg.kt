@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -72,7 +73,7 @@ abstract class KaliScansOrg : KeiSource() {
         .build()
 
     private suspend fun getMangaList(url: HttpUrl): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div.book-item").map { element ->
             val link = element.selectFirst("h3 a[href]")!!
             SManga.create().apply {
@@ -102,7 +103,7 @@ abstract class KaliScansOrg : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         // Site dates are relative ("3 weeks ago"), so keep the date a chapter was first stored with
         val knownDates = chapters.filter { it.date_upload > 0 }.associate { it.url to it.date_upload }
         val chapterList = parseChapterList(document, manga.url).onEach { chapter ->
@@ -178,14 +179,14 @@ abstract class KaliScansOrg : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("#chapter-images img").mapIndexed { index, img ->
             Page(index, imageUrl = img.absUrl("src"))
         }
     }
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/search").asJsoup()
+        val document = client.get("$baseUrl/search", Fetch.DOCUMENT).asJsoup()
         return document.select("#search-form-large input[name='genre[]']").map { input ->
             Genre(input.closest("label")!!.selectFirst(".radio__label")!!.text(), input.attr("value"))
         }.toJsonElement()

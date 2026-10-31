@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -34,7 +35,7 @@ abstract class NarasiNinja : KeiSource() {
     private suspend fun getCsrfToken(): String {
         csrfToken?.let { return it }
 
-        val token = client.get("$baseUrl/komik").asJsoup()
+        val token = client.get("$baseUrl/komik", Fetch.DOCUMENT).asJsoup()
             .selectFirst("meta[name=csrf-token]")
             ?.attr("content")
             ?: throw Exception("CSRF token tidak ditemukan")
@@ -51,11 +52,11 @@ abstract class NarasiNinja : KeiSource() {
 
     private suspend fun postFilter(page: Int, body: FormBody): FilterResponse {
         val url = "$baseUrl/komik/filter?page=$page"
-        var response = client.post(url, filterHeaders(), body, ensureSuccess = false)
+        var response = client.post(url, filterHeaders(), Fetch.XHR, body, ensureSuccess = false)
         if (response.code == 419) {
             response.close()
             csrfToken = null
-            response = client.post(url, filterHeaders(), body, ensureSuccess = false)
+            response = client.post(url, filterHeaders(), Fetch.XHR, body, ensureSuccess = false)
         }
         if (!response.isSuccessful) {
             val code = response.code
@@ -117,7 +118,7 @@ abstract class NarasiNinja : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val details = mangaDetailsParse(document).apply { url = manga.url }
         val chapterList = chapterListParse(document)
 
@@ -175,7 +176,7 @@ abstract class NarasiNinja : KeiSource() {
 
     // ======================== Pages ==========================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("#readerarea img.ts-main-image, #readerarea img").mapNotNull { img ->
             img.attr("abs:src").ifEmpty { img.attr("abs:data-src") }.ifEmpty { null }
         }.distinct().mapIndexed { index, imageUrl ->

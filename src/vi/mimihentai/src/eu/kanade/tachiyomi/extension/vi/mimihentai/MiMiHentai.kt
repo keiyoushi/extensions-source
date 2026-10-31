@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -49,7 +50,7 @@ abstract class MiMiHentai : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList("$baseUrl/danh-sach?page=$page", page)
 
-    private suspend fun getMangaList(url: String, page: Int): MangasPage = mangaListParse(client.get(url).asJsoup(), page)
+    private suspend fun getMangaList(url: String, page: Int): MangasPage = mangaListParse(client.get(url, Fetch.DOCUMENT).asJsoup(), page)
 
     private fun mangaListParse(document: Document, page: Int): MangasPage {
         val mangaList = document.select("a.group").mapNotNull { element ->
@@ -95,7 +96,7 @@ abstract class MiMiHentai : KeiSource() {
             }
         }.build()
 
-        return mangaListParse(client.get(url).asJsoup(), page)
+        return mangaListParse(client.get(url, Fetch.DOCUMENT).asJsoup(), page)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -118,7 +119,7 @@ abstract class MiMiHentai : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = mangaDetailsParse(document, manga),
             chapters = chapterListParse(document),
@@ -175,7 +176,7 @@ abstract class MiMiHentai : KeiSource() {
 
     // =============================== Pages ================================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select("img.lazy")
         .mapIndexed { index, element -> Page(index, imageUrl = imageUrl(element)) }
 
@@ -183,7 +184,7 @@ abstract class MiMiHentai : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-kiem").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-kiem", Fetch.DOCUMENT).asJsoup()
         .select("label")
         .mapNotNull { element ->
             val id = genreIdRegex.matchEntire(element.attr("@click"))
@@ -203,7 +204,7 @@ abstract class MiMiHentai : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val relatedList = document.select("h2")
             .firstOrNull { it.text() == "Có thể bạn thích" }
             ?.parent()

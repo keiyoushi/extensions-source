@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -49,7 +50,7 @@ abstract class Hentara : KeiSource() {
     }
 
     private suspend fun searchIndex(query: String, sortIdx: Int, genreIdx: Int): MangasPage {
-        val data = client.get(Api.index()).parseAs<HentaraIndexDto>()
+        val data = client.get(Api.index(), Fetch.XHR).parseAs<HentaraIndexDto>()
 
         val genre = GENRES.getOrNull(genreIdx) ?: "Any"
 
@@ -82,7 +83,7 @@ abstract class Hentara : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.url.substringAfterLast("/")
-        val data = client.get(Api.comic(slug)).parseAs<HentaraMangaDto>()
+        val data = client.get(Api.comic(slug), Fetch.XHR).parseAs<HentaraMangaDto>()
         val comicSlug = data.comic.slug
 
         val chapterList = data.episodes.map { ep ->
@@ -108,7 +109,7 @@ abstract class Hentara : KeiSource() {
         val ep = pathSegments[2].substringAfter("chapter-").toIntOrNull()
             ?: throw IllegalArgumentException("Malformed chapter URL: ${chapter.url}")
 
-        val data = client.get(Api.episode(slug, ep)).parseAs<HentaraEpisodeDto>()
+        val data = client.get(Api.episode(slug, ep), Fetch.XHR).parseAs<HentaraEpisodeDto>()
 
         return data.pages.map {
             Page(it.pageNumber - 1, imageUrl = it.imageUrl)

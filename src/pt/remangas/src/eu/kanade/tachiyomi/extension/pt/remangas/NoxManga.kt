@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -44,7 +45,7 @@ abstract class NoxManga : KeiSource() {
             .addQueryParameter("sort", "new")
             .build()
 
-        val result = client.get(url).parseAs<ChapterUpdateListDto>()
+        val result = client.get(url, Fetch.XHR).parseAs<ChapterUpdateListDto>()
         return MangasPage(result.mangas, result.hasNextPage)
     }
 
@@ -62,7 +63,7 @@ abstract class NoxManga : KeiSource() {
             }
             .build()
 
-        val result = client.get(url).parseAs<MangaListDto>()
+        val result = client.get(url, Fetch.XHR).parseAs<MangaListDto>()
         return MangasPage(result.comics.map(MangaDto::toSManga), result.hasNextPage)
     }
 
@@ -86,7 +87,7 @@ abstract class NoxManga : KeiSource() {
 
         val details = async {
             if (fetchDetails) {
-                client.get("$apiUrl/comics/slug/$slug").parseAs<MangaDto>().toSManga()
+                client.get("$apiUrl/comics/slug/$slug", Fetch.XHR).parseAs<MangaDto>().toSManga()
             } else {
                 manga
             }
@@ -100,7 +101,7 @@ abstract class NoxManga : KeiSource() {
                     .addQueryParameter("sort", "newest")
                     .build()
 
-                client.get(url).parseAs<ChapterListDto>().chapters.map { it.toSChapter(slug) }
+                client.get(url, Fetch.XHR).parseAs<ChapterListDto>().chapters.map { it.toSChapter(slug) }
             } else {
                 chapters
             }
@@ -109,13 +110,13 @@ abstract class NoxManga : KeiSource() {
         SMangaUpdate(manga = details.await(), chapters = chapterList.await())
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/chapters/${chapter.url}?skip_view=true")
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/chapters/${chapter.url}?skip_view=true", Fetch.XHR)
         .parseAs<ChapterPagesDto>()
         .toPageList()
 
     override val supportsFilterFetching: Boolean get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres")
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres", Fetch.XHR)
         .parseAs<GenreListDto>()
         .data
         .filter { it.slug.isNotEmpty() }

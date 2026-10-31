@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.GraphQLErrorInterceptor
@@ -52,6 +53,7 @@ abstract class MangaNo :
         val result = client.post(
             url = apiUrl,
             headers = apiHeaders(),
+            fetch = Fetch.XHR,
             body = graphQLBody(
                 query = POPULAR_QUERY,
                 operationName = "RankingsMonthly",
@@ -66,6 +68,7 @@ abstract class MangaNo :
         return client.post(
             url = apiUrl,
             headers = apiHeaders(),
+            fetch = Fetch.XHR,
             body = graphQLBody(
                 query = LATEST_QUERY,
                 operationName = "NewWorks",
@@ -87,6 +90,7 @@ abstract class MangaNo :
             return client.post(
                 url = apiUrl,
                 headers = apiHeaders(),
+                fetch = Fetch.XHR,
                 body = graphQLBody(
                     query = SEARCH_QUERY,
                     operationName = "Search",
@@ -99,6 +103,7 @@ abstract class MangaNo :
         val result = client.post(
             url = apiUrl,
             headers = apiHeaders(),
+            fetch = Fetch.XHR,
             body = graphQLBody(
                 query = TAG_QUERY,
                 operationName = "Tag",
@@ -125,6 +130,7 @@ abstract class MangaNo :
         val work = client.post(
             url = apiUrl,
             headers = apiHeaders(),
+            fetch = Fetch.XHR,
             body = graphQLBody(
                 query = DETAILS_QUERY,
                 operationName = "MangaDetails",
@@ -150,6 +156,7 @@ abstract class MangaNo :
         val edges = client.post(
             url = apiUrl,
             headers = apiHeaders(),
+            fetch = Fetch.XHR,
             body = graphQLBody(
                 query = VIEWER_QUERY,
                 operationName = "GetEpisode",
@@ -199,7 +206,7 @@ abstract class MangaNo :
             .build()
 
         return try {
-            client.post(url, LoginRequestBody(email, password, true).toJsonRequestBody()).parseAs<LoginResponse>()
+            client.post(url, Fetch.XHR, LoginRequestBody(email, password, true).toJsonRequestBody()).parseAs<LoginResponse>()
         } catch (_: HttpException) {
             loginFailed = true
             null
@@ -212,7 +219,7 @@ abstract class MangaNo :
             .build()
 
         return try {
-            client.post(url, RefreshRequestBody("refresh_token", refreshToken).toJsonRequestBody()).parseAs<LoginResponse>()
+            client.post(url, Fetch.XHR, RefreshRequestBody("refresh_token", refreshToken).toJsonRequestBody()).parseAs<LoginResponse>()
         } catch (_: HttpException) {
             null
         }
@@ -223,7 +230,7 @@ abstract class MangaNo :
             .addQueryParameter("key", LOGIN_KEY)
             .build()
 
-        return client.post(url, SecureTokenRequestBody(true).toJsonRequestBody()).parseAs<LoginResponse>()
+        return client.post(url, Fetch.XHR, SecureTokenRequestBody(true).toJsonRequestBody()).parseAs<LoginResponse>()
     }
 
     private fun clearTokens() {

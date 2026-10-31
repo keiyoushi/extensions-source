@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -31,7 +32,6 @@ import okhttp3.OkHttpClient
 abstract class WebtoonLib :
     KeiSource(),
     ConfigurableSource {
-
     private val preferences by getPreferencesLazy()
 
     private val hideAdult get() = preferences.getBoolean(PREF_HIDE_ADULT, false)
@@ -86,7 +86,7 @@ abstract class WebtoonLib :
             .addPathSegment("related")
             .addQueryParameter("limit", "12")
             .build()
-        return client.get(url).parseAs<List<Series>>()
+        return client.get(url, Fetch.XHR).parseAs<List<Series>>()
             .filterNot { hideAdult && it.isAdult }
             .map { it.toSManga() }
     }
@@ -102,13 +102,13 @@ abstract class WebtoonLib :
             .addPathSegments(chapter.url)
             .addQueryParameter("languageCode", "en")
             .build()
-        val reader = client.get(url).parseAs<Reader>()
+        val reader = client.get(url, Fetch.XHR).parseAs<Reader>()
         if (reader.chapterType != "SOFTSUB") {
             return reader.pages.mapIndexed { index, image -> Page(index, imageUrl = image) }
         }
 
         // Originals carry the lettering when the chapter was uploaded in English
-        val manifest = client.get(reader.manifestUrl!!).parseAs<Manifest>()
+        val manifest = client.get(reader.manifestUrl!!, Fetch.XHR).parseAs<Manifest>()
         return manifest.pages.mapIndexed { index, page ->
             val image = if (manifest.sourceLanguage == "en" || page.bubbles.isEmpty()) {
                 page.originalImageUrl
@@ -120,7 +120,7 @@ abstract class WebtoonLib :
     }
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/series").asJsoup()
+        val document = client.get("$baseUrl/series", Fetch.DOCUMENT).asJsoup()
         fun options(section: String, param: String) = document.select("section[aria-labelledby$=-$section] a[href*='?$param=']").map {
             FilterOption(it.text(), it.absUrl("href").toHttpUrl().queryParameter(param)!!)
         }
@@ -165,7 +165,7 @@ abstract class WebtoonLib :
         .build()
 
     private suspend fun fetchSeries(url: HttpUrl): MangasPage {
-        val list = client.get(url).parseAs<SeriesList>()
+        val list = client.get(url, Fetch.XHR).parseAs<SeriesList>()
         val page = url.queryParameter("page")!!.toInt()
         return MangasPage(list.items.map { it.toSManga() }, page * PAGE_SIZE < list.total)
     }
@@ -184,10 +184,10 @@ abstract class WebtoonLib :
     }
 
     private suspend fun openSearch() {
-        val access = client.get("$API_URL/search/access").parseAs<SearchAccess>()
+        val access = client.get("$API_URL/search/access", Fetch.XHR).parseAs<SearchAccess>()
         if (access.challengeRequired) {
             val token = getTurnstileToken(baseUrl, access.siteKey, action = "reader-search")
-            client.post("$API_URL/search/access/verify", body = SearchVerification(token).toJsonRequestBody()).close()
+            client.post("$API_URL/search/access/verify", Fetch.XHR, body = SearchVerification(token).toJsonRequestBody()).close()
         }
     }
 
@@ -204,7 +204,7 @@ abstract class WebtoonLib :
                 .setQueryParameter("page", page.toString())
                 .setQueryParameter("pageSize", MAX_PAGE_SIZE.toString())
                 .build()
-            val list = client.get(pageUrl).parseAs<SeriesList>()
+            val list = client.get(pageUrl, Fetch.XHR).parseAs<SeriesList>()
             list.items.map { it.toSManga() }.filterTo(mangas) { it.title.contains(query, ignoreCase = true) }
         } while (page++ * MAX_PAGE_SIZE < list.total)
         return MangasPage(mangas, false)
@@ -215,7 +215,7 @@ abstract class WebtoonLib :
             .addPathSegments("webtoons/slug")
             .addPathSegment(slug)
             .build()
-        return client.get(url).parseAs()
+        return client.get(url, Fetch.XHR).parseAs()
     }
 
     private suspend fun getChapters(slug: String, series: Series): List<SChapter> {
@@ -232,7 +232,7 @@ abstract class WebtoonLib :
                 .addQueryParameter("pageSize", MAX_PAGE_SIZE.toString())
                 .addQueryParameter("languageCode", "en")
                 .build()
-            val list = client.get(url).parseAs<ChapterList>()
+            val list = client.get(url, Fetch.XHR).parseAs<ChapterList>()
             list.items.mapTo(chapters) { it.toSChapter(slug, group) }
         } while (page++ < list.totalPages)
         return chapters

@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -113,7 +114,7 @@ abstract class Zenko :
             }
         }.build()
 
-        client.get(url).use { response ->
+        client.get(url, Fetch.XHR).use { response ->
             val result = response.parseAs<SearchResponse>()
             val lang = isEng()
             val mangas = result.data.map { it.toSManga(lang, imgUrl) }
@@ -149,7 +150,7 @@ abstract class Zenko :
             if (fetchDetails) {
                 val lang = isEng()
                 val url = "$apiUrl/titles/$mangaId"
-                val data = client.get(url).use { it.parseAs<MangaDetailsResponse>() }
+                val data = client.get(url, Fetch.XHR).use { it.parseAs<MangaDetailsResponse>() }
                 data.toSManga(lang, imgUrl)
             } else {
                 manga
@@ -159,7 +160,7 @@ abstract class Zenko :
         val chaptersAsync = async {
             if (fetchChapters) {
                 val chaptersUrl = "$apiUrl/titles/$mangaId/chapters"
-                val data = client.get(chaptersUrl).use { it.parseAs<List<ChapterResponseItem>>() }
+                val data = client.get(chaptersUrl, Fetch.XHR).use { it.parseAs<List<ChapterResponseItem>>() }
                 data.sortedByDescending { item ->
                     val id = StringProcessor.generateId(item.name)
                     if (id > 0) id else item.id.toDouble()
@@ -178,7 +179,7 @@ abstract class Zenko :
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val mangaId = manga.url.substringAfter("titles/")
         val url = "$apiUrl/titles/$mangaId/similar"
-        val data = client.get(url).use { it.parseAs<List<SearchDetailsResponse>>() }
+        val data = client.get(url, Fetch.XHR).use { it.parseAs<List<SearchDetailsResponse>>() }
         val hiddenCat = hiddenCategories()
         return data.filter { !hiddenCat.contains(it.category) }.map { it.toSManga(lang, imgUrl) }
     }
@@ -187,7 +188,7 @@ abstract class Zenko :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (_, chapterId) = chapter.url.substringAfter("titles/").split("/", limit = 2)
         val url = "$apiUrl/chapters/$chapterId"
-        val data = client.get(url).use { it.parseAs<ChapterResponseItem>() }
+        val data = client.get(url, Fetch.XHR).use { it.parseAs<ChapterResponseItem>() }
         return data.pages.orEmpty().map { page ->
             Page(page.order, imageUrl = "$imgUrl/${page.content}")
         }

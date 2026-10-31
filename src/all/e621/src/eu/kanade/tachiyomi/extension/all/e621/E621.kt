@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
@@ -166,7 +167,7 @@ abstract class E621 :
             url.addQueryParameter("tags", tags)
         }
 
-        val response = client.get(url.build(), apiHeaders())
+        val response = client.get(url.build(), apiHeaders(), Fetch.XHR)
 
         return if (mode == "pools.json") {
             val pools = response.parseAs<List<Pool>>()
@@ -205,7 +206,7 @@ abstract class E621 :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val pool = client.get("$baseUrl/pools/${manga.url}.json", apiHeaders()).parseAs<Pool>()
+        val pool = client.get("$baseUrl/pools/${manga.url}.json", apiHeaders(), Fetch.XHR).parseAs<Pool>()
 
         return coroutineScope {
             val details = async { if (fetchDetails) mangaDetailsParse(manga, pool) else manga }
@@ -391,7 +392,7 @@ abstract class E621 :
                     }
                 }.build()
 
-                val post = client.get(url, apiHeaders()).parseAs<PostsResponse>().posts.firstOrNull()
+                val post = client.get(url, apiHeaders(), Fetch.XHR).parseAs<PostsResponse>().posts.firstOrNull()
                 val imageUrl = when {
                     post == null || isPostDeleted(post) -> DELETED_PLACEHOLDER
                     isBlacklisted(post, blacklist) -> BLACKLISTED_PLACEHOLDER
@@ -401,7 +402,7 @@ abstract class E621 :
             }
             "pools" -> {
                 val poolId = chapterUrl.pathSegments.last()
-                client.get("$baseUrl/pools/$poolId.json", apiHeaders()).parseAs<Pool>().postIds
+                client.get("$baseUrl/pools/$poolId.json", apiHeaders(), Fetch.XHR).parseAs<Pool>().postIds
             }
             else -> throw Exception("Unsupported chapter url")
         }
@@ -484,7 +485,7 @@ abstract class E621 :
                     .addQueryParameter("limit", chunk.size.toString())
                     .build()
 
-                val data = client.get(url, apiHeaders())
+                val data = client.get(url, apiHeaders(), Fetch.XHR)
                     .parseAs<PostsResponse>()
 
                 data.posts.sortedBy { chunk.indexOf(it.id) }
@@ -503,7 +504,7 @@ abstract class E621 :
                     .addQueryParameter("limit", chunk.size.toString())
                     .build()
 
-                val data = client.get(url, apiHeaders())
+                val data = client.get(url, apiHeaders(), Fetch.XHR)
                     .parseAs<List<Pool>>()
 
                 data.sortedBy { chunk.indexOf(it.id) }
@@ -533,7 +534,7 @@ abstract class E621 :
         }
 
         val blacklist = runCatching {
-            client.get("$baseUrl/users/me.json", apiHeaders()).parseAs<UserMeResponse>().blacklistedTags ?: ""
+            client.get("$baseUrl/users/me.json", apiHeaders(), Fetch.XHR).parseAs<UserMeResponse>().blacklistedTags ?: ""
         }.getOrDefault("")
 
         cachedAccountBlacklist = blacklist

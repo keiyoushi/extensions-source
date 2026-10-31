@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.DEFAULT_CACHE_CONTROL
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -116,7 +117,7 @@ abstract class PepperCarrot :
             val seconds = System.currentTimeMillis() / 1000 - lastUpdated
             CacheControl.Builder().maxStale(seconds.toInt(), TimeUnit.SECONDS).build()
         }
-        val response = client.get(listUrl, cache)
+        val response = client.get(listUrl, Fetch.DOCUMENT, cache)
 
         if (response.request.url.pathSegments[0] == "0_sources") return parseArtwork(response)
 
@@ -151,7 +152,7 @@ abstract class PepperCarrot :
             return listOf(Page(0, imageUrl = baseUrl + url))
         }
 
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val urls =
             document.select(".webcomic-page img").map { it.attr("src") } +
                 document.select(".mft-cv-image").map { it.attr("src") }

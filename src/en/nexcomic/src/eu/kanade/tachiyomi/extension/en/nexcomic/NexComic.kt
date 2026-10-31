@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
@@ -32,7 +33,7 @@ abstract class NexComic : KeiSource() {
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = coroutineScope {
         val sort = filters.firstInstanceOrNull<SortFilter>()?.toUriPart() ?: "viewed"
         val popular = if (sort == "viewed") {
-            async { client.get("$baseUrl/api/local/popular?limit=100&period=all").parseAs<PopularDto>() }
+            async { client.get("$baseUrl/api/local/popular?limit=100&period=all", Fetch.XHR).parseAs<PopularDto>() }
         } else {
             null
         }
@@ -56,7 +57,7 @@ abstract class NexComic : KeiSource() {
         MangasPage(sorted.map { it.toSManga(baseUrl) }, false)
     }
 
-    private suspend fun getAllSeries() = client.get("$baseUrl/api/local/series").parseAs<SeriesListDto>().data
+    private suspend fun getAllSeries() = client.get("$baseUrl/api/local/series", Fetch.XHR).parseAs<SeriesListDto>().data
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "series") return null
@@ -84,7 +85,7 @@ abstract class NexComic : KeiSource() {
     }
 
     // the series page's rsc payload carries the whole site catalog, chapters included
-    private suspend fun getCatalog(slug: String) = client.get("$baseUrl/series/$slug.rsc").extractNextJs<CatalogDto> {
+    private suspend fun getCatalog(slug: String) = client.get("$baseUrl/series/$slug.rsc", Fetch.XHR).extractNextJs<CatalogDto> {
         it is JsonObject && "series" in it && "chapters" in it
     }!!
 
@@ -94,7 +95,7 @@ abstract class NexComic : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val pages = client.get("${getChapterUrl(chapter)}.rsc").extractNextJs<ChapterPagesDto> {
+        val pages = client.get("${getChapterUrl(chapter)}.rsc", Fetch.XHR).extractNextJs<ChapterPagesDto> {
             it is JsonObject && "chapterNumber" in it && (it["pages"] as? JsonArray)?.isNotEmpty() == true
         }!!.pages
         return pages.sortedBy { it.pageNumber }.mapIndexed { index, page ->

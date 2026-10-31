@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -34,7 +35,7 @@ abstract class RawDEX : KeiSource() {
     }
 
     private suspend fun fetchBrowsePage(url: String): MangasPage {
-        val document = client.get(url, ensureSuccess = false).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT, ensureSuccess = false).asJsoup()
         val mangas = document.select("article.rdx-library-card").mapNotNull(::browseMangaFromElement)
 
         // Pagination links claim more pages than actually exist near the end of the
@@ -60,7 +61,7 @@ abstract class RawDEX : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
     }
 
@@ -126,7 +127,7 @@ abstract class RawDEX : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(".rdx-reader-page img").mapIndexed { index, img ->
             Page(index, imageUrl = img.attr("abs:src"))
         }.ifEmpty { error("No pages found") }

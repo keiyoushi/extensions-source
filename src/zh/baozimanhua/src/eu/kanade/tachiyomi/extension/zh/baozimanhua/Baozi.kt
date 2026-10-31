@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -68,7 +69,7 @@ abstract class Baozi :
             .addPathSegment("classify")
             .addQueryParameter("page", page.toString())
             .build()
-        val mangas = parseMangaCards(client.get(url).asJsoup())
+        val mangas = parseMangaCards(client.get(url, Fetch.DOCUMENT).asJsoup())
         return MangasPage(mangas, mangas.size >= 36)
     }
 
@@ -76,7 +77,7 @@ abstract class Baozi :
         getPopularManga(page)
     } else {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegments("list/new").build()
-        MangasPage(parseMangaCards(client.get(url).asJsoup()), false)
+        MangasPage(parseMangaCards(client.get(url, Fetch.DOCUMENT).asJsoup()), false)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -91,7 +92,7 @@ abstract class Baozi :
             }
         }.build()
 
-        val mangas = parseMangaCards(client.get(url).asJsoup())
+        val mangas = parseMangaCards(client.get(url, Fetch.DOCUMENT).asJsoup())
         return MangasPage(mangas, query.isEmpty() && mangas.size >= 36)
     }
 
@@ -142,7 +143,7 @@ abstract class Baozi :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = mangaDetailsParse(document).apply { url = manga.url },
             chapters = chapterListParse(document),
@@ -208,7 +209,7 @@ abstract class Baozi :
 
     // Web mirrors now serve an app-download wall with placeholder images instead of the chapter;
     // only the app reader still has the real pages
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(appChapterUrl(chapter.url)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(appChapterUrl(chapter.url), Fetch.DOCUMENT).asJsoup()
         .select(".comic-contain img[data-src]")
         .mapIndexed { index, img -> Page(index, imageUrl = img.absUrl("data-src")) }
 
@@ -242,7 +243,7 @@ abstract class Baozi :
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get(appBaseUrl.toHttpUrl().newBuilder().addPathSegments("baozimhapp/classify").build()).asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get(appBaseUrl.toHttpUrl().newBuilder().addPathSegments("baozimhapp/classify").build(), Fetch.DOCUMENT).asJsoup()
         .select(".classify-nav")
         .mapNotNull { nav ->
             val options = nav.select("[onclick]").mapNotNull { item ->

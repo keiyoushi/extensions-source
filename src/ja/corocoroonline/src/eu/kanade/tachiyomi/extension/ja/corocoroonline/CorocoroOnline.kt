@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.put
 import keiyoushi.source.KeiSource
@@ -62,7 +63,7 @@ abstract class CorocoroOnline :
             .addQueryParameter("rq", "title/list/ranking")
             .build()
 
-        val rankings = client.get(url).parseAsProto<PopularResponse>().rankingLists
+        val rankings = client.get(url, Fetch.XHR).parseAsProto<PopularResponse>().rankingLists
         val ranking = if (category == null) {
             rankings.firstOrNull()
         } else {
@@ -80,13 +81,13 @@ abstract class CorocoroOnline :
             .addQueryParameter("day", day)
             .build()
 
-        val titles = client.get(url).parseAsProto<TitleListView>().list?.titles.orEmpty()
+        val titles = client.get(url, Fetch.XHR).parseAsProto<TitleListView>().list?.titles.orEmpty()
         val mangas = titles.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
     private suspend fun getSeriesList(listUrl: HttpUrl): MangasPage {
-        val document = client.get(listUrl).asJsoup()
+        val document = client.get(listUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div.grid > a[href^='/title/']").map {
             SManga.create().apply {
                 url = it.absUrl("href").toHttpUrl().pathSegments.last()
@@ -109,7 +110,7 @@ abstract class CorocoroOnline :
             .addQueryParameter("title_id", manga.url)
             .build()
 
-        val details = client.get(url).parseAsProto<TitleDetailView>()
+        val details = client.get(url, Fetch.XHR).parseAsProto<TitleDetailView>()
         val chapterList = details.chapters
             .filter { !hideLocked || !it.isLocked }
             .map { it.toSChapter() }

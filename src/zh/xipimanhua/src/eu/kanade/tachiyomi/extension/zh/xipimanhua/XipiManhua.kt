@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -40,7 +41,7 @@ abstract class XipiManhua : KeiSource() {
                 .addQueryParameter("page", page.toString())
                 .addQueryParameter("page_size", "20")
                 .build()
-            val data = client.get(url).parseData<SearchDto>()
+            val data = client.get(url, Fetch.XHR).parseData<SearchDto>()
             // The index holds a series once per slug alias, all with the same mid
             return MangasPage(data.data.map { it.toSManga() }.distinctBy { it.url }, data.page < data.totalPages)
         }
@@ -68,7 +69,7 @@ abstract class XipiManhua : KeiSource() {
             addQueryParameter("page", page.toString())
             addQueryParameter("per_page", "18")
         }.build()
-        val data = client.get(url).parseData<MangaListDto>()
+        val data = client.get(url, Fetch.XHR).parseData<MangaListDto>()
         return MangasPage(data.items.map { it.toSManga() }, data.page < data.totalPages)
     }
 
@@ -103,7 +104,7 @@ abstract class XipiManhua : KeiSource() {
         val url = "$API_URL/v1/manga".toHttpUrl().newBuilder()
             .addQueryParameter("mid", mid)
             .build()
-        return client.get(url).parseData<MangaDto>().toSManga().apply { this.url = mid }
+        return client.get(url, Fetch.XHR).parseData<MangaDto>().toSManga().apply { this.url = mid }
     }
 
     private suspend fun chapterList(mid: String): List<SChapter> = coroutineScope {
@@ -119,7 +120,7 @@ abstract class XipiManhua : KeiSource() {
             .addQueryParameter("per_page", "50")
             .addQueryParameter("order", "desc")
             .build()
-        return client.get(url).parseData()
+        return client.get(url, Fetch.XHR).parseData()
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/works/${manga.url}"
@@ -133,7 +134,7 @@ abstract class XipiManhua : KeiSource() {
         val url = "$API_URL/v2/chapter".toHttpUrl().newBuilder()
             .addQueryParameter("hid", apiHid)
             .build()
-        val data = client.get(url).parseData<ChapterPagesDto>()
+        val data = client.get(url, Fetch.XHR).parseData<ChapterPagesDto>()
 
         val images = decodeImages(data.images).toMutableList()
         if (images.isNotEmpty()) decoyIndex(images.size, data.orderId, data.sid)?.let(images::removeAt)

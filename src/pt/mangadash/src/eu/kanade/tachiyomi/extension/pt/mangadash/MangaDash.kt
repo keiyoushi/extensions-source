@@ -19,6 +19,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.applicationContext
@@ -189,7 +191,7 @@ abstract class MangaDash :
         val baseClient = network.client
 
         // 1. Get CSRF Token. Using Use block for safety.
-        val getRequest = GET(loginUrl, headers)
+        val getRequest = GET(loginUrl, headers).newBuilder().fetch(Fetch.DOCUMENT).build()
         val document = baseClient.newCall(getRequest).execute().asJsoup()
         val csrfToken = document.selectFirst("meta[name=csrf-token]")?.attr("content")
             ?: document.selectFirst("input[name=csrf_token]")?.attr("value")
@@ -205,7 +207,7 @@ abstract class MangaDash :
             .add("password", password)
             .build()
 
-        val postRequest = POST(loginUrl, headers, formBody)
+        val postRequest = POST(loginUrl, headers, formBody).newBuilder().fetch(Fetch.DOCUMENT).build()
         baseClient.newCall(postRequest).execute().close()
     }
 
@@ -247,7 +249,7 @@ abstract class MangaDash :
             addQueryParameter("plus18", plus18)
         }.build()
 
-        return client.get(url).parseAs<MangaListDto>().let {
+        return client.get(url, Fetch.XHR).parseAs<MangaListDto>().let {
             MangasPage(
                 it.items.map {
                     it.toSManga(baseUrl)
@@ -267,7 +269,7 @@ abstract class MangaDash :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             mangaDetailsParse(doc),
             chapterListParse(doc),
@@ -310,7 +312,7 @@ abstract class MangaDash :
 
     // =============================== Pages ===============================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val dataElement = document.selectFirst("script#chapterViewerData")
             ?: throw Exception("Dados do capítulo não encontrados")
 
@@ -338,10 +340,8 @@ abstract class MangaDash :
                 .add("Origin", baseUrl)
                 .build()
 
-            val pdfRequest = GET(pdfUrl, pdfHeaders)
-
             // Using use { ... } around manual network calls block for reliable memory release
-            pdfClient.newCall(pdfRequest).execute().use { pdfResponse ->
+            pdfClient.get(pdfUrl, pdfHeaders, Fetch.DOCUMENT, ensureSuccess = false).use { pdfResponse ->
                 if (!pdfResponse.isSuccessful) {
                     throw Exception("HTTP error ${pdfResponse.code} ao baixar o arquivo PDF do capítulo")
                 }

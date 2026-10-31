@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -19,7 +20,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
 abstract class MangaTuk : KeiSource() {
-
     private val apiUrl = "https://api.mangatuk.com/api"
 
     override suspend fun getPopularManga(page: Int) = search(page, "", "popular", null)
@@ -40,7 +40,7 @@ abstract class MangaTuk : KeiSource() {
             addQueryParameter("limit", PAGE_SIZE.toString())
             addQueryParameter("offset", ((page - 1) * PAGE_SIZE).toString())
         }.build()
-        val result = client.get(url).parseAs<SeriesListDto>()
+        val result = client.get(url, Fetch.XHR).parseAs<SeriesListDto>()
         return MangasPage(result.data.map { it.toSManga() }, page * PAGE_SIZE < result.total)
     }
 
@@ -53,7 +53,7 @@ abstract class MangaTuk : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val segments = url.pathSegments.filter(String::isNotBlank)
         if (segments.size < 2 || segments[0] !in setOf("series", "manga")) return null
-        return client.get("$apiUrl/catalog/series/by-slug/${segments[1]}").parseAs<SeriesDto>().toSMangaDetails()
+        return client.get("$apiUrl/catalog/series/by-slug/${segments[1]}", Fetch.XHR).parseAs<SeriesDto>().toSMangaDetails()
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/series/${manga.memo["slug"]!!.jsonPrimitive.content}"
@@ -66,14 +66,14 @@ abstract class MangaTuk : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val series = client.get("$apiUrl/catalog/series/${manga.url}").parseAs<SeriesDto>()
+        val series = client.get("$apiUrl/catalog/series/${manga.url}", Fetch.XHR).parseAs<SeriesDto>()
         return SMangaUpdate(
             series.toSMangaDetails(),
             series.chapters.filterNot { it.locked }.map { it.toSChapter(series.slug) }.reversed(),
         )
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/catalog/chapters/${chapter.url}/pages")
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/catalog/chapters/${chapter.url}/pages", Fetch.XHR)
         .parseAs<List<PageDto>>()
         .mapIndexed { i, page -> Page(i, imageUrl = page.imageUrl) }
 

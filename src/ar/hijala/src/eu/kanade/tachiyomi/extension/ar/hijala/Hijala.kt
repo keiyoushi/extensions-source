@@ -7,6 +7,8 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -41,7 +43,7 @@ abstract class Hijala : MangaThemesia() {
         val pieceBitmaps = runBlocking {
             listOf(leftPieceUrl, rightPieceUrl).map { pieceUrl ->
                 async(Dispatchers.IO) {
-                    val pieceRequest = request.newBuilder().url(pieceUrl).build()
+                    val pieceRequest = request.newBuilder().url(pieceUrl).fetch(Fetch.IMAGE).build()
                     client.newCall(pieceRequest).await().use { response ->
                         response.body.use { body ->
                             BitmapFactory.decodeStream(body.byteStream())

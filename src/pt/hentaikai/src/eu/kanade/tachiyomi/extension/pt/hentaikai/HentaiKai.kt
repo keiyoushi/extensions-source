@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -31,7 +32,7 @@ abstract class HentaiKai : KeiSource() {
     }
 
     private suspend fun typeList(url: String, page: Int, typePath: String): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("a:has(div.box-info-serie)").map(::listingParse)
         val hasNextPage = document.selectFirst("a[href*=\"/$typePath/page/${page + 1}/\"]") != null
         return MangasPage(mangas, hasNextPage)
@@ -56,7 +57,7 @@ abstract class HentaiKai : KeiSource() {
         val url = base.toHttpUrl().newBuilder()
             .apply { if (query.isNotBlank()) addQueryParameter("s", query) }
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return MangasPage(document.select("a:has(div.box-info-serie)").map(::listingParse), false)
     }
 
@@ -103,7 +104,7 @@ abstract class HentaiKai : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl/${manga.url}").asJsoup()
+        val document = client.get("$baseUrl/${manga.url}", Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = manga.apply {
             val rawTitle = document.selectFirst("h1")?.text()?.trim().orEmpty()
@@ -125,7 +126,7 @@ abstract class HentaiKai : KeiSource() {
         return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/${chapter.url}").asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/${chapter.url}", Fetch.DOCUMENT).asJsoup()
         .select("li img[data-src]")
         .map { it.attr("data-src").ifEmpty { it.attr("src") } }
         .filter { it.isNotBlank() && !it.startsWith("data:") }

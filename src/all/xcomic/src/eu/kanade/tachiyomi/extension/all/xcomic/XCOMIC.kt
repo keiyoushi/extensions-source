@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -43,7 +44,6 @@ import org.jsoup.parser.Parser
 abstract class XCOMIC :
     KeiSource(),
     ConfigurableSource {
-
     private val preferences by getPreferencesLazy()
 
     // ========================= Popular & Latest ==========================
@@ -156,11 +156,11 @@ abstract class XCOMIC :
         return coroutineScope {
             val itemsDeferred = async {
                 val payload = graphQLBody(query = TITLE_BROWSE_QUERY, variables = wrapper)
-                client.post("$baseUrl/query/", payload).parseGraphQLAs<TitleBrowseData>()
+                client.post("$baseUrl/query/", Fetch.XHR, payload).parseGraphQLAs<TitleBrowseData>()
             }
             val pagerDeferred = async {
                 val payload = graphQLBody(query = TITLE_BROWSE_PAGER_QUERY, variables = wrapper)
-                client.post("$baseUrl/query/", payload).parseGraphQLAs<TitleBrowsePagerData>().pager
+                client.post("$baseUrl/query/", Fetch.XHR, payload).parseGraphQLAs<TitleBrowsePagerData>().pager
             }
 
             MangasPage(parseSearchManga(itemsDeferred.await()), pagerDeferred.await().hasNextPage())
@@ -188,7 +188,7 @@ abstract class XCOMIC :
     override val supportsFilterFetching: Boolean get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val response = client.get("$baseUrl/search")
+        val response = client.get("$baseUrl/search", Fetch.DOCUMENT)
         val document = response.asJsoup()
 
         val filterMap = mutableMapOf<String, MutableList<Map<String, String>>>()
@@ -342,17 +342,17 @@ abstract class XCOMIC :
 
     private suspend fun fetchTitleNode(id: String): TitleNodeData? {
         val payload = graphQLBody(query = TITLE_NODE_QUERY, variables = ApiTitleNodeVariables(id))
-        return client.post("$baseUrl/query/", payload).parseGraphQLAs<TitleNodeEnvelope>().response?.data
+        return client.post("$baseUrl/query/", Fetch.XHR, payload).parseGraphQLAs<TitleNodeEnvelope>().response?.data
     }
 
     private suspend fun fetchComicNode(id: String): ComicNode? {
         val payload = graphQLBody(query = COMIC_NODE_QUERY, variables = ApiComicNodeVariables(id))
-        return client.post("$baseUrl/query/", payload).parseGraphQLAs<ComicNodeData>().response.data
+        return client.post("$baseUrl/query/", Fetch.XHR, payload).parseGraphQLAs<ComicNodeData>().response.data
     }
 
     private suspend fun fetchComicProbe(id: String): ComicProbeData? {
         val payload = graphQLBody(query = COMIC_PROBE_QUERY, variables = ApiComicNodeVariables(id))
-        return client.post("$baseUrl/query/", payload).parseGraphQLAs<ComicProbeEnvelope>().response?.data
+        return client.post("$baseUrl/query/", Fetch.XHR, payload).parseGraphQLAs<ComicProbeEnvelope>().response?.data
     }
 
     private suspend fun fetchResolvedTitleNode(id: String): TitleNodeData? {
@@ -623,7 +623,7 @@ abstract class XCOMIC :
 
         val query = if (deduplicate) CHAPTER_UNIQ_LIST_QUERY else CHAPTER_LIST_QUERY
         val payload = graphQLBody(query = query, variables = ApiChapterListWrapper(select))
-        val response = client.post("$baseUrl/query/", payload)
+        val response = client.post("$baseUrl/query/", Fetch.XHR, payload)
 
         val data = if (deduplicate) {
             response.parseGraphQLAs<ChapterListUniqData>().response
@@ -649,7 +649,7 @@ abstract class XCOMIC :
         val chapterId = getChapterId(chapter.url)
 
         val payload = graphQLBody(query = CHAPTER_PAGES_QUERY, variables = ApiChapterNodeVariables(chapterId))
-        val response = client.post("$baseUrl/query/", payload)
+        val response = client.post("$baseUrl/query/", Fetch.XHR, payload)
         val data = response.parseGraphQLAs<ChapterPagesData>().response.data
 
         return data.imageUrls.mapIndexed { index, url ->

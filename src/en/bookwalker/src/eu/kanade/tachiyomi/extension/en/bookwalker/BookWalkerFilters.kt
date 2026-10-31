@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SortDto
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.TagFilterDto
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.TagInclusionMode
 import eu.kanade.tachiyomi.source.model.Filter
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.utils.parseAsProto
 
@@ -31,6 +32,7 @@ class BookWalkerFilters(private val bookwalker: BookWalker) {
         val response = bookwalker.client.post(
             bookwalker.endpoint("ContentService/SearchHeader"),
             bookwalker.headers,
+            Fetch.XHR,
             SearchHeaderRequestDto().toProtoRequestBody(),
         ).parseAsProto<SearchHeaderResponseDto>()
 
@@ -48,6 +50,7 @@ class BookWalkerFilters(private val bookwalker: BookWalker) {
                 lastResponse = bookwalker.client.post(
                     bookwalker.endpoint("CollectionService/SearchFilterOptionsV2"),
                     bookwalker.headers,
+                    Fetch.XHR,
                     SearchFilterOptionsRequestDto(
                         filterType = initialList.filterType,
                         limitOffset = LimitOffsetDto(100, lastResponse?.countInfo?.offset ?: 0),

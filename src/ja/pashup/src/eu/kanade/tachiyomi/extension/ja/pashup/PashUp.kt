@@ -13,6 +13,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.lib.publus.PublusContent
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
@@ -40,7 +41,7 @@ abstract class PashUp :
             .addQueryParameter("limit", pageLimit.toString())
             .addQueryParameter("offset", ((page - 1) * pageLimit).toString())
             .build()
-        return client.get(url).toMangasPage(page)
+        return client.get(url, Fetch.DOCUMENT).toMangasPage(page)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -53,7 +54,7 @@ abstract class PashUp :
             .addQueryParameter("limit", pageLimit.toString())
             .addQueryParameter("offset", ((page - 1) * pageLimit).toString())
             .build()
-        return client.get(url).toMangasPage(page)
+        return client.get(url, Fetch.DOCUMENT).toMangasPage(page)
     }
 
     private fun Response.toMangasPage(page: Int): MangasPage {
@@ -71,7 +72,7 @@ abstract class PashUp :
             .addQueryParameter("limit", "9999")
             .build()
 
-        val mangas = client.get(url).parseAs<ContentResponse>().contents
+        val mangas = client.get(url, Fetch.XHR).parseAs<ContentResponse>().contents
             .filter { it.category == "2" }
             .map { it.toSManga() }
         return MangasPage(mangas, false)
@@ -91,7 +92,7 @@ abstract class PashUp :
             .addQueryParameter("limit", "9999")
             .addQueryParameter("order", "nodesc")
             .build()
-        val contents = client.get(url).parseAs<ContentResponse>().contents
+        val contents = client.get(url, Fetch.XHR).parseAs<ContentResponse>().contents
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val products = contents.mapNotNull { it.product }
             .filter { it.isAvailable && (!hideLocked || !it.isLocked) }
@@ -117,7 +118,7 @@ abstract class PashUp :
             .addQueryParameter("cid", viewerUrl.queryParameter("cid"))
             .build()
 
-        val contentUrl = client.get(url).parseAs<PublusContent>().url
+        val contentUrl = client.get(url, Fetch.XHR).parseAs<PublusContent>().url
             ?: throw Exception("Refresh Chapter List")
 
         return client.fetchPages(contentUrl)

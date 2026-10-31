@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.fr.sushiscan
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
@@ -23,8 +24,8 @@ abstract class SushiScan : MangaThemesia() {
     override val seriesAuthorSelector = ".infotable tr:contains(Auteur) td:last-child"
     override val seriesStatusSelector = ".infotable tr:contains(Statut) td:last-child"
 
-    override suspend fun getPopularManga(page: Int) = searchMangaParse(client.get("$baseUrl/catalogue/?page=$page&order=popular").asJsoup())
-    override suspend fun getLatestUpdates(page: Int) = searchMangaParse(client.get("$baseUrl/catalogue/?page=$page&order=update").asJsoup())
+    override suspend fun getPopularManga(page: Int) = searchMangaParse(client.get("$baseUrl/catalogue/?page=$page&order=popular", Fetch.DOCUMENT).asJsoup())
+    override suspend fun getLatestUpdates(page: Int) = searchMangaParse(client.get("$baseUrl/catalogue/?page=$page&order=update", Fetch.DOCUMENT).asJsoup())
 
     override fun searchMangaUrl(page: Int, query: String) = "$baseUrl/page/$page".toHttpUrl().newBuilder()
         .addQueryParameter("s", query)

@@ -10,6 +10,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.lib.publus.PublusContent
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -47,7 +48,7 @@ abstract class Docomo : KeiSource() {
             .addQueryParameter("s", "daily")
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
@@ -60,7 +61,7 @@ abstract class Docomo : KeiSource() {
             .addQueryParameter("t", "2")
             .addQueryParameter("ss", "1")
             .build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     private fun Response.toMangasPage(): MangasPage {
@@ -91,7 +92,7 @@ abstract class Docomo : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val details = SManga.create().apply {
             title = document.selectFirst("h1.p-header__title")!!.text()
             author = document.select(".p-information__author-list li a").joinToString { it.text() }
@@ -111,7 +112,7 @@ abstract class Docomo : KeiSource() {
                     .addQueryParameter("order", "a")
                     .addQueryParameter("page", page.toString())
                     .build()
-                val result = client.get(contentsUrl).parseAs<ChaptersResponse>()
+                val result = client.get(contentsUrl, Fetch.XHR).parseAs<ChaptersResponse>()
                 Jsoup.parseBodyFragment(result.html).select(".o-series-list__card-item").mapTo(this) {
                     SChapter.create().apply {
                         url = it.selectFirst(".o-series-list__card")!!.attr("data-product_id")
@@ -142,13 +143,13 @@ abstract class Docomo : KeiSource() {
         .toString()
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val sesid = client.get(getChapterUrl(chapter)).asJsoup().selectFirst("#mwrs4b-params")!!.attr("data-sesid")
+        val sesid = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup().selectFirst("#mwrs4b-params")!!.attr("data-sesid")
         val body = FormBody.Builder()
             .add("cid", chapter.url)
             .add("sesid", sesid)
             .build()
 
-        val contentUrl = client.post("$sessionUrl/responder/sessionValidate", body).parseAs<PublusContent>().url!!
+        val contentUrl = client.post("$sessionUrl/responder/sessionValidate", Fetch.XHR, body).parseAs<PublusContent>().url!!
         return client.fetchPages(contentUrl)
     }
 }

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -45,7 +46,7 @@ abstract class Shinigami : KeiSource() {
             .addQueryParameter("sort", "popularity")
             .build()
 
-        val response = client.get(url, apiHeaders)
+        val response = client.get(url, apiHeaders, Fetch.XHR)
         return parseMangaList(response)
     }
 
@@ -58,7 +59,7 @@ abstract class Shinigami : KeiSource() {
             .addQueryParameter("sort", "latest")
             .build()
 
-        val response = client.get(url, apiHeaders)
+        val response = client.get(url, apiHeaders, Fetch.XHR)
         return parseMangaList(response)
     }
 
@@ -77,7 +78,7 @@ abstract class Shinigami : KeiSource() {
             it.addToUri(url)
         }
 
-        val response = client.get(url.build(), apiHeaders)
+        val response = client.get(url.build(), apiHeaders, Fetch.XHR)
         return parseMangaList(response)
     }
 
@@ -150,7 +151,7 @@ abstract class Shinigami : KeiSource() {
     }
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
-        val response = client.get("$apiUrl/v1/manga/detail/${manga.url}", apiHeaders)
+        val response = client.get("$apiUrl/v1/manga/detail/${manga.url}", apiHeaders, Fetch.XHR)
         val mangaDetailsResponse = response.parseAs<ShinigamiMangaDetailDto>()
         val mangaDetails = mangaDetailsResponse.data
 
@@ -182,7 +183,7 @@ abstract class Shinigami : KeiSource() {
     }
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
-        val response = client.get("$apiUrl/v1/chapter/${manga.url}/list?page_size=3000", apiHeaders)
+        val response = client.get("$apiUrl/v1/chapter/${manga.url}/list?page_size=3000", apiHeaders, Fetch.XHR)
         val result = response.parseAs<ShinigamiChapterListDto>()
         return result.chapterList.map(::chapterFromObject)
     }
@@ -201,7 +202,7 @@ abstract class Shinigami : KeiSource() {
             throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
         }
 
-        val response = client.get("$apiUrl/v1/chapter/detail/${chapter.url}", apiHeaders)
+        val response = client.get("$apiUrl/v1/chapter/detail/${chapter.url}", apiHeaders, Fetch.XHR)
         val result = response.parseAs<ShinigamiPageListDto>()
 
         return result.pageList.chapterPage.pages.mapIndexed { index, imageName ->

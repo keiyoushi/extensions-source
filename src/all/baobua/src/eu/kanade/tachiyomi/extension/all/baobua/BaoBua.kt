@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -24,13 +25,12 @@ import kotlin.time.Instant
 
 @Source
 abstract class BaoBua : KeiSource() {
-
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)
 
     // ========================= Popular =========================
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangasPage(client.get("$baseUrl/?page=$page").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangasPage(client.get("$baseUrl/?page=$page", Fetch.DOCUMENT).asJsoup())
 
     // ========================= Latest  =========================
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
@@ -41,7 +41,7 @@ abstract class BaoBua : KeiSource() {
             return MangasPage(emptyList(), false)
         }
 
-        val response = client.get(url)
+        val response = client.get(url, Fetch.DOCUMENT)
         val finalUrl = response.request.url
         val document = response.asJsoup()
 
@@ -67,12 +67,12 @@ abstract class BaoBua : KeiSource() {
                 .addQueryParameter("q", query)
                 .addQueryParameter("page", page.toString())
                 .build()
-            return parseMangasPage(client.get(url).asJsoup())
+            return parseMangasPage(client.get(url, Fetch.DOCUMENT).asJsoup())
         }
 
         val filter = filters.firstInstance<SourceCategorySelector>()
         return filter.selectedCategory?.let {
-            parseMangasPage(client.get(it.buildUrl(baseUrl, page)).asJsoup())
+            parseMangasPage(client.get(it.buildUrl(baseUrl, page), Fetch.DOCUMENT).asJsoup())
         } ?: getPopularManga(page)
     }
 
@@ -83,7 +83,7 @@ abstract class BaoBua : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         val requestUrl = response.request.url.toString()
         val document = response.asJsoup()
 
@@ -107,7 +107,7 @@ abstract class BaoBua : KeiSource() {
     // ========================= Pages   =========================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val pages = mutableListOf<Page>()
-        var document = client.get(getChapterUrl(chapter)).asJsoup()
+        var document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         while (true) {
             val offset = pages.size
@@ -119,7 +119,7 @@ abstract class BaoBua : KeiSource() {
                 ?.absUrl("href")
                 ?: break
 
-            document = client.get(nextPageUrl).asJsoup()
+            document = client.get(nextPageUrl, Fetch.DOCUMENT).asJsoup()
         }
 
         return pages

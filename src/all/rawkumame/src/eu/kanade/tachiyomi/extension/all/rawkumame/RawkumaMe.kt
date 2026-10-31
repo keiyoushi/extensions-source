@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -51,7 +52,7 @@ abstract class RawkumaMe : KeiSource() {
             .addQueryParameter("page", page.toString())
             .apply(params)
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.extractNextJs<List<SeriesDto>>().orEmpty().map { it.toSManga(baseUrl) }
         return MangasPage(mangas, document.selectFirst("a[rel=next]") != null)
     }
@@ -75,7 +76,7 @@ abstract class RawkumaMe : KeiSource() {
             .addQueryParameter("lang", lang)
             .addQueryParameter("slugs", manga.url)
             .build()
-        val series = client.get(url).parseAs<List<SeriesDto>>().first()
+        val series = client.get(url, Fetch.XHR).parseAs<List<SeriesDto>>().first()
         return SMangaUpdate(
             manga = series.toSMangaDetails(baseUrl),
             chapters = series.toSChapters(lang),
@@ -90,7 +91,7 @@ abstract class RawkumaMe : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         // images are cleaned scans, the translated text for every language is an svg string in the chapter's rsc payload
-        val reader = client.get("$baseUrl/manga/${chapter.url}").asJsoup().extractNextJs<ReaderChapterDto>()
+        val reader = client.get("$baseUrl/manga/${chapter.url}", Fetch.DOCUMENT).asJsoup().extractNextJs<ReaderChapterDto>()
             ?: return emptyList()
         return reader.pages.mapIndexed { index, page ->
             val svg = page.text[lang]

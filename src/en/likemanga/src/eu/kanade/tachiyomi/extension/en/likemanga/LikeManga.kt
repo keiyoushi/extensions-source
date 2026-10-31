@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -96,7 +97,7 @@ abstract class LikeManga : KeiSource() {
             }
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select("div.card-body div.card").map { element ->
             SManga.create().apply {
@@ -113,7 +114,7 @@ abstract class LikeManga : KeiSource() {
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/?act=searchadvance").asJsoup()
+        val document = client.get("$baseUrl/?act=searchadvance", Fetch.DOCUMENT).asJsoup()
 
         return document.selectFirst("div.search_genres")
             ?.select("div.form-check")
@@ -149,7 +150,7 @@ abstract class LikeManga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = manga.apply {
             title = document.select("#title-detail-manga").text()
@@ -185,7 +186,7 @@ abstract class LikeManga : KeiSource() {
                             addQueryParameter("keyword", "")
                         }.build()
 
-                        val chapterPage = client.get(url)
+                        val chapterPage = client.get(url, Fetch.XHR)
                             .parseAs<JsonObject>()
                             .getString("list_chap")
                             .asJsoup(baseUrl)
@@ -223,7 +224,7 @@ abstract class LikeManga : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return document.select("div:contains(you may also like) + div div.card > a").map {
             SManga.create().apply {
@@ -237,7 +238,7 @@ abstract class LikeManga : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val element = document.selectFirst("div.reading input#next_img_token")
 
         if (element != null) {

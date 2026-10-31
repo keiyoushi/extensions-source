@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -35,7 +36,7 @@ abstract class MH1234 : KeiSource() {
                 addPathSegment(page.toString())
             }
         }.build()
-        return mangaListParse(client.get(url))
+        return mangaListParse(client.get(url, Fetch.DOCUMENT))
     }
 
     // Latest Page
@@ -51,14 +52,14 @@ abstract class MH1234 : KeiSource() {
             }
         }.build()
 
-        return mangaListParse(client.get(url))
+        return mangaListParse(client.get(url, Fetch.DOCUMENT))
     }
 
     // Search Page
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
-        return parseMangaDetails(client.get(url).asJsoup())
+        return parseMangaDetails(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = if (query.isNotBlank()) {
@@ -70,7 +71,7 @@ abstract class MH1234 : KeiSource() {
                 addPathSegment(page.toString())
             }
         }.build()
-        mangaListParse(client.get(url))
+        mangaListParse(client.get(url, Fetch.DOCUMENT))
     } else {
         val genre = filters.firstInstanceOrNull<GenreFilter>()?.selected?.second ?: "0"
         val status = filters.firstInstanceOrNull<StatusFilter>()?.selected?.second ?: "0"
@@ -89,7 +90,7 @@ abstract class MH1234 : KeiSource() {
                 addPathSegment(page.toString())
             }
         }.build()
-        mangaListParse(client.get(url))
+        mangaListParse(client.get(url, Fetch.DOCUMENT))
     }
 
     // Shared manga list parsing
@@ -117,7 +118,7 @@ abstract class MH1234 : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document),
             chapters = parseChapterList(document),
@@ -159,7 +160,7 @@ abstract class MH1234 : KeiSource() {
     override val supportsRelatedMangas = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return doc.select(".mint-section:has(h2:contains(喜欢这部的也在看)) .mint-cover-card").mapNotNull {
             val name = it.selectFirst("h3")?.text()?.takeIf(String::isNotBlank) ?: return@mapNotNull null
@@ -175,12 +176,12 @@ abstract class MH1234 : KeiSource() {
     // Manga View Page
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        var response = client.get(getChapterUrl(chapter))
+        var response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         // Handle redirection to reader in JS
         val url = REPLACE_URL_REGEX.find(response.peekBody(10240).string())?.groupValues?.get(1)
         if (url != null) {
             response.close()
-            response = client.get(url)
+            response = client.get(url, Fetch.DOCUMENT)
         }
 
         val document = response.asJsoup()
@@ -194,7 +195,7 @@ abstract class MH1234 : KeiSource() {
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val doc = client.get("$baseUrl/category/").asJsoup()
+        val doc = client.get("$baseUrl/category/", Fetch.DOCUMENT).asJsoup()
 
         return doc.select("a.filter-tag").associate {
             it.text() to it.attr("href").substringAfterLast("/")

@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.head
@@ -57,7 +58,7 @@ abstract class MangaKingdom :
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/rank/", desktopHeaders).asJsoup()
+        val document = client.get("$baseUrl/rank/", desktopHeaders, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".book-list-ranking .book-list--item").map(::mangaFromElement)
         return MangasPage(mangas, false)
     }
@@ -71,7 +72,7 @@ abstract class MangaKingdom :
             .addQueryParameter("page", page.toString())
             .build()
 
-        val document = client.get(url, desktopHeaders).asJsoup()
+        val document = client.get(url, desktopHeaders, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".book-list__new .book-list--item").map(::mangaFromElement)
         val hasNextPage = document.selectFirst(".paging--next") != null
         return MangasPage(mangas, hasNextPage)
@@ -105,7 +106,7 @@ abstract class MangaKingdom :
             if (page > 1) addQueryParameter("page", page.toString())
         }.build()
 
-        val document = client.get(url, desktopHeaders).asJsoup()
+        val document = client.get(url, desktopHeaders, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".book-list-detail--box a.book-list--item").map(::mangaFromElement)
         val hasNextPage = document.selectFirst(".paging--next") != null
         return MangasPage(mangas, hasNextPage)
@@ -150,7 +151,7 @@ abstract class MangaKingdom :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
-        val document = client.get(getMangaUrl(manga), desktopHeaders).asJsoup()
+        val document = client.get(getMangaUrl(manga), desktopHeaders, Fetch.DOCUMENT).asJsoup()
         val bookTitle = document.selectFirst("h1.book-info--title span[itemprop=name]")!!.text()
         val details = SManga.create().apply {
             title = bookTitle
@@ -167,7 +168,7 @@ abstract class MangaKingdom :
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val lastPage = document.select(".paging__title .paging--item").maxOfOrNull { it.text().toInt() } ?: 1
         val otherPages = (2..lastPage).map { page ->
-            async { client.get("$baseUrl/title/${manga.url}/pv/$page", desktopHeaders).asJsoup() }
+            async { client.get("$baseUrl/title/${manga.url}/pv/$page", desktopHeaders, Fetch.DOCUMENT).asJsoup() }
         }
 
         val chapterList = (listOf(document) + otherPages.awaitAll()).flatMap {
@@ -206,7 +207,7 @@ abstract class MangaKingdom :
         val viewer = client.head(getChapterUrl(chapter), desktopHeaders).use { it.request.url }
         val ticket = viewer.queryParameter("p0")!!
         val obfuid = viewer.queryParameter("p1")!!
-        val header = client.get(buildViewerUrl(ticket, "64kb_QVGA_h", obfuid, "header"), desktopHeaders).parseAs<HeaderResponse>()
+        val header = client.get(buildViewerUrl(ticket, "64kb_QVGA_h", obfuid, "header"), desktopHeaders, Fetch.XHR).parseAs<HeaderResponse>()
         return header.contentInfos.flatMap { content ->
             val contentUrl = buildViewerUrl(ticket, content.name, obfuid, "content", header.dk)
             (content.startSceneNo..content.endSceneNo).map {

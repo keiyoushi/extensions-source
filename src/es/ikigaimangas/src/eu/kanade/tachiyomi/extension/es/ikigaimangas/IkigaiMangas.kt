@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.post
@@ -46,7 +47,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class IkigaiMangas :
     KeiSource(),
     ConfigurableSource {
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addCookie("is-adult-enabled" to "true")
         .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
 
@@ -65,7 +65,7 @@ abstract class IkigaiMangas :
     override suspend fun getPopularManga(page: Int): MangasPage {
         fetchDomainUrl()
 
-        val document = client.get("$baseUrl/clasificacion/").asJsoup()
+        val document = client.get("$baseUrl/clasificacion/", Fetch.DOCUMENT).asJsoup()
 
         val mangaList = document.select("div.grid > div.card").map { element ->
             SManga.create().apply {
@@ -83,7 +83,7 @@ abstract class IkigaiMangas :
         val latestUrl = baseUrl.toHttpUrl().newBuilder()
             .addQueryParameter("pagina", page.toString())
             .build()
-        val document = client.get(latestUrl).asJsoup()
+        val document = client.get(latestUrl, Fetch.DOCUMENT).asJsoup()
 
         val mangaList = document.select("section[aria-labelledby=new-chapters-heading] > ul.grid:last-of-type a.card").map { element ->
             SManga.create().apply {
@@ -132,7 +132,7 @@ abstract class IkigaiMangas :
 
         searchUrl.addQueryParameter("pagina", page.toString())
 
-        val document = client.get(searchUrl.build()).asJsoup()
+        val document = client.get(searchUrl.build(), Fetch.DOCUMENT).asJsoup()
 
         val mangaList = document.select("section[aria-labelledby=archive-heading] > ul.grid a.card").map { element ->
             SManga.create().apply {
@@ -161,7 +161,7 @@ abstract class IkigaiMangas :
             .set("X-QRL", qfunc)
             .set("Content-Type", "application/qwik-json")
             .build()
-        return client.post(url, headers, body).parseAs<QwikData>().parseAsList<QwikSeriesDto>()
+        return client.post(url, headers, Fetch.XHR, body).parseAs<QwikData>().parseAsList<QwikSeriesDto>()
     }
 
     private fun qwikDataParse(query: String, contentFilter: ContentFilter, seriesList: List<QwikSeriesDto>, page: Int): MangasPage {
@@ -193,7 +193,7 @@ abstract class IkigaiMangas :
     ): SMangaUpdate {
         fetchDomainUrl()
 
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val mainContent = document.selectFirst("main")!!
         val updatedManga = SManga.create().apply {
             title = mainContent.selectFirst(".card-body .card-title")!!.text()
@@ -228,7 +228,7 @@ abstract class IkigaiMangas :
                         .addQueryParameter("pagina", page.toString())
                         .build()
 
-                    client.get(url).asJsoup()
+                    client.get(url, Fetch.DOCUMENT).asJsoup()
                         .select("section.card > ul.grid a.card")
                         .map(::chapterFromElement)
                 }
@@ -263,7 +263,7 @@ abstract class IkigaiMangas :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         fetchDomainUrl()
 
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("section div > img").mapIndexed { i, element ->
             Page(i, imageUrl = element.attr("abs:src"))
         }
@@ -364,12 +364,12 @@ abstract class IkigaiMangas :
             try {
                 val initClient = network.client
                 val headers = super.headersBuilder().build()
-                val document = initClient.get("https://ikigaimangas.com", headers).asJsoup()
+                val document = initClient.get("https://ikigaimangas.com", headers, Fetch.DOCUMENT).asJsoup()
                 val scriptUrl = document.selectFirst("button[on:click]:containsOwn(Ir al sitio)")?.attr("on:click")
                     ?: return
-                val script = initClient.get("https://ikigaimangas.com/build/$scriptUrl", headers).body.string()
+                val script = initClient.get("https://ikigaimangas.com/build/$scriptUrl", headers, Fetch.SCRIPT).body.string()
                 val domain = script.substringAfter("i(\"").substringBefore("\"")
-                val host = initClient.get(domain, headers, ensureSuccess = false).use { it.request.url.host }
+                val host = initClient.get(domain, headers, Fetch.DOCUMENT, ensureSuccess = false).use { it.request.url.host }
                 preferences.edit().putString(BASE_URL_PREF, "https://$host").apply()
                 domainFetched = true
             } catch (_: Exception) {}

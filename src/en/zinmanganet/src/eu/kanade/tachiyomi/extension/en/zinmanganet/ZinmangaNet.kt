@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
@@ -38,7 +39,7 @@ abstract class ZinmangaNet : MadaraNoAjax() {
             .addQueryParameter("order", "desc")
             .build()
 
-        suspend fun fetchPage(page: Int) = client.get(url.newBuilder().addQueryParameter("page", page.toString()).build()).parseAs<ChapterListResponse>().data
+        suspend fun fetchPage(page: Int) = client.get(url.newBuilder().addQueryParameter("page", page.toString()).build(), Fetch.XHR).parseAs<ChapterListResponse>().data
 
         val first = fetchPage(1)
         val rest = coroutineScope {

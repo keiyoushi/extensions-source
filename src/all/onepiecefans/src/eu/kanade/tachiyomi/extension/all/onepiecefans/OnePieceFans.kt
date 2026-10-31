@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferences
@@ -33,7 +34,7 @@ abstract class OnePieceFans :
     private val defaultThumbnailUrl get() = "$baseUrl/images/luffy.png"
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val result = client.get("$baseUrl/fansubs-config.json").parseAs<Map<String, List<Fansub>>>()
+        val result = client.get("$baseUrl/fansubs-config.json", Fetch.XHR).parseAs<Map<String, List<Fansub>>>()
 
         val mangas = result[internalLang]?.map { fansub ->
             SManga.create().apply {
@@ -63,7 +64,7 @@ abstract class OnePieceFans :
     ): SMangaUpdate {
         if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
-        val chapterNumbers = client.get("$baseUrl/server.php?lang=$internalLang&folderName=${manga.url}")
+        val chapterNumbers = client.get("$baseUrl/server.php?lang=$internalLang&folderName=${manga.url}", Fetch.XHR)
             .parseAs<List<String>>()
 
         val newChapters = chapterNumbers.map { number ->
@@ -80,7 +81,7 @@ abstract class OnePieceFans :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (folderName, chapterNumber) = chapter.url.split("/", limit = 2)
-        val images = client.get("$baseUrl/server.php?lang=$internalLang&folderName=$folderName&chapter=$chapterNumber")
+        val images = client.get("$baseUrl/server.php?lang=$internalLang&folderName=$folderName&chapter=$chapterNumber", Fetch.XHR)
             .parseAs<List<String>>()
 
         return images.mapIndexed { index, fileName ->

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -15,7 +16,6 @@ import keiyoushi.utils.asJsoup
 abstract class ExistentialComics : KeiSource() {
 
     override val supportsLatest = false
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val manga = SManga.create().apply {
             title = "Existential Comics"
@@ -42,7 +42,7 @@ abstract class ExistentialComics : KeiSource() {
     ): SMangaUpdate {
         if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
-        val chapterList = client.get(getMangaUrl(manga)).asJsoup().select("div#date-comics ul li a:eq(0)").map { element ->
+        val chapterList = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup().select("div#date-comics ul li a:eq(0)").map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.attr("href"))
                 name = element.text()
@@ -53,7 +53,7 @@ abstract class ExistentialComics : KeiSource() {
         return SMangaUpdate(manga, chapterList)
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup().select(".comicImg").mapIndexed { i, element ->
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup().select(".comicImg").mapIndexed { i, element ->
         Page(i, imageUrl = element.attr("abs:src"))
     }
 }

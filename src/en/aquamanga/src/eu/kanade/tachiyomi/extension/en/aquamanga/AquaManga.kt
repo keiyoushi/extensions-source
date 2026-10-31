@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
@@ -29,7 +30,7 @@ abstract class AquaManga : MadaraNoAjax() {
     )
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/$mangaSubString/").asJsoup()
+        val document = client.get("$baseUrl/$mangaSubString/", Fetch.DOCUMENT).asJsoup()
         return document.selectFirst(filterGenresSelector)?.select("a.aqua-filter-pill")?.mapNotNull { element ->
             val href = element.attr("href").takeIf(String::isNotBlank) ?: return@mapNotNull null
             val genre = href.substringAfter("genre=", "")
@@ -62,7 +63,7 @@ abstract class AquaManga : MadaraNoAjax() {
             }
             if (query.isNotBlank()) addQueryParameter(searchQueryParameter, query)
         }.build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return MangasPage(parseArchive(document), document.selectFirst(nextPageSelector()) != null)
     }
 

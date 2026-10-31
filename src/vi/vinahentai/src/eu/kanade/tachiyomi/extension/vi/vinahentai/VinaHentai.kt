@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -36,7 +37,7 @@ abstract class VinaHentai : KeiSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("sort", "views")
             .build()
-        return responseMangaList(client.get(url))
+        return responseMangaList(client.get(url, Fetch.DOCUMENT))
     }
 
     // ============================== Latest ================================
@@ -46,7 +47,7 @@ abstract class VinaHentai : KeiSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("sort", "updatedAt")
             .build()
-        return responseMangaList(client.get(url))
+        return responseMangaList(client.get(url, Fetch.DOCUMENT))
     }
 
     // ============================== Search ================================
@@ -57,7 +58,7 @@ abstract class VinaHentai : KeiSource() {
                 .addQueryParameter("page", page.toString())
                 .addQueryParameter("q", query)
                 .build()
-            return responseMangaSearch(client.get(url))
+            return responseMangaSearch(client.get(url, Fetch.DOCUMENT))
         }
 
         var genreSlug: String? = null
@@ -79,14 +80,14 @@ abstract class VinaHentai : KeiSource() {
                 .addQueryParameter("sort", sort)
                 .apply { if (status.isNotEmpty()) addQueryParameter("status", status) }
                 .build()
-            responseMangaList(client.get(url))
+            responseMangaList(client.get(url, Fetch.DOCUMENT))
         } else {
             val url = "$baseUrl/danh-sach".toHttpUrl().newBuilder()
                 .addQueryParameter("page", page.toString())
                 .addQueryParameter("sort", sort)
                 .apply { if (status.isNotEmpty()) addQueryParameter("status", status) }
                 .build()
-            responseMangaList(client.get(url))
+            responseMangaList(client.get(url, Fetch.DOCUMENT))
         }
     }
 
@@ -177,7 +178,7 @@ abstract class VinaHentai : KeiSource() {
         val detailUrl = if (url.pathSegments.firstOrNull() == "truyen-hentai") {
             url
         } else {
-            val chapterDocument = client.get(url).asJsoup()
+            val chapterDocument = client.get(url, Fetch.DOCUMENT).asJsoup()
             if (chapterDocument.selectFirst("a[aria-label=Đọc từ đầu]") == null) return null
             chapterDocument.selectFirst("a[href*=\"/truyen-hentai/\"]")
                 ?.absUrl("href")
@@ -197,7 +198,7 @@ abstract class VinaHentai : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
@@ -248,7 +249,7 @@ abstract class VinaHentai : KeiSource() {
     private val imageUrlRegex = Regex("""https://[^"'\s\\]+/manga-images/[^"'\s\\]+""")
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val body = client.get(getChapterUrl(chapter)).use { it.body.string() }
+        val body = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).use { it.body.string() }
 
         val imageUrls = imageUrlRegex.findAll(body)
             .map { it.value }
@@ -267,7 +268,7 @@ abstract class VinaHentai : KeiSource() {
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/danh-sach").asJsoup()
+        val document = client.get("$baseUrl/danh-sach", Fetch.DOCUMENT).asJsoup()
 
         return document.select("a[href*=/genres/]")
             .mapNotNull { element ->

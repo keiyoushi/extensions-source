@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -36,6 +37,7 @@ import kotlin.time.Duration.Companion.minutes
 abstract class Kemono :
     KeiSource(),
     ConfigurableSource {
+
     override val supportsLatest = true
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->
@@ -133,7 +135,7 @@ abstract class Kemono :
 
         val mangas = run {
             val favorites = if (fav != null) {
-                val response = client.get("$baseUrl/$apiPath/account/favorites", ensureSuccess = false)
+                val response = client.get("$baseUrl/$apiPath/account/favorites", Fetch.XHR, ensureSuccess = false)
 
                 if (response.isSuccessful) {
                     response.parseAs<List<KemonoFavoritesDto>>().filterNot { it.service.lowercase() == "discord" }
@@ -149,6 +151,7 @@ abstract class Kemono :
             val response = client.get(
                 "$baseUrl/$apiPath/creators",
                 headers,
+                Fetch.XHR,
                 CacheControl.Builder().maxStale(30.minutes).build(),
             )
             val allCreators = response.parseAs<List<KemonoCreatorDto>>().filterNot { it.service.lowercase() == "discord" }
@@ -253,7 +256,7 @@ abstract class Kemono :
     private suspend fun retry(url: String): Response {
         var code = 0
         repeat(5) {
-            val response = client.get(url, ensureSuccess = false)
+            val response = client.get(url, Fetch.XHR, ensureSuccess = false)
             if (response.isSuccessful) return response
             response.close()
             code = response.code
@@ -265,7 +268,7 @@ abstract class Kemono :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val postData: KemonoPostDtoWrapped = client.get("$baseUrl/$apiPath${chapter.url}").parseAs()
+        val postData: KemonoPostDtoWrapped = client.get("$baseUrl/$apiPath${chapter.url}", Fetch.XHR).parseAs()
         return postData.post.images.mapIndexed { i, path -> Page(i, imageUrl = "$baseUrl/$dataPath$path") }
     }
 

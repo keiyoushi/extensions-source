@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -28,7 +29,7 @@ abstract class HentaiFusion : KeiSource() {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             if (page > 1) addPathSegments("page/$page")
         }.build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseListing(document)
     }
 
@@ -45,7 +46,7 @@ abstract class HentaiFusion : KeiSource() {
                 if (page > 1) addQueryParameter("paged", page.toString())
             }
         }.build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseListing(document)
     }
 
@@ -84,7 +85,7 @@ abstract class HentaiFusion : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(manga.url).asJsoup()
+        val document = client.get(manga.url, Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document),
             chapters = parseChapterList(document),
@@ -123,7 +124,7 @@ abstract class HentaiFusion : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(chapter.url).asJsoup()
+        val document = client.get(chapter.url, Fetch.DOCUMENT).asJsoup()
         return document.select("ul.post-fotos > li > img")
             .mapNotNull { img ->
                 val url = img.attr("data-src")

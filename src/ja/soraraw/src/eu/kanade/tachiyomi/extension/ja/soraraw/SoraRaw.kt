@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.aesCtr
@@ -44,7 +45,6 @@ import kotlin.time.Instant
 abstract class SoraRaw :
     KeiSource(),
     ConfigurableSource {
-
     private val preferences by getPreferencesLazy()
 
     private val showAdult get() = preferences.getBoolean(PREF_ADULT, false)
@@ -57,7 +57,7 @@ abstract class SoraRaw :
 
     // The site's 18+ setting swaps every ranking for its 18+ list
     private suspend fun getRanking(path: String): MangasPage {
-        val ranking = client.get("$baseUrl/$path").parseAs<RankingDto>()
+        val ranking = client.get("$baseUrl/$path", Fetch.XHR).parseAs<RankingDto>()
         val mangas = if (showAdult) ranking.manga18s else ranking.mangas
         return MangasPage(mangas.map { it.toSManga() }, false)
     }
@@ -68,7 +68,7 @@ abstract class SoraRaw :
 
     private suspend fun getListing(path: String, page: Int): MangasPage {
         val url = if (page == 1) "$baseUrl/$path" else "$baseUrl/$path/page/$page"
-        val listing = client.get(url).extractNextJs<ListingDto>()!!
+        val listing = client.get(url, Fetch.DOCUMENT).extractNextJs<ListingDto>()!!
         return MangasPage(listing.results.map { it.toSManga() }, listing.hasNextPage)
     }
 
@@ -89,9 +89,9 @@ abstract class SoraRaw :
 
     // The site's own search runs over these catalog files in the browser
     private suspend fun searchCatalog(query: String, genre: Genre?): MangasPage = coroutineScope {
-        val pages = client.get("$baseUrl/config.json").parseAs<ConfigDto>().catalogPages
+        val pages = client.get("$baseUrl/config.json", Fetch.XHR).parseAs<ConfigDto>().catalogPages
         val entries = (1..pages).map { page ->
-            async { client.get("$baseUrl/mangas_$page.json").parseAs<CatalogDto>().list }
+            async { client.get("$baseUrl/mangas_$page.json", Fetch.XHR).parseAs<CatalogDto>().list }
         }.awaitAll().flatten()
 
         val words = query.split(WHITESPACE)
@@ -124,7 +124,7 @@ abstract class SoraRaw :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = client.get(getMangaUrl(manga)).extractNextJs<MangaPageDto>()!!.manga
+        val details = client.get(getMangaUrl(manga), Fetch.DOCUMENT).extractNextJs<MangaPageDto>()!!.manga
         return SMangaUpdate(details.toSManga(), details.toSChapterList())
     }
 
@@ -133,14 +133,14 @@ abstract class SoraRaw :
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/manga/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get(getChapterUrl(chapter)).extractNextJs<ChapterPageDto>()!!.chapter
-        val manifestBase = client.get("$baseUrl/config.json").parseAs<ConfigDto>().apiImage
+        val data = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).extractNextJs<ChapterPageDto>()!!.chapter
+        val manifestBase = client.get("$baseUrl/config.json", Fetch.XHR).parseAs<ConfigDto>().apiImage
         val manifestUrl = manifestBase.toHttpUrl().newBuilder()
             .addPathSegment(data.mangaId.toString())
             .addPathSegment("${data.id}.json")
             .addQueryParameter("t", Instant.parse(data.updatedAt).toEpochMilliseconds().toString())
             .build()
-        val manifest = client.get(manifestUrl).parseAs<ManifestDto>().d
+        val manifest = client.get(manifestUrl, Fetch.XHR).parseAs<ManifestDto>().d
             .decodeBase64()
             .xorInPlace(MANIFEST_KEY.toByteArray())
             .decodeToString()
@@ -167,7 +167,7 @@ abstract class SoraRaw :
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/genres.json").parseAs()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/genres.json", Fetch.XHR).parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         // The site lists one genre several times under the same slug

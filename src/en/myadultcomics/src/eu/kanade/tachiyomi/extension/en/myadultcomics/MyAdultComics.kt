@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -25,11 +26,10 @@ import org.jsoup.nodes.Document
 
 @Source
 abstract class MyAdultComics : KeiSource() {
-
     override val supportsLatest = false
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/index.php?page=$page").asJsoup()
+        val document = client.get("$baseUrl/index.php?page=$page", Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document)
     }
 
@@ -71,7 +71,7 @@ abstract class MyAdultComics : KeiSource() {
         }
         url.addQueryParameter("page", page.toString())
 
-        val document = client.get(url.build()).asJsoup()
+        val document = client.get(url.build(), Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document)
     }
 
@@ -79,7 +79,7 @@ abstract class MyAdultComics : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host || url.encodedPath != "/read.php") return null
         val mangaId = url.queryParameter("i") ?: return null
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val pagePaths = parsePagePaths(document)
         return parseMangaDetails(document, pagePaths).apply {
             setUrlWithoutDomain("$baseUrl/read.php?i=$mangaId")
@@ -126,7 +126,7 @@ abstract class MyAdultComics : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val pagePaths = chapter.memo["pages"]?.parseAs<List<String>>()
-            ?: parsePagePaths(client.get(getChapterUrl(chapter)).asJsoup())
+            ?: parsePagePaths(client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup())
 
         return pagePaths.mapIndexed { index, path ->
             Page(index, imageUrl = "$baseUrl$path")
@@ -144,7 +144,7 @@ abstract class MyAdultComics : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val pagePaths = parsePagePaths(document)
         val details = parseMangaDetails(document, pagePaths)
         val chapterList = parseChapterList(document, pagePaths)

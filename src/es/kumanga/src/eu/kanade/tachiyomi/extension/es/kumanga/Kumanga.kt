@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -31,7 +32,7 @@ abstract class Kumanga : KeiSource() {
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList())
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".update_item h4 a").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
@@ -52,7 +53,7 @@ abstract class Kumanga : KeiSource() {
                 group.state.filter { it.state }.forEach { add("${group.param}[${it.value}]", it.value) }
             }
         }.build()
-        val result = client.post("$baseUrl/backend/ajax/searchengine2.php", body)
+        val result = client.post("$baseUrl/backend/ajax/searchengine2.php", Fetch.XHR, body)
             .parseAs<SearchResponseDto>()
         return MangasPage(result.contents.map { it.toSManga() }, page * PER_PAGE < result.totalContents)
     }
@@ -63,11 +64,11 @@ abstract class Kumanga : KeiSource() {
         val segment = url.pathSegments.getOrNull(1) ?: return null
         val mangaUrl = when {
             segment == "c" || segment == "leer" ->
-                client.get(url).asJsoup().selectFirst("a[href~=manga/\\d+/]")?.absUrl("href") ?: return null
+                client.get(url, Fetch.DOCUMENT).asJsoup().selectFirst("a[href~=manga/\\d+/]")?.absUrl("href") ?: return null
             segment.toIntOrNull() != null -> "$baseUrl/manga/$segment"
             else -> return null
         }
-        val document = client.get(mangaUrl).asJsoup()
+        val document = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
         return parseDetails(document).apply {
             setUrlWithoutDomain(document.selectFirst("meta[property=og:url]")!!.attr("content"))
             initialized = true
@@ -80,7 +81,7 @@ abstract class Kumanga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val details = parseDetails(document).apply { url = manga.url }
         return SMangaUpdate(details, parseChapters(document, manga.url.toMangaId()))
     }
@@ -128,7 +129,7 @@ abstract class Kumanga : KeiSource() {
         val readerUrl = if (chapter.url.startsWith("/manga/leer/")) {
             getChapterUrl(chapter)
         } else {
-            val upload = client.get(getChapterUrl(chapter)).asJsoup()
+            val upload = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
                 .selectFirst("a#leer, a.readButton")!!.absUrl("href").toHttpUrl()
             // Upload pages (/manga/c/<id>) and the reader (/manga/leer/<id>) share the upload id
             baseUrl.toHttpUrl().newBuilder()
@@ -137,7 +138,7 @@ abstract class Kumanga : KeiSource() {
                 .build()
                 .toString()
         }
-        val scripts = client.get(readerUrl).asJsoup().select("script").joinToString("\n") { it.data() }
+        val scripts = client.get(readerUrl, Fetch.DOCUMENT).asJsoup().select("script").joinToString("\n") { it.data() }
         val name = RPICS_REGEX.find(scripts)!!.groupValues[1]
         val encoded = STRING_CONST_REGEX.findAll(scripts).first { it.groupValues[1] == name }.groupValues[2]
         val paths = Base64.decode(encoded, Base64.DEFAULT).xor(PAGES_KEY).decodeToString().parseAs<List<String>>()

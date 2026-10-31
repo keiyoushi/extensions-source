@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.post
@@ -116,7 +117,7 @@ abstract class MangaHub : KeiSource() {
             .set("x-mhub-access", apiKey)
             .build()
 
-        return client.post("$baseApiUrl/graphql", requestHeaders, body)
+        return client.post("$baseApiUrl/graphql", requestHeaders, Fetch.XHR, body)
     }
 
     private val refreshMutex = Mutex()
@@ -136,7 +137,7 @@ abstract class MangaHub : KeiSource() {
 
         for (i in 1..2) {
             val query = if (i == 1) "?reloadKey=1" else ""
-            val response = noRedirectClient.get("$url$query", refreshHeaders, ensureSuccess = false)
+            val response = noRedirectClient.get("$url$query", refreshHeaders, Fetch.DOCUMENT, ensureSuccess = false)
             val returnedKey = response.headers("Set-Cookie")
                 .firstNotNullOfOrNull { apiRegex.find(it)?.groupValues?.get(1) }
             response.close()
@@ -352,7 +353,7 @@ abstract class MangaHub : KeiSource() {
     }
 
     private suspend fun decryptPages(pages: String): String {
-        val cryptoParams = client.get("$baseUrl/api/chapter-crypto", apiHeaders.build())
+        val cryptoParams = client.get("$baseUrl/api/chapter-crypto", apiHeaders.build(), Fetch.XHR)
             .parseAs<ChapterCryptoDto>()
 
         val parts = pages.split(":")

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -27,6 +28,7 @@ abstract class StoneScape : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage = client.get(
         "$apiUrl/series/popular?page=$page&period=week&contentType=manhwa&limit=24",
+        Fetch.XHR,
     ).toMangasPage()
 
     private fun Response.toMangasPage(): MangasPage {
@@ -47,6 +49,7 @@ abstract class StoneScape : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = client.get(
         "$apiUrl/series?page=$page&limit=24&contentType=manhwa",
+        Fetch.XHR,
     ).toMangasPage()
 
     // ============================== Search ===============================
@@ -62,7 +65,7 @@ abstract class StoneScape : KeiSource() {
 
         val slug = url.pathSegments[typeIndex + 1]
 
-        return client.get("$apiUrl/series/by-slug/$slug")
+        return client.get("$apiUrl/series/by-slug/$slug", Fetch.XHR)
             .parseAs<SeriesDto>()
             .toSManga(baseUrl)
     }
@@ -107,7 +110,7 @@ abstract class StoneScape : KeiSource() {
             url.addQueryParameter("genres", selectedGenres.joinToString(","))
         }
 
-        return client.get(url.build()).toMangasPage()
+        return client.get(url.build(), Fetch.XHR).toMangasPage()
     }
 
     // ============================== Details ==============================
@@ -126,7 +129,7 @@ abstract class StoneScape : KeiSource() {
 
         val details = async {
             if (fetchDetails) {
-                client.get("$apiUrl/series/by-slug/$slug")
+                client.get("$apiUrl/series/by-slug/$slug", Fetch.XHR)
                     .parseAs<SeriesDto>()
                     .toSMangaDetails(baseUrl)
             } else {
@@ -136,7 +139,7 @@ abstract class StoneScape : KeiSource() {
 
         val chapterList = async {
             if (fetchChapters) {
-                client.get("$apiUrl/series/by-slug/$slug/chapters")
+                client.get("$apiUrl/series/by-slug/$slug/chapters", Fetch.XHR)
                     .parseAs<ChapterListResponse>()
                     .chapters
                     .map {
@@ -166,7 +169,7 @@ abstract class StoneScape : KeiSource() {
     ): List<Page> {
         val chapterId = chapter.url.substringAfter("#")
 
-        val result = client.get("$apiUrl/chapters/$chapterId/pages")
+        val result = client.get("$apiUrl/chapters/$chapterId/pages", Fetch.XHR)
             .parseAs<ChapterDetailsDto>()
 
         return result.allPages.mapIndexed { index, page ->

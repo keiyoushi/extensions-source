@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.clipstudioreader.ClipStudioReaderInterceptor
 import keiyoushi.lib.clipstudioreader.fetchPages
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.post
@@ -86,7 +87,7 @@ abstract class Honto :
             addQueryParameter("unt", "1")
             addQueryParameter("pgno", page.toString())
         }.build()
-        val document = client.get(searchUrl).asJsoup()
+        val document = client.get(searchUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div.stBoxLine01 > div.stProduct02").map {
             SManga.create().apply {
                 title = it.selectFirst("a.dyTitle")!!.text()
@@ -107,7 +108,7 @@ abstract class Honto :
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val details = async {
             if (!fetchDetails) return@async manga
-            val document = client.get(getMangaUrl(manga)).asJsoup()
+            val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
             SManga.create().apply {
                 title = document.selectFirst("h1.stTitle")!!.text()
                 author = document.select("p.stAuthor a").joinToString { it.text() }
@@ -125,12 +126,12 @@ abstract class Honto :
                 .addQueryParameter("adtDisp", "1")
                 .build()
 
-            val firstPage = client.get(volumesUrl).asJsoup()
+            val firstPage = client.get(volumesUrl, Fetch.DOCUMENT).asJsoup()
             val lastPage = firstPage.select("ul.stPager li a").mapNotNull { it.text().toIntOrNull() }.maxOrNull() ?: 1
             val otherPages = (2..lastPage).map { page ->
                 async {
                     val pageUrl = volumesUrl.newBuilder().addQueryParameter("pgno", page.toString()).build()
-                    client.get(pageUrl).asJsoup()
+                    client.get(pageUrl, Fetch.DOCUMENT).asJsoup()
                 }
             }
 
@@ -141,7 +142,7 @@ abstract class Honto :
                     .addQueryParameter("freeWord", manga.title)
                     .addQueryParameter("dispNum", "100")
                     .build()
-                client.get(ownedUrl).asJsoup().select("a[onclick^=OD.browserViewer]")
+                client.get(ownedUrl, Fetch.DOCUMENT).asJsoup().select("a[onclick^=OD.browserViewer]")
                     .mapTo(HashSet()) { ARGUMENT_REGEX.findAll(it.attr("onclick")).last().groupValues[1] }
             }
 
@@ -202,7 +203,7 @@ abstract class Honto :
         }.build()
 
         // volumes that need a login get html instead of json
-        return client.post("$baseUrl/view_interface.php", form).parseAs<ViewerResponse> {
+        return client.post("$baseUrl/view_interface.php", Fetch.XHR, form).parseAs<ViewerResponse> {
             if (it.startsWith("{")) it else throw Exception("Log in via WebView.")
         }.url
     }

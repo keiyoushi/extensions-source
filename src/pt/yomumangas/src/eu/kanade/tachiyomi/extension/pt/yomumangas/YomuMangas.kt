@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -28,6 +29,7 @@ abstract class YomuMangas : KeiSource() {
     // ============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int) = client.get(
         "$apiUrl/home/updates?page=$page",
+        Fetch.XHR,
     ).parseAs<LatestUpdatesResponse>().let { mangas ->
         MangasPage(mangas.medias.map { it.toSManga() }, page < 20)
     }
@@ -74,7 +76,7 @@ abstract class YomuMangas : KeiSource() {
             }
         }
 
-        val dto = client.get(url.build())
+        val dto = client.get(url.build(), Fetch.XHR)
             .parseAs<SearchResponse>()
         return MangasPage(
             dto.mangas.map { it.toSManga() },
@@ -101,7 +103,7 @@ abstract class YomuMangas : KeiSource() {
 
         val updatedManga = async {
             if (fetchDetails) {
-                client.get("$apiUrl/mangas/$id")
+                client.get("$apiUrl/mangas/$id", Fetch.XHR)
                     .parseAs<MangaDetailsResponse>()
                     .manga
                     .toSManga()
@@ -111,7 +113,7 @@ abstract class YomuMangas : KeiSource() {
         }
         val updatedChapters = async {
             if (fetchChapters) {
-                client.get("$apiUrl/mangas/$id/chapters")
+                client.get("$apiUrl/mangas/$id/chapters", Fetch.XHR)
                     .parseAs<ChaptersResponse>()
                     .chapters
                     .map { it.toSChapter(id, slug) }
@@ -131,6 +133,7 @@ abstract class YomuMangas : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val html = client.get(
             getChapterUrl(chapter),
+            Fetch.DOCUMENT,
         ).body.string()
 
         val pages = URI_REGEX.findAll(html).mapIndexed { index, matchResult ->
@@ -148,8 +151,8 @@ abstract class YomuMangas : KeiSource() {
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData() = coroutineScope {
-        val tags = async { client.get("$apiUrl/tags").parseAs<FilterData>().tags }
-        val genres = async { client.get("$apiUrl/genres").parseAs<FilterData>().genres }
+        val tags = async { client.get("$apiUrl/tags", Fetch.XHR).parseAs<FilterData>().tags }
+        val genres = async { client.get("$apiUrl/genres", Fetch.XHR).parseAs<FilterData>().genres }
         FilterData(tags.await(), genres.await())
     }.toJsonElement()
 

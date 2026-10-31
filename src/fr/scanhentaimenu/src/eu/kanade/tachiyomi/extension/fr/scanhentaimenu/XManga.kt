@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -81,7 +82,7 @@ abstract class XManga : KeiSource() {
             }
         }.build()
 
-        val response = client.get(url).parseAs<MangaListResponse>()
+        val response = client.get(url, Fetch.XHR).parseAs<MangaListResponse>()
         val mangas = response.mangas.map { it.toSManga(baseUrl) }
         val hasNextPage = response.pagination?.let { it.current < it.totalPages } ?: false
         return MangasPage(mangas, hasNextPage)
@@ -122,7 +123,7 @@ abstract class XManga : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val apiUrl = "$baseUrl/api/mangas/${manga.url}"
-        val response = client.get(apiUrl).parseAs<MangaDetailResponse>()
+        val response = client.get(apiUrl, Fetch.XHR).parseAs<MangaDetailResponse>()
         val mangaDetail = response.manga ?: throw Exception("Manga introuvable (${manga.url})")
 
         val updatedManga = mangaDetail.toSManga(baseUrl)
@@ -139,7 +140,7 @@ abstract class XManga : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val apiUrl = "$baseUrl/api/mangas/read/${chapter.url}"
-        val response = client.get(apiUrl).parseAs<ChapterResponse>()
+        val response = client.get(apiUrl, Fetch.XHR).parseAs<ChapterResponse>()
         val chapterDetail = response.chapter ?: throw Exception("Chapitre introuvable (${chapter.url})")
 
         return chapterDetail.pages.mapIndexed { index, pageItem ->

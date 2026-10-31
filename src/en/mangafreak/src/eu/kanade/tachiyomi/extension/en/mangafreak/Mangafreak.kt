@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -24,7 +25,6 @@ import kotlin.time.Duration.Companion.minutes
 
 @Source
 abstract class Mangafreak : KeiSource() {
-
     private val floatLetterPattern = Regex("""(\d+)(\.\d+|[a-i]+\b)?""")
 
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy/M/d", Locale.ROOT)
@@ -45,7 +45,7 @@ abstract class Mangafreak : KeiSource() {
     // ============================== Popular ==============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/Genre/All/$page").asJsoup()
+        val document = client.get("$baseUrl/Genre/All/$page", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div.ranking_item").map { mangaFromElement(it, "a") }
         val hasNextPage = document.select("a.next_p").isNotEmpty()
         return MangasPage(mangas, hasNextPage)
@@ -60,7 +60,7 @@ abstract class Mangafreak : KeiSource() {
         } else {
             "$baseUrl/Latest_Releases/$page"
         }
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div.latest_releases_item").map { element ->
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("img")?.absUrl("src")?.let {
@@ -116,7 +116,7 @@ abstract class Mangafreak : KeiSource() {
             }
         }
 
-        val document = client.get(url.build()).asJsoup()
+        val document = client.get(url.build(), Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div.manga_search_item , div.mangaka_search_item")
             .map { mangaFromElement(it, "h3 a, h5 a") }
         return MangasPage(mangas, false)
@@ -130,7 +130,7 @@ abstract class Mangafreak : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val details = SManga.create().apply {
             thumbnail_url = document.selectFirst("div.manga_series_image img")?.absUrl("src")
@@ -179,7 +179,7 @@ abstract class Mangafreak : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("img#gohere[src]").mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("src"))
         }

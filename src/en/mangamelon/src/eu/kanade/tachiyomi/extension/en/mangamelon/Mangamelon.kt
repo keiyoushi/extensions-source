@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -148,6 +149,6 @@ abstract class Mangamelon : KeiSource() {
             .add("data", data)
             .add("sessionid", "")
             .build()
-        return client.post("$API_BASE/$path", formBody)
+        return client.post("$API_BASE/$path", Fetch.XHR, formBody)
     }
 }

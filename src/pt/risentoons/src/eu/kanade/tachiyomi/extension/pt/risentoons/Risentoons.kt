@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -54,7 +55,7 @@ abstract class Risentoons : KeiSource() {
             .addQueryParameter("page", page.toString())
             .apply(params)
             .build()
-        return client.get(url).parseAs<MangaListDto>().toMangasPage(baseUrl)
+        return client.get(url, Fetch.XHR).parseAs<MangaListDto>().toMangasPage(baseUrl)
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
@@ -76,20 +77,20 @@ abstract class Risentoons : KeiSource() {
         SMangaUpdate(details.await(), chapterList.await())
     }
 
-    private suspend fun fetchMangaDetails(slug: String): SManga = client.get("$apiUrl/mangas/$slug")
+    private suspend fun fetchMangaDetails(slug: String): SManga = client.get("$apiUrl/mangas/$slug", Fetch.XHR)
         .parseAs<DataDto<MangaDto>>().data.toSManga(baseUrl)
 
-    private suspend fun fetchChapterList(slug: String): List<SChapter> = client.get("$apiUrl/mangas/$slug/chapters?order=desc")
+    private suspend fun fetchChapterList(slug: String): List<SChapter> = client.get("$apiUrl/mangas/$slug/chapters?order=desc", Fetch.XHR)
         .parseAs<ChapterListDto>().chapters.map { it.toSChapter(slug) }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = (baseUrl + chapter.url).toHttpUrl().queryParameter("chapter")!!
-        return client.get("$apiUrl/mangas/chapters/$chapterId/pages").parseAs<PageListDto>().toPageList(baseUrl)
+        return client.get("$apiUrl/mangas/chapters/$chapterId/pages", Fetch.XHR).parseAs<PageListDto>().toPageList(baseUrl)
     }
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres")
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres", Fetch.XHR)
         .parseAs<DataDto<List<GenreDto>>>().data.map { it.name }.toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList {

@@ -30,6 +30,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -115,7 +117,7 @@ class MangaDex(
             )
             .build()
 
-        return parseMangasPage(client.get(url))
+        return parseMangasPage(client.get(url, Fetch.XHR))
     }
 
     private fun parseMangasPage(response: Response): MangasPage {
@@ -166,7 +168,7 @@ class MangaDex(
         .addQueryParameter("includeEmptyPages", "0")
         .build()
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = latestUpdatesParse(client.get(latestUpdatesUrl(page), CacheControl.FORCE_NETWORK))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = latestUpdatesParse(client.get(latestUpdatesUrl(page), Fetch.XHR, CacheControl.FORCE_NETWORK))
 
     /**
      * Used by Komikku
@@ -196,7 +198,7 @@ class MangaDex(
             .addQueryParameter("ids[]", mangaIds)
             .build()
 
-        val mangaRequest = GET(mangaApiUrl, headers, CacheControl.FORCE_NETWORK)
+        val mangaRequest = GET(mangaApiUrl, headers, CacheControl.FORCE_NETWORK).newBuilder().fetch(Fetch.XHR).build()
         val mangaResponse = client.newCall(mangaRequest).execute()
         val mangaListDto = mangaResponse.parseAs<MangaListDto>()
         val firstVolumeCovers = fetchFirstVolumeCovers(mangaListDto.data).orEmpty()
@@ -241,6 +243,7 @@ class MangaDex(
                         query = MDConstants.PREFIX_ID_SEARCH + getMangaIdFromChapterId(query.removePrefix(MDConstants.PREFIX_CH_SEARCH)),
                         filters = filters,
                     ),
+                    fetch = Fetch.XHR,
                     cacheControl = CacheControl.FORCE_NETWORK,
                 )
                 .let(::parseMangasPage)
@@ -252,6 +255,7 @@ class MangaDex(
                         page = page,
                         uploader = query.removePrefix(MDConstants.PREFIX_USER_SEARCH),
                     ),
+                    fetch = Fetch.XHR,
                     cacheControl = CacheControl.FORCE_NETWORK,
                 )
                 .let(::latestUpdatesParse)
@@ -260,6 +264,7 @@ class MangaDex(
             client
                 .get(
                     url = "${MDConstants.API_LIST_URL}/${query.removePrefix(MDConstants.PREFIX_LIST_SEARCH)}",
+                    fetch = Fetch.XHR,
                     cacheControl = CacheControl.FORCE_NETWORK,
                 )
                 .let { searchMangaListParse(it, page, filters) }
@@ -272,13 +277,14 @@ class MangaDex(
                         query = query.trim(),
                         filters = filters,
                     ),
+                    fetch = Fetch.XHR,
                     cacheControl = CacheControl.FORCE_NETWORK,
                 )
                 .let(::parseMangasPage)
     }
 
     private suspend fun getMangaIdFromChapterId(id: String): String {
-        val response = client.get("${MDConstants.API_CHAPTER_URL}/$id", ensureSuccess = false)
+        val response = client.get("${MDConstants.API_CHAPTER_URL}/$id", Fetch.XHR, ensureSuccess = false)
 
         if (!response.isSuccessful) {
             throw Exception(helper.intl.format("unable_to_process_chapter_request", response.code))
@@ -375,7 +381,7 @@ class MangaDex(
             dexLang = dexLang,
         )
 
-        val mangaRequest = GET(finalUrl, headers, CacheControl.FORCE_NETWORK)
+        val mangaRequest = GET(finalUrl, headers, CacheControl.FORCE_NETWORK).newBuilder().fetch(Fetch.XHR).build()
         val mangaResponse = client.newCall(mangaRequest).execute()
         val mangaList = searchMangaListParse(mangaResponse)
 
@@ -457,6 +463,7 @@ class MangaDex(
                 .addQueryParameter("includes[]", MDConstants.AUTHOR)
                 .addQueryParameter("includes[]", MDConstants.ARTIST)
                 .build(),
+            fetch = Fetch.XHR,
             cacheControl = CacheControl.FORCE_NETWORK,
         ).parseAs<MangaDto>()
 
@@ -481,7 +488,7 @@ class MangaDex(
      */
     private fun fetchSimpleChapterList(manga: MangaDto, langCode: String): Map<String, AggregateVolume> {
         val url = "${MDConstants.API_MANGA_URL}/${manga.data!!.id}/aggregate?translatedLanguage[]=$langCode"
-        val response = client.newCall(GET(url, headers)).execute()
+        val response = client.newCall(GET(url, headers).newBuilder().fetch(Fetch.XHR).build()).execute()
 
         return runCatching { response.parseAs<AggregateDto>() }
             .getOrNull()?.volumes.orEmpty()
@@ -520,7 +527,7 @@ class MangaDex(
             .build()
 
         val result = runCatching {
-            client.newCall(GET(apiUrl, headers)).execute().parseAs<CoverArtListDto>().data
+            client.newCall(GET(apiUrl, headers).newBuilder().fetch(Fetch.XHR).build()).execute().parseAs<CoverArtListDto>().data
         }
 
         val covers = result.getOrNull() ?: return null
@@ -546,7 +553,7 @@ class MangaDex(
             throw Exception(helper.intl["migrate_warning"])
         }
 
-        val response = client.get(paginatedChapterListUrl(helper.getUUIDFromUrl(manga.url), 0), CacheControl.FORCE_NETWORK)
+        val response = client.get(paginatedChapterListUrl(helper.getUUIDFromUrl(manga.url), 0), Fetch.XHR, CacheControl.FORCE_NETWORK)
         if (response.code == 204) {
             return emptyList()
         }
@@ -567,7 +574,7 @@ class MangaDex(
         while (hasNextPage) {
             offset += chapterListResponse.limit
 
-            val newResponse = client.get(paginatedChapterListUrl(mangaId, offset), CacheControl.FORCE_NETWORK)
+            val newResponse = client.get(paginatedChapterListUrl(mangaId, offset), Fetch.XHR, CacheControl.FORCE_NETWORK)
             val newChapterList = newResponse.parseAs<ChapterListDto>()
             chapterListResults.addAll(newChapterList.data)
 
@@ -603,7 +610,7 @@ class MangaDex(
             "${MDConstants.API_URL}/at-home/server/$chapterId"
         }.also(helper::mdAtHomeRefresh).toHttpUrl()
 
-        val response = client.get(url, CacheControl.FORCE_NETWORK)
+        val response = client.get(url, Fetch.XHR, CacheControl.FORCE_NETWORK)
         val atHomeRequestUrl = response.request.url
         val atHomeDto = response.parseAs<AtHomeDto>()
         val host = atHomeDto.baseUrl

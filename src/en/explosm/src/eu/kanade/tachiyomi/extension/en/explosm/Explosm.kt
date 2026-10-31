@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -23,12 +24,12 @@ abstract class Explosm : KeiSource() {
     private val archivePage get() = "$baseUrl/comics"
 
     private suspend fun getArchiveAllYears(): Map<String, Map<String, List<ComicDto>>> {
-        val jsonPath = client.get(archivePage).asJsoup()
+        val jsonPath = client.get(archivePage, Fetch.DOCUMENT).asJsoup()
             .select("head > script").last()?.attr("src")
             ?.replace("static", "data")
             ?.replaceAfterLast("/", "comics.json")
             ?: throw Exception("Error at last() in getArchiveAllYears")
-        return client.get(baseUrl + jsonPath).parseAs<ComicsResponse>().pageProps.comicArchiveData
+        return client.get(baseUrl + jsonPath, Fetch.XHR).parseAs<ComicsResponse>().pageProps.comicArchiveData
     }
 
     // Popular

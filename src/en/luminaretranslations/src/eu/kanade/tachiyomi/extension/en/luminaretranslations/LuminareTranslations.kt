@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -65,7 +66,7 @@ abstract class LuminareTranslations : KeiSource() {
             ?.takeIf { it.isNotEmpty() }
             ?.let { url.addQueryParameter("status", it) }
 
-        val result = client.get(url.build()).parseAs<EntryResponse>()
+        val result = client.get(url.build(), Fetch.XHR).parseAs<EntryResponse>()
         val mangas = result.data.filter { it.type !in EXCLUDED_TYPES }.map { it.toSManga() }
         val hasNextPage = (page * pageSize) < result.meta.total
         return MangasPage(mangas, hasNextPage)
@@ -78,7 +79,7 @@ abstract class LuminareTranslations : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         // The series and chapters API endpoints fail with a server-side PHP memory error, so parse the series page
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val xData = document.selectFirst("section[x-data*=chapters:]")!!.attr("x-data").lines().map(String::trim)
         fun xDataArray(key: String) = xData.first { it.startsWith("$key:") }.removePrefix("$key:").trim().removeSuffix(",")
@@ -113,7 +114,7 @@ abstract class LuminareTranslations : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/series/${chapter.memo["seriesSlug"]!!.string}/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val images = client.get(getChapterUrl(chapter)).asJsoup().select("img.reader-page[data-src]")
+        val images = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup().select("img.reader-page[data-src]")
         val server = images.firstOrNull()?.attr("data-server-id")
         return images.filter { it.attr("data-server-id") == server }.mapIndexed { i, img ->
             Page(i, imageUrl = img.absUrl("data-src"))
@@ -122,7 +123,7 @@ abstract class LuminareTranslations : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/explore/filters").parseAs<FilterResponse>().toJsonElement()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/explore/filters", Fetch.XHR).parseAs<FilterResponse>().toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val filterData = data?.parseAs<FilterResponse>() ?: return FilterList()

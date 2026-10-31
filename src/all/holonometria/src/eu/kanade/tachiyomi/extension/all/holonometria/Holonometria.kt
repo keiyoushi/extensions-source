@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -22,7 +23,7 @@ abstract class Holonometria : KeiSource() {
     override val supportsLatest = false
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/${langPath}alt/holonometria/manga/").asJsoup()
+        val document = client.get("$baseUrl/${langPath}alt/holonometria/manga/", Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select(".manga__item").map { element ->
             SManga.create().apply {
@@ -50,7 +51,7 @@ abstract class Holonometria : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = manga.apply {
             title = document.select(".alt-nav__met-sub-link.is-current").text()
@@ -84,7 +85,7 @@ abstract class Holonometria : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         return document.select(".manga-detail__swiper-wrapper img").mapIndexed { idx, img ->
             Page(idx, imageUrl = img.attr("abs:src"))

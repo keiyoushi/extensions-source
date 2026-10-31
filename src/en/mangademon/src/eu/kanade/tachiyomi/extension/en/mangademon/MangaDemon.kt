@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -23,7 +24,6 @@ import java.util.Locale
 
 @Source
 abstract class MangaDemon : KeiSource() {
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(6) { it.toString().contains("images/thumbnails") }
         rateLimit(2)
@@ -32,7 +32,7 @@ abstract class MangaDemon : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage = mangaList("$baseUrl/advanced.php?list=$page&status=all&orderby=VIEWS%20DESC".toHttpUrl())
 
     private suspend fun mangaList(url: HttpUrl): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div#advanced-content > div.advanced-element").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.selectFirst("a")!!.encodedAttr("href"))
@@ -45,7 +45,7 @@ abstract class MangaDemon : KeiSource() {
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/lastupdates.php?list=$page").asJsoup()
+        val document = client.get("$baseUrl/lastupdates.php?list=$page", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div#updates-container > div.updates-element:not(:has(.toffee-badge))").map { element ->
             SManga.create().apply {
                 with(element.selectFirst("div.updates-element-info")!!) {
@@ -67,7 +67,7 @@ abstract class MangaDemon : KeiSource() {
         val url = "$baseUrl/search.php".toHttpUrl().newBuilder()
             .addQueryParameter("manga", query)
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("body > a[href]").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.encodedAttr("href"))
@@ -109,7 +109,7 @@ abstract class MangaDemon : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         manga.apply {
             with(document.selectFirst("div#manga-info-container")!!) {
@@ -146,7 +146,7 @@ abstract class MangaDemon : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("div > img.imgholder").mapIndexed { i, element ->
             Page(i, imageUrl = element.attr("abs:src"))
         }

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -66,7 +67,7 @@ abstract class MyHentaiComics : KeiSource() {
     // =========================== Comic Listing ==============================
 
     private suspend fun parseComicListing(url: HttpUrl): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select("li.item:not(.image-block) .comic-inner a").map { el ->
             SManga.create().apply {
@@ -88,7 +89,7 @@ abstract class MyHentaiComics : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val descriptionDiv = document.selectFirst("div.comic-description")
 
         val categories = descriptionDiv
@@ -147,7 +148,7 @@ abstract class MyHentaiComics : KeiSource() {
     // ============================== Page List ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         // The comic ID from the request URL: /gallery/show/59109/1
         val comicId = document.location()

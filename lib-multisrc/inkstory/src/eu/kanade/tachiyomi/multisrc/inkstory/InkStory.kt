@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
@@ -158,7 +159,7 @@ abstract class InkStory :
             .addQueryParameter("page", (page - 1).coerceAtLeast(0).toString())
             .addQueryParameter("size", PAGE_SIZE.toString())
             .build()
-        return client.get(url).use { response ->
+        return client.get(url, Fetch.XHR).use { response ->
             val manga = response.parseAs<List<MangaFromSearchDto>>().map { it.book.toSManga() }
             MangasPage(manga, manga.size >= PAGE_SIZE)
         }
@@ -212,7 +213,7 @@ abstract class InkStory :
             addQueryParameter("sort", "$sort,$order")
         }.build()
 
-        return client.get(url).use { response ->
+        return client.get(url, Fetch.XHR).use { response ->
             val mangas = response.parseAs<List<BookFromSearchDto>>().map { it.toSManga() }
             val totalHits = response.header("x-estimated-total-hits")?.toIntOrNull()
             val hasNextPage = if (totalHits != null) {
@@ -247,7 +248,7 @@ abstract class InkStory :
         val mangaAsync = async {
             if (fetchDetails) {
                 val url = "$API_URL/books/${manga.url}"
-                client.get(url).parseAs<MangaFullDto>().toSManga()
+                client.get(url, Fetch.XHR).parseAs<MangaFullDto>().toSManga()
             } else {
                 manga
             }
@@ -255,7 +256,7 @@ abstract class InkStory :
         val chaptersAsync = async {
             if (fetchChapters) {
                 val bookId = manga.memo["id"]!!.string
-                val branches = client.get("$API_URL/branches?bookId=$bookId&moderationStatus=APPROVED")
+                val branches = client.get("$API_URL/branches?bookId=$bookId&moderationStatus=APPROVED", Fetch.XHR)
                     .parseAs<List<BranchDto>>()
                     .associate { it.id to it.publisherName() }
                 val branchType = prefBranch()
@@ -263,7 +264,7 @@ abstract class InkStory :
                 val url = "$API_URL/chapters?bookId=$bookId&moderationStatus=APPROVED"
                 val fourDaysAgo = Clock.System.now().minus(4.days).toEpochMilliseconds()
 
-                val data = client.get(url).parseAs<List<ChapterDto>>()
+                val data = client.get(url, Fetch.XHR).parseAs<List<ChapterDto>>()
                     .map { it.toSChapter(branches, manga.url) }
                     .filter { !delay || it.date_upload <= 0L || it.date_upload <= fourDaysAgo }
                 when (branchType) {
@@ -318,7 +319,7 @@ abstract class InkStory :
     // ============================== Pages ===============================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = "$API_URL/chapters/${chapter.url}"
-        val chapter = client.get(url).parseAs<PagesDto>()
+        val chapter = client.get(url, Fetch.XHR).parseAs<PagesDto>()
 
         return chapter.pages
             .sortedBy { it.index ?: Int.MAX_VALUE }
@@ -362,7 +363,7 @@ abstract class InkStory :
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val genres = client.get("$API_URL/labels")
+        val genres = client.get("$API_URL/labels", Fetch.XHR)
             .parseAs<List<GenresDto>>()
             .filter { it.kind == "GENRE" }
             .map { it.name to it.slug }

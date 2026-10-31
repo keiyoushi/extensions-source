@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -41,7 +42,7 @@ abstract class TCBScans : KeiSource() {
 
     // popular
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/projects").asJsoup()
+        val document = client.get("$baseUrl/projects", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div.bg-card").map { element ->
             SManga.create().apply {
                 with(element.selectFirst("a[href].text-white")!!) {
@@ -76,7 +77,7 @@ abstract class TCBScans : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val details = SManga.create().apply {
             url = manga.url
@@ -116,7 +117,7 @@ abstract class TCBScans : KeiSource() {
 
     // pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("picture img, .image-container img").mapIndexed { i, img ->
             Page(i, imageUrl = img.absUrl("src"))
         }

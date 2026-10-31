@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -24,7 +25,6 @@ private const val ARCHIVE_URL = "https://sas.ewanb.me"
 abstract class SolarAndSundry : KeiSource() {
 
     override val supportsLatest = false
-
     @Serializable
     private class SasPage(
         @SerialName("page_number") val pageNumber: Int,
@@ -68,7 +68,7 @@ abstract class SolarAndSundry : KeiSource() {
         val details = if (fetchDetails) createManga() else manga
         if (!fetchChapters) return SMangaUpdate(details, chapters)
 
-        val pages = client.get(baseUrl + manga.url).parseAs<List<SasPage>>()
+        val pages = client.get(baseUrl + manga.url, Fetch.XHR).parseAs<List<SasPage>>()
         val chapterList = pages.map { page ->
             SChapter.create().apply {
                 name = page.name
@@ -86,7 +86,7 @@ abstract class SolarAndSundry : KeiSource() {
     // Pages
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val page = client.get(baseUrl + chapter.url).parseAs<SasPage>()
+        val page = client.get(baseUrl + chapter.url, Fetch.XHR).parseAs<SasPage>()
 
         return listOf(Page(0, "", page.imageUrl))
     }

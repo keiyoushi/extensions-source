@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -33,13 +34,13 @@ abstract class BoyLove : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage("$baseUrl/home/api/getpage/tp/1-topestmh-${page - 1}")
 
     private suspend fun parseMangaPage(url: String): MangasPage {
-        val listPage = client.get(url).parseAs<ResultDto<ListPageDto<MangaDto>>>().result
+        val listPage = client.get(url, Fetch.XHR).parseAs<ResultDto<ListPageDto<MangaDto>>>().result
         val mangas = listPage.list.map { it.toSManga() }
         return MangasPage(mangas, !listPage.lastPage)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val mangas = client.get("$baseUrl/home/Api/getDailyUpdate.html?widx=4&page=${page - 1}&limit=10")
+        val mangas = client.get("$baseUrl/home/Api/getDailyUpdate.html?widx=4&page=${page - 1}&limit=10", Fetch.XHR)
             .parseAs<ResultDto<List<MangaDto>>>().result.map { it.toSManga() }
         return MangasPage(mangas, mangas.size >= 10)
     }
@@ -64,12 +65,12 @@ abstract class BoyLove : KeiSource() {
         val details = async {
             if (!fetchDetails) return@async manga
             val id = manga.url.toInt()
-            client.get(textSearchUrl(1, manga.title))
+            client.get(textSearchUrl(1, manga.title), Fetch.XHR)
                 .parseAs<ResultDto<ListPageDto<MangaDto>>>().result.list.find { it.id == id }!!.toSManga()
         }
         val chapterList = async {
             if (!fetchChapters) return@async chapters
-            client.get("$baseUrl/home/api/chapter_list/tp/${manga.url}")
+            client.get("$baseUrl/home/api/chapter_list/tp/${manga.url}", Fetch.XHR)
                 .parseAs<ResultDto<ListPageDto<ChapterDto>>>().result.list.map { it.toSChapter() }.reversed()
         }
         SMangaUpdate(details.await(), chapterList.await())
@@ -87,7 +88,7 @@ abstract class BoyLove : KeiSource() {
     }
 
     private suspend fun fetchPageList(chapterUrl: String): List<Page> {
-        val doc = client.get(baseUrl + chapterUrl).asJsoup()
+        val doc = client.get(baseUrl + chapterUrl, Fetch.DOCUMENT).asJsoup()
         val root = doc.selectFirst(Evaluator.Tag("section"))!!
         val images = root.select(Evaluator.Class("reader-cartoon-image"))
         val urlList = if (images.isEmpty()) {
@@ -114,7 +115,7 @@ abstract class BoyLove : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/home/book/cate.html").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/home/book/cate.html", Fetch.DOCUMENT).asJsoup()
         .select("div[data-str=tag] > a.button")
         .map { it.ownText() }
         .toJsonElement()

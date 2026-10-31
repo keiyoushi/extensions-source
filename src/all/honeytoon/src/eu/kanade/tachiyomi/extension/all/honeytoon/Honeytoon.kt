@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.post
@@ -72,18 +73,18 @@ abstract class Honeytoon :
 
     // Popular
 
-    override suspend fun getPopularManga(page: Int): MangasPage = mangaParse(client.get("$baseUrl$langPath/ranking").asJsoup(), ".section.popular")
+    override suspend fun getPopularManga(page: Int): MangasPage = mangaParse(client.get("$baseUrl$langPath/ranking", Fetch.DOCUMENT).asJsoup(), ".section.popular")
 
     // Latest
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaParse(client.get("$baseUrl$langPath/ranking").asJsoup(), ".section.new")
+    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaParse(client.get("$baseUrl$langPath/ranking", Fetch.DOCUMENT).asJsoup(), ".section.new")
 
     // Search
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return SManga.create().apply {
             this.url = url.encodedPath
             parseDetails(document)
@@ -98,7 +99,7 @@ abstract class Honeytoon :
             .add("query", query)
             .build()
 
-        val mangas = client.post("$baseUrl$langPath/api/comic/search", headers, form).parseAs<List<SearchDto>>().map {
+        val mangas = client.post("$baseUrl$langPath/api/comic/search", headers, Fetch.XHR, form).parseAs<List<SearchDto>>().map {
             SManga.create().apply {
                 title = Jsoup.parseBodyFragment(it.title).selectFirst("body")!!.ownText()
                 thumbnail_url = "https://pic.honeytoon.com/${it.image}"
@@ -117,7 +118,7 @@ abstract class Honeytoon :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val dateFormat = dateFormat
 
         val chapterList = document.select(".comic-list-items > a")
@@ -163,7 +164,7 @@ abstract class Honeytoon :
                 removeAt(lastIndex)
             }
             .last()
-        val document = client.get("$baseUrl${chapter.url}#slug=$slug").asJsoup()
+        val document = client.get("$baseUrl${chapter.url}#slug=$slug", Fetch.DOCUMENT).asJsoup()
         return document.select(".single__item img, .comic-canvas-scramble").mapIndexed { index, element ->
             when (element.tagName()) {
                 "img" -> Page(index, imageUrl = element.imgSrc())

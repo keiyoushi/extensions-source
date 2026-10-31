@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.booleanOrNull
@@ -33,7 +34,6 @@ import okhttp3.OkHttpClient
 abstract class Inkr :
     KeiSource(),
     ConfigurableSource {
-
     private val preferences by getPreferencesLazy()
 
     private val queryApiUrl = "https://icq-api.inkr.com/v1"
@@ -168,13 +168,14 @@ abstract class Inkr :
 
     private fun genreIdForName(name: String): String? = GENRES.firstOrNull { it.first.equals(name, ignoreCase = true) }?.second
 
-    private suspend fun filterTitleOids(request: FilteredRequest): List<String> = client.post("$queryApiUrl/title/filtered", apiHeaders, request.toJsonRequestBody())
+    private suspend fun filterTitleOids(request: FilteredRequest): List<String> = client.post("$queryApiUrl/title/filtered", apiHeaders, Fetch.XHR, request.toJsonRequestBody())
         .parseAs<FilteredResponse>()
         .data
 
     private suspend fun searchTitleOids(query: String): List<String> = client.post(
         "$queryApiUrl/title/search",
         apiHeaders,
+        Fetch.XHR,
         SearchRequest(query).toJsonRequestBody(),
     ).parseAs<SearchResponse>().data.title
 
@@ -396,7 +397,7 @@ abstract class Inkr :
             ),
         ).toJsonRequestBody()
 
-        return client.post("$contentApiUrl/content_json/batch", apiHeaders, body)
+        return client.post("$contentApiUrl/content_json/batch", apiHeaders, Fetch.XHR, body)
             .parseAs<ContentMapResponse>()
             .data
     }

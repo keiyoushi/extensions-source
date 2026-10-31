@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
@@ -49,7 +50,7 @@ abstract class Guya :
     private fun updateScanlators() {
         if (scanlators.isEmpty() && scanlatorsJob?.isActive != true) {
             scanlatorsJob = scope.launch {
-                scanlators = runCatching { client.get("$baseUrl/api/get_all_groups/").parseAs<Map<String, String>>() }
+                scanlators = runCatching { client.get("$baseUrl/api/get_all_groups/", Fetch.XHR).parseAs<Map<String, String>>() }
                     .getOrDefault(emptyMap())
             }
         }
@@ -57,10 +58,10 @@ abstract class Guya :
 
     private suspend fun fetchAllSeries(): Map<String, SeriesDto> {
         updateScanlators()
-        return client.get("$baseUrl/api/get_all_series/").parseAs()
+        return client.get("$baseUrl/api/get_all_series/", Fetch.XHR).parseAs()
     }
 
-    private suspend fun fetchSeries(slug: String): SeriesDetailsDto = client.get("$baseUrl/api/series/$slug/").parseAs()
+    private suspend fun fetchSeries(slug: String): SeriesDetailsDto = client.get("$baseUrl/api/series/$slug/", Fetch.XHR).parseAs()
 
     // Allows sources to limit which series are shown
     protected open fun filterMangas(mangasPage: MangasPage): MangasPage = mangasPage

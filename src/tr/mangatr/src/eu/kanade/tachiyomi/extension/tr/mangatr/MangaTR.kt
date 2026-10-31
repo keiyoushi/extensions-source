@@ -12,6 +12,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -79,7 +81,7 @@ abstract class MangaTR : KeiSource() {
                 .addQueryParameter("icerik", query)
                 .addQueryParameter("page", page.toString())
                 .build()
-            val document = client.get(url).asJsoup()
+            val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
             val mangas = document.select("div.arama-card")
                 .filterNot { it.selectFirst(".arama-badge")?.text()?.lowercase(Locale.ROOT)?.isExcludedType() == true }
@@ -115,7 +117,7 @@ abstract class MangaTR : KeiSource() {
     }
 
     private suspend fun getMangaList(page: Int, url: HttpUrl): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select("div.media-card")
             .filterNot { it.selectFirst(".media-card__badge")?.text()?.lowercase(Locale.ROOT)?.isExcludedType() == true }
@@ -159,7 +161,7 @@ abstract class MangaTR : KeiSource() {
         val path = url.pathSegments.singleOrNull() ?: return null
         if (!path.startsWith("manga-") || !path.endsWith(".html")) return null
 
-        val document = client.get("$baseUrl/$path").asJsoup()
+        val document = client.get("$baseUrl/$path", Fetch.DOCUMENT).asJsoup()
         return document.mangaDetails().apply { this.url = "/$path" }
     }
 
@@ -169,7 +171,7 @@ abstract class MangaTR : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
         val details = document.mangaDetails()
         val chapterList = if (fetchChapters) getChapterList(document) else chapters
         return SMangaUpdate(details, chapterList)
@@ -220,7 +222,7 @@ abstract class MangaTR : KeiSource() {
                 .add("chapter_list_key", key)
                 .apply { offset?.let { add("offset", it.toString()) } }
                 .build()
-            val response = client.post("$baseUrl/cek/fetch_pages_manga.php", ajaxHeaders, form)
+            val response = client.post("$baseUrl/cek/fetch_pages_manga.php", ajaxHeaders, Fetch.XHR, form)
             // the chapter hrefs are relative, but this endpoint lives under /cek/
             val elements = response.asJsoup()
                 .also { it.setBaseUri("$baseUrl/") }
@@ -250,7 +252,7 @@ abstract class MangaTR : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(baseUrl + chapter.url)
+        val response = client.get(baseUrl + chapter.url, Fetch.DOCUMENT)
         val document = response.asJsoup()
 
         if (document.selectFirst("div#uyari:contains(üye girişi)") != null) {
@@ -269,7 +271,7 @@ abstract class MangaTR : KeiSource() {
             ?: throw Exception("Sayfa verisi bulunamadı")
 
         // The gate token is single-use and its response key unlocks the config for this page load only
-        val gateKey = client.post("$baseUrl/$gatePath", "{}".toRequestBody(JSON_MEDIA_TYPE))
+        val gateKey = client.post("$baseUrl/$gatePath", Fetch.XHR, "{}".toRequestBody(JSON_MEDIA_TYPE))
             .parseAs<ReaderGateDto>().k
         val config = configScript.data()
             .decrypt("gate|$gateKey|reader")
@@ -368,6 +370,7 @@ abstract class MangaTR : KeiSource() {
                         .header("Accept", "application/json")
                         .header("Referer", request.url.toString())
                         .header("X-Requested-With", "XMLHttpRequest")
+                        .fetch(Fetch.XHR)
                         .build()
 
                     network.client.newCall(verifyRequest).execute().close()

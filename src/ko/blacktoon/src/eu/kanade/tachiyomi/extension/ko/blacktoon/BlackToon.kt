@@ -8,6 +8,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -25,12 +27,11 @@ import kotlin.random.Random
 
 @Source
 abstract class BlackToon : KeiSource() {
-
     private var currentBaseUrlHost = ""
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->
         if (currentBaseUrlHost.isBlank()) {
-            noRedirectClient.newCall(GET(baseUrl, headers)).execute().use {
+            noRedirectClient.newCall(GET(baseUrl, headers).newBuilder().fetch(Fetch.DOCUMENT).build()).execute().use {
                 currentBaseUrlHost = it.headers["location"]?.toHttpUrlOrNull()?.host
                     ?: throw IOException("unable to get updated url")
             }
@@ -73,8 +74,8 @@ abstract class BlackToon : KeiSource() {
 
     private suspend fun getHosts(): Hosts = hosts ?: hostsMutex.withLock {
         hosts ?: run {
-            val home = client.get(baseUrl).use { it.body.string() }
-            val config = client.get("$baseUrl/data/config.js").use { it.body.string() }
+            val home = client.get(baseUrl, Fetch.DOCUMENT).use { it.body.string() }
+            val config = client.get("$baseUrl/data/config.js", Fetch.SCRIPT).use { it.body.string() }
             Hosts(
                 toonList = INC_URL1_REGEX.find(home)!!.groupValues[1],
                 webtoon = INC_URL2_REGEX.find(home)!!.groupValues[1],
@@ -86,7 +87,7 @@ abstract class BlackToon : KeiSource() {
     private suspend fun fetchDb(): List<SeriesItem> {
         val hosts = getHosts()
         return listOf(0, 1).flatMap { listIdx ->
-            client.get("${hosts.webtoon}/webtoon_$listIdx.js")
+            client.get("${hosts.webtoon}/webtoon_$listIdx.js", Fetch.SCRIPT)
                 .use { it.body.string() }
                 .substringAfter(" = ")
                 .removeSuffix(";")
@@ -150,7 +151,7 @@ abstract class BlackToon : KeiSource() {
     }
 
     private suspend fun fetchDetails(manga: SManga): SManga {
-        val doc = client.get("$baseUrl/webtoon/${manga.url}.html").asJsoup()
+        val doc = client.get("$baseUrl/webtoon/${manga.url}.html", Fetch.DOCUMENT).asJsoup()
         return SManga.create().apply {
             title = manga.title
             description = doc.select("p.mt-2").last()?.text()
@@ -163,7 +164,7 @@ abstract class BlackToon : KeiSource() {
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val url = "${getHosts().toonList}/data/toonlist/${manga.url}.js?v=${"%.17f".format(Random.nextDouble())}"
 
-        val data = client.get(url).parseAs<List<Chapter>> {
+        val data = client.get(url, Fetch.SCRIPT).parseAs<List<Chapter>> {
             it.substringAfter(" = ").removeSuffix(";")
         }
 
@@ -183,7 +184,7 @@ abstract class BlackToon : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl/webtoons/${chapter.url}.html").asJsoup()
+        val document = client.get("$baseUrl/webtoons/${chapter.url}.html", Fetch.DOCUMENT).asJsoup()
         val imageHost = getHosts().image
 
         return document.select("#toon_content_imgs img").mapIndexed { i, img ->

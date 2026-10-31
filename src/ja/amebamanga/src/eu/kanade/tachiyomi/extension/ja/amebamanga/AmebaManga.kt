@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
@@ -60,7 +61,7 @@ abstract class AmebaManga :
             .addQueryParameter("limit", pageSize.toString())
             .build()
 
-        return client.get(url).toMangasPage(offset)
+        return client.get(url, Fetch.XHR).toMangasPage(offset)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -73,7 +74,7 @@ abstract class AmebaManga :
             .addQueryParameter("limit", pageSize.toString())
             .build()
 
-        return client.get(url).toMangasPage(offset)
+        return client.get(url, Fetch.XHR).toMangasPage(offset)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -100,7 +101,7 @@ abstract class AmebaManga :
                 addFilter("start_datetime_within_days", filters.firstInstance<ReleasedThisMonthFilter>(), "30")
             }.build()
 
-        return client.get(url).toMangasPage(offset)
+        return client.get(url, Fetch.XHR).toMangasPage(offset)
     }
 
     private fun Response.toMangasPage(offset: Int): MangasPage {
@@ -139,7 +140,7 @@ abstract class AmebaManga :
     ): SMangaUpdate = coroutineScope {
         val details = async {
             if (!fetchDetails) return@async manga
-            client.get("$apiUrl/titles/${manga.url}?ac=1").parseAs<DetailsResponse>().toSManga()
+            client.get("$apiUrl/titles/${manga.url}?ac=1", Fetch.XHR).parseAs<DetailsResponse>().toSManga()
         }
 
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
@@ -155,7 +156,7 @@ abstract class AmebaManga :
                 .addQueryParameter("limit", "1000")
                 .build()
 
-            val books = client.get(url).parseAs<ChapterResponse>().books
+            val books = client.get(url, Fetch.XHR).parseAs<ChapterResponse>().books
             val lockedBooks = books.filter { it.isLocked }
             val ownedUrl = "$apiUrl/user_books/me/by_book/v2".toHttpUrl().newBuilder()
                 .apply { lockedBooks.forEach { addQueryParameter("book_id", it.id.toString()) } }
@@ -165,7 +166,7 @@ abstract class AmebaManga :
             val ownedIds = if (lockedBooks.isEmpty() || !isLoggedIn) {
                 emptySet()
             } else {
-                val ownedResponse = client.get(ownedUrl, ensureSuccess = false)
+                val ownedResponse = client.get(ownedUrl, Fetch.XHR, ensureSuccess = false)
                 if (ownedResponse.isSuccessful) {
                     ownedResponse.parseAs<OwnedResponse>().userBooks.filter { it.isOwned }.map { it.bookId }.toSet()
                 } else {
@@ -190,7 +191,7 @@ abstract class AmebaManga :
             .addQueryParameter("bookId", chapter.url)
             .build()
 
-        val result = client.get(url).parseAs<ViewerResponse>().result
+        val result = client.get(url, Fetch.XHR).parseAs<ViewerResponse>().result
         val guardianUrl = "${result.guardianServer}/${result.bookData.s3Key}"
 
         if (!result.bookData.imagedReflow) {
@@ -203,7 +204,7 @@ abstract class AmebaManga :
             .encodedQuery(result.signedParams)
             .build()
 
-        val profiles = client.get(bookUrl).parseAs<ReflowBook>().reflowData.profiles
+        val profiles = client.get(bookUrl, Fetch.XHR).parseAs<ReflowBook>().reflowData.profiles
         val profile = profiles.find { it.id == "mincho_medium" } ?: profiles.first()
         val key = result.keys[profile.id]!!.string
 

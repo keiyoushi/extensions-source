@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -53,7 +54,7 @@ abstract class FMReader : KeiSource() {
 
     protected open fun popularMangaUrl(page: Int) = "$baseUrl/$requestPath?listType=pagination&page=$page&$popularSort&sort_type=DESC"
 
-    override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get(popularMangaUrl(page)).asJsoup())
+    override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get(popularMangaUrl(page), Fetch.DOCUMENT).asJsoup())
 
     protected open fun searchMangaUrl(page: Int, query: String, filters: FilterList): HttpUrl {
         val url = "$baseUrl/$requestPath?".toHttpUrl().newBuilder()
@@ -95,11 +96,11 @@ abstract class FMReader : KeiSource() {
         return url.build()
     }
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = popularMangaParse(client.get(searchMangaUrl(page, query, filters)).asJsoup())
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = popularMangaParse(client.get(searchMangaUrl(page, query, filters), Fetch.DOCUMENT).asJsoup())
 
     protected open fun latestUpdatesUrl(page: Int) = "$baseUrl/$requestPath?listType=pagination&page=$page&sort=last_update&sort_type=DESC"
 
-    override suspend fun getLatestUpdates(page: Int) = popularMangaParse(client.get(latestUpdatesUrl(page)).asJsoup())
+    override suspend fun getLatestUpdates(page: Int) = popularMangaParse(client.get(latestUpdatesUrl(page), Fetch.DOCUMENT).asJsoup())
 
     open fun popularMangaParse(document: Document): MangasPage {
         val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
@@ -150,7 +151,7 @@ abstract class FMReader : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangaTitle = parseMangaTitle(document) ?: return null
         return mangaDetailsParse(document).apply {
             setUrlWithoutDomain(url.toString())
@@ -166,7 +167,7 @@ abstract class FMReader : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val details = mangaDetailsParse(document).apply { title = manga.title }
         return SMangaUpdate(details, fetchChapterList(manga, document))
     }
@@ -334,7 +335,7 @@ abstract class FMReader : KeiSource() {
 
     open val pageListImageSelector = "img.chapter-img"
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter)).asJsoup())
+    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup())
 
     open fun pageListParse(document: Document): List<Page> = document.select(pageListImageSelector).mapIndexed { i, img ->
         Page(i, document.location(), img.imgAttr())

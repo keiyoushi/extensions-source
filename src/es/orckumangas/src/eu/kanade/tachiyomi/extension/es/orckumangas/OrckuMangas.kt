@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
@@ -39,7 +40,7 @@ abstract class OrckuMangas : KeiSource() {
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/ranking?page=$page").asJsoup()
+        val document = client.get("$baseUrl/ranking?page=$page", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("ol li.border-t a[href*=ficha?id=]").mapNotNull { element ->
             parseMangaCard(element)
         }.distinctBy { it.url }
@@ -49,7 +50,7 @@ abstract class OrckuMangas : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         if (page > 1) return MangasPage(emptyList(), false)
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("#latestGrid div.reveal a[href*=ficha?id=]").mapNotNull { element ->
             val title = element.selectFirst("span.line-clamp-2")?.text()?.takeIf { it.isNotBlank() }
                 ?: return@mapNotNull null
@@ -86,7 +87,7 @@ abstract class OrckuMangas : KeiSource() {
                 }
             }
         }
-        val document = client.get(urlBuilder.build()).asJsoup()
+        val document = client.get(urlBuilder.build(), Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("ul.grid li a[href*=ficha?id=]").mapNotNull { element ->
             parseMangaCard(element)
         }.distinctBy { it.url }
@@ -119,7 +120,7 @@ abstract class OrckuMangas : KeiSource() {
     }
 
     private suspend fun getDetails(manga: SManga): SManga {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SManga.create().apply {
             url = manga.url
             title = document.selectFirst("main#contenido h1")?.text() ?: manga.title
@@ -139,7 +140,7 @@ abstract class OrckuMangas : KeiSource() {
             .setQueryParameter("page", "1")
             .build()
 
-        val document = client.get(base).asJsoup()
+        val document = client.get(base, Fetch.DOCUMENT).asJsoup()
         val pages = document.select("nav[aria-label=Páginas de capítulos] a[href*=page=]").mapNotNull {
             runCatching { it.attr("abs:href").toHttpUrl().queryParameter("page")?.toIntOrNull() }.getOrNull()
         }.maxOrNull() ?: 1
@@ -151,6 +152,7 @@ abstract class OrckuMangas : KeiSource() {
                         base.newBuilder()
                             .setQueryParameter("page", page.toString())
                             .build(),
+                        Fetch.DOCUMENT,
                     ).asJsoup(),
                 )
             }
@@ -170,7 +172,7 @@ abstract class OrckuMangas : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("div.chapter-images img, main img[src*=uploads]").mapIndexedNotNull { index, element ->
             val src = element.attr("abs:src").takeIf { it.isNotBlank() } ?: return@mapIndexedNotNull null
             Page(index, imageUrl = src)
@@ -179,7 +181,7 @@ abstract class OrckuMangas : KeiSource() {
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData() = client.get("$baseUrl/biblioteca").asJsoup()
+    override suspend fun fetchFilterData() = client.get("$baseUrl/biblioteca", Fetch.DOCUMENT).asJsoup()
         .select("select#genero option")
         .associate { it.text().trim() to it.attr("value") }
         .toJsonElement()

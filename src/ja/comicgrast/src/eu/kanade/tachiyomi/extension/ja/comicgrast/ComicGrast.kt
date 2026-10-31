@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -27,7 +28,7 @@ abstract class ComicGrast : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())
 
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/comic/serial/$page").asJsoup().parseMangaList()
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/comic/serial/$page", Fetch.DOCUMENT).asJsoup().parseMangaList()
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
@@ -36,7 +37,7 @@ abstract class ComicGrast : KeiSource() {
             .addQueryParameter("type", "0")
             .addQueryParameter("word", query)
             .build()
-        return client.get(url).asJsoup().parseMangaList()
+        return client.get(url, Fetch.DOCUMENT).asJsoup().parseMangaList()
     }
 
     private fun Document.parseMangaList(): MangasPage {
@@ -57,7 +58,7 @@ abstract class ComicGrast : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val details = SManga.create().apply {
             url = manga.url
@@ -81,13 +82,13 @@ abstract class ComicGrast : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val scriptData = document.selectFirst("#comic-data")?.data()
             ?: throw Exception("Comic data not found")
 
         val comicData = scriptData.parseAs<ComicData>()
         val contentUrl = "$baseUrl/img/serial-comic/${comicData.serialComicId}/${comicData.storyNumber}/content"
-        val indexPages = client.get("$contentUrl/index.json").parseAs<List<ComicPage>>()
+        val indexPages = client.get("$contentUrl/index.json", Fetch.XHR).parseAs<List<ComicPage>>()
 
         return indexPages.mapIndexed { i, page ->
             val url = "$contentUrl/${page.name}".toHttpUrl().newBuilder()

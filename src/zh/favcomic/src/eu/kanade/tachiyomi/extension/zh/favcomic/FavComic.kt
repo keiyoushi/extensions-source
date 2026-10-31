@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -34,7 +35,6 @@ private class LoginResultDto(
 abstract class FavComic :
     KeiSource(),
     ConfigurableSource {
-
     private val pref by getPreferencesLazy()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -59,7 +59,7 @@ abstract class FavComic :
             .set("Referer", "$baseUrl/login")
             .build()
 
-        val dto = client.post("$baseUrl/login", headers = headers, body = formBody).parseAs<LoginResultDto>()
+        val dto = client.post("$baseUrl/login", headers = headers, Fetch.XHR, body = formBody).parseAs<LoginResultDto>()
         if (dto.result == "success") {
             return true
         }
@@ -91,7 +91,7 @@ abstract class FavComic :
             .addQueryParameter("comicType", pref.getString(PREF_MANGA_TYPE, "boy-1")!!.substringAfter('-'))
             .addQueryParameter("vip", "0")
             .build()
-        val mangas = client.get(url).asJsoup().select(".rank_item > a").map { a ->
+        val mangas = client.get(url, Fetch.DOCUMENT).asJsoup().select(".rank_item > a").map { a ->
             val img = a.selectFirst(".cover > img")!!
             val authors = a.select(".author a").joinToString { it.text() }
                 .ifEmpty { a.selectFirst(".author")?.text().orEmpty() }
@@ -110,7 +110,7 @@ abstract class FavComic :
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/${pref.getString(PREF_MANGA_TYPE, "boy-1")!!.substringBefore('-')}?page=$page"
-        return mangasPageParse(client.get(url))
+        return mangasPageParse(client.get(url, Fetch.DOCUMENT))
     }
 
     // Search
@@ -128,7 +128,7 @@ abstract class FavComic :
             .addQueryParameter("sort", filters[5].toString())
             .addQueryParameter("page", page.toString())
         filters.firstInstance<TagGroup>().getTag(mangaTypeFilter.state)?.run { url.addQueryParameter("tag", this) }
-        return mangasPageParse(client.get(url.build()))
+        return mangasPageParse(client.get(url.build(), Fetch.DOCUMENT))
     }
 
     // Manga & Chapters
@@ -139,7 +139,7 @@ abstract class FavComic :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(baseUrl + manga.url).asJsoup()
+        val doc = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
 
         val img = doc.selectFirst(".comic_cover_box > .flex_box > img")!!
         val note = doc.selectFirst(".translation_agency_box")?.text()
@@ -175,11 +175,11 @@ abstract class FavComic :
 
     // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        var doc = client.get(baseUrl + chapter.url).asJsoup()
+        var doc = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
         var code = doc.selectFirst(".comic_chapter_box")?.attr("code")
         if (code == "1") {
             if (login()) {
-                doc = client.get(baseUrl + chapter.url).asJsoup()
+                doc = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
                 code = doc.selectFirst(".comic_chapter_box")?.attr("code")
             }
         }

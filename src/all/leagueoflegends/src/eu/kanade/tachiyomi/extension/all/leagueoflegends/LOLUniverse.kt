@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -27,7 +28,7 @@ abstract class LOLUniverse : KeiSource() {
 
     override fun Headers.Builder.configureHeaders() = set("Origin", UNIVERSE_URL).set("Referer", "$UNIVERSE_URL/")
 
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$MEEPS_URL/$siteLang/comics/index.json")
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$MEEPS_URL/$siteLang/comics/index.json", Fetch.XHR)
         .parseAs<LOLHub>()
         .mapNotNull {
             SManga.create().apply {
@@ -52,7 +53,7 @@ abstract class LOLUniverse : KeiSource() {
         if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
         if ('/' !in manga.url) {
-            val issues = client.get("$MEEPS_URL/$siteLang/comics/${manga.url}/index.json").parseAs<LOLIssues>()
+            val issues = client.get("$MEEPS_URL/$siteLang/comics/${manga.url}/index.json", Fetch.XHR).parseAs<LOLIssues>()
             val updatedChapters = coroutineScope {
                 issues.map {
                     async {
@@ -81,7 +82,7 @@ abstract class LOLUniverse : KeiSource() {
         Page(idx, imageUrl = img.toString())
     }
 
-    private suspend fun fetchPages(chapter: SChapter) = client.get("$COMICS_URL/$siteLang/${chapter.url}/index.json").parseAs<LOLPages>()
+    private suspend fun fetchPages(chapter: SChapter) = client.get("$COMICS_URL/$siteLang/${chapter.url}/index.json", Fetch.XHR).parseAs<LOLPages>()
 
     // The chapter date is only available in the page list
     private suspend fun SChapter.fetchDate() = Instant.tryParse(fetchPages(this).date)

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -44,7 +45,7 @@ abstract class Toontaku : KeiSource() {
                 addQueryParameter("cursor", latestCursor ?: throw Exception("Sayfa bulunamadı, listeyi yenileyin"))
             }
         }.build()
-        val data = client.get(url).parseAs<ApiResponse<LatestChaptersDto>>().data
+        val data = client.get(url, Fetch.XHR).parseAs<ApiResponse<LatestChaptersDto>>().data
         latestCursor = data.nextCursor
         val mangas = data.items.filter { it.contentKind == "IMAGE_CHAPTER" }.map { it.toSManga() }
         return MangasPage(mangas, !data.isEnd)
@@ -79,7 +80,7 @@ abstract class Toontaku : KeiSource() {
             // the site also hosts light novels (TEXT_CHAPTER)
             addQueryParameter("contentKind", "IMAGE_CHAPTER")
         }
-        val data = client.get(url.build()).parseAs<ApiResponse<SeriesListDto>>().data
+        val data = client.get(url.build(), Fetch.XHR).parseAs<ApiResponse<SeriesListDto>>().data
         return MangasPage(data.series.map { it.toSManga() }, data.page < data.totalPages)
     }
 
@@ -113,28 +114,28 @@ abstract class Toontaku : KeiSource() {
                 .addQueryParameter("sortBy", "chapterNumber")
                 .addQueryParameter("sortOrder", "desc")
                 .build()
-            client.get(url).parseAs<ApiResponse<ChapterListDto>>().data.chapters.map { it.toSChapter(manga.url) }
+            client.get(url, Fetch.XHR).parseAs<ApiResponse<ChapterListDto>>().data.chapters.map { it.toSChapter(manga.url) }
         } else {
             chapters
         }
         return SMangaUpdate(updatedManga, chapterList)
     }
 
-    private suspend fun fetchDetails(slug: String): SeriesDetailsDto = client.get("$apiUrl/series/slug/$slug").parseAs<ApiResponse<SeriesDetailsResponse>>().data.series
+    private suspend fun fetchDetails(slug: String): SeriesDetailsDto = client.get("$apiUrl/series/slug/$slug", Fetch.XHR).parseAs<ApiResponse<SeriesDetailsResponse>>().data.series
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         // the site answers 403 for locked chapters, which the app's Cloudflare interceptor mistakes for a challenge
         if (chapter.memo.getBoolean("locked")) {
             throw Exception("Bu bölüm kilitli, açmak için sitede oturum açıp satın almanız gerekiyor")
         }
-        return client.get("$apiUrl/chapters/${chapter.url}?increment_view=false").parseAs<ApiResponse<ChapterDto>>().data.imageUrls.mapIndexed { index, imageUrl ->
+        return client.get("$apiUrl/chapters/${chapter.url}?increment_view=false", Fetch.XHR).parseAs<ApiResponse<ChapterDto>>().data.imageUrls.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
         }
     }
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/filters").parseAs()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/filters", Fetch.XHR).parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data?.parseAs<FiltersDto>()?.genres.orEmpty()

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -32,11 +33,12 @@ abstract class MangaNova : KeiSource() {
     }
 
     // Popular
-    override suspend fun getPopularManga(page: Int) = parseSearch(client.get("$apiUrl/catalogue/"))
+    override suspend fun getPopularManga(page: Int) = parseSearch(client.get("$apiUrl/catalogue/", Fetch.XHR))
 
     // Latest
     override suspend fun getLatestUpdates(page: Int) = client.get(
         "$apiUrl/catalogue/",
+        Fetch.XHR,
     ).parseAs<Catalogue>().newSeries.map {
         it.toDetailedSManga()
     }.let { MangasPage(it, false) }
@@ -50,6 +52,7 @@ abstract class MangaNova : KeiSource() {
         val slug = url.pathSegments[1]
         val catalogue = client.get(
             "$apiUrl/catalogue/",
+            Fetch.XHR,
         ).parseAs<Catalogue>()
         return catalogue.series.find {
             it.slug == slug
@@ -62,7 +65,7 @@ abstract class MangaNova : KeiSource() {
         } else {
             "$apiUrl/catalogue/"
         }
-        return parseSearch(client.get(url), query)
+        return parseSearch(client.get(url, Fetch.XHR), query)
     }
 
     private fun parseSearch(
@@ -105,6 +108,7 @@ abstract class MangaNova : KeiSource() {
         val slug = manga.url.slug()
         val catalogue = client.get(
             "$apiUrl/catalogue/",
+            Fetch.XHR,
         ).parseAs<Catalogue>()
         val series = catalogue.series
         val serie = series.find { it.slug == slug }
@@ -116,7 +120,7 @@ abstract class MangaNova : KeiSource() {
     // Chapters
     private suspend fun getChapterList(manga: SManga): List<SChapter> {
         val slug = manga.url.slug()
-        val response = client.get("$apiUrl/mangas/$slug")
+        val response = client.get("$apiUrl/mangas/$slug", Fetch.XHR)
         val serie = response.parseAs<DetailedSerieContainer>().serie
         val categories = serie.chapitres
         val chapterList = mutableListOf<SChapter>()
@@ -143,7 +147,7 @@ abstract class MangaNova : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val slug = chapter.url.slug()
         val chapterNumber = chapter.url.number()
-        val response = client.get("$apiUrl/mangas/$slug/chapitres/$chapterNumber")
+        val response = client.get("$apiUrl/mangas/$slug/chapitres/$chapterNumber", Fetch.XHR)
 
         val images = response.parseAs<ChapterDetails>().images
         return images.map { pageData ->

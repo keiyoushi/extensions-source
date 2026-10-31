@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
@@ -54,7 +55,7 @@ abstract class FodFuji :
             .addQueryParameter("page", page.toString())
             .build()
 
-        val result = client.get(url).parseAs<RankingResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<RankingResponse>()
         val mangas = result.rankingBooks.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
@@ -66,7 +67,7 @@ abstract class FodFuji :
             .addQueryParameter("page", page.toString())
             .build()
 
-        val result = client.get(url).parseAs<LatestResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<LatestResponse>()
         val mangas = result.newArrivalBooks.map { it.toSManga() }
         return MangasPage(mangas, result.hasNextPage())
     }
@@ -77,7 +78,7 @@ abstract class FodFuji :
             .addQueryParameter("page", page.toString())
             .build()
 
-        val result = client.get(url).parseAs<SearchResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<SearchResponse>()
         val mangas = result.searchBooks.map { it.toSManga() }
         return MangasPage(mangas, result.searchInfo.hasNextPage())
     }
@@ -97,7 +98,7 @@ abstract class FodFuji :
             .addQueryParameter("episode_id", episodeId)
             .build()
 
-        val result = client.get(url).parseAs<DetailsResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<DetailsResponse>()
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val chapterList = result.bookSeries
             .filter { !hideLocked || !it.isLocked }
@@ -118,7 +119,7 @@ abstract class FodFuji :
             .addQueryParameter("episode_id", chapter.url)
             .build()
 
-        val result = client.get(url).parseAs<ViewerResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<ViewerResponse>()
         if (result.bookData == null) {
             throw Exception("Log in via WebView and purchase this product to read.")
         }
@@ -135,7 +136,7 @@ abstract class FodFuji :
             .encodedQuery(result.additionalQueryString)
             .build()
 
-        val profiles = client.get(bookJsonUrl).parseAs<ReflowBook>().reflowData.profiles
+        val profiles = client.get(bookJsonUrl, Fetch.XHR).parseAs<ReflowBook>().reflowData.profiles
         val profile = profiles.find { it.id == "mincho_medium" } ?: profiles.first()
         val key = keys[profile.id]!!.string
 

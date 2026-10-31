@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -42,7 +43,7 @@ abstract class MissKon : KeiSource() {
 
     // region popular
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/top3/").asJsoup()
+        val document = client.get("$baseUrl/top3/", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("article.item-list").map { mangaFromElement(it) }
         return MangasPage(mangas, false)
     }
@@ -50,7 +51,7 @@ abstract class MissKon : KeiSource() {
 
     // region latest
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/page/$page").asJsoup()
+        val document = client.get("$baseUrl/page/$page", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("article.item-list").map { mangaFromElement(it) }
         val hasNextPage = document.selectFirst(".current + a.page") != null
         return MangasPage(mangas, hasNextPage)
@@ -69,7 +70,7 @@ abstract class MissKon : KeiSource() {
                 .build()
         }
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("article.item-list").map { mangaFromElement(it) }
         val hasNextPage = document.selectFirst("div.content > div.pagination > span.current + a") != null
         return MangasPage(mangas, hasNextPage)
@@ -83,7 +84,7 @@ abstract class MissKon : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val updatedManga = parseMangaDetails(document)
         val updatedChapters = parseChapterList(document, manga.url)
         return SMangaUpdate(updatedManga, updatedChapters)
@@ -120,7 +121,7 @@ abstract class MissKon : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return document.select(".content > .yarpp-related a.yarpp-thumbnail").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.attr("abs:href"))
@@ -134,7 +135,7 @@ abstract class MissKon : KeiSource() {
     // region Pages
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document
             .select("div.post-inner > div.entry > p > img")
             .mapIndexed { i, imgEl -> Page(i, imageUrl = imgEl.absUrl("data-src")) }

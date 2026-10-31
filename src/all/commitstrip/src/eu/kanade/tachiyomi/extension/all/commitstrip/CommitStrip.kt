@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -82,7 +83,7 @@ abstract class CommitStrip : KeiSource() {
         if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
         // years without any strip (e.g. 2023) return 404
-        val response = client.get("${manga.url}/?", ensureSuccess = false)
+        val response = client.get("${manga.url}/?", Fetch.DOCUMENT, ensureSuccess = false)
         if (response.code == 404) {
             response.close()
             return SMangaUpdate(manga, emptyList())
@@ -94,7 +95,7 @@ abstract class CommitStrip : KeiSource() {
         }
 
         val chapterList = (1..pages).flatMap { page ->
-            client.get("${manga.url}/page/$page/?").asJsoup().select(".excerpt a").map { element ->
+            client.get("${manga.url}/page/$page/?", Fetch.DOCUMENT).asJsoup().select(".excerpt a").map { element ->
                 SChapter.create().apply {
                     url = "$baseUrl/$siteLang" + element.attr("href").substringAfter(baseUrl)
 
@@ -118,7 +119,7 @@ abstract class CommitStrip : KeiSource() {
     // Page
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val imageUrl = client.get(chapter.url).asJsoup().selectFirst(".entry-content p img")?.attr("abs:src") ?: ""
+        val imageUrl = client.get(chapter.url, Fetch.DOCUMENT).asJsoup().selectFirst(".entry-content p img")?.attr("abs:src") ?: ""
         return listOf(Page(0, imageUrl = imageUrl))
     }
 

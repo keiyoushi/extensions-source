@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
@@ -36,7 +37,7 @@ abstract class Aniverse : KeiSource() {
             .addQueryParameter("q", query)
             .addQueryParameter("media", "manga")
             .build()
-        val mangas = client.get(url).parseAs<List<MangaItemDto>>().map { it.toSManga() }
+        val mangas = client.get(url, Fetch.XHR).parseAs<List<MangaItemDto>>().map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
@@ -45,7 +46,7 @@ abstract class Aniverse : KeiSource() {
             .addQueryParameter("page", page.toString())
             .apply { if (genre != null) addQueryParameter("genre", genre) }
             .build()
-        val dto = client.get(url).parseAs<MangaListDto>()
+        val dto = client.get(url, Fetch.XHR).parseAs<MangaListDto>()
         return MangasPage(dto.items.map { it.toSManga() }, dto.hasNextPage)
     }
 
@@ -67,7 +68,7 @@ abstract class Aniverse : KeiSource() {
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
 
-    private suspend fun fetchMangaPage(slug: String): MangaPageDto = client.get("$baseUrl/manga/$slug").extractNextJs<MangaPageDto>()
+    private suspend fun fetchMangaPage(slug: String): MangaPageDto = client.get("$baseUrl/manga/$slug", Fetch.XHR).extractNextJs<MangaPageDto>()
         ?: throw Exception("Impossible d'extraire les données du manga")
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -78,7 +79,7 @@ abstract class Aniverse : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter))
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         // Locked chapters redirect to the sign-in page.
         if (response.request.url.encodedPath.startsWith("/sign-in")) {
             response.close()

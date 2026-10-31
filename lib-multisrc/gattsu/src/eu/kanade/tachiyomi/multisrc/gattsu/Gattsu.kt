@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -33,7 +34,7 @@ abstract class Gattsu : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val path = if (page == 1) "" else "page/$page"
-        val document = client.get("$baseUrl/$path").asJsoup()
+        val document = client.get("$baseUrl/$path", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(latestUpdatesSelector()).map { element ->
             latestUpdatesFromElement(element)
         }
@@ -60,7 +61,7 @@ abstract class Gattsu : KeiSource() {
             .addQueryParameter("post_type", "post")
             .build()
 
-        val document = client.get(searchUrl).asJsoup()
+        val document = client.get(searchUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(searchMangaSelector()).map { element ->
             searchMangaFromElement(element)
         }
@@ -80,7 +81,7 @@ abstract class Gattsu : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.all(String::isEmpty)) return null
 
-        return mangaDetailsParse(client.get(url).asJsoup()).apply { setUrlWithoutDomain(url.toString()) }
+        return mangaDetailsParse(client.get(url, Fetch.DOCUMENT).asJsoup()).apply { setUrlWithoutDomain(url.toString()) }
     }
 
     // Details and chapters come from the same page
@@ -90,7 +91,7 @@ abstract class Gattsu : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document))
     }
 
@@ -136,7 +137,7 @@ abstract class Gattsu : KeiSource() {
         "div.meio div.post-box.listaImagens div.galeriaHtml img"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(pageListSelector())
             .mapIndexed { i, el ->
                 Page(i, document.location(), imageUrl = el.imgAttr().withoutSize())

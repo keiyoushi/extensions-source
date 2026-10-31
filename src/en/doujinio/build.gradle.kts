@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Doujin.io - J18"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 

@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -99,7 +100,7 @@ abstract class XAsiatAlbums : KeiSource() {
             addQueryParameter("_", System.currentTimeMillis().toString())
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select(".list-albums .item a[href]")
             .mapNotNull { link ->
@@ -138,7 +139,7 @@ abstract class XAsiatAlbums : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(resolveUrl(manga.url))
+        val response = client.get(resolveUrl(manga.url), Fetch.DOCUMENT)
         val requestUrl = response.request.url.toString()
         val document = response.asJsoup()
 
@@ -185,7 +186,7 @@ abstract class XAsiatAlbums : KeiSource() {
 
     // Album detail pages deliver ALL images on a single page (confirmed from live site:
     // even 98-image albums show every image at once with no internal pagination).
-    override suspend fun getPageList(chapter: SChapter): List<Page> = parseImagePages(client.get(resolveUrl(chapter.url)).asJsoup())
+    override suspend fun getPageList(chapter: SChapter): List<Page> = parseImagePages(client.get(resolveUrl(chapter.url), Fetch.DOCUMENT).asJsoup())
         .mapIndexed { index, imageUrl -> Page(index = index, imageUrl = imageUrl) }
 
     // Extracts image URLs from a gallery document.

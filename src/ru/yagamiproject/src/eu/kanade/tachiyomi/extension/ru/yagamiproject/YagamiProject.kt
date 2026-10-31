@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -24,7 +25,7 @@ import java.time.format.DateTimeFormatter
 @Source
 abstract class YagamiProject : KeiSource() {
     // Popular
-    override suspend fun getPopularManga(page: Int): MangasPage = searchMangaParse(client.get("$baseUrl/list-new/$page").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = searchMangaParse(client.get("$baseUrl/list-new/$page", Fetch.DOCUMENT).asJsoup())
 
     private fun searchMangaParse(document: Document): MangasPage {
         val mangas = document.select(".list .group").map { element ->
@@ -42,12 +43,12 @@ abstract class YagamiProject : KeiSource() {
     }
 
     // Latest
-    override suspend fun getLatestUpdates(page: Int): MangasPage = searchMangaParse(client.get("$baseUrl/latest/$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = searchMangaParse(client.get("$baseUrl/latest/$page", Fetch.DOCUMENT).asJsoup())
 
     // Search
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
-            return searchMangaParse(client.get("$baseUrl/reader/search/?s=$query&p=$page").asJsoup())
+            return searchMangaParse(client.get("$baseUrl/reader/search/?s=$query&p=$page", Fetch.DOCUMENT).asJsoup())
         }
         val activeFilters = if (filters.isEmpty()) getFilterList() else filters
         activeFilters.firstInstanceOrNull<CategoryList>()?.let { filter ->
@@ -57,7 +58,7 @@ abstract class YagamiProject : KeiSource() {
                     addPathSegment(getCategoryList()[filter.state].name)
                     if (page > 1) addPathSegment(page.toString())
                 }.build()
-                return searchMangaParse(client.get(url).asJsoup())
+                return searchMangaParse(client.get(url, Fetch.DOCUMENT).asJsoup())
             }
         }
         activeFilters.firstInstanceOrNull<FormatList>()?.let { filter ->
@@ -66,7 +67,7 @@ abstract class YagamiProject : KeiSource() {
                     addPathSegment(getFormatList()[filter.state].query)
                     if (page > 1) addPathSegment(page.toString())
                 }.build()
-                return searchMangaParse(client.get(url).asJsoup())
+                return searchMangaParse(client.get(url, Fetch.DOCUMENT).asJsoup())
             }
         }
         return getPopularManga(page)
@@ -90,7 +91,7 @@ abstract class YagamiProject : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val url = getMangaUrl(manga)
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val newManga = mangaDetailsParse(document, manga.url)
         val newChapter = chapterListParse(document)
         return SMangaUpdate(newManga, newChapter)
@@ -156,9 +157,9 @@ abstract class YagamiProject : KeiSource() {
 
     // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val initialDoc = client.get(getChapterUrl(chapter)).asJsoup()
+        val initialDoc = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val doc = if (initialDoc.selectFirst(".info")?.text()?.contains("mature contents") == true) {
-            client.post(getChapterUrl(chapter), adultBody).asJsoup()
+            client.post(getChapterUrl(chapter), Fetch.DOCUMENT, adultBody).asJsoup()
         } else {
             initialDoc
         }
@@ -175,7 +176,7 @@ abstract class YagamiProject : KeiSource() {
     }
 
     override suspend fun getImageUrl(page: Page): String {
-        val document = client.get(page.url).asJsoup()
+        val document = client.get(page.url, Fetch.DOCUMENT).asJsoup()
         val defaultImg = document.select("#page img").attr("abs:src")
         return if (defaultImg.contains("string(1)")) {
             document.select("#get_download").first()!!.absUrl("href")

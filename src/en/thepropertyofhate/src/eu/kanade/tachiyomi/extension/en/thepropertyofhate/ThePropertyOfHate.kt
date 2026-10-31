@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -61,7 +62,7 @@ abstract class ThePropertyOfHate : KeiSource() {
     }
 
     private suspend fun getChapterList(): List<SChapter> {
-        val document = client.get("$baseUrl/TPoH/").asJsoup()
+        val document = client.get("$baseUrl/TPoH/", Fetch.DOCUMENT).asJsoup()
 
         val chapters = mutableListOf<SChapter>()
         var addedActiveChapter = false
@@ -104,11 +105,11 @@ abstract class ThePropertyOfHate : KeiSource() {
 
     // ========================= Pages =========================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(baseUrl + chapter.url).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
         .select("select.jumpbox option:not([style*=bold]):not([value=-1])")
         .mapIndexed { num, opt -> Page(num, opt.absUrl("value")) }
 
-    override suspend fun getImageUrl(page: Page): String = client.get(page.url).asJsoup()
+    override suspend fun getImageUrl(page: Page): String = client.get(page.url, Fetch.DOCUMENT).asJsoup()
         .selectFirst(".comic_comic > img")!!
         .absUrl("src")
 }

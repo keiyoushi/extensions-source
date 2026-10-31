@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -48,7 +49,7 @@ abstract class Otakusic : KeiSource() {
         val url = searchUrl(page)
             .addQueryParameter("sort", "views")
             .build()
-        return parseMangaListPage(client.get(url).asJsoup())
+        return parseMangaListPage(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // =============================== Latest ===============================
@@ -57,7 +58,7 @@ abstract class Otakusic : KeiSource() {
         val url = searchUrl(page)
             .addQueryParameter("sort", "updated")
             .build()
-        return parseMangaListPage(client.get(url).asJsoup())
+        return parseMangaListPage(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // =============================== Search ===============================
@@ -82,7 +83,7 @@ abstract class Otakusic : KeiSource() {
             )
         }.build()
 
-        return parseMangaListPage(client.get(url).asJsoup())
+        return parseMangaListPage(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private fun searchUrl(page: Int) = "$baseUrl/tim-kiem".toHttpUrl().newBuilder()
@@ -134,7 +135,7 @@ abstract class Otakusic : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
         val mangaDeferred = if (fetchDetails) {
-            async { parseMangaDetails(client.get(getMangaUrl(manga)).asJsoup(), manga) }
+            async { parseMangaDetails(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup(), manga) }
         } else {
             null
         }
@@ -178,7 +179,7 @@ abstract class Otakusic : KeiSource() {
 
     private suspend fun loadChapterList(manga: SManga): List<SChapter> {
         val slug = getMangaUrl(manga).toHttpUrl().pathSegments.getOrNull(1) ?: return emptyList()
-        val chapters = client.get("$baseUrl/api/v1/manga/chapters/$slug", apiHeaders)
+        val chapters = client.get("$baseUrl/api/v1/manga/chapters/$slug", apiHeaders, Fetch.XHR)
             .parseAs<ChaptersResponse>().data
 
         return chapters
@@ -215,14 +216,14 @@ abstract class Otakusic : KeiSource() {
         val parts = chapterPathSegments(chapter)
         val mangaSlug = parts[0]
         val chapterOriginalSlug = parts[1]
-        val chapters = client.get("$baseUrl/api/v1/manga/chapters/$mangaSlug", apiHeaders)
+        val chapters = client.get("$baseUrl/api/v1/manga/chapters/$mangaSlug", apiHeaders, Fetch.XHR)
             .parseAs<ChaptersResponse>().data
         val chapterDto = chapters.firstOrNull { it.chapterOriginalSlug == chapterOriginalSlug }
             ?: return emptyList()
         val apiUrl = chapterDto.apiUrl ?: return emptyList()
 
         return if (apiUrl.toHttpUrlOrNull() != null) {
-            val pageData = client.get(apiUrl).parseAs<ChapterPagesResponse>().data
+            val pageData = client.get(apiUrl, Fetch.XHR).parseAs<ChapterPagesResponse>().data
             pageData.item.chapterImages
                 .sortedBy { it.page }
                 .mapIndexed { index, image ->
@@ -241,7 +242,7 @@ abstract class Otakusic : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-kiem").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-kiem", Fetch.DOCUMENT).asJsoup()
         .select("input[name=category]")
         .mapNotNull { input ->
             val value = input.attr("value").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
@@ -258,7 +259,7 @@ abstract class Otakusic : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val heading = document.select("h2")
             .firstOrNull { it.text().equals("Có thể bạn sẽ thích", ignoreCase = true) }
             ?: return emptyList()

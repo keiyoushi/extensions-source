@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -20,7 +21,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
 abstract class Toongrab : KeiSource() {
-
     // Popular = views descending ("Most Popular"); Latest = the default browse order
     override suspend fun getPopularManga(page: Int): MangasPage = browseMangas(page, "Most Popular")
 
@@ -31,7 +31,7 @@ abstract class Toongrab : KeiSource() {
             addQueryParameter("page", page.toString())
             if (sort != null) addQueryParameter("sort", sort)
         }.build()
-        val response = client.get(url).parseAs<BrowseResponse>()
+        val response = client.get(url, Fetch.XHR).parseAs<BrowseResponse>()
         return MangasPage(response.data.map { it.toSManga() }, response.hasNextPage(page))
     }
 
@@ -48,7 +48,7 @@ abstract class Toongrab : KeiSource() {
             }
         }.build()
 
-        val response = client.get(url).parseAs<BrowseResponse>()
+        val response = client.get(url, Fetch.XHR).parseAs<BrowseResponse>()
         return MangasPage(response.data.map { it.toSManga() }, response.hasNextPage(page))
     }
 
@@ -81,16 +81,16 @@ abstract class Toongrab : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
         val detailsDeferred = async {
-            if (fetchDetails) client.get("$baseUrl/api/manga/${manga.url}").parseAs<MangaDetails>() else null
+            if (fetchDetails) client.get("$baseUrl/api/manga/${manga.url}", Fetch.XHR).parseAs<MangaDetails>() else null
         }
 
         val chapterList = if (fetchChapters) {
             // Chapter API is paginated, capped at 100 per page server-side
-            val first = client.get("$baseUrl/api/manga/${manga.url}/chapters?limit=100")
+            val first = client.get("$baseUrl/api/manga/${manga.url}/chapters?limit=100", Fetch.XHR)
                 .parseAs<ChapterListResponse>()
             val rest = (2..first.totalPages).map { page ->
                 async {
-                    client.get("$baseUrl/api/manga/${manga.url}/chapters?limit=100&page=$page")
+                    client.get("$baseUrl/api/manga/${manga.url}/chapters?limit=100&page=$page", Fetch.XHR)
                         .parseAs<ChapterListResponse>()
                         .chapters
                 }
@@ -120,7 +120,7 @@ abstract class Toongrab : KeiSource() {
         val slug = segments[1]
         val number = segments[2].removePrefix("chapter-")
 
-        val response = client.get("$baseUrl/api/manga/$slug/chapter/$number").parseAs<ChapterImages>()
+        val response = client.get("$baseUrl/api/manga/$slug/chapter/$number", Fetch.XHR).parseAs<ChapterImages>()
         return response.toPageList()
     }
 }

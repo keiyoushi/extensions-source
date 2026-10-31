@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -28,7 +29,7 @@ abstract class Masonry : KeiSource() {
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(popularMangaUrl(page)).asJsoup()
+        val document = client.get(popularMangaUrl(page), Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document)
     }
 
@@ -48,7 +49,7 @@ abstract class Masonry : KeiSource() {
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/updates/sort/newest/mpage/$page/").asJsoup()
+        val document = client.get("$baseUrl/updates/sort/newest/mpage/$page/", Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document)
     }
 
@@ -88,7 +89,7 @@ abstract class Masonry : KeiSource() {
             }.build()
         }
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document)
     }
 
@@ -97,7 +98,7 @@ abstract class Masonry : KeiSource() {
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val tags = client.get("$baseUrl/updates/sort/newest/").asJsoup()
+        val tags = client.get("$baseUrl/updates/sort/newest/", Fetch.DOCUMENT).asJsoup()
             .select("#filter-a span:has(> input)")
             .map {
                 Tag(
@@ -134,7 +135,7 @@ abstract class Masonry : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
             chapters = parseChapterList(document, manga),
@@ -161,7 +162,7 @@ abstract class Masonry : KeiSource() {
 
     /* Pages */
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(".list-gallery a[href^=https://cdn.]").mapIndexed { idx, img ->
             Page(idx, imageUrl = img.absUrl("href"))
         }

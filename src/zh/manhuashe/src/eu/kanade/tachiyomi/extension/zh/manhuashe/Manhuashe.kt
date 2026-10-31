@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -31,17 +32,17 @@ abstract class Manhuashe : KeiSource() {
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/category/order/hits/page/$page").asJsoup()
+        val document = client.get("$baseUrl/category/order/hits/page/$page", Fetch.DOCUMENT).asJsoup()
         return parseManga(document)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/category/order/addtime/page/$page").asJsoup()
+        val document = client.get("$baseUrl/category/order/addtime/page/$page", Fetch.DOCUMENT).asJsoup()
         return parseManga(document)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val document = client.get("$baseUrl/search/$query/$page").asJsoup()
+        val document = client.get("$baseUrl/search/$query/$page", Fetch.DOCUMENT).asJsoup()
         return parseManga(document)
     }
 
@@ -57,7 +58,7 @@ abstract class Manhuashe : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         manga.apply {
             title = document.selectFirst("div.comic-meta-info > h1")!!.text()
             thumbnail_url = document.selectFirst("div.comic-cover-large > img")!!.absUrl("src")
@@ -80,7 +81,7 @@ abstract class Manhuashe : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
         return document.select("div.comic-content > img").mapIndexed { index, it ->
             Page(index, imageUrl = it.attr("src"))
         }

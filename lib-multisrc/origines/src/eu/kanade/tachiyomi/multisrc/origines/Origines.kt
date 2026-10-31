@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -107,7 +108,7 @@ abstract class Origines : KeiSource() {
             .add("annee", "")
             .build()
 
-        val data = client.post("$baseUrl/wp-admin/admin-ajax.php", form)
+        val data = client.post("$baseUrl/wp-admin/admin-ajax.php", Fetch.XHR, form)
             .parseAs<CatalogueResponse>()
             .data
 
@@ -173,7 +174,7 @@ abstract class Origines : KeiSource() {
         val slug = manga.url.toMangaSlug()
 
         if (fetchDetails) {
-            manga.parseDetails(client.get("$baseUrl/$mangaPath/$slug/").asJsoup())
+            manga.parseDetails(client.get("$baseUrl/$mangaPath/$slug/", Fetch.DOCUMENT).asJsoup())
         }
 
         val chapterList = if (fetchChapters) getChapterList(slug) else chapters
@@ -215,7 +216,7 @@ abstract class Origines : KeiSource() {
 
     private suspend fun getChapterList(slug: String): List<SChapter> {
         val form = FormBody.Builder().build()
-        val document = client.post("$baseUrl/$mangaPath/$slug/ajax/chapters/", form).asJsoup()
+        val document = client.post("$baseUrl/$mangaPath/$slug/ajax/chapters/", Fetch.XHR, form).asJsoup()
 
         return document.select("div.ori-chl-row").map { element ->
             val link = element.selectFirst("a.ori-chl-corps")!!
@@ -273,7 +274,7 @@ abstract class Origines : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl/$mangaPath/${chapter.url.toChapterSlug()}/?style=list").asJsoup()
+        val document = client.get("$baseUrl/$mangaPath/${chapter.url.toChapterSlug()}/?style=list", Fetch.DOCUMENT).asJsoup()
 
         return document.select("div.reading-content img.wp-manga-chapter-img").mapIndexed { index, img ->
             val image = when {

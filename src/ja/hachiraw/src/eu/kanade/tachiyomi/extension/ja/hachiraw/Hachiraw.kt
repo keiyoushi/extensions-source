@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -40,7 +41,7 @@ abstract class Hachiraw : KeiSource() {
         val slug = url.pathSegments.getOrNull(1) ?: return null
 
         val mangaUrl = "/manga/$slug"
-        return mangaDetailsParse(client.get(baseUrl + mangaUrl).asJsoup()).apply {
+        return mangaDetailsParse(client.get(baseUrl + mangaUrl, Fetch.DOCUMENT).asJsoup()).apply {
             this.url = mangaUrl
         }
     }
@@ -68,7 +69,7 @@ abstract class Hachiraw : KeiSource() {
             }
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div.ng-scope > div.top-15").map { element ->
             SManga.create().apply {
                 element.selectFirst("a.ng-binding.SeriesName")!!.let {
@@ -88,7 +89,7 @@ abstract class Hachiraw : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val chapterList = document.select("a.ChapterLink").map { element ->
             SChapter.create().apply {
@@ -133,7 +134,7 @@ abstract class Hachiraw : KeiSource() {
         }.trim()
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup().select("#TopPage img").mapIndexed { i, img ->
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup().select("#TopPage img").mapIndexed { i, img ->
         Page(i, imageUrl = img.absUrl("src"))
     }
 

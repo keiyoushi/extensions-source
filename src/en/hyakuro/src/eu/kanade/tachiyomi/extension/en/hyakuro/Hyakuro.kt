@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -16,7 +17,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
 abstract class Hyakuro : KeiSource() {
-
     private val apiUrl get() = "$baseUrl/backend/api"
 
     // Popular/A-Z
@@ -26,7 +26,7 @@ abstract class Hyakuro : KeiSource() {
             .addQueryParameter("sort", "Title:asc")
             .addQueryParameter("pagination[page]", page.toString())
             .build()
-        return parseMangaList(client.get(url).parseAs<PaginatedResponse>())
+        return parseMangaList(client.get(url, Fetch.XHR).parseAs<PaginatedResponse>())
     }
 
     // Latest
@@ -36,7 +36,7 @@ abstract class Hyakuro : KeiSource() {
             .addQueryParameter("sort", "updatedAt:desc")
             .addQueryParameter("pagination[page]", page.toString())
             .build()
-        return parseMangaList(client.get(url).parseAs<PaginatedResponse>())
+        return parseMangaList(client.get(url, Fetch.XHR).parseAs<PaginatedResponse>())
     }
 
     // Search
@@ -73,7 +73,7 @@ abstract class Hyakuro : KeiSource() {
                 }
             }
         }.build()
-        return parseMangaList(client.get(url).parseAs<PaginatedResponse>())
+        return parseMangaList(client.get(url, Fetch.XHR).parseAs<PaginatedResponse>())
     }
 
     private fun parseMangaList(result: PaginatedResponse): MangasPage {
@@ -94,7 +94,7 @@ abstract class Hyakuro : KeiSource() {
             .addQueryParameter("filters[slug][\$eq]", slug)
             .addQueryParameter("populate", "Cover,Chapters")
             .build()
-        val attributes = client.get(url).parseAs<PaginatedResponse>().data.first().attributes
+        val attributes = client.get(url, Fetch.XHR).parseAs<PaginatedResponse>().data.first().attributes
         return SMangaUpdate(
             attributes.toSManga(baseUrl),
             attributes.chapters!!.sortedByDescending { it.chapter }
@@ -118,7 +118,7 @@ abstract class Hyakuro : KeiSource() {
             .addQueryParameter("filters[slug][\$eq]", slug)
             .addQueryParameter("populate[Chapters][populate]", "*")
             .build()
-        val attributes = client.get(url).parseAs<PaginatedResponse>().data.first().attributes
+        val attributes = client.get(url, Fetch.XHR).parseAs<PaginatedResponse>().data.first().attributes
         val chapterData = attributes.chapters!!.find { it.id == chapterId }!!
 
         return chapterData.pages!!.data

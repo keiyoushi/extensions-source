@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -54,7 +55,7 @@ abstract class SunshineButterflyScans : KeiSource() {
         mutex.withLock {
             if (!initialized) {
                 initialized = true
-                chaptersData = client.get("$baseUrl/json/chapters.json", apiHeaders()).parseAs<List<EntryDto>>().groupBy {
+                chaptersData = client.get("$baseUrl/json/chapters.json", apiHeaders(), Fetch.XHR).parseAs<List<EntryDto>>().groupBy {
                     it.series
                 }.values.map { it.sortedByDescending { it.num } }
             }
@@ -209,7 +210,7 @@ abstract class SunshineButterflyScans : KeiSource() {
             }
         }.build()
 
-        val response = client.get(url, headers)
+        val response = client.get(url, headers, Fetch.XHR)
         return if (isGoogleDrive) {
             response.parseAs<GoogleDriveResponseDto>().files.sortedBy {
                 it.name

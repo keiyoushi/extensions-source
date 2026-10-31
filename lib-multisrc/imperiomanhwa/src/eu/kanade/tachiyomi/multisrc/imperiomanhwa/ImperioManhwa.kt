@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -86,7 +87,7 @@ abstract class ImperioManhwa :
     }
 
     private suspend fun listing(url: HttpUrl): MangasPage {
-        val props = client.get(url).asJsoup().inertiaPage<ListingProps>().props
+        val props = client.get(url, Fetch.DOCUMENT).asJsoup().inertiaPage<ListingProps>().props
         return MangasPage(props.series.map { it.toSManga() }, props.pagination.next != null)
     }
 
@@ -103,14 +104,14 @@ abstract class ImperioManhwa :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val props = client.get(getMangaUrl(manga)).asJsoup().inertiaPage<SeriesProps>().props
+        val props = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup().inertiaPage<SeriesProps>().props
         // A labelled tag row holds something else, like the series' groups
         props.series.applyTo(manga, intl["alt_names"], withTags = props.tagsLabel == null)
         if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
         // Dates from the series page, the rest from the full chapter list
         val all = if (props.chaptersPagination.last > 1) {
-            client.get(baseHttpUrl.resolve(props.series.url)!!.resolve("${props.paths.chapters}.json")!!).parseAs<ChapterListDto>().items
+            client.get(baseHttpUrl.resolve(props.series.url)!!.resolve("${props.paths.chapters}.json")!!, Fetch.XHR).parseAs<ChapterListDto>().items
         } else {
             props.chapters
         }
@@ -158,7 +159,7 @@ abstract class ImperioManhwa :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val page = document.inertiaPage<JsonElement>()
         if (page.component == "Reader/Locked") return emptyList()
 
@@ -223,7 +224,7 @@ abstract class ImperioManhwa :
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val props = client.get(baseUrl).asJsoup().inertiaPage<HomeProps>().props
+        val props = client.get(baseUrl, Fetch.DOCUMENT).asJsoup().inertiaPage<HomeProps>().props
         return FilterData(props.genres, props.content.sections).toJsonElement()
     }
 

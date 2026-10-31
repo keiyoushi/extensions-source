@@ -20,6 +20,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -330,7 +331,7 @@ abstract class Comix :
             .addQueryParameter("q", name)
             .addQueryParameter("limit", "20")
             .build()
-        val hits = client.get(url).parseAs<TagSearchResponse>().result
+        val hits = client.get(url, Fetch.XHR).parseAs<TagSearchResponse>().result
         if (hits.isEmpty()) throw Exception("No $type named \"$name\"")
         // Exact names when the site's fuzzy search has them
         val ids = hits.filter { it.label.equals(name, ignoreCase = true) }.ifEmpty { hits }.map { it.id.toString() }

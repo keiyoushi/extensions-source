@@ -13,6 +13,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.lib.publus.PublusContent
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -38,9 +39,9 @@ abstract class MangaFive :
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(PublusInterceptor())
 
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/ranking").toMangasPage()
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/ranking", Fetch.DOCUMENT).toMangasPage()
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get("$baseUrl/series?p=$page").toMangasPage()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get("$baseUrl/series?p=$page", Fetch.DOCUMENT).toMangasPage()
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val sort = filters.firstInstance<SortFilter>()
@@ -52,7 +53,7 @@ abstract class MangaFive :
                 .addQueryParameter("p", page.toString())
                 .addQueryParameter("order", sort.value)
                 .build()
-            return client.get(url).toMangasPage()
+            return client.get(url, Fetch.DOCUMENT).toMangasPage()
         }
 
         val url = "$baseUrl/genre".toHttpUrl().newBuilder()
@@ -60,7 +61,7 @@ abstract class MangaFive :
             .addQueryParameter("p", page.toString())
             .addQueryParameter("order", sort.value)
             .build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(
@@ -87,7 +88,7 @@ abstract class MangaFive :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val detail = document.selectFirst(".comic-main-right-detail")!!
         val titleName = detail.selectFirst("h1.comic-title")!!.text()
@@ -117,7 +118,7 @@ abstract class MangaFive :
                 val hasNextPage = doc.selectFirst(".pagination-list-item.to-next:not(.disabled)") != null
                 if (!hasNextPage) break
                 page++
-                doc = client.get("${getMangaUrl(manga)}?p=$page").asJsoup()
+                doc = client.get("${getMangaUrl(manga)}?p=$page", Fetch.DOCUMENT).asJsoup()
             }
             list
         } else {
@@ -132,7 +133,7 @@ abstract class MangaFive :
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/product/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter))
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         val url = response.request.url
         val cid = if (url.pathSegments.last() == "ads_before_launching_viewer.html") {
             val onclick = response.asJsoup().selectFirst("button[onclick]")!!.attr("onclick")
@@ -147,7 +148,7 @@ abstract class MangaFive :
             .addEncodedQueryParameter("cid", cid)
             .build()
 
-        val content = client.get(licenseUrl).parseAs<PublusContent>()
+        val content = client.get(licenseUrl, Fetch.XHR).parseAs<PublusContent>()
         val auth = content.authInfo?.toAuth()
         val contentUrl = content.url!!
 
@@ -160,7 +161,7 @@ abstract class MangaFive :
                 .addPathSegment("content.json")
                 .also { auth?.applyTo(it) }
                 .build()
-            return client.get(packUrl).parseAs<List<List<ContentPackResponse>>>()
+            return client.get(packUrl, Fetch.XHR).parseAs<List<List<ContentPackResponse>>>()
                 .flatten()
                 .flatMap { it.effectTargetImgs }
                 .mapIndexed { index, path ->

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -22,12 +23,11 @@ import java.text.Normalizer
 
 @Source
 abstract class ZettaHQ : KeiSource() {
-
     override val supportsLatest = false
 
     // ============================== Popular ==============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = mangasPageParse(client.get("$baseUrl/page/$page").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = mangasPageParse(client.get("$baseUrl/page/$page", Fetch.DOCUMENT).asJsoup())
 
     private fun mangasPageParse(document: Document): MangasPage {
         val mangas = document.select("div.post-item article").map(::mangaFromElement)
@@ -111,7 +111,7 @@ abstract class ZettaHQ : KeiSource() {
             .addPathSegment(page.toString())
             .addQueryParameter("s", query)
 
-        return mangasPageParse(client.get(url.build()).asJsoup())
+        return mangasPageParse(client.get(url.build(), Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -143,7 +143,7 @@ abstract class ZettaHQ : KeiSource() {
     }
 
     private suspend fun getMangaDetails(path: String) = SManga.create().apply {
-        val document = client.get(baseUrl + path).asJsoup()
+        val document = client.get(baseUrl + path, Fetch.DOCUMENT).asJsoup()
         title = document.selectFirst("h1")!!.text()
         thumbnail_url = document.selectFirst(".content-container article img:first-child")?.absUrl("src")
         genre = document.select(".tags > a.tag").joinToString { it.text() }
@@ -155,7 +155,7 @@ abstract class ZettaHQ : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
         return document.select(".content-container article img").mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("src"))
         }
@@ -166,7 +166,7 @@ abstract class ZettaHQ : KeiSource() {
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/busca-avancada/").asJsoup()
+        val document = client.get("$baseUrl/busca-avancada/", Fetch.DOCUMENT).asJsoup()
 
         return FilterData(
             categories = parseOptions(document, "ofcategory"),

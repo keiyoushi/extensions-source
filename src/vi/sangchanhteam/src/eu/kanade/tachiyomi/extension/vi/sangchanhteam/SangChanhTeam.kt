@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -76,7 +77,7 @@ abstract class SangChanhTeam : KeiSource() {
             val url = "$baseUrl/wp-json/initlise/v1/search".toHttpUrl().newBuilder()
                 .addQueryParameter("term", query.trim())
                 .build()
-            val mangas = client.get(url).parseAs<List<SearchDto>>()
+            val mangas = client.get(url, Fetch.XHR).parseAs<List<SearchDto>>()
                 .filter { it.postType == null || it.postType == "manga" }
                 .mapNotNull(::mangaFromSearchDto)
                 .distinctBy { it.url }
@@ -84,7 +85,7 @@ abstract class SangChanhTeam : KeiSource() {
         }
 
         val url = filterUrl(page, filters)
-        return parseMangaPage(client.get(url))
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT))
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -109,7 +110,7 @@ abstract class SangChanhTeam : KeiSource() {
 
     private suspend fun getFilteredManga(page: Int, sort: String): MangasPage {
         val url = filterUrl(page, FilterList(), sort)
-        return parseMangaPage(client.get(url))
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT))
     }
 
     private fun filterUrl(page: Int, filters: FilterList, defaultSort: String = "updated"): HttpUrl = baseUrl.toHttpUrl().newBuilder().apply {
@@ -167,7 +168,7 @@ abstract class SangChanhTeam : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
             chapters = if (fetchChapters) fetchChapterList(document) else chapters,
@@ -223,7 +224,7 @@ abstract class SangChanhTeam : KeiSource() {
                         .addPathSegment("")
                         .fragment("chapter-list")
                         .build()
-                    client.get(url).asJsoup()
+                    client.get(url, Fetch.DOCUMENT).asJsoup()
                 }
             }.awaitAll()
         }
@@ -280,7 +281,7 @@ abstract class SangChanhTeam : KeiSource() {
     // ============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("#chapter-content img[data-imc-order]")
             .mapNotNull { image ->
                 image.absUrl("data-original-src")
@@ -295,7 +296,7 @@ abstract class SangChanhTeam : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/bo-loc-nang-cao/").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/bo-loc-nang-cao/", Fetch.DOCUMENT).asJsoup()
         .select("input.genre-checkbox[value]")
         .mapNotNull { element ->
             val name = element.attr("data-genre-name").takeIf { it.isNotBlank() } ?: return@mapNotNull null
@@ -311,7 +312,7 @@ abstract class SangChanhTeam : KeiSource() {
 
     override val supportsRelatedMangas get() = true
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga)).asJsoup()
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         .select(".manga-item-slider")
         .mapNotNull { element -> runCatching { mangaFromElement(element) }.getOrNull() }
         .distinctBy { it.url }

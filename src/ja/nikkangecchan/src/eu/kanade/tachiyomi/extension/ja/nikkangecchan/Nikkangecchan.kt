@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -16,9 +17,8 @@ import okhttp3.Request
 abstract class Nikkangecchan : KeiSource() {
 
     override val supportsLatest = false
-
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".contentInner > figure").mapNotNull { element ->
             val imgBox = element.selectFirst(".imgBox")
             val detailBox = element.select(".detailBox").lastOrNull()
@@ -48,7 +48,7 @@ abstract class Nikkangecchan : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
         val detailBox = document.selectFirst("#comicDetail .detailBox")
             ?: throw Exception("Detail box not found")
 

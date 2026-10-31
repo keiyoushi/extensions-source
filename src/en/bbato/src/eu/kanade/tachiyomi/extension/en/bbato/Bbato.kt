@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -33,14 +34,14 @@ abstract class Bbato : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val path = if (page == 1) "/filter?sort=views" else "/filter?sort=views&page=$page"
-        return client.get("$baseUrl$path").asJsoup().parseMangasPage()
+        return client.get("$baseUrl$path", Fetch.DOCUMENT).asJsoup().parseMangasPage()
     }
 
     // ============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val path = if (page == 1) "/updated" else "/updated/page/$page"
-        return client.get("$baseUrl$path").asJsoup().parseMangasPage()
+        return client.get("$baseUrl$path", Fetch.DOCUMENT).asJsoup().parseMangasPage()
     }
 
     // ============================== Search ===============================
@@ -67,7 +68,7 @@ abstract class Bbato : KeiSource() {
             }
         }.build()
 
-        return client.get(url).asJsoup().parseMangasPage()
+        return client.get(url, Fetch.DOCUMENT).asJsoup().parseMangasPage()
     }
 
     private fun Document.parseMangasPage(): MangasPage {
@@ -96,7 +97,7 @@ abstract class Bbato : KeiSource() {
             }
             else -> return null
         }
-        val document = client.get("$baseUrl$mangaUrl").asJsoup()
+        val document = client.get("$baseUrl$mangaUrl", Fetch.DOCUMENT).asJsoup()
         return SManga.create().apply {
             setUrlWithoutDomain(mangaUrl)
             title = document.selectFirst("h1[itemprop=name]")?.text() ?: return null
@@ -120,7 +121,7 @@ abstract class Bbato : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val updatedManga = if (fetchDetails) {
-            val document = client.get(getMangaUrl(manga)).asJsoup()
+            val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
             SManga.create().apply {
                 url = manga.url
                 title = document.selectFirst("h1[itemprop=name]")?.text() ?: throw Exception("Missing title")
@@ -138,7 +139,7 @@ abstract class Bbato : KeiSource() {
         val updatedChapters = if (fetchChapters) {
             val slug = manga.url.removeSuffix("/").substringAfterLast("/")
             val chapterHeaders = headersBuilder().add("X-Requested-With", "XMLHttpRequest").build()
-            val responseDto = client.get("$baseUrl/get-chapter-list?slug=$slug", chapterHeaders).parseAs<ChapterListResponse>()
+            val responseDto = client.get("$baseUrl/get-chapter-list?slug=$slug", chapterHeaders, Fetch.XHR).parseAs<ChapterListResponse>()
             responseDto.toSChapterList(slug, dateTimeFormat)
         } else {
             chapters
@@ -158,7 +159,7 @@ abstract class Bbato : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         return document.select(".pages .page:not(.notice-page) img").mapIndexedNotNull { index, img ->
             img.getImageUrl()?.let { Page(index, imageUrl = it) }

@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -28,7 +29,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class NexusToons :
     KeiSource(),
     ConfigurableSource {
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(NexusDecrypt.createInterceptor())
         rateLimit(3, 1.seconds)
@@ -132,7 +132,7 @@ abstract class NexusToons :
         }
 
         return parseSearch(
-            client.get(url.build(), apiHeaders),
+            client.get(url.build(), apiHeaders, Fetch.XHR),
         )
     }
 
@@ -154,7 +154,7 @@ abstract class NexusToons :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = getMangaSlug(manga.url)
-        val response = client.get("$baseUrl/api/manga/$slug", apiHeaders)
+        val response = client.get("$baseUrl/api/manga/$slug", apiHeaders, Fetch.XHR)
         val mangaDto = response.parseAs<MangaDetailsDto>()
         val chapterList = mangaDto.chapters.orEmpty().map {
             it.toSChapter(mangaDto.slug)
@@ -170,7 +170,7 @@ abstract class NexusToons :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.url.substringAfter("/read/").substringBefore("/")
-        val response = client.get("$baseUrl/api/read/$chapterId", apiHeaders)
+        val response = client.get("$baseUrl/api/read/$chapterId", apiHeaders, Fetch.XHR)
 
         val readResponse = response.parseAs<ReadResponse>()
         val pages = readResponse.pages
@@ -194,7 +194,7 @@ abstract class NexusToons :
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData() = client.get("$baseUrl/api/categories").parseAs<List<GenreDto>>().toJsonElement()
+    override suspend fun fetchFilterData() = client.get("$baseUrl/api/categories", Fetch.XHR).parseAs<List<GenreDto>>().toJsonElement()
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         listOf(

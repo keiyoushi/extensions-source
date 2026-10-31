@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -28,7 +29,7 @@ abstract class AHottie : KeiSource() {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
         }.build()
-        return popularMangaParse(client.get(url).asJsoup())
+        return popularMangaParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private fun popularMangaParse(document: Document): MangasPage {
@@ -60,7 +61,7 @@ abstract class AHottie : KeiSource() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         if (document.selectFirst("h1") != null && document.selectFirst("div.pl-3 > a") != null) {
             val manga = mangaDetailsParse(document).apply {
@@ -74,7 +75,7 @@ abstract class AHottie : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         if (document.selectFirst("h1") != null && document.selectFirst("div.pl-3 > a") != null) {
             return mangaDetailsParse(document).apply {
                 this.url = url.encodedPath
@@ -98,7 +99,7 @@ abstract class AHottie : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = mangaDetailsParse(document)
 
@@ -132,14 +133,14 @@ abstract class AHottie : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val pages = mutableListOf<Page>()
-        var doc = client.get(baseUrl + chapter.url).asJsoup()
+        var doc = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
         while (true) {
             doc.select("#main img.block").forEach {
                 pages.add(Page(pages.size, imageUrl = it.absUrl("src")))
             }
             val nextPageUrl = doc.selectFirst("a[rel=next]")?.absUrl("href") ?: ""
             if (nextPageUrl.isEmpty()) break
-            doc = client.get(nextPageUrl).asJsoup()
+            doc = client.get(nextPageUrl, Fetch.DOCUMENT).asJsoup()
         }
         return pages
     }

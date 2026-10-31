@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -47,10 +48,10 @@ abstract class PandaChaika : KeiSource() {
     private val ehentaiRegex = Regex("""(?:https?://)?e-hentai\.org/g/""")
 
     // Popular
-    override suspend fun getPopularManga(page: Int): MangasPage = parseSearch(client.get("$baseSearchUrl/?tags=$searchLang&sort=rating&apply=&json=&page=$page"))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseSearch(client.get("$baseSearchUrl/?tags=$searchLang&sort=rating&apply=&json=&page=$page", Fetch.XHR))
 
     // Latest
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseSearch(client.get("$baseSearchUrl/?tags=$searchLang&sort=public_date&apply=&json=&page=$page"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseSearch(client.get("$baseSearchUrl/?tags=$searchLang&sort=public_date&apply=&json=&page=$page", Fetch.XHR))
 
     private fun parsePageRange(query: String, minPages: Int = 1, maxPages: Int = 9999): Pair<Int, Int> {
         val num = query.filter(Char::isDigit).toIntOrNull() ?: -1
@@ -110,21 +111,21 @@ abstract class PandaChaika : KeiSource() {
             searchFirstArchive("$baseSearchUrl/?qsearch=$url&json=")
         }
 
-        else -> parseSearch(client.get(searchMangaUrl(page, query, filters)))
+        else -> parseSearch(client.get(searchMangaUrl(page, query, filters), Fetch.XHR))
     }
 
     private suspend fun searchFirstArchive(url: String): MangasPage {
-        val archive = client.get(url).parseAs<ArchiveResponse>().archives.getOrNull(0)?.toSManga() ?: throw Exception("Not Found")
+        val archive = client.get(url, Fetch.XHR).parseAs<ArchiveResponse>().archives.getOrNull(0)?.toSManga() ?: throw Exception("Not Found")
         return MangasPage(listOf(archive), false)
     }
 
     private suspend fun searchMangaById(id: Int): MangasPage {
-        val title = client.get("$baseUrl/api?archive=$id").parseAs<Archive>().title
+        val title = client.get("$baseUrl/api?archive=$id", Fetch.XHR).parseAs<Archive>().title
         val fullLink = baseSearchUrl.toHttpUrl().newBuilder().apply {
             addQueryParameter("qsearch", title)
             addQueryParameter("json", "")
         }.build()
-        val archive = client.get(fullLink)
+        val archive = client.get(fullLink, Fetch.XHR)
             .parseAs<ArchiveResponse>().archives
             .find {
                 it.id == id
@@ -224,7 +225,7 @@ abstract class PandaChaika : KeiSource() {
     ): SMangaUpdate {
         if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
-        val archive = client.get("$baseUrl/api?archive=${manga.url}").parseAs<Archive>()
+        val archive = client.get("$baseUrl/api?archive=${manga.url}", Fetch.XHR).parseAs<Archive>()
 
         val chapter = SChapter.create().apply {
             name = "Chapter"

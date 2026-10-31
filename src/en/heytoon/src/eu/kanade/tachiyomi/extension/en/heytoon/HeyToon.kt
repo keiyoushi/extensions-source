@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -24,13 +25,12 @@ import java.util.Locale
 
 @Source
 abstract class HeyToon : KeiSource() {
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         if (page != 1) {
             return getSearchMangaList(page - 1, "", SortFilter.popular)
         }
 
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
 
         val entries = document.select("section[class*=slider]:has(h2:matches((?i)popular|trending)) a").map { element ->
             SManga.create().apply {
@@ -70,7 +70,7 @@ abstract class HeyToon : KeiSource() {
             }
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val entries = document.select("div[class*=comicItem] a").map { element ->
             SManga.create().apply {
@@ -96,7 +96,7 @@ abstract class HeyToon : KeiSource() {
             .set("X-Requested-With", "XMLHttpRequest")
             .build()
 
-        val data = client.get(url, ajaxHeaders).parseAs<List<Comic>>()
+        val data = client.get(url, ajaxHeaders, Fetch.XHR).parseAs<List<Comic>>()
 
         val entries = data.map { comic ->
             SManga.create().apply {
@@ -122,7 +122,7 @@ abstract class HeyToon : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val details = SManga.create().apply {
             title = document.selectFirst("#titleSubWrapper h1.titCon")!!.text()
@@ -154,7 +154,7 @@ abstract class HeyToon : KeiSource() {
     private val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         return document.select("#comicContent img").mapIndexed { index, img ->
             Page(index, imageUrl = img.absUrl("src"))

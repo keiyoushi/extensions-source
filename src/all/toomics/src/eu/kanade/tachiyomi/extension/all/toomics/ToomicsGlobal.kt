@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -60,11 +61,11 @@ abstract class ToomicsGlobal : KeiSource() {
 
     // ================================== Popular =======================================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/$siteLang/webtoon/ranking").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/$siteLang/webtoon/ranking", Fetch.DOCUMENT).asJsoup())
 
     // ================================== Latest =======================================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/$siteLang/webtoon/new_comics").asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/$siteLang/webtoon/new_comics", Fetch.DOCUMENT).asJsoup())
 
     private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select("li > div.visual a:has(img)").mapNotNull { element ->
@@ -92,7 +93,7 @@ abstract class ToomicsGlobal : KeiSource() {
         val formBody = FormBody.Builder()
             .add("toonData", query)
             .build()
-        val searchDto = client.post("$baseUrl/$siteLang/webtoon/ajax_search", body = formBody).parseAs<SearchDto>()
+        val searchDto = client.post("$baseUrl/$siteLang/webtoon/ajax_search", fetch = Fetch.XHR, body = formBody).parseAs<SearchDto>()
         val document = Jsoup.parseBodyFragment(searchDto.content.clearHtml(), baseUrl)
         val mangas = document.select("#search-list-items li").mapNotNull { element ->
             val title = element.selectFirst("strong")?.text() ?: return@mapNotNull null
@@ -122,7 +123,7 @@ abstract class ToomicsGlobal : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val header = document.selectFirst("#glo_contents section.relative:has(img[src*=thumb])")
             ?: throw Exception("Could not find manga details header")
@@ -165,11 +166,11 @@ abstract class ToomicsGlobal : KeiSource() {
     // ================================== Pages ========================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        var document = client.get(getChapterUrl(chapter)).asJsoup()
+        var document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         if (document.selectFirst("div.section_age_verif") != null) {
             // Same request the site's "Yes, I'm over 18" button makes; stores adult display mode in the session
-            client.get("$baseUrl/$siteLang/index/set_display/?display=A&return=%2F$siteLang").close()
-            document = client.get(getChapterUrl(chapter)).asJsoup()
+            client.get("$baseUrl/$siteLang/index/set_display/?display=A&return=%2F$siteLang", Fetch.DOCUMENT).close()
+            document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
             if (document.selectFirst("div.section_age_verif") != null) {
                 throw Exception("Verify age via WebView")
             }

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -66,7 +67,7 @@ abstract class KappaBeast : KeiSource() {
             addParam("sort[0]", sort)
         }.build()
 
-        val result = client.get(url).parseAs<SearchResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<SearchResponse>()
         return MangasPage(result.data.map { it.toSManga(cdnUrl) }, result.meta.pagination.hasNextPage())
     }
 
@@ -99,7 +100,7 @@ abstract class KappaBeast : KeiSource() {
             .addQueryParameter("pagination[pageSize]", "1")
             .build()
 
-        val data = client.get(url).parseAs<SearchResponse>().data.first()
+        val data = client.get(url, Fetch.XHR).parseAs<SearchResponse>().data.first()
         return SMangaUpdate(data.toSManga(cdnUrl), data.toSChapters())
     }
 
@@ -113,7 +114,7 @@ abstract class KappaBeast : KeiSource() {
             .addQueryParameter("pagination[pageSize]", "1")
             .build()
 
-        val data = client.get(api).parseAs<SearchResponse>().data.firstOrNull() ?: return null
+        val data = client.get(api, Fetch.XHR).parseAs<SearchResponse>().data.firstOrNull() ?: return null
         return data.toSManga(cdnUrl).apply { initialized = true }
     }
 
@@ -129,7 +130,7 @@ abstract class KappaBeast : KeiSource() {
             .addQueryParameter("pagination[pageSize]", "1")
             .build()
 
-        val html = client.get(url).parseAs<ChapterPageResponse>().data.firstOrNull()?.htmlContent
+        val html = client.get(url, Fetch.XHR).parseAs<ChapterPageResponse>().data.firstOrNull()?.htmlContent
             ?: return emptyList()
         return Jsoup.parseBodyFragment(html, baseUrl).select("div.separator > a").mapIndexed { i, element ->
             Page(i, imageUrl = element.absUrl("href").toHttpUrl().newBuilder().setPathSegment(4, "s0").build().toString())

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -40,7 +41,7 @@ abstract class MangoToons : KeiSource() {
             .apply(params)
             .build()
 
-        return client.get(url).parseAs<MangaListDto>().toMangasPage(baseUrl)
+        return client.get(url, Fetch.XHR).parseAs<MangaListDto>().toMangasPage(baseUrl)
     }
 
     // details and chapters come from the same endpoint
@@ -50,7 +51,7 @@ abstract class MangoToons : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val dto = client.get("$apiUrl/obras/${manga.url.mangaId()}").parseAs<MangaDto>()
+        val dto = client.get("$apiUrl/obras/${manga.url.mangaId()}", Fetch.XHR).parseAs<MangaDto>()
 
         return SMangaUpdate(dto.toSManga(baseUrl), dto.chapterList())
     }
@@ -59,7 +60,7 @@ abstract class MangoToons : KeiSource() {
         val mangaId = chapter.url.mangaId()
         val number = chapter.url.chapterNumber()
 
-        return client.get("$apiUrl/leitor/obras/$mangaId/capitulos/$number/manifest")
+        return client.get("$apiUrl/leitor/obras/$mangaId/capitulos/$number/manifest", Fetch.XHR)
             .parseAs<ManifestDto>()
             .toPageList()
     }

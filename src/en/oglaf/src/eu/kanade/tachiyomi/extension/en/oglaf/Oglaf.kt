@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -15,7 +16,6 @@ import keiyoushi.utils.asJsoup
 abstract class Oglaf : KeiSource() {
 
     override val supportsLatest = false
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val manga = SManga.create().apply {
             title = "Oglaf"
@@ -42,7 +42,7 @@ abstract class Oglaf : KeiSource() {
     ): SMangaUpdate {
         if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
         val chapterList = document.select("a:has(img[width=400])").mapNotNull { element ->
             val href = element.attr("href")
             val nameMatch = nameRegex.find(href) ?: return@mapNotNull null
@@ -63,7 +63,7 @@ abstract class Oglaf : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val pages = mutableListOf<Page>()
-        var document = client.get(baseUrl + chapter.url).asJsoup()
+        var document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
 
         while (true) {
             val imageUrl = document.selectFirst("img#strip")?.attr("abs:src") ?: break
@@ -71,7 +71,7 @@ abstract class Oglaf : KeiSource() {
 
             val nextUrl = document.selectFirst("a[rel=next]")?.attr("href")
             if (nextUrl != null && urlRegex.matches(nextUrl)) {
-                document = client.get(baseUrl + nextUrl).asJsoup()
+                document = client.get(baseUrl + nextUrl, Fetch.DOCUMENT).asJsoup()
             } else {
                 break
             }

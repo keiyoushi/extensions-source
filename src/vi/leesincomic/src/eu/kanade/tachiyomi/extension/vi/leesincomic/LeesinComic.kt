@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -74,7 +75,7 @@ abstract class LeesinComic : KeiSource() {
                     ?.let { return@coroutineScope it.second }
 
                 val job = catalogJob ?: async {
-                    client.get("$baseUrl/api.php?action=get_comics")
+                    client.get("$baseUrl/api.php?action=get_comics", Fetch.XHR)
                         .parseAs<ComicsResponse>().comics
                 }.also { catalogJob = it }
 
@@ -186,7 +187,7 @@ abstract class LeesinComic : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.url.slugFromUrl()
-        val comic = client.get("$baseUrl/api.php?action=get_comic&id=$slug")
+        val comic = client.get("$baseUrl/api.php?action=get_comic&id=$slug", Fetch.XHR)
             .parseAs<ComicResponse>().comic
 
         return SMangaUpdate(
@@ -249,7 +250,7 @@ abstract class LeesinComic : KeiSource() {
             .addQueryParameter("chapterNumber", chapterNumber)
             .build()
 
-        val images = client.get(apiUrl).parseAs<ChapterResponse>().chapter.images
+        val images = client.get(apiUrl, Fetch.XHR).parseAs<ChapterResponse>().chapter.images
         return images.mapIndexed { index, url ->
             Page(index, imageUrl = url.fixImageHost())
         }
@@ -260,7 +261,7 @@ abstract class LeesinComic : KeiSource() {
     override val supportsFilterFetching: Boolean get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val root = client.get("$baseUrl/api.php?action=get_comics").parseAs<JsonElement>()
+        val root = client.get("$baseUrl/api.php?action=get_comics", Fetch.XHR).parseAs<JsonElement>()
         val genres = root.obj.getArrayOrNull("comics").orEmpty()
             .flatMap { (it as? JsonObject)?.getArrayOrNull("genres").orEmpty() }
             .mapNotNull { it.stringOrNull?.trim() }

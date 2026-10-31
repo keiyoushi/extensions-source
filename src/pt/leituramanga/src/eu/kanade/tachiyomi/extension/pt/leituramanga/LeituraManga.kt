@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -22,7 +23,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class LeituraManga : KeiSource() {
-
     private val apiUrl = "https://api.leituramanga.net"
 
     private val cdnUrl = "https://cdn.leituramanga.net"
@@ -55,7 +55,7 @@ abstract class LeituraManga : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList("$apiUrl/api/manga/?sort=time&limit=24&page=$page")
 
     private suspend fun parseMangaList(url: String): MangasPage {
-        val result = client.get(url).parseAs<MangaResponseDto<MangaListDto>>()
+        val result = client.get(url, Fetch.XHR).parseAs<MangaResponseDto<MangaListDto>>()
         val mangas = result.data.data.map { it.toSManga(cdnUrl) }
         val hasNext = result.data.pagination.let { it.page < it.totalPage }
         return MangasPage(mangas, hasNext)
@@ -111,7 +111,7 @@ abstract class LeituraManga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         manga.apply {
             title = document.selectFirst("h1")!!.text()
@@ -142,7 +142,7 @@ abstract class LeituraManga : KeiSource() {
         val slug = document.location().toHttpUrl().pathSegments.last { it.isNotEmpty() }
 
         // Using the exact limit from the frontend so we get the 80/min limit instead of the default 3/min limit
-        val result = client.get("$apiUrl/api/chapter/get-by-manga-id?mangaId=$mangaId&page=1&limit=9007199254740991")
+        val result = client.get("$apiUrl/api/chapter/get-by-manga-id?mangaId=$mangaId&page=1&limit=9007199254740991", Fetch.XHR)
             .parseAs<MangaResponseDto<ChapterListDto>>()
 
         return SMangaUpdate(manga, result.data.data.map { it.toSChapter(slug) })
@@ -151,7 +151,7 @@ abstract class LeituraManga : KeiSource() {
     // ================= Pages ==================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val dto = client.get(getChapterUrl(chapter)).extractNextJs<ChapterPageDto> {
+        val dto = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).extractNextJs<ChapterPageDto> {
             val chapter = (it as? JsonObject)?.get("chapter") as? JsonObject
             chapter?.containsKey("images") == true
         } ?: throw IOException("Páginas não encontradas")

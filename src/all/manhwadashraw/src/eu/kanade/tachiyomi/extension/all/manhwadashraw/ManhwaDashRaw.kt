@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -30,14 +31,14 @@ abstract class ManhwaDashRaw : MadaraNoAjax() {
         if (slug.isEmpty()) return MangasPage(emptyList(), false)
 
         val token = searchToken?.takeIf { page > 1 }
-            ?: client.get(baseUrl).asJsoup().selectFirst("input[name=mbk_token]")!!.attr("value").also { searchToken = it }
+            ?: client.get(baseUrl, Fetch.DOCUMENT).asJsoup().selectFirst("input[name=mbk_token]")!!.attr("value").also { searchToken = it }
 
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("search/$token/$slug/")
             if (page > 1) addPathSegments("page/$page/")
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return MangasPage(parseArchive(document), document.selectFirst(nextPageSelector()) != null)
     }
 

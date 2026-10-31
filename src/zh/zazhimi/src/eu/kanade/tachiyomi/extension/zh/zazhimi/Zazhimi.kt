@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -29,7 +30,7 @@ abstract class Zazhimi : KeiSource() {
     // Popular
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val result = client.get("$apiUrl/index.php?p=$page&s=20").parseAs<IndexResponse>()
+        val result = client.get("$apiUrl/index.php?p=$page&s=20", Fetch.XHR).parseAs<IndexResponse>()
         val mangas = result.new.map(NewItem::toSManga)
         return MangasPage(mangas, mangas.isNotEmpty())
     }
@@ -56,7 +57,7 @@ abstract class Zazhimi : KeiSource() {
             url.addPathSegment("search.php").addQueryParameter("k", query)
         }
         url.addQueryParameter("p", page.toString()).addQueryParameter("s", "20")
-        val result = client.get(url.build()).parseAs<SearchResponse>()
+        val result = client.get(url.build(), Fetch.XHR).parseAs<SearchResponse>()
         return MangasPage(result.magazine.map(SearchItem::toSManga), true)
     }
 
@@ -68,7 +69,7 @@ abstract class Zazhimi : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val result = client.get(apiUrl + manga.url).parseAs<ShowResponse>()
+        val result = client.get(apiUrl + manga.url, Fetch.XHR).parseAs<ShowResponse>()
         if (result.content.isEmpty()) throw IllegalStateException("内容解析为空！")
         val item = result.content[0]
         val details = SManga.create().apply {
@@ -90,7 +91,7 @@ abstract class Zazhimi : KeiSource() {
     // Manga View Page
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val result = client.get(apiUrl + chapter.url).parseAs<ShowResponse>()
+        val result = client.get(apiUrl + chapter.url, Fetch.XHR).parseAs<ShowResponse>()
         return result.content.mapIndexed { i, it -> it.toPage(i) }
     }
 }

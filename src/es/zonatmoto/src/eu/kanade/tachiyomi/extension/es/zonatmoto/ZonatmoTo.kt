@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -37,7 +38,7 @@ abstract class ZonatmoTo : KeiSource() {
             .addQueryParameter("postType", "any")
             .addQueryParameter("postsPerPage", "50")
             .build()
-        val mangas = client.get(url).parseAs<TopViewsResponseDto>().data?.items.orEmpty().mapNotNull {
+        val mangas = client.get(url, Fetch.XHR).parseAs<TopViewsResponseDto>().data?.items.orEmpty().mapNotNull {
             it.toSManga()
         }
         return MangasPage(mangas, false)
@@ -83,7 +84,7 @@ abstract class ZonatmoTo : KeiSource() {
             addQueryParameter("search", it)
         } ?: addQueryParameter("orderBy", "post_modified")
     }.let {
-        parseSearch(client.get(it.build()))
+        parseSearch(client.get(it.build(), Fetch.XHR))
     }
 
     private fun parseSearch(response: Response): MangasPage {
@@ -114,7 +115,7 @@ abstract class ZonatmoTo : KeiSource() {
 
         val updatedManga = async {
             if (fetchDetails) {
-                client.get(mangaUrl).parseAs<SingleMangaResponseDto>()
+                client.get(mangaUrl, Fetch.XHR).parseAs<SingleMangaResponseDto>()
                     .data
                     ?.toSManga()
                     ?: throw Exception("Unable to parse manga details")
@@ -150,13 +151,13 @@ abstract class ZonatmoTo : KeiSource() {
     }
 
     private suspend fun getChapters(url: HttpUrl, mangaSlug: String): List<SChapter> = coroutineScope {
-        val firstPageDto = client.get(url).parseAs<ChapterListResponseDto>()
+        val firstPageDto = client.get(url, Fetch.XHR).parseAs<ChapterListResponseDto>()
         val totalPages = firstPageDto.data?.pagination?.totalPages ?: 1
 
         val nextItems = (2..totalPages).map { page ->
             async {
                 val pageUrl = url.newBuilder().setQueryParameter("page", "$page").build()
-                client.get(pageUrl)
+                client.get(pageUrl, Fetch.XHR)
                     .parseAs<ChapterListResponseDto>()
                     .data?.items.orEmpty()
             }
@@ -179,6 +180,7 @@ abstract class ZonatmoTo : KeiSource() {
 
         val chapterData = client.get(
             "$apiUrl/single/manga/$mangaSlug/$chapterSlug",
+            Fetch.XHR,
         ).parseAs<SingleChapterResponseDto>().data?.chapter
             ?: throw Exception("Unable to parse chapter pages")
 

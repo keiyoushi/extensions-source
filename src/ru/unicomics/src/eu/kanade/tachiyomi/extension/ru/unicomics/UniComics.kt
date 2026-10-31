@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -33,7 +34,7 @@ abstract class UniComics : KeiSource() {
         rateLimit(3)
     }
 
-    override suspend fun getPopularManga(page: Int): MangasPage = comicsGridPage(client.get("$baseUrl/comics/series/page/$page").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = comicsGridPage(client.get("$baseUrl/comics/series/page/$page", Fetch.DOCUMENT).asJsoup())
 
     private fun comicsGridPage(document: Document): MangasPage {
         val mangas = document.select(".comics-grid .comic-card").mapNotNull(::popularMangaFromElement)
@@ -57,7 +58,7 @@ abstract class UniComics : KeiSource() {
         }
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = comicsGridPage(client.get("$baseUrl/comics/online/page/$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = comicsGridPage(client.get("$baseUrl/comics/online/page/$page", Fetch.DOCUMENT).asJsoup())
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val events = filters.firstInstanceOrNull<GetEventsList>()
@@ -68,7 +69,7 @@ abstract class UniComics : KeiSource() {
             (events?.state ?: 0) > 0 -> return getEvents(page)
             (publisher?.state ?: 0) > 0 -> {
                 val publisherName = publisher!!.urls[publisher.state]
-                return comicsGridPage(client.get("$baseUrl$PATH_PUBLISHERS/$publisherName/page/$page").asJsoup())
+                return comicsGridPage(client.get("$baseUrl$PATH_PUBLISHERS/$publisherName/page/$page", Fetch.DOCUMENT).asJsoup())
             }
 
             else -> return getPopularManga(page)
@@ -81,7 +82,7 @@ abstract class UniComics : KeiSource() {
         val queryTokens = QUERY_TOKEN_REGEX.findAll(query.lowercase()).map { it.value }.toList()
         if (queryTokens.isEmpty()) return MangasPage(emptyList(), false)
 
-        val document = client.get("$baseUrl/map").asJsoup()
+        val document = client.get("$baseUrl/map", Fetch.DOCUMENT).asJsoup()
 
         // Filter before dedup: /map lists every series twice (RU and EN titles sharing
         // one slug), so a query matching only one variant must survive.
@@ -106,7 +107,7 @@ abstract class UniComics : KeiSource() {
     // The events grid is a single page on the site (no pagination).
     private suspend fun getEvents(page: Int): MangasPage {
         if (page > 1) return MangasPage(emptyList(), false)
-        val document = client.get("$baseUrl$PATH_EVENTS").asJsoup()
+        val document = client.get("$baseUrl$PATH_EVENTS", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".events-grid .event-card, .list_events").mapNotNull { element ->
             val a = element.selectFirst("a") ?: return@mapNotNull null
             val url = a.absUrl("href").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
@@ -126,7 +127,7 @@ abstract class UniComics : KeiSource() {
         val titleid = url.pathSegments.getOrNull(2) ?: return null
 
         return mangaDetailsParse(
-            client.get("$baseUrl$PATH_URL$titleid").asJsoup(),
+            client.get("$baseUrl$PATH_URL$titleid", Fetch.DOCUMENT).asJsoup(),
         ).apply {
             this.url = PATH_URL + titleid
         }
@@ -141,7 +142,7 @@ abstract class UniComics : KeiSource() {
         val updatedManga = async {
             if (fetchDetails) {
                 mangaDetailsParse(
-                    client.get(getMangaUrl(manga)).asJsoup(),
+                    client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup(),
                 )
             } else {
                 manga
@@ -190,7 +191,7 @@ abstract class UniComics : KeiSource() {
     private suspend fun getChapters(manga: SManga): List<SChapter> = coroutineScope {
         val chapters = mutableListOf<SChapter>()
         val url = baseUrl + manga.url
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val isIssue = document.selectFirst(".issue-info-grid") != null
         if (isIssue) {
@@ -222,7 +223,7 @@ abstract class UniComics : KeiSource() {
 
         val pageChapters = pageUrls.map { pageUrl ->
             async {
-                client.get(pageUrl).asJsoup()
+                client.get(pageUrl, Fetch.DOCUMENT).asJsoup()
                     .select(".comics-grid .comic-card")
                     .map {
                         chapterFromElement(it)
@@ -253,7 +254,7 @@ abstract class UniComics : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val options = document.select("select.mobilePageSelector option")
         if (options.isNotEmpty()) {
             return options.mapIndexed { i, option ->
@@ -275,13 +276,13 @@ abstract class UniComics : KeiSource() {
     }
 
     override suspend fun getImageUrl(page: Page): String {
-        val document = client.get(page.url).asJsoup()
+        val document = client.get(page.url, Fetch.DOCUMENT).asJsoup()
         return document.selectFirst(".image_online, #b_image, #image")?.absUrl("src") ?: ""
     }
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData() = client.get("$baseUrl/comics/publishers").asJsoup()
+    override suspend fun fetchFilterData() = client.get("$baseUrl/comics/publishers", Fetch.DOCUMENT).asJsoup()
         .select(".publishers-card > a:first-child")
         .associate { it.text() to it.attr("href").substringAfterLast("/") }.toJsonElement()
 

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -39,9 +40,9 @@ abstract class ScanReader : KeiSource() {
             } else {
                 "$baseUrl/bibliotheque/?sort=views"
             }
-            client.get(url).asJsoup()
+            client.get(url, Fetch.DOCUMENT).asJsoup()
         } else {
-            client.get(baseUrl).asJsoup()
+            client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         }
 
         val mangas = if (page > 1) {
@@ -67,7 +68,7 @@ abstract class ScanReader : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = if (page > 1) "$baseUrl/dernieres-sorties/page/$page/" else "$baseUrl/dernieres-sorties/"
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div.manga-cover")
             .mapNotNull { mangaFromLatestCard(it) }
             .filterNot { it.title.contains("(Novel)") }
@@ -82,7 +83,7 @@ abstract class ScanReader : KeiSource() {
             .addQueryParameter("s", query.trim())
             .addQueryParameter("post_type", "manga")
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div.manga-card")
             .mapNotNull { mangaFromCard(it) }
             .filterNot { it.title.contains("(Novel)") }
@@ -108,7 +109,7 @@ abstract class ScanReader : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val mangaUrl = getMangaUrl(manga)
-        val document = client.get(mangaUrl).asJsoup()
+        val document = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
 
         parseMangaDetails(document, manga)
 
@@ -176,6 +177,7 @@ abstract class ScanReader : KeiSource() {
         val response = client.post(
             "$baseUrl/wp-admin/admin-ajax.php",
             ajaxHeaders,
+            Fetch.XHR.from(mangaUrl),
             ajaxBody,
         )
 
@@ -218,7 +220,7 @@ abstract class ScanReader : KeiSource() {
     // ====================== Page List ======================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val body = client.get(baseUrl + chapter.url).body.string()
+        val body = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).body.string()
 
         val arrayMatch = imageArrayRegex.find(body) ?: return emptyList()
 

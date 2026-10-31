@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
@@ -57,7 +58,7 @@ abstract class EbookRenta :
             addQueryParameter("page", page.toString())
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".search-typeDesc-listItem").map {
             SManga.create().apply {
                 val link = it.selectFirst("a.search-typeDesc-titleLink")!!
@@ -77,7 +78,7 @@ abstract class EbookRenta :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val details = SManga.create().apply {
             title = document.selectFirst("h1.fvSeries-desc-title")!!.text()
             author = document.select("#js-productDetailsSection [data-schema-attribute=author] a").joinToString { it.text() }
@@ -109,9 +110,9 @@ abstract class EbookRenta :
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/renta/sc/jump/viewer?type=${chapter.memo["type"]!!.string}&prd_tid=9-${chapter.url}&style=ch"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        var document = client.get(getChapterUrl(chapter)).asJsoup()
+        var document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         document.selectFirst("meta[http-equiv=refresh]")?.let {
-            document = client.get(it.attr("content").substringAfter("URL=")).asJsoup()
+            document = client.get(it.attr("content").substringAfter("URL="), Fetch.DOCUMENT).asJsoup()
         }
         if ("/view_strm/" in document.location()) throw Exception("AniComix videos are not supported!")
 
@@ -139,7 +140,7 @@ abstract class EbookRenta :
                     .addQueryParameter("target_column", column)
                     .addQueryParameter("mode", "facet")
                     .build()
-                client.get(url).parseAs<FacetResponse>().response
+                client.get(url, Fetch.XHR).parseAs<FacetResponse>().response
             }
         }.awaitAll()
         FilterData(genres, categories, keywords, deals, onSale).toJsonElement()

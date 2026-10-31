@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -79,7 +80,7 @@ abstract class Kyokotsu : KeiSource() {
             addQueryParameter("lang", lang)
         }.build()
 
-        return client.get(url).use { response ->
+        return client.get(url, Fetch.XHR).use { response ->
             val data = response.parseAs<ApiResponse<SearchDto>>().data
             val mangas = data.items.map { it.toSManga(lang, baseUrl) }
             val hasNextPage = page * PAGINATION < data.total
@@ -113,7 +114,7 @@ abstract class Kyokotsu : KeiSource() {
         val mangaNew = if (fetchDetails || (fetchChapters && manga.memo["source"]?.stringOrNull == null)) {
             val url = "$baseUrl/title?slug=${manga.url}"
             val engGenres = if (lang != "ru") getGenreMap() else emptyMap()
-            client.get(url).parseAs<ApiResponse<FullMangaDto>>().data.toSManga(lang, baseUrl, engGenres, loc)
+            client.get(url, Fetch.XHR).parseAs<ApiResponse<FullMangaDto>>().data.toSManga(lang, baseUrl, engGenres, loc)
         } else {
             manga
         }
@@ -121,7 +122,7 @@ abstract class Kyokotsu : KeiSource() {
         val chaptersNew = if (fetchChapters) {
             val ending = if (lang != "ru") "&lang=$lang" else ""
             val url = "$baseUrl/chapters/live?fresh=1&slug=${manga.url}$ending"
-            val response = client.get(url).parseAs<ApiResponse<List<ChapterDto>>>()
+            val response = client.get(url, Fetch.XHR).parseAs<ApiResponse<List<ChapterDto>>>()
             response.data.map { it.toSChapter(lang, mangaNew.memo) }.asReversed()
         } else {
             chapters
@@ -163,7 +164,7 @@ abstract class Kyokotsu : KeiSource() {
             else -> "$baseUrl/proxy?e=" + Base64.encodeToString("https://api.remanga.org/api/titles/chapters/$id/".toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
         }
 
-        val response = client.get(url, ensureSuccess = false).use { resp ->
+        val response = client.get(url, Fetch.XHR, ensureSuccess = false).use { resp ->
             val body = resp.body.string()
             val apiError = runCatching { body.parseAs<ApiError>() }.getOrNull()
             if (apiError?.error?.isNotBlank() == true) throw Exception(apiError.error)
@@ -178,7 +179,7 @@ abstract class Kyokotsu : KeiSource() {
                 urls = data.content.pages?.flatten()?.mapNotNull { it.link?.replace("img.reimg.org", "img.reimg2.org") },
             ).toJsonRequestBody()
 
-            client.post("$baseUrl/proxy/sign", body).parseAs<ApiResponse<List<String>>>()
+            client.post("$baseUrl/proxy/sign", Fetch.XHR, body).parseAs<ApiResponse<List<String>>>()
         } else {
             response.parseAs<ApiResponse<List<String>>>()
         }
@@ -193,14 +194,14 @@ abstract class Kyokotsu : KeiSource() {
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val url = "$baseUrl/similar?slug=${manga.url}&lang=$lang"
-        return client.get(url).parseAs<ApiResponse<List<SearchMangaDto>>>().data.map { it.toSManga(lang, baseUrl) }
+        return client.get(url, Fetch.XHR).parseAs<ApiResponse<List<SearchMangaDto>>>().data.map { it.toSManga(lang, baseUrl) }
     }
 
     // ============================== Filters ===============================
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val response = client.get("$baseUrl/genres?limit=500").parseAs<ApiResponse<List<Genres>>>()
+        val response = client.get("$baseUrl/genres?limit=500", Fetch.XHR).parseAs<ApiResponse<List<Genres>>>()
 
         val data = if (lang == "ru") {
             response.data.map { it.nameRu to it.nameRu }.sortedBy { it.first }

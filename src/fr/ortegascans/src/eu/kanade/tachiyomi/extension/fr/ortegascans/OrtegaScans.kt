@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -71,7 +72,7 @@ abstract class OrtegaScans :
             addQueryParameter("maxChapters", maxChaptersFilter.value)
         }.build()
 
-        val dto = client.get(url).parseAs<SeriesResponse>()
+        val dto = client.get(url, Fetch.XHR).parseAs<SeriesResponse>()
         val mangas = dto.data.map { it.toSManga(baseUrl) }
         return MangasPage(mangas, dto.hasMore)
     }
@@ -82,7 +83,7 @@ abstract class OrtegaScans :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val dto = client.get("$baseUrl/serie/${manga.mangaSlug()}", rscHeaders)
+        val dto = client.get("$baseUrl/serie/${manga.mangaSlug()}", rscHeaders, Fetch.XHR)
             .extractNextJs<MangaDetailsDataDto>()
             ?: throw Exception("Impossible d'extraire les détails du manga")
 
@@ -98,7 +99,7 @@ abstract class OrtegaScans :
     override val supportsRelatedMangas = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get("$baseUrl/serie/${manga.mangaSlug()}").asJsoup()
+        val document = client.get("$baseUrl/serie/${manga.mangaSlug()}", Fetch.DOCUMENT).asJsoup()
         val section = document.selectFirst("section:has(h2:containsOwn(Vous aimeriez))")
             ?: return emptyList()
 
@@ -126,6 +127,7 @@ abstract class OrtegaScans :
         val response = client.get(
             "$baseUrl/serie/${chapter.memo.getString("mangaSlug")}/chapter/${chapter.memo.getString("number")}",
             rscHeaders,
+            Fetch.XHR,
         )
         val dto = response.extractNextJs<PageListDto>()
             ?: throw Exception("Impossible d'extraire la liste des pages")

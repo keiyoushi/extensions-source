@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -41,7 +42,7 @@ abstract class TheGirlFromRandomChattingMangaOnline : KeiSource() {
     ): SMangaUpdate {
         val updatedManga = if (fetchDetails) createManga() else manga
         val updatedChapters = if (fetchChapters) {
-            client.get("$baseUrl/wp-json/mg/v1/chapters-list").parseAs<ChaptersListDto>().map(ChapterDto::toSChapter)
+            client.get("$baseUrl/wp-json/mg/v1/chapters-list", Fetch.XHR).parseAs<ChaptersListDto>().map(ChapterDto::toSChapter)
         } else {
             chapters
         }
@@ -51,13 +52,13 @@ abstract class TheGirlFromRandomChattingMangaOnline : KeiSource() {
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/manga/${chapter.url}"
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select("p > noscript > img")
         .map { img -> img.attr("src") }
         .mapIndexed { i, src -> Page(i, imageUrl = src) }
 
     private suspend fun createManga(): SManga {
-        val mainPage = client.get(baseUrl).asJsoup()
+        val mainPage = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
 
         return SManga.create().apply {
             url = "the-girl-from-random-chatting"

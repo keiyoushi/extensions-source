@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -26,7 +27,7 @@ abstract class Love4u : FMReader() {
             .addQueryParameter("mid", mangaId)
             .build()
 
-        return chapterListParse(client.get(xhrUrl).asJsoup())
+        return chapterListParse(client.get(xhrUrl, Fetch.DOCUMENT).asJsoup())
     }
 
     override fun chapterFromElement(element: Element, mangaTitle: String): SChapter = SChapter.create().apply {
@@ -60,7 +61,7 @@ abstract class Love4u : FMReader() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         val chapterId = document.selectFirst("#chapter")
             ?.`val`()
@@ -70,7 +71,7 @@ abstract class Love4u : FMReader() {
             .addQueryParameter("cid", chapterId)
             .build()
 
-        return pageListParse(client.get(xhrUrl).asJsoup())
+        return pageListParse(client.get(xhrUrl, Fetch.DOCUMENT).asJsoup())
     }
 
     companion object {

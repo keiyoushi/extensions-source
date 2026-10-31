@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -43,7 +44,7 @@ abstract class Lmtos : KeiSource() {
             filters.firstInstanceOrNull<NsfwFilter>()?.selected?.takeIf { it != "all" }?.let { addQueryParameter("adult", it) }
         }.build()
 
-        val result = client.get(url).asJsoup().extractNextJs<MangaList>() ?: return MangasPage(emptyList(), false)
+        val result = client.get(url, Fetch.DOCUMENT).asJsoup().extractNextJs<MangaList>() ?: return MangasPage(emptyList(), false)
         return MangasPage(result.mangas.map { it.toSManga() }, page * result.pageSize < result.total)
     }
 
@@ -57,7 +58,7 @@ abstract class Lmtos : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val details = document.extractNextJs<MangaDetails>()!!.manga.toSManga()
 
@@ -72,7 +73,7 @@ abstract class Lmtos : KeiSource() {
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/manga/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val result = client.get(getChapterUrl(chapter)).asJsoup().extractNextJs<ChapterPages>() ?: return emptyList()
+        val result = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup().extractNextJs<ChapterPages>() ?: return emptyList()
         return result.chapter.pages.orEmpty().mapIndexed { index, url ->
             Page(index, imageUrl = url)
         }

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -24,7 +25,7 @@ abstract class Fliptru : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         if (page > 1) return MangasPage(emptyList(), false)
-        val document = client.get("$baseUrl/most_popular_list/").asJsoup()
+        val document = client.get("$baseUrl/most_popular_list/", Fetch.DOCUMENT).asJsoup()
         return MangasPage(parseComicCards(document), false)
     }
 
@@ -44,7 +45,7 @@ abstract class Fliptru : KeiSource() {
         val url = base.toHttpUrl().newBuilder()
             .apply { if (page > 1) addQueryParameter("page", page.toString()) }
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val hasNextPage = document.selectFirst("#loadMoreComics a") != null
         return MangasPage(parseComicCards(document), hasNextPage)
     }
@@ -53,7 +54,7 @@ abstract class Fliptru : KeiSource() {
         val url = "$baseUrl/search/".toHttpUrl().newBuilder()
             .addQueryParameter("term", query)
             .build()
-        val mangas = client.get(url).parseAs<List<SearchResultDto>>()
+        val mangas = client.get(url, Fetch.XHR).parseAs<List<SearchResultDto>>()
             .mapNotNull { result ->
                 val path = result.url.substringBefore("?").removeSuffix("/info")
                 if (!path.startsWith("/comic/")) return@mapNotNull null
@@ -100,7 +101,7 @@ abstract class Fliptru : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga.url),
             chapters = parseChapterList(document),
@@ -153,7 +154,7 @@ abstract class Fliptru : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(baseUrl + chapter.url)
+        val response = client.get(baseUrl + chapter.url, Fetch.DOCUMENT)
         if (response.request.url.encodedPath.startsWith("/users/")) {
             throw IOException("Este capítulo exige login (restrito por idade)")
         }

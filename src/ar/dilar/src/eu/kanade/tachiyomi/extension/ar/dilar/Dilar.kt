@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -27,7 +28,7 @@ abstract class Dilar : KeiSource() {
     // Popular
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$baseUrl/api/rankings")
+        val response = client.get("$baseUrl/api/rankings", Fetch.XHR)
         val data = response.parseAs<RankingsDto>()
         val entries = data.topSeries
             .filterNot { it.isNovel() }
@@ -38,7 +39,7 @@ abstract class Dilar : KeiSource() {
     // Latest
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val response = client.get("$baseUrl/api/series?page=$page")
+        val response = client.get("$baseUrl/api/series?page=$page", Fetch.XHR)
         val data = response.parseAs<SeriesListDto>()
         val entries = data.series
             .filterNot { it.isNovel() }
@@ -64,7 +65,7 @@ abstract class Dilar : KeiSource() {
             translationStatus = IncludeExcludeDto(filters.firstInstanceOrNull<TranslationStatusFilter>()?.checked.orEmpty(), emptyList()),
             over17 = filters.firstInstanceOrNull<Over17Filter>()?.toValue(),
         ).toJsonRequestBody()
-        val response = client.post("$baseUrl/api/search/filter", body)
+        val response = client.post("$baseUrl/api/search/filter", Fetch.XHR, body)
         val data = response.parseAs<SearchListDto>()
 
         return MangasPage(data.rows.map { it.toSManga() }, data.hasNextPage)
@@ -74,7 +75,7 @@ abstract class Dilar : KeiSource() {
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData() = client.get("$baseUrl/api/categories")
+    override suspend fun fetchFilterData() = client.get("$baseUrl/api/categories", Fetch.XHR)
         .parseAs<List<CategoryGroupDto>>()
         .toJsonElement()
 
@@ -102,14 +103,14 @@ abstract class Dilar : KeiSource() {
     ): SMangaUpdate = coroutineScope {
         val mangaDeferred = async {
             if (!fetchDetails) return@async manga
-            client.get("$baseUrl/api/series/${manga.getMangaId()}")
+            client.get("$baseUrl/api/series/${manga.getMangaId()}", Fetch.XHR)
                 .parseAs<SeriesDto>()
                 .toSManga()
         }
 
         val chaptersDeferred = async {
             if (!fetchChapters) return@async chapters
-            val response = client.get("$baseUrl/api/series/${manga.getMangaId()}/chapters")
+            val response = client.get("$baseUrl/api/series/${manga.getMangaId()}/chapters", Fetch.XHR)
             response.parseAs<ChapterListDto>().chapters.flatMap { chapter ->
                 chapter.releases.map { it.toSChapter(chapter, manga.url) }
             }.sortedByDescending { it.chapter_number }

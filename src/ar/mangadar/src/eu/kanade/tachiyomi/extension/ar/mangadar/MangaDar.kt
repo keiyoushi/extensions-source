@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -34,7 +35,7 @@ abstract class MangaDar : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/manga/page/$page/".toHttpUrl()
-        val response = client.get(url)
+        val response = client.get(url, Fetch.DOCUMENT)
         return parseMangaListPage(response)
     }
 
@@ -47,7 +48,7 @@ abstract class MangaDar : KeiSource() {
             urlBuilder.addPathSegment("page")
             urlBuilder.addPathSegment(page.toString())
         }
-        val response = client.get(urlBuilder.build())
+        val response = client.get(urlBuilder.build(), Fetch.DOCUMENT)
         return parseMangaListPage(response)
     }
 
@@ -59,7 +60,7 @@ abstract class MangaDar : KeiSource() {
                 .addQueryParameter("action", "mangaverse_search")
                 .addQueryParameter("q", query)
                 .build()
-            val response = client.get(url)
+            val response = client.get(url, Fetch.DOCUMENT)
             return parseSearchJson(response)
         }
 
@@ -85,7 +86,7 @@ abstract class MangaDar : KeiSource() {
         if (status.isNotEmpty()) urlBuilder.addQueryParameter("status", status)
         if (genre.isNotEmpty()) urlBuilder.addQueryParameter("genre", genre)
 
-        val response = client.get(urlBuilder.build())
+        val response = client.get(urlBuilder.build(), Fetch.DOCUMENT)
         return parseMangaListPage(response)
     }
 
@@ -94,7 +95,7 @@ abstract class MangaDar : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val slug = url.pathSegments.last { it.isNotEmpty() }
         if (slug.isBlank() || slug == "page") return null
-        val response = client.get(url)
+        val response = client.get(url, Fetch.DOCUMENT)
         return parseMangaDetails(response)
     }
 
@@ -105,7 +106,7 @@ abstract class MangaDar : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val mangaUrl = "$baseUrl/manga/${manga.url}".toHttpUrl()
-        val response = client.get(mangaUrl)
+        val response = client.get(mangaUrl, Fetch.DOCUMENT)
         val doc = response.asJsoup()
 
         val mangaDetail = parseMangaDetailsFromDoc(doc).apply { url = manga.url }
@@ -118,7 +119,7 @@ abstract class MangaDar : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = "$baseUrl${chapter.url}".toHttpUrl()
-        val response = client.get(url)
+        val response = client.get(url, Fetch.DOCUMENT)
         val doc = response.asJsoup()
         return doc.select(".reader-page img").mapIndexed { index, img ->
             val imageUrl = img.attr("src").ifBlank { img.attr("data-src") }

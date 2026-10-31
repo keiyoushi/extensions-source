@@ -17,6 +17,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -72,7 +74,7 @@ abstract class Taiyo : KeiSource() {
         }
         val id = url.pathSegments.getOrNull(1) ?: return null
 
-        return parseMangaDetails(client.get("$baseUrl/media/$id").asJsoup())
+        return parseMangaDetails(client.get("$baseUrl/media/$id", Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -93,6 +95,7 @@ abstract class Taiyo : KeiSource() {
         val obj = client.post(
             "https://meilisearch.${baseUrl.substringAfterLast("/")}/multi-search",
             getApiHeaders(),
+            Fetch.XHR,
             requestBody,
         ).parseAs<SearchResultDto>()
 
@@ -123,7 +126,7 @@ abstract class Taiyo : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
         val details = if (fetchDetails) {
-            async { parseMangaDetails(client.get(getMangaUrl(manga)).asJsoup()) }
+            async { parseMangaDetails(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()) }
         } else {
             null
         }
@@ -182,7 +185,7 @@ abstract class Taiyo : KeiSource() {
                     .addQueryParameter("input", input.toJsonString())
                     .build()
 
-                val parsed = client.get(pageUrl).parseAs<ChapterListDto> {
+                val parsed = client.get(pageUrl, Fetch.XHR).parseAs<ChapterListDto> {
                     CHAPTER_REGEX.find(it)!!.groupValues[1]
                 }
 
@@ -206,7 +209,7 @@ abstract class Taiyo : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val chapterObj = document.parseJsonFromDocument<MediaChapterDto>("mediaChapter") {
             substringBefore(",\\\"chapters\\\"") + "}}"
         }!!
@@ -259,7 +262,7 @@ abstract class Taiyo : KeiSource() {
     }
 
     private fun fetchBearerToken(): String {
-        val scripts = client.newCall(GET(baseUrl, headers))
+        val scripts = client.newCall(GET(baseUrl, headers).newBuilder().fetch(Fetch.DOCUMENT).build())
             .execute().asJsoup()
             .select("script[src*=next]:not([nomodule]):not([src*=app])")
 
@@ -274,7 +277,7 @@ abstract class Taiyo : KeiSource() {
         val elements = scripts.toList().reversed()
         for (element in elements) {
             val scriptUrl = element.attr("src")
-            val script = client.newCall(GET("$baseUrl$scriptUrl", headers))
+            val script = client.newCall(GET("$baseUrl$scriptUrl", headers).newBuilder().fetch(Fetch.SCRIPT).build())
                 .execute().body.string()
             if (TOKEN_REGEX.containsMatchIn(script)) {
                 return script

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -78,10 +79,10 @@ abstract class MangaMukai : KeiSource() {
     ): SMangaUpdate = coroutineScope {
         val id = mangaId(manga)
         val details = async {
-            if (fetchDetails) client.get("$apiUrl/manga/$id").parseAs<DetailsDto>().toSManga(manga.url) else manga
+            if (fetchDetails) client.get("$apiUrl/manga/$id", Fetch.XHR).parseAs<DetailsDto>().toSManga(manga.url) else manga
         }
         val chapterList = async {
-            if (fetchChapters) client.get("$apiUrl/series/$id/chapters").parseAs<ChaptersDto>().chapters.asReversed().map { it.toSChapter() } else chapters
+            if (fetchChapters) client.get("$apiUrl/series/$id/chapters", Fetch.XHR).parseAs<ChaptersDto>().chapters.asReversed().map { it.toSChapter() } else chapters
         }
 
         SMangaUpdate(details.await().apply { memo = buildJsonObject { put(MANGA_ID, id) } }, chapterList.await())
@@ -92,7 +93,7 @@ abstract class MangaMukai : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         // Chapters saved by the MangaThemesia version store the post slug
         if (chapter.url.startsWith("/")) throw Exception("Refresh chapter list")
-        return client.get("$apiUrl/chapters/content?id=${chapter.url}", ensureSuccess = false).use { response ->
+        return client.get("$apiUrl/chapters/content?id=${chapter.url}", Fetch.XHR, ensureSuccess = false).use { response ->
             // Paid chapters answer 401 until they're bought with the site's coins
             if (response.code == 401) return emptyList()
             if (!response.isSuccessful) throw HttpException(response.code)
@@ -102,7 +103,7 @@ abstract class MangaMukai : KeiSource() {
 
     override val supportsRelatedMangas = true
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get("$apiUrl/related/${mangaId(manga)}?limit=10")
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get("$apiUrl/related/${mangaId(manga)}?limit=10", Fetch.XHR)
         .parseAs<CatalogDto>().mangas.map { it.toSManga() }
 
     override val supportsFilterFetching = true
@@ -129,7 +130,7 @@ abstract class MangaMukai : KeiSource() {
         )
     }
 
-    private suspend fun fetchCatalog(): List<MangaDto> = client.get("$apiUrl/catalog").parseAs<CatalogDto>().mangas
+    private suspend fun fetchCatalog(): List<MangaDto> = client.get("$apiUrl/catalog", Fetch.XHR).parseAs<CatalogDto>().mangas
 
     private suspend fun mangaId(manga: SManga): String = manga.memo[MANGA_ID]?.stringOrNull ?: resolveMangaId(manga.url)
 
@@ -137,8 +138,8 @@ abstract class MangaMukai : KeiSource() {
     private suspend fun resolveMangaId(url: String): String {
         if (url.all(Char::isDigit)) return url
         val slug = url.trimEnd('/').substringAfterLast('/')
-        val category = client.get("$wpUrl/categories?slug=$slug&_fields=id").parseAs<List<IdDto>>().first()
-        return client.get("$wpUrl/posts?categories=${category.id}&per_page=1&_fields=ero_seri").parseAs<List<SeriesRefDto>>().first().eroSeri
+        val category = client.get("$wpUrl/categories?slug=$slug&_fields=id", Fetch.XHR).parseAs<List<IdDto>>().first()
+        return client.get("$wpUrl/posts?categories=${category.id}&per_page=1&_fields=ero_seri", Fetch.XHR).parseAs<List<SeriesRefDto>>().first().eroSeri
     }
 
     companion object {

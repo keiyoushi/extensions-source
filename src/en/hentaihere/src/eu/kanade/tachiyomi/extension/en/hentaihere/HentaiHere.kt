@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -25,7 +26,7 @@ abstract class HentaiHere : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", getFilterList())
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/browse/newest/page-$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/browse/newest/page-$page", Fetch.DOCUMENT).asJsoup())
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
@@ -36,7 +37,7 @@ abstract class HentaiHere : KeiSource() {
         val slug = url.pathSegments.getOrNull(1) ?: return null
 
         val manga = SManga.create().apply { this.url = "/$type/$slug" }
-        return parseMangaDetails(client.get(getMangaUrl(manga)).asJsoup(), manga)
+        return parseMangaDetails(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup(), manga)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -60,7 +61,7 @@ abstract class HentaiHere : KeiSource() {
             }.let { baseUrl + it }
         }
 
-        return parseMangaList(client.get(url).asJsoup())
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private fun parseMangaList(document: Document): MangasPage {
@@ -80,7 +81,7 @@ abstract class HentaiHere : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val chapterList = document.select("#preview-chapter option").map { option ->
             val name = option.text().removeSuffix("(latest)").trim()
@@ -113,7 +114,7 @@ abstract class HentaiHere : KeiSource() {
         }
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .selectFirst("script[data-reader-data]")
         ?.data()
         ?.parseAs<ReaderData>()

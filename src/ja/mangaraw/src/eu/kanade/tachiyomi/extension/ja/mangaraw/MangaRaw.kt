@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -22,6 +23,7 @@ import okhttp3.OkHttpClient
 
 @Source
 abstract class MangaRaw : KeiSource() {
+
     private val apiUrl = "https://api.mangarw.com/api/v1"
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
@@ -42,7 +44,7 @@ abstract class MangaRaw : KeiSource() {
                 .addQueryParameter("limit", "24")
                 .addQueryParameter("sort", sort)
                 .build()
-        return client.get(url).parseAs<MangaListDto>().toMangasPage()
+        return client.get(url, Fetch.XHR).parseAs<MangaListDto>().toMangasPage()
     }
 
     override suspend fun getSearchMangaList(
@@ -59,7 +61,7 @@ abstract class MangaRaw : KeiSource() {
                 .newBuilder()
                 .addQueryParameter("keyword", query)
                 .build()
-        return client.get(url).parseAs<MangaListDto>().toMangasPage()
+        return client.get(url, Fetch.XHR).parseAs<MangaListDto>().toMangasPage()
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -67,7 +69,7 @@ abstract class MangaRaw : KeiSource() {
         if (url.pathSegments.firstOrNull() != "manga") return null
         val id = url.pathSegments.getOrNull(1)?.toLongOrNull() ?: return null
         return client
-            .get("$apiUrl/manga/$id")
+            .get("$apiUrl/manga/$id", Fetch.XHR)
             .parseAs<ApiResponse<MangaDto>>()
             .data
             .toSManga()
@@ -85,7 +87,7 @@ abstract class MangaRaw : KeiSource() {
             async {
                 if (fetchDetails) {
                     client
-                        .get("$apiUrl/manga/${manga.url}")
+                        .get("$apiUrl/manga/${manga.url}", Fetch.XHR)
                         .parseAs<ApiResponse<MangaDto>>()
                         .data
                         .toSManga()
@@ -97,7 +99,7 @@ abstract class MangaRaw : KeiSource() {
             async {
                 if (fetchChapters) {
                     client
-                        .get("$apiUrl/manga/${manga.url}/chapters?order=desc")
+                        .get("$apiUrl/manga/${manga.url}/chapters?order=desc", Fetch.XHR)
                         .parseAs<ApiResponse<List<ChapterDto>>>()
                         .data
                         .map { it.toSChapter() }
@@ -111,7 +113,7 @@ abstract class MangaRaw : KeiSource() {
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/chapter/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = client
-        .get("$apiUrl/chapter/${chapter.url}")
+        .get("$apiUrl/chapter/${chapter.url}", Fetch.XHR)
         .parseAs<ApiResponse<ReaderDto>>()
         .data
         .toPages()

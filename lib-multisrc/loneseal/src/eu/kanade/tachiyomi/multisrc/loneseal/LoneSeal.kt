@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -53,6 +54,7 @@ abstract class LoneSeal : KeiSource() {
             addQueryParameter("sort", "views")
             addQueryParameter("order", "desc")
         },
+        Fetch.XHR,
     ).parseAs<SearchResponseDto>().toMangasPage(page, urlLayout)
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -60,7 +62,7 @@ abstract class LoneSeal : KeiSource() {
             .addQueryParameter("sections", "latest_comic_updates")
             .addQueryParameter("updateLimit", "240") // Default: 12, 35. Max: 35, 100, 720.
             .build()
-        val response = client.get(url).parseAs<HomeSectionsDto>()
+        val response = client.get(url, Fetch.XHR).parseAs<HomeSectionsDto>()
         return MangasPage(response.latestComicUpdates.map { it.toSManga(urlLayout) }, false)
     }
 
@@ -89,6 +91,7 @@ abstract class LoneSeal : KeiSource() {
                 if (query.isNotBlank()) addQueryParameter("q", query)
                 filters.filterIsInstance<UriQueryFilter>().forEach { it.addToQuery(this) }
             },
+            Fetch.XHR,
         ).parseAs<SearchResponseDto>().toMangasPage(page, urlLayout)
 
         return when (selectedSort) {
@@ -110,7 +113,7 @@ abstract class LoneSeal : KeiSource() {
         if (segments.firstOrNull() != mangaUrlDirectory) return null
         if (segments.getOrNull(2) == "chapter") return null
         val slug = segments.getOrNull(1) ?: return null
-        return client.get("$apiUrl/series/comic/$slug")
+        return client.get("$apiUrl/series/comic/$slug", Fetch.XHR)
             .parseAs<SeriesDetailDto>()
             .toSManga(urlLayout)
             .apply { initialized = true }
@@ -122,7 +125,7 @@ abstract class LoneSeal : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val detail = client.get("$apiUrl/series/comic/${mangaSlug(manga.url)}")
+        val detail = client.get("$apiUrl/series/comic/${mangaSlug(manga.url)}", Fetch.XHR)
             .parseAs<SeriesDetailDto>()
         return SMangaUpdate(
             detail.toSManga(urlLayout),
@@ -134,7 +137,7 @@ abstract class LoneSeal : KeiSource() {
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val slug = mangaSlug(manga.url)
-        val detail = client.get("$apiUrl/series/comic/$slug").parseAs<SeriesDetailDto>()
+        val detail = client.get("$apiUrl/series/comic/$slug", Fetch.XHR).parseAs<SeriesDetailDto>()
         val keywords = detail.synopsis?.relatedKeywords().orEmpty()
         val genre = detail.genres.firstOrNull { it.slug !in overloadedGenres }?.slug
         val results = coroutineScope {
@@ -150,10 +153,10 @@ abstract class LoneSeal : KeiSource() {
             .map { it.toSManga(urlLayout) }
     }
 
-    private suspend fun searchByKeyword(keyword: String): List<MangaDto> = client.get(searchUrl(1) { addQueryParameter("q", keyword) })
+    private suspend fun searchByKeyword(keyword: String): List<MangaDto> = client.get(searchUrl(1) { addQueryParameter("q", keyword) }, Fetch.XHR)
         .parseAs<SearchResponseDto>().data
 
-    private suspend fun searchByGenre(genre: String): List<MangaDto> = client.get(searchUrl(1) { addQueryParameter("genre", genre) })
+    private suspend fun searchByGenre(genre: String): List<MangaDto> = client.get(searchUrl(1) { addQueryParameter("genre", genre) }, Fetch.XHR)
         .parseAs<SearchResponseDto>().data
 
     protected open suspend fun Headers.Builder.configureChapterHeaders() = this
@@ -162,7 +165,7 @@ abstract class LoneSeal : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (seriesSlug, chapterSlug) = chapterParts(chapter.url)
-        val dto = client.get("$apiUrl/series/comic/$seriesSlug/chapter/$chapterSlug", chapterHeaders())
+        val dto = client.get("$apiUrl/series/comic/$seriesSlug/chapter/$chapterSlug", chapterHeaders(), Fetch.XHR)
             .parseAs<ChapterPagesResponseDto>()
         val pages = toPageList(dto)
         if (pages.isEmpty()) onEmptyPages(dto)
@@ -175,7 +178,7 @@ abstract class LoneSeal : KeiSource() {
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData() = client.get("$apiUrl/genres").parseAs<JsonElement>()
+    override suspend fun fetchFilterData() = client.get("$apiUrl/genres", Fetch.XHR).parseAs<JsonElement>()
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         buildList {

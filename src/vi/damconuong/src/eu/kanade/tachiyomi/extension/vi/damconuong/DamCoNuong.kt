@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -126,7 +127,7 @@ abstract class DamCoNuong : KeiSource() {
     }
 
     private suspend fun getMangaList(url: HttpUrl): MangasPage {
-        val document = client.get(url.toString()).asJsoup()
+        val document = client.get(url.toString(), Fetch.DOCUMENT).asJsoup()
 
         val mangaCards = document.select(".manga-vertical")
         val mangas = mangaCards.mapNotNull { card ->
@@ -152,7 +153,7 @@ abstract class DamCoNuong : KeiSource() {
         text.contains("Yêu cầu đăng nhập", ignoreCase = true)
 
     private suspend fun fetchHtmlDocument(url: String): Document {
-        val response = client.get(url, ensureSuccess = false)
+        val response = client.get(url, Fetch.DOCUMENT, ensureSuccess = false)
         if (response.code == 403) {
             response.close()
             throw Exception("Truyện này cần đăng nhập webview bằng tài khoản phù hợp để xem")
@@ -263,7 +264,7 @@ abstract class DamCoNuong : KeiSource() {
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val slug = manga.url.trimStart('/').substringAfterLast('/')
-        val response = client.get("$baseUrl/truyen/$slug", ensureSuccess = false)
+        val response = client.get("$baseUrl/truyen/$slug", Fetch.DOCUMENT, ensureSuccess = false)
         if (response.code == 403) {
             response.close()
             return emptyList()
@@ -311,7 +312,7 @@ abstract class DamCoNuong : KeiSource() {
 
     private suspend fun fetchPagesJson(mangaSlug: String, chapterSlug: String, token: String): String {
         val cUrl = "$baseUrl/_c/mangas/$mangaSlug/chapters/$chapterSlug/pages?_=$token"
-        val text = client.get(cUrl, ensureSuccess = false).use { it.body.string() }
+        val text = client.get(cUrl, Fetch.DOCUMENT, ensureSuccess = false).use { it.body.string() }
         if (text.contains("\"e\":")) {
             return text
         }
@@ -326,7 +327,7 @@ abstract class DamCoNuong : KeiSource() {
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/tim-kiem").asJsoup()
+        val document = client.get("$baseUrl/tim-kiem", Fetch.DOCUMENT).asJsoup()
         val genreRegex = Regex("""toggleGenre\('([^']+)'\)""")
 
         val genres = document.select("button").mapNotNull { button ->

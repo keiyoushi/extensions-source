@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.manhuarm.translator.bing
 
 import eu.kanade.tachiyomi.extension.all.manhuarm.translator.TranslatorEngine
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.utils.asJsoup
@@ -53,7 +54,7 @@ class BingTranslator(private val client: OkHttpClient, private val headers: () -
             .add("key", tokens.key)
             .build()
 
-        return client.post(url.toString(), apiHeaders, payload).parseAs<List<TranslateDto>>().first().text
+        return client.post(url.toString(), apiHeaders, Fetch.XHR, payload).parseAs<List<TranslateDto>>().first().text
     }
 
     private suspend fun refreshTokens(): Boolean {
@@ -66,7 +67,7 @@ class BingTranslator(private val client: OkHttpClient, private val headers: () -
     }
 
     private suspend fun loadTokens(): TokenGroup {
-        val document = client.get(TRANSLATOR_URL, headers()).asJsoup()
+        val document = client.get(TRANSLATOR_URL, headers(), Fetch.DOCUMENT).asJsoup()
 
         val scripts = document.select("script").map(Element::data)
 

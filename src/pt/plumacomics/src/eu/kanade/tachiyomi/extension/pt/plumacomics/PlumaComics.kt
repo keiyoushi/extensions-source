@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -24,7 +25,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class PlumaComics : KeiSource() {
-
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3, 1.seconds)
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(
@@ -49,7 +49,7 @@ abstract class PlumaComics : KeiSource() {
             url.addQueryParameter(it.query, it.selected)
         }
 
-        val dto = client.get(url.build()).parseAs<Mangas>()
+        val dto = client.get(url.build(), Fetch.XHR).parseAs<Mangas>()
 
         return MangasPage(dto.series.map { it.toSManga(baseUrl) }, hasNextPage = dto.page < dto.totalPages)
     }
@@ -61,7 +61,7 @@ abstract class PlumaComics : KeiSource() {
             return null
         }
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val dto = document.extractNextJs<Series>() ?: return null
 
         return SManga.create().apply {
@@ -74,7 +74,7 @@ abstract class PlumaComics : KeiSource() {
     }
 
     override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         manga.apply {
             title = document.selectFirst("meta[property*=title]")!!.text().substringBeforeLast("|")
@@ -89,7 +89,7 @@ abstract class PlumaComics : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$baseUrl/api/viewer/bootstrap?c=${chapter.url}")
+        val response = client.get("$baseUrl/api/viewer/bootstrap?c=${chapter.url}", Fetch.XHR)
         val pages = response.parseAs<PagesList>()
         return pages.pages.map { page ->
             Page(page.i, imageUrl = page.u.trim('/'))

@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -79,12 +80,12 @@ abstract class RimuScans :
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/admin/genres").parseAs<GenresDto>().toJsonElement()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/admin/genres", Fetch.XHR).parseAs<GenresDto>().toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList = getRimuFilterList(data?.parseAs<GenresDto>()?.genres)
 
     private suspend fun seriesParse(url: HttpUrl): MangasPage {
-        val dto = client.get(url).parseAs<SeriesListDto>()
+        val dto = client.get(url, Fetch.XHR).parseAs<SeriesListDto>()
         val mangas = dto.series.map { it.toSManga(baseUrl) }
         return MangasPage(mangas, dto.hasMore)
     }
@@ -99,7 +100,7 @@ abstract class RimuScans :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         val slug = response.request.url.pathSegments.last()
         val document = response.asJsoup()
 
@@ -138,7 +139,7 @@ abstract class RimuScans :
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter))
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         val chapterNumber = response.request.url.pathSegments.last().toDoubleOrNull()
             ?: throw Exception("Numéro de chapitre absent de la requête")
 

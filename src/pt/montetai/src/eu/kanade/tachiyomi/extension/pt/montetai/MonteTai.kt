@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.pt.montetai
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
@@ -44,7 +45,7 @@ abstract class MonteTai : Madara() {
             .set("X-Requested-With", "XMLHttpRequest")
             .build()
 
-        val response = client.post("$baseUrl/wp-admin/admin-ajax.php", chapterHeaders, body)
+        val response = client.post("$baseUrl/wp-admin/admin-ajax.php", chapterHeaders, Fetch.XHR.from(mangaPath), body)
         return response.body.string().parseAs<ChapterListDto>()
             .toSChapterList(::parseChapterDate)
     }

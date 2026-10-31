@@ -115,7 +115,6 @@ class BrowserHeadersCacheTest {
     private fun request(path: String) = Request.Builder().url("$base$path")
         .header("User-Agent", ua)
         .header("Referer", "$base/")
-        .header("Origin", base)
 
     private fun call(request: Request): Response = client.newCall(request).execute().also { it.body.string() }
 
@@ -203,7 +202,7 @@ class BrowserHeadersCacheTest {
 
     @Test
     fun originNullAfterTwoCrossOriginHops() {
-        call(Request.Builder().url("http://127.0.0.1:${server.address.port}/to-third").header("User-Agent", ua).header("Referer", "$base/").header("Origin", base).fetch(Fetch.XHR).build())
+        call(Request.Builder().url("http://127.0.0.1:${server.address.port}/to-third").header("User-Agent", ua).header("Referer", "$base/").fetch(Fetch.XHR).build())
         assertEquals("null", thirdSeen["/landed"]!!.getFirst("Origin"))
     }
 

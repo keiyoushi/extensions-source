@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -23,7 +24,7 @@ abstract class ReadHorimiyaOnline : KeiSource() {
 
     // ========================= Popular =========================
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get(baseUrl)
+        val response = client.get(baseUrl, Fetch.DOCUMENT)
         return MangasPage(listOf(parseMangaDetails(response.asJsoup())), false)
     }
 
@@ -32,7 +33,7 @@ abstract class ReadHorimiyaOnline : KeiSource() {
 
     // ========================= Search =========================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val response = client.get(baseUrl)
+        val response = client.get(baseUrl, Fetch.DOCUMENT)
         return MangasPage(listOf(parseMangaDetails(response.asJsoup())), false)
     }
 
@@ -42,7 +43,7 @@ abstract class ReadHorimiyaOnline : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val baseHost = baseUrl.substringAfter("://").substringBefore("/")
         if (url.host != baseHost) return null
-        val response = client.get(baseUrl)
+        val response = client.get(baseUrl, Fetch.DOCUMENT)
         return parseMangaDetails(response.asJsoup())
     }
 
@@ -53,7 +54,7 @@ abstract class ReadHorimiyaOnline : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(baseUrl)
+        val response = client.get(baseUrl, Fetch.DOCUMENT)
         val document = response.asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document),
@@ -71,7 +72,7 @@ abstract class ReadHorimiyaOnline : KeiSource() {
 
     // ========================= Pages =========================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(baseUrl + chapter.url)
+        val response = client.get(baseUrl + chapter.url, Fetch.DOCUMENT)
         return parsePageList(response.asJsoup())
     }
 

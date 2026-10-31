@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -82,7 +83,7 @@ abstract class Comick :
             addQueryParameter("type", type)
         }.build()
 
-        val data = client.get(url).parseAs<Data<List<BrowseComic>>>()
+        val data = client.get(url, Fetch.XHR).parseAs<Data<List<BrowseComic>>>()
 
         return MangasPage(
             mangas = data.data.map(BrowseComic::toSManga),
@@ -102,7 +103,7 @@ abstract class Comick :
             if (page > 1) addQueryParameter("cursor", latestNextCursor)
         }.build()
 
-        val data = client.get(url).parseAs<SearchResponse>()
+        val data = client.get(url, Fetch.XHR).parseAs<SearchResponse>()
 
         latestNextCursor = data.cursor
 
@@ -112,7 +113,7 @@ abstract class Comick :
         )
     }
 
-    override suspend fun getMangaByUrl(url: HttpUrl) = parseDetails(client.get(url))
+    override suspend fun getMangaByUrl(url: HttpUrl) = parseDetails(client.get(url, Fetch.DOCUMENT))
 
     private val spaceSlashRegex = Regex("[ /]")
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -193,7 +194,7 @@ abstract class Comick :
             }
         }.build()
 
-        val data = client.get(url).parseAs<SearchResponse>()
+        val data = client.get(url, Fetch.XHR).parseAs<SearchResponse>()
 
         searchNextCursor = data.cursor
 
@@ -213,7 +214,7 @@ abstract class Comick :
     ): SMangaUpdate = coroutineScope {
         val detailsDeferred = async {
             if (fetchDetails) {
-                parseDetails(client.get(getMangaUrl(manga)))
+                parseDetails(client.get(getMangaUrl(manga), Fetch.DOCUMENT))
             } else {
                 manga
             }
@@ -274,7 +275,7 @@ abstract class Comick :
         val langParam = languageWhitelist.takeIf { it.size == 1 }?.first()?.let { "?lang=$it" }.orEmpty()
         val url = "$baseUrl/api/comics/${manga.url}/chapter-list$langParam"
 
-        val data = client.get(url).parseAs<ChapterList>()
+        val data = client.get(url, Fetch.XHR).parseAs<ChapterList>()
         val chapters = data.data.toMutableList()
 
         coroutineScope {
@@ -284,7 +285,7 @@ abstract class Comick :
                         .addQueryParameter("page", it.toString())
                         .build()
 
-                    client.get(pageUrl).parseAs<ChapterList>().data
+                    client.get(pageUrl, Fetch.XHR).parseAs<ChapterList>().data
                 }
             }.awaitAll().forEach(chapters::addAll)
         }
@@ -308,7 +309,7 @@ abstract class Comick :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get(getChapterUrl(chapter)).asJsoup()
+        val data = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
             .selectFirst("#sv-data")!!.data()
             .parseAs<PageListData>()
 
@@ -319,7 +320,7 @@ abstract class Comick :
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData() = client.get("$baseUrl/api/metadata").parseAs<Metadata>().toJsonElement()
+    override suspend fun fetchFilterData() = client.get("$baseUrl/api/metadata", Fetch.XHR).parseAs<Metadata>().toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val filters = mutableListOf(

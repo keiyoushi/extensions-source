@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -40,7 +41,7 @@ abstract class Zerobyw : KeiSource() {
     }
 
     private suspend fun fetchMangaList(url: HttpUrl): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("a[href*=/details/?kuid=]").map { element: Element ->
             parseMangaFromCard(element)
         }
@@ -83,7 +84,7 @@ abstract class Zerobyw : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val labs = document
             .select("main div.flex-wrap.text-sm > span")
             .eachText()
@@ -111,7 +112,7 @@ abstract class Zerobyw : KeiSource() {
     // Pages
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val images = document.select("#image-container img.manga-image")
         if (images.isEmpty()) {
             var message = document.select("div#messagetext > p")

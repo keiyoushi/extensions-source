@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -27,7 +28,6 @@ import java.util.Date
 
 @Source
 abstract class WebNovel : KeiSource() {
-
     private val baseApiUrl = "$baseUrl$BASE_API_ENDPOINT"
 
     private val baseCoverURl = baseUrl.replace("www", "book-pic")
@@ -61,7 +61,7 @@ abstract class WebNovel : KeiSource() {
                 "&categoryId=$genre&bookStatus=$contentStatus&orderBy=$sort"
         }
 
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
 
         return if (url.contains(QUERY_SEARCH_PATH)) {
             response.parseAsForWebNovel<QuerySearchResponse>().toMangasPage(::getCoverUrl)
@@ -119,19 +119,19 @@ abstract class WebNovel : KeiSource() {
     }
 
     private suspend fun getMangaDetails(manga: SManga): SManga {
-        val response = client.get("$baseApiUrl/comic/getComicDetailPage?comicId=${manga.getId}")
+        val response = client.get("$baseApiUrl/comic/getComicDetailPage?comicId=${manga.getId}", Fetch.XHR)
         return response.parseAsForWebNovel<ComicDetailInfoResponse>().toSManga(::getCoverUrl)
     }
 
     private suspend fun getChapterList(manga: SManga): List<SChapter> {
-        val chapterList = client.get("$baseApiUrl/comic/getChapterList?comicId=${manga.getId}")
+        val chapterList = client.get("$baseApiUrl/comic/getChapterList?comicId=${manga.getId}", Fetch.XHR)
             .parseAsForWebNovel<ComicChapterListResponse>()
 
         val comic = chapterList.comic
         val chapters = chapterList.chapters.reversed().asSequence()
 
         val accurateUpdateTimes = runCatching {
-            client.get("$WEBNOVEL_UPLOAD_TIME/${comic.id}.json").parseAs<Map<String, Long>>()
+            client.get("$WEBNOVEL_UPLOAD_TIME/${comic.id}.json", Fetch.XHR).parseAs<Map<String, Long>>()
         }
             .getOrDefault(emptyMap())
 
@@ -179,7 +179,7 @@ abstract class WebNovel : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (comicId, chapterId) = chapter.getMangaAndChapterId
-        val response = client.get(pageListUrl(comicId, chapterId))
+        val response = client.get(pageListUrl(comicId, chapterId), Fetch.XHR)
         return parsePageList(response)
     }
 

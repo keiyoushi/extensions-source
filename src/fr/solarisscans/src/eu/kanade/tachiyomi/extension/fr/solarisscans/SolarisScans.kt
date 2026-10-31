@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -31,7 +32,6 @@ import org.jsoup.nodes.Element
 abstract class SolarisScans :
     KeiSource(),
     ConfigurableSource {
-
     private val preferences by getPreferencesLazy()
 
     private val hidePremium: Boolean
@@ -80,7 +80,7 @@ abstract class SolarisScans :
             }
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select("article.solaris-catalog-card").mapNotNull { element ->
             val titleElement = element.selectFirst("h2 a") ?: return@mapNotNull null
@@ -121,7 +121,7 @@ abstract class SolarisScans :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val updatedManga = if (fetchDetails) parseDetails(document, manga.url) else manga
         // Extra chapter pages live behind ?chapters_page=N, so only fetch them when asked.
         val updatedChapters = if (fetchChapters) {
@@ -196,7 +196,7 @@ abstract class SolarisScans :
         for (page in 2..totalPages.coerceAtMost(MAX_CHAPTER_PAGES)) {
             val url = base.newBuilder().setQueryParameter("chapters_page", page.toString()).build()
             val document = try {
-                client.get(url).asJsoup()
+                client.get(url, Fetch.DOCUMENT).asJsoup()
             } catch (e: HttpException) {
                 if (e.message?.contains("404") == true) {
                     break
@@ -237,7 +237,7 @@ abstract class SolarisScans :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
-        val document = client.get(chapterUrl).asJsoup()
+        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
 
         val script = document.selectFirst("script#chapter_preloaded_images")?.data().orEmpty()
         val imageUrls = PRELOADED_IMAGE_REGEX.findAll(script).mapNotNull { match ->

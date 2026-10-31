@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
 import keiyoushi.lib.speedbinb.fetchPages
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -37,7 +38,7 @@ abstract class ComicMeteor : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(SpeedBinbInterceptor())
 
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/titles").toMangasPage()
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/titles", Fetch.DOCUMENT).toMangasPage()
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
@@ -46,14 +47,14 @@ abstract class ComicMeteor : KeiSource() {
             val url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("word", query)
                 .build()
-            return client.get(url).toMangasPage()
+            return client.get(url, Fetch.DOCUMENT).toMangasPage()
         }
 
         val category = filters.firstInstanceOrNull<AllFilter>()?.selected
         val url = "$baseUrl/titles".toHttpUrl().newBuilder().apply {
             category?.let { addQueryParameter(it.key, it.value) }
         }.build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     private suspend fun Response.toMangasPage(): MangasPage {
@@ -75,7 +76,7 @@ abstract class ComicMeteor : KeiSource() {
             .apply { request.url.queryParameterNames.forEach { addQueryParameter(it, request.url.queryParameter(it)) } }
             .build()
 
-        val apiMangas = client.get(url).parseAs<ApiTitlesResponse>().data.map { it.toSManga() }
+        val apiMangas = client.get(url, Fetch.XHR).parseAs<ApiTitlesResponse>().data.map { it.toSManga() }
         return MangasPage(mangas + apiMangas, false)
     }
 
@@ -85,7 +86,7 @@ abstract class ComicMeteor : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val details = SManga.create().apply {
             title = document.selectFirst("main h2")!!.text()
             author = document.select("a[href*=/authors/]").joinToString { it.text() }
@@ -133,12 +134,12 @@ abstract class ComicMeteor : KeiSource() {
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/pt/${chapter.memo["label"]!!.string}/${chapter.memo["slug"]!!.string}/${chapter.url}/viewer"
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.fetchPages(client.get(getChapterUrl(chapter)).asJsoup())
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.fetchPages(client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup())
 
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/titles").asJsoup()
+        val document = client.get("$baseUrl/titles", Fetch.DOCUMENT).asJsoup()
         return listOf("label" to "レーベルから選ぶ", "genre" to "ジャンルから選ぶ", "category" to "カテゴリから選ぶ").flatMap { (key, heading) ->
             document.selectFirst("h3:contains($heading)")?.nextElementSibling()?.select("a").orEmpty().map {
                 FilterOption(it.text(), key, it.attr("href").substringAfter("="))

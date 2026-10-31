@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -58,14 +59,14 @@ abstract class TeamX : KeiSource() {
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$baseUrl/series/${page.pageNumber()}")
+        val response = client.get("$baseUrl/series/${page.pageNumber()}", Fetch.DOCUMENT)
         return parsePopularManga(response)
     }
 
     // ============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl${page.pageNumber()}").asJsoup()
+        val document = client.get("$baseUrl${page.pageNumber()}", Fetch.DOCUMENT).asJsoup()
 
         val mangaList = document.select("div.last-chapter div.box")
             .mapNotNull { element ->
@@ -91,7 +92,7 @@ abstract class TeamX : KeiSource() {
                 .addQueryParameter("keyword", query)
                 .build()
 
-            val document = client.get(url).asJsoup()
+            val document = client.get(url, Fetch.DOCUMENT).asJsoup()
             val mangas = document.select("div.tx-grid a.tx-card").map { element ->
                 SManga.create().apply {
                     title = element.selectFirst("h3")!!.text()
@@ -110,7 +111,7 @@ abstract class TeamX : KeiSource() {
             }
         }.build()
 
-        return parsePopularManga(client.get(url))
+        return parsePopularManga(client.get(url, Fetch.DOCUMENT))
     }
 
     // ============================== Deeplinking =============================
@@ -139,7 +140,7 @@ abstract class TeamX : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get("$baseUrl${manga.url}")
+        val response = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT)
         val document = response.asJsoup()
 
         return SMangaUpdate(
@@ -182,7 +183,7 @@ abstract class TeamX : KeiSource() {
 
         val remainingChapters = (2..lastPage).map { page ->
             async {
-                val response = client.get("$url?page=$page")
+                val response = client.get("$url?page=$page", Fetch.DOCUMENT)
                 parseChapterElements(response.asJsoup())
             }
         }.awaitAll()
@@ -222,7 +223,7 @@ abstract class TeamX : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$baseUrl${chapter.url}")
+        val response = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT)
         return response.asJsoup()
             .select("div.image_list canvas[data-src], div.image_list img[src]")
             .mapIndexed { i, element ->
@@ -239,7 +240,7 @@ abstract class TeamX : KeiSource() {
     override val supportsFilterFetching: Boolean get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/series").asJsoup()
+        val document = client.get("$baseUrl/series", Fetch.DOCUMENT).asJsoup()
 
         fun parseOptions(selector: String): Options = document.select(selector).map { FilterOption(it.text(), it.attr("value")) }
 

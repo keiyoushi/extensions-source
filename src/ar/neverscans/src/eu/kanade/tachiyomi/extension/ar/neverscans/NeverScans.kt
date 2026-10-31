@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -37,14 +38,14 @@ abstract class NeverScans : KeiSource() {
     // ============================== Popular ==============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$baseUrl/manga?sort=popular")
+        val response = client.get("$baseUrl/manga?sort=popular", Fetch.DOCUMENT)
         return response.toMangasPage()
     }
 
     // ============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val response = client.get("$baseUrl/manga")
+        val response = client.get("$baseUrl/manga", Fetch.DOCUMENT)
         return response.toMangasPage()
     }
 
@@ -54,7 +55,7 @@ abstract class NeverScans : KeiSource() {
         val url = "$baseUrl/manga".toHttpUrl().newBuilder().apply {
             addQueryParameter("search", query)
         }.build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     // ============================== Details ==============================
@@ -77,7 +78,7 @@ abstract class NeverScans : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get("$baseUrl${manga.url}")
+        val response = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT)
         val document = response.asJsoup()
 
         val mangaDetail = SManga.create().apply {
@@ -110,7 +111,7 @@ abstract class NeverScans : KeiSource() {
     // ============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$baseUrl/${chapter.url}")
+        val response = client.get("$baseUrl/${chapter.url}", Fetch.DOCUMENT)
         val doc = response.asJsoup()
         return doc.select("img[src*=/api/public/page/]").mapIndexed { index, img ->
             Page(index, imageUrl = img.absUrl("src"))

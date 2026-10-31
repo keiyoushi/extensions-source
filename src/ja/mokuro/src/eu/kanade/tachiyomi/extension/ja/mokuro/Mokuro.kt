@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
@@ -37,7 +38,6 @@ private fun coverUrl(apiBase: String, cover: String): String = apiBase.toHttpUrl
 abstract class Mokuro :
     KeiSource(),
     ConfigurableSource {
-
     private val preferences by getPreferencesLazy()
 
     private val titleLang: String
@@ -227,7 +227,7 @@ abstract class Mokuro :
             .addPathSegment("$volumeName.mokuro")
             .build()
 
-        val response = client.get(url, headers)
+        val response = client.get(url, headers, Fetch.XHR)
         return response.use { resp ->
             val mokuro = resp.parseAs<MokuroDto>()
             val cbzUrl = resp.request.url.newBuilder()
@@ -276,7 +276,7 @@ abstract class Mokuro :
     // ===============================
 
     private suspend fun getCatalog(): CatalogDto {
-        val response = client.get("$baseUrl/mokuro-reader/catalog.json")
+        val response = client.get("$baseUrl/mokuro-reader/catalog.json", Fetch.XHR)
         return response.parseAs<CatalogDto>()
     }
 
@@ -286,7 +286,7 @@ abstract class Mokuro :
             .addPathSegment("series.json")
             .build()
 
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         return response.parseAs<SeriesDetailDto>()
     }
 
@@ -304,12 +304,12 @@ abstract class Mokuro :
         fun urlFor(seriesTitle: String): String? = covers[seriesTitle.lowercase()]?.let { coverUrl(apiBase, it) }
     }
 
-    private suspend fun getCoverIndex(): CoverIndex = CoverIndex(apiBase, client.get("$apiBase/library").parseAs<LibraryDto>().series)
+    private suspend fun getCoverIndex(): CoverIndex = CoverIndex(apiBase, client.get("$apiBase/library", Fetch.XHR).parseAs<LibraryDto>().series)
 
     private suspend fun resolveCoverUrl(seriesTitle: String): String? {
         if (useLatestVolumeCover) {
             val url = "$apiBase/series".toHttpUrl().newBuilder().addQueryParameter("name", seriesTitle).build()
-            val cover = client.get(url).parseAs<LibrarySeriesDetailDto>().volumes.lastOrNull { it.cover != null }?.cover
+            val cover = client.get(url, Fetch.XHR).parseAs<LibrarySeriesDetailDto>().volumes.lastOrNull { it.cover != null }?.cover
             if (cover != null) return coverUrl(apiBase, cover)
         }
         return getCoverIndex().urlFor(seriesTitle)

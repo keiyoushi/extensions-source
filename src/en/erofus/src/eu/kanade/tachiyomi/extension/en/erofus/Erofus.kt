@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
@@ -43,7 +44,7 @@ abstract class Erofus : EroMuse() {
             }
         }
 
-        return parseManga(client.get(stackUrl()).asJsoup())
+        return parseManga(client.get(stackUrl(), Fetch.DOCUMENT).asJsoup())
     }
 
     override fun parseDetails(document: Document): SManga = SManga.create().apply {

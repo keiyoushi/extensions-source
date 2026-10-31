@@ -8,6 +8,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -33,7 +35,6 @@ import kotlin.time.Instant
 
 @Source
 abstract class HentaiLoop : KeiSource() {
-
     private val ajaxHeaders: Headers
         get() = headersBuilder()
             .set("X-Requested-With", "XMLHttpRequest")
@@ -121,7 +122,7 @@ abstract class HentaiLoop : KeiSource() {
             .add("query", query.trim())
             .build()
 
-        val data = client.post("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, body)
+        val data = client.post("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, Fetch.XHR, body)
             .parseAs<Data<QuerySearchResponse>>()
         val mangas = data.data.posts.map { manga ->
             SManga.create().apply {
@@ -148,7 +149,7 @@ abstract class HentaiLoop : KeiSource() {
             addQueryParameter("sortmanga", sort)
         }.build()
 
-        return parseMangaList(client.get(url))
+        return parseMangaList(client.get(url, Fetch.DOCUMENT))
     }
 
     private suspend fun advancedSearch(page: Int, query: String, filters: FilterList): MangasPage {
@@ -275,7 +276,7 @@ abstract class HentaiLoop : KeiSource() {
             .add("offset", ((page - 1) * 10).toString())
             .build()
 
-        val response = client.post("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, body)
+        val response = client.post("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, Fetch.XHR, body)
             .parseAs<Data<AdvancedSearchResponse>>()
 
         if (!response.success && response.data.message?.contains("captcha", ignoreCase = true) == true) {
@@ -312,7 +313,7 @@ abstract class HentaiLoop : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = manga.apply {
             title = document.selectFirst(".manga-title")!!.text()
@@ -374,7 +375,7 @@ abstract class HentaiLoop : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return document.select(".related-entry a").map { element ->
             SManga.create().apply {
@@ -397,7 +398,7 @@ abstract class HentaiLoop : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         countViews(document)
 
@@ -422,6 +423,7 @@ abstract class HentaiLoop : KeiSource() {
             .url("$baseUrl/wp-admin/admin-ajax.php")
             .headers(ajaxHeaders)
             .post(body)
+            .fetch(Fetch.XHR)
             .build()
 
         // fire and forget so page loading isn't delayed

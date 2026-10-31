@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -49,7 +50,7 @@ abstract class Seikowo : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        val scriptData = client.get(url).asJsoup()
+        val scriptData = client.get(url, Fetch.DOCUMENT).asJsoup()
             .selectFirst("script:containsData(window.__POPULAR_POST__)")
             ?.data()
             .orEmpty()
@@ -98,7 +99,7 @@ abstract class Seikowo : KeiSource() {
             .addQueryParameter("start-index", startIndex.toString())
             .build()
 
-        val feed = client.get(url).parseAs<FeedResponseDto>().feed
+        val feed = client.get(url, Fetch.XHR).parseAs<FeedResponseDto>().feed
         val rawEntries = feed.entry.orEmpty()
         val mangas = rawEntries.mapNotNull(::toCatalogueEntry).map { it.toSManga() }
 
@@ -184,7 +185,7 @@ abstract class Seikowo : KeiSource() {
         .addQueryParameter("max-results", maxResults.toString())
         .addQueryParameter("start-index", startIndex.toString())
         .build()
-        .let { client.get(it).parseAs<FeedResponseDto>().feed }
+        .let { client.get(it, Fetch.XHR).parseAs<FeedResponseDto>().feed }
 
     private fun toCatalogueEntry(entry: FeedEntryDto): CatalogueEntry? {
         val metadata = parseMetadata(entry.content?.value) ?: return null
@@ -319,7 +320,7 @@ abstract class Seikowo : KeiSource() {
     }
 
     private suspend fun fetchPostId(mangaUrl: String): String {
-        val body = client.get("$baseUrl$mangaUrl").use { it.body.string() }
+        val body = client.get("$baseUrl$mangaUrl", Fetch.DOCUMENT).use { it.body.string() }
         return postIdRegex.find(body)?.groupValues?.getOrNull(1)
             ?: postIdFallbackRegex.find(body)?.groupValues?.getOrNull(1)
             ?: throw Exception("Cannot find post ID")
@@ -359,7 +360,7 @@ abstract class Seikowo : KeiSource() {
             .addQueryParameter("alt", "json")
             .build()
 
-        return client.get(url).parseAs<FeedEntryResponseDto>().entry
+        return client.get(url, Fetch.XHR).parseAs<FeedEntryResponseDto>().entry
     }
 
     // ============================== Pages =================================
@@ -421,7 +422,7 @@ abstract class Seikowo : KeiSource() {
             blogId = workerBlogId,
         )
 
-        val items = client.post(workerApiUrl, listPayload.toJsonRequestBody())
+        val items = client.post(workerApiUrl, Fetch.XHR, listPayload.toJsonRequestBody())
             .parseAs<WorkerListResponseDto>()
             .items
             .orEmpty()
@@ -452,7 +453,7 @@ abstract class Seikowo : KeiSource() {
         )
 
         return runCatching {
-            client.post(workerApiUrl, getPayload.toJsonRequestBody()).parseAs<WorkerPostDto>()
+            client.post(workerApiUrl, Fetch.XHR, getPayload.toJsonRequestBody()).parseAs<WorkerPostDto>()
         }.getOrNull()
     }
 

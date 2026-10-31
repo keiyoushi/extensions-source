@@ -15,6 +15,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -110,7 +112,7 @@ abstract class MangaBuff :
     private fun getToken(): String {
         storedToken?.let { return it }
 
-        val request = GET(baseUrl, headers)
+        val request = GET(baseUrl, headers).newBuilder().fetch(Fetch.DOCUMENT).build()
         val response = client.newCall(request).execute()
 
         response.use {
@@ -147,7 +149,7 @@ abstract class MangaBuff :
                 }
             }.build()
 
-            client.get(url).use {
+            client.get(url, Fetch.DOCUMENT).use {
                 return parseSearchManga(it.asJsoup())
             }
         }
@@ -190,7 +192,7 @@ abstract class MangaBuff :
             }
         }.build()
 
-        client.get(url).use {
+        client.get(url, Fetch.DOCUMENT).use {
             return parseSearchManga(it.asJsoup())
         }
     }
@@ -229,7 +231,7 @@ abstract class MangaBuff :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val newUrl = manga.url
-        val document = client.get("${baseUrl}$newUrl", ensureSuccess = false).use { response ->
+        val document = client.get("${baseUrl}$newUrl", Fetch.DOCUMENT, ensureSuccess = false).use { response ->
             if (!response.isSuccessful) {
                 if (response.code == 404) {
                     throw Exception("Контент не доступен.\nВозможно может помочь авторизация через WebView")
@@ -330,7 +332,7 @@ abstract class MangaBuff :
                 .add("manga_id", mangaId)
                 .build()
 
-            val moreChapters = client.post("$baseUrl/chapters/load", form)
+            val moreChapters = client.post("$baseUrl/chapters/load", Fetch.XHR, form)
                 .parseAs<Dto>()
                 .content
                 .let { Jsoup.parseBodyFragment(it, baseUrl) }
@@ -353,7 +355,7 @@ abstract class MangaBuff :
 
     // ============================== Pages ======================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get("$baseUrl${chapter.url}").asJsoup()
+        val data = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
         return data.select(".reader__pages img").mapIndexed { idx, img ->
             Page(idx, imageUrl = img.imgAttr())
         }
@@ -363,7 +365,7 @@ abstract class MangaBuff :
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val data = client.get("$baseUrl/manga/").asJsoup()
+        val data = client.get("$baseUrl/manga/", Fetch.DOCUMENT).asJsoup()
 
         return FiltersData(
             genres = data.select(".sl-select[name=\"genres[]\"] option").map { it.text() to it.attr("value") },

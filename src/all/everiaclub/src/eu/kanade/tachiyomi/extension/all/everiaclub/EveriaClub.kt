@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -41,7 +42,7 @@ abstract class EveriaClub : KeiSource() {
 
     // ========================= Popular =========================
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".wli_popular_posts-class li").map { element ->
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("img")?.imgSrc
@@ -63,7 +64,7 @@ abstract class EveriaClub : KeiSource() {
     }
 
     private suspend fun fetchPosts(url: HttpUrl): MangasPage {
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         val totalPages = response.header("X-WP-TotalPages")?.toIntOrNull() ?: 0
         val currentPage = url.queryParameter("page")?.toIntOrNull() ?: 0
         val posts = response.parseAs<List<WPPostDto>>()
@@ -94,11 +95,11 @@ abstract class EveriaClub : KeiSource() {
                     addPathSegment(page.toString())
                 }
             }.build()
-            return parseHtmlMangasPage(client.get(newUrl).asJsoup())
+            return parseHtmlMangasPage(client.get(newUrl, Fetch.DOCUMENT).asJsoup())
         }
 
         // Post link
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val manga = SManga.create().apply {
             this.url = url.encodedPath
             title = document.selectFirst(".entry-title")?.text()
@@ -147,7 +148,7 @@ abstract class EveriaClub : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         val responseUrl = response.request.url.toString()
         val document = response.asJsoup()
 
@@ -198,7 +199,7 @@ abstract class EveriaClub : KeiSource() {
 
     // ========================= Pages =========================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val pageLinks = document.select(".page-links a.post-page-numbers")
             .map { it.attr("abs:href") }
             .distinct()
@@ -211,7 +212,7 @@ abstract class EveriaClub : KeiSource() {
                 pageLinks.map { url ->
                     async {
                         semaphore.withPermit {
-                            runCatching { client.get(url).asJsoup() }.getOrNull()
+                            runCatching { client.get(url, Fetch.DOCUMENT).asJsoup() }.getOrNull()
                         }
                     }
                 }.awaitAll()
@@ -233,9 +234,9 @@ abstract class EveriaClub : KeiSource() {
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val categories = client.get("$baseUrl/wp-json/wp/v2/categories?per_page=100&hide_empty=true")
+        val categories = client.get("$baseUrl/wp-json/wp/v2/categories?per_page=100&hide_empty=true", Fetch.XHR)
             .parseAs<List<WPCategoryDto>>()
-        val tags = client.get("$baseUrl/wp-json/wp/v2/tags?per_page=100&hide_empty=true&orderby=count&order=desc")
+        val tags = client.get("$baseUrl/wp-json/wp/v2/tags?per_page=100&hide_empty=true&orderby=count&order=desc", Fetch.XHR)
             .parseAs<List<WPTagDto>>()
         return FilterDataDto(categories, tags).toJsonElement()
     }

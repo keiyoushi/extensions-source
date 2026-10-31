@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
@@ -33,7 +34,6 @@ import java.io.IOException
 abstract class Kodansha :
     KeiSource(),
     ConfigurableSource {
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(::imageIntercept)
@@ -75,7 +75,7 @@ abstract class Kodansha :
             addQueryParameter("count", PAGE_SIZE.toString())
             addQueryParameter("offset", ((page - 1) * PAGE_SIZE).toString())
         }.build()
-        val result = client.get(url).parseAs<SeriesListDto>()
+        val result = client.get(url, Fetch.XHR).parseAs<SeriesListDto>()
         return MangasPage(result.mangas.map { it.toSManga() }, page * PAGE_SIZE < result.totalCount.toInt())
     }
 
@@ -87,7 +87,7 @@ abstract class Kodansha :
             segments.size >= 3 && segments[0] == "reader" && segments[1] == "series" -> segments[2]
             else -> return null
         }
-        return client.get("$API_URL/manga/slug/$slug/v0").parseAs<SeriesDto>().toSMangaDetails()
+        return client.get("$API_URL/manga/slug/$slug/v0", Fetch.XHR).parseAs<SeriesDto>().toSMangaDetails()
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/series/${manga.memo["slug"]!!.stringOrNull}/"
@@ -106,7 +106,7 @@ abstract class Kodansha :
     ): SMangaUpdate = coroutineScope {
         val details = async {
             if (fetchDetails) {
-                client.get("$API_URL/manga/${manga.url}/v0").parseAs<SeriesDto>().toSMangaDetails()
+                client.get("$API_URL/manga/${manga.url}/v0", Fetch.XHR).parseAs<SeriesDto>().toSMangaDetails()
             } else {
                 manga
             }
@@ -120,14 +120,14 @@ abstract class Kodansha :
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> = coroutineScope {
         val slug = manga.memo["slug"]!!.stringOrNull!!
         val volumes = async {
-            client.get("$API_URL/mangas/${manga.url}/volumes/v0").parseAs<VolumeListDto>()
+            client.get("$API_URL/mangas/${manga.url}/volumes/v0", Fetch.XHR).parseAs<VolumeListDto>()
                 .volumes.associate { it.uuid to it.label }
         }
         val chapterUrl = "$API_URL/mangas/${manga.url}/chapters/v4".toHttpUrl().newBuilder()
             .addQueryParameter("order", "ascending")
             .addQueryParameter("count", "1000")
             .build()
-        val result = client.get(chapterUrl).parseAs<ChapterListDto>().chapters
+        val result = client.get(chapterUrl, Fetch.XHR).parseAs<ChapterListDto>().chapters
         val volumeLabels = volumes.await()
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         result
@@ -137,7 +137,7 @@ abstract class Kodansha :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$API_URL/chapters/${chapter.url}/pages/v1", ensureSuccess = false)
+        val response = client.get("$API_URL/chapters/${chapter.url}/pages/v1", Fetch.XHR, ensureSuccess = false)
         if (response.code == 401 || response.code == 403) {
             response.close()
             throw IOException("This chapter must be purchased on Kodansha to read")

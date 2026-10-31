@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -47,13 +48,13 @@ abstract class XlecX : KeiSource() {
     // Popular
     override suspend fun getPopularManga(page: Int): MangasPage {
         val pageStr = if (page > 1) "page/$page/" else ""
-        return parseMangasPage(client.get("$baseUrl/f/sort=news_read/order=desc/$pageStr"))
+        return parseMangasPage(client.get("$baseUrl/f/sort=news_read/order=desc/$pageStr", Fetch.DOCUMENT))
     }
 
     // Latest
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val pageStr = if (page > 1) "page/$page/" else ""
-        return parseMangasPage(client.get("$baseUrl/f/sort=date/order=desc/$pageStr"))
+        return parseMangasPage(client.get("$baseUrl/f/sort=date/order=desc/$pageStr", Fetch.DOCUMENT))
     }
 
     // Search
@@ -66,7 +67,7 @@ abstract class XlecX : KeiSource() {
             .addQueryParameter("story", query)
             .build()
 
-        return parseMangasPage(client.get(url))
+        return parseMangasPage(client.get(url, Fetch.DOCUMENT))
     }
 
     private fun parseMangasPage(response: Response): MangasPage {
@@ -109,7 +110,7 @@ abstract class XlecX : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
 
         val manga = SManga.create().apply {
             url = manga.url
@@ -142,7 +143,7 @@ abstract class XlecX : KeiSource() {
 
     // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
 
         // 'Full size' tab
         document.select("#content-2 > .imagegall23 > img").mapIndexed { index, element ->

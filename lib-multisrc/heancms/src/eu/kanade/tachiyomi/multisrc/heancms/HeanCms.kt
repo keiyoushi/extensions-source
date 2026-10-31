@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -83,7 +84,7 @@ abstract class HeanCms :
             .add("password", preferences.password)
             .build()
 
-        val response = client.post("$apiUrl/login", headers, body, ensureSuccess = false)
+        val response = client.post("$apiUrl/login", headers, Fetch.XHR, body, ensureSuccess = false)
 
         if (!response.isSuccessful) {
             val result = response.parseAs<HeanCmsErrorsDto>()
@@ -103,14 +104,14 @@ abstract class HeanCms :
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = queryUrlBuilder(page, "", status = "All", order = "desc", orderBy = "total_views", tagIds = "[]")
-        return parseSearchMangaList(client.get(url))
+        return parseSearchMangaList(client.get(url, Fetch.XHR))
     }
 
     // ============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = queryUrlBuilder(page, "", status = "All", order = latestSortBy, orderBy = "latest", tagIds = "[]")
-        return parseSearchMangaList(client.get(url))
+        return parseSearchMangaList(client.get(url, Fetch.XHR))
     }
 
     // ============================== Search ===============================
@@ -133,7 +134,7 @@ abstract class HeanCms :
             tagIds = tagIds,
         )
 
-        return parseSearchMangaList(client.get(url))
+        return parseSearchMangaList(client.get(url, Fetch.XHR))
     }
 
     private fun queryUrlBuilder(
@@ -168,7 +169,7 @@ abstract class HeanCms :
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/tags").parseAs()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/tags", Fetch.XHR).parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data?.parseAs<List<HeanCmsGenreDto>>()?.map { Genre(it.name, it.id) }
@@ -228,13 +229,13 @@ abstract class HeanCms :
 
     private suspend fun fetchMangaDetails(slug: String, knownFormat: String?): SManga {
         val apiHeaders = headers.newBuilder().add("Accept", ACCEPT_JSON).build()
-        val series = client.get("$apiUrl/series/$slug", apiHeaders).parseAs<HeanCmsSeriesDto>()
+        val series = client.get("$apiUrl/series/$slug", apiHeaders, Fetch.XHR).parseAs<HeanCmsSeriesDto>()
 
         // The series endpoint has no badge; look it up in the listing once per entry
         val format = knownFormat
             ?: if (fetchBadge) {
                 val searchUrl = queryUrlBuilder(1, series.title, status = "All", order = "desc", orderBy = "total_views", tagIds = "[]")
-                client.get(searchUrl).parseAs<HeanCmsQuerySearchDto>().data
+                client.get(searchUrl, Fetch.XHR).parseAs<HeanCmsQuerySearchDto>().data
                     .firstOrNull { it.id == series.id }
                     ?.format()
             } else {
@@ -295,7 +296,7 @@ abstract class HeanCms :
                 .addQueryParameter("series_id", seriesId)
                 .build()
 
-            val result = client.get(url, apiHeaders).parseAs<HeanCmsChapterPayloadDto>()
+            val result = client.get(url, apiHeaders, Fetch.XHR).parseAs<HeanCmsChapterPayloadDto>()
             chapterList.addAll(result.data)
             hasNextPage = result.meta.hasNextPage()
             page++
@@ -313,7 +314,7 @@ abstract class HeanCms :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = apiUrl + chapter.url.replace("/$mangaSubDirectory/", "/chapter/")
-        val result = client.get(url, authHeaders()).parseAs<HeanCmsPagePayloadDto>()
+        val result = client.get(url, authHeaders(), Fetch.XHR).parseAs<HeanCmsPagePayloadDto>()
 
         if (result.isPaywalled() && result.chapter.chapterData == null) {
             throw Exception("Paid chapter unavailable.")

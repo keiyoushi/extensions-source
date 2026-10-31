@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -23,7 +24,6 @@ import kotlin.time.Instant
 
 @Source
 abstract class HentaiSco : KeiSource() {
-
     override suspend fun getPopularManga(page: Int): MangasPage = browse(paged("hentai-list", page)) { addQueryParameter("m_orderby", "views") }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = browse(paged("hentai-list", page)) {}
@@ -51,7 +51,7 @@ abstract class HentaiSco : KeiSource() {
             .addPathSegment("")
             .apply(params)
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return MangasPage(document.mangaList(), document.selectFirst("nav.pager a[rel=next]") != null)
     }
 
@@ -75,7 +75,7 @@ abstract class HentaiSco : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val details = document.selectFirst("article[data-manga-id]")!!
 
         manga.apply {
@@ -108,7 +108,7 @@ abstract class HentaiSco : KeiSource() {
 
     override val supportsRelatedMangas = true
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga)).asJsoup().mangaList()
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup().mangaList()
 
     // Madara-era entries: a post id with memo["path"], or a "/hentai/<slug>/" url
     private val SManga.slug: String
@@ -124,7 +124,7 @@ abstract class HentaiSco : KeiSource() {
             return baseUrl.toHttpUrl().resolve(path)!!.pathSegments.drop(1).filter(String::isNotEmpty).joinToString("/")
         }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select("[data-reader-pages] img.reader-page")
         .mapIndexed { index, image -> Page(index, imageUrl = image.absUrl("src")) }
 
@@ -132,7 +132,7 @@ abstract class HentaiSco : KeiSource() {
 
     override suspend fun fetchFilterData(): JsonElement {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegments("hentai-list/").build()
-        return client.get(url).asJsoup()
+        return client.get(url, Fetch.DOCUMENT).asJsoup()
             .select("section[aria-labelledby=browse-genres] a")
             .associate { it.ownText() to it.absUrl("href").toHttpUrl().pathSegments[1] }
             .toJsonElement()

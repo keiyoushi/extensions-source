@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.UserAgentType
 import keiyoushi.lib.randomua.setRandomUserAgent
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -50,10 +51,10 @@ abstract class BuonDua :
     private val preferences by getPreferencesLazy()
 
     // Latest
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangasPage(client.get("$baseUrl/?start=${20 * (page - 1)}"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangasPage(client.get("$baseUrl/?start=${20 * (page - 1)}", Fetch.DOCUMENT))
 
     // Popular
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangasPage(client.get("$baseUrl/hot?start=${20 * (page - 1)}"))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangasPage(client.get("$baseUrl/hot?start=${20 * (page - 1)}", Fetch.DOCUMENT))
 
     // Search
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -64,10 +65,10 @@ abstract class BuonDua :
                     addQueryParameter("search", query)
                     addQueryParameter("start", (20 * (page - 1)).toString())
                 }.build()
-                parseMangasPage(client.get(url))
+                parseMangasPage(client.get(url, Fetch.DOCUMENT))
             }
             tagFilter?.state?.isNotEmpty() == true ->
-                parseMangasPage(client.get("$baseUrl/tag/${tagFilter.state}&start=${20 * (page - 1)}"))
+                parseMangasPage(client.get("$baseUrl/tag/${tagFilter.state}&start=${20 * (page - 1)}", Fetch.DOCUMENT))
             else -> getPopularManga(page)
         }
     }
@@ -105,7 +106,7 @@ abstract class BuonDua :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
     }
 
@@ -185,7 +186,7 @@ abstract class BuonDua :
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         return parseMangasPage(response).mangas
     }
 
@@ -193,7 +194,7 @@ abstract class BuonDua :
     private val pageListSelector = ".article-fulltext img"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return if (preferences.splitPages) {
             pageListParse(document)
         } else {
@@ -218,7 +219,7 @@ abstract class BuonDua :
                             val pageUrl = basePageUrl.toHttpUrl().newBuilder()
                                 .setQueryParameter("page", page.toString())
                                 .build()
-                            client.get(pageUrl).asJsoup()
+                            client.get(pageUrl, Fetch.DOCUMENT).asJsoup()
                         }
                     }
                     doc.select(pageListSelector).map { imgEl ->

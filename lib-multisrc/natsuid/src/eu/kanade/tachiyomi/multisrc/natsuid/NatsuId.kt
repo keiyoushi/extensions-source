@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -54,7 +55,7 @@ abstract class NatsuId : KeiSource() {
             .addQueryParameter("_embed", null)
             .build()
 
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         val manga = response.parseAs<List<Manga>>(transform = ::transformJsonResponse)[0]
 
         if (manga.isNovel) error("Novels are not supported")
@@ -97,7 +98,7 @@ abstract class NatsuId : KeiSource() {
             addFormDataPart("query", query.trim())
         }.build()
 
-        return parseSearchManga(client.post(url, body))
+        return parseSearchManga(client.post(url, Fetch.XHR, body))
     }
 
     protected open suspend fun parseSearchManga(response: Response): MangasPage {
@@ -116,7 +117,7 @@ abstract class NatsuId : KeiSource() {
             addQueryParameter("_embed", null)
         }.build()
 
-        val details = client.get(url)
+        val details = client.get(url, Fetch.XHR)
             .parseAs<List<Manga>>(transform = ::transformJsonResponse)
             .filterNot { it.isNovel }
             .associateBy { it.slug }
@@ -137,6 +138,7 @@ abstract class NatsuId : KeiSource() {
         nonce ?: run {
             val response = client.get(
                 "$baseUrl/wp-admin/admin-ajax.php?type=search_form&action=get_nonce",
+                Fetch.XHR,
             )
 
             Jsoup.parseBodyFragment(response.body.string())
@@ -162,7 +164,7 @@ abstract class NatsuId : KeiSource() {
     ): SMangaUpdate = coroutineScope {
         val mangaId = manga.id() ?: run {
             // Network fallback
-            client.get(getMangaUrl(manga)).asJsoup()
+            client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
                 .selectFirst("#gallery-list")!!.attr("hx-get")
                 .substringAfter("manga_id=")
                 .substringBefore("&")
@@ -174,7 +176,7 @@ abstract class NatsuId : KeiSource() {
     }
 
     protected open suspend fun getMangaDetails(mangaId: String): SManga {
-        val response = client.get("$baseUrl/wp-json/wp/v2/manga/$mangaId?_embed")
+        val response = client.get("$baseUrl/wp-json/wp/v2/manga/$mangaId?_embed", Fetch.XHR)
         val manga = response.parseAs<Manga>(transform = ::transformJsonResponse)
         return manga.toSManga()
     }
@@ -191,7 +193,7 @@ abstract class NatsuId : KeiSource() {
     protected open val chapterDateAttribute = "datetime"
 
     protected open suspend fun getChapterList(mangaId: String): List<SChapter> {
-        val response = client.get(chapterListUrl(mangaId))
+        val response = client.get(chapterListUrl(mangaId), Fetch.XHR)
         val document = Jsoup.parseBodyFragment(response.body.string(), baseUrl)
 
         return document.select(chapterListSelector).map {
@@ -210,7 +212,7 @@ abstract class NatsuId : KeiSource() {
     protected open val pageListSelector = "section[data-image-data] img"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         return document.select(pageListSelector).mapIndexed { idx, img ->
             Page(idx, imageUrl = img.absUrl("src"))
@@ -222,7 +224,7 @@ abstract class NatsuId : KeiSource() {
 
     override suspend fun fetchFilterData(): JsonElement {
         val url = "$baseUrl/wp-json/wp/v2/genre?per_page=100&page=1&orderby=count&order=desc"
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         return response.parseAs<List<Term>>(transform = ::transformJsonResponse).toJsonElement()
     }
 

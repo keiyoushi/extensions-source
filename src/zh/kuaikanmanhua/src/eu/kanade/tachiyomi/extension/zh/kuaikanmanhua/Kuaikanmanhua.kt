@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -27,7 +28,7 @@ abstract class Kuaikanmanhua : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage = getWebMangaList("$baseUrl/tag/0?region=1&pays=0&state=0&sort=2&page=$page")
 
     private suspend fun getWebMangaList(listUrl: String): MangasPage {
-        val document = client.get(listUrl).asJsoup()
+        val document = client.get(listUrl, Fetch.DOCUMENT).asJsoup()
 
         val onLastPage = document
             .selectFirst("ul.pagination li:nth-last-child(2) a")?.attr("class")?.contains("active") ?: true
@@ -78,7 +79,7 @@ abstract class Kuaikanmanhua : KeiSource() {
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotEmpty()) {
-            val searchResponse = client.get("$apiUrl/v1/search/topic?q=$query&since=${(page - 1) * DEFAULT_PAGE_SIZE}&size=$DEFAULT_PAGE_SIZE")
+            val searchResponse = client.get("$apiUrl/v1/search/topic?q=$query&since=${(page - 1) * DEFAULT_PAGE_SIZE}&size=$DEFAULT_PAGE_SIZE", Fetch.XHR)
                 .parseAs<ApiSearchResponse>()
 
             val data = searchResponse.data ?: return MangasPage(emptyList(), false)
@@ -136,7 +137,7 @@ abstract class Kuaikanmanhua : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val payload = client.get(baseUrl + manga.url).asJsoup().parseNuxt<WebMangaPayload>()
+        val payload = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup().parseNuxt<WebMangaPayload>()
         val data = requireNotNull(payload.data.getOrNull(0)) {
             "Source did not return manga details"
         }
@@ -164,7 +165,7 @@ abstract class Kuaikanmanhua : KeiSource() {
     // Pages
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val images = client.get(baseUrl + chapter.url.replace("/web/comic/", "/webs/comic-next/"))
+        val images = client.get(baseUrl + chapter.url.replace("/web/comic/", "/webs/comic-next/"), Fetch.DOCUMENT)
             .asJsoup()
             .parseNuxt<WebChapterPayload>()
             .data

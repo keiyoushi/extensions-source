@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.head
 import keiyoushi.network.rateLimit
@@ -66,7 +67,7 @@ abstract class KiraKira :
                 .addQueryParameter("page", page.toString())
                 .build()
 
-            return client.get(url, apiHeaders).parseAs<ComicListDto>().toMangasPage()
+            return client.get(url, apiHeaders, Fetch.XHR).parseAs<ComicListDto>().toMangasPage()
         }
 
         return getGenreMangaList(
@@ -90,7 +91,7 @@ abstract class KiraKira :
             status?.let { addQueryParameter("status", it) }
         }.build()
 
-        return client.get(url, apiHeaders).parseAs<ComicListDto>().toMangasPage()
+        return client.get(url, apiHeaders, Fetch.XHR).parseAs<ComicListDto>().toMangasPage()
     }
 
     // ============================== Details ===============================
@@ -119,7 +120,7 @@ abstract class KiraKira :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = extractComicSlug(manga.url) ?: throw Exception("Không tìm thấy mã truyện")
-        val payload = client.get("$apiUrl/comics/$slug", apiHeaders).parseAs<ComicDetailsDto>()
+        val payload = client.get("$apiUrl/comics/$slug", apiHeaders, Fetch.XHR).parseAs<ComicDetailsDto>()
 
         val updatedManga = SManga.create().apply {
             setUrlWithoutDomain("/comics/$slug")
@@ -208,7 +209,7 @@ abstract class KiraKira :
             .newBuilder()
             .build()
 
-        val response = client.get(url, apiHeaders, ensureSuccess = false)
+        val response = client.get(url, apiHeaders, Fetch.XHR, ensureSuccess = false)
 
         if (!response.isSuccessful) {
             if (response.code == 401 && isAutoUnlockEnabled) {
@@ -281,7 +282,7 @@ abstract class KiraKira :
     }
 
     private suspend fun fetchImageSlug(comicSlug: String): String? {
-        val details = client.get("$apiUrl/comics/$comicSlug", apiHeaders).parseAs<ComicDetailsDto>()
+        val details = client.get("$apiUrl/comics/$comicSlug", apiHeaders, Fetch.XHR).parseAs<ComicDetailsDto>()
         return details.thumbnail?.let { imageSlugRegex.find(it)?.groupValues?.getOrNull(1) }
     }
 
@@ -297,7 +298,7 @@ abstract class KiraKira :
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres", apiHeaders).parseAs()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres", apiHeaders, Fetch.XHR).parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data?.parseAs<GenreListDto>()?.data?.genres.orEmpty().mapNotNull { genre ->

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -51,7 +52,7 @@ abstract class TuiTruyen : KeiSource() {
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val mangas = client.get(baseUrl).asJsoup()
+        val mangas = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
             .select("ol.homepage-ranking-list[data-ranking-period=total] a.homepage-ranking-item__link")
             .map(::popularMangaFromElement)
 
@@ -73,7 +74,7 @@ abstract class TuiTruyen : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        return parseMangaList(client.get(url).asJsoup())
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private fun latestMangaFromElement(element: Element): SManga = SManga.create().apply {
@@ -131,7 +132,7 @@ abstract class TuiTruyen : KeiSource() {
             }
             .build()
 
-        return parseMangaList(client.get(url).asJsoup())
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -176,7 +177,7 @@ abstract class TuiTruyen : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
             chapters = if (fetchChapters) fetchChapterList(document) else chapters,
@@ -210,7 +211,7 @@ abstract class TuiTruyen : KeiSource() {
             if (nextChapterPageUrl == null || nextChapterPageUrl in visitedPages) break
 
             currentPageUrl = nextChapterPageUrl
-            currentDocument = client.get(currentPageUrl).asJsoup()
+            currentDocument = client.get(currentPageUrl, Fetch.DOCUMENT).asJsoup()
         }
 
         return chapters
@@ -264,7 +265,7 @@ abstract class TuiTruyen : KeiSource() {
     // ============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
         val readerElement = document.selectFirst("[data-reader-imgx-initial-pages]")
         val accessUrl = readerElement?.attr("data-reader-imgx-access-url")?.ifBlank { null }
 
@@ -330,7 +331,7 @@ abstract class TuiTruyen : KeiSource() {
                     }
                 }
                 .build()
-            val pageAccess = client.post(accessUrl, accessHeaders, body).parseAs<PageAccessResponse>()
+            val pageAccess = client.post(accessUrl, accessHeaders, Fetch.XHR, body).parseAs<PageAccessResponse>()
 
             pageAccess.pages.forEach { entry ->
                 if (entry.downloadUrl.isNotBlank() && entry.grant != null) {
@@ -406,7 +407,7 @@ abstract class TuiTruyen : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/manga").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/manga", Fetch.DOCUMENT).asJsoup()
         .select(".filter-option[data-genre]")
         .mapNotNull { element ->
             val id = element.attr("data-genre").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
@@ -424,7 +425,7 @@ abstract class TuiTruyen : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         return listOf("manga-related-author-title", "manga-related-similar-title")
             .flatMap { sectionId ->
                 document.selectFirst("section[aria-labelledby=$sectionId]")

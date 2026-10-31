@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -108,7 +109,7 @@ abstract class Faust :
 
         val body = requestBodyData.toJsonRequestBody()
 
-        client.post(url, body).use { response ->
+        client.post(url, Fetch.XHR, body).use { response ->
             val data = response.parseAs<SearchResponseDto>()
             val mangas = data.titles.map { it.toSManga() }
             return MangasPage(mangas, (data.totalPages > data.page))
@@ -136,7 +137,7 @@ abstract class Faust :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val url = "$apiUrl/titles/${manga.url}"
-        client.get(url).use { response ->
+        client.get(url, Fetch.XHR).use { response ->
             val data = response.parseAs<SMangaDto>()
             val manga = data.toSManga()
             val chapters = data.makeSChapters(manga.url).reversed()
@@ -159,7 +160,7 @@ abstract class Faust :
         }
         val (chapterSlug, seriesSlug) = chapter.url.split("/", limit = 2)
         val url = "$apiUrl/chapters/$chapterSlug?titleSlug=$seriesSlug"
-        val data = client.get(url, ensureSuccess = false).use { response ->
+        val data = client.get(url, Fetch.XHR, ensureSuccess = false).use { response ->
             if (!response.isSuccessful) {
                 if (response.code == 403 && response.body.string().contains("необхідно увійти")) {
                     throw Exception("Для перегляду розділів 18+ необхідно увійти до облікового запису у WebView.")
@@ -179,12 +180,12 @@ abstract class Faust :
 
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
         val genres = async {
-            client.get("$apiUrl/genres/paged?page=1&pageSize=100").use { genres ->
+            client.get("$apiUrl/genres/paged?page=1&pageSize=100", Fetch.XHR).use { genres ->
                 genres.parseAs<GenreListPageDto>().items.map { it.name to it.id }
             }
         }
         val tags = async {
-            client.get("$apiUrl/tags/paged?page=1&pageSize=150").use { tags ->
+            client.get("$apiUrl/tags/paged?page=1&pageSize=150", Fetch.XHR).use { tags ->
                 tags.parseAs<GenreListPageDto>().items.map { it.name to it.id }
             }
         }

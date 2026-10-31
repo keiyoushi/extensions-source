@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -73,7 +74,7 @@ abstract class LittleTyrant : Madara() {
                 .add("offset", offset.toString())
                 .build()
             offset += 12
-            val dto = client.post(url, form).parseAs<ChapterDto>()
+            val dto = client.post(url, Fetch.XHR.from(mangaPath), form).parseAs<ChapterDto>()
             val chapterElements = dto.toJsoup(baseUrl).select(chapterListSelector())
             chapters += chapterElements.mapNotNull { chapterFromElement(it, mangaPath) }
         } while (!dto.isEmpty())
@@ -84,7 +85,7 @@ abstract class LittleTyrant : Madara() {
     // =============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         val script = document.selectFirst("script:containsData(_proxyUrls)")?.data()
             ?: return emptyList()
@@ -121,7 +122,7 @@ abstract class LittleTyrant : Madara() {
             .addQueryParameter("browser_nonce", nonce)
             .build()
         client.cookieJar.saveFromResponse(url, listOf(Cookie.parse(url, "lt_browser_nonce=$nonce; path=/")!!))
-        return client.get(url, pageHeaders).body.string()
+        return client.get(url, pageHeaders, Fetch.XHR).body.string()
     }
 
     // =============================== Images =================================

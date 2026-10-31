@@ -34,6 +34,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
@@ -264,7 +266,7 @@ class MangaDexHelper(lang: String) {
             tokenTracker[tokenRequestUrl] = System.currentTimeMillis()
         }
 
-        return GET(tokenRequestUrl, headers, cacheControl)
+        return GET(tokenRequestUrl, headers, cacheControl).newBuilder().fetch(Fetch.XHR).build()
     }
 
     fun mdAtHomeRefresh(tokenRequestUrl: String) {

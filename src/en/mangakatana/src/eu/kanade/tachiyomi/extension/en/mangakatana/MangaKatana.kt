@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -56,7 +57,7 @@ abstract class MangaKatana :
     // Latest
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/page/$page").asJsoup()
+        val document = client.get("$baseUrl/page/$page", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div#book_list > div.item").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.selectFirst("div.text > h3 > a")!!.absUrl("href"))
@@ -71,7 +72,7 @@ abstract class MangaKatana :
     // Popular (is actually alphabetical)
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/manga/page/$page").asJsoup()
+        val document = client.get("$baseUrl/manga/page/$page", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div#book_list > div.item").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.selectFirst("div.text > h3 > a")!!.absUrl("href"))
@@ -136,7 +137,7 @@ abstract class MangaKatana :
                 .build()
         }
 
-        val response = client.get(url)
+        val response = client.get(url, Fetch.DOCUMENT)
         val pathSegments = response.request.url.pathSegments
         val document = response.asJsoup()
         return if (pathSegments[0] == "manga" && pathSegments[1] != "page") {
@@ -167,7 +168,7 @@ abstract class MangaKatana :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetailsFromDocument(document), chapterListFromDocument(document))
     }
 
@@ -205,7 +206,7 @@ abstract class MangaKatana :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.pathSegments.firstOrNull() != "manga" || url.pathSegments.size < 2) return null
         val mangaUrl = "$baseUrl/manga/${url.pathSegments[1]}"
-        val document = client.get(mangaUrl).asJsoup()
+        val document = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
         return mangaDetailsFromDocument(document).apply {
             setUrlWithoutDomain(mangaUrl)
         }
@@ -215,7 +216,7 @@ abstract class MangaKatana :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val serverSuffix = preferences.getString(serverPreference, "")?.takeIf { it.isNotBlank() }?.let { "?sv=$it" } ?: ""
-        val document = client.get(getChapterUrl(chapter) + serverSuffix).asJsoup()
+        val document = client.get(getChapterUrl(chapter) + serverSuffix, Fetch.DOCUMENT).asJsoup()
         val imageScript = document.select("script:containsData(data-src)").firstOrNull()?.data()
             ?: return emptyList()
         val imageArrayName = imageArrayNameRegex.find(imageScript)?.groupValues?.get(1)

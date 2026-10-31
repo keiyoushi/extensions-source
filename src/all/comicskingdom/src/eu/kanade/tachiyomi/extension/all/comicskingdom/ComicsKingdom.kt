@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
@@ -94,7 +95,7 @@ abstract class ComicsKingdom :
     )
 
     private suspend fun parseMangaList(url: HttpUrl): MangasPage {
-        val list = client.get(url).parseAs<List<Manga>>()
+        val list = client.get(url, Fetch.XHR).parseAs<List<Manga>>()
         return MangasPage(
             list.map {
                 SManga.create().apply {
@@ -119,7 +120,7 @@ abstract class ComicsKingdom :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val mangaData = client.get(baseUrl + manga.url).parseAs<Manga>()
+        val mangaData = client.get(baseUrl + manga.url, Fetch.XHR).parseAs<Manga>()
 
         val updatedManga = SManga.create().apply {
             url = manga.url
@@ -142,7 +143,7 @@ abstract class ComicsKingdom :
         val mangaName = mangaData.link.toHttpUrl().pathSegments.last()
 
         if (shouldCompact()) {
-            val body = client.get(mangaData.link).use { it.body.string() }
+            val body = client.get(mangaData.link, Fetch.DOCUMENT).use { it.body.string() }
             val postCount = compactChapterCountRegex.findAll(body)
                 .find { result -> result.groupValues[1].toDouble() > 0 }!!.groupValues[1].toDouble()
             val maxPage = ceil(postCount / chapterPerPage)
@@ -211,7 +212,7 @@ abstract class ComicsKingdom :
             addQueryParameter("page", page.toString())
         }.build()
 
-        return client.get(url).parseAs<List<Chapter>>()
+        return client.get(url, Fetch.XHR).parseAs<List<Chapter>>()
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -222,7 +223,7 @@ abstract class ComicsKingdom :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(baseUrl + chapter.url)
+        val response = client.get(baseUrl + chapter.url, Fetch.XHR)
         if (shouldCompact()) {
             return response.parseAs<List<Chapter>>()
                 .mapIndexed { idx, chapter ->

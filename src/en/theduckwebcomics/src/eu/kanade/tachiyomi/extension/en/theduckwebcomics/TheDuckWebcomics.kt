@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -16,9 +17,8 @@ import org.jsoup.nodes.Document
 
 @Source
 abstract class TheDuckWebcomics : KeiSource() {
-
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/search/?page=$page").asJsoup()
+        val document = client.get("$baseUrl/search/?page=$page", Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document)
     }
 
@@ -41,7 +41,7 @@ abstract class TheDuckWebcomics : KeiSource() {
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/search/?page=$page&last_update=today").asJsoup()
+        val document = client.get("$baseUrl/search/?page=$page&last_update=today", Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document)
     }
 
@@ -53,7 +53,7 @@ abstract class TheDuckWebcomics : KeiSource() {
                 it.encode(this)
             }
         }.build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document)
     }
 
@@ -67,7 +67,7 @@ abstract class TheDuckWebcomics : KeiSource() {
         val manga = manga.apply { initialized = true }
 
         val chapters = if (fetchChapters) {
-            val document = client.get(baseUrl + manga.url).asJsoup()
+            val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
 
             document.selectFirst(".yellow-box > .paranomargin")?.text()?.let(::error)
             document.select("#page_dropdown > option").mapIndexed { idx, el ->
@@ -85,7 +85,7 @@ abstract class TheDuckWebcomics : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
         val imageUrl = document.selectFirst(".page-image")?.absUrl("src")
             ?: throw Exception("Page image not found")
         return listOf(Page(0, imageUrl = imageUrl))

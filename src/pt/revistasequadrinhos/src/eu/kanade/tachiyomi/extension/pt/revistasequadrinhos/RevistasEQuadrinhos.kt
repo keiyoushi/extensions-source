@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -37,7 +38,7 @@ abstract class RevistasEQuadrinhos : KeiSource() {
     }
 
     private suspend fun fetchMangaList(url: HttpUrl): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select("ul.videos > li").map { element ->
             val a = element.selectFirst("a.titulo") ?: throw Exception("Manga URL is mandatory")
@@ -110,7 +111,7 @@ abstract class RevistasEQuadrinhos : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         val chapterUrl = response.request.url.encodedPath
         val document = response.asJsoup()
 
@@ -137,7 +138,7 @@ abstract class RevistasEQuadrinhos : KeiSource() {
 
     // =============================== Pages ===============================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         val gallery = document.select("div.dgwt-jg-gallery figure.dgwt-jg-item a")
         if (gallery.isNotEmpty()) {

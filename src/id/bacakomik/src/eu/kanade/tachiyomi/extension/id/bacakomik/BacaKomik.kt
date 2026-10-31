@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -29,7 +30,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class BacaKomik : KeiSource() {
-
     private val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)
     private val chapterRegex = Regex("""Chapter\s+([0-9]+(?:\.[0-9]+)?)""", RegexOption.IGNORE_CASE)
 
@@ -40,13 +40,13 @@ abstract class BacaKomik : KeiSource() {
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/daftar-komik/${pagePath(page)}?order=popular".toHttpUrl()
-        return mangaListParse(client.get(url).asJsoup())
+        return mangaListParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // =============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/daftar-komik/${pagePath(page)}?order=update".toHttpUrl()
-        return mangaListParse(client.get(url).asJsoup())
+        return mangaListParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // =============================== Search ===============================
@@ -97,7 +97,7 @@ abstract class BacaKomik : KeiSource() {
             }
         }.build()
 
-        return mangaListParse(client.get(url).asJsoup())
+        return mangaListParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -105,7 +105,7 @@ abstract class BacaKomik : KeiSource() {
         if (url.pathSegments.firstOrNull() != "komik") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
         val targetUrl = "$baseUrl/komik/$slug/".toHttpUrl()
-        val document = client.get(targetUrl).asJsoup()
+        val document = client.get(targetUrl, Fetch.DOCUMENT).asJsoup()
         val manga = SManga.create().apply {
             setUrlWithoutDomain(targetUrl.toString())
         }
@@ -119,7 +119,7 @@ abstract class BacaKomik : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseDetails(document, manga),
             chapters = parseChapters(document),
@@ -189,7 +189,7 @@ abstract class BacaKomik : KeiSource() {
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = baseUrl + chapter.url
-        val document = client.get(chapterUrl).asJsoup()
+        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
         return document.select("div:has(>img[alt*=\"Chapter\"]) img")
             .filter { it.parent()?.tagName() != "noscript" }
             .mapIndexedNotNull { i, element ->

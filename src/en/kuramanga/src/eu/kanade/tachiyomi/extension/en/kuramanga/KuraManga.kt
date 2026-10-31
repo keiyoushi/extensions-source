@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -24,7 +25,7 @@ abstract class KuraManga : KeiSource() {
 
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("section:has(h2:contains(Popular)) a.sp-card").mapNotNull { element ->
             val titleEl = element.selectFirst(".sp-cap h3") ?: return@mapNotNull null
             SManga.create().apply {
@@ -39,7 +40,7 @@ abstract class KuraManga : KeiSource() {
     // =============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val pageUrl = if (page > 1) "$baseUrl/?page=$page" else "$baseUrl/"
-        val document = client.get(pageUrl).asJsoup()
+        val document = client.get(pageUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".update-list .update-row").mapNotNull { element ->
             val link = element.selectFirst("a.update-series-link") ?: return@mapNotNull null
             SManga.create().apply {
@@ -90,7 +91,7 @@ abstract class KuraManga : KeiSource() {
         val searchHeaders = headers.newBuilder()
             .add("X-Requested-With", "XMLHttpRequest")
             .build()
-        val response = client.get(url, searchHeaders).parseAs<SearchResponse>()
+        val response = client.get(url, searchHeaders, Fetch.XHR).parseAs<SearchResponse>()
 
         val mangas = response.data.map { it.toSManga() }
         val hasNextPage = response.data.size == PAGE_SIZE && (response.total == 0 || page * PAGE_SIZE < response.total)
@@ -102,7 +103,7 @@ abstract class KuraManga : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val slug = url.pathSegments.firstOrNull { it.isNotBlank() } ?: return null
         if (slug in setOf("search", "assets", "api", "login", "register")) return null
-        val document = client.get("$baseUrl/$slug").asJsoup()
+        val document = client.get("$baseUrl/$slug", Fetch.DOCUMENT).asJsoup()
         mangaDetailsParse(document).apply {
             this.url = "/$slug"
         }
@@ -114,7 +115,7 @@ abstract class KuraManga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = mangaDetailsParse(document).apply {
                 url = manga.url
@@ -168,7 +169,7 @@ abstract class KuraManga : KeiSource() {
 
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("#chapterImages img").mapIndexed { index, img ->
             val imageUrl = img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }
             Page(index, imageUrl = imageUrl)

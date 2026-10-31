@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.booleanOrNull
@@ -44,7 +45,7 @@ abstract class VineTheme :
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", "24")
             .build()
-        val data = client.get(url).parseAs<ApiSeriesResponse>()
+        val data = client.get(url, Fetch.XHR).parseAs<ApiSeriesResponse>()
         return MangasPage(data.data.map { it.toSManga(baseUrl) }, data.meta?.hasMore == true)
     }
 
@@ -60,7 +61,7 @@ abstract class VineTheme :
                 addQueryParameter("page", page.toString())
             }
             .build()
-        val data = client.get(url).parseAs<ApiSeriesResponse>()
+        val data = client.get(url, Fetch.XHR).parseAs<ApiSeriesResponse>()
         return MangasPage(data.data.map { it.toSManga(baseUrl) }, data.meta?.hasMore == true)
     }
 
@@ -70,7 +71,7 @@ abstract class VineTheme :
         if (segments.getOrNull(0) != "series" || segments.getOrNull(1) != "comic") return null
         val slug = segments.getOrNull(2)?.takeIf { it.isNotEmpty() } ?: return null
         if (segments.getOrNull(3) == "chapter") return null
-        val detail = client.get("$baseUrl/series/comic/$slug", headers = rscHeaders)
+        val detail = client.get("$baseUrl/series/comic/$slug", rscHeaders, Fetch.XHR)
             .extractNextJs<DetailDto>(DetailDto::nextJsFilter)
             ?: return null
         return detail.series.toSManga(baseUrl, fallbackSlug = slug)
@@ -82,7 +83,7 @@ abstract class VineTheme :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = client.get(getDetailsUrl(manga), rscHeaders).extractNextJs<DetailDto>(DetailDto::nextJsFilter)
+        val details = client.get(getDetailsUrl(manga), rscHeaders, Fetch.XHR).extractNextJs<DetailDto>(DetailDto::nextJsFilter)
 
         val updatedManga = details?.series?.toSManga(baseUrl, manga) ?: manga
         val updatedChapters = if (fetchChapters) fetchAllChapters(manga, details, chapters) else chapters
@@ -92,7 +93,7 @@ abstract class VineTheme :
 
     override val supportsRelatedMangas: Boolean get() = true
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getDetailsUrl(manga), rscHeaders)
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getDetailsUrl(manga), rscHeaders, Fetch.XHR)
         .extractNextJs<RelatedDto>(RelatedDto::nextJsFilter)
         ?.similarSeries
         .orEmpty()
@@ -113,7 +114,8 @@ abstract class VineTheme :
                             getDetailsUrl(manga).newBuilder()
                                 .addQueryParameter("page", page.toString())
                                 .build(),
-                            headers = rscHeaders,
+                            rscHeaders,
+                            Fetch.XHR,
                         ).extractNextJs<DetailDto>(DetailDto::nextJsFilter)
                             ?.chapters.orEmpty()
                     }
@@ -135,7 +137,7 @@ abstract class VineTheme :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         if (chapter.memo["isLocked"]?.booleanOrNull == true) return emptyList()
-        val response = client.get(getChapterUrl(chapter), rscHeaders)
+        val response = client.get(getChapterUrl(chapter), rscHeaders, Fetch.XHR)
         val dto = response.extractNextJs<ChapterDetailDto>(ChapterDetailDto::nextJsFilter)
         return dto?.chapter?.pages.orEmpty().mapIndexedNotNull { index, pageDto ->
             pageDto.imageUrl?.toAbsoluteUrl(baseUrl)?.let { Page(index, imageUrl = it) }
@@ -145,7 +147,7 @@ abstract class VineTheme :
     override val supportsFilterFetching: Boolean get() = true
 
     override suspend fun fetchFilterData(): JsonElement = client
-        .get("$baseUrl/series")
+        .get("$baseUrl/series", Fetch.DOCUMENT)
         .extractNextJs<GenreTagListDto>(GenreTagListDto::nextJsFilter)
         ?.toFilterData()
         .toJsonElement()

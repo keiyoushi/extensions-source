@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.unpacker.Unpacker
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
@@ -35,7 +36,6 @@ import java.util.TimeZone
 abstract class Dm5 :
     KeiSource(),
     ConfigurableSource {
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(CommentsInterceptor)
         addCookie("isAdult" to "1")
@@ -49,7 +49,7 @@ abstract class Dm5 :
         set("User-Agent", USER_AGENT)
     }
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/manhua-list-p$page/").asJsoup()
+        val document = client.get("$baseUrl/manhua-list-p$page/", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(POPULAR_MANGA_SELECTOR).map { popularMangaFromElement(it) }
         val hasNextPage = document.selectFirst(NEXT_PAGE_SELECTOR) != null
         return MangasPage(mangas, hasNextPage)
@@ -63,14 +63,14 @@ abstract class Dm5 :
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/manhua-list-s2-p$page/").asJsoup()
+        val document = client.get("$baseUrl/manhua-list-s2-p$page/", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(POPULAR_MANGA_SELECTOR).map { popularMangaFromElement(it) }
         val hasNextPage = document.selectFirst(NEXT_PAGE_SELECTOR) != null
         return MangasPage(mangas, hasNextPage)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val document = client.get("$baseUrl/search?title=$query&language=1&page=$page").asJsoup()
+        val document = client.get("$baseUrl/search?title=$query&language=1&page=$page", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(SEARCH_MANGA_SELECTOR).map {
             SManga.create().apply {
                 title = it.selectFirst(".title > a")!!.text()
@@ -97,7 +97,7 @@ abstract class Dm5 :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
         manga.apply {
             title = document.selectFirst("div.banner_detail_form p.title")!!.ownText()
             thumbnail_url = document.selectFirst("div.banner_detail_form img")?.absUrl("src")
@@ -152,7 +152,7 @@ abstract class Dm5 :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
         val images = document.select("div#barChapter > img.load-src")
         val result: MutableList<Page>
         val script = document.selectFirst("script:containsData(DM5_MID)")!!.data()
@@ -205,7 +205,7 @@ abstract class Dm5 :
     override suspend fun getImageUrl(page: Page): String {
         val referer = page.url.substringBefore("chapterfun.ashx")
         val newHeaders = headers.newBuilder().set("Referer", referer).build()
-        val response = client.get(page.url, newHeaders)
+        val response = client.get(page.url, newHeaders, Fetch.SCRIPT)
         val script = Unpacker.unpack(response.body.string())
         val pix = script.substringAfter("var pix=\"").substringBefore("\"")
         val pvalue = script.substringAfter("var pvalue=[\"").substringBefore("\"")

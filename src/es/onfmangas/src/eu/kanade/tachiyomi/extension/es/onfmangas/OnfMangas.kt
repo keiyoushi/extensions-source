@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -77,7 +78,7 @@ abstract class OnfMangas : KeiSource() {
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/populares.php").asJsoup()
+        val document = client.get("$baseUrl/populares.php", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("a.pop-podium-card, a.pop-card").mapNotNull { element ->
             SManga.create().apply {
                 title = element.selectFirst(".pop-podium-name, .pop-name")?.text()
@@ -97,7 +98,7 @@ abstract class OnfMangas : KeiSource() {
     // =============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/mangas.php?tab=general&genero=0&q=&page=$page").asJsoup()
+        val document = client.get("$baseUrl/mangas.php?tab=general&genero=0&q=&page=$page", Fetch.DOCUMENT).asJsoup()
         return parseMangasPage(document)
     }
 
@@ -133,7 +134,7 @@ abstract class OnfMangas : KeiSource() {
             url.addQueryParameter("generos[0]", genero)
         }
 
-        val document = client.get(url.build()).asJsoup()
+        val document = client.get(url.build(), Fetch.DOCUMENT).asJsoup()
         return parseMangasPage(document)
     }
 
@@ -148,7 +149,7 @@ abstract class OnfMangas : KeiSource() {
         if (!url.host.equals(baseUrl.toHttpUrl().host, ignoreCase = true)) return null
         if (url.pathSegments.firstOrNull() != "manga") return null
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseMangaDetails(document).apply {
             this.url = url.encodedPath
         }
@@ -160,7 +161,7 @@ abstract class OnfMangas : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
     }
 
@@ -218,7 +219,7 @@ abstract class OnfMangas : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
         val hexString = document.selectFirst("script:containsData(const _hexP =)")
             ?.data()
             ?.substringAfter("const _hexP = \"")

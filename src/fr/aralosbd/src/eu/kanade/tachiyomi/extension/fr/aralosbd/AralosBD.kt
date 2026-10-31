@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -43,7 +44,7 @@ abstract class AralosBD : KeiSource() {
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = searchMangas("$baseUrl/manga/search?s=page:${page - 1};sort:id;order:desc;text:$query", page)
 
     private suspend fun searchMangas(url: String, page: Int): MangasPage {
-        val searchResult = client.get(url).parseAs<AralosBDSearchResult>()
+        val searchResult = client.get(url, Fetch.XHR).parseAs<AralosBDSearchResult>()
 
         return MangasPage(searchResult.mangas.map { it.toSManga(baseUrl) }, page < searchResult.pageCount)
     }
@@ -62,14 +63,14 @@ abstract class AralosBD : KeiSource() {
 
         val details = async {
             if (fetchDetails) {
-                client.get("$baseUrl/manga/api?get=manga&id=$id").parseAs<AralosBDManga>().toSManga(manga)
+                client.get("$baseUrl/manga/api?get=manga&id=$id", Fetch.XHR).parseAs<AralosBDManga>().toSManga(manga)
             } else {
                 manga
             }
         }
         val chapterList = async {
             if (fetchChapters) {
-                client.get("$baseUrl/manga/api?get=chapters&manga=$id").parseAs<List<AralosBDChapter>>()
+                client.get("$baseUrl/manga/api?get=chapters&manga=$id", Fetch.XHR).parseAs<List<AralosBDChapter>>()
                     .filter { it.isReleased }
                     .map { it.toSChapter(baseUrl) }
             } else {
@@ -91,7 +92,7 @@ abstract class AralosBD : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val id = chapter.url.toHttpUrl().queryParameter("id")!!
 
-        return client.get("$baseUrl/manga/api?get=pages&chapter=$id").parseAs<AralosBDPages>()
+        return client.get("$baseUrl/manga/api?get=pages&chapter=$id", Fetch.XHR).parseAs<AralosBDPages>()
             .links.mapIndexed { index, link ->
                 Page(index, imageUrl = "$baseUrl/$link")
             }

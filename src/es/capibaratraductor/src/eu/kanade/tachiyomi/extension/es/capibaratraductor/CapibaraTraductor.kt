@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -91,7 +92,7 @@ abstract class CapibaraTraductor : KeiSource() {
         .addQueryParameter("type", COMIC_TYPES)
 
     private suspend fun parseMangaList(url: HttpUrl, page: Int, headers: Headers): MangasPage {
-        val result = client.get(url, headers).parseAs<Data<SeriesListDataDto>>()
+        val result = client.get(url, headers, Fetch.XHR).parseAs<Data<SeriesListDataDto>>()
 
         val mangas = result.data.series.map { it.toSManga() }
         val hasNextPage = page < result.data.maxPage
@@ -106,7 +107,7 @@ abstract class CapibaraTraductor : KeiSource() {
         val seriesSlug = segments[2]
 
         if (segments[0] == "joint") {
-            val series = client.get("$baseUrl/api/joint/$seriesSlug").parseAs<Data<SeriesDto>>().data
+            val series = client.get("$baseUrl/api/joint/$seriesSlug", Fetch.XHR).parseAs<Data<SeriesDto>>().data
             return series.toSMangaDetails(series.leaderSlug()).apply {
                 memo = buildJsonObject { put("jointSlug", seriesSlug) }
                 initialized = true
@@ -163,7 +164,7 @@ abstract class CapibaraTraductor : KeiSource() {
             "manga-custom/$seriesSlug"
         }
 
-        val result = client.get("$baseUrl/api/$seriesPath/chapter/$chapterSlug/pages", getScanHeaders(organizationSlug))
+        val result = client.get("$baseUrl/api/$seriesPath/chapter/$chapterSlug/pages", getScanHeaders(organizationSlug), Fetch.XHR)
             .parseAs<Data<List<PageDto>>>()
         return result.data.mapIndexed { i, page ->
             Page(i, imageUrl = decodePageUrl(page.pg, result.rv!!, i))
@@ -179,7 +180,7 @@ abstract class CapibaraTraductor : KeiSource() {
             .addQueryParameter("type", COMIC_TYPES)
             .build()
 
-        return client.get(url).parseAs<Data<SeriesListDataDto>>().data.series.map { it.toSManga() }
+        return client.get(url, Fetch.XHR).parseAs<Data<SeriesListDataDto>>().data.series.map { it.toSManga() }
     }
 
     override val supportsFilterFetching get() = true
@@ -187,8 +188,8 @@ abstract class CapibaraTraductor : KeiSource() {
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
         val sfwScans = async { fetchAllScans(includeNsfw = false) }
         val nsfwScans = async { fetchAllScans(includeNsfw = true) }
-        val genres = async { client.get("$baseUrl/api/genre").parseAs<Data<List<FilterOptionDto>>>().data }
-        val demographies = async { client.get("$baseUrl/api/demography").parseAs<Data<List<FilterOptionDto>>>().data }
+        val genres = async { client.get("$baseUrl/api/genre", Fetch.XHR).parseAs<Data<List<FilterOptionDto>>>().data }
+        val demographies = async { client.get("$baseUrl/api/demography", Fetch.XHR).parseAs<Data<List<FilterOptionDto>>>().data }
 
         val scans = (sfwScans.await() + nsfwScans.await())
             .distinctBy { it.second }
@@ -256,7 +257,7 @@ abstract class CapibaraTraductor : KeiSource() {
                 }
                 .build()
 
-            val response = client.get(url)
+            val response = client.get(url, Fetch.XHR)
                 .parseAs<Data<ScanListDto>>()
                 .data
 
@@ -276,7 +277,7 @@ abstract class CapibaraTraductor : KeiSource() {
         val (seriesSlug, organizationSlug) = manga.url.split("/", limit = 2)
         val seriesPath = manga.memo["jointSlug"]?.stringOrNull?.let { "joint/$it" } ?: "manga-custom/$seriesSlug"
 
-        return client.get("$baseUrl/api/$seriesPath", getScanHeaders(organizationSlug))
+        return client.get("$baseUrl/api/$seriesPath", getScanHeaders(organizationSlug), Fetch.XHR)
             .parseAs<Data<SeriesDto>>()
             .data
     }

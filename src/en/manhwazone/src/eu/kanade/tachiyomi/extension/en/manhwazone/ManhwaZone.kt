@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -28,14 +29,14 @@ abstract class ManhwaZone : KeiSource() {
 
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/series?sortBy=popularity&page=$page").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/series?sortBy=popularity&page=$page", Fetch.DOCUMENT).asJsoup())
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/series?sortBy=latest&page=$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/series?sortBy=latest&page=$page", Fetch.DOCUMENT).asJsoup())
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || !url.encodedPath.startsWith("/series/")) return null
 
-        return parseMangaDetails(client.get(url).asJsoup()).apply {
+        return parseMangaDetails(client.get(url, Fetch.DOCUMENT).asJsoup()).apply {
             this.url = url.encodedPath
         }
     }
@@ -69,7 +70,7 @@ abstract class ManhwaZone : KeiSource() {
             }
         }
 
-        return parseMangaList(client.get(url.build()).asJsoup())
+        return parseMangaList(client.get(url.build(), Fetch.DOCUMENT).asJsoup())
     }
 
     private fun parseMangaList(document: Document): MangasPage {
@@ -90,7 +91,7 @@ abstract class ManhwaZone : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = parseMangaDetails(document).apply { url = manga.url }
         val chapterList = if (fetchChapters) fetchChapterList(document) else chapters
@@ -148,7 +149,7 @@ abstract class ManhwaZone : KeiSource() {
             ),
         )
 
-        val postResponse = client.post("$baseUrl/livewire/update", jsonHeaders, payload.toJsonRequestBody(), ensureSuccess = false)
+        val postResponse = client.post("$baseUrl/livewire/update", jsonHeaders, Fetch.XHR, payload.toJsonRequestBody(), ensureSuccess = false)
         if (!postResponse.isSuccessful) {
             postResponse.close()
             return emptyList()
@@ -175,7 +176,7 @@ abstract class ManhwaZone : KeiSource() {
     }
 
     // The __RS_CONF__ image host (img.mangalaxy.net) no longer resolves; the page also lists the images directly
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select("img.lazy-image[data-src]")
         .mapIndexed { i, element -> Page(i, imageUrl = element.attr("abs:data-src")) }
 

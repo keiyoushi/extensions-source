@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.tr.mangatilkisi
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.utils.asJsoup
 import okhttp3.FormBody
@@ -34,6 +35,6 @@ abstract class MangaTilkisi : Madara() {
         val payload = FormBody.Builder()
             .add("verified", "1")
             .build()
-        return client.post(chapterUrl, headers, payload).use { it.asJsoup() }
+        return client.post(chapterUrl, headers, Fetch.DOCUMENT, payload).use { it.asJsoup() }
     }
 }

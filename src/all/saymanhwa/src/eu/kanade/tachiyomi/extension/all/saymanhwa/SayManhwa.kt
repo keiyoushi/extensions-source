@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -45,7 +46,7 @@ abstract class SayManhwa : KeiSource() {
         val url = "$baseUrl/$saymanhwaLang/popular".toHttpUrl().newBuilder()
             .apply { if (page != 1) addQueryParameter("page", page.toString()) }
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseMangaPage(document, page)
     }
 
@@ -55,7 +56,7 @@ abstract class SayManhwa : KeiSource() {
         val url = "$baseUrl/$saymanhwaLang/latest".toHttpUrl().newBuilder()
             .apply { if (page != 1) addQueryParameter("page", page.toString()) }
             .build()
-        return parseMangaPage(client.get(url).asJsoup(), page)
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT).asJsoup(), page)
     }
 
     // ============================== Search ===============================
@@ -76,7 +77,7 @@ abstract class SayManhwa : KeiSource() {
             }
         }.build()
 
-        return parseMangaPage(client.get(url).asJsoup(), page)
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT).asJsoup(), page)
     }
 
     private fun parseMangaPage(document: Document, page: Int): MangasPage {
@@ -103,7 +104,7 @@ abstract class SayManhwa : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             mangaDetailsParse(document, getMangaUrl(manga)),
             chapterListParse(document),
@@ -113,7 +114,7 @@ abstract class SayManhwa : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val mangaUrl = mangaUrlFrom(url)
-        val document = client.get(mangaUrl).asJsoup()
+        val document = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
         return mangaDetailsParse(document, mangaUrl.toString()).apply { initialized = true }
     }
 
@@ -189,7 +190,7 @@ abstract class SayManhwa : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(".reader-pages img").mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("src"))
         }
@@ -200,7 +201,7 @@ abstract class SayManhwa : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return document.select(".recommend-card-v71").mapNotNull { element ->
             val link = element.selectFirst("h3 a") ?: return@mapNotNull null
             SManga.create().apply {
@@ -217,7 +218,7 @@ abstract class SayManhwa : KeiSource() {
 
     override suspend fun fetchFilterData(): JsonElement {
         val url = "$baseUrl/$saymanhwaLang/series".toHttpUrl()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val genres = document.select("select[name=genre] option").mapNotNull { option ->
             val value = option.attr("value")
             val text = option.text()

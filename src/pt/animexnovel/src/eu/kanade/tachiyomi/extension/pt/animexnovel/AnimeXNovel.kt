@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -29,7 +30,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class AnimeXNovel : KeiSource() {
-
     override val supportsFilterFetching: Boolean = true
 
     override fun OkHttpClient.Builder.configureClient() = readTimeout(1.minutes)
@@ -49,7 +49,7 @@ abstract class AnimeXNovel : KeiSource() {
     )
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val mangas = client.get(baseUrl).asJsoup()
+        val mangas = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
             .select("div:contains(Últimos Mangás) + .axn-piz-container .axn-piz-card")
             .map(::mangaFromElement)
         return MangasPage(mangas, hasNextPage = false)
@@ -77,7 +77,7 @@ abstract class AnimeXNovel : KeiSource() {
                     .forEach { filter -> add("terms[]", filter.id) }
             }
             .build()
-        val response = client.post("$baseUrl/wp-admin/admin-ajax.php", form)
+        val response = client.post("$baseUrl/wp-admin/admin-ajax.php", Fetch.DOCUMENT, form)
 
         val mangas = response.asJsoup().select("a.axn-card").map(::mangaFromElement).toMutableList()
         val hasNextPage = mangas.isNotEmpty() && mangas.size > 1
@@ -108,7 +108,7 @@ abstract class AnimeXNovel : KeiSource() {
     }
 
     override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.XHR).asJsoup()
 
         val mangaUpdate = when {
             fetchDetails -> document.selectFirst("#axn-data")!!.data()
@@ -139,7 +139,7 @@ abstract class AnimeXNovel : KeiSource() {
         var page = 1
         do {
             url.setQueryParameter("page", (page++).toString())
-            val response = client.get(url.build())
+            val response = client.get(url.build(), Fetch.XHR)
             val currentPage = response.getChapterList()
             chapterList += currentPage
         } while (currentPage.isNotEmpty())
@@ -152,7 +152,7 @@ abstract class AnimeXNovel : KeiSource() {
     private val pageContainerSelector = ".spice-block-img-gallery, .wp-block-gallery, .spnc-entry-content, .leitor-cascata"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.selectFirst(pageContainerSelector)!!.select("img").mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("src"))
         }
@@ -163,7 +163,7 @@ abstract class AnimeXNovel : KeiSource() {
     private class CheckBox(name: String, val id: String = name) : Filter.CheckBox(name)
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/pesquisar").asJsoup()
+        val document = client.get("$baseUrl/pesquisar", Fetch.DOCUMENT).asJsoup()
 
         val filtersSelectors = setOf(
             "grp-alfabeto",

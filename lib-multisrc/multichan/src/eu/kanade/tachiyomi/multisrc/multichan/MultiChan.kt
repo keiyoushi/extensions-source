@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -22,7 +23,7 @@ abstract class MultiChan : KeiSource() {
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/mostfavorites?offset=${20 * (page - 1)}").asJsoup()
+        val document = client.get("$baseUrl/mostfavorites?offset=${20 * (page - 1)}", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(popularMangaSelector()).map { element ->
             popularMangaFromElement(element)
         }
@@ -33,7 +34,7 @@ abstract class MultiChan : KeiSource() {
     protected open fun latestUpdatesUrl(page: Int) = "$baseUrl/manga/new?offset=${20 * (page - 1)}"
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get(latestUpdatesUrl(page)).asJsoup()
+        val document = client.get(latestUpdatesUrl(page), Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(latestUpdatesSelector()).map { element ->
             latestUpdatesFromElement(element)
         }
@@ -72,7 +73,7 @@ abstract class MultiChan : KeiSource() {
     protected abstract fun searchMangaUrl(page: Int, query: String, filters: FilterList): String
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val document = client.get(searchMangaUrl(page, query, filters)).asJsoup()
+        val document = client.get(searchMangaUrl(page, query, filters), Fetch.DOCUMENT).asJsoup()
         var hasNextPage = false
 
         val mangas = document.select(searchMangaSelector()).map { element ->
@@ -104,7 +105,7 @@ abstract class MultiChan : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetailsParse(document), fetchChapterList(manga, document))
     }
 
@@ -145,7 +146,7 @@ abstract class MultiChan : KeiSource() {
         return chapter
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(baseUrl + chapter.url).body.string())
+    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(baseUrl + chapter.url, Fetch.DOCUMENT).body.string())
 
     protected open fun pageListParse(html: String): List<Page> {
         val beginIndex = html.indexOf("fullimg\":[") + 10

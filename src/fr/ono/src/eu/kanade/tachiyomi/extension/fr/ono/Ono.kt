@@ -13,6 +13,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -136,7 +138,7 @@ abstract class Ono :
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val body = graphQLBody(query = RANKING_QUERY, operationName = "getCatalogRanking")
-        val series = client.post(apiUrl, gqlHeaders, body)
+        val series = client.post(apiUrl, gqlHeaders, Fetch.XHR, body)
             .parseGraphQLAs<RankingData>()
             .getCatalogRanking?.series!!
         val mangas = series.map { s ->
@@ -161,7 +163,7 @@ abstract class Ono :
             operationName = "searchCatalogByTerm",
             variables = SearchVariables(query),
         )
-        val series = client.post(apiUrl, gqlHeaders, body)
+        val series = client.post(apiUrl, gqlHeaders, Fetch.XHR, body)
             .parseGraphQLAs<SearchCatalogData>()
             .searchCatalogByTerm?.series!!
         val mangas = series.map { s ->
@@ -178,13 +180,13 @@ abstract class Ono :
 
     private suspend fun seriesDetail(manga: SManga): SeriesDetail {
         val url = (baseUrl + manga.url).toHttpUrl()
-        client.get(url, rscHeaders).extractNextJs<SeriesDetail>()?.let { return it }
+        client.get(url, rscHeaders, Fetch.XHR).extractNextJs<SeriesDetail>()?.let { return it }
 
         // RSC payload can be partial on client-side navigation; retry cache-busted.
         val retryUrl = url.newBuilder()
             .addQueryParameter("_", System.currentTimeMillis().toString())
             .build()
-        return client.get(retryUrl, rscHeaders, CacheControl.FORCE_NETWORK).extractNextJs<SeriesDetail>()!!
+        return client.get(retryUrl, rscHeaders, Fetch.XHR, CacheControl.FORCE_NETWORK).extractNextJs<SeriesDetail>()!!
     }
 
     override suspend fun fetchMangaUpdate(
@@ -256,7 +258,7 @@ abstract class Ono :
         val num = segments.last()
         val slug = segments[segments.size - 2]
 
-        val payload = fetchReadingSession(num, slug) { client.post(apiUrl, gqlHeaders, it) }
+        val payload = fetchReadingSession(num, slug) { client.post(apiUrl, gqlHeaders, Fetch.XHR, it) }
 
         when (payload.__typename) {
             "SessionStarted" -> {}
@@ -352,7 +354,7 @@ abstract class Ono :
         response.close()
 
         val payload = fetchReadingSession(num, slug) {
-            client.newCall(POST(apiUrl, gqlHeaders, it)).execute()
+            client.newCall(POST(apiUrl, gqlHeaders, it).newBuilder().fetch(Fetch.XHR).build()).execute()
         }
         val freshPages = payload.publicationMetadata?.pages
             ?: throw IOException("Pas de pages dans la session rafraîchie")

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -28,7 +29,7 @@ abstract class ComicLand : KeiSource() {
     }
 
     private suspend fun mangaListParse(url: HttpUrl): MangasPage {
-        val res = client.get(url).parseAs<ApiResponse<PageData>>()
+        val res = client.get(url, Fetch.XHR).parseAs<ApiResponse<PageData>>()
         val data = res.data ?: return MangasPage(emptyList(), false)
 
         return MangasPage(data.comics.map { it.toSManga() }, data.hasNextPage)
@@ -78,7 +79,7 @@ abstract class ComicLand : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val res = client.get("$apiUrl/comic/detail?slug=${manga.url}").parseAs<ApiResponse<ComicDetailDto>>()
+        val res = client.get("$apiUrl/comic/detail?slug=${manga.url}", Fetch.XHR).parseAs<ApiResponse<ComicDetailDto>>()
         val data = res.data ?: throw Exception("Failed to parse manga details")
 
         return SMangaUpdate(
@@ -92,7 +93,7 @@ abstract class ComicLand : KeiSource() {
         val slug = chapter.url.substringAfter("/comic/").substringBefore("/chapter/")
         val index = chapter.url.substringAfter("/chapter/")
 
-        val res = client.get("$apiUrl/chapter/pages_by_index?slug=$slug&index=$index").parseAs<ApiResponse<PagesData>>()
+        val res = client.get("$apiUrl/chapter/pages_by_index?slug=$slug&index=$index", Fetch.XHR).parseAs<ApiResponse<PagesData>>()
         val pages = res.data?.pages ?: emptyList()
 
         return pages.mapIndexed { index, url ->

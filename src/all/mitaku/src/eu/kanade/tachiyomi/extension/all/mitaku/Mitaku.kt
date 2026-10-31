@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -31,7 +32,7 @@ abstract class Mitaku : KeiSource() {
     // ========================= Popular =========================
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/category/ero-cosplay/page/$page".toHttpUrl()
-        return parseMangasPage(client.get(url).asJsoup())
+        return parseMangasPage(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // ========================= Latest =========================
@@ -41,7 +42,7 @@ abstract class Mitaku : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         if (isMangaOrChapterPath(url.pathSegments) != true) return null
-        return mangaDetailsParse(client.get(url).asJsoup())
+        return mangaDetailsParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -63,7 +64,7 @@ abstract class Mitaku : KeiSource() {
             else -> return getPopularManga(page)
         }
 
-        return parseSearch(client.get(url))
+        return parseSearch(client.get(url, Fetch.DOCUMENT))
     }
 
     private fun parseSearch(response: Response): MangasPage {
@@ -94,7 +95,7 @@ abstract class Mitaku : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             mangaDetailsParse(doc),
             parseChapters(doc),
@@ -139,7 +140,7 @@ abstract class Mitaku : KeiSource() {
 
     // ========================= Pages =========================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter))
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         val pages = response.asJsoup().select(PAGE_SELECTOR)
             .mapIndexedNotNull { index, element ->
                 val imageUrl = element.absUrl("data-mfp-src").ifBlank { element.absUrl("href") }

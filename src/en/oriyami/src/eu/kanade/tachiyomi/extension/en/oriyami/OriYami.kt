@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
@@ -39,7 +40,7 @@ abstract class OriYami : KeiSource() {
             addQueryParameter("page", page.toString())
             addQueryParameter("page_size", PAGE_SIZE)
         }.build()
-        val list = client.get(url, apiHeaders).parseAs<BrowseList>()
+        val list = client.get(url, apiHeaders, Fetch.XHR).parseAs<BrowseList>()
         return MangasPage(list.results.map { it.toSManga() }, list.next != null)
     }
 
@@ -77,11 +78,11 @@ abstract class OriYami : KeiSource() {
             .addPathSegment(chapter.memo[MEMO_NUMBER]!!.string)
             .addPathSegment("")
             .build()
-        return client.get(url, apiHeaders).parseAs<ChapterPages>().pages
+        return client.get(url, apiHeaders, Fetch.XHR).parseAs<ChapterPages>().pages
             .mapIndexed { index, page -> Page(index, imageUrl = page.imageUrl) }
     }
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/library")
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/library", Fetch.XHR)
         .extractNextJs<LibraryData> { it is JsonObject && "initialMeta" in it && "initialYears" in it }!!
         .toJsonElement()
 
@@ -108,7 +109,7 @@ abstract class OriYami : KeiSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("page_size", PAGE_SIZE)
             .build()
-        val list = client.get(url, apiHeaders).parseAs<PagedList>()
+        val list = client.get(url, apiHeaders, Fetch.XHR).parseAs<PagedList>()
         return MangasPage(list.results.map { it.toSManga() }, list.hasNext)
     }
 
@@ -118,7 +119,7 @@ abstract class OriYami : KeiSource() {
             .addPathSegment(slug)
             .addPathSegment("")
             .build()
-        return client.get(url, apiHeaders).parseAs()
+        return client.get(url, apiHeaders, Fetch.XHR).parseAs()
     }
 
     // the site routes every other type (Global-Manga) under /manga

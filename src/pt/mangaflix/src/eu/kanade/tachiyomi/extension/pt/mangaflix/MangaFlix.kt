@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -31,7 +32,7 @@ abstract class MangaFlix : KeiSource() {
 
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val result = client.get("$apiUrl/browse").parseAs<BrowseResponseDto>()
+        val result = client.get("$apiUrl/browse", Fetch.XHR).parseAs<BrowseResponseDto>()
         val popularSection = result.data.firstOrNull { it.key == "most-read" }
 
         val mangas = popularSection?.items?.let { itemsElement ->
@@ -43,7 +44,7 @@ abstract class MangaFlix : KeiSource() {
 
     // =============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val result = client.get("$apiUrl/latest-releases?selected_language=pt-br").parseAs<LatestResponseDto>()
+        val result = client.get("$apiUrl/latest-releases?selected_language=pt-br", Fetch.XHR).parseAs<LatestResponseDto>()
         val mangas = result.data.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
@@ -51,7 +52,7 @@ abstract class MangaFlix : KeiSource() {
     // =============================== Search ===============================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotEmpty()) {
-            val result = client.get("$apiUrl/search/mangas?query=$query&selected_language=pt-br").parseAs<SearchResponseDto>()
+            val result = client.get("$apiUrl/search/mangas?query=$query&selected_language=pt-br", Fetch.XHR).parseAs<SearchResponseDto>()
             val mangas = result.data.works.map { item ->
                 SManga.create().apply {
                     title = item.name
@@ -68,7 +69,7 @@ abstract class MangaFlix : KeiSource() {
             ?: return getLatestUpdates(page)
 
         val offset = (page - 1) * 20
-        val result = client.get("$apiUrl/genres/$genreId/mangas/?offset=$offset&limit=20&include_adult=true").parseAs<GenreResponseDto>()
+        val result = client.get("$apiUrl/genres/$genreId/mangas/?offset=$offset&limit=20&include_adult=true", Fetch.XHR).parseAs<GenreResponseDto>()
         val mangas = result.data.map { it.toSManga() }
         val totalItems = result.metadata?.total ?: 0
 
@@ -77,7 +78,7 @@ abstract class MangaFlix : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres?include_adult=true&selected_language=pt-br")
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres?include_adult=true&selected_language=pt-br", Fetch.XHR)
         .parseAs<GenreListResponseDto>()
         .data
         .toJsonElement()
@@ -96,7 +97,7 @@ abstract class MangaFlix : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val id = manga.url.substringAfterLast("/")
-        val details = client.get("$apiUrl/mangas/$id").parseAs<MangaDetailsResponseDto>().data
+        val details = client.get("$apiUrl/mangas/$id", Fetch.XHR).parseAs<MangaDetailsResponseDto>().data
 
         val updatedManga = SManga.create().apply {
             url = manga.url
@@ -124,7 +125,7 @@ abstract class MangaFlix : KeiSource() {
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val id = chapter.url.substringAfterLast("/")
-        val result = client.get("$apiUrl/chapters/$id?selected_language=pt-br").parseAs<ChapterDetailsResponseDto>()
+        val result = client.get("$apiUrl/chapters/$id?selected_language=pt-br", Fetch.XHR).parseAs<ChapterDetailsResponseDto>()
         return result.data.images.mapIndexed { index, image ->
             Page(index, imageUrl = image.default_url)
         }

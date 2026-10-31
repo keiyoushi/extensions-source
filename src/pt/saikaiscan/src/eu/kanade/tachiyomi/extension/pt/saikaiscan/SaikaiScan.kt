@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -46,7 +47,7 @@ abstract class SaikaiScan : KeiSource() {
             .addQueryParameter("relationships", "language,type,format,latestReleases.separator")
             .build()
 
-        return parseSearch(client.get(apiEndpointUrl, apiHeaders))
+        return parseSearch(client.get(apiEndpointUrl, apiHeaders, Fetch.XHR))
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -73,7 +74,7 @@ abstract class SaikaiScan : KeiSource() {
             .forEach { it.addQueryParameter(apiEndpointUrl) }
 
         return parseSearch(
-            client.get(apiEndpointUrl.build(), apiHeaders),
+            client.get(apiEndpointUrl.build(), apiHeaders, Fetch.XHR),
         )
     }
 
@@ -103,6 +104,7 @@ abstract class SaikaiScan : KeiSource() {
         val result = client.get(
             apiEndpointUrl,
             apiHeaders,
+            Fetch.XHR,
         ).parseAs<PaginatedStories>()
 
         val story = result.data!![0]
@@ -127,6 +129,7 @@ abstract class SaikaiScan : KeiSource() {
         val result = client.get(
             apiEndpointUrl,
             apiHeaders,
+            Fetch.XHR,
         ).parseAs<ReleaseResult>()
 
         return result.data?.releaseImages.orEmpty().mapIndexed { i, obj ->
@@ -146,6 +149,7 @@ abstract class SaikaiScan : KeiSource() {
 
     override suspend fun fetchFilterData() = client.get(
         "$apiUrl/api/genres",
+        Fetch.XHR,
     ).parseAs<GenresResult>().data.toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(

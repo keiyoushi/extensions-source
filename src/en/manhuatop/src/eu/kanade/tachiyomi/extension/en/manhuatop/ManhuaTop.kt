@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -53,7 +54,7 @@ abstract class ManhuaTop : KeiSource() {
             filters.filterIsInstance<UrlFilter>().forEach { it.addToUrl(this) }
         }.build()
 
-        val discovery = client.get(apiUrl("discovery", listing)).parseAs<DiscoveryDto>()
+        val discovery = client.get(apiUrl("discovery", listing), Fetch.XHR).parseAs<DiscoveryDto>()
         return MangasPage(discovery.items.map { it.toSManga() }, discovery.hasMore)
     }
 
@@ -81,7 +82,7 @@ abstract class ManhuaTop : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) parseDetails(manga, client.get(getMangaUrl(manga)).asJsoup()) else manga }
+        val details = async { if (fetchDetails) parseDetails(manga, client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()) else manga }
         val chapterList = async { if (fetchChapters) fetchChapters(mangaPath(manga)) else chapters }
 
         SMangaUpdate(details.await(), chapterList.await())
@@ -133,7 +134,7 @@ abstract class ManhuaTop : KeiSource() {
             .addQueryParameter("tab", "chapters")
             .addQueryParameter("chapter_page", page.toString())
             .build()
-        return client.get(apiUrl("reader", series, "chapters")).parseAs<ChaptersDto>()
+        return client.get(apiUrl("reader", series, "chapters"), Fetch.XHR).parseAs<ChaptersDto>()
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -148,7 +149,7 @@ abstract class ManhuaTop : KeiSource() {
             var page = 1
             do {
                 val content = chapterUrl.newBuilder().apply { if (page > 1) addQueryParameter("content_page", page.toString()) }.build()
-                val response = client.get(apiUrl("reader", content, "content")).parseAs<ContentDto>()
+                val response = client.get(apiUrl("reader", content, "content"), Fetch.XHR).parseAs<ContentDto>()
                 addAll(response.images)
                 page++
             } while (response.hasMore)
@@ -159,7 +160,7 @@ abstract class ManhuaTop : KeiSource() {
 
     override val supportsRelatedMangas = true
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga)).asJsoup()
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         .select(".detail-recommendations li.manga-card, .related-manga li.manga-card")
         .map { card ->
             SManga.create().apply {
@@ -178,7 +179,7 @@ abstract class ManhuaTop : KeiSource() {
             var page = 1
             do {
                 val url = "$baseUrl/api/genres".toHttpUrl().newBuilder().addQueryParameter("page", page.toString()).build()
-                val response = client.get(url).parseAs<GenresDto>()
+                val response = client.get(url, Fetch.XHR).parseAs<GenresDto>()
                 addAll(response.terms)
                 page++
             } while (response.hasMore)

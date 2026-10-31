@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -32,7 +33,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class GocTruyenTranh : KeiSource() {
-
     private val searchUrl get() = "$baseUrl/baseapi/comics/filterComic"
 
     private val dateFormat = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss", Locale.US)
@@ -64,7 +64,7 @@ abstract class GocTruyenTranh : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/danh-sach/truyen-hot?page=$page"
 
-        return parseMangaPage(client.get(url))
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT))
     }
 
     // =============================== Latest ===============================
@@ -72,7 +72,7 @@ abstract class GocTruyenTranh : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/danh-sach/truyen-moi-cap-nhat?page=$page"
 
-        return parseMangaPage(client.get(url))
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT))
     }
 
     // =============================== Search ===============================
@@ -111,7 +111,7 @@ abstract class GocTruyenTranh : KeiSource() {
             }
         }.build()
 
-        client.get(url, headers).use { response ->
+        client.get(url, headers, Fetch.XHR).use { response ->
             val json = response.parseAs<SearchDTO>()
             val manga = json.comics.data.map {
                 SManga.create().apply {
@@ -141,7 +141,7 @@ abstract class GocTruyenTranh : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host == baseUrl.toHttpUrl().host) {
-            client.get(url, headers).use { response ->
+            client.get(url, headers, Fetch.DOCUMENT).use { response ->
                 return parseMangaDetails(response.asJsoup())
             }
         }
@@ -156,7 +156,7 @@ abstract class GocTruyenTranh : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             parseMangaDetails(document),
             parseChapterList(document),
@@ -194,7 +194,7 @@ abstract class GocTruyenTranh : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        client.get(getChapterUrl(chapter), headers).use { response ->
+        client.get(getChapterUrl(chapter), headers, Fetch.DOCUMENT).use { response ->
             return response.asJsoup().select("img.lozad").mapIndexed { i, e ->
                 Page(i, imageUrl = e.absUrl("data-src"))
             }

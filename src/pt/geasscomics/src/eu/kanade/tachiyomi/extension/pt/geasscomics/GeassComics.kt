@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -74,7 +75,7 @@ abstract class GeassComics :
         .apply { if (!showNsfwPref()) addQueryParameter("safe", "true") }
 
     private suspend fun fetchWorks(url: HttpUrl.Builder): MangasPage {
-        val result = client.get(url.build()).parseAs<ApiResponse<WorkListDto>>().data
+        val result = client.get(url.build(), Fetch.XHR).parseAs<ApiResponse<WorkListDto>>().data
         return MangasPage(result.items.map { it.toSManga() }, result.hasNextPage)
     }
 
@@ -87,7 +88,7 @@ abstract class GeassComics :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.url.removePrefix("/manga/")
-        val work = client.get("$apiUrl/api/works/$slug").parseAs<ApiResponse<WorkDto>>().data
+        val work = client.get("$apiUrl/api/works/$slug", Fetch.XHR).parseAs<ApiResponse<WorkDto>>().data
 
         return SMangaUpdate(work.toSManga(), work.chapters.map { it.toSChapter(slug) })
     }
@@ -96,7 +97,7 @@ abstract class GeassComics :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (mangaSlug, number) = chapter.slugAndNumber()
-        val result = client.get("$apiUrl/api/works/$mangaSlug/chapters/$number").parseAs<ApiResponse<ChapterPagesDto>>()
+        val result = client.get("$apiUrl/api/works/$mangaSlug/chapters/$number", Fetch.XHR).parseAs<ApiResponse<ChapterPagesDto>>()
         return result.data.pages.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
 
@@ -120,8 +121,8 @@ abstract class GeassComics :
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
-        val genres = async { client.get("$apiUrl/api/genres").parseAs<ApiResponse<List<GenreTagDto>>>().data }
-        val tags = async { client.get("$apiUrl/api/tags").parseAs<ApiResponse<List<GenreTagDto>>>().data }
+        val genres = async { client.get("$apiUrl/api/genres", Fetch.XHR).parseAs<ApiResponse<List<GenreTagDto>>>().data }
+        val tags = async { client.get("$apiUrl/api/tags", Fetch.XHR).parseAs<ApiResponse<List<GenreTagDto>>>().data }
 
         FilterData(genres.await(), tags.await()).toJsonElement()
     }

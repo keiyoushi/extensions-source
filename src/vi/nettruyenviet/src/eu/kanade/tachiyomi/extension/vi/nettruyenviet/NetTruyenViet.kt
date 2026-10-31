@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -39,7 +40,7 @@ abstract class NetTruyenViet : KeiSource() {
             .addQueryParameter("sort", "10")
             .addQueryParameter("page", page.toString())
             .build()
-        return parseMangaPage(client.get(url).asJsoup())
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private fun parseMangaPage(document: Document): MangasPage {
@@ -69,7 +70,7 @@ abstract class NetTruyenViet : KeiSource() {
         val url = "$baseUrl/".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val latestSection = document.selectFirst(
             "div.items:has(h1.page-title:matchesOwn(NetTruyen\\s*-\\s*Truyện tranh online))",
@@ -90,7 +91,7 @@ abstract class NetTruyenViet : KeiSource() {
                 .addQueryParameter("keyword", query)
                 .addQueryParameter("page", page.toString())
                 .build()
-            return parseMangaPage(client.get(url).asJsoup())
+            return parseMangaPage(client.get(url, Fetch.DOCUMENT).asJsoup())
         }
 
         val genrePath = filters.firstInstanceOrNull<GenreFilter>()?.toUriPart()
@@ -107,7 +108,7 @@ abstract class NetTruyenViet : KeiSource() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        return parseMangaPage(client.get(url).asJsoup())
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // ============================== Details ===============================
@@ -124,7 +125,7 @@ abstract class NetTruyenViet : KeiSource() {
     }
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
-        val infoElement = client.get(getMangaUrl(manga)).asJsoup().selectFirst("article#item-detail")!!
+        val infoElement = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup().selectFirst("article#item-detail")!!
 
         return manga.apply {
             title = infoElement.selectFirst("h1.title-detail, h1")!!.text()
@@ -173,7 +174,7 @@ abstract class NetTruyenViet : KeiSource() {
             .add("X-Requested-With", "XMLHttpRequest")
             .build()
 
-        val chapterItems = client.get(url, chapterHeaders).parseAs<ChapterListDto>().toChapterItems(slug)
+        val chapterItems = client.get(url, chapterHeaders, Fetch.XHR).parseAs<ChapterListDto>().toChapterItems(slug)
         return chapterItems.map { chapterItem ->
             SChapter.create().apply {
                 name = chapterItem.name
@@ -209,7 +210,7 @@ abstract class NetTruyenViet : KeiSource() {
     // ============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val imageUrls = client.get(getChapterUrl(chapter)).asJsoup()
+        val imageUrls = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
             .select("#chapter-content img, .reading-detail .page-chapter img, .chapter-content img, .page-chapter img")
             .map { imageElement ->
                 imageElement.absUrl("data-src")

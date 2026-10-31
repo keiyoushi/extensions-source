@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -62,7 +63,7 @@ abstract class HoneyManga :
                 .addQueryParameter("query", cleanQuery)
                 .build()
 
-            client.get(url).use { response ->
+            client.get(url, Fetch.XHR).use { response ->
                 val blockedGenres = blockGenres()
                 val blockedTypes = blockTypes()
                 val contentShown = contentType()
@@ -129,7 +130,7 @@ abstract class HoneyManga :
             filters = searchFilters.ifEmpty { null },
         ).toJsonRequestBody()
 
-        client.post("$apiUrl/v2/manga/cursor-list", body).use { response ->
+        client.post("$apiUrl/v2/manga/cursor-list", Fetch.XHR, body).use { response ->
             val result = response.parseAs<CatalogResponseDto>()
             val mangas = result.data.mapNotNull { it.toSManga(imgUrl) }
             return MangasPage(mangas, result.hasNextPage)
@@ -171,7 +172,7 @@ abstract class HoneyManga :
         val mangaAsync = async {
             if (fetchDetails) {
                 val url = "$apiUrl/manga/$mangaId"
-                val data = client.get(url).use { it.parseAs<CompleteMangaDto>() }
+                val data = client.get(url, Fetch.XHR).use { it.parseAs<CompleteMangaDto>() }
                 data.toSManga(imgUrl)
             } else {
                 manga
@@ -193,7 +194,7 @@ abstract class HoneyManga :
                         sortOrder = "DESC",
                     ).toJsonRequestBody()
 
-                    val data = client.post(chaptersUrl, body).parseAs<ChapterResponse>()
+                    val data = client.post(chaptersUrl, Fetch.XHR, body).parseAs<ChapterResponse>()
                     fetchedChapters.addAll(data.data.mapNotNull { it.toSChapter(hideLocked) })
                     page++
                 } while (data.hasNextPage)
@@ -223,7 +224,7 @@ abstract class HoneyManga :
             chapter.url
         }
         val url = "$apiUrl/chapter/frames/$chapterId"
-        return client.get(url).use { it.parseAs<ChapterPages>().toPageList(imgUrl) }
+        return client.get(url, Fetch.XHR).use { it.parseAs<ChapterPages>().toPageList(imgUrl) }
     }
 
     // ============================= Filters ==============================

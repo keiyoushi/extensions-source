@@ -11,6 +11,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
@@ -75,7 +77,7 @@ abstract class Roxinha :
             }
         }.build()
 
-        val dto = client.get(url).parseAs<SearchResponseDto>()
+        val dto = client.get(url, Fetch.XHR).parseAs<SearchResponseDto>()
         val (mangas, hasMore) = dto.toMangasPage(baseUrl)
         return MangasPage(mangas, hasMore)
     }
@@ -90,7 +92,7 @@ abstract class Roxinha :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get("$apiUrl/manga/${manga.url}")
+        val response = client.get("$apiUrl/manga/${manga.url}", Fetch.XHR)
         val dto = response.parseAs<MangaDto>()
 
         return SMangaUpdate(dto.toSManga(baseUrl), dto.toSChapters())
@@ -101,7 +103,7 @@ abstract class Roxinha :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = "$apiUrl/manga/chapter/${chapter.url}"
 
-        val accessRes = client.get("$chapterUrl/access", ensureSuccess = false)
+        val accessRes = client.get("$chapterUrl/access", Fetch.XHR, ensureSuccess = false)
         if (!accessRes.isSuccessful) {
             val message = accessRes.errorMessage()
             throw Exception(if (accessRes.code == 401) "$message. $LOGIN_HINT" else message)
@@ -109,7 +111,7 @@ abstract class Roxinha :
         val accessDto = accessRes.parseAs<TicketDto>()
         val accessHeaders = headersBuilder().set("x-chapter-access", accessDto.ticket).build()
 
-        val chapterRes = client.get(chapterUrl, accessHeaders)
+        val chapterRes = client.get(chapterUrl, accessHeaders, Fetch.XHR)
         val chapterDto = chapterRes.parseAs<ChapterDetailsDto>()
         return chapterDto.toPages(baseUrl)
     }
@@ -181,7 +183,7 @@ abstract class Roxinha :
         }
 
         val body = LoginRequestDto(email.trim(), password).toJsonRequestBody()
-        val response = network.client.newCall(POST("$apiUrl/auth/login", headers, body)).execute()
+        val response = network.client.newCall(POST("$apiUrl/auth/login", headers, body).newBuilder().fetch(Fetch.XHR).build()).execute()
 
         if (!response.isSuccessful) {
             throw IOException(response.errorMessage())

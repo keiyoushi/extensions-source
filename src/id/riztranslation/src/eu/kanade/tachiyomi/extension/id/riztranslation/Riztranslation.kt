@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -30,7 +31,7 @@ abstract class Riztranslation : KeiSource() {
     // ========================= Popular =========================
     override suspend fun getPopularManga(page: Int): MangasPage {
         val offset = (page - 1) * 20
-        return client.get("$apiUrl/Book?select=id,judul,cover&type=not.ilike.*novel*&order=id.desc&offset=$offset&limit=20", apiHeaders)
+        return client.get("$apiUrl/Book?select=id,judul,cover&type=not.ilike.*novel*&order=id.desc&offset=$offset&limit=20", apiHeaders, Fetch.XHR)
             .parseAs<List<BookDto>>()
             .toMangasPage()
     }
@@ -40,7 +41,7 @@ abstract class Riztranslation : KeiSource() {
     // ========================= Latest =========================
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val offset = (page - 1) * 30
-        val chapters = client.get("$apiUrl/Chapter?select=bookId,Book!inner(id,judul,cover)&Book.type=not.ilike.*novel*&order=created_at.desc&offset=$offset&limit=30", apiHeaders)
+        val chapters = client.get("$apiUrl/Chapter?select=bookId,Book!inner(id,judul,cover)&Book.type=not.ilike.*novel*&order=created_at.desc&offset=$offset&limit=30", apiHeaders, Fetch.XHR)
             .parseAs<List<LatestChapterDto>>()
         val hasNextPage = chapters.size == 30
 
@@ -55,7 +56,7 @@ abstract class Riztranslation : KeiSource() {
         if (typeIndex == -1 || typeIndex + 1 >= url.pathSize) return null
         val id = url.pathSegments[typeIndex + 1]
 
-        return client.get("$apiUrl/Book?select=id,judul,cover&type=not.ilike.*novel*&id=eq.$id", apiHeaders)
+        return client.get("$apiUrl/Book?select=id,judul,cover&type=not.ilike.*novel*&id=eq.$id", apiHeaders, Fetch.XHR)
             .parseAs<List<BookDto>>()
             .firstOrNull()
             ?.toSManga()
@@ -126,7 +127,7 @@ abstract class Riztranslation : KeiSource() {
         url.addQueryParameter("offset", offset.toString())
         url.addQueryParameter("limit", "20")
 
-        return client.get(url.build(), apiHeaders).parseAs<List<BookDto>>().toMangasPage()
+        return client.get(url.build(), apiHeaders, Fetch.XHR).parseAs<List<BookDto>>().toMangasPage()
     }
 
     // ========================= Filters =========================
@@ -149,7 +150,7 @@ abstract class Riztranslation : KeiSource() {
     ): SMangaUpdate = coroutineScope {
         val details = if (fetchDetails) {
             async {
-                val books = client.get("$apiUrl/Book?select=*%2Cgenres%3A_BookGenre%28genre%3AGenre%28*%29%29&type=not.ilike.*novel*&id=eq.${manga.url}", apiHeaders)
+                val books = client.get("$apiUrl/Book?select=*%2Cgenres%3A_BookGenre%28genre%3AGenre%28*%29%29&type=not.ilike.*novel*&id=eq.${manga.url}", apiHeaders, Fetch.XHR)
                     .parseAs<List<BookDto>>()
                 if (books.isEmpty()) throw Exception("Manga not found")
                 books.first().toSMangaDetails().apply { url = manga.url }
@@ -160,7 +161,7 @@ abstract class Riztranslation : KeiSource() {
 
         val chapterList = if (fetchChapters) {
             async {
-                client.get("$apiUrl/Chapter?select=id,bookId,chapter,nama,created_at&bookId=eq.${manga.url}&order=chapter.desc", apiHeaders)
+                client.get("$apiUrl/Chapter?select=id,bookId,chapter,nama,created_at&bookId=eq.${manga.url}&order=chapter.desc", apiHeaders, Fetch.XHR)
                     .parseAs<List<ChapterDto>>()
                     .map { it.toSChapter() }
             }
@@ -177,7 +178,7 @@ abstract class Riztranslation : KeiSource() {
     // ========================= Pages =========================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val id = chapter.url.substringAfterLast("/")
-        val chapters = client.get("$apiUrl/Chapter?select=id,bookId,isigambar&id=eq.$id", apiHeaders)
+        val chapters = client.get("$apiUrl/Chapter?select=id,bookId,isigambar&id=eq.$id", apiHeaders, Fetch.XHR)
             .parseAs<List<ChapterDto>>()
         if (chapters.isEmpty()) throw Exception("Chapter not found")
         val isigambar = chapters.first().isigambar

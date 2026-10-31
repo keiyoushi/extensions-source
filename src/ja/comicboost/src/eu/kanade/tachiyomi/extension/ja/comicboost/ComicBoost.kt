@@ -10,6 +10,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.lib.publus.PublusContent
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -34,7 +35,7 @@ abstract class ComicBoost : KeiSource() {
         val url = "$baseUrl/genre/".toHttpUrl().newBuilder()
             .addQueryParameter("p", page.toString())
             .build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
@@ -44,7 +45,7 @@ abstract class ComicBoost : KeiSource() {
             .addQueryParameter("k", query)
             .addQueryParameter("p", page.toString())
             .build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     private fun Response.toMangasPage(): MangasPage {
@@ -66,7 +67,7 @@ abstract class ComicBoost : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        var document = client.get(getMangaUrl(manga)).asJsoup()
+        var document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val details = SManga.create().apply {
             title = document.selectFirst("h1.comic-title")!!.text()
             author = document.select(".comic-main-right .author-list .author").joinToString { it.text().replace(AUTHOR_ROLE_REGEX, "") }
@@ -88,7 +89,7 @@ abstract class ComicBoost : KeiSource() {
                     }
                 }
                 val nextUrl = document.selectFirst(".pagination-list.right .to-next:not(.disabled) a")?.absUrl("href") ?: break
-                document = client.get(nextUrl).asJsoup()
+                document = client.get(nextUrl, Fetch.DOCUMENT).asJsoup()
             }
         }
 
@@ -101,14 +102,14 @@ abstract class ComicBoost : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/product/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val cid = client.get(getChapterUrl(chapter)).use { it.request.url.queryParameter("cid") }
+        val cid = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).use { it.request.url.queryParameter("cid") }
             ?: throw Exception("Log in via WebView and purchase this chapter to read.")
 
         val url = "$baseUrl/pageapi/viewer/c.php".toHttpUrl().newBuilder()
             .addQueryParameter("cid", cid)
             .build()
 
-        val contentUrl = client.get(url).parseAs<PublusContent>().url!!
+        val contentUrl = client.get(url, Fetch.XHR).parseAs<PublusContent>().url!!
         return client.fetchPages(contentUrl)
     }
 

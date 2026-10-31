@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -25,12 +26,12 @@ abstract class MangaRw : KeiSource() {
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3, 1.seconds)
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/?page=$page").asJsoup()
+        val document = client.get("$baseUrl/?page=$page", Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/browse?page=$page").asJsoup()
+        val document = client.get("$baseUrl/browse?page=$page", Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document)
     }
 
@@ -39,7 +40,7 @@ abstract class MangaRw : KeiSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("search", query)
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document)
     }
 
@@ -73,7 +74,7 @@ abstract class MangaRw : KeiSource() {
     ): SMangaUpdate = coroutineScope {
         val detailsDeferred = async {
             if (fetchDetails) {
-                val document = client.get(baseUrl + manga.url).asJsoup()
+                val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
                 manga.apply {
                     title = document.selectFirst("h1")?.text()?.trim() ?: title
                     thumbnail_url = document.selectFirst("img[src*=covers]")?.absUrl("src")
@@ -88,7 +89,7 @@ abstract class MangaRw : KeiSource() {
         val chaptersDeferred = async {
             if (fetchChapters) {
                 val mangaId = "$baseUrl${manga.url}".toHttpUrl().pathSegments.last()
-                val response = client.get("$baseUrl/api/v1/chapters?id=$mangaId").asJsoup()
+                val response = client.get("$baseUrl/api/v1/chapters?id=$mangaId", Fetch.XHR).asJsoup()
                 response.select("option").mapNotNull { option ->
                     val name = option.text().trim()
                     if (name.isEmpty() || option.attr("value").isEmpty()) return@mapNotNull null
@@ -112,7 +113,7 @@ abstract class MangaRw : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
         return document.select("img[src*=mangabuzz], img[data-src*=mangabuzz]").mapIndexed { index, img ->
             val imageUrl = img.attr("data-src").ifBlank { img.attr("src") }
             Page(index, imageUrl = imageUrl)

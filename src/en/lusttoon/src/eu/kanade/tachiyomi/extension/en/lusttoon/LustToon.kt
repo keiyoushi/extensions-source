@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -23,7 +24,6 @@ import okhttp3.OkHttpClient
 
 @Source
 abstract class LustToon : KeiSource() {
-
     private val apiUrl = "https://back.lustoon.com"
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
@@ -52,7 +52,7 @@ abstract class LustToon : KeiSource() {
             .addQueryParameter("loading", "true")
             .build()
 
-        val resp = client.get(url).parseAs<SearchResponseDto>()
+        val resp = client.get(url, Fetch.XHR).parseAs<SearchResponseDto>()
         return MangasPage(resp.mangas, resp.hasNext)
     }
 
@@ -63,7 +63,7 @@ abstract class LustToon : KeiSource() {
             val rscHeaders = headers.newBuilder()
                 .add("RSC", "1")
                 .build()
-            val response = client.get(baseUrl, rscHeaders)
+            val response = client.get(baseUrl, rscHeaders, Fetch.XHR)
             val home = response.extractNextJs<HomeDto> { element ->
                 element is JsonObject && "comics" in element && element["comics"] is JsonArray
             }
@@ -83,7 +83,7 @@ abstract class LustToon : KeiSource() {
             .addQueryParameter("loading", "true")
             .build()
 
-        val resp = client.get(url).parseAs<SearchResponseDto>()
+        val resp = client.get(url, Fetch.XHR).parseAs<SearchResponseDto>()
         return MangasPage(resp.mangas, resp.hasNext)
     }
 
@@ -94,7 +94,7 @@ abstract class LustToon : KeiSource() {
             val url = "$apiUrl/home/buscar".toHttpUrl().newBuilder()
                 .addQueryParameter("query", query)
                 .build()
-            val items = client.get(url).parseAs<List<SearchItemDto>>()
+            val items = client.get(url, Fetch.XHR).parseAs<List<SearchItemDto>>()
             return MangasPage(items.filter { it.slug != null }.map { it.toSManga() }, false)
         }
 
@@ -111,7 +111,7 @@ abstract class LustToon : KeiSource() {
             .addQueryParameter("state", filters.firstInstanceOrNull<StatusFilter>()?.selected ?: "")
             .build()
 
-        val resp = client.get(url).parseAs<SearchResponseDto>()
+        val resp = client.get(url, Fetch.XHR).parseAs<SearchResponseDto>()
         return MangasPage(resp.mangas, resp.hasNext)
     }
 
@@ -137,7 +137,7 @@ abstract class LustToon : KeiSource() {
         val rscHeaders = headers.newBuilder()
             .add("RSC", "1")
             .build()
-        val response = client.get(getMangaUrl(manga), rscHeaders)
+        val response = client.get(getMangaUrl(manga), rscHeaders, Fetch.XHR)
         val serie = response.extractNextJs<SerieDto> { element ->
             element is JsonObject && "slug" in element && "chapters" in element
         } ?: throw Exception("Failed to find valid series data")
@@ -153,7 +153,7 @@ abstract class LustToon : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter))
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         val document = response.asJsoup()
         val pageches = document.extractNextJs<PagechesDto> { element ->
             element is JsonObject && "urlImg" in element && "chapterId" in element

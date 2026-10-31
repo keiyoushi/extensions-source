@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -90,7 +91,7 @@ abstract class ComicFury :
             }
         }
 
-        val jsp = client.get(req.build()).asJsoup()
+        val jsp = client.get(req.build(), Fetch.DOCUMENT).asJsoup()
         val list: MutableList<SManga> = arrayListOf()
         for (result in jsp.select("div.webcomic-result")) {
             list.add(
@@ -145,7 +146,7 @@ abstract class ComicFury :
     }
 
     private suspend fun getMangaDetails(manga: SManga, url: String): SManga {
-        val response = client.get(url)
+        val response = client.get(url, Fetch.DOCUMENT)
         val responseUrl = response.request.url.toString()
         val jsp = response.asJsoup()
         val desDiv = jsp.selectFirst("div.description-tags")
@@ -191,14 +192,14 @@ abstract class ComicFury :
             // Fetch the next page and repeat. If there are no more pages, exit.
             val nextPageButton = currentPage.selectFirst(nextPageSelector) ?: break
             val url = nextPageButton.absUrl("href")
-            currentPage = client.get(url).asJsoup()
+            currentPage = client.get(url, Fetch.DOCUMENT).asJsoup()
         }
 
         return chapters
     }
 
     private suspend fun getChapterList(url: String): List<SChapter> {
-        val response = client.get(url)
+        val response = client.get(url, Fetch.DOCUMENT)
         val pathSegments = response.request.url.pathSegments
         val jsp = response.asJsoup()
         val chapters = mutableListOf<SChapter>()
@@ -208,7 +209,7 @@ abstract class ComicFury :
             archiveElements.forEach { element ->
                 val url = element.absUrl("href")
                 val chapterHeader = element.select(".archive-chapter-title").text().ifEmpty { element.text() }
-                val currentPage = client.get(url).asJsoup()
+                val currentPage = client.get(url, Fetch.DOCUMENT).asJsoup()
                 chapters.addAll(collect(currentPage, chapterHeader))
             }
         } else {
@@ -223,7 +224,7 @@ abstract class ComicFury :
             if (slug.isNotEmpty()) {
                 val customUrl = "https://$slug.webcomic.ws/archive/comics"
                 try {
-                    val customDoc = client.get(customUrl).asJsoup()
+                    val customDoc = client.get(customUrl, Fetch.DOCUMENT).asJsoup()
                     customDoc.select("div.archivecomic, div.nl-archivecomic").forEach { element ->
                         val linkElement = element.selectFirst("a") ?: return@forEach
                         val chapterHeader = element.parent()?.previousElementSibling()?.selectFirst("h3")?.text()
@@ -254,7 +255,7 @@ abstract class ComicFury :
         } else {
             "$baseUrl${chapter.url}"
         }
-        val response = client.get(url)
+        val response = client.get(url, Fetch.DOCUMENT)
         val responseUrl = response.request.url.toString()
         val jsp = response.asJsoup()
         val pages: MutableList<Page> = arrayListOf()
