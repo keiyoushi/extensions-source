@@ -36,12 +36,16 @@ abstract class XXXYaoi : MadaraNoAjax() {
         .set("Pragma", "no-cache")
 
     override val mangaSubString = "bl"
+    override val genreDirectory = "genero"
 
     override val mangaDetailsSelectorTitle = ".xyaoi-main-title, h1"
     override val mangaDetailsSelectorAuthor = "a[href*=author]"
     override val mangaDetailsSelectorArtist = "a[href*=artist]"
     override val mangaDetailsSelectorStatus = "span:contains(status) + span"
     override val mangaDetailsSelectorDescription = "[class*=synopsis]"
+    override val mangaDetailsSelectorGenre = ".xyaoi-genres-list a"
+    override val mangaDetailsSelectorTag = ".wp-manga-tags-list a"
+    override val seriesTypeSelector = "span:contains(tipo) + span:not(:contains(Não informado))"
 
     override fun searchCardSelector() = ".xyaoi-search-card"
 
