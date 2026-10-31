@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.ar.procomic
 
 import eu.kanade.tachiyomi.source.model.Filter
-import java.time.Year
 
 abstract class SelectFilter<T>(
     name: String,
@@ -21,36 +20,24 @@ class TypeFilter :
         ),
     )
 
-class StatusFilter :
-    SelectFilter<String?>(
-        "الحالة",
-        listOf(
-            "الكل" to null,
-            "مستمر" to "مستمر",
-            "مكتمل" to "مكتمل",
-            "متوقف" to "متوقف",
-        ),
-    )
-
-class YearFilter :
-    SelectFilter<String?>(
-        "السنة",
-        buildList {
-            add("الكل" to null)
-            (Year.now().value downTo 1970).forEach { add(it.toString() to it.toString()) }
-        },
-    )
-
 class SortFilter :
     SelectFilter<String>(
         "الترتيب",
         listOf(
-            "الأكثر شهرة" to "popular",
-            "أحدث السلاسل" to "latest",
-            "أحدث الفصول" to "latest_chapter",
-            "الشعبية الإجمالية" to "total_popularity",
-            "الأقدم" to "oldest",
-            "أبجدي (أ-ي)" to "az",
-            "أبجدي (ي-أ)" to "za",
+            "الأكثر رواجاً" to "popular",
+            "آخر تحديث" to "latest",
+            "الأحدث" to "newest",
+            "التقييم" to "rating",
+            "الأكثر مشاهدة" to "views",
+            "أبجدي" to "title",
         ),
     )
+
+class GenreFilter(genres: List<GenreDto>) : Filter.Group<GenreOption>("التصنيفات", genres.map(::GenreOption)) {
+    val included get() = state.filter { it.isIncluded() }.map { it.id }
+    val excluded get() = state.filter { it.isExcluded() }.map { it.id }
+}
+
+class GenreOption(genre: GenreDto) : Filter.TriState(genre.displayName) {
+    val id = genre.id
+}
