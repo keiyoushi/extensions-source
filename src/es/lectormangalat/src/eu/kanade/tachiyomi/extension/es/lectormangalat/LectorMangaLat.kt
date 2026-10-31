@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -21,6 +22,7 @@ import okhttp3.OkHttpClient
 
 @Source
 abstract class LectorMangaLat : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
 
     private val apiUrl = "https://$API_HOST/api"
 
@@ -43,7 +45,7 @@ abstract class LectorMangaLat : KeiSource() {
             status?.let { addQueryParameter("estado", it) }
             addQueryParameter("page", page.toString())
         }.build()
-        val result = client.get(url).parseAs<SeriesListDto>()
+        val result = client.get(url, Fetch.XHR).parseAs<SeriesListDto>()
         // The API lists some broken entries without a slug
         return MangasPage(result.data.filter { it.slug.isNotEmpty() }.map { it.toSManga() }, result.hasNextPage)
     }
@@ -57,7 +59,7 @@ abstract class LectorMangaLat : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val segments = url.pathSegments.filter(String::isNotBlank)
         if (segments.size < 2 || segments[0] != "comics") return null
-        return client.get("$apiUrl/series/${segments[1]}").parseAs<SeriesDetailsDto>().data.toSMangaDetails()
+        return client.get("$apiUrl/series/${segments[1]}", Fetch.XHR).parseAs<SeriesDetailsDto>().data.toSMangaDetails()
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/comics/${manga.memo["slug"]!!.stringOrNull}"
@@ -70,11 +72,11 @@ abstract class LectorMangaLat : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val series = client.get("$apiUrl/series/${manga.memo["slug"]!!.stringOrNull}").parseAs<SeriesDetailsDto>().data
+        val series = client.get("$apiUrl/series/${manga.memo["slug"]!!.stringOrNull}", Fetch.XHR).parseAs<SeriesDetailsDto>().data
         return SMangaUpdate(series.toSMangaDetails(), series.capitulos.map { it.toSChapter(series.slug) })
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/capitulos/${chapter.url}")
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/capitulos/${chapter.url}", Fetch.XHR)
         .parseAs<ChapterPagesDto>()
         .data.paginas
         .mapIndexed { i, url -> Page(i, imageUrl = url) }

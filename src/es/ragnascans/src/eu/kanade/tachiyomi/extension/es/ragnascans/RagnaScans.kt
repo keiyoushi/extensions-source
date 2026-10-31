@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -31,6 +32,7 @@ import java.util.Locale
 
 @Source
 abstract class RagnaScans : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
 
     // Limit to 1 request per second to prevent HTTP 429 on parallel manga update fetches
     override fun OkHttpClient.Builder.configureClient() = rateLimit(1) {
@@ -45,13 +47,13 @@ abstract class RagnaScans : KeiSource() {
 
     // ============================== Popular ==============================
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/directorio.php?page=$page&orden=vistas&q=").asJsoup()
+        val document = client.get("$baseUrl/directorio.php?page=$page&orden=vistas&q=", Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document)
     }
 
     // ============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/directorio.php?page=$page&orden=actualizado&q=").asJsoup()
+        val document = client.get("$baseUrl/directorio.php?page=$page&orden=actualizado&q=", Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document)
     }
 
@@ -90,7 +92,7 @@ abstract class RagnaScans : KeiSource() {
             }
         }.build()
 
-        return parseMangaList(client.get(url).asJsoup())
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -99,7 +101,7 @@ abstract class RagnaScans : KeiSource() {
         if (url.encodedPath == "/manga.php" && url.queryParameter("id") == null) return null
         if (url.encodedPathSegments.firstOrNull() == "manga" && url.encodedPathSegments.getOrNull(1) == null) return null
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangaId = document
             .selectFirst("[data-manga-id]")
             ?.attrOrNull("data-manga-id")
@@ -118,7 +120,7 @@ abstract class RagnaScans : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
     }
 
@@ -180,7 +182,7 @@ abstract class RagnaScans : KeiSource() {
 
     // =============================== Pages ===============================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("#pagesContainer .page-container img").mapIndexedNotNull { index, img ->
             val dataVerify = img.attr("data-verify")
 

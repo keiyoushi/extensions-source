@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -19,6 +20,7 @@ import okhttp3.OkHttpClient
 
 @Source
 abstract class CeriseScan : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
 
@@ -50,7 +52,7 @@ abstract class CeriseScan : KeiSource() {
             filter.selected?.let { url.addQueryParameter(filter.parameter, it) }
         }
 
-        return client.get(url.build()).parseAs<ComicListDto>().toMangasPage(page, baseUrl)
+        return client.get(url.build(), Fetch.XHR).parseAs<ComicListDto>().toMangasPage(page, baseUrl)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -74,7 +76,7 @@ abstract class CeriseScan : KeiSource() {
         val url = "$baseUrl/api/comics".toHttpUrl().newBuilder()
             .addPathSegment(slugOrId)
             .build()
-        return client.get(url).parseAs<ComicDto>()
+        return client.get(url, Fetch.XHR).parseAs<ComicDto>()
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -82,7 +84,7 @@ abstract class CeriseScan : KeiSource() {
             .addQueryParameter("chapterId", chapter.url)
             .build()
         val siteUrl = baseUrl.toHttpUrl()
-        return client.get(url).parseAs<List<String>>().mapIndexed { index, path ->
+        return client.get(url, Fetch.XHR).parseAs<List<String>>().mapIndexed { index, path ->
             Page(index, imageUrl = siteUrl.resolve(path)!!.toString())
         }
     }

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -20,6 +21,8 @@ import okhttp3.Response
 
 @Source
 abstract class ZerosumOnline : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
+
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "https://api.$domain/api/v1"
 
@@ -31,7 +34,7 @@ abstract class ZerosumOnline : KeiSource() {
             .addQueryParameter("sort", "date")
             .build()
 
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.XHR).toMangasPage()
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
@@ -49,7 +52,7 @@ abstract class ZerosumOnline : KeiSource() {
             }
         }.build()
 
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.XHR).toMangasPage()
     }
 
     private fun Response.toMangasPage(): MangasPage {
@@ -68,7 +71,7 @@ abstract class ZerosumOnline : KeiSource() {
             .addQueryParameter("tag", manga.url.substringAfterLast("/"))
             .build()
 
-        val details = client.get(url).parseAsProto<TitleDetailView>()
+        val details = client.get(url, Fetch.XHR).parseAsProto<TitleDetailView>()
         return SMangaUpdate(
             details.title.toSManga(),
             details.chapters.map { it.toSChapter(details.title.slug) },
@@ -81,7 +84,7 @@ abstract class ZerosumOnline : KeiSource() {
             .addQueryParameter("chapter_id", id)
             .build()
 
-        val result = client.post(url, ByteArray(0).toRequestBody()).parseAsProto<ViewerView>()
+        val result = client.post(url, Fetch.XHR, ByteArray(0).toRequestBody()).parseAsProto<ViewerView>()
         return result.pages
             .filter { it.url.isNotEmpty() }
             .mapIndexed { i, img ->

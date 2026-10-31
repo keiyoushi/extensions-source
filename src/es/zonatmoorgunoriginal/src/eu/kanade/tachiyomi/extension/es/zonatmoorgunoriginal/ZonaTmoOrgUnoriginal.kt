@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -30,6 +31,8 @@ import java.util.Locale
 
 @Source
 abstract class ZonaTmoOrgUnoriginal : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
+
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
     }
@@ -50,7 +53,7 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
                 .newBuilder()
                 .addQueryParameter("page", page.toString())
                 .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val seenMangaUrls = mutableSetOf<String>()
         val mangas =
@@ -131,7 +134,7 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
                 .addQueryParameter("page", page.toString())
                 .build()
 
-        val html = client.get(url, ajaxHeaders).parseAs<JsonObject>().getString("html")
+        val html = client.get(url, ajaxHeaders, Fetch.XHR).parseAs<JsonObject>().getString("html")
         val document = Jsoup.parse(html, baseUrl)
         val mangas = document.select("#library-grid .element").mapNotNull(::mangaFromElement)
         val hasNextPage =
@@ -175,7 +178,7 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
         }
 
         val canonicalUrl = url.toString().toCanonicalMangaUrl()
-        return parseMangaDetails(client.get(url).asJsoup()).apply {
+        return parseMangaDetails(client.get(url, Fetch.DOCUMENT).asJsoup()).apply {
             setUrlWithoutDomain(mangaIdentityUrl(title, canonicalUrl.mangaType()))
             memo = memo.withCanonicalMangaUrl(canonicalUrl)
         }
@@ -199,7 +202,7 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
                     identityUrl?.queryParameter("title") ?: manga.title,
                     identityUrl?.queryParameter("type"),
                 ).toCanonicalMangaUrl()
-        val document = client.get(baseUrl.toHttpUrl().resolve(canonicalUrl)!!).asJsoup()
+        val document = client.get(baseUrl.toHttpUrl().resolve(canonicalUrl)!!, Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga =
             parseMangaDetails(document).apply {

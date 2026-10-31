@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -17,6 +18,8 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class JumpRookie : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
+
     private var nextPageKey: String? = null
 
     private val desktopHeaders get() = headersBuilder()
@@ -30,7 +33,7 @@ abstract class JumpRookie : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        val document = client.get(url, desktopHeaders).asJsoup()
+        val document = client.get(url, desktopHeaders, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("section.series-contents").map { it.toSManga() }
         val hasNextPage = document.selectFirst(".button-next") != null
         return MangasPage(mangas, hasNextPage)
@@ -42,7 +45,7 @@ abstract class JumpRookie : KeiSource() {
                 .addQueryParameter("query", query)
                 .build()
 
-            val document = client.get(url).asJsoup()
+            val document = client.get(url, Fetch.DOCUMENT).asJsoup()
             val mangas = document.select("#search-series section.series-contents").map { it.toSManga() }
             return MangasPage(mangas, false)
         }
@@ -59,7 +62,7 @@ abstract class JumpRookie : KeiSource() {
             nextPageKey?.let { addQueryParameter("key", it) }
         }.build()
 
-        val response = client.get(url)
+        val response = client.get(url, Fetch.DOCUMENT)
         nextPageKey = response.header("Tky-Link-Rel-Next")
             ?.let { baseUrl.toHttpUrl().resolve(it) }
             ?.queryParameter("key")
@@ -81,7 +84,7 @@ abstract class JumpRookie : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val details = SManga.create().apply {
             title = document.selectFirst(".series-title")!!.text()
             author = document.selectFirst(".user-name")?.text()
@@ -104,7 +107,7 @@ abstract class JumpRookie : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(".js-page-image").mapIndexed { i, element ->
             Page(i, imageUrl = element.absUrl("src"))
         }

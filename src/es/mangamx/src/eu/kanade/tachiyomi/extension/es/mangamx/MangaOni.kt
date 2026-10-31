@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -28,6 +29,8 @@ abstract class MangaOni :
     KeiSource(),
     ConfigurableSource {
 
+    override val imageFetch = Fetch.IMAGE
+
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)
@@ -35,6 +38,7 @@ abstract class MangaOni :
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get(
             "$baseUrl/directorio?genero=false&estado=false&filtro=visitas&tipo=false&adulto=${if (hideNSFWContent()) "0" else "false"}&orden=desc&p=$page",
+            Fetch.DOCUMENT,
         ).asJsoup()
 
         val mangas = document.select("#article-div a").map { element ->
@@ -51,7 +55,7 @@ abstract class MangaOni :
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/recientes?p=$page").asJsoup()
+        val document = client.get("$baseUrl/recientes?p=$page", Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select("div._1bJU3").map { element ->
             SManga.create().apply {
@@ -88,7 +92,7 @@ abstract class MangaOni :
         }
         uri.appendQueryParameter("p", page.toString())
 
-        val document = client.get(uri.toString()).asJsoup()
+        val document = client.get(uri.toString(), Fetch.DOCUMENT).asJsoup()
 
         val mangas = if (document.location().startsWith("$baseUrl/directorio")) {
             document.select("#article-div a").map { element ->
@@ -122,7 +126,7 @@ abstract class MangaOni :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val details = manga.apply {
             title = document.selectFirst("h1")?.text() ?: throw Exception("Title not found")
@@ -157,7 +161,7 @@ abstract class MangaOni :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         val encoded = document.selectFirst("script:containsData(unicap)")
             ?.data()?.substringAfter("'")?.substringBefore("'")

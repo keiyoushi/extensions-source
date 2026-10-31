@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -21,6 +22,7 @@ import java.util.Calendar
 
 @Source
 abstract class Dokiraw : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
 
     private val dateRegex = Regex("""(\d+)""")
     private val chapterRegex = Regex("""(\d+(?:\.\d+)?)""")
@@ -32,7 +34,7 @@ abstract class Dokiraw : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangaElements = document.select(POPULAR_MANGA_SELECTOR)
 
         val mangas = mangaElements.map { mangaFromElement(it) }
@@ -50,7 +52,7 @@ abstract class Dokiraw : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangaElements = document.select(POPULAR_MANGA_SELECTOR)
 
         val mangas = mangaElements.map { mangaFromElement(it) }
@@ -74,7 +76,7 @@ abstract class Dokiraw : KeiSource() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangaElements = document.select(POPULAR_MANGA_SELECTOR)
 
         val mangas = mangaElements.map { mangaFromElement(it) }
@@ -121,7 +123,7 @@ abstract class Dokiraw : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = mangaDetailsParse(document, manga),
             chapters = chapterListParse(document),
@@ -163,7 +165,7 @@ abstract class Dokiraw : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("div.page-chapter img").mapIndexed { index, element ->
             val finalUrl = element.absUrl("data-cdn")
                 .ifEmpty { element.absUrl("data-original") }

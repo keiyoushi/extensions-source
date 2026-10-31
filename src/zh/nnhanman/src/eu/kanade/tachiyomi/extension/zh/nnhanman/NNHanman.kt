@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -31,6 +32,7 @@ import org.jsoup.nodes.Element
  */
 @Source
 abstract class NNHanman : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
 
     // ---- 通用解析 ----
 
@@ -65,11 +67,11 @@ abstract class NNHanman : KeiSource() {
 
     // ---- 热门（排行页，单页无分页） ----
 
-    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(parseItemBoxes(client.get("$baseUrl/ranking").asJsoup()), false)
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(parseItemBoxes(client.get("$baseUrl/ranking", Fetch.DOCUMENT).asJsoup()), false)
 
     // ---- 最新（更新页，无分页） ----
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = MangasPage(parseItemBoxes(client.get("$baseUrl/update").asJsoup()), false)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = MangasPage(parseItemBoxes(client.get("$baseUrl/update", Fetch.DOCUMENT).asJsoup()), false)
 
     // ---- 搜索与筛选 ----
 
@@ -100,7 +102,7 @@ abstract class NNHanman : KeiSource() {
                 .build()
         }
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return MangasPage(parseCol3Cards(document), document.hasNextPage())
     }
 
@@ -112,7 +114,7 @@ abstract class NNHanman : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetails(document), chapterList(document))
     }
 
@@ -152,14 +154,14 @@ abstract class NNHanman : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.pathSegments.firstOrNull() != "comic") return null
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return mangaDetails(document)
     }
 
     // ---- 正文 ----
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("#m_r_imgbox_0 img[data-src]")
             .sortedBy { it.attr("data-index").toIntOrNull() ?: 0 }
             .mapIndexed { i, img -> Page(i, imageUrl = img.absUrl("data-src")) }

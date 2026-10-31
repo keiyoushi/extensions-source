@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
@@ -29,6 +30,7 @@ import kotlin.time.Instant
 abstract class Sacachispa :
     KeiSource(),
     ConfigurableSource {
+    override val imageFetch = Fetch.IMAGE
 
     override val supportsLatest = false
 
@@ -59,7 +61,7 @@ abstract class Sacachispa :
             }
             .build()
 
-        val response = client.get(url).parseAs<MangaListResponse>()
+        val response = client.get(url, Fetch.XHR).parseAs<MangaListResponse>()
 
         return MangasPage(
             mangas = response.data.map { it.toSManga() },
@@ -94,7 +96,7 @@ abstract class Sacachispa :
     }
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
-        val details = client.get("$API_URL/manga/${manga.url}").parseAs<MangaResponse>().data
+        val details = client.get("$API_URL/manga/${manga.url}", Fetch.XHR).parseAs<MangaResponse>().data
 
         return SManga.create().apply {
             // manga.url is immutable for existing entries, so legacy slug-based manga can't be
@@ -129,7 +131,7 @@ abstract class Sacachispa :
         val patreon = hidePatreon()
 
         do {
-            val response = client.get("$API_URL/releases?mangaId=$mangaId&page=$page&limit=$CHAPTER_PAGE_SIZE")
+            val response = client.get("$API_URL/releases?mangaId=$mangaId&page=$page&limit=$CHAPTER_PAGE_SIZE", Fetch.XHR)
                 .parseAs<ReleaseListResponse>()
 
             chapters += response.data.mapNotNull { it.toSChapter(patreon) }
@@ -140,12 +142,12 @@ abstract class Sacachispa :
         return chapters.sortedByDescending { it.chapter_number }
     }
 
-    private suspend fun resolveMangaId(slug: String): String = client.get("$API_URL/manga/$slug").parseAs<MangaResponse>().data.id
+    private suspend fun resolveMangaId(slug: String): String = client.get("$API_URL/manga/$slug", Fetch.XHR).parseAs<MangaResponse>().data.id
 
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$API_URL/releases/${chapter.url}/pages", ensureSuccess = false)
+        val response = client.get("$API_URL/releases/${chapter.url}/pages", Fetch.XHR, ensureSuccess = false)
 
         if (response.code == 403) {
             // Locked (Patreon-exclusive) chapters answer with 403 and a JSON error body.

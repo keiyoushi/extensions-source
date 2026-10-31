@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
@@ -26,6 +27,7 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class MangaFox : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
 
     private val mobileUrl get() = baseUrl.replace("://", "://m.")
 
@@ -37,7 +39,7 @@ abstract class MangaFox : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val pageStr = if (page != 1) "$page.html" else ""
-        val document = client.get("$baseUrl/directory/$pageStr").asJsoup()
+        val document = client.get("$baseUrl/directory/$pageStr", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
         val hasNextPage = document.selectFirst(popularMangaNextPageSelector()) != null
         return MangasPage(mangas, hasNextPage)
@@ -57,7 +59,7 @@ abstract class MangaFox : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val pageStr = if (page != 1) "$page.html" else ""
-        val document = client.get("$baseUrl/directory/$pageStr?latest").asJsoup()
+        val document = client.get("$baseUrl/directory/$pageStr?latest", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
         val hasNextPage = document.selectFirst(popularMangaNextPageSelector()) != null
         return MangasPage(mangas, hasNextPage)
@@ -102,7 +104,7 @@ abstract class MangaFox : KeiSource() {
             addQueryParameter("sort", "")
             addQueryParameter("stype", "1")
         }.build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(searchMangaSelector()).map { searchMangaFromElement(it) }
         val hasNextPage = document.selectFirst(popularMangaNextPageSelector()) != null
         return MangasPage(mangas, hasNextPage)
@@ -118,7 +120,7 @@ abstract class MangaFox : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetailsFromDocument(document), chapterListFromDocument(document))
     }
 
@@ -166,7 +168,7 @@ abstract class MangaFox : KeiSource() {
 
         val headers = headersBuilder().set("Referer", "$mobileUrl/").build()
 
-        val document = client.get("$mobileUrl$mobilePath", headers).asJsoup()
+        val document = client.get("$mobileUrl$mobilePath", headers, Fetch.DOCUMENT).asJsoup()
         return document.select("#viewer img").mapIndexed { idx, it ->
             Page(idx, imageUrl = it.attr("abs:data-original"))
         }

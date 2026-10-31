@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -28,6 +29,8 @@ import java.util.Locale
 
 @Source
 abstract class FourKHD : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
+
     private val apiUrl get() = "$baseUrl/index.php".toHttpUrl()
     private val pageSize = 20
 
@@ -41,7 +44,7 @@ abstract class FourKHD : KeiSource() {
             .addQueryParameter("_embed", "1")
             .addQueryParameter("orderby", "modified")
             .build()
-        return postsToMangaPage(client.get(requestUrl))
+        return postsToMangaPage(client.get(requestUrl, Fetch.XHR))
     }
 
     // ========================= Latest =========================
@@ -54,7 +57,7 @@ abstract class FourKHD : KeiSource() {
             .addQueryParameter("_embed", "1")
             .addQueryParameter("orderby", "date")
             .build()
-        return postsToMangaPage(client.get(requestUrl))
+        return postsToMangaPage(client.get(requestUrl, Fetch.XHR))
     }
 
     // ========================= Search =========================
@@ -71,7 +74,7 @@ abstract class FourKHD : KeiSource() {
             builder.addQueryParameter("search", query)
         }
 
-        return postsToMangaPage(client.get(builder.build()))
+        return postsToMangaPage(client.get(builder.build(), Fetch.XHR))
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -81,7 +84,7 @@ abstract class FourKHD : KeiSource() {
             .addQueryParameter("slug", slug)
             .addQueryParameter("_embed", "1")
             .build()
-        return postsToMangaPage(client.get(requestUrl)).mangas.firstOrNull()
+        return postsToMangaPage(client.get(requestUrl, Fetch.XHR)).mangas.firstOrNull()
     }
 
     private fun postsToMangaPage(response: Response): MangasPage {
@@ -104,7 +107,7 @@ abstract class FourKHD : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(postByPathRequestUrl(manga.url, manga.memo))
+        val response = client.get(postByPathRequestUrl(manga.url, manga.memo), Fetch.XHR)
         val post = parseSinglePost(response) ?: throw Exception("Missing post details from API")
 
         val id = post.id
@@ -140,7 +143,7 @@ abstract class FourKHD : KeiSource() {
     // ========================= Pages =========================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(postByPathRequestUrl(chapter.url, chapter.memo))
+        val response = client.get(postByPathRequestUrl(chapter.url, chapter.memo), Fetch.XHR)
         val apiImageUrls = parseSinglePost(response)
             ?.contentRendered()
             ?.let(::extractImageUrlsFromHtml)

@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -23,6 +24,7 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class MundoHentai : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
 
     override val supportsLatest = false
 
@@ -40,7 +42,7 @@ abstract class MundoHentai : KeiSource() {
             .build()
 
         val pageStr = if (page != 1) "page/$page" else ""
-        val document = client.get("$baseUrl/category/doujinshi/$pageStr", newHeaders).asJsoup()
+        val document = client.get("$baseUrl/category/doujinshi/$pageStr", newHeaders, Fetch.DOCUMENT).asJsoup()
         val mangas = document
             .select("div.lista > ul > li div.thumb-conteudo:has(a[href^=$baseUrl]):not(:contains(Tufos))")
             .map(::genericMangaFromElement)
@@ -53,7 +55,7 @@ abstract class MundoHentai : KeiSource() {
             val url = baseUrl.toHttpUrl().newBuilder()
                 .addQueryParameter("s", query)
                 .build()
-            client.get(url).asJsoup()
+            client.get(url, Fetch.DOCUMENT).asJsoup()
         } else {
             val tagFilter = filters.firstInstance<TagFilter>()
             val tagSlug = tagFilter.values[tagFilter.state].slug
@@ -67,7 +69,7 @@ abstract class MundoHentai : KeiSource() {
                 .build()
 
             val pageStr = if (page != 1) "page/$page" else ""
-            client.get("$baseUrl/tag/$tagSlug/$pageStr", newHeaders).asJsoup()
+            client.get("$baseUrl/tag/$tagSlug/$pageStr", newHeaders, Fetch.DOCUMENT).asJsoup()
         }
 
         val mangas = document
@@ -83,7 +85,7 @@ abstract class MundoHentai : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val post = document.select("div.post-box")
         val multipleChapters = document.select("div.listaImagens div.galeriaTab")
 
@@ -123,7 +125,7 @@ abstract class MundoHentai : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val chapterId = document.location().substringAfterLast("#", "")
         val gallerySelector = when {
             chapterId.isNotEmpty() -> "div.listaImagens #galeria-$chapterId img"

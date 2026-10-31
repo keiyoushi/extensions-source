@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -28,6 +29,8 @@ import java.util.Locale
 
 @Source
 abstract class ThienThaiTruyen : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
+
     override fun OkHttpClient.Builder.configureClient() = rateLimit(5)
 
     // ============================== Popular ===============================
@@ -89,7 +92,7 @@ abstract class ThienThaiTruyen : KeiSource() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        return parseMangaListPage(client.get(url).asJsoup())
+        return parseMangaListPage(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // ============================== Details ===============================
@@ -124,7 +127,7 @@ abstract class ThienThaiTruyen : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
             chapters = parseChapterList(document),
@@ -194,7 +197,7 @@ abstract class ThienThaiTruyen : KeiSource() {
 
     // ============================== Pages =================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
 
         val imageUrls = document
             .select("div.w-full.mx-auto.center img:not([title=banner])")
@@ -213,7 +216,7 @@ abstract class ThienThaiTruyen : KeiSource() {
     // ============================== Filters ===============================
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-kiem-nang-cao").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-kiem-nang-cao", Fetch.DOCUMENT).asJsoup()
         .select("#genres-filter input[name='genres[]'][value]")
         .mapNotNull { input ->
             val name = input.parent()?.text()?.takeIf(String::isNotEmpty) ?: return@mapNotNull null
@@ -228,7 +231,7 @@ abstract class ThienThaiTruyen : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         val relatedContainer = document.select("h2")
             .firstOrNull { it.text() == "Liên quan" }
             ?.parent()

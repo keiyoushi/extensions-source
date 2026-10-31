@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -25,6 +26,7 @@ import java.util.Locale
 
 @Source
 abstract class JeazScans : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
@@ -35,7 +37,7 @@ abstract class JeazScans : KeiSource() {
 
     // The site migrated to custom home sections and PHP routes for search.
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/").asJsoup()
+        val document = client.get("$baseUrl/", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("a.popular-card[href*='manga.php?id=']").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.attr("abs:href"))
@@ -47,7 +49,7 @@ abstract class JeazScans : KeiSource() {
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/").asJsoup()
+        val document = client.get("$baseUrl/", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("article.release-card").map { element ->
             SManga.create().apply {
                 val link = element.selectFirst("a.release-title")!!
@@ -67,7 +69,7 @@ abstract class JeazScans : KeiSource() {
             .addQueryParameter("q", query.trim())
             .build()
 
-        val items = client.get(url).parseAs<List<SearchResponseItem>>()
+        val items = client.get(url, Fetch.XHR).parseAs<List<SearchResponseItem>>()
         val mangas = items.mapNotNull { it.toSManga(baseUrl) }
 
         return MangasPage(mangas, false)
@@ -79,7 +81,7 @@ abstract class JeazScans : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = mangaDetailsParse(document)
         val updatedChapters = if (fetchChapters) chapterList(document) else chapters
@@ -128,7 +130,7 @@ abstract class JeazScans : KeiSource() {
                 .addQueryParameter("limit", CHAPTERS_PER_REQUEST.toString())
                 .addQueryParameter("orden", "desc")
                 .build()
-            val result = client.get(apiUrl).parseAs<ChaptersResponse>()
+            val result = client.get(apiUrl, Fetch.XHR).parseAs<ChaptersResponse>()
 
             result.chapters.filterNot { it.isLocked }.mapTo(chapters) { chapter ->
                 SChapter.create().apply {
@@ -175,7 +177,7 @@ abstract class JeazScans : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val imageElements = document.select(
             ".page-container img.reader-page-image, .page-container img.protected-img, .reader-body img, .reading-content img",
         )
@@ -209,7 +211,7 @@ abstract class JeazScans : KeiSource() {
             .set("Referer", document.location())
             .build()
 
-        val payload = client.get(apiUrl, requestHeaders).parseAs<ApiLectorResponse>()
+        val payload = client.get(apiUrl, requestHeaders, Fetch.XHR).parseAs<ApiLectorResponse>()
         if (!payload.success) throw Exception("API returned error")
 
         val pages = payload.paginas

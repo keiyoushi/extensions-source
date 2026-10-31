@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -24,6 +25,7 @@ import java.util.Locale
 
 @Source
 abstract class FenixProject : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
 
     override val supportsLatest = false
 
@@ -49,7 +51,7 @@ abstract class FenixProject : KeiSource() {
     }
 
     private suspend fun fetchListing(url: String): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("#works-grid > div").mapNotNull(::parseCard)
         return MangasPage(mangas, document.selectFirst("a[rel=next]") != null)
     }
@@ -85,7 +87,7 @@ abstract class FenixProject : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val details = manga.apply {
             document.selectFirst("main h1")?.text()?.let { title = it }
@@ -133,7 +135,7 @@ abstract class FenixProject : KeiSource() {
         val latestChapterUrl = cards.first()?.selectFirst("a[href*='/capitulo-']")?.absUrl("href")
             ?: return cards.mapNotNull(::parseDetailChapter)
 
-        val fullList = client.get(latestChapterUrl).asJsoup()
+        val fullList = client.get(latestChapterUrl, Fetch.DOCUMENT).asJsoup()
             .select("#chapter-select-top a[href*='/capitulo-']")
             .map { link ->
                 val href = link.attr("href")
@@ -167,7 +169,7 @@ abstract class FenixProject : KeiSource() {
 
     private fun Float.format(): String = toString().removeSuffix(".0")
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select("img[alt^='Página ']")
         .mapIndexed { index, img -> Page(index, imageUrl = img.absUrl("src")) }
 

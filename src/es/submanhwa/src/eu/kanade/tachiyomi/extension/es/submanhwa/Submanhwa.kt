@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -23,6 +24,7 @@ import java.util.Locale
 
 @Source
 abstract class Submanhwa : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
 
     private val dateFormat = DateTimeFormatter.ofPattern("d MMM. yyyy", Locale.ENGLISH)
 
@@ -36,7 +38,7 @@ abstract class Submanhwa : KeiSource() {
             addQueryParameter("sortBy", "views")
             addQueryParameter("asc", "false")
         }.build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select(".series-card").map { element ->
             SManga.create().apply {
@@ -51,7 +53,7 @@ abstract class Submanhwa : KeiSource() {
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select("article.up-card").map { element ->
             SManga.create().apply {
@@ -86,7 +88,7 @@ abstract class Submanhwa : KeiSource() {
             }
             addQueryParameter("page", page.toString())
         }.build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select("a.lib-card").map { element ->
             SManga.create().apply {
@@ -108,7 +110,7 @@ abstract class Submanhwa : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val details = SManga.create().apply {
             url = manga.url
@@ -153,7 +155,7 @@ abstract class Submanhwa : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("#all img").mapIndexed { idx, img ->
             Page(idx, imageUrl = img.imgAttr())
         }
@@ -161,7 +163,7 @@ abstract class Submanhwa : KeiSource() {
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/biblioteca").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/biblioteca", Fetch.DOCUMENT).asJsoup()
         .select("a.tag-chip")
         .mapNotNull { chip ->
             chip.absUrl("href").toHttpUrl().queryParameter("genre")?.let { chip.ownText() to it }

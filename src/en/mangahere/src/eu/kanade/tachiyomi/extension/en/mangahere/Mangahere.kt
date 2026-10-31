@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
@@ -26,6 +27,8 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Mangahere : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
+
     override fun OkHttpClient.Builder.configureClient() = apply {
         addCookie("isAdult" to "1")
         rateLimit(1, 2.seconds) {
@@ -38,7 +41,7 @@ abstract class Mangahere : KeiSource() {
     // Popular Manga
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/directory/$page.htm").asJsoup()
+        val document = client.get("$baseUrl/directory/$page.htm", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
         val hasNextPage = document.selectFirst(popularMangaNextPageSelector()) != null
         return MangasPage(mangas, hasNextPage)
@@ -60,7 +63,7 @@ abstract class Mangahere : KeiSource() {
     // Latest Updates
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/directory/$page.htm?latest").asJsoup()
+        val document = client.get("$baseUrl/directory/$page.htm?latest", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(latestUpdatesSelector()).map { popularMangaFromElement(it) }
         val hasNextPage = document.selectFirst(latestUpdatesNextPageSelector()) != null
         return MangasPage(mangas, hasNextPage)
@@ -126,7 +129,7 @@ abstract class Mangahere : KeiSource() {
             addEncodedQueryParameter("name", null)
         }
 
-        val document = client.get(url.build()).asJsoup()
+        val document = client.get(url.build(), Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(searchMangaSelector()).map { searchMangaFromElement(it) }
         val hasNextPage = document.selectFirst(searchMangaNextPageSelector()) != null
         return MangasPage(mangas, hasNextPage)
@@ -155,14 +158,14 @@ abstract class Mangahere : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val updatedManga = mangaDetailsFromDocument(document)
         val updatedChapters = chapterListFromDocument(document)
 
         // Explicitly ignoring `fetchChapters` as we would otherwise provide incomplete data
         // Get a chapter, check if the manga is licensed.
         val aChapterUrl = getChapterUrl(updatedChapters.first())
-        val aChapterDocument = client.get(aChapterUrl).asJsoup()
+        val aChapterDocument = client.get(aChapterUrl, Fetch.DOCUMENT).asJsoup()
         if (aChapterDocument.select("p.detail-block-content").hasText()) updatedManga.status = SManga.LICENSED
 
         return SMangaUpdate(updatedManga, updatedChapters)
@@ -222,7 +225,7 @@ abstract class Mangahere : KeiSource() {
     // Pages
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val bar = document.select("script[src*=chapter_bar]")
 
         // if-branch is for webtoon reader, else is for page-by-page
@@ -314,7 +317,7 @@ abstract class Mangahere : KeiSource() {
             } else {
                 requestUrl.newBuilder().setQueryParameter("key", "").build()
             }
-            responseText = client.get(url, pageHeaders).use { it.body.string() }
+            responseText = client.get(url, pageHeaders, Fetch.XHR).use { it.body.string() }
             if (responseText.isNotEmpty()) {
                 return parseImageUrl(responseText)
             }
