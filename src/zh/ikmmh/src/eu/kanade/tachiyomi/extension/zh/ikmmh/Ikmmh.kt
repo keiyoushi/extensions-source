@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -50,6 +51,8 @@ import kotlin.time.Duration.Companion.milliseconds
 @Source
 abstract class Ikmmh : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     // 站点对无 Cookie 的请求会在每次响应中轮换下发新 PHPSESSID（实测），
     // 固定回传同一会话可避免"WAF 会话不连贯"特征；缺失或异常时静默跳过，不影响可用性
     @Volatile
@@ -78,7 +81,7 @@ abstract class Ikmmh : KeiSource() {
     protected suspend fun warmupSession() {
         if (sessionCookie == null) {
             runCatching {
-                client.get("$baseUrl/").asJsoup()
+                client.get("$baseUrl/", Fetch.DOCUMENT).asJsoup()
             }
         }
     }
@@ -87,7 +90,7 @@ abstract class Ikmmh : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         warmupSession()
-        val document = client.get("$baseUrl/booklists/9/全部/3/$page.html").asJsoup()
+        val document = client.get("$baseUrl/booklists/9/全部/3/$page.html", Fetch.DOCUMENT).asJsoup()
         return MangasPage(parseListItemMangas(document), document.hasNextPage())
     }
 
@@ -95,7 +98,7 @@ abstract class Ikmmh : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         warmupSession()
-        val document = client.get("$baseUrl/update/$page.html").asJsoup()
+        val document = client.get("$baseUrl/update/$page.html", Fetch.DOCUMENT).asJsoup()
         return MangasPage(parseListItemMangas(document), page < LATEST_MAX_PAGES)
     }
 
@@ -108,7 +111,7 @@ abstract class Ikmmh : KeiSource() {
             val url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("searchkey", query)
                 .build()
-            val document = client.get(url).asJsoup()
+            val document = client.get(url, Fetch.DOCUMENT).asJsoup()
             return MangasPage(parseListItemMangas(document), hasNextPage = false)
         }
 
@@ -124,7 +127,7 @@ abstract class Ikmmh : KeiSource() {
             }
         }
 
-        val document = client.get("$baseUrl/booklists/$area/$tag/$status/$page.html").asJsoup()
+        val document = client.get("$baseUrl/booklists/$area/$tag/$status/$page.html", Fetch.DOCUMENT).asJsoup()
         return MangasPage(parseListItemMangas(document), document.hasNextPage())
     }
 
@@ -139,7 +142,7 @@ abstract class Ikmmh : KeiSource() {
         val details = async {
             if (fetchDetails) {
                 warmupSession()
-                client.get(getMangaUrl(manga)).asJsoup().parseDetails(manga)
+                client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup().parseDetails(manga)
             } else {
                 manga
             }
@@ -169,6 +172,7 @@ abstract class Ikmmh : KeiSource() {
         val bookId = manga.url.trim().trimEnd('/').substringAfterLast('/')
         val chapters = client.get(
             "$baseUrl/api/comic/zyz/chapters?ph=1&tempid=3&zpid=$bookId&page=0&line=48&orderby=desc",
+            Fetch.XHR,
         ).parseAs<ChapterListDto> {
             it.replace("\\,", ",")
         }
@@ -189,7 +193,7 @@ abstract class Ikmmh : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "book") return null
 
-        return client.get(url).asJsoup().parseDetails(SManga.create()).apply {
+        return client.get(url, Fetch.DOCUMENT).asJsoup().parseDetails(SManga.create()).apply {
             this.url = url.encodedPath
         }
     }
@@ -216,7 +220,7 @@ abstract class Ikmmh : KeiSource() {
                 .add("limit", "10")
                 .build()
 
-            val data = client.post("$baseUrl/api/comic/read/pics", body).parseAs<PicsDto>().data
+            val data = client.post("$baseUrl/api/comic/read/pics", Fetch.XHR, body).parseAs<PicsDto>().data
             val batch = data.pic
             if (batch.isEmpty()) break
 

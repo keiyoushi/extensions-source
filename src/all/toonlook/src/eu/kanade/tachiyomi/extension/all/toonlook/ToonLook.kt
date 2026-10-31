@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -30,6 +31,8 @@ import java.util.Locale
 
 @Source
 abstract class ToonLook : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
+
     private val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yy", Locale.ROOT)
     private val chapterDataRegex = """chapterData\s*=\s*(\{.*?\})\s*;""".toRegex()
 
@@ -63,7 +66,7 @@ abstract class ToonLook : KeiSource() {
             }
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseMangasPage(document)
     }
 
@@ -113,7 +116,7 @@ abstract class ToonLook : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.url
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(
             manga = parseMangaDetails(document, slug),
@@ -122,7 +125,7 @@ abstract class ToonLook : KeiSource() {
     }
 
     private suspend fun fetchMangaDetails(slug: String): SManga {
-        val document = client.get("$baseUrl/manhwa/$slug/").asJsoup()
+        val document = client.get("$baseUrl/manhwa/$slug/", Fetch.DOCUMENT).asJsoup()
         return parseMangaDetails(document, slug)
     }
 
@@ -193,7 +196,7 @@ abstract class ToonLook : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val script = document.select("script").firstOrNull { it.data().contains("chapterData") }?.data()
             ?: throw Exception("Could not find chapter data")
         val json = chapterDataRegex.find(script)?.groupValues?.get(1)
@@ -224,6 +227,7 @@ abstract class ToonLook : KeiSource() {
             .addPathSegments("wp-json/wp/v2/genre")
             .addQueryParameter("per_page", "100")
             .build(),
+        Fetch.XHR,
     ).parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {

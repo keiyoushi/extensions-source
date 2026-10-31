@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
 import keiyoushi.lib.speedbinb.fetchPages
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
@@ -33,6 +34,8 @@ import okhttp3.OkHttpClient
 abstract class BookLive :
     KeiSource(),
     ConfigurableSource {
+    override val imageFetch = Fetch.IMAGE
+
     private val preferences by getPreferencesLazy()
     private val desktopHeaders get() = headersBuilder()
         .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36")
@@ -61,7 +64,7 @@ abstract class BookLive :
             addQueryParameter("sort", filters.firstInstance<SortFilter>().value)
             addQueryParameter("page_no", page.toString())
         }.build()
-        val document = client.get(searchUrl, desktopHeaders).asJsoup()
+        val document = client.get(searchUrl, desktopHeaders, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("ul.search_item_list > li.item").map {
             SManga.create().apply {
                 val link = it.selectFirst("h3.title_ellipsis a")!!
@@ -82,7 +85,7 @@ abstract class BookLive :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga), desktopHeaders).asJsoup()
+        val document = client.get(getMangaUrl(manga), desktopHeaders, Fetch.DOCUMENT).asJsoup()
         val mangaTitle = document.selectFirst("#breadcrumb .book_title")!!.text()
         val details = SManga.create().apply {
             title = mangaTitle

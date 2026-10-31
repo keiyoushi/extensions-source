@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -32,6 +33,8 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class HV2TComics : KeiSource() {
+
+    override val imageFetch = Fetch.IMAGE
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(authInterceptor())
@@ -119,7 +122,7 @@ abstract class HV2TComics : KeiSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("sort", "popular")
             .build()
-        return client.get(url).parseAs<ComicListResponse>().toMangasPage()
+        return client.get(url, Fetch.XHR).parseAs<ComicListResponse>().toMangasPage()
     }
 
     // ============================== Latest ================================
@@ -129,7 +132,7 @@ abstract class HV2TComics : KeiSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("sort", "latest")
             .build()
-        return client.get(url).parseAs<ComicListResponse>().toMangasPage()
+        return client.get(url, Fetch.XHR).parseAs<ComicListResponse>().toMangasPage()
     }
 
     // ============================== Search ================================
@@ -166,7 +169,7 @@ abstract class HV2TComics : KeiSource() {
             if (names.isNotEmpty()) urlBuilder.addQueryParameter("translator_names_exc", names.joinToString(","))
         }
 
-        return client.get(urlBuilder.build()).parseAs<ComicListResponse>().toMangasPage()
+        return client.get(urlBuilder.build(), Fetch.XHR).parseAs<ComicListResponse>().toMangasPage()
     }
 
     // ============================== Details ===============================
@@ -178,7 +181,7 @@ abstract class HV2TComics : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
         loadAuthToken()
-        val detailResponse = client.get("$baseUrl/api/comics/${manga.url}").parseAs<ComicDetailResponse>()
+        val detailResponse = client.get("$baseUrl/api/comics/${manga.url}", Fetch.XHR).parseAs<ComicDetailResponse>()
 
         SMangaUpdate(
             manga = detailResponse.data.toSManga(),
@@ -193,7 +196,7 @@ abstract class HV2TComics : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val slug = url.pathSegments.getOrNull(1) ?: return null
-        return client.get("$baseUrl/api/comics/$slug").parseAs<ComicDetailResponse>().data.toSManga()
+        return client.get("$baseUrl/api/comics/$slug", Fetch.XHR).parseAs<ComicDetailResponse>().data.toSManga()
     }
 
     // =============================== Pages ================================
@@ -271,9 +274,9 @@ abstract class HV2TComics : KeiSource() {
 
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
         loadAuthToken()
-        val tags = async { client.get("$baseUrl/api/tags").parseAs<TagResponse>().data.map { TagOption(it.id, it.name, it.slug) } }
+        val tags = async { client.get("$baseUrl/api/tags", Fetch.XHR).parseAs<TagResponse>().data.map { TagOption(it.id, it.name, it.slug) } }
         val translators = async {
-            client.get("$baseUrl/api/translators?view=top-by-comics-v1")
+            client.get("$baseUrl/api/translators?view=top-by-comics-v1", Fetch.XHR)
                 .parseAs<TranslatorResponse>()
                 .data
                 .map { TranslatorOption(it) }

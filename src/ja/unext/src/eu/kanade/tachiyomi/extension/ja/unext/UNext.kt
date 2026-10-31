@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.GraphQLErrorInterceptor
@@ -49,6 +50,8 @@ import kotlin.random.Random
 abstract class UNext :
     KeiSource(),
     ConfigurableSource {
+    override val imageFetch = Fetch.IMAGE
+
     private val apiUrl get() = "https://cc.unext.jp"
     private val preferences by getPreferencesLazy()
     private val apiHeaders get() = headersBuilder()
@@ -234,7 +237,7 @@ abstract class UNext :
             .addQueryParameter("play_token", playlist.playToken)
             .build()
 
-        val license = client.post(url, LicenseRequest(challenge, signature).toJsonRequestBody()).parseAs<LicenseResponse>().license
+        val license = client.post(url, Fetch.XHR, LicenseRequest(challenge, signature).toJsonRequestBody()).parseAs<LicenseResponse>().license
         val licenseKey = (userId + bookFileCode).sha256().copyOf(AES_KEY_SIZE)
 
         val data = Base64.decode(license.data, Base64.DEFAULT)

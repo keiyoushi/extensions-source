@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.WebViewTimeoutException
@@ -25,6 +26,8 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class ArazNovel : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     private val apiUrl get() = "$baseUrl/wp-json/aotori/v1/serie"
 
     override suspend fun getPopularManga(page: Int) = browse(page, "views")
@@ -37,7 +40,7 @@ abstract class ArazNovel : KeiSource() {
         val url = "$apiUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("query", query)
             .build()
-        val mangas = client.get(url).parseAs<List<SerieDto>>().map { it.toSManga() }
+        val mangas = client.get(url, Fetch.XHR).parseAs<List<SerieDto>>().map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
@@ -46,7 +49,7 @@ abstract class ArazNovel : KeiSource() {
             .addQueryParameter("orderby", orderBy)
             .addQueryParameter("page", page.toString())
             .build()
-        val result = client.get(url).parseAs<SerieListDto>()
+        val result = client.get(url, Fetch.XHR).parseAs<SerieListDto>()
         return MangasPage(result.items.map { it.toSManga() }, result.hasMore)
     }
 
@@ -63,8 +66,8 @@ abstract class ArazNovel : KeiSource() {
             .addQueryParameter("slug", segments[1])
             .addQueryParameter("_fields", "id")
             .build()
-        val id = client.get(wpUrl).parseAs<List<WpMangaDto>>().firstOrNull()?.id ?: return null
-        return client.get("$apiUrl/$id").parseAs<SerieDetailsDto>().toSManga()
+        val id = client.get(wpUrl, Fetch.XHR).parseAs<List<WpMangaDto>>().firstOrNull()?.id ?: return null
+        return client.get("$apiUrl/$id", Fetch.XHR).parseAs<SerieDetailsDto>().toSManga()
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/series/${manga.memo["slug"]!!.string}/"
@@ -77,7 +80,7 @@ abstract class ArazNovel : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val serie = client.get("$apiUrl/${manga.url}").parseAs<SerieDetailsDto>()
+        val serie = client.get("$apiUrl/${manga.url}", Fetch.XHR).parseAs<SerieDetailsDto>()
         return SMangaUpdate(
             serie.toSManga(),
             serie.chapters.map { it.toSChapter(serie.slug) },
@@ -86,7 +89,7 @@ abstract class ArazNovel : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
-        var document = client.get(chapterUrl).asJsoup()
+        var document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
         if (document.selectFirst(".cf-turnstile, .g-recaptcha") != null) {
             document = passGate(chapterUrl).asJsoup(chapterUrl)
         }

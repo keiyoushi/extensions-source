@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -25,6 +26,8 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class FlameComics : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     override val supportRelatedMangasBySearch = true
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::buildIdOutdatedInterceptor)
@@ -36,7 +39,7 @@ abstract class FlameComics : KeiSource() {
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val series = client.get(dataUrl { addPathSegment("latest.json") })
+        val series = client.get(dataUrl { addPathSegment("latest.json") }, Fetch.XHR)
             .parseAs<NextDataDto<LatestDto>>().pageProps.allSeries
         return MangasPage(series.mapNotNull { it.toSManga() }, false)
     }
@@ -47,7 +50,7 @@ abstract class FlameComics : KeiSource() {
         return MangasPage(series.mapNotNull { it.toSManga() }, false)
     }
 
-    private suspend fun fetchBrowseSeries(): List<SeriesDto> = client.get(dataUrl { addPathSegment("browse.json") })
+    private suspend fun fetchBrowseSeries(): List<SeriesDto> = client.get(dataUrl { addPathSegment("browse.json") }, Fetch.XHR)
         .parseAs<NextDataDto<BrowseDto>>().pageProps.series
 
     private fun String.normalizeTitle() = SPECIAL_CHARS_REGEX.replace(lowercase(), "")
@@ -72,6 +75,7 @@ abstract class FlameComics : KeiSource() {
                 addPathSegment("$seriesId.json")
                 addQueryParameter("id", seriesId)
             },
+            Fetch.XHR,
         ).parseAs<NextDataDto<SeriesPageDto>>().pageProps
 
         return SMangaUpdate(
@@ -90,6 +94,7 @@ abstract class FlameComics : KeiSource() {
                 addQueryParameter("id", seriesId)
                 addQueryParameter("token", token)
             },
+            Fetch.XHR,
         ).parseAs<NextDataDto<ChapterPageDto>>().pageProps.chapter.toPages()
     }
 
@@ -99,7 +104,7 @@ abstract class FlameComics : KeiSource() {
 
     private suspend fun dataUrl(path: HttpUrl.Builder.() -> Unit): HttpUrl {
         val id = buildId
-            ?: client.get(baseUrl).asJsoup().extractNextJs<BuildIdDto>()?.buildId?.also { buildId = it }
+            ?: client.get(baseUrl, Fetch.DOCUMENT).asJsoup().extractNextJs<BuildIdDto>()?.buildId?.also { buildId = it }
             ?: throw Exception("Failed to find buildId")
 
         return baseUrl.toHttpUrl().newBuilder()

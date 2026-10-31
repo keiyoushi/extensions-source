@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -23,10 +24,12 @@ import java.util.Calendar
 @Source
 abstract class TrManga : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/webtoon-listesi?sort=views&short_type=DESC&page=$page").asJsoup()
+        val document = client.get("$baseUrl/webtoon-listesi?sort=views&short_type=DESC&page=$page", Fetch.DOCUMENT).asJsoup()
         return mangaListFromDocument(document)
     }
 
@@ -45,7 +48,7 @@ abstract class TrManga : KeiSource() {
     // =============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/son-eklenenler?page=$page").asJsoup()
+        val document = client.get("$baseUrl/son-eklenenler?page=$page", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("article:has(h3 a)").map { latestUpdatesFromElement(it) }
         val hasNextPage = document.selectFirst("a[rel=next]") != null
         return MangasPage(mangas, hasNextPage)
@@ -91,7 +94,7 @@ abstract class TrManga : KeiSource() {
             }
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return mangaListFromDocument(document)
     }
 
@@ -102,7 +105,7 @@ abstract class TrManga : KeiSource() {
         val segments = url.pathSegments
         if (segments.firstOrNull() != "webtoon" || segments.size < 2) return null
         val mangaUrl = "$baseUrl/webtoon/${segments[1]}"
-        val document = client.get(mangaUrl).asJsoup()
+        val document = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
         return mangaDetailsFromDocument(document).apply {
             setUrlWithoutDomain(mangaUrl)
         }
@@ -116,7 +119,7 @@ abstract class TrManga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val details = mangaDetailsFromDocument(document)
         val chapterList = chapterListFromDocument(document)
         return SMangaUpdate(details, chapterList)
@@ -177,7 +180,7 @@ abstract class TrManga : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         if (document.selectFirst("*:containsOwn(Üyelere Özel)") != null) {
             throw Exception("Bu bölüm üyelere özeldir. Okumak için WebView üzerinden giriş yapın")
         }

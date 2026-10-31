@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -33,6 +34,8 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class Newtoki : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     override suspend fun getPopularManga(page: Int): MangasPage = getWorkList(page, ListingFilter.listings[0], "views", FilterList())
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = getWorkList(page, ListingFilter.listings[0], "new", FilterList())
@@ -50,7 +53,7 @@ abstract class Newtoki : KeiSource() {
             .apply { kind?.let { addQueryParameter("kind", it) } }
             .addQueryParameter("page", page.toString())
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".search-results-grid a.card[href]").mapNotNull { element ->
             val path = element.absUrl("href").toHttpUrl().pathSegments
             if (path.size != 2 || path[0] !in TYPES) return@mapNotNull null
@@ -85,7 +88,7 @@ abstract class Newtoki : KeiSource() {
             .addQueryParameter("pageSize", PAGE_SIZE.toString())
             .build()
 
-        val response = client.get(url).parseAs<WorkListDto>()
+        val response = client.get(url, Fetch.XHR).parseAs<WorkListDto>()
         return MangasPage(response.works.map { it.toSManga(listing.type) }, response.hasMore)
     }
 
@@ -94,7 +97,7 @@ abstract class Newtoki : KeiSource() {
         val path = url.pathSegments
         if (path.size < 2 || path[0] !in TYPES) return null
         val manga = SManga.create().apply { this.url = "/${path[0]}/${path[1]}" }
-        return parseMangaDetails(manga, client.get(getMangaUrl(manga)).asJsoup())
+        return parseMangaDetails(manga, client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun fetchMangaUpdate(
@@ -103,7 +106,7 @@ abstract class Newtoki : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             parseMangaDetails(manga, document),
             if (fetchChapters) parseChapterList(manga, document) else chapters,
@@ -138,7 +141,7 @@ abstract class Newtoki : KeiSource() {
                     val url = getMangaUrl(manga).toHttpUrl().newBuilder()
                         .addQueryParameter("epage", page.toString())
                         .build()
-                    client.get(url).asJsoup().select(CHAPTER_SELECTOR).map(::parseChapter)
+                    client.get(url, Fetch.DOCUMENT).asJsoup().select(CHAPTER_SELECTOR).map(::parseChapter)
                 }
             }.awaitAll()
         }

@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -33,6 +34,8 @@ import java.util.Locale
 abstract class ClownCorps :
     KeiSource(),
     ConfigurableSource {
+    override val imageFetch = Fetch.IMAGE
+
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(TextInterceptor())
@@ -71,7 +74,7 @@ abstract class ClownCorps :
         if (!fetchChapters) return SMangaUpdate(getManga(), chapters)
 
         // The total number of webpages with chapters on them
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val currentPageIndicator = document.select("#paginav li.paginav-pages").text()
         val totalWebpageCount = currentPageIndicator.split(" ").last().toInt()
 
@@ -108,7 +111,7 @@ abstract class ClownCorps :
 
     private suspend fun fetchChapterWebpage(webpageIndex: Int): Document {
         val url = "$baseUrl/comic/page/$webpageIndex/"
-        return client.get(url).asJsoup()
+        return client.get(url, Fetch.DOCUMENT).asJsoup()
     }
 
     private fun extractChapters(document: Document): List<SerializableChapter> {
@@ -129,7 +132,7 @@ abstract class ClownCorps :
         .toFormatter(Locale.ENGLISH)
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val doc = client.get(getChapterUrl(chapter)).asJsoup()
+        val doc = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val pages = mutableListOf<Page>()
 
         val image = doc.selectFirst("#comic img") ?: return pages

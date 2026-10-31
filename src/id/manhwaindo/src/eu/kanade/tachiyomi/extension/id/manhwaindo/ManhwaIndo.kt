@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -33,6 +34,8 @@ import java.time.ZonedDateTime
 
 @Source
 abstract class ManhwaIndo : KeiSource() {
+
+    override val imageFetch = Fetch.IMAGE
 
     override fun Headers.Builder.configureHeaders() = apply {
         set("Accept-Language", "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7")
@@ -67,7 +70,7 @@ abstract class ManhwaIndo : KeiSource() {
             }.build()
         }
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("a.series:has(img)").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.attr("abs:href"))
@@ -85,7 +88,7 @@ abstract class ManhwaIndo : KeiSource() {
         if (url.pathSegments.firstOrNull() != "series") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
         val mangaUrl = "/series/$slug/"
-        return parseMangaDetails(client.get(baseUrl + mangaUrl).asJsoup()).apply { this.url = mangaUrl }
+        return parseMangaDetails(client.get(baseUrl + mangaUrl, Fetch.DOCUMENT).asJsoup()).apply { this.url = mangaUrl }
     }
 
     override suspend fun fetchMangaUpdate(
@@ -109,9 +112,9 @@ abstract class ManhwaIndo : KeiSource() {
         }
     }
 
-    private suspend fun getMangaDetails(manga: SManga) = parseMangaDetails(client.get(getMangaUrl(manga)).asJsoup()).apply { url = manga.url }
+    private suspend fun getMangaDetails(manga: SManga) = parseMangaDetails(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()).apply { url = manga.url }
 
-    private suspend fun fetchChapterList(seriesId: String) = client.get("$baseUrl/wp-json/agc/v1/chapters?series=$seriesId").parseAs<List<ChapterDto>>().map {
+    private suspend fun fetchChapterList(seriesId: String) = client.get("$baseUrl/wp-json/agc/v1/chapters?series=$seriesId", Fetch.XHR).parseAs<List<ChapterDto>>().map {
         SChapter.create().apply {
             setUrlWithoutDomain(it.url)
             name = "Chapter ${it.chapter}"
@@ -159,7 +162,7 @@ abstract class ManhwaIndo : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(".reader-area img")
             .map { it.attr("abs:src") }
             .distinct()
@@ -168,7 +171,7 @@ abstract class ManhwaIndo : KeiSource() {
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData() = client.get("$baseUrl/series/").asJsoup()
+    override suspend fun fetchFilterData() = client.get("$baseUrl/series/", Fetch.DOCUMENT).asJsoup()
         .select("input[name='genre[]'][value~=.+]")
         .map { GenreDto(it.parent()!!.text(), it.attr("value")) }
         .toJsonElement()

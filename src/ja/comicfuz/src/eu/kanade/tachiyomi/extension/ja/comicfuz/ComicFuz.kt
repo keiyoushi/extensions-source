@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
@@ -19,6 +20,8 @@ import okio.IOException
 
 @Source
 abstract class ComicFuz : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
+
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "https://api.$domain/v1"
     private val cdnUrl get() = "https://img.$domain"
@@ -50,7 +53,7 @@ abstract class ComicFuz : KeiSource() {
             dayOfWeek = DayOfWeek.today(),
         ).toRequestBodyProto()
 
-        val data = client.post("$apiUrl/mangas_by_day_of_week", payload).parseAsProto<MangaListResponse>()
+        val data = client.post("$apiUrl/mangas_by_day_of_week", Fetch.XHR, payload).parseAsProto<MangaListResponse>()
         val entries = data.mangas.map {
             it.toSManga(cdnUrl)
         }
@@ -71,7 +74,7 @@ abstract class ComicFuz : KeiSource() {
                 pageIndexOfBooks = 1,
             ).toRequestBodyProto()
 
-            val data = client.post("$apiUrl/search", payload).parseAsProto<SearchResponse>()
+            val data = client.post("$apiUrl/search", Fetch.XHR, payload).parseAsProto<SearchResponse>()
             val entries = data.mangas.map {
                 it.toSManga(cdnUrl)
             }
@@ -85,7 +88,7 @@ abstract class ComicFuz : KeiSource() {
                 tagId = tag.selected!!,
             ).toRequestBodyProto()
 
-            val data = client.post("$apiUrl/manga_list", payload).parseAsProto<MangaListResponse>()
+            val data = client.post("$apiUrl/manga_list", Fetch.XHR, payload).parseAsProto<MangaListResponse>()
             val entries = data.mangas.map {
                 it.toSManga(cdnUrl)
             }
@@ -111,7 +114,7 @@ abstract class ComicFuz : KeiSource() {
             mangaId = manga.url.substringAfterLast("/").toInt(),
         ).toRequestBodyProto()
 
-        val data = client.post("$apiUrl/manga_detail", payload).parseAsProto<MangaDetailsResponse>()
+        val data = client.post("$apiUrl/manga_detail", Fetch.XHR, payload).parseAsProto<MangaDetailsResponse>()
         val chapterList = data.chapterGroups.flatMap { group ->
             group.chapters.map { chapter ->
                 chapter.toSChapter()
@@ -139,7 +142,7 @@ abstract class ComicFuz : KeiSource() {
             ),
         ).toRequestBodyProto()
 
-        val data = client.post("$apiUrl/manga_viewer", payload).parseAsProto<MangaViewerResponse>()
+        val data = client.post("$apiUrl/manga_viewer", Fetch.XHR, payload).parseAsProto<MangaViewerResponse>()
 
         val pages = data.pages
             .filter { it.image?.isExtraPage == false }

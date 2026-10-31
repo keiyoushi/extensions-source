@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -24,6 +25,8 @@ import java.util.Date
 abstract class QuestionableContent :
     KeiSource(),
     ConfigurableSource {
+
+    override val imageFetch = Fetch.IMAGE
 
     override val supportsLatest = false
 
@@ -67,7 +70,7 @@ abstract class QuestionableContent :
     }
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val chapters = document.select("""div#container a[href^="view.php?comic="]""")
             .map { element ->
@@ -102,7 +105,7 @@ abstract class QuestionableContent :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val pages = document.select("#strip").mapIndexed { i, element ->
             Page(i, imageUrl = element.attr("abs:src"))
         }.toMutableList()

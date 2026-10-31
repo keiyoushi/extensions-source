@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.manhuarm.translator.google
 
 import eu.kanade.tachiyomi.extension.all.manhuarm.translator.TranslatorEngine
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
@@ -47,7 +48,7 @@ class GoogleTranslator(private val client: OkHttpClient, private val headers: ()
             .set("Referer", "$WEBPAGE/")
             .build()
 
-        return client.get(url, apiHeaders).parseAs<JsonElement>()
+        return client.get(url, apiHeaders, Fetch.XHR).parseAs<JsonElement>()
             .jsonArray[0].jsonArray
             .joinToString("") { it.jsonArray[0].jsonPrimitive.content }
     }

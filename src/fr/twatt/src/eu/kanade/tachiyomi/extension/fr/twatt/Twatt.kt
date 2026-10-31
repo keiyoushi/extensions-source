@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.dataimage.DataImageInterceptor
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -18,6 +19,8 @@ import kotlin.time.Instant
 @Source
 abstract class Twatt : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(DataImageInterceptor())
@@ -25,7 +28,7 @@ abstract class Twatt : KeiSource() {
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val projects = client.get("$baseUrl/api/projects").parseAs<ProjectsResponse>().projects
+        val projects = client.get("$baseUrl/api/projects", Fetch.XHR).parseAs<ProjectsResponse>().projects
         val mangas = projects.map { it.toSManga(baseUrl) }
         return MangasPage(mangas, false)
     }
@@ -52,6 +55,7 @@ abstract class Twatt : KeiSource() {
     ): SMangaUpdate {
         val data = client.get(
             "$baseUrl/api/series/${manga.url.substringAfterLast('/')}",
+            Fetch.XHR,
         ).parseAs<SeriesResponse>()
 
         return SMangaUpdate(
@@ -77,7 +81,7 @@ abstract class Twatt : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$baseUrl/api/chapters/${chapter.url.substringAfterLast('/')}")
+        val response = client.get("$baseUrl/api/chapters/${chapter.url.substringAfterLast('/')}", Fetch.XHR)
         val images = response.parseAs<ChapterResponse>().chapter.images
         return images.mapIndexed { i, path ->
             Page(i, imageUrl = resolvePath(path, baseUrl))

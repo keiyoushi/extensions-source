@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -30,6 +31,8 @@ import kotlin.time.Duration.Companion.minutes
 
 @Source
 abstract class StellarSaber : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
+
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::imageInterceptor)
 
     private fun Int.pageNumber() = if (this > 1) "page/$this/" else ""
@@ -37,13 +40,13 @@ abstract class StellarSaber : KeiSource() {
     // ------------------- Popular / Latest -------------------
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$baseUrl/manga/${page.pageNumber()}?sort=rating")
+        val response = client.get("$baseUrl/manga/${page.pageNumber()}?sort=rating", Fetch.DOCUMENT)
 
         return parseMangaListPage(response.asJsoup())
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val response = client.get("$baseUrl/manga/${page.pageNumber()}?sort=latest")
+        val response = client.get("$baseUrl/manga/${page.pageNumber()}?sort=latest", Fetch.DOCUMENT)
 
         return parseMangaListPage(response.asJsoup())
     }
@@ -90,7 +93,7 @@ abstract class StellarSaber : KeiSource() {
             addFormDataPart("keyword", query)
         }.build()
 
-        val response = client.post("$baseUrl/wp-admin/admin-ajax.php", body)
+        val response = client.post("$baseUrl/wp-admin/admin-ajax.php", Fetch.XHR, body)
         val data = response.parseAs<SearchResponse>()
 
         val entries = data.data.results
@@ -120,7 +123,7 @@ abstract class StellarSaber : KeiSource() {
     private suspend fun fetchNonce(): String {
         nonce?.let { return it }
 
-        val document = client.get("$baseUrl/manga/").asJsoup()
+        val document = client.get("$baseUrl/manga/", Fetch.DOCUMENT).asJsoup()
         return fetchNonce(document)
     }
 
@@ -132,7 +135,7 @@ abstract class StellarSaber : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = parseMangaDetails(document)
         val updatedChapters = parseChapterList(document)
@@ -236,7 +239,7 @@ abstract class StellarSaber : KeiSource() {
     // ------------------- Pages -------------------
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
 
         val key = fetchCdnKey(document)
 
@@ -254,7 +257,7 @@ abstract class StellarSaber : KeiSource() {
             .add("chapter_id", script.extract("chapterId: ", ','))
             .build()
 
-        val response = client.post("$baseUrl/wp-admin/admin-ajax.php", formBody)
+        val response = client.post("$baseUrl/wp-admin/admin-ajax.php", Fetch.XHR, formBody)
 
         return response.parseAs<CdnKeyResponse>().data.key
     }

@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -19,6 +20,8 @@ import java.io.IOException
 
 @Source
 abstract class ArgosScan : KeiSource() {
+
+    override val imageFetch = Fetch.IMAGE
 
     private val apiUrl = "https://api.argoscomics.online"
 
@@ -49,7 +52,7 @@ abstract class ArgosScan : KeiSource() {
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int) = (
-        client.get("$apiUrl/projects").parseAs<Projects>().toMangasPage()
+        client.get("$apiUrl/projects", Fetch.XHR).parseAs<Projects>().toMangasPage()
         )
 
     // =============================== Search ===============================
@@ -61,7 +64,7 @@ abstract class ArgosScan : KeiSource() {
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = (
-        client.get("$apiUrl/projects").parseAs<Projects>().toMangasPage(query)
+        client.get("$apiUrl/projects", Fetch.XHR).parseAs<Projects>().toMangasPage(query)
         )
 
     // =========================== Manga Details ============================
@@ -93,10 +96,10 @@ abstract class ArgosScan : KeiSource() {
         }
     }
 
-    private suspend fun fetchDetails(slug: String) = client.get("$apiUrl/projects/slug/$slug").parseAs<Project>()
+    private suspend fun fetchDetails(slug: String) = client.get("$apiUrl/projects/slug/$slug", Fetch.XHR).parseAs<Project>()
 
     private suspend fun fetchChapters(projectId: String) = (
-        client.get("$apiUrl/chapters?kind=published&project_id=$projectId")
+        client.get("$apiUrl/chapters?kind=published&project_id=$projectId", Fetch.XHR)
             .parseAs<Chapters>()
             .toSChapterList(projectId)
         )

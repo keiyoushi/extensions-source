@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -24,6 +25,8 @@ import kotlin.time.Instant
 
 @Source
 abstract class ViTruyen : KeiSource() {
+
+    override val imageFetch = Fetch.IMAGE
 
     private val apiUrl get() = "https://api.${baseUrl.toHttpUrl().host}/api/next"
 
@@ -88,7 +91,7 @@ abstract class ViTruyen : KeiSource() {
             }
             .build()
 
-        val result = client.get(url).parseAs<ListingResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<ListingResponse>()
 
         return MangasPage(
             mangas = result.items.map { it.toSManga() },
@@ -105,7 +108,7 @@ abstract class ViTruyen : KeiSource() {
                 .addQueryParameter("page", page.toString())
                 .build()
 
-            val result = client.get(url).parseAs<SearchResponse>()
+            val result = client.get(url, Fetch.XHR).parseAs<SearchResponse>()
 
             return MangasPage(
                 mangas = result.items.map { it.toSManga() },
@@ -139,7 +142,7 @@ abstract class ViTruyen : KeiSource() {
         return getMangaDetails(slug).toSManga()
     }
 
-    private suspend fun getMangaDetails(slug: String): MangaDetails = client.get("$apiUrl/manga/$slug").parseAs()
+    private suspend fun getMangaDetails(slug: String): MangaDetails = client.get("$apiUrl/manga/$slug", Fetch.XHR).parseAs()
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -194,13 +197,13 @@ abstract class ViTruyen : KeiSource() {
         val pathSegments = getChapterUrl(chapter).toHttpUrl().pathSegments
         val chapterId = pathSegments[1].substringAfterLast("-")
 
-        return client.get("$apiUrl/manga/${pathSegments[0]}/chapter/$chapterId")
+        return client.get("$apiUrl/manga/${pathSegments[0]}/chapter/$chapterId", Fetch.XHR)
             .parseAs<MangaDetails>()
             .currentChapterContent
             ?.content
     }
 
-    private suspend fun fetchPageUrlsFromPage(chapter: SChapter): List<String> = client.get(getChapterUrl(chapter)).asJsoup()
+    private suspend fun fetchPageUrlsFromPage(chapter: SChapter): List<String> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select("img.v2-reader-page-image[src]")
         .map { it.absUrl("src") }
 
@@ -214,7 +217,7 @@ abstract class ViTruyen : KeiSource() {
             .addQueryParameter("sort", "latest")
             .build()
 
-        return client.get(url).parseAs<ListingResponse>().filterOptions.toJsonElement()
+        return client.get(url, Fetch.XHR).parseAs<ListingResponse>().filterOptions.toJsonElement()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList = getFilters(data?.parseAs<FilterOptions>() ?: FilterOptions())
