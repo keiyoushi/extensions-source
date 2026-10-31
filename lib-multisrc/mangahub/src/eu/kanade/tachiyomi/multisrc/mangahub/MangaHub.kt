@@ -73,7 +73,6 @@ abstract class MangaHub : KeiSource() {
 
     private val apiHeaders get() = headersBuilder()
         .set("Accept", "application/json")
-        .removeAll("Upgrade-Insecure-Requests")
 
     private suspend inline fun <reified T> fetchGraphQL(
         query: String,
