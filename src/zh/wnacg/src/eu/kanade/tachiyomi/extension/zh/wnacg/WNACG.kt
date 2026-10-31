@@ -29,6 +29,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.io.IOException
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -141,7 +142,8 @@ abstract class WNACG :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) return null
+        // Links point at the live mirror, which can be newer than the selected baseUrl
+        if (url.host != baseUrl.toHttpUrl().host && !mirrorHostRegex.containsMatchIn(url.host)) return null
         val (aid, sid) = mangaUrlRegex.matchEntire(url.encodedPath)?.destructured ?: return null
         val path = "/photos-index-aid-${sid.ifEmpty { aid }}.html"
 
@@ -165,7 +167,7 @@ abstract class WNACG :
     }
 
     private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("h2")!!.text()
+        title = document.selectFirst("h2")?.text() ?: throw IOException(LOGIN_HINT)
         artist = document.selectFirst("div.uwuinfo p")?.text()
         author = artist
         val category = document.selectFirst("div.uwconn label:contains(分類：)")?.text()
@@ -246,7 +248,8 @@ abstract class WNACG :
         SortFilter(),
         Filter.Separator(),
         Filter.Header("注意：分类和标签均不支持搜索"),
-        CategoryFilter(),
+        Filter.Header("注意：在 WebView 中登录后刷新列表并重置，可显示韩漫等分类"),
+        CategoryFilter(preferences.extraCategories),
         Filter.Header("注意：排行仅在未选分类和标签时生效"),
         RankingFilter(),
         Filter.Separator(),
@@ -261,9 +264,21 @@ abstract class WNACG :
 
     private fun mangaListParse(response: Response): MangasPage {
         val document = response.asJsoup()
+        saveExtraCategories(document)
         val mangas = document.select(".gallary_item").map { mangaFromElement(it) }
         val hasNextPage = document.selectFirst("span.thispage + a") != null
         return MangasPage(mangas, hasNextPage)
+    }
+
+    // The site's menu lists more categories once logged in
+    private fun saveExtraCategories(document: Document) {
+        val categories = document.select("#album_tabs > li").flatMap { item ->
+            val parent = item.selectFirst("> a") ?: return@flatMap emptyList()
+            listOf(parent.text() to parent) + item.select(".drop_dwon a").map { "${parent.text()}-${it.text()}" to it }
+        }.mapNotNull { (name, link) ->
+            unlistedCategoryId(link.attr("href"))?.let { name to it }
+        }
+        preferences.extraCategories = categories
     }
 
     private fun MangasPage.filterBlockedTitles(
@@ -319,7 +334,8 @@ abstract class WNACG :
         )
 
         // Gallery page, reader and chapter links; a chapter's sid is its collection
-        private val mangaUrlRegex = Regex("""/photos-(?:index|slide|list|gallery)-aid-(\d+)(?:-sid-(\d+))?(?:-page-\d+)?\.html""")
+        private val mangaUrlRegex = Regex("""/photos-(?:index|slide|list|gallery)(?:-page-\d+)?-aid-(\d+)(?:-sid-(\d+))?(?:-page-\d+)?\.html""")
+        private val mirrorHostRegex = Regex("""^(?:www\.)?wn(?:acg|\d+)\.""")
         private val mangaAidRegex = Regex("""photos-index-aid-(\d+)""")
         private val chapterListPageRegex = Regex("""photos-index-aid-\d+-page-(\d+)\.html""")
         private val chapterDateRegex = Regex("""\d{4}-\d{2}-\d{2}""")
