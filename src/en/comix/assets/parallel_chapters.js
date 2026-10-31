@@ -2,7 +2,7 @@
     "use strict";
 
     const LIMIT = 100;
-    const WAVE = 40;
+    const TAP_EVERY = 3;
     const MAX_PAGES = 1000;
     const RETRY_KEY = "__comixA1Retried";
     const CHAPTERS_RE = /\/api\/v1\/manga\/[^/]+\/chapters/;
@@ -16,19 +16,16 @@
         }, { capture: true, passive: true });
     }
 
-    let flagged = 0;
-    try {
-        performance.setResourceTimingBufferSize(10000);
-        new PerformanceObserver(list => {
-            for (const e of list.getEntries()) {
-                if (!CHAPTERS_RE.test(e.name)) continue;
-                try {
-                    const q = new URL(e.name).searchParams;
-                    if ((Number(q.get("v")) & 1) || /[^0]/.test(q.get("w") || "0")) flagged++;
-                } catch (err) {}
-            }
-        }).observe({ type: "resource" });
-    } catch (e) {}
+    try { performance.setResourceTimingBufferSize(10000); } catch (e) {}
+    const flaggedRequests = () => performance.getEntriesByType("resource").filter(e => {
+        if (!CHAPTERS_RE.test(e.name)) return false;
+        try {
+            const q = new URL(e.name).searchParams;
+            return (Number(q.get("v")) & 1) || /[^0]/.test(q.get("w") || "0");
+        } catch (err) {
+            return false;
+        }
+    }).length;
 
     const retryOnce = () => {
         try {
@@ -80,13 +77,29 @@
     };
 
     const findApi = async (url) => {
-        const [mod, src] = await Promise.all([import(url), fetch(url).then(r => r.text())]);
-        const m = /async"([\w$]+)"\(\w+,\w+=\{\}\)\{const [\w$]+=[\w$]+,[\w$]+=[\w$]+\.([\w$]+)\.\1\(\w+\);/.exec(src);
-        if (!m) throw new Error("chapter method not found");
-        for (const v of Object.values(mod)) {
-            try { if (v && typeof v[m[1]] === "function") return { api: v, key: m[1] }; } catch (e) {}
+        const mod = await import(url);
+        const keys = {};
+        for (const exported of Object.values(mod)) {
+            if (!exported || typeof exported !== "object") continue;
+            for (const group of Object.values(exported)) {
+                if (!group || typeof group !== "object" || Array.isArray(group)) continue;
+                for (const [name, fn] of Object.entries(group)) {
+                    if (typeof fn !== "function") continue;
+                    try {
+                        const queryKey = fn("H", {});
+                        if (!Array.isArray(queryKey) || queryKey[0] !== "manga") continue;
+                        if (queryKey[1] === "chapters" && queryKey[2] === "H") keys.chapters = name;
+                        if (queryKey[1] === "recommended" && queryKey[2] === "H") keys.recommended = name;
+                    } catch (e) {}
+                }
+            }
         }
-        throw new Error("api export not found");
+        if (!keys.chapters || !keys.recommended) throw new Error("chapter method not found");
+        const apis = Object.values(mod).filter(v => {
+            try { return v && typeof v[keys.chapters] === "function" && typeof v[keys.recommended] === "function"; } catch (e) { return false; }
+        });
+        if (apis.length !== 1) throw new Error("api export not found");
+        return { api: apis[0], key: keys.chapters };
     };
 
     const fromUrl = url => {
@@ -94,34 +107,33 @@
         return m ? { id: parseInt(m[1], 10), number: parseFloat(m[2]) } : null;
     };
 
-    const urlOf = ch => (typeof ch.yr === "string" && ch.yr) ||
-        Object.values(ch).find(v => typeof v === "string" && /\/title\/.+-chapter-/.test(v));
+    const FIELDS = 13;
+    const [ID, NUMBER, NAME, OFFICIAL, VOTES, DATE, GROUP, LINK] = [0, 2, 4, 6, 7, 8, 10, 12];
 
     const checkFields = ch => {
         if (!ch) return;
-        const parsed = fromUrl(urlOf(ch));
-        const ok = parsed && typeof ch.yr === "string" && ch.fq === parsed.id && typeof ch.Vn === "number" && "OC" in ch;
-        if (!ok) throw new Error("chapter fields changed: " + Object.keys(ch).join(","));
+        const row = Object.values(ch);
+        const parsed = fromUrl(row[LINK]);
+        const ok = row.length === FIELDS && parsed && row[ID] === parsed.id && row[NUMBER] === parsed.number &&
+            (row[NAME] === null || typeof row[NAME] === "string") && typeof row[OFFICIAL] === "boolean";
+        if (!ok) throw new Error("chapter fields changed");
     };
 
     const mapChapter = (ch) => {
         if (!ch || typeof ch !== "object") return null;
-        const url = urlOf(ch);
-        const parsed = fromUrl(url);
+        const row = Object.values(ch);
+        const parsed = fromUrl(row[LINK]);
         if (!parsed) return null;
+        const group = row[GROUP] && Object.values(row[GROUP]);
         return {
-            id: Number.isInteger(ch.fq) ? ch.fq : parsed.id,
-            url,
-            number: typeof ch.Vn === "number" ? ch.Vn : parsed.number,
-            name: typeof ch.OC === "string" ? ch.OC : "",
-            votes: typeof ch.Fl === "number" ? ch.Fl : 0,
-            createdAtFormatted: (typeof ch.Zi === "string" && ch.Zi) ||
-                Object.values(ch).find(v => typeof v === "string" && /\d+\s*\w+\s+ago/i.test(v)) || "",
-            group: ch.Ck && typeof ch.Ck === "object"
-                ? { id: Object.values(ch.Ck).find(v => Number.isInteger(v)) ?? null,
-                    name: Object.values(ch.Ck).find(v => typeof v === "string") || "" }
-                : null,
-            isOfficial: ch.Za === true,
+            id: Number.isInteger(row[ID]) ? row[ID] : parsed.id,
+            url: row[LINK],
+            number: typeof row[NUMBER] === "number" ? row[NUMBER] : parsed.number,
+            name: typeof row[NAME] === "string" ? row[NAME] : "",
+            votes: typeof row[VOTES] === "number" ? row[VOTES] : 0,
+            createdAtFormatted: typeof row[DATE] === "string" ? row[DATE] : "",
+            group: group ? { id: Number.isInteger(group[0]) ? group[0] : null, name: group[1] || "" } : null,
+            isOfficial: row[OFFICIAL] === true,
         };
     };
 
@@ -158,22 +170,15 @@
         let failed = 0;
         let stopped = false;
 
-        for (let page = 2; page <= pages;) {
+        for (let page = 2; page <= pages; page++) {
             if (!onTitle()) { stopped = true; break; }
-            if (!(await tap())) {
+            if ((page - 2) % TAP_EVERY === 0 && !(await tap())) {
                 if (byPage.size === 1) throw new Error("no trusted tap");
                 stopped = true;
                 break;
             }
-            const end = Math.min(page + WAVE, pages + 1);
-            const wave = [];
-            for (; page < end; page++) {
-                const p = page;
-                wave.push(get(p).then(r => { byPage.set(p, items(r)); }, () => { failed++; }));
-            }
-            await Promise.all(wave);
-            await sleep(250);
-            if (flagged > 0) {
+            await get(page).then(r => { byPage.set(page, items(r)); }, () => { failed++; });
+            if (flaggedRequests() > 0) {
                 if (retryOnce()) return new Promise(() => {});
                 stopped = true;
                 break;

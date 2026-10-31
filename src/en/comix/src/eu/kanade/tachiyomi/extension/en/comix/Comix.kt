@@ -499,13 +499,7 @@ abstract class Comix :
     ): ChapterList {
         if (knownIds.isEmpty()) showChapterListHint()
         val mangaId = manga.url.removePrefix("/").substringBefore('-')
-        val skipPacer = AtomicBoolean(true)
-        val payload = runInWebView(
-            getMangaUrl(manga),
-            { it.isChapterListRequest() },
-            onDisplay = true,
-            skipPacer = skipPacer,
-        ) { passPayloadName, _, touchName ->
+        val payload = runInWebView(getMangaUrl(manga), { it.isChapterListRequest() }, onDisplay = true) { passPayloadName, _, touchName ->
             """
             (function () {
                 const titlePath = ${JSONObject.quote("/title/$mangaId")};
@@ -552,7 +546,6 @@ abstract class Comix :
                     if (result.error) throw new Error(result.error);
                     send({ chapters: result.chapters || [], complete: !!result.complete, error: null, queries: pageQueries() });
                 }).catch(() => {
-                    try { window.__comixPace(); } catch (e) {}
                     ${asset("harvest_chapters.js")}
                     window.__comixHarvestPromise
                         .then(result => send(wrap(result)))
@@ -806,7 +799,6 @@ abstract class Comix :
         // The reader run: images on, offscreen display
         loadImages: Boolean = false,
         onDisplay: Boolean = loadImages,
-        skipPacer: AtomicBoolean? = null,
         timeoutSeconds: Long = if (isDataRequest != null) DATA_REQUEST_WAIT_SECONDS else WEBVIEW_TIMEOUT_SECONDS,
         // Gets every payload; the run ends on done()
         onPayload: ((payload: String, done: () -> Unit) -> Unit)? = null,
@@ -816,7 +808,7 @@ abstract class Comix :
         val timeoutDeadline = AtomicLong(System.nanoTime() + timeoutSeconds.seconds.inWholeNanoseconds)
         val dataRequests = AtomicInteger()
         val (bridgeName, errorBridgeName, passPayloadName, rejectName) = List(4) { randomName() }
-        val (touchBridgeName, touchName, paceBridgeName) = List(3) { randomName() }
+        val (touchBridgeName, touchName) = List(2) { randomName() }
         return runWebView(timeout = Duration.INFINITE) {
             userAgent = headers["User-Agent"].orEmpty()
             blockImages = !loadImages
@@ -838,7 +830,7 @@ abstract class Comix :
                 }
                 val isData = isDataRequest?.invoke(requestUrl) == true
                 if (isData) dataRequests.incrementAndGet()
-                if (requestUrl.isChapterListRequest() && skipPacer?.get() != true) chapterListPacer.waitForSlot()
+                if (requestUrl.isChapterListRequest()) chapterListPacer.waitForSlot()
                 if (isData || requestUrl.encodedPath.startsWith(WAF_PATH)) {
                     timeoutDeadline.set(System.nanoTime() + timeoutSeconds.seconds.inWholeNanoseconds)
                 }
@@ -866,9 +858,6 @@ abstract class Comix :
                     4 -> swipe(points[0], points[1], points[2], points[3])
                     else -> throw Exception("Bad touch from the page: $message")
                 }
-            }
-            if (skipPacer != null) {
-                webMessageBridge(paceBridgeName, setOf(siteOrigin)) { skipPacer.set(false) }
             }
             // Refuse the site's first-tap ad window
             withNativeWebView {
@@ -906,7 +895,6 @@ abstract class Comix :
                 window.$passPayloadName = payload => window.$bridgeName.postMessage(payload);
                 window.$rejectName = message => window.$errorBridgeName.postMessage(message);
                 window.$touchName = points => window.$touchBridgeName.postMessage(points.join(","));
-                ${if (skipPacer != null) "window.__comixPace = () => window.$paceBridgeName.postMessage(\"1\");" else ""}
                 ${pageScript(passPayloadName, rejectName, touchName)}
                 })();
             """.trimIndent()
@@ -1114,7 +1102,7 @@ abstract class Comix :
         private val RECENT_QUERIES_TTL_NANOS = 120.seconds.inWholeNanoseconds
         private const val SCRIPT_RETRY_INTERVAL_MS = 100L
         private const val MAX_CHAPTER_PAGES = 1000
-        private val chapterListPacer = RequestPacer(minGapMs = 2500, maxGapMs = 5000)
+        private val chapterListPacer = RequestPacer(minGapMs = 300, maxGapMs = 600)
         private const val OFFICIAL_GROUP_ID = 10702
         private const val CHAPTER_DATA_VERSION = 1
         private const val TAG_ID_CACHE_SIZE = 50
