@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -22,6 +23,7 @@ import kotlin.experimental.xor
 
 @Source
 abstract class NicovideoSeiga : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
 
     override val supportsLatest: Boolean = false
 
@@ -33,7 +35,7 @@ abstract class NicovideoSeiga : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         // This is the only API call that doesn't use the API url
-        val mangas = client.get("$baseUrl/manga/ajax/ranking?span=total&category=all&page=$page")
+        val mangas = client.get("$baseUrl/manga/ajax/ranking?span=total&category=all&page=$page", Fetch.XHR)
             .parseAs<List<PopularManga>>()
 
         // The api call allows a maximum of 5 pages
@@ -50,7 +52,7 @@ abstract class NicovideoSeiga : KeiSource() {
     // ============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val r = client.get("$apiUrl/contents?mode=keyword&sort=score&q=$query&limit=20&offset=${(page - 1) * 20}")
+        val r = client.get("$apiUrl/contents?mode=keyword&sort=score&q=$query&limit=20&offset=${(page - 1) * 20}", Fetch.XHR)
             .parseAs<ApiResponse<Manga>>()
         return MangasPage(r.data.result.map { it.toSManga() }, r.data.extra?.hasNext == true)
     }
@@ -65,12 +67,12 @@ abstract class NicovideoSeiga : KeiSource() {
     ): SMangaUpdate = coroutineScope {
         val details = async {
             if (!fetchDetails) return@async manga
-            client.get("$apiUrl/contents/${manga.url}").parseAs<ApiResponse<Manga>>()
+            client.get("$apiUrl/contents/${manga.url}", Fetch.XHR).parseAs<ApiResponse<Manga>>()
                 .data.result.first().toSManga()
         }
         val chapterList = async {
             if (!fetchChapters) return@async chapters
-            client.get("$apiUrl/contents/${manga.url}/episodes").parseAs<ApiResponse<Chapter>>()
+            client.get("$apiUrl/contents/${manga.url}/episodes", Fetch.XHR).parseAs<ApiResponse<Chapter>>()
                 .data.result
                 // Chapter is unpublished by publishers from Niconico
                 // Either due to licensing issues or the publisher is withholding the chapter from selling
@@ -93,7 +95,7 @@ abstract class NicovideoSeiga : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$apiUrl/episodes/${chapter.url}/frames?enable_webp=true", ensureSuccess = false)
+        val response = client.get("$apiUrl/episodes/${chapter.url}/frames?enable_webp=true", Fetch.XHR, ensureSuccess = false)
         // Nicovideo refuses to serve pages without login only if you are on desktop (Supposedly to provide danmaku)
         // There's no login requirement on the mobile version of the website
         return when (response.code) {

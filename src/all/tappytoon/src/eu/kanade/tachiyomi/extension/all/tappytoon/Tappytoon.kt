@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -31,6 +32,7 @@ import kotlin.time.Instant
 @Source
 abstract class Tappytoon : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
         val res = chain.proceed(chain.request())
         val mime = res.headers["Content-Type"]
@@ -58,7 +60,7 @@ abstract class Tappytoon : KeiSource() {
     private var apiHeaders: Headers? = null
 
     private suspend fun apiHeaders(): Headers = apiHeaders ?: run {
-        val data = client.get(baseUrl).asJsoup().getElementById("__NEXT_DATA__")!!
+        val data = client.get(baseUrl, Fetch.DOCUMENT).asJsoup().getElementById("__NEXT_DATA__")!!
         val axiosHeaders = data.data().parseAs<NextData>().props.initialState.axios.headers
         headers.newBuilder()
             .set("Accept-Language", lang)
@@ -77,7 +79,7 @@ abstract class Tappytoon : KeiSource() {
             .addEncodedQueryParameter("locale", lang)
             .build()
 
-        return parseComics(client.get(url, apiHeaders()))
+        return parseComics(client.get(url, apiHeaders(), Fetch.XHR))
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -89,7 +91,7 @@ abstract class Tappytoon : KeiSource() {
             .addEncodedQueryParameter("locale", lang)
             .build()
 
-        return parseComics(client.get(url, apiHeaders()))
+        return parseComics(client.get(url, apiHeaders(), Fetch.XHR))
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -106,7 +108,7 @@ abstract class Tappytoon : KeiSource() {
             build()
         }
 
-        val response = client.get(url, apiHeaders())
+        val response = client.get(url, apiHeaders(), Fetch.XHR)
         val link = response.headers["Link"]
         nextUrl = link?.substringAfter('<')?.substringBefore('>')
         return parseComics(response).copy(hasNextPage = link != null)
@@ -148,7 +150,7 @@ abstract class Tappytoon : KeiSource() {
             .addEncodedQueryParameter("locale", lang)
             .build()
 
-        val chapterList = client.get(url, apiHeaders()).parseAs<List<Chapter>>().accessible.asReversed().map {
+        val chapterList = client.get(url, apiHeaders(), Fetch.XHR).parseAs<List<Chapter>>().accessible.asReversed().map {
             SChapter.create().apply {
                 name = it.toString()
                 this.url = it.id.toString()
@@ -168,7 +170,7 @@ abstract class Tappytoon : KeiSource() {
             .addEncodedQueryParameter("locale", lang)
             .build()
 
-        return client.get(url, apiHeaders()).parseAs<Media>().mapIndexed { idx, img ->
+        return client.get(url, apiHeaders(), Fetch.XHR).parseAs<Media>().mapIndexed { idx, img ->
             Page(idx, "", img.toString())
         }
     }

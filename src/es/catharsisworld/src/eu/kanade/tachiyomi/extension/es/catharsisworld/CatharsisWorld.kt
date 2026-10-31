@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -50,6 +51,7 @@ import kotlin.time.Instant
 
 @Source
 abstract class CatharsisWorld : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
 
     private val apiUrl get() = "$baseUrl/api"
 
@@ -85,13 +87,13 @@ abstract class CatharsisWorld : KeiSource() {
             status?.let { addQueryParameter("status", it) }
             addQueryParameter("sort", sort)
         }.build()
-        val result = client.get(url).parseAs<MangaListDto>()
+        val result = client.get(url, Fetch.XHR).parseAs<MangaListDto>()
         return MangasPage(result.data.map { it.toSManga(baseUrl) }, page < result.totalPages)
     }
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/mangas/genres").parseAs<List<GenreDto>>().toJsonElement()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/mangas/genres", Fetch.XHR).parseAs<List<GenreDto>>().toJsonElement()
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         buildList {
@@ -107,7 +109,7 @@ abstract class CatharsisWorld : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val segments = url.pathSegments
         if (segments.size < 2 || segments[0] != "manga") return null
-        return client.get("$apiUrl/mangas/${segments[1]}").parseAs<MangaDto>().toSMangaDetails(baseUrl)
+        return client.get("$apiUrl/mangas/${segments[1]}", Fetch.XHR).parseAs<MangaDto>().toSMangaDetails(baseUrl)
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
@@ -123,7 +125,7 @@ abstract class CatharsisWorld : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val dto = client.get("$apiUrl/mangas/${manga.url}").parseAs<MangaDto>()
+        val dto = client.get("$apiUrl/mangas/${manga.url}", Fetch.XHR).parseAs<MangaDto>()
         return SMangaUpdate(
             dto.toSMangaDetails(baseUrl),
             dto.capitulos
@@ -364,7 +366,7 @@ abstract class CatharsisWorld : KeiSource() {
     // Null when the site asks for a new reader pass
     private suspend fun fetchChapter(url: String, pass: ReaderPassDto): PagesDto? {
         val passHeaders = headersBuilder().set("X-Catharsis-Reader-Pass", pass.pass).build()
-        val response = client.get(url, passHeaders, ensureSuccess = false)
+        val response = client.get(url, passHeaders, Fetch.XHR, ensureSuccess = false)
         if (response.isSuccessful) return response.parseAs<PagesDto>()
         if (response.code == 401) {
             response.close()
@@ -399,9 +401,9 @@ abstract class CatharsisWorld : KeiSource() {
         currentReaderPass
             ?.takeIf { Instant.fromEpochMilliseconds(it.expiresAt) > Clock.System.now() + 1.minutes }
             ?.let { return it }
-        val system = client.get("$apiUrl/system").parseAs<SystemDto>()
+        val system = client.get("$apiUrl/system", Fetch.XHR).parseAs<SystemDto>()
         val capUrl = system.capApiEndpoint.toHttpUrl()
-        val challenge = client.post(capUrl.resolve("challenge")!!, RequestBody.EMPTY).parseAs<CapChallengeResponse>()
+        val challenge = client.post(capUrl.resolve("challenge")!!, Fetch.XHR, RequestBody.EMPTY).parseAs<CapChallengeResponse>()
         val solutions = (1..challenge.challenge.count).map { i ->
             solveCap(
                 salt = capPrng("${challenge.token}$i", challenge.challenge.saltSize),
@@ -410,12 +412,14 @@ abstract class CatharsisWorld : KeiSource() {
         }
         val redeemed = client.post(
             capUrl.resolve("redeem")!!,
+            Fetch.XHR,
             CapRedeemRequest(challenge.token, solutions).toJsonRequestBody(),
         ).parseAs<CapRedeemResponse>()
         val capToken = redeemed.token?.takeIf { redeemed.success }
             ?: throw Exception("Reader verification failed")
         val response = client.post(
             "$apiUrl/mangas/reader-pass",
+            Fetch.XHR,
             ReaderPassRequest(capToken, system.capSitekey).toJsonRequestBody(),
             ensureSuccess = false,
         )

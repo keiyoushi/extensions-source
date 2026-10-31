@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -47,6 +48,7 @@ import java.util.TimeZone
 abstract class CuuTruyenMoe :
     KeiSource(),
     ConfigurableSource {
+    override val imageFetch = Fetch.IMAGE
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -80,7 +82,7 @@ abstract class CuuTruyenMoe :
 
     // ============================== Popular ===============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(client.get("$baseUrl/tim-kiem?sort=-views&filter[status]=2,1&page=$page"))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(client.get("$baseUrl/tim-kiem?sort=-views&filter[status]=2,1&page=$page", Fetch.DOCUMENT))
 
     private fun parseMangaPage(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -102,7 +104,7 @@ abstract class CuuTruyenMoe :
 
     // =============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaPage(client.get("$baseUrl/tim-kiem?sort=-updated_at&filter[status]=2,1&page=$page"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaPage(client.get("$baseUrl/tim-kiem?sort=-updated_at&filter[status]=2,1&page=$page", Fetch.DOCUMENT))
 
     // =============================== Search ===============================
 
@@ -135,12 +137,12 @@ abstract class CuuTruyenMoe :
             addQueryParameter("page", page.toString())
         }.build()
 
-        return parseMangaPage(client.get(url))
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT))
     }
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-kiem").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-kiem", Fetch.DOCUMENT).asJsoup()
         .select("label")
         .mapNotNull { element ->
             val id = genreIdRegex.matchEntire(element.attr("@click"))
@@ -196,7 +198,7 @@ abstract class CuuTruyenMoe :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
             chapters = parseChapterList(document),
@@ -208,7 +210,7 @@ abstract class CuuTruyenMoe :
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         val relatedSection = document.select("h5")
             .firstOrNull { it.text() == "Có thể bạn thích" }
             ?.parent()
@@ -308,7 +310,7 @@ abstract class CuuTruyenMoe :
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
 
         val imageUrls = document.select("div.text-center > img.max-w-full").mapNotNull { image ->
             image.extractImageUrl()

@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.clipstudioreader.ClipStudioReaderInterceptor
 import keiyoushi.lib.clipstudioreader.fetchPages
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.head
 import keiyoushi.source.KeiSource
@@ -29,11 +30,13 @@ import okhttp3.Response
 abstract class SugoComics :
     KeiSource(),
     ConfigurableSource {
+    override val imageFetch = Fetch.IMAGE
+
     private val preferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(ClipStudioReaderInterceptor())
 
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/products/list.php?mode=week_series_ranking&group_id=1").toMangasPage()
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/products/list.php?mode=week_series_ranking&group_id=1", Fetch.DOCUMENT).toMangasPage()
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList())
 
@@ -45,7 +48,7 @@ abstract class SugoComics :
             if (filters.firstInstanceOrNull<FreeFilter>()?.state == true) addQueryParameter("free_type", "free")
             addQueryParameter("pageno", page.toString())
         }.build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     private fun Response.toMangasPage(): MangasPage {
@@ -72,7 +75,7 @@ abstract class SugoComics :
             .addQueryParameter("disp_number", "500")
             .build()
 
-        val firstPage = client.get(seriesUrl).asJsoup()
+        val firstPage = client.get(seriesUrl, Fetch.DOCUMENT).asJsoup()
         val info = firstPage.select("ul.product_details-main-content-list li").associate {
             it.selectFirst(".detail-name")!!.text() to it.selectFirst(".detail-content")?.textOrNull()
         }
@@ -92,7 +95,7 @@ abstract class SugoComics :
 
         val pages = mutableListOf(firstPage)
         while (pages.last().selectFirst("ul.result-pager li.active + li") != null) {
-            pages += client.get(seriesUrl.newBuilder().addQueryParameter("pageno", (pages.size + 1).toString()).build()).asJsoup()
+            pages += client.get(seriesUrl.newBuilder().addQueryParameter("pageno", (pages.size + 1).toString()).build(), Fetch.DOCUMENT).asJsoup()
         }
 
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)

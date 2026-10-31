@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -28,6 +29,7 @@ import java.util.Locale
 @Source
 abstract class SaturdayMorningBreakfastComics : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = apply {
@@ -77,7 +79,7 @@ abstract class SaturdayMorningBreakfastComics : KeiSource() {
         if (!fetchChapters) return SMangaUpdate(makeSManga(), chapters)
 
         // the archive page responds with HTTP 500 despite serving the full list
-        val response = client.get(getMangaUrl(manga), ensureSuccess = false)
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT, ensureSuccess = false)
         if (!response.isSuccessful && response.code != 500) {
             response.close()
             throw HttpException(response.code)
@@ -100,7 +102,7 @@ abstract class SaturdayMorningBreakfastComics : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         // the chapter pages respond with HTTP 500 despite serving the full page
-        val response = client.get(getChapterUrl(chapter), ensureSuccess = false)
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT, ensureSuccess = false)
         if (!response.isSuccessful && response.code != 500) {
             response.close()
             throw HttpException(response.code)

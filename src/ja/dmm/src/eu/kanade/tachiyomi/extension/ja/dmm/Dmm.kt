@@ -13,6 +13,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.lib.publus.PublusContent
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
@@ -32,6 +33,8 @@ import java.io.IOException
 abstract class Dmm :
     KeiSource(),
     ConfigurableSource {
+    override val imageFetch = Fetch.IMAGE
+
     private val shopName get() = if (name == "FANZA") "adult" else "general"
     private val apiUrl get() = "$baseUrl/ajax/bff"
     private val preferences by getPreferencesLazy()
@@ -59,7 +62,7 @@ abstract class Dmm :
                 addQueryParameter("page", page.toString())
             }
         }.build()
-        return client.get(url, desktopHeaders).toMangasPage()
+        return client.get(url, desktopHeaders, Fetch.DOCUMENT).toMangasPage()
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -69,7 +72,7 @@ abstract class Dmm :
                 addQueryParameter("page", page.toString())
             }
         }.build()
-        return client.get(url, desktopHeaders).toMangasPage()
+        return client.get(url, desktopHeaders, Fetch.DOCUMENT).toMangasPage()
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -77,7 +80,7 @@ abstract class Dmm :
             .addQueryParameter("searchstr", query)
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(url, desktopHeaders).toMangasPage()
+        return client.get(url, desktopHeaders, Fetch.DOCUMENT).toMangasPage()
     }
 
     private fun Response.toMangasPage(): MangasPage {
@@ -113,7 +116,7 @@ abstract class Dmm :
                 .addQueryParameter("device_type", "sp")
                 .addQueryParameter("format_webp", "1")
                 .build()
-            client.get(url).parseAs<DetailsResponse>().toSManga()
+            client.get(url, Fetch.XHR).parseAs<DetailsResponse>().toSManga()
         }
 
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
@@ -144,7 +147,7 @@ abstract class Dmm :
             .addQueryParameter("page", page.toString())
             .addQueryParameter("per_page", PER_PAGE.toString())
             .build()
-        return client.get(url).parseAs<ChapterResponse>()
+        return client.get(url, Fetch.XHR).parseAs<ChapterResponse>()
     }
 
     override fun getChapterUrl(chapter: SChapter): String = chapter.memo["viewerUrl"]?.string
@@ -155,7 +158,7 @@ abstract class Dmm :
             ?: throw Exception("Log in via WebView and purchase this product to read.")
 
         val url = viewerUrl.takeIf { it.queryParameter("cid") != null }
-            ?: client.get(viewerUrl).use { it.request.url }
+            ?: client.get(viewerUrl, Fetch.DOCUMENT).use { it.request.url }
 
         val authUrl = "$baseUrl/viewerapi/auth/".toHttpUrl().newBuilder()
             .addQueryParameter("cid", url.queryParameter("cid"))
@@ -164,7 +167,7 @@ abstract class Dmm :
             }
             .build()
 
-        val content = client.get(authUrl).parseAs<PublusContent>()
+        val content = client.get(authUrl, Fetch.XHR).parseAs<PublusContent>()
         return client.fetchPages(content.url!!, content.authInfo?.toAuth())
     }
 

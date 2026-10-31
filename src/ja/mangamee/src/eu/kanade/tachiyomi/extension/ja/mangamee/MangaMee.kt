@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.XorInterceptor
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
@@ -27,6 +28,8 @@ import okhttp3.OkHttpClient
 abstract class MangaMee :
     KeiSource(),
     ConfigurableSource {
+    override val imageFetch = Fetch.IMAGE
+
     private val domain = "manga-mee.jp"
     private val apiUrl = "https://prod2-android.$domain/web/v1"
     private val preferences by getPreferencesLazy()
@@ -41,7 +44,7 @@ abstract class MangaMee :
     )
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val result = client.get("$baseUrl/title-list/ranking", rscHeaders).extractNextJs<RankingResponse>()
+        val result = client.get("$baseUrl/title-list/ranking", rscHeaders, Fetch.XHR).extractNextJs<RankingResponse>()
         val mangas = result?.all?.rankingList.orEmpty()
             .find { it.name == "総合" }?.titles.orEmpty()
             .map { it.toSManga() }
@@ -49,7 +52,7 @@ abstract class MangaMee :
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val result = client.get("$baseUrl/title-list/todaysupdate", rscHeaders).extractNextJs<LatestResponse>()
+        val result = client.get("$baseUrl/title-list/todaysupdate", rscHeaders, Fetch.XHR).extractNextJs<LatestResponse>()
         val mangas = result?.titleGroup?.titles.orEmpty().map { it.toSManga() }
         return MangasPage(mangas, false)
     }
@@ -59,7 +62,7 @@ abstract class MangaMee :
             .addPathSegment(query)
             .build()
 
-        val result = client.get(url, rscHeaders).extractNextJs<SearchResponse>()
+        val result = client.get(url, rscHeaders, Fetch.XHR).extractNextJs<SearchResponse>()
         val mangas = result?.popularTitles?.titles.orEmpty().map { it.toSManga() }
         return MangasPage(mangas, false)
     }
@@ -75,12 +78,12 @@ abstract class MangaMee :
             val url = "$apiUrl/title_detail".toHttpUrl().newBuilder()
                 .addQueryParameter("title_id", manga.url)
                 .build()
-            client.get(url).parseAsProto<DetailResponse>().toSManga()
+            client.get(url, Fetch.XHR).parseAsProto<DetailResponse>().toSManga()
         }
         val chapterList = async {
             if (!fetchChapters) return@async chapters
             val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-            client.get("$baseUrl/all-episodes/${manga.url}", rscHeaders)
+            client.get("$baseUrl/all-episodes/${manga.url}", rscHeaders, Fetch.XHR)
                 .extractNextJs<ChapterResponse>()?.allEpisodes?.episodes.orEmpty()
                 .filter { !hideLocked || !it.isLocked }
                 .map { it.toSChapter(manga.url) }
@@ -99,7 +102,7 @@ abstract class MangaMee :
             .addQueryParameter("episode_id", chapter.url)
             .build()
 
-        val result = client.get(url).parseAsProto<DetailResponse>()
+        val result = client.get(url, Fetch.XHR).parseAsProto<DetailResponse>()
         if (result.pages.isNullOrEmpty()) {
             throw Exception("This chapter is only accessible via the official マンガMee app.")
         }

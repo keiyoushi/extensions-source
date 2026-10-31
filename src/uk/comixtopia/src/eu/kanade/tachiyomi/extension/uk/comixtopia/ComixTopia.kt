@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.array
@@ -25,6 +26,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
 abstract class ComixTopia : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
 
     private val apiUrl get() = "https://supa.${baseUrl.toHttpUrl().host}/rest/v1"
 
@@ -79,7 +81,7 @@ abstract class ComixTopia : KeiSource() {
             addQueryParameter("offset", ((page - 1) * PAGINATION).toString())
         }.build()
 
-        return client.get(url, apiCountHeaders).use { response ->
+        return client.get(url, apiCountHeaders, Fetch.XHR).use { response ->
             val contentRange = response.header("content-range")?.substringAfter("/")?.toIntOrNull() ?: 0
             val hasNextPage = (page * 10) < contentRange
             val manga = response.parseAs<List<TitlesList>>().map { it.toSManga() }
@@ -125,7 +127,7 @@ abstract class ComixTopia : KeiSource() {
             addQueryParameter("slug", "eq.$mangaUrl")
         }.build()
 
-        val data = client.get(url, apiHeaders).parseAs<List<MangaFull>>().first()
+        val data = client.get(url, apiHeaders, Fetch.XHR).parseAs<List<MangaFull>>().first()
         val newManga = data.toSManga()
         val newChapters = data.toSChapters(mangaUrl).sortedWith(
             compareByDescending<SChapter> { it.chapter_number }.thenByDescending { it.date_upload },
@@ -151,12 +153,12 @@ abstract class ComixTopia : KeiSource() {
 
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
         val genres = async {
-            client.get("$apiUrl/genres?select=id,name", apiHeaders).use {
+            client.get("$apiUrl/genres?select=id,name", apiHeaders, Fetch.XHR).use {
                 it.parseAs<List<IdNameDto>>().sortedBy { dto -> dto.name }.map { dto -> dto.name to dto.id.toString() }
             }
         }
         val authors = async {
-            val data = client.get("$apiUrl/authors?select=id,name", apiHeaders).use {
+            val data = client.get("$apiUrl/authors?select=id,name", apiHeaders, Fetch.XHR).use {
                 it.parseAs<List<IdNameDto>>()
             }
             // 530 Authors
@@ -165,7 +167,7 @@ abstract class ComixTopia : KeiSource() {
             }
         }
         val publishers = async {
-            client.get("$apiUrl/publishers?select=id,name", apiHeaders).use {
+            client.get("$apiUrl/publishers?select=id,name", apiHeaders, Fetch.XHR).use {
                 it.parseAs<List<IdNameDto>>().sortedBy { dto -> dto.name }.map { dto -> dto.name to dto.id.toString() }
             }
         }

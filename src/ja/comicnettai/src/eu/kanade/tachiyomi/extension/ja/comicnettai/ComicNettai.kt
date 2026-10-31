@@ -10,6 +10,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.lib.publus.PublusContent
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -27,6 +28,7 @@ import java.time.format.DateTimeFormatter
 
 @Source
 abstract class ComicNettai : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy.MM.dd").withZone(ZoneId.of("Asia/Tokyo"))
 
     override val supportsLatest = false
@@ -37,7 +39,7 @@ abstract class ComicNettai : KeiSource() {
         val url = "$baseUrl/series".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
@@ -47,7 +49,7 @@ abstract class ComicNettai : KeiSource() {
             .addQueryParameter("q", query)
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     private fun Response.toMangasPage(): MangasPage {
@@ -69,7 +71,7 @@ abstract class ComicNettai : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        var document = client.get(getMangaUrl(manga)).asJsoup()
+        var document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val details = SManga.create().apply {
             title = document.selectFirst(".detail--title")!!.text()
             author = document.select(".detail__author__item").joinToString { it.text() }
@@ -92,7 +94,7 @@ abstract class ComicNettai : KeiSource() {
                     }
                 }
                 val nextUrl = document.selectFirst(".pagenation__item:not(.is-hidde) .pagenation__item__link--next")?.absUrl("href") ?: break
-                document = client.get(nextUrl).asJsoup()
+                document = client.get(nextUrl, Fetch.DOCUMENT).asJsoup()
             }
         }
 
@@ -109,7 +111,7 @@ abstract class ComicNettai : KeiSource() {
             .addQueryParameter("cid", chapter.memo["cid"]!!.string)
             .build()
 
-        val contentUrl = client.get(url).parseAs<PublusContent>().url!!
+        val contentUrl = client.get(url, Fetch.XHR).parseAs<PublusContent>().url!!
         return client.fetchPages(contentUrl)
     }
 }

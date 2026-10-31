@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -22,6 +23,8 @@ import okhttp3.Response
 
 @Source
 abstract class TerraHistoricus : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
+
     private val topicKeys = listOf("terra-historicus", "talos-ii-historicus")
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(::refreshExpiredImage)
@@ -74,7 +77,7 @@ abstract class TerraHistoricus : KeiSource() {
         }
     }
 
-    override suspend fun getImageUrl(page: Page): String = client.get(page.url).pageImageUrl()
+    override suspend fun getImageUrl(page: Page): String = client.get(page.url, Fetch.XHR).pageImageUrl()
         .toHttpUrl().newBuilder().fragment(page.url).build().toString()
 
     private fun refreshExpiredImage(chain: Interceptor.Chain): Response {
@@ -104,7 +107,7 @@ abstract class TerraHistoricus : KeiSource() {
         return topicKeys.first()
     }
 
-    private suspend inline fun <reified T> fetch(url: String) = client.get(url).parseAs<THResult<T>>().data
+    private suspend inline fun <reified T> fetch(url: String) = client.get(url, Fetch.XHR).parseAs<THResult<T>>().data
 
     companion object {
         const val TOPIC_KEY = "topicKey"

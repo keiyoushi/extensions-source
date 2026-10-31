@@ -17,6 +17,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -43,6 +44,8 @@ import kotlin.time.Duration.Companion.seconds
 abstract class MangaLivre :
     KeiSource(),
     ConfigurableSource {
+    override val imageFetch = Fetch.IMAGE
+
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
 
     private val apiUrl: String get() = "$baseUrl/api"
@@ -111,7 +114,7 @@ abstract class MangaLivre :
                 else -> {}
             }
         }
-        val dto = client.get(url.build()).parseJson<WrapperDto>()
+        val dto = client.get(url.build(), Fetch.XHR).parseJson<WrapperDto>()
         val mangas = dto.mangas.map { it.toSManga(useAlternativeTitle) }
         return MangasPage(mangas, dto.hasNextPage)
     }
@@ -126,7 +129,7 @@ abstract class MangaLivre :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val dto = client.get("$apiUrl/manga-by-slug/${manga.url}").parseJson<MangaDto>()
+        val dto = client.get("$apiUrl/manga-by-slug/${manga.url}", Fetch.XHR).parseJson<MangaDto>()
         return SMangaUpdate(
             manga = dto.toSManga(useAlternativeTitle),
             chapters = dto.toSChapterList(),
@@ -153,6 +156,7 @@ abstract class MangaLivre :
     private suspend fun fetchReaderAccess(ref: ChapterReferenceDto): ReaderAccessResponseDto? {
         client.post(
             "$apiUrl/reader/chapter/access",
+            fetch = Fetch.XHR,
             body = ref.toJsonRequestBody(),
             ensureSuccess = false,
         ).use { response ->

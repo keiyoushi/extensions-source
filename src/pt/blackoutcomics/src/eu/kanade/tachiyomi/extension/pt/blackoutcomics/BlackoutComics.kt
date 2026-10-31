@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.post
@@ -28,6 +29,7 @@ import java.util.Locale
 
 @Source
 abstract class BlackoutComics : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
 
     override fun OkHttpClient.Builder.configureClient() = addCookie(
         listOf(
@@ -41,7 +43,7 @@ abstract class BlackoutComics : KeiSource() {
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val doc = client.get("$baseUrl/ranking").asJsoup().extractCsrf()
+        val doc = client.get("$baseUrl/ranking", Fetch.DOCUMENT).asJsoup().extractCsrf()
         val mangas = doc.select(".ranking-grid a.webtoon-card").map { el ->
             SManga.create().apply {
                 setUrlWithoutDomain(el.attr("abs:href"))
@@ -54,7 +56,7 @@ abstract class BlackoutComics : KeiSource() {
 
     // =============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val doc = client.get("$baseUrl/atualizados-recente?page=$page").asJsoup().extractCsrf()
+        val doc = client.get("$baseUrl/atualizados-recente?page=$page", Fetch.DOCUMENT).asJsoup().extractCsrf()
         val mangas = doc.select(".webtoon-grid a.webtoon-card").map { el ->
             SManga.create().apply {
                 setUrlWithoutDomain(el.attr("abs:href"))
@@ -82,7 +84,7 @@ abstract class BlackoutComics : KeiSource() {
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val response = if (query.isNotBlank()) {
             if (searchCsrf == null) {
-                client.get(baseUrl).asJsoup().extractCsrf()
+                client.get(baseUrl, Fetch.DOCUMENT).asJsoup().extractCsrf()
             }
             val searchHeaders = headersBuilder()
                 .set("x-csrf-token", searchCsrf.orEmpty())
@@ -90,7 +92,7 @@ abstract class BlackoutComics : KeiSource() {
                 .build()
             val body = SearchPayload(query).toJsonRequestBody()
             runCatching {
-                client.post("$baseUrl/comics/search-preview", searchHeaders, body)
+                client.post("$baseUrl/comics/search-preview", searchHeaders, Fetch.XHR, body)
             }.onFailure { searchCsrf = null }.getOrThrow()
         } else {
             val url = "$baseUrl/comics".toHttpUrl().newBuilder().apply {
@@ -100,7 +102,7 @@ abstract class BlackoutComics : KeiSource() {
                 if (!status.isNullOrEmpty()) addQueryParameter("status", status)
                 if (!genre.isNullOrEmpty()) addQueryParameter("gen", genre)
             }.build()
-            client.get(url)
+            client.get(url, Fetch.DOCUMENT)
         }
         return parseSearch(response)
     }
@@ -129,7 +131,7 @@ abstract class BlackoutComics : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             parseDetails(doc),
             parseChapters(doc),
@@ -178,7 +180,7 @@ abstract class BlackoutComics : KeiSource() {
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
-        val doc = client.get(chapterUrl).asJsoup()
+        val doc = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
         for (script in doc.select("script:not([src])")) {
             val match = PAGE_LIST_REGEX.find(script.html()) ?: continue
             val urls = match.groupValues[1].parseAs<List<String>>()
