@@ -20,6 +20,7 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.textOrNull
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -75,11 +76,15 @@ abstract class SugoComics :
         val info = firstPage.select("ul.product_details-main-content-list li").associate {
             it.selectFirst(".detail-name")!!.text() to it.selectFirst(".detail-content")?.textOrNull()
         }
-        val details = SManga.create().apply {
+        val details = manga.apply {
             title = info["シリーズ"] ?: firstPage.selectFirst("h1.product_details-title")!!.text()
-            author = info["著者"]
-            description = firstPage.selectFirst("p.product_details-area-text")?.textOrNull()
-            genre = listOfNotNull(info["カテゴリー"], info["ジャンル"]).joinToString()
+            author = info["著者"]?.split('/')?.joinToString { it.substringBefore('（').substringAfter('：').trim() }
+            description = listOfNotNull(
+                info["出版社"]?.let { "Publisher: $it" },
+                info["掲載誌"]?.let { "Magazine: $it" },
+                firstPage.selectFirst("p.product_details-area-text")?.textOrNull(),
+            ).joinToString("\n\n").ifEmpty { null }
+            genre = listOfNotNull(info["カテゴリー"], info["ジャンル"]).joinToString().ifEmpty { null }
             thumbnail_url = firstPage.selectFirst("img.product_details-main-content-img")?.absUrl("src")
         }
 
@@ -95,7 +100,7 @@ abstract class SugoComics :
             it.select("#product_details-series-list > li").mapNotNull { element ->
                 val isLocked = element.selectFirst(".product_details-btn-box button[onclick*=reading]") == null
                 if (hideLocked && isLocked) return@mapNotNull null
-                val title = element.selectFirst("h2.product_details-series-title")!!.text()
+                val title = element.selectFirst("h2.product_details-series-title")!!.text().replace(TRIAL_PREFIX_REGEX, "")
                 SChapter.create().apply {
                     url = element.selectFirst("a.product_details-series-content-img-box")!!.absUrl("href").toHttpUrl().queryParameter("product_id")!!
                     name = if (isLocked) "🔒 $title" else title
@@ -107,6 +112,13 @@ abstract class SugoComics :
             details,
             chapterList.reversed(),
         )
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.encodedPath != "/products/detail.php") return null
+        val productId = url.queryParameter("product_id")?.toIntOrNull() ?: return null
+        val manga = SManga.create().apply { this.url = productId.toString() }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/products/detail.php?product_id=${manga.url}"
@@ -135,5 +147,8 @@ abstract class SugoComics :
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+
+        // The trial's end date would otherwise be read as the chapter number
+        private val TRIAL_PREFIX_REGEX = """^【期間限定[^】]*閲覧期限[^】]*】""".toRegex()
     }
 }

@@ -6,13 +6,17 @@ plugins {
 
 keiyoushi {
     name = "Sugo Comics"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
         lang = "ja"
         baseUrl = "https://nadeshiko-shoten.jp"
+    }
+
+    deeplink {
+        path("/products/detail.php")
     }
 }
 
