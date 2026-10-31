@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -27,6 +28,8 @@ import okhttp3.Response
 
 @Source
 abstract class CiaoPlus : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
+
     private val apiUrl get() = "https://api.ciao.shogakukan.co.jp"
     private val pageLimit = 25
 
@@ -149,7 +152,7 @@ abstract class CiaoPlus : KeiSource() {
                 .build()
 
             val params = mapOf("platform" to "3", "episode_id_list" to episodeIdList)
-            client.post("$apiUrl/episode/list", hashedHeaders(params), body)
+            client.post("$apiUrl/episode/list", hashedHeaders(params), Fetch.XHR, body)
                 .parseAs<EpisodeListResponse>().episodeList
                 .map { it.toSChapter(result.titleName) }
                 .reversed()
@@ -197,6 +200,6 @@ abstract class CiaoPlus : KeiSource() {
 
     private suspend fun hashedGet(url: HttpUrl): Response {
         val queryParams = url.queryParameterNames.associateWith { url.queryParameter(it)!! }
-        return client.get(url, hashedHeaders(queryParams))
+        return client.get(url, hashedHeaders(queryParams), Fetch.XHR)
     }
 }

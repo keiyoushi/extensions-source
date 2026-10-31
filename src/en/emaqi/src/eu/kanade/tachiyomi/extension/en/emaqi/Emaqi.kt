@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -42,6 +43,8 @@ import javax.crypto.spec.PSource
 abstract class Emaqi :
     KeiSource(),
     ConfigurableSource {
+    override val imageFetch = Fetch.IMAGE
+
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "https://api.$domain/graphql"
     private val preferences by getPreferencesLazy()
@@ -60,6 +63,7 @@ abstract class Emaqi :
         return client.post(
             url = apiUrl,
             headers = apiHeaders(),
+            fetch = Fetch.XHR,
             body = graphQLBody(
                 query = SERIES_QUERY,
                 operationName = "FetchHomeSection",
@@ -73,6 +77,7 @@ abstract class Emaqi :
         return client.post(
             url = apiUrl,
             headers = apiHeaders(),
+            fetch = Fetch.XHR,
             body = graphQLBody(
                 query = SERIES_QUERY,
                 operationName = "FetchHomeSection",
@@ -96,6 +101,7 @@ abstract class Emaqi :
         val result = client.post(
             url = apiUrl,
             headers = apiHeaders(),
+            fetch = Fetch.XHR,
             body = graphQLBody(
                 query = SEARCH_QUERY,
                 operationName = "Search",
@@ -131,6 +137,7 @@ abstract class Emaqi :
         val result = client.post(
             url = apiUrl,
             headers = apiHeaders(),
+            fetch = Fetch.XHR,
             body = graphQLBody(
                 query = COMIC_QUERY,
                 operationName = "FetchComicData",
@@ -185,7 +192,7 @@ abstract class Emaqi :
             .set("X-Hash", Base64.encodeToString(keyPair.public.encoded, Base64.NO_WRAP))
             .build()
 
-        val contents = client.post(apiUrl, contentHeaders, body).parseGraphQLAs<ViewerResponse>().chapter.contents
+        val contents = client.post(apiUrl, contentHeaders, Fetch.XHR, body).parseGraphQLAs<ViewerResponse>().chapter.contents
         if (contents == null || contents.pages.isEmpty()) {
             if (loginFailed) {
                 throw IOException("Invalid E-Mail or Password")
@@ -236,7 +243,7 @@ abstract class Emaqi :
             .build()
 
         return try {
-            client.post(url, LoginRequestBody(email, password, true).toJsonRequestBody()).parseAs<LoginResponse>()
+            client.post(url, Fetch.XHR, LoginRequestBody(email, password, true).toJsonRequestBody()).parseAs<LoginResponse>()
         } catch (_: HttpException) {
             loginFailed = true
             null
@@ -249,7 +256,7 @@ abstract class Emaqi :
             .build()
 
         return try {
-            client.post(url, RefreshRequestBody("refresh_token", refreshToken).toJsonRequestBody()).parseAs<LoginResponse>()
+            client.post(url, Fetch.XHR, RefreshRequestBody("refresh_token", refreshToken).toJsonRequestBody()).parseAs<LoginResponse>()
         } catch (_: HttpException) {
             null
         }

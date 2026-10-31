@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -29,6 +30,7 @@ import java.io.IOException
 abstract class Vomic :
     KeiSource(),
     ConfigurableSource {
+    override val imageFetch = Fetch.IMAGE
 
     private val baseHost get() = baseUrl.toHttpUrl().host
 
@@ -55,6 +57,7 @@ abstract class Vomic :
             addQueryParameter("page", "$page")
             addQueryParameter("limit", "$UPDATE_LIMIT")
         }.build(),
+        Fetch.XHR,
     ).parse<List<Manga>>().let {
         MangasPage(it.map { it.toSManga() }, it.size >= UPDATE_LIMIT)
     }
@@ -84,7 +87,7 @@ abstract class Vomic :
             }
         }.build()
 
-        val mangas = client.get(url).parse<List<Manga>>().map { it.toSManga() }
+        val mangas = client.get(url, Fetch.DOCUMENT).parse<List<Manga>>().map { it.toSManga() }
         return MangasPage(mangas, mangas.size >= limit)
     }
 
@@ -111,6 +114,7 @@ abstract class Vomic :
     ): SMangaUpdate {
         val details = client.get(
             "$apiUrl/c/getCartoonInfoV1?car_id=${manga.url}",
+            Fetch.XHR,
         ).parse<Manga>()
 
         return SMangaUpdate(
@@ -130,6 +134,7 @@ abstract class Vomic :
         var response = client.get(
             "$apiUrl/c/getChapterInfo?c_id=$chapterId",
             authHeaders,
+            Fetch.XHR,
             ensureSuccess = false,
         )
 
@@ -139,6 +144,7 @@ abstract class Vomic :
             response = client.get(
                 "$apiUrl/c/getChapterInfo?c_id=$chapterId",
                 authHeaders,
+                Fetch.XHR,
             )
         }
 
@@ -150,7 +156,7 @@ abstract class Vomic :
     // Related mangas
     override val supportsRelatedMangas = true
 
-    override suspend fun fetchRelatedMangaList(manga: SManga) = client.get("$apiUrl/c/getDetailRecommendList")
+    override suspend fun fetchRelatedMangaList(manga: SManga) = client.get("$apiUrl/c/getDetailRecommendList", Fetch.XHR)
         .parse<List<Manga>>().map { it.toSManga() }
 
     // Filters
@@ -158,6 +164,7 @@ abstract class Vomic :
 
     override suspend fun fetchFilterData() = client.get(
         "$apiUrl/c/getCatList",
+        Fetch.XHR,
     ).parse<List<Category>>().associate { it.name to it.id }.toJsonElement()
 
     override fun getFilterList(data: JsonElement?) = FilterList(
@@ -210,6 +217,7 @@ abstract class Vomic :
 
         val response = client.post(
             "$apiUrl/login",
+            Fetch.XHR,
             LoginPayload(email, password).toJsonRequestBody(),
         )
 

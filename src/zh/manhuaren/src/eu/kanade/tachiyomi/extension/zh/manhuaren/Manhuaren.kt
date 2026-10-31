@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -47,6 +48,7 @@ import kotlin.time.Duration.Companion.minutes
 abstract class Manhuaren :
     KeiSource(),
     ConfigurableSource {
+    override val imageFetch = Fetch.IMAGE
 
     private val pageSize = 20
     private val baseHttpUrl = baseUrl.toHttpUrl()
@@ -233,7 +235,7 @@ abstract class Manhuaren :
 
     private suspend fun myPost(url: HttpUrl, body: RequestBody): Response {
         val request = myRequest(url, "POST", body)
-        return client.post(request.url, request.headers, body)
+        return client.post(request.url, request.headers, Fetch.DOCUMENT, body)
     }
 
     private suspend fun myGet(url: HttpUrl): Response {
@@ -242,7 +244,7 @@ abstract class Manhuaren :
         val headers = request.headers.newBuilder()
             .add("Authorization", authorization)
             .build()
-        return client.get(request.url, headers, CacheControl.Builder().maxAge(10.minutes).build())
+        return client.get(request.url, headers, Fetch.DOCUMENT, CacheControl.Builder().maxAge(10.minutes).build())
     }
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
@@ -371,7 +373,7 @@ abstract class Manhuaren :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host !in webHosts) return null
         val id = url.queryParameter("id")
-            ?: client.get(url).body.string()
+            ?: client.get(url, Fetch.DOCUMENT).body.string()
                 .let { mangaIdRegex.find(it)?.groupValues?.get(1) }
             ?: return null
         val manga = SManga.create().apply { this.url = "/v1/manga/getDetail?mangaId=$id" }

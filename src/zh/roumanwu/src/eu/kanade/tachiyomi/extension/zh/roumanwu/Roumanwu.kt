@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -26,6 +27,7 @@ import java.time.format.DateTimeFormatter
 
 @Source
 abstract class Roumanwu : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(ScrambledImageInterceptor())
 
@@ -33,11 +35,11 @@ abstract class Roumanwu : KeiSource() {
         val url = "$baseUrl/books".toHttpUrl().newBuilder()
             .addQueryParameter("page", (page - 1).toString())
             .build()
-        return parseMangaList(client.get(url).asJsoup())
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/home").asJsoup()
+        val document = client.get("$baseUrl/home", Fetch.DOCUMENT).asJsoup()
         return parseHomePage(document, Regex("最近更新"))
     }
 
@@ -58,13 +60,13 @@ abstract class Roumanwu : KeiSource() {
                 }
                 .build()
         }
-        return parseMangaList(client.get(url).asJsoup())
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.pathSegments.firstOrNull() != "books") return null
         val id = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
-        return parseMangaDetails(client.get("$baseUrl/books/$id").asJsoup())
+        return parseMangaDetails(client.get("$baseUrl/books/$id", Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun fetchMangaUpdate(
@@ -73,7 +75,7 @@ abstract class Roumanwu : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document),
             chapters = parseChapterList(document),
@@ -81,7 +83,7 @@ abstract class Roumanwu : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val body = client.get(getChapterUrl(chapter)).use { it.body.string() }
+        val body = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).use { it.body.string() }
 
         val fromNextJs = body.asJsoup(baseUrl).extractNextJs<ChapterPages>()?.toPageList().orEmpty()
         if (fromNextJs.isNotEmpty()) return fromNextJs

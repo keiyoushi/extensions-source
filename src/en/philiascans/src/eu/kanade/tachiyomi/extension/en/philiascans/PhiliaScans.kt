@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -34,6 +35,7 @@ import okhttp3.Response
 abstract class PhiliaScans :
     KeiSource(),
     ConfigurableSource {
+    override val imageFetch = Fetch.IMAGE
 
     private val apiUrl: String
         get() = "$baseUrl/api"
@@ -75,7 +77,7 @@ abstract class PhiliaScans :
             }
             .build()
 
-        val result = client.get(url).parseAs<SeriesResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<SeriesResponse>()
         return MangasPage(result.items.map { it.toSManga(baseUrl) }, result.hasNextPage())
     }
 
@@ -87,7 +89,7 @@ abstract class PhiliaScans :
     ): SMangaUpdate = coroutineScope {
         val detailsDeferred = async {
             if (!fetchDetails) return@async manga
-            client.get("$apiUrl/manga/${manga.url}").parseAs<DetailsResponse>().toSManga(baseUrl).apply {
+            client.get("$apiUrl/manga/${manga.url}", Fetch.XHR).parseAs<DetailsResponse>().toSManga(baseUrl).apply {
                 url = manga.url
             }
         }
@@ -109,7 +111,7 @@ abstract class PhiliaScans :
 
     private suspend fun getChapterList(slug: String): List<SChapter> {
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-        return client.get("$apiUrl/manga/$slug/chapters").parseAs<ChapterResponse>().items
+        return client.get("$apiUrl/manga/$slug/chapters", Fetch.XHR).parseAs<ChapterResponse>().items
             .filter { !hideLocked || !it.isLocked }
             .map { it.toSChapter(slug) }
     }
@@ -120,6 +122,7 @@ abstract class PhiliaScans :
         val response = client.get(
             "$apiUrl/chapters/$chapterId/page-keys",
             readerHeaders(token),
+            Fetch.XHR,
             ensureSuccess = false,
         )
         if (response.code == 404) {
@@ -128,6 +131,7 @@ abstract class PhiliaScans :
             return refreshed to client.get(
                 "$apiUrl/chapters/$chapterId/page-keys",
                 readerHeaders(refreshed),
+                Fetch.XHR,
             ).parseAs()
         }
         if (!response.isSuccessful) throwReaderError(response)
@@ -138,7 +142,7 @@ abstract class PhiliaScans :
         val parts = chapter.url.split("/")
         val mangaSlug = parts.first()
         val chapterSlug = parts.last()
-        val result = client.get("$apiUrl/manga/$mangaSlug/chapters/$chapterSlug").parseAs<ViewerResponse>()
+        val result = client.get("$apiUrl/manga/$mangaSlug/chapters/$chapterSlug", Fetch.XHR).parseAs<ViewerResponse>()
         if (!result.hasAccess) throw Exception("Log in via WebView and purchase this chapter to read.")
 
         val (token, pageKeyResponse) = fetchPageKeys(result.chapter.id, getReaderAccessToken())
@@ -150,6 +154,7 @@ abstract class PhiliaScans :
             val openResponse = client.post(
                 "$apiUrl/chapters/${result.chapter.id}/open",
                 headers,
+                Fetch.XHR,
                 emptyBody,
             ).parseAs<OpenResponse>()
             val drmCall = client.get(
@@ -157,6 +162,7 @@ abstract class PhiliaScans :
                     .addQueryParameter("session", openResponse.sessionId)
                     .build(),
                 headers,
+                Fetch.XHR,
                 ensureSuccess = false,
             )
             val drmResponse = if (drmCall.isSuccessful) {
@@ -179,7 +185,7 @@ abstract class PhiliaScans :
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres").parseAs<List<Genre>>()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres", Fetch.XHR).parseAs<List<Genre>>()
         .map { it.toPair() }
         .toJsonElement()
 
@@ -205,7 +211,7 @@ abstract class PhiliaScans :
             }
         }
 
-        val response = client.post("$apiUrl/reader/access-token", tokenHeaders, emptyBody, ensureSuccess = false)
+        val response = client.post("$apiUrl/reader/access-token", tokenHeaders, Fetch.XHR, emptyBody, ensureSuccess = false)
         if (!response.isSuccessful) throwReaderError(response)
 
         val result = response.parseAs<TokenResponse>()

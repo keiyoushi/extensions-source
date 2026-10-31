@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -26,6 +27,8 @@ import org.jsoup.nodes.Element
 abstract class GorakuWeb :
     KeiSource(),
     ConfigurableSource {
+    override val imageFetch = Fetch.IMAGE
+
     private val preferences by getPreferencesLazy()
     private val rscHeaders get() = headersBuilder()
         .set("rsc", "1")
@@ -34,13 +37,13 @@ abstract class GorakuWeb :
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val data = client.get(baseUrl, rscHeaders).extractNextJs<List<Entries>>()
+        val data = client.get(baseUrl, rscHeaders, Fetch.DOCUMENT).extractNextJs<List<Entries>>()
         val mangas = data.orEmpty().map { it.toSManga(baseUrl) }
         return MangasPage(mangas, false)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("section:has(h2:contains(更新作品)) div.bdr_lg.group").map { it.toSManga() }
         return MangasPage(mangas, false)
     }
@@ -51,7 +54,7 @@ abstract class GorakuWeb :
                 .addQueryParameter("keyword", query)
                 .build()
 
-            return client.get(url).toMangasPage()
+            return client.get(url, Fetch.DOCUMENT).toMangasPage()
         }
 
         val filter = filters.firstInstance<CategoryFilter>()
@@ -60,14 +63,14 @@ abstract class GorakuWeb :
                 .addQueryParameter("id", filter.value)
                 .build()
 
-            return client.get(url).toMangasPage()
+            return client.get(url, Fetch.XHR).toMangasPage()
         }
 
         val url = "$baseUrl/series".toHttpUrl().newBuilder()
             .addQueryParameter("completed", filter.value)
             .build()
 
-        val data = client.get(url, rscHeaders).extractNextJs<SeriesList>()
+        val data = client.get(url, rscHeaders, Fetch.DOCUMENT).extractNextJs<SeriesList>()
         val mangas = data?.cardList?.flatten().orEmpty().map { it.toSManga(baseUrl) }
         return MangasPage(mangas, false)
     }
@@ -92,7 +95,7 @@ abstract class GorakuWeb :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
-        val data = client.get(getMangaUrl(manga), rscHeaders).extractNextJs<EpisodeProps>()!!
+        val data = client.get(getMangaUrl(manga), rscHeaders, Fetch.XHR).extractNextJs<EpisodeProps>()!!
 
         return SMangaUpdate(
             data.toSManga(),
@@ -103,7 +106,7 @@ abstract class GorakuWeb :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get(getChapterUrl(chapter), rscHeaders).extractNextJs<EpisodeProps>()
+        val data = client.get(getChapterUrl(chapter), rscHeaders, Fetch.XHR).extractNextJs<EpisodeProps>()
             ?: throw Exception("This chapter is not available.")
 
         return data.metadata.pages.map {

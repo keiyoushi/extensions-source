@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -26,6 +27,7 @@ import java.io.IOException
 
 @Source
 abstract class LuraToon : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addNetworkInterceptor(::pageHeadersInterceptor)
@@ -36,8 +38,8 @@ abstract class LuraToon : KeiSource() {
 
     // Popular
     override suspend fun getPopularManga(page: Int) = coroutineScope {
-        val top10 = async { client.get("$baseUrl/api/main/").parseAs<MainPage>().top10 }
-        val obras = async { client.get("$baseUrl/api/obras/").parseAs<SearchResponse>().obras }
+        val top10 = async { client.get("$baseUrl/api/main/", Fetch.XHR).parseAs<MainPage>().top10 }
+        val obras = async { client.get("$baseUrl/api/obras/", Fetch.XHR).parseAs<SearchResponse>().obras }
         MangasPage(
             (top10.await() + obras.await()).distinctBy {
                 it.slug
@@ -49,6 +51,7 @@ abstract class LuraToon : KeiSource() {
     // Latest
     override suspend fun getLatestUpdates(page: Int) = client.get(
         "$baseUrl/api/main/?part=${page - 1}",
+        Fetch.XHR,
     ).parseAs<MainPage>().latest.map { it.toSManga(baseUrl) }.let {
         MangasPage(it, page < 2)
     }
@@ -68,6 +71,7 @@ abstract class LuraToon : KeiSource() {
         "$baseUrl/api/autocomplete/".toHttpUrl().newBuilder()
             .addPathSegment(query)
             .build(),
+        Fetch.XHR,
     ).parseAs<SearchResponse>().obras.map { it.toSManga(baseUrl) }.let {
         MangasPage(it, false)
     }
@@ -89,6 +93,7 @@ abstract class LuraToon : KeiSource() {
         val slug = manga.url.trim('/')
         val res = client.get(
             "$baseUrl/api/obra/$slug/",
+            Fetch.XHR,
             ensureSuccess = false,
         )
         if (res.code == 404) res.throwError(MIGRATE)
@@ -125,7 +130,7 @@ abstract class LuraToon : KeiSource() {
     private var userId: Long? = null
 
     private suspend fun getUserId() = userId ?: run {
-        client.get("$baseUrl/api/user-info/").parseAs<User>()
+        client.get("$baseUrl/api/user-info/", Fetch.XHR).parseAs<User>()
             .takeIf {
                 it.authorized
             }?.userid.also { userId = it } ?: error(LOGIN)
@@ -137,6 +142,7 @@ abstract class LuraToon : KeiSource() {
         val userId = getUserId()
         val res = client.get(
             baseUrl + "/api/$OBRA_PATH/$mangaSlug/$capSlug/",
+            Fetch.XHR,
             cacheControl = FORCE_NETWORK,
         )
 

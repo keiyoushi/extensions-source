@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -32,6 +33,8 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Akaya : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
+
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
         val request = chain.request()
 
@@ -51,11 +54,12 @@ abstract class Akaya : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(
         client.get(
             "$baseUrl/collection/6aadb3142d515?page=$page",
+            Fetch.DOCUMENT,
         ),
     )
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(
-        client.get("$baseUrl/explorer/all?page=$page"),
+        client.get("$baseUrl/explorer/all?page=$page", Fetch.DOCUMENT),
     )
 
     override suspend fun getSearchMangaList(
@@ -86,13 +90,13 @@ abstract class Akaya : KeiSource() {
         }
 
         return parseMangaList(
-            client.get("$baseUrl/explorer/all?page=$page"),
+            client.get("$baseUrl/explorer/all?page=$page", Fetch.DOCUMENT),
         )
     }
 
     private suspend fun livewireSearch(query: String): Response {
         val homeDocument = client
-            .get(baseUrl)
+            .get(baseUrl, Fetch.DOCUMENT)
             .asJsoup()
 
         val component = homeDocument
@@ -147,6 +151,7 @@ abstract class Akaya : KeiSource() {
         return client.post(
             "$baseUrl/livewire-c4e82cae/update",
             requestHeaders,
+            Fetch.XHR,
             payload.toJsonRequestBody(),
         )
     }
@@ -158,7 +163,7 @@ abstract class Akaya : KeiSource() {
         val explorerUrl = "$baseUrl/explorer/all?page=$page"
 
         val explorerDocument = client
-            .get(explorerUrl)
+            .get(explorerUrl, Fetch.DOCUMENT)
             .asJsoup()
 
         val component = explorerDocument
@@ -218,6 +223,7 @@ abstract class Akaya : KeiSource() {
         return client.post(
             "$baseUrl/livewire-c4e82cae/update",
             requestHeaders,
+            Fetch.XHR,
             payload.toJsonRequestBody(),
         )
     }
@@ -323,7 +329,7 @@ abstract class Akaya : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client
-            .get(getMangaUrl(manga))
+            .get(getMangaUrl(manga), Fetch.DOCUMENT)
             .asJsoup()
 
         val updatedManga = parseMangaDetails(document)
@@ -466,6 +472,7 @@ abstract class Akaya : KeiSource() {
         return client.post(
             "$baseUrl/livewire-c4e82cae/update",
             requestHeaders,
+            Fetch.XHR,
             payload.toJsonRequestBody(),
         )
     }
@@ -579,7 +586,7 @@ abstract class Akaya : KeiSource() {
         }
 
         val document = client
-            .get(getChapterUrl(chapter))
+            .get(getChapterUrl(chapter), Fetch.DOCUMENT)
             .asJsoup()
 
         val imageUrls = document.select("img").mapNotNull { image ->

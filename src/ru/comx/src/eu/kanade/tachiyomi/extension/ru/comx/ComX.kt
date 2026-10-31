@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -41,6 +42,7 @@ import java.util.Locale
 abstract class ComX :
     KeiSource(),
     ConfigurableSource {
+    override val imageFetch = Fetch.IMAGE
 
     private val preferences: SharedPreferences = getPreferences()
 
@@ -71,7 +73,7 @@ abstract class ComX :
                 addPathSegments("page/$page")
                 addPathSegment("")
             }.build()
-            return parseSearchMangas(client.get(url))
+            return parseSearchMangas(client.get(url, Fetch.DOCUMENT))
         }
 
         var orderBy = "rating"
@@ -127,7 +129,7 @@ abstract class ComX :
             .add("set_direction_sort", "dle_direction_xfilter")
             .build()
 
-        return parseSearchMangas(client.post(url, body))
+        return parseSearchMangas(client.post(url, Fetch.DOCUMENT, body))
     }
 
     // ============================== Search Utilities ===============================
@@ -147,7 +149,7 @@ abstract class ComX :
             .add("set_direction_sort", "dle_direction_cat_1")
             .build()
 
-        return parseSearchMangas(client.post(url, body))
+        return parseSearchMangas(client.post(url, Fetch.DOCUMENT, body))
     }
 
     fun parseSearchMangas(response: Response): MangasPage {
@@ -179,7 +181,7 @@ abstract class ComX :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         url.pathSegments.firstOrNull() ?: return null
-        return parseMangaDetails(client.get(url).asJsoup(), url.encodedPath)
+        return parseMangaDetails(client.get(url, Fetch.DOCUMENT).asJsoup(), url.encodedPath)
     }
 
     override suspend fun fetchMangaUpdate(
@@ -188,7 +190,7 @@ abstract class ComX :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(baseUrl + manga.url, ensureSuccess = false).use { response ->
+        val doc = client.get(baseUrl + manga.url, Fetch.DOCUMENT, ensureSuccess = false).use { response ->
             if (!response.isSuccessful) {
                 if (response.code == 403) {
                     throw Exception("Контент не доступен. Возможно может помочь авторизация через WebView")
@@ -368,7 +370,7 @@ abstract class ComX :
 
     // =============================== Pages ===============================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}", ensureSuccess = false).use { response ->
+        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT, ensureSuccess = false).use { response ->
             if (!response.isSuccessful) {
                 if (response.code == 304 || response.code == 302 || response.code == 403) {
                     throw Exception("Глава не доступна. Возможно может помочь авторизация через WebView")
@@ -412,7 +414,7 @@ abstract class ComX :
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val doc = client.get("$baseUrl/comix-read/").asJsoup()
+        val doc = client.get("$baseUrl/comix-read/", Fetch.DOCUMENT).asJsoup()
         val script = doc.selectFirst("script:containsData(window.__XFILTER__)")?.data()
             ?: error("Filter data not found")
 

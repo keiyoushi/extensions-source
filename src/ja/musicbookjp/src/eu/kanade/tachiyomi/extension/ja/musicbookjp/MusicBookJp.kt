@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -33,6 +34,8 @@ import java.io.IOException
 abstract class MusicBookJp :
     KeiSource(),
     ConfigurableSource {
+    override val imageFetch = Fetch.IMAGE
+
     private val preferences by getPreferencesLazy()
 
     override fun getHomeUrl(): String = "$baseUrl/comic"
@@ -57,7 +60,7 @@ abstract class MusicBookJp :
             .addQueryParameter("rankingType", "D")
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -65,7 +68,7 @@ abstract class MusicBookJp :
             .addQueryParameter("tab", "male")
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -73,7 +76,7 @@ abstract class MusicBookJp :
             .addQueryParameter("keyword", query)
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     private fun Response.toMangasPage(): MangasPage {
@@ -149,7 +152,7 @@ abstract class MusicBookJp :
             .addQueryParameter("tab", "book")
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(url).asJsoup()
+        return client.get(url, Fetch.DOCUMENT).asJsoup()
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/comic/store/seriesDetails?seriesId=${manga.url}"
@@ -158,7 +161,7 @@ abstract class MusicBookJp :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val a001 = (1..6).map { SCID_CHARS.random() }.joinToString("")
-        val viewer = client.post("$baseUrl/comic/eblieva/bvApi/pageList", ViewerRequestBody(a001, chapter.url).toJsonRequestBody()).parseAs<ViewerResponse>()
+        val viewer = client.post("$baseUrl/comic/eblieva/bvApi/pageList", Fetch.XHR, ViewerRequestBody(a001, chapter.url).toJsonRequestBody()).parseAs<ViewerResponse>()
         val display = viewer.data.parseAs<PageData> { it.decrypt(a001 + "bvhm" + viewer.sckb) }.displaySettingInfo.first()
         val params = display.config.paramList
         return List(params.last().lastPage) { index ->

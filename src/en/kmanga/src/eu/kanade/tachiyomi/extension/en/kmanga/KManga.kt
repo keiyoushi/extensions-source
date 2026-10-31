@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -33,6 +34,8 @@ import java.net.URLDecoder
 abstract class KManga :
     KeiSource(),
     ConfigurableSource {
+    override val imageFetch = Fetch.IMAGE
+
     private val domain = baseUrl.toHttpUrl().host
     private val apiUrl = "https://api.$domain"
     private val pageLimit = 25
@@ -250,9 +253,9 @@ abstract class KManga :
             .build()
 
         return if (body != null) {
-            client.post(url, newHeaders, body)
+            client.post(url, newHeaders, Fetch.XHR, body)
         } else {
-            client.get(url, newHeaders)
+            client.get(url, newHeaders, Fetch.XHR)
         }
     }
 

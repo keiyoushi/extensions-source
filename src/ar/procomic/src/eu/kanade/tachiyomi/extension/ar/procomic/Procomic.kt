@@ -17,6 +17,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.imagedecoder.ImageDecoder
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -55,6 +56,7 @@ import kotlin.reflect.KMutableProperty0
 abstract class Procomic :
     KeiSource(),
     ConfigurableSource {
+    override val imageFetch = Fetch.IMAGE
 
     private val preferences by getPreferencesLazy()
 
@@ -247,7 +249,7 @@ abstract class Procomic :
         try {
             for (cell in 0 until columns * rows) {
                 if (call.isCanceled()) throw IOException("Canceled")
-                val response = runBlocking { client.get(map.pieces[map.order[cell]].toHttpUrl(), ensureSuccess = false) }
+                val response = runBlocking { client.get(map.pieces[map.order[cell]].toHttpUrl(), Fetch.IMAGE, ensureSuccess = false) }
                 if (response.code == 410) {
                     response.close()
                     return null
@@ -303,7 +305,7 @@ abstract class Procomic :
         val (id, key) = device()
         val headers = ProChanSigner.readHeaders("GET", url, id, key).toMutableMap()
         readerSession?.let { headers["X-ProChan-Reader-Session"] = it }
-        return client.get(url, headers.toHeaders())
+        return client.get(url, headers.toHeaders(), Fetch.DOCUMENT)
     }
 
     private suspend fun device(): Pair<String, PrivateKey> {
@@ -328,7 +330,7 @@ abstract class Procomic :
         val url = "$apiUrl/api/android/device/register".toHttpUrl()
         val body = RegisterRequestDto(ProChanSigner.encodePublicKey(keyPair.public)).toJsonString().toByteArray()
         val headers = ProChanSigner.registerHeaders(url, body)
-        val id = client.post(url, headers.toHeaders(), body.toRequestBody(JSON_MEDIA_TYPE))
+        val id = client.post(url, headers.toHeaders(), Fetch.XHR, body.toRequestBody(JSON_MEDIA_TYPE))
             .parseAs<RegisterResponseDto>().deviceId
         preferences.edit()
             .putString(DEVICE_ID_KEY, id)
