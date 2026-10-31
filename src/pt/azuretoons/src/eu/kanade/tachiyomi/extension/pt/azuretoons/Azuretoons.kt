@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -89,7 +90,7 @@ abstract class Azuretoons :
             ).toJsonRequestBody()
             val loginHeaders = headers.newBuilder().set("Accept", "application/json").build()
             val response = network.client.newCall(
-                POST("$apiUrl/auth/login", loginHeaders, body),
+                POST("$apiUrl/auth/login", loginHeaders, body).newBuilder().fetch(Fetch.XHR).build(),
             ).execute()
 
             if (!response.isSuccessful) {

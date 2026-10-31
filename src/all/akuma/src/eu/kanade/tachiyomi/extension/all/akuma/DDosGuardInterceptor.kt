@@ -2,6 +2,8 @@ package eu.kanade.tachiyomi.extension.all.akuma
 
 import android.webkit.CookieManager
 import eu.kanade.tachiyomi.network.GET
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import okhttp3.Cookie
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
@@ -48,12 +50,12 @@ class DDosGuardInterceptor(private val client: OkHttpClient) : Interceptor {
     }
 
     private fun getNewCookie(url: HttpUrl): Cookie? {
-        val wellKnown = client.newCall(GET(WELL_KNOWN_URL))
+        val wellKnown = client.newCall(GET(WELL_KNOWN_URL).newBuilder().fetch(Fetch.SCRIPT).build())
             .execute().body.string()
             .substringAfter("'", "")
             .substringBefore("'", "")
         val checkUrl = "${url.scheme}://${url.host + wellKnown}"
-        val response = client.newCall(GET(checkUrl)).execute()
+        val response = client.newCall(GET(checkUrl).newBuilder().fetch(Fetch.XHR).build()).execute()
         return response.header("set-cookie")?.let {
             Cookie.parse(url, it)
         }

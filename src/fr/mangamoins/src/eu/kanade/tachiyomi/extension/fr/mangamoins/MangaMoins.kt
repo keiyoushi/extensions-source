@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -28,7 +29,7 @@ abstract class MangaMoins : KeiSource() {
 
         if (response.code == 403 && request.url.toString().contains("/api/v1/")) {
             response.close()
-            val homeRequest = GET(baseUrl, headers)
+            val homeRequest = GET(baseUrl, headers).newBuilder().fetch(Fetch.DOCUMENT).build()
             network.client.newCall(homeRequest).execute().close()
             return@addInterceptor chain.proceed(request)
         }

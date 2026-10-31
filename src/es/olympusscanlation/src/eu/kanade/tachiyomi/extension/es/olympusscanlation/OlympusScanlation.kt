@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -39,10 +40,10 @@ abstract class OlympusScanlation :
         if (!preferences.fetchDomainPref()) return
         try {
             val initClient = network.client
-            val document = initClient.newCall(GET("https://olympus.pages.dev", headers)).execute().asJsoup()
+            val document = initClient.newCall(GET("https://olympus.pages.dev", headers).newBuilder().fetch(Fetch.DOCUMENT).build()).execute().asJsoup()
             val domain = document.selectFirst("meta[property=og:url]")?.attr("content")
                 ?: return
-            val host = initClient.newCall(GET(domain, headers)).execute().request.url.host
+            val host = initClient.newCall(GET(domain, headers).newBuilder().fetch(Fetch.DOCUMENT).build()).execute().request.url.host
             val newDomain = "https://$host"
             preferences.edit().putString(BASE_URL_PREF, newDomain).apply()
         } catch (_: Exception) {

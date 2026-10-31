@@ -31,6 +31,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -199,7 +200,7 @@ class MangaDex(
             .addQueryParameter("ids[]", mangaIds)
             .build()
 
-        val mangaRequest = GET(mangaApiUrl, headers, CacheControl.FORCE_NETWORK)
+        val mangaRequest = GET(mangaApiUrl, headers, CacheControl.FORCE_NETWORK).newBuilder().fetch(Fetch.XHR).build()
         val mangaResponse = client.newCall(mangaRequest).execute()
         val mangaListDto = mangaResponse.parseAs<MangaListDto>()
         val firstVolumeCovers = fetchFirstVolumeCovers(mangaListDto.data).orEmpty()
@@ -382,7 +383,7 @@ class MangaDex(
             dexLang = dexLang,
         )
 
-        val mangaRequest = GET(finalUrl, headers, CacheControl.FORCE_NETWORK)
+        val mangaRequest = GET(finalUrl, headers, CacheControl.FORCE_NETWORK).newBuilder().fetch(Fetch.XHR).build()
         val mangaResponse = client.newCall(mangaRequest).execute()
         val mangaList = searchMangaListParse(mangaResponse)
 
@@ -489,7 +490,7 @@ class MangaDex(
      */
     private fun fetchSimpleChapterList(manga: MangaDto, langCode: String): Map<String, AggregateVolume> {
         val url = "${MDConstants.API_MANGA_URL}/${manga.data!!.id}/aggregate?translatedLanguage[]=$langCode"
-        val response = client.newCall(GET(url, headers)).execute()
+        val response = client.newCall(GET(url, headers).newBuilder().fetch(Fetch.XHR).build()).execute()
 
         return runCatching { response.parseAs<AggregateDto>() }
             .getOrNull()?.volumes.orEmpty()
@@ -528,7 +529,7 @@ class MangaDex(
             .build()
 
         val result = runCatching {
-            client.newCall(GET(apiUrl, headers)).execute().parseAs<CoverArtListDto>().data
+            client.newCall(GET(apiUrl, headers).newBuilder().fetch(Fetch.XHR).build()).execute().parseAs<CoverArtListDto>().data
         }
 
         val covers = result.getOrNull() ?: return null

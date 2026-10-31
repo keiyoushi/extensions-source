@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -75,7 +76,7 @@ abstract class NexusMangas : KeiSource() {
         val fragment = request.url.fragment
         if (fragment == null || request.url.host == API_HOST) return chain.proceed(request)
 
-        val response = pageClient.newCall(request).execute()
+        val response = pageClient.newCall(request.newBuilder().fetch(Fetch.IMAGE).build()).execute()
         val index = fragment.substringAfter('/').toIntOrNull()
         if (response.code != 403 || index == null) return response
 
@@ -84,12 +85,13 @@ abstract class NexusMangas : KeiSource() {
             .url("$functionsUrl/read-chapter")
             .headers(readerHeaders)
             .post(ReadChapterRequestDto(fragment.substringBefore('/')).toJsonRequestBody())
+            .fetch(Fetch.XHR)
             .build()
         val pageUrl = client.newCall(readRequest).execute()
             .parseAs<ReadChapterDto>()
             .pageUrl(index)
 
-        return pageClient.newCall(request.newBuilder().url(pageUrl).build()).execute()
+        return pageClient.newCall(request.newBuilder().url(pageUrl).fetch(Fetch.IMAGE).build()).execute()
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage = fetchWorks(page, order = POPULAR_ORDER)

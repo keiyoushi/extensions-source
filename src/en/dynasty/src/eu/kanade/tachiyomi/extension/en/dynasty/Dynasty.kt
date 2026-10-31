@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.head
 import keiyoushi.network.post
@@ -706,6 +707,7 @@ abstract class Dynasty :
             Request.Builder()
                 .url(chapterUrl)
                 .headers(headers)
+                .fetch(Fetch.XHR)
                 .build(),
         ).execute()
             .parseAs<ChapterResponse>()

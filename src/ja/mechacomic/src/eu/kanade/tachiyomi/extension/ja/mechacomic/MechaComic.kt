@@ -217,7 +217,7 @@ abstract class MechaComic :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = coroutineScope {
-        val viewerUrl = noRedirectClient.get(getChapterUrl(chapter), ensureSuccess = false)
+        val viewerUrl = noRedirectClient.get(getChapterUrl(chapter), Fetch.DOCUMENT, ensureSuccess = false)
             .use { it.header("Location") }
             ?.toHttpUrlOrNull()
         val contentsUrl = viewerUrl?.let {

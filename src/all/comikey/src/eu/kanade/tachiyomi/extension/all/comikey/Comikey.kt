@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -276,7 +277,7 @@ abstract class Comikey :
                             removeAll("X-Requested-With")
                         }.build()
 
-                        val response = client.newCall(GET(url.toString(), requestHeaders)).execute()
+                        val response = client.newCall(GET(url.toString(), requestHeaders).newBuilder().fetch(Fetch.XHR).build()).execute()
                         manifestRedirect = response.request.url
 
                         WebResourceResponse(

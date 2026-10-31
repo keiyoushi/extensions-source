@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
@@ -141,6 +142,7 @@ abstract class HentaiFox : GalleryAdults() {
         return client.post(
             url,
             xhrHeaders,
+            Fetch.XHR,
             FormBody.Builder()
                 .add("type", category)
                 .build(),

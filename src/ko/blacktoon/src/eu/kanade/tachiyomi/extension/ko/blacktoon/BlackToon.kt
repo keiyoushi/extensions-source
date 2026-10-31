@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -32,7 +33,7 @@ abstract class BlackToon : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->
         if (currentBaseUrlHost.isBlank()) {
-            noRedirectClient.newCall(GET(baseUrl, headers)).execute().use {
+            noRedirectClient.newCall(GET(baseUrl, headers).newBuilder().fetch(Fetch.DOCUMENT).build()).execute().use {
                 currentBaseUrlHost = it.headers["location"]?.toHttpUrlOrNull()?.host
                     ?: throw IOException("unable to get updated url")
             }

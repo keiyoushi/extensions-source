@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import kotlinx.serialization.json.buildJsonObject
@@ -27,7 +28,7 @@ abstract class LunaScans : MadaraNoAjax() {
             if (page > 1) addPathSegments("page/$page/")
             addQueryParameter("m_orderby", order)
         }.build()
-        val response = client.get(url, ensureSuccess = false)
+        val response = client.get(url, Fetch.DOCUMENT, ensureSuccess = false)
         if (response.code == 404) {
             response.close()
             return MangasPage(emptyList(), false)

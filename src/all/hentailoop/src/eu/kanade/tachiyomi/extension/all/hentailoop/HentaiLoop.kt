@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -424,6 +425,7 @@ abstract class HentaiLoop : KeiSource() {
             .url("$baseUrl/wp-admin/admin-ajax.php")
             .headers(ajaxHeaders)
             .post(body)
+            .fetch(Fetch.XHR)
             .build()
 
         // fire and forget so page loading isn't delayed

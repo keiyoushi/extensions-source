@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.pt.xxxyaoi
 import android.webkit.WebResourceResponse
 import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
@@ -57,7 +58,7 @@ abstract class XXXYaoi : MadaraNoAjax() {
     }
 
     override suspend fun fetchChapterDocument(chapterUrl: String): Document {
-        val html = client.get(chapterUrl).body.string()
+        val html = client.get(chapterUrl, Fetch.DOCUMENT).body.string()
         val rendered = try {
             runWebView<String> {
                 userAgent = headers["User-Agent"].orEmpty()

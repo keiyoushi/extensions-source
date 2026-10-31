@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -371,6 +372,7 @@ abstract class MangaTR : KeiSource() {
                         .header("Accept", "application/json")
                         .header("Referer", request.url.toString())
                         .header("X-Requested-With", "XMLHttpRequest")
+                        .fetch(Fetch.XHR)
                         .build()
 
                     network.client.newCall(verifyRequest).execute().close()

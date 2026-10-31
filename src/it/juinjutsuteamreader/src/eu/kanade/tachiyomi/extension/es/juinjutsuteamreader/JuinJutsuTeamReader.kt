@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.it.juinjutsuteamreader
 
 import eu.kanade.tachiyomi.multisrc.foolslide.FoolSlide
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -27,8 +25,7 @@ abstract class JuinJutsuTeamReader : FoolSlide() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         if (page == 1) seenMangaUrls.clear()
-        val request = GET("$baseUrl/latest/$page/", headers)
-        val document = client.newCall(request).await().asJsoup()
+        val document = client.get("$baseUrl/latest/$page/", headers, Fetch.DOCUMENT, ensureSuccess = false).asJsoup()
         val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
         val newMangas = mangas.filter { seenMangaUrls.add(it.url) }
         val hasNextPage = newMangas.isNotEmpty() && popularMangaNextPageSelector().let { selector -> document.select(selector).first() != null }

@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -139,7 +140,7 @@ abstract class Zaimanhua :
                 "$accountApiUrl/userInfo/get",
                 headersBuilder().setToken(token).build(),
                 cache = USE_CACHE,
-            ),
+            ).newBuilder().fetch(Fetch.XHR).build(),
         ).execute().parseAs<SimpleResponseDto>()
         return response.errno == 0
     }
@@ -155,7 +156,7 @@ abstract class Zaimanhua :
                 "$accountApiUrl/login/passwd",
                 headers,
                 formBody,
-            ),
+            ).newBuilder().fetch(Fetch.XHR).build(),
         ).execute().parseAs<ResponseDto<UserDto>>()
         return response.data.user?.token ?: ""
     }
@@ -238,7 +239,7 @@ abstract class Zaimanhua :
         response.close()
 
         val params = fragment.parseAs<ImageRetryParamsDto>()
-        val pageListResponse = client.newCall(GET(pageListApiUrl(params.url), h5Headers, USE_CACHE)).execute()
+        val pageListResponse = client.newCall(GET(pageListApiUrl(params.url), h5Headers, USE_CACHE).newBuilder().fetch(Fetch.XHR).build()).execute()
         val result = pageListResponse.parseAs<ResponseDto<DataWrapperDto<ChapterImagesDto>>>()
         if (result.errmsg.isNotBlank()) {
             throw IOException(result.errmsg)

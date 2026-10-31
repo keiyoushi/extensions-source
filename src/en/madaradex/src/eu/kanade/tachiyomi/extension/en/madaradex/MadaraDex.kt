@@ -2,6 +2,8 @@ package eu.kanade.tachiyomi.extension.en.madaradex
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import okhttp3.Cookie
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -42,6 +44,7 @@ abstract class MadaraDex : Madara() {
                     .url("$baseUrl/wp-admin/admin-ajax.php")
                     .post(FormBody.Builder().add("action", "mdx_auth_refresh").build())
                     .header("X-Mdx-Auth-Refresh", "1")
+                    .fetch(Fetch.XHR)
                     .build(),
             ).execute().close()
         }

@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -243,7 +244,7 @@ abstract class MangaBall :
 
     private fun updateViews(chapterId: String) {
         val body = ViewRequest(chapterId, "chapter").toJsonBody()
-        val request = POST("$baseUrl/api/v1/views/update", headers, body)
+        val request = POST("$baseUrl/api/v1/views/update", headers, body).newBuilder().fetch(Fetch.XHR).build()
 
         client.newCall(request)
             .enqueue(

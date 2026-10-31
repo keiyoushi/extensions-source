@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -263,7 +264,7 @@ abstract class Taiyo : KeiSource() {
     }
 
     private fun fetchBearerToken(): String {
-        val scripts = client.newCall(GET(baseUrl, headers))
+        val scripts = client.newCall(GET(baseUrl, headers).newBuilder().fetch(Fetch.DOCUMENT).build())
             .execute().asJsoup()
             .select("script[src*=next]:not([nomodule]):not([src*=app])")
 
@@ -278,7 +279,7 @@ abstract class Taiyo : KeiSource() {
         val elements = scripts.toList().reversed()
         for (element in elements) {
             val scriptUrl = element.attr("src")
-            val script = client.newCall(GET("$baseUrl$scriptUrl", headers))
+            val script = client.newCall(GET("$baseUrl$scriptUrl", headers).newBuilder().fetch(Fetch.SCRIPT).build())
                 .execute().body.string()
             if (TOKEN_REGEX.containsMatchIn(script)) {
                 return script

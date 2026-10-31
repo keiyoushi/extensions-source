@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.WebViewTimeoutException
@@ -410,12 +411,12 @@ abstract class Softkomik : KeiSource() {
                 .any { it.name == "zEm9be" || it.name == "AhyyL" }
 
             if (!hasCookies) {
-                client.newCall(GET(baseUrl)).execute().close()
-                client.newCall(GET("$baseUrl/api/me", apiHeaders)).execute().close()
+                client.newCall(GET(baseUrl).newBuilder().fetch(Fetch.DOCUMENT).build()).execute().close()
+                client.newCall(GET("$baseUrl/api/me", apiHeaders).newBuilder().fetch(Fetch.XHR).build()).execute().close()
             }
 
             val response = runCatching {
-                client.newCall(GET(route.sessionApiUrl, apiHeaders)).execute()
+                client.newCall(GET(route.sessionApiUrl, apiHeaders).newBuilder().fetch(Fetch.XHR).build()).execute()
             }.getOrNull()
 
             if (response?.isSuccessful == true) {

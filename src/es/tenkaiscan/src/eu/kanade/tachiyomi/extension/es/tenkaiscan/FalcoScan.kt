@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -147,7 +148,7 @@ abstract class FalcoScan : KeiSource() {
     private val tokens = ConcurrentHashMap<String, String>()
 
     private fun fetchToken(chapterUrl: String): String {
-        val response = client.newCall(Request.Builder().url(chapterUrl).headers(headers).build()).execute()
+        val response = client.newCall(Request.Builder().url(chapterUrl).headers(headers).fetch(Fetch.DOCUMENT).build()).execute()
         val token = Jsoup.parse(response.body.string()).selectFirst("#canvas-reader")!!.attr("data-token")
         tokens[chapterUrl] = token
         return token

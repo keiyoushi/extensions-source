@@ -19,6 +19,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
@@ -685,7 +686,7 @@ abstract class MangaDot :
 
     private fun countViews(mangaId: Int) {
         val url = "$baseUrl/api/manga/$mangaId/view"
-        val request = POST(url, headers, FormBody.Builder().build())
+        val request = POST(url, headers, FormBody.Builder().build()).newBuilder().fetch(Fetch.XHR).build()
         client.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
                 response.use {

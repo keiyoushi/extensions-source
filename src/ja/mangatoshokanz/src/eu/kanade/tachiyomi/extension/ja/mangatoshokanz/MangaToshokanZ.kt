@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -53,6 +54,7 @@ abstract class MangaToshokanZ : KeiSource() {
             val r18Request = Request.Builder()
                 .url(url)
                 .head()
+                .fetch(Fetch.DOCUMENT)
                 .build()
 
             isR18 = true

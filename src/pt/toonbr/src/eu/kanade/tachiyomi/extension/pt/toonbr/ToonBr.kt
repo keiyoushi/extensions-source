@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -124,7 +125,7 @@ abstract class ToonBr :
     // runs while the client is being built, so it has to use the base client synchronously
     private fun login(email: String, password: String): String {
         val requestBody = LoginRequest(email, password).toJsonRequestBody()
-        val request = POST("$apiUrl/api/auth/login", headers, requestBody)
+        val request = POST("$apiUrl/api/auth/login", headers, requestBody).newBuilder().fetch(Fetch.XHR).build()
         val response = network.client.newCall(request).execute()
         if (!response.isSuccessful) {
             response.close()

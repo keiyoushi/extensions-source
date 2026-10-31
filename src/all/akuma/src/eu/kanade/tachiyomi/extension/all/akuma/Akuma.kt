@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -121,7 +122,7 @@ abstract class Akuma :
 
     private fun getToken(): String {
         if (storedToken.isNullOrEmpty()) {
-            val request = GET(baseUrl, headers)
+            val request = GET(baseUrl, headers).newBuilder().fetch(Fetch.DOCUMENT).build()
             val response = client.newCall(request).execute()
 
             val document = response.asJsoup()

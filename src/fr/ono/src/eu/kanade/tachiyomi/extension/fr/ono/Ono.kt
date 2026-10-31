@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -355,7 +356,7 @@ abstract class Ono :
         response.close()
 
         val payload = fetchReadingSession(num, slug) {
-            client.newCall(POST(apiUrl, gqlHeaders, it)).execute()
+            client.newCall(POST(apiUrl, gqlHeaders, it).newBuilder().fetch(Fetch.XHR).build()).execute()
         }
         val freshPages = payload.publicationMetadata?.pages
             ?: throw IOException("Pas de pages dans la session rafraîchie")

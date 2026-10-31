@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -102,7 +103,7 @@ abstract class NoyAcg :
             .set("Origin", WEB_BASE_URL)
             .set("Referer", "$WEB_BASE_URL/")
             .build()
-        val request = POST("$WEB_BASE_URL/api/login", loginHeaders, body)
+        val request = POST("$WEB_BASE_URL/api/login", loginHeaders, body).newBuilder().fetch(Fetch.XHR).build()
         network.client.newCall(request).execute().use { response ->
             val status = response.parseAs<LoginResponseDto>().status
             when (status) {

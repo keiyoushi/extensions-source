@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferences
@@ -222,7 +223,7 @@ abstract class KuroMangas :
             put("password", password)
         }.toString()
         val requestBody = payload.toRequestBody(JSON_MEDIA_TYPE)
-        val request = POST("$apiUrl/auth/login", headers, requestBody)
+        val request = POST("$apiUrl/auth/login", headers, requestBody).newBuilder().fetch(Fetch.XHR).build()
         network.client.newCall(request).execute().close()
 
         return hasSession()

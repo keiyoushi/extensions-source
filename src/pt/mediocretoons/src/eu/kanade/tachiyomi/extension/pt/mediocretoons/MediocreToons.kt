@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -102,7 +103,7 @@ abstract class MediocreToons :
         }
 
         val body = LoginRequestDto(loginEmail.trim(), loginPassword).toJsonRequestBody()
-        val response = client.newCall(POST("$API_URL$LOGIN_PATH", headers, body)).execute()
+        val response = client.newCall(POST("$API_URL$LOGIN_PATH", headers, body).newBuilder().fetch(Fetch.XHR).build()).execute()
 
         if (!response.isSuccessful) {
             val message = runCatching { response.parseAs<ErrorDto>().message }.getOrNull()

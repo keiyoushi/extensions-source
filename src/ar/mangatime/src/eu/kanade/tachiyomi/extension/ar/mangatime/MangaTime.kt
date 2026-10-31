@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -126,7 +127,7 @@ abstract class MangaTime : KeiSource() {
                 endpointUrl("content.trackView"),
                 headers,
                 TrpcEnvelope(ViewQuery(seriesId, chapterId)).toJsonString().toJsonRequestBody(),
-            ),
+            ).newBuilder().fetch(Fetch.XHR).build(),
         ).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) = response.closeQuietly()
             override fun onFailure(call: Call, e: IOException) {}

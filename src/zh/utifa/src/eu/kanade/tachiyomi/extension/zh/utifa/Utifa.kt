@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -120,7 +121,7 @@ abstract class Utifa : KeiSource() {
         val now = System.currentTimeMillis()
         resigned?.let { if (it.chapterId == chapterId && now - it.fetchedAt < RESIGNED_TTL) return it.urls }
         val urls = try {
-            val response = client.newCall(GET(chapterPagesUrl(chapterId), headers)).execute()
+            val response = client.newCall(GET(chapterPagesUrl(chapterId), headers).newBuilder().fetch(Fetch.XHR).build()).execute()
             if (!response.isSuccessful) {
                 response.close()
                 throw IOException("HTTP error ${response.code}")

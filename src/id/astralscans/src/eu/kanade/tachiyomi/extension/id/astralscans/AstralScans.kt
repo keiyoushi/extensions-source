@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.textOrNull
@@ -40,8 +41,9 @@ abstract class AstralScans : MangaThemesia() {
 
         val response = client.post(
             getMangaUrl(manga),
-            headers = headers,
-            body = body,
+            headers,
+            Fetch.XHR.from(getMangaUrl(manga)),
+            body,
         )
 
         val responseText = response.body.string()

@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -89,7 +90,7 @@ abstract class Yabai : KeiSource() {
     private fun updateTokens() {
         // We do a normal GET to baseUrl (without X-Requested-With) so that client
         // can successfully handle the DDOS-Guard challenge via WebView if needed.
-        val request = GET(baseUrl, headers)
+        val request = GET(baseUrl, headers).newBuilder().fetch(Fetch.DOCUMENT).build()
         val response = client.newCall(request).execute()
         val requestUrl = response.request.url
 

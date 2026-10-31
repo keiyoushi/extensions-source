@@ -139,7 +139,7 @@ abstract class MangaHub : KeiSource() {
 
         for (i in 1..2) {
             val query = if (i == 1) "?reloadKey=1" else ""
-            val response = noRedirectClient.get("$url$query", refreshHeaders, ensureSuccess = false)
+            val response = noRedirectClient.get("$url$query", refreshHeaders, Fetch.DOCUMENT, ensureSuccess = false)
             val returnedKey = response.headers("Set-Cookie")
                 .firstNotNullOfOrNull { apiRegex.find(it)?.groupValues?.get(1) }
             response.close()

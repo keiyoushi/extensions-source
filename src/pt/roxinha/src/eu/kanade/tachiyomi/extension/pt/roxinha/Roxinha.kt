@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
@@ -184,7 +185,7 @@ abstract class Roxinha :
         }
 
         val body = LoginRequestDto(email.trim(), password).toJsonRequestBody()
-        val response = network.client.newCall(POST("$apiUrl/auth/login", headers, body)).execute()
+        val response = network.client.newCall(POST("$apiUrl/auth/login", headers, body).newBuilder().fetch(Fetch.XHR).build()).execute()
 
         if (!response.isSuccessful) {
             throw IOException(response.errorMessage())

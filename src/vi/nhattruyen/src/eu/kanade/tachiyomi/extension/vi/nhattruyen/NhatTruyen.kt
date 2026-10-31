@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
@@ -54,7 +55,7 @@ abstract class NhatTruyen : WPComics() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        return parseMangaPage(client.get(url), searchMangaSelector(), ::searchMangaFromElement)
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT), searchMangaSelector(), ::searchMangaFromElement)
     }
 
     private class OrderByFilter :
@@ -93,7 +94,7 @@ abstract class NhatTruyen : WPComics() {
                 .addPathSegment("Comic/Services/ComicService.asmx/ChapterList")
                 .addQueryParameter("slug", slug)
                 .build()
-            val response = client.get(url)
+            val response = client.get(url, Fetch.XHR.from(manga.url))
             val json = response.parseAs<ChapterDTO>()
             json.data.map {
                 SChapter.create().apply {

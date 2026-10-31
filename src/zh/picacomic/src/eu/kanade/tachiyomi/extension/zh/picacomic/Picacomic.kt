@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -368,7 +369,7 @@ abstract class Picacomic :
         val body = PicaLoginPayload(username, password).toJsonString().toRequestBody()
 
         val response = client.newCall(
-            POST(url, picaHeaders(url, "POST"), body),
+            POST(url, picaHeaders(url, "POST"), body).newBuilder().fetch(Fetch.XHR).build(),
         ).execute()
         if (!response.isSuccessful) throw IOException("登录失败")
         return response.parseAs<PicaResponse>().data.token!!
@@ -388,9 +389,9 @@ abstract class Picacomic :
         }.toHeaders()
     }
 
-    private suspend fun OkHttpClient.get(url: String) = get(url, picaHeaders(url))
-    private suspend fun OkHttpClient.get(url: HttpUrl) = get(url, picaHeaders(url.toString()))
-    private suspend fun OkHttpClient.post(url: String, body: RequestBody) = post(url, picaHeaders(url, "POST"), body)
+    private suspend fun OkHttpClient.get(url: String) = get(url, picaHeaders(url), Fetch.XHR)
+    private suspend fun OkHttpClient.get(url: HttpUrl) = get(url, picaHeaders(url.toString()), Fetch.XHR)
+    private suspend fun OkHttpClient.post(url: String, body: RequestBody) = post(url, picaHeaders(url, "POST"), Fetch.XHR, body)
 
     private fun Request.applyToken() = newBuilder().header("Authorization", token).build()
 
