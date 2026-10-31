@@ -30,18 +30,13 @@ class MangaDetailDto(
     val authors: List<NamedDto> = emptyList(),
     val artists: List<NamedDto> = emptyList(),
     val genres: List<NamedDto> = emptyList(),
-    val covers: List<CoverDto> = emptyList(),
+    val cover: String? = null,
     val synopses: List<SynopsisDto> = emptyList(),
 )
 
 @Serializable
 class NamedDto(
     val name: String,
-)
-
-@Serializable
-class CoverDto(
-    val image: String,
 )
 
 @Serializable

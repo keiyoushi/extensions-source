@@ -105,7 +105,7 @@ abstract class Sacachispa :
                 put("slug", details.slug)
             }
             title = details.title
-            thumbnail_url = details.covers.firstOrNull()?.image?.toCoverUrl()
+            thumbnail_url = details.cover?.toCoverUrl()
             author = details.authors.joinToString { it.name }.ifEmpty { null }
             artist = details.artists.joinToString { it.name }.ifEmpty { null }
             genre = details.genres.joinToString { it.name }.ifEmpty { null }
