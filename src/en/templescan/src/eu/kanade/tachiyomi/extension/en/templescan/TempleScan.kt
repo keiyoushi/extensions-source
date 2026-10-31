@@ -10,13 +10,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -35,18 +35,7 @@ abstract class TempleScan :
         rateLimit(1)
     }
 
-    // the image cdn answers 403 to any request carrying Sec-Fetch-Dest, so no browser fetch metadata here
-    override fun Headers.Builder.configureHeaders() = apply {
-        removeAll("Origin")
-        set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-        set("Accept-Encoding", "gzip, deflate, br, zstd")
-        set("Accept-Language", "en-US, en;q=0.9")
-        set("Sec-Fetch-Dest", "document")
-        set("Sec-Fetch-Mode", "navigate")
-        set("Sec-Fetch-Site", "none")
-        set("Sec-Fetch-User", "?1")
-        set("Upgrade-Insecure-Requests", "1")
-    }
+    override val imageFetch = Fetch.IMAGE
 
     private val pages = SitePages(baseUrl) { headers["User-Agent"]!! }
 
