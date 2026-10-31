@@ -12,12 +12,15 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
+import keiyoushi.utils.decodeHex
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParseDateTime
+import keiyoushi.utils.selectLast
+import keiyoushi.utils.textOrNull
+import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Cookie
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -25,9 +28,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
-import java.util.Locale
+import java.io.IOException
 
 @Source
 abstract class OnfMangas : KeiSource() {
@@ -38,11 +39,10 @@ abstract class OnfMangas : KeiSource() {
         val request = chain.request()
         val response = chain.proceed(request)
 
-        val body = response.peekBody(8192).string()
-        if (!body.contains("Verificando")) return response
+        if (response.body.contentType()?.subtype != "html") return response
+        if ("Verificando" !in response.peekBody(8192).string()) return response
 
-        val cookieString = solveOnfCheck(response) ?: error("Failed to solve cookie challenge")
-        response.close()
+        val cookieString = solveOnfCheck(response) ?: throw IOException("Failed to solve cookie challenge")
         val cookie = Cookie.parse(request.url, cookieString)
         client.cookieJar.saveFromResponse(request.url, listOfNotNull(cookie))
 
@@ -51,7 +51,7 @@ abstract class OnfMangas : KeiSource() {
 
     private fun solveOnfCheck(response: Response): String? {
         val document = response.asJsoup()
-        val script = document.selectFirst("script")?.data() ?: error("Failed to find cookie challenge script")
+        val script = document.selectFirst("script")?.data() ?: throw IOException("Failed to find cookie challenge script")
 
         return QuickJs.create().use { js ->
             js.evaluate(
@@ -69,90 +69,75 @@ abstract class OnfMangas : KeiSource() {
         }
     }
 
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = this
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0")
-
     override val imageFetch = Fetch.IMAGE
 
-    private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
-
-    // ============================== Popular ===============================
+    private val authorPlaceholders = setOf("Autor Desconocido", "Desconocido", "Sin dato")
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/populares.php", Fetch.DOCUMENT).asJsoup()
-        val mangas = document.select("a.pop-podium-card, a.pop-card").mapNotNull { element ->
+        // The podium lists #2 before #1
+        val entries = document.select("a.pop-podium-card.gold") + document.select("a.pop-podium-card:not(.gold), a.pop-card")
+        val mangas = entries.map { element ->
             SManga.create().apply {
-                title = element.selectFirst(".pop-podium-name, .pop-name")?.text()
-                    ?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-
-                setUrlWithoutDomain(
-                    element.attr("abs:href")
-                        .takeIf { it.isNotEmpty() } ?: return@mapNotNull null,
-                )
-
-                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+                title = element.selectFirst(".pop-podium-name, .pop-name")!!.text()
+                setUrlWithoutDomain(element.attr("abs:href"))
+                thumbnail_url = element.selectFirst("img")?.attrOrNull("abs:src")
             }
         }
         return MangasPage(mangas, false)
     }
 
-    // =============================== Latest ===============================
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList())
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/mangas.php?tab=general&genero=0&q=&page=$page", Fetch.DOCUMENT).asJsoup()
-        return parseMangasPage(document)
-    }
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "$baseUrl/mangas.php".toHttpUrl().newBuilder()
+            .addQueryParameter("q", query)
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("tab", filters.firstInstanceOrNull<TabFilter>()?.selected ?: "general")
 
-    private fun parseMangasPage(document: Document): MangasPage {
-        val mangas = document.select(".manga-grid .manga-card").mapNotNull { element ->
+        filters.firstInstanceOrNull<GenreFilter>()?.state.orEmpty()
+            .filter { it.state }
+            .forEach { url.addQueryParameter("generos[]", it.id) }
+
+        val document = client.get(url.build(), Fetch.DOCUMENT).asJsoup()
+        val mangas = document.select(".manga-grid .manga-card").map { element ->
             SManga.create().apply {
-                title = element.selectFirst(".manga-title")?.text()
-                    ?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-                setUrlWithoutDomain(
-                    element.selectFirst("a")?.attr("abs:href")
-                        ?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null,
-                )
-                thumbnail_url = element.selectFirst(".card-cover img")?.attr("abs:src")
+                title = element.selectFirst(".manga-title")!!.text()
+                setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+                thumbnail_url = element.selectFirst(".card-cover img")?.attrOrNull("abs:src")
             }
         }
         val hasNextPage = document.selectFirst(".pagination a.page-btn:contains(Siguiente)") != null
         return MangasPage(mangas, hasNextPage)
     }
 
-    // =============================== Search ===============================
+    override val supportsFilterFetching = true
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val url = "$baseUrl/mangas.php".toHttpUrl().newBuilder()
-            .addQueryParameter("q", query)
-            .addQueryParameter("page", page.toString())
-
-        val tab = filters.firstInstanceOrNull<TabFilter>()?.selected ?: "general"
-        val genero = filters.firstInstanceOrNull<GenreFilter>()?.selected ?: "0"
-
-        url.addQueryParameter("tab", tab)
-
-        if (genero != "0") {
-            url.addQueryParameter("generos[0]", genero)
-        }
-
-        val document = client.get(url.build(), Fetch.DOCUMENT).asJsoup()
-        return parseMangasPage(document)
+    override suspend fun fetchFilterData(): JsonElement {
+        val document = client.get("$baseUrl/mangas.php", Fetch.DOCUMENT).asJsoup()
+        return document.select("label.cat-checkbox").map { label ->
+            GenreDto(label.selectFirst("input")!!.attr("value"), label.selectFirst(".cat-label")!!.text())
+        }.toJsonElement()
     }
 
-    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
-        TabFilter(),
-        GenreFilter(),
-    )
-
-    // =========================== Manga Details & Chapters ============================
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.parseAs<List<GenreDto>>().orEmpty()
+        return FilterList(
+            buildList {
+                add(TabFilter())
+                if (genres.isNotEmpty()) add(GenreFilter(genres))
+            },
+        )
+    }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (!url.host.equals(baseUrl.toHttpUrl().host, ignoreCase = true)) return null
-        if (url.pathSegments.firstOrNull() != "manga") return null
+        if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host) return null
+        if (url.pathSegments[0] != "manga" || url.pathSegments.getOrNull(1).isNullOrEmpty()) return null
 
         val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseMangaDetails(document).apply {
-            this.url = url.encodedPath
+            setUrlWithoutDomain(document.selectFirst("link[rel=canonical]")!!.attr("abs:href"))
+            initialized = true
         }
     }
 
@@ -167,70 +152,40 @@ abstract class OnfMangas : KeiSource() {
     }
 
     private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst(".manga-title")?.text()
-            ?.takeIf { it.isNotEmpty() }
-            ?: throw Exception("Could not parse manga title")
-        author = document.selectFirst(".author-link")?.text()
-        description = document.selectFirst(".manga-description")?.text()
-        genre = document.select(".genre-tag").joinToString { it.text() }
-        thumbnail_url = document.selectFirst(".manga-poster")?.attr("abs:src")
+        title = document.selectFirst(".manga-title")!!.text()
+        author = document.selectFirst(".author-link")?.textOrNull()?.takeUnless { it in authorPlaceholders }
+        description = listOfNotNull(
+            document.selectFirst(".manga-description")?.textOrNull()?.takeUnless { it == "Información no completada" },
+            document.select(".onf-alt-desktop .mal-alt-titulo").eachText().ifEmpty { null }
+                ?.joinToString("\n", prefix = "**Nombres alternativos:**\n") { "- $it" },
+        ).joinToString("\n\n").ifEmpty { null }
+        genre = document.select(".genre-tag").eachText().joinToString().ifEmpty { null }
+        thumbnail_url = document.selectFirst(".manga-poster")?.attrOrNull("abs:src")
 
-        val statusText = document.select(".manga-meta span").last()?.text()
+        val statusText = document.selectLast(".manga-meta span")?.text().orEmpty().lowercase()
         status = when {
-            statusText?.contains("EMISIÓN", true) == true -> SManga.ONGOING
-            statusText?.contains("FINALIZADO", true) == true -> SManga.COMPLETED
+            "emisión" in statusText -> SManga.ONGOING
+            "finalizado" in statusText -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
     }
 
     private fun parseChapterList(document: Document): List<SChapter> {
-        val hexString = document.selectFirst("script:containsData(const _hex =)")
-            ?.data()
-            ?.substringAfter("const _hex = \"")
-            ?.substringBefore("\";")
-            ?: return emptyList()
+        val json = document.decodeHexVariable("_hex") ?: return emptyList()
 
-        val jsonString = decodeHex(hexString)
-        val chaptersData = jsonString.parseAs<List<ChapterDto>>()
-
-        val chapters = mutableListOf<SChapter>()
-
-        val sortedChapters = chaptersData.sortedWith(
-            compareByDescending<ChapterDto> { it.numberFloat }
-                .thenByDescending { it.date },
-        )
-
-        for (dto in sortedChapters) {
-            val parentChapter = dto.toSChapter().apply {
-                date_upload = dateFormat.tryParseDateTime(dto.date, ZoneOffset.UTC)
+        return json.parseAs<List<ChapterDto>>()
+            .sortedWith(compareByDescending<ChapterDto> { it.numberFloat }.thenByDescending { it.date })
+            .flatMap { dto ->
+                (listOf(dto) + dto.otherVersions.orEmpty()).map { it.toSChapter(dto) }
             }
-            chapters.add(parentChapter)
-
-            dto.getOtherVersions()?.forEach { otherVersion ->
-                chapters.add(
-                    otherVersion.toSChapter(dto).apply {
-                        date_upload = parentChapter.date_upload
-                    },
-                )
-            }
-        }
-        return chapters
     }
-
-    // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        val hexString = document.selectFirst("script:containsData(const _hexP =)")
-            ?.data()
-            ?.substringAfter("const _hexP = \"")
-            ?.substringBefore("\";")
-            ?: return emptyList()
+        val json = document.decodeHexVariable("_hexP") ?: return emptyList()
 
-        val jsonString = decodeHex(hexString)
-        val pagesData = jsonString.parseAs<List<PageDto>>()
-
-        return pagesData.mapIndexed { index, dto -> dto.toPage(index) }
+        return json.parseAs<List<PageDto>>()
+            .mapIndexed { index, dto -> dto.toPage(index) }
     }
 
     // uploads.mangadex.org serves a placeholder image with either header
@@ -239,13 +194,10 @@ abstract class OnfMangas : KeiSource() {
         .removeHeader("Origin")
         .build()
 
-    // ============================= Utilities ==============================
-
-    private fun decodeHex(hexString: String): String {
-        require(hexString.length % 2 == 0) { "Must have an even length" }
-        val bytes = hexString.chunked(2)
-            .map { it.toInt(16).toByte() }
-            .toByteArray()
-        return String(bytes, Charsets.UTF_8)
-    }
+    private fun Document.decodeHexVariable(name: String): String? = selectFirst("script:containsData(const $name =)")
+        ?.data()
+        ?.substringAfter("const $name = \"")
+        ?.substringBefore("\";")
+        ?.decodeHex()
+        ?.decodeToString()
 }
