@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.saturdaymorningbreakfastcomics
 
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -79,7 +80,7 @@ abstract class SaturdayMorningBreakfastComics : KeiSource() {
         val response = client.get(getMangaUrl(manga), ensureSuccess = false)
         if (!response.isSuccessful && response.code != 500) {
             response.close()
-            throw Exception("HTTP ${response.code}")
+            throw HttpException(response.code)
         }
 
         val chapterList = response.asJsoup().select("option[value*=\"comic/\"]")
@@ -98,7 +99,14 @@ abstract class SaturdayMorningBreakfastComics : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        // the chapter pages respond with HTTP 500 despite serving the full page
+        val response = client.get(getChapterUrl(chapter), ensureSuccess = false)
+        if (!response.isSuccessful && response.code != 500) {
+            response.close()
+            throw HttpException(response.code)
+        }
+
+        val document = response.asJsoup()
         val pages = mutableListOf<Page>()
         val image = document.select("img#cc-comic")
         pages.add(Page(0, "", image.attr("abs:src")))
