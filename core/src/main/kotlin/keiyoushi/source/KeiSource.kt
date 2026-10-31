@@ -144,14 +144,13 @@ abstract class KeiSource : HttpSource() {
      * Customizes the base Headers builder. Subclasses can override this to append source-specific
      * headers.
      *
-     * Note: `User-Agent`, `Referer` and `Origin` are set here. The other browser headers are added per request
-     * kind, which also drops this `Origin` where browsers send none; headers set here or on a request are kept.
+     * Note: `User-Agent` and `Referer` are set here. The other browser headers, `Origin` included, are added per
+     * request kind; headers set here or on a request are kept.
      */
     protected open fun Headers.Builder.configureHeaders(): Headers.Builder = this
 
     final override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
-        .set("Origin", baseUrl)
         .configureHeaders()
 
     /**

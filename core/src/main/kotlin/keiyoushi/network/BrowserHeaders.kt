@@ -32,13 +32,12 @@ internal class BrowserCallInterceptor(
         val from = request.tag(FromPage::class.java)
         // Nothing to do, and baseUrl stays unread
         if (from == null && (kind == null || kind == Fetch.Kind.NONE)) return chain.proceed(request)
-        val siteUrl = siteUrl()
-        val site = siteUrl.toHttpUrlOrNull()
+        val site = siteUrl().toHttpUrlOrNull()
         val page = from?.let { it.page.toHttpUrlOrNull() ?: site?.resolve(it.page) }
         val browserHeaders = kind != null && kind != Fetch.Kind.NONE && site != null && Browser.of(request.header("User-Agent").orEmpty()) != null
         if (page == null && !browserHeaders) return chain.proceed(request)
         // A fresh one per call: a request or builder can be sent more than once
-        val call = BrowserCall(page, site.takeIf { browserHeaders }, siteUrl)
+        val call = BrowserCall(page, site.takeIf { browserHeaders })
         return chain.proceed(request.newBuilder().tag(BrowserCall::class.java, call).build())
     }
 }
@@ -47,7 +46,7 @@ internal class BrowserCallInterceptor(
  * A call's page and site, and what its redirect chain has passed through so far. [site] is set when the call gets
  * browser headers.
  */
-internal class BrowserCall(val page: HttpUrl?, val site: HttpUrl?, val siteUrl: String) {
+internal class BrowserCall(val page: HttpUrl?, val site: HttpUrl?) {
     // The page as last sent as Referer, trimmed further on each hop
     var referer: HttpUrl? = page
 
@@ -61,8 +60,8 @@ internal class BrowserCall(val page: HttpUrl?, val site: HttpUrl?, val siteUrl: 
 
 /**
  * Adds the headers Chrome or Firefox, as named in a request's `User-Agent`, sends for its [Fetch.Kind] and puts them in
- * that browser's order: client hints, `Accept-Language`, fetch metadata, `Accept` and `Priority`, and KeiSource's
- * default `Origin` only where browsers send one. Any other request goes out as built, apart from the `Referer` of
+ * that browser's order: client hints, `Accept-Language`, fetch metadata, `Accept` and `Priority`, and `Origin`
+ * where browsers send one. Any other request goes out as built, apart from the `Referer` of
  * [Fetch.from].
  *
  * Runs per hop on the network level, so it sees `Cookie`, the body headers OkHttp adds and each redirect. Every hop
@@ -135,11 +134,10 @@ internal fun BrowserCall.hop(request: Request): Request {
     }
     if (kind == Fetch.Kind.DOCUMENT) fill("Upgrade-Insecure-Requests", "1")
     fill("Priority", browser.priority(kind))
-    // KeiSource's default Origin is ours to keep or drop; one the source set or removed itself stays
-    if (request.header("Origin").let { it == siteUrl || it == site.origin() }) {
-        // Browsers send Origin on methods other than GET and HEAD and on cross-origin XHRs
+    // Browsers send Origin on methods other than GET and HEAD and on cross-origin XHRs; one the source set itself stays
+    if (request.header("Origin") == null) {
         val sendsOrigin = (request.method != "GET" && request.method != "HEAD") || (kind == Fetch.Kind.XHR && initiator.origin() != origin)
-        if (sendsOrigin) builder.header("Origin", if (tainted) "null" else initiator.origin()) else builder.removeHeader("Origin")
+        if (sendsOrigin) builder.header("Origin", if (tainted) "null" else initiator.origin())
     }
     return builder.build()
 }

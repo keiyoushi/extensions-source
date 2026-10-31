@@ -1404,8 +1404,8 @@ Behavior `KeiSource` gives you for free:
     `imageFetch`, `Fetch.IMAGE` by default; override it with `Fetch.NONE` to send them as built. The app's covers are
     recognised as GETs with `Cache-Control: no-store` and no `Fetch`, so don't put that on your own requests without
     one.
-  - Headers a request already has are kept, fetch metadata the source sets itself included, and a request without
-    `Origin` gets none. `from` replaces the `Referer`, also on each redirect.
+  - Headers a request already has are kept, fetch metadata and `Origin` the source sets itself included; `Origin` is
+    otherwise added where browsers send one (requests other than GET and HEAD, cross-origin XHRs). `from` replaces the `Referer`, also on each redirect.
 - **Filter fetching:** if a source needs to fetch its filter options from the network, set
   `supportsFilterFetching = true`, implement `fetchFilterData()` (returns the raw filter data as a
   `JsonElement`, called on a background coroutine, attempted up to 3 times total on failure, and

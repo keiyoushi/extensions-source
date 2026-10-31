@@ -72,8 +72,8 @@ class BrowserHeadersTest {
     fun withoutKindGoesOutAsBuilt() {
         val get = builder("https://api.b.test/list", referer = "https://a.test/").header("X-Site", "1").build()
         assertEquals(get.headers, intercept(get, wireOrder = true).headers)
-        // A source that drops the default Origin keeps it dropped
-        val post = builder("https://a.test/api/search", referer = "https://a.test/").removeHeader("Origin").post(json()).build()
+        // No Origin added without a kind
+        val post = builder("https://a.test/api/search", referer = "https://a.test/").post(json()).build()
         assertEquals(post.headers, intercept(post, wireOrder = true).headers)
     }
 
@@ -99,7 +99,7 @@ class BrowserHeadersTest {
     }
 
     @Test
-    fun defaultOriginWithoutReferer() {
+    fun originWithoutReferer() {
         val sent = intercept(builder("https://a.test/api/search").fetch(Fetch.XHR).post(json()).build())
         assertEquals("https://a.test", sent.header("Origin"))
         assertEquals("same-origin", sent.header("Sec-Fetch-Site"))
@@ -139,7 +139,7 @@ class BrowserHeadersTest {
     @Test
     fun nonBrowserClientsGetNoBrowserHeaders() {
         val sent = intercept(builder("https://api.a.test/list", ua = "Tachiyomi Dalvik/2.1.0").fetch(Fetch.XHR).build())
-        assertEquals("https://a.test", sent.header("Origin"))
+        assertNull(sent.header("Origin"))
         assertNull(sent.header("Accept-Language"))
         assertNull(sent.header("Sec-Fetch-Mode"))
         assertNull(sent.header("Accept"))
@@ -204,12 +204,6 @@ class BrowserHeadersTest {
         assertEquals("https://a.test", sent.header("Origin"))
         assertEquals("max-age=0", sent.header("Cache-Control"))
         assertEquals(listOf("Cache-Control", "Sec-CH-UA"), sent.headers.map { it.first }.take(2))
-    }
-
-    @Test
-    fun removedOriginStaysRemoved() {
-        val sent = intercept(builder("https://a.test/api/search", referer = "https://a.test/").removeHeader("Origin").fetch(Fetch.XHR).post(json()).build())
-        assertNull(sent.header("Origin"))
     }
 
     @Test
@@ -285,7 +279,7 @@ class BrowserHeadersTest {
 
     @Test
     fun retryFromResponseRequestStartsOver() {
-        val stale = builder("https://a.test/api").tag(BrowserCall::class.java, BrowserCall(null, "https://a.test".toHttpUrl(), "https://a.test"))
+        val stale = builder("https://a.test/api").tag(BrowserCall::class.java, BrowserCall(null, "https://a.test".toHttpUrl()))
         val none = stale.fetch(Fetch.NONE).build()
         assertEquals(none.headers, intercept(none, wireOrder = true).headers)
     }
@@ -308,10 +302,9 @@ class BrowserHeadersTest {
 
     private fun json() = "{}".toRequestBody("application/json".toMediaType())
 
-    // A source's request: KeiSource's default Origin, the given Referer
+    // A source's request: the given Referer
     private fun builder(url: String, referer: String? = null, ua: String = chromeUa) = Request.Builder().url(url)
         .header("User-Agent", ua)
-        .header("Origin", "https://a.test")
         .apply { referer?.let { header("Referer", it) } }
 
     // The request as sent: with the wire order pass it's HTTP/1.1, as a unit test has no connection; without, the
