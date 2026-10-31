@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -21,6 +22,8 @@ import okhttp3.OkHttpClient
 
 @Source
 abstract class MangaWT : KeiSource() {
+
+    override val imageFetch = Fetch.IMAGE
 
     private val apiUrl get() = "$baseUrl/api"
 
@@ -65,7 +68,7 @@ abstract class MangaWT : KeiSource() {
             addQueryParameter("limit", PAGE_SIZE.toString())
         }.build()
 
-        val response = client.get(url).parseAs<MangaListResponse>()
+        val response = client.get(url, Fetch.XHR).parseAs<MangaListResponse>()
         return MangasPage(response.mangas.map { it.toSManga() }, response.page < response.pages)
     }
 
@@ -90,7 +93,7 @@ abstract class MangaWT : KeiSource() {
     ): SMangaUpdate {
         // Entries from the old Madara-based version store "/manga/<slug>/" as the url.
         val slug = manga.url.trim('/').substringAfterLast('/')
-        val details = client.get("$apiUrl/mangas/slug/$slug").parseAs<MangaDto>()
+        val details = client.get("$apiUrl/mangas/slug/$slug", Fetch.XHR).parseAs<MangaDto>()
         return SMangaUpdate(
             details.toSManga(),
             details.chapters
@@ -106,7 +109,7 @@ abstract class MangaWT : KeiSource() {
             throw Exception("Bölüm kilitli, henüz yayınlanmadı")
         }
         val url = "$apiUrl/mangas/${chapter.memo.getString("mangaId")}/chapters/${chapter.memo.getString("number")}/pages"
-        return client.get(url).parseAs<PageListResponse>().pages
+        return client.get(url, Fetch.XHR).parseAs<PageListResponse>().pages
             .sortedBy { it.pageNumber }
             .mapIndexed { index, page ->
                 Page(index, imageUrl = page.signedUrl)

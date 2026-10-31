@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -31,6 +32,8 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class HentaiVNx : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)
 
     // ============================== Popular ===============================
@@ -43,7 +46,7 @@ abstract class HentaiVNx : KeiSource() {
 
     // ============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaListParse(client.get("$baseUrl/?page=$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaListParse(client.get("$baseUrl/?page=$page", Fetch.DOCUMENT).asJsoup())
 
     // ============================== Search ===============================
 
@@ -80,7 +83,7 @@ abstract class HentaiVNx : KeiSource() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        return mangaListParse(client.get(url).asJsoup())
+        return mangaListParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -91,7 +94,7 @@ abstract class HentaiVNx : KeiSource() {
         val mangaUrl = if (url.pathSegments.size == 2) {
             url
         } else {
-            client.get(url).asJsoup()
+            client.get(url, Fetch.DOCUMENT).asJsoup()
                 .selectFirst("a.itemcrumb[href*=/truyen-hentai/]")
                 ?.absUrl("href")
                 ?.toHttpUrlOrNull()
@@ -106,7 +109,7 @@ abstract class HentaiVNx : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-truyen-nang-cao").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-truyen-nang-cao", Fetch.DOCUMENT).asJsoup()
         .select(".genre-item")
         .mapNotNull { element ->
             val name = element.attr("title").ifEmpty { element.text() }
@@ -149,7 +152,7 @@ abstract class HentaiVNx : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = mangaDetailsParse(document, manga),
             chapters = chapterListParse(document),
@@ -199,7 +202,7 @@ abstract class HentaiVNx : KeiSource() {
     // ============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
         val images = document.select(".reading-detail img, .page-chapter img")
             .ifEmpty { document.select(".chapter-content img") }
 

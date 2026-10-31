@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -20,6 +21,8 @@ import java.util.Locale
 
 @Source
 abstract class MangaDE : KeiSource() {
+
+    override val imageFetch = Fetch.IMAGE
 
     private val apiUrl get() = "https://api.${baseUrl.toHttpUrl().host}/api"
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
@@ -54,7 +57,7 @@ abstract class MangaDE : KeiSource() {
             ?.filter { it.state }
             ?.forEach { url.addQueryParameter("genres[]", it.id) }
 
-        val response = client.get(url.build())
+        val response = client.get(url.build(), Fetch.XHR)
         return response.parseAs<PayloadDto<MangaListPageDto>>().data.toMangasPage()
     }
 
@@ -84,7 +87,7 @@ abstract class MangaDE : KeiSource() {
             ?.removePrefix("pid")
             ?.takeIf { it.isNotEmpty() } ?: return null
 
-        val data = client.get("$apiUrl/comics/$mangaId/view").parseAs<PayloadDto<MangaDto>>().data
+        val data = client.get("$apiUrl/comics/$mangaId/view", Fetch.XHR).parseAs<PayloadDto<MangaDto>>().data
         return data.toSManga().apply { initialized = true }
     }
 
@@ -95,18 +98,18 @@ abstract class MangaDE : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val id = super.getMangaUrl(manga).toHttpUrl().queryParameter("mid")!!
-        val data = client.get("$apiUrl/comics/$id/view").parseAs<PayloadDto<MangaDto>>().data
+        val data = client.get("$apiUrl/comics/$id/view", Fetch.XHR).parseAs<PayloadDto<MangaDto>>().data
         return SMangaUpdate(data.toSManga(), data.toSChapterList(dateFormat))
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val id = super.getChapterUrl(chapter).toHttpUrl().queryParameter("cid")!!
-        return client.get("$apiUrl/chapters/$id/view").parseAs<PayloadDto<ChapterDto>>().data.toPageList()
+        return client.get("$apiUrl/chapters/$id/view", Fetch.XHR).parseAs<PayloadDto<ChapterDto>>().data.toPageList()
     }
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres?size=500").parseAs()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres?size=500", Fetch.XHR).parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         buildList {

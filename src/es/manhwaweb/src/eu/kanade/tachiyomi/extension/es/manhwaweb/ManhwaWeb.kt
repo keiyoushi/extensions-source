@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -19,12 +20,14 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class ManhwaWeb : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     private val apiUrl = "https://api.manhwaweb.com"
 
     override fun Headers.Builder.configureHeaders() = add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8")
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val result = client.get("$apiUrl/manhwa/nuevos").parseAs<PayloadPopularDto>()
+        val result = client.get("$apiUrl/manhwa/nuevos", Fetch.XHR).parseAs<PayloadPopularDto>()
         val mangas = (result.data.weekly + result.data.total)
             .distinctBy { it.slug }
             .sortedByDescending { it.views }
@@ -34,7 +37,7 @@ abstract class ManhwaWeb : KeiSource() {
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val result = client.get("$apiUrl/latest/new-manhwa").parseAs<PayloadLatestDto>()
+        val result = client.get("$apiUrl/latest/new-manhwa", Fetch.XHR).parseAs<PayloadLatestDto>()
         val mangas = (result.data.esp + result.data.raw18 + result.data.esp18)
             .distinctBy { it.slug }
             .sortedByDescending { it.latestChapterDate }
@@ -84,7 +87,7 @@ abstract class ManhwaWeb : KeiSource() {
 
         url.addQueryParameter("page", (page - 1).toString())
 
-        val response = client.get(url.build())
+        val response = client.get(url.build(), Fetch.XHR)
         val result = response.parseAs<PayloadSearchDto>()
         val mangas = result.data.map { it.toSManga() }
         return MangasPage(mangas, result.hasNextPage)
@@ -104,7 +107,7 @@ abstract class ManhwaWeb : KeiSource() {
         return SMangaUpdate(dto.toSManga(), parseChapterList(dto))
     }
 
-    private suspend fun getDetailsBySlug(slug: String) = client.get("$apiUrl/manhwa/see/$slug").parseAs<ComicDetailsDto>()
+    private suspend fun getDetailsBySlug(slug: String) = client.get("$apiUrl/manhwa/see/$slug", Fetch.XHR).parseAs<ComicDetailsDto>()
 
     private fun parseChapterList(comic: ComicDetailsDto) = comic.chapters
         .flatMap { chapter -> chapter.versions.mapNotNull { it.toSChapter(chapter.number, comic.id, comic.slug) } }
@@ -130,7 +133,7 @@ abstract class ManhwaWeb : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val slug = chapter.url.removeSuffix("/").substringAfterLast("/")
 
-        val response = client.get("$apiUrl/chapters/see/$slug")
+        val response = client.get("$apiUrl/chapters/see/$slug", Fetch.XHR)
 
         val result = response.parseAs<PayloadPageDto>()
         return result.data.images.filter { it.startsWith("http") }

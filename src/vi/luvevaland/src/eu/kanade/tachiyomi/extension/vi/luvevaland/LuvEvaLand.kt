@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -27,12 +28,14 @@ import java.util.Locale
 
 @Source
 abstract class LuvEvaLand : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
+
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$baseUrl/truyen-tranh")
+        val response = client.get("$baseUrl/truyen-tranh", Fetch.DOCUMENT)
         val document = response.asJsoup()
 
         val mangas = document.select("#total-tab-content .comic-item")
@@ -65,7 +68,7 @@ abstract class LuvEvaLand : KeiSource() {
         val url = "$baseUrl/danh-sach-chuong-moi-cap-nhat".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
-        val response = client.get(url)
+        val response = client.get(url, Fetch.DOCUMENT)
         val document = response.asJsoup()
 
         val mangas = document.select(".home__lg-book .book-vertical__item")
@@ -103,7 +106,7 @@ abstract class LuvEvaLand : KeiSource() {
                 ?.filter { it.state }
                 ?.forEach { addQueryParameter("genres[]", it.id) }
         }.build()
-        val response = client.get(url)
+        val response = client.get(url, Fetch.DOCUMENT)
         val document = response.asJsoup()
         val mangas = document.select("table.book__list tr.book__list-item")
             .mapNotNull(::searchMangaFromRow)
@@ -146,7 +149,7 @@ abstract class LuvEvaLand : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get("$baseUrl${manga.url}")
+        val response = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT)
         val document = response.asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
@@ -250,7 +253,7 @@ abstract class LuvEvaLand : KeiSource() {
     // ============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$baseUrl${chapter.url}")
+        val response = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT)
         val document = response.asJsoup()
 
         val images = document.select("#view-chapter img, #chapter-content img, .chapter-content img, .reading-content img, .content-chapter img, .box-chapter-content img")
@@ -284,7 +287,7 @@ abstract class LuvEvaLand : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-kiem").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-kiem", Fetch.DOCUMENT).asJsoup()
         .select("select[name='genres[]'] option[value]")
         .mapNotNull { option ->
             val id = option.attr("value").takeIf { it.isNotEmpty() } ?: return@mapNotNull null

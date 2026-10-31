@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -23,6 +24,8 @@ import java.util.Locale
 
 @Source
 abstract class ManGeek : KeiSource() {
+
+    override val imageFetch = Fetch.IMAGE
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         rateLimit(3)
@@ -54,11 +57,13 @@ abstract class ManGeek : KeiSource() {
         val mangas = if (normalizedQuery.isBlank()) {
             client.post(
                 signedUrl("discover"),
+                Fetch.XHR,
                 TagsBody(includedTags).toJsonRequestBody(),
             ).parseAs<List<MangaDto>>()
         } else {
             client.post(
                 signedUrl("search", normalizedQuery),
+                Fetch.XHR,
                 TagsBody(includedTags).toJsonRequestBody(),
             ).parseAs<List<MangaDto>>()
         }
@@ -69,7 +74,7 @@ abstract class ManGeek : KeiSource() {
         )
     }
 
-    private suspend fun fetchHome(): HomeDto = client.get(signedUrl("home")).parseAs<HomeDto>()
+    private suspend fun fetchHome(): HomeDto = client.get(signedUrl("home"), Fetch.XHR).parseAs<HomeDto>()
 
     override val supportsFilterFetching get() = true
 
@@ -101,7 +106,7 @@ abstract class ManGeek : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val dto = client.get(signedUrl("manga", manga.url)).parseAs<MangaDto>()
+        val dto = client.get(signedUrl("manga", manga.url), Fetch.XHR).parseAs<MangaDto>()
 
         return SMangaUpdate(
             manga = dto.toSManga(details = true),
@@ -124,7 +129,7 @@ abstract class ManGeek : KeiSource() {
         return fetchChapterPages("mirror", chapter.url)
     }
 
-    private suspend fun fetchChapterPages(route: String, chapterId: String): List<Page> = client.get(signedUrl(route, chapterId)).parseAs<ChapterPagesDto>().toPageList()
+    private suspend fun fetchChapterPages(route: String, chapterId: String): List<Page> = client.get(signedUrl(route, chapterId), Fetch.XHR).parseAs<ChapterPagesDto>().toPageList()
 
     private fun signedUrl(route: String, input: String? = null): HttpUrl {
         val nonce = System.currentTimeMillis().toString(16).uppercase(Locale.ROOT)

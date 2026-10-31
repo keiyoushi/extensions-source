@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.projectsuki
 
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
@@ -89,7 +90,7 @@ object ProjectSukiAPI {
             .build()
 
         val body = PagesRequestData(bookID, chapterID, "true").toJsonRequestBody()
-        return parseChapterPagesResponse(client.post(callpageUrl, newHeaders, body))
+        return parseChapterPagesResponse(client.post(callpageUrl, newHeaders, Fetch.XHR, body))
     }
 
     private fun parseChapterPagesResponse(response: Response): List<Page> {
@@ -145,7 +146,7 @@ object ProjectSukiAPI {
             .build()
 
         val body = SearchRequestData(null).toJsonRequestBody()
-        return parseBookSearchResponse(client.post(apiBookSearchUrl, newHeaders, body))
+        return parseBookSearchResponse(client.post(apiBookSearchUrl, newHeaders, Fetch.XHR, body))
     }
 
     private fun parseBookSearchResponse(response: Response): Map<BookID, BookTitle> {

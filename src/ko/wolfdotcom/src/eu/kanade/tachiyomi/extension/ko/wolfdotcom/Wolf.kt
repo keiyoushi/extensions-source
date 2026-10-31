@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -26,6 +27,8 @@ import java.util.Locale
 
 @Source
 abstract class Wolf : KeiSource() {
+
+    override val imageFetch = Fetch.IMAGE
 
     private val isWebtoon get() = name.endsWith("웹툰")
     private val isComic get() = name.endsWith("만화책")
@@ -81,7 +84,7 @@ abstract class Wolf : KeiSource() {
             .addQueryParameter("pg", page.toString())
             .build()
 
-        return parseMangaList(client.get(url).asJsoup())
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private fun parseMangaList(document: Document): MangasPage {
@@ -111,7 +114,7 @@ abstract class Wolf : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        var document = client.get(getMangaUrl(manga)).asJsoup()
+        var document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = manga.apply {
             title = document.selectFirst("h1.w-title")!!.text()
@@ -143,7 +146,7 @@ abstract class Wolf : KeiSource() {
                 .addQueryParameter("s", "n")
                 .addQueryParameter("pg", page.toString())
                 .build()
-            document = client.get(url).asJsoup()
+            document = client.get(url, Fetch.DOCUMENT).asJsoup()
         }
 
         return SMangaUpdate(updatedManga, updatedChapters)
@@ -170,7 +173,7 @@ abstract class Wolf : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         return document.select("#vimg-area img[data-src]").mapIndexed { idx, img ->
             Page(idx, imageUrl = img.absUrl("data-src"))
@@ -182,7 +185,7 @@ abstract class Wolf : KeiSource() {
     override val supportsFilterFetching get() = !isPhoto
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/$browsePath").asJsoup()
+        val document = client.get("$baseUrl/$browsePath", Fetch.DOCUMENT).asJsoup()
 
         return document.select(".f-row").mapNotNull { row ->
             val links = row.select("a.ftag").map { it.ownText() to it.absUrl("href").toHttpUrl() }

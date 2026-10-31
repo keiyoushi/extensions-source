@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -29,6 +30,8 @@ import okhttp3.OkHttpClient
 abstract class KivaraToons :
     KeiSource(),
     ConfigurableSource {
+
+    override val imageFetch = Fetch.IMAGE
 
     private val preferences by getPreferencesLazy()
 
@@ -56,7 +59,7 @@ abstract class KivaraToons :
             .addAdultContentParameter()
             .build()
 
-        val result = client.get(url).parseAs<LatestUpdatesDto>()
+        val result = client.get(url, Fetch.XHR).parseAs<LatestUpdatesDto>()
         return MangasPage(result.mangas.map { it.toSManga(siteUrl) }, result.hasNextPage)
     }
 
@@ -83,7 +86,7 @@ abstract class KivaraToons :
             }
             .build()
 
-        val result = client.get(url).parseAs<MangaListDto>()
+        val result = client.get(url, Fetch.XHR).parseAs<MangaListDto>()
         return MangasPage(result.mangas.map { it.toSManga(siteUrl) }, result.hasNextPage)
     }
 
@@ -108,7 +111,7 @@ abstract class KivaraToons :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = client.get("$baseUrl/api/obras/${manga.url}?$ADULT_CONTENT_QUERY").parseAs<MangaDto>()
+        val details = client.get("$baseUrl/api/obras/${manga.url}?$ADULT_CONTENT_QUERY", Fetch.XHR).parseAs<MangaDto>()
 
         return SMangaUpdate(
             manga = details.toSManga(siteUrl),
@@ -116,7 +119,7 @@ abstract class KivaraToons :
         )
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/api/capitulos/${chapter.url}?$ADULT_CONTENT_QUERY")
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/api/capitulos/${chapter.url}?$ADULT_CONTENT_QUERY", Fetch.XHR)
         .parseAs<ChapterPagesDto>()
         .toPageList(siteUrl)
 
@@ -124,13 +127,13 @@ abstract class KivaraToons :
 
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
         val formats = async {
-            client.get("$baseUrl/api/filtros/formatos").parseAs<FormatListDto>().formats
+            client.get("$baseUrl/api/filtros/formatos", Fetch.XHR).parseAs<FormatListDto>().formats
         }
         val statuses = async {
-            client.get("$baseUrl/api/filtros/status").parseAs<StatusListDto>().status
+            client.get("$baseUrl/api/filtros/status", Fetch.XHR).parseAs<StatusListDto>().status
         }
         val tags = async {
-            client.get("$baseUrl/api/filtros/tags").parseAs<TagListDto>().tags
+            client.get("$baseUrl/api/filtros/tags", Fetch.XHR).parseAs<TagListDto>().tags
         }
 
         FilterData(formats.await(), statuses.await(), tags.await()).toJsonElement()

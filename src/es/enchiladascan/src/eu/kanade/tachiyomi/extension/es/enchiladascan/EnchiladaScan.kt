@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -17,6 +18,8 @@ import okhttp3.Request
 @Source
 abstract class EnchiladaScan : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     override val supportsLatest = false
 
     private val domainUrl: String
@@ -25,7 +28,7 @@ abstract class EnchiladaScan : KeiSource() {
     private var catalog: List<Manga>? = null
 
     private suspend fun fetchCatalog(): List<Manga> = catalog
-        ?: client.get("$baseUrl/catalogo.json").parseAs<Catalog>().items.also { catalog = it }
+        ?: client.get("$baseUrl/catalogo.json", Fetch.XHR).parseAs<Catalog>().items.also { catalog = it }
 
     // ============================== Popular ==============================
 
@@ -56,7 +59,7 @@ abstract class EnchiladaScan : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val container = document.selectFirst("main.container")!!
 
         manga.apply {
@@ -91,7 +94,7 @@ abstract class EnchiladaScan : KeiSource() {
         val mangaSlug = segments[segments.size - 2]
         val chapterSlug = segments.last()
 
-        return client.get("$baseUrl/assets/mangas/$mangaSlug/$chapterSlug/images.json")
+        return client.get("$baseUrl/assets/mangas/$mangaSlug/$chapterSlug/images.json", Fetch.XHR)
             .parseAs<List<String>>()
             .mapIndexed { index, imageUrl ->
                 Page(index, imageUrl = imageUrl)

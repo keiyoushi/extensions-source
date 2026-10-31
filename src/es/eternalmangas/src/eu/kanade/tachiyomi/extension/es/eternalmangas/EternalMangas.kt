@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -26,13 +27,15 @@ import kotlin.time.Instant
 @Source
 abstract class EternalMangas : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     override val supportRelatedMangasBySearch = true
 
     // Images sent with Origin miss the Cloudflare cache the site reader fills
     override fun Headers.Builder.configureHeaders() = removeAll("Origin")
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("a.em-popular-card").map { it.toSManga() }
         return MangasPage(mangas, false)
     }
@@ -46,7 +49,7 @@ abstract class EternalMangas : KeiSource() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("a.em-series-catalog-card")
             // Text-only novels; "Novela visual" has image chapters
             .filterNot { it.selectFirst(".em-series-type-badge")?.text() == NOVEL_TYPE }
@@ -80,7 +83,7 @@ abstract class EternalMangas : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(document.toSManga(manga), document.toChapters())
     }
 
@@ -122,7 +125,7 @@ abstract class EternalMangas : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("#em-reader-pages img.em-reader-img").mapIndexed { index, image ->
             Page(index, imageUrl = image.absUrl("data-src").ifEmpty { image.absUrl("src") })
         }
@@ -131,7 +134,7 @@ abstract class EternalMangas : KeiSource() {
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/series").asJsoup()
+        val document = client.get("$baseUrl/series", Fetch.DOCUMENT).asJsoup()
         return FILTER_TITLES.keys.associateWith { param ->
             document.select("form select[name=$param] option")
                 .map { FilterOption(it.text(), it.attr("value")) }

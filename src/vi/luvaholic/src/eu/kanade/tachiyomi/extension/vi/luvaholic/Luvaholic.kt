@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -25,6 +26,8 @@ import org.jsoup.nodes.Element
 @Source
 abstract class Luvaholic : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(3)
     }
@@ -32,7 +35,7 @@ abstract class Luvaholic : KeiSource() {
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val manga = document.select(".td-hot-slider .comic-card").mapNotNull(::mangaFromCard)
         return MangasPage(manga, hasNextPage = false)
     }
@@ -49,7 +52,7 @@ abstract class Luvaholic : KeiSource() {
             addQueryParameter("sort", "new")
         }.build()
 
-        return parseMangaPage(client.get(url))
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT))
     }
 
     // =============================== Search ===============================
@@ -60,7 +63,7 @@ abstract class Luvaholic : KeiSource() {
                 addQueryParameter("s", query)
                 addQueryParameter("paged", page.toString())
             }.build()
-            return parseMangaPage(client.get(url))
+            return parseMangaPage(client.get(url, Fetch.DOCUMENT))
         }
 
         val genreSlug = filters.firstInstanceOrNull<GenreFilter>()?.selectedSlug
@@ -87,7 +90,7 @@ abstract class Luvaholic : KeiSource() {
             if (statusValue != null) builder.addQueryParameter("filter", statusValue)
         }
 
-        return parseMangaPage(client.get(builder.build()))
+        return parseMangaPage(client.get(builder.build(), Fetch.DOCUMENT))
     }
 
     private fun parseMangaPage(response: Response): MangasPage {
@@ -127,7 +130,7 @@ abstract class Luvaholic : KeiSource() {
         val segments = url.pathSegments.filter { it.isNotBlank() }
         if (segments.isEmpty()) return null
 
-        var document = client.get(url).asJsoup()
+        var document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangaUrl = if (document.selectFirst("#chapter-list-container") == null && segments.size > 1) {
             "$baseUrl/${segments.dropLast(1).last()}/"
@@ -136,7 +139,7 @@ abstract class Luvaholic : KeiSource() {
         }
 
         if (mangaUrl != url.toString()) {
-            document = client.get(mangaUrl).asJsoup()
+            document = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
         }
 
         return mangaDetailsParse(document).apply {
@@ -152,7 +155,7 @@ abstract class Luvaholic : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(
             mangaDetailsParse(document).apply { setUrlWithoutDomain(manga.url) },
@@ -208,7 +211,7 @@ abstract class Luvaholic : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(".td-chap-images img, #chapter-content-text img")
             .mapIndexedNotNull { index, img ->
                 val src = img.absUrl("src").ifBlank { null }
@@ -223,7 +226,7 @@ abstract class Luvaholic : KeiSource() {
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val genres = document.select(".dropdown-mega .dropdown-menu a[href*=\"/category/\"]")
             .mapNotNull { a ->
                 val name = a.text().trim()

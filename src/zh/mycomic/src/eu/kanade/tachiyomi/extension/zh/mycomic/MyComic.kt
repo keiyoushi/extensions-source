@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -29,6 +30,8 @@ import java.util.Locale
 abstract class MyComic :
     KeiSource(),
     ConfigurableSource {
+    override val imageFetch = Fetch.IMAGE
+
     private val preferences by getPreferencesLazy {
         when (getString(PREF_LANGUAGE, "")) {
             "zh-hant" -> edit().putString(PREF_LANGUAGE, "").apply()
@@ -73,7 +76,7 @@ abstract class MyComic :
             url.addQueryParameter("page", page.toString())
         }
 
-        val document = client.get(url.build()).asJsoup()
+        val document = client.get(url.build(), Fetch.DOCUMENT).asJsoup()
         if (isRankFilter) {
             return MangasPage(
                 document.select("table > tbody > tr > td:nth-child(2) a").map {
@@ -95,7 +98,7 @@ abstract class MyComic :
         when (segments.getOrNull(0)) {
             "chapters" -> {
                 if (segments.getOrNull(1).isNullOrEmpty()) return null
-                val href = client.get(url).asJsoup()
+                val href = client.get(url, Fetch.DOCUMENT).asJsoup()
                     .selectFirst("a[data-flux-button]")
                     ?.absUrl("href") ?: return null
                 return getMangaByUrl(href.toHttpUrl())
@@ -107,7 +110,7 @@ abstract class MyComic :
                     addPathSegment("comics")
                     addPathSegment(segments[1])
                 }.build()
-                return mangaDetailsParse(client.get(mangaUrl).asJsoup()).apply {
+                return mangaDetailsParse(client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()).apply {
                     setUrlWithoutDomain(mangaUrl.toString())
                     initialized = true
                 }
@@ -136,7 +139,7 @@ abstract class MyComic :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document))
     }
 
@@ -175,7 +178,7 @@ abstract class MyComic :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("img[x-ref]").mapIndexed { index, element ->
             Page(index, imageUrl = element.imgAttr())
         }
