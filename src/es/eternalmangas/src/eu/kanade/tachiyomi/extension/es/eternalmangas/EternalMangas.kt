@@ -15,6 +15,7 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
@@ -25,6 +26,9 @@ import java.util.Calendar
 abstract class EternalMangas : KeiSource() {
 
     override val supportRelatedMangasBySearch = true
+
+    // Images sent with Origin miss the Cloudflare cache the site reader fills
+    override fun Headers.Builder.configureHeaders() = removeAll("Origin")
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get(baseUrl).asJsoup()
