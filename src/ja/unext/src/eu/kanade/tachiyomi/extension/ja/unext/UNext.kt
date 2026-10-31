@@ -77,6 +77,7 @@ abstract class UNext :
             variables = PopularVariables("D_C_COMIC", page, 20),
             extensions = persistedQueryExtension(POPULAR_QUERY_HASH),
             cacheControl = FORCE_NETWORK,
+            fetch = Fetch.XHR,
         ).parseGraphQLAs<PopularResponse>().bookRanking
         val mangas = result.books.map { it.bookSakuhin.toSManga() }
         return MangasPage(mangas, result.pageInfo.hasNextPage())
@@ -90,6 +91,7 @@ abstract class UNext :
             variables = LatestVariables("TAG0000014500", page, 20),
             extensions = persistedQueryExtension(LATEST_QUERY_HASH),
             cacheControl = FORCE_NETWORK,
+            fetch = Fetch.XHR,
         ).parseGraphQLAs<LatestResponse>().newBooks
         val mangas = result.books.map { it.toSManga() }
         return MangasPage(mangas, result.pageInfo.hasNextPage())
@@ -103,6 +105,7 @@ abstract class UNext :
             variables = SearchVariables(query, page, 20, null, "RECOMMEND"),
             extensions = persistedQueryExtension(SEARCH_QUERY_HASH),
             cacheControl = FORCE_NETWORK,
+            fetch = Fetch.XHR,
         ).parseGraphQLAs<SearchResponse>().search
         val mangas = result.books.map { it.toSManga() }
         return MangasPage(mangas, result.pageInfo.hasNextPage())
@@ -128,6 +131,7 @@ abstract class UNext :
                 variables = DetailsVariables(sakuhinCode, "TOTAL", 2, 5),
                 extensions = persistedQueryExtension(DETAILS_QUERY_HASH),
                 cacheControl = FORCE_NETWORK,
+                fetch = Fetch.XHR,
             ).parseGraphQLAs<DetailsResponse>().bookTitle.toSManga()
         }
 
@@ -140,6 +144,7 @@ abstract class UNext :
                 variables = ChapterListVariables(sakuhinCode, 1, 9999),
                 extensions = persistedQueryExtension(CHAPTER_LIST_QUERY_HASH),
                 cacheControl = FORCE_NETWORK,
+                fetch = Fetch.XHR,
             ).parseGraphQLAs<ChapterListResponse>().bookTitleBooks.books
                 .filter { !hideLocked || !it.isLocked }
                 .map { it.toSChapter(sakuhinCode) }
@@ -165,6 +170,7 @@ abstract class UNext :
                     apiHeaders,
                     operationName = "cosmo_getCacheBusterUserId",
                     extensions = persistedQueryExtension(USER_ID_QUERY_HASH),
+                    fetch = Fetch.XHR,
                 ).parseGraphQLAs<UserResponse>().unextUser.id
             } catch (_: GraphQLException) {
                 ""
@@ -178,6 +184,7 @@ abstract class UNext :
             variables = PageListVariables(bookFileCode),
             extensions = persistedQueryExtension(PLAYLIST_QUERY_HASH),
             cacheControl = FORCE_NETWORK,
+            fetch = Fetch.XHR,
         ).parseAs<PlaylistResponse>()
 
         val playlist = playlistResult.playlist ?: throw Exception(

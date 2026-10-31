@@ -303,7 +303,7 @@ suspend fun OkHttpClient.graphQLGet(
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
     json: Json = jsonInstance,
-    fetch: Fetch = Fetch.NONE,
+    fetch: Fetch,
 ): Response = get(
     url.toHttpUrl().newBuilder().appendGraphQLParams(query, operationName, variables, extensions, json).build(),
     headers,
@@ -340,7 +340,7 @@ suspend inline fun <reified V : Any> OkHttpClient.graphQLGet(
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
     json: Json = jsonInstance,
-    fetch: Fetch = Fetch.NONE,
+    fetch: Fetch,
 ): Response = graphQLGet(url, headers, query, operationName, variables.toJsonElement(json), extensions, cacheControl, ensureSuccess, json, fetch)
 
 /**
@@ -369,7 +369,7 @@ suspend fun OkHttpClient.graphQLGet(
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
     json: Json = jsonInstance,
-    fetch: Fetch = Fetch.NONE,
+    fetch: Fetch,
 ): Response = graphQLGet(url, source.headers, query, operationName, variables, extensions, cacheControl, ensureSuccess, json, fetch)
 
 /**
@@ -400,7 +400,7 @@ suspend inline fun <reified V : Any> OkHttpClient.graphQLGet(
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
     ensureSuccess: Boolean = true,
     json: Json = jsonInstance,
-    fetch: Fetch = Fetch.NONE,
+    fetch: Fetch,
 ): Response = graphQLGet(url, source.headers, query, operationName, variables.toJsonElement(json), extensions, cacheControl, ensureSuccess, json, fetch)
 
 /**
