@@ -31,6 +31,7 @@ import kotlinx.serialization.json.Json
 @Serializable
 data class PartialLocaleStrings(
     val mirrorTitle: String? = null,
+    val mirrorAutomatic: String? = null,
     val customUrlTitle: String? = null,
     val customUrlDialogMessage: String? = null,
     val filterFetchHint: String? = null,
@@ -38,6 +39,7 @@ data class PartialLocaleStrings(
 
 data class LocaleStrings(
     val mirrorTitle: String,
+    val mirrorAutomatic: String,
     val customUrlTitle: String,
     val customUrlDialogMessage: String,
     val filterFetchHint: String,
@@ -79,6 +81,7 @@ private val configurable = ClassName("eu.kanade.tachiyomi.source", "Configurable
 private val preferenceScreen = ClassName("androidx.preference", "PreferenceScreen")
 private val mirrorPrefsClass = ClassName("keiyoushi.source", "MirrorPreferences")
 private val customUrlPrefsClass = ClassName("keiyoushi.source", "CustomUrlPreferences")
+private val fetchedUrlPrefsClass = ClassName("keiyoushi.source", "FetchedUrlPreferences")
 private val getPreferencesFn = MemberName("keiyoushi.utils", "getPreferences")
 
 class SourceProcessor(
@@ -102,6 +105,7 @@ class SourceProcessor(
         val locale = translations[lang] ?: translations[lang.substringBefore("-")]
         return LocaleStrings(
             mirrorTitle = locale?.mirrorTitle ?: en.mirrorTitle!!,
+            mirrorAutomatic = locale?.mirrorAutomatic ?: en.mirrorAutomatic!!,
             customUrlTitle = locale?.customUrlTitle ?: en.customUrlTitle!!,
             customUrlDialogMessage = locale?.customUrlDialogMessage ?: en.customUrlDialogMessage!!,
             filterFetchHint = locale?.filterFetchHint ?: en.filterFetchHint!!,
@@ -167,6 +171,10 @@ class SourceProcessor(
             }
             .map { it.simpleName.asString() }
             .toSet()
+
+        if ("fetchedUrlPreferences" in overridden) {
+            logger.error("fetchedUrlPreferences is owned by the DSL; remove 'override val fetchedUrlPreferences' from ${annotated.simpleName.asString()}", annotated)
+        }
 
         val fileProps = mutableListOf<PropertySpec>()
 
@@ -268,7 +276,7 @@ class SourceProcessor(
         if (sources.any { it.baseUrl.type != "static" }) {
             logger.error(
                 "A concrete @Source class ($className) only supports a static baseUrl; " +
-                    "make it abstract to use a mirror/custom baseUrl.",
+                    "make it abstract to use a mirrors/custom/fetched baseUrl.",
                 node,
             )
         }
@@ -407,6 +415,40 @@ class SourceProcessor(
                 addProperty(
                     PropertySpec.builder("baseUrl", String::class.asClassName(), KModifier.OVERRIDE)
                         .getter(FunSpec.getterBuilder().addStatement("return %N.baseUrl", prefsName).build())
+                        .build(),
+                )
+                addPreferenceScreen(isConfigurable) { addStatement("%N.setupPreferenceScreen(screen)", prefsName) }
+                if (!isConfigurable) addSuperinterface(configurable)
+            }
+            urlSpec.type == "fetched" -> {
+                val strings = stringsForLang(source.lang)
+                val prefsName = "fetchedUrlPrefs$suffix"
+                val initializer = CodeBlock.builder()
+                    .add("%T(\n", fetchedUrlPrefsClass)
+                    .indent()
+                    .add("preferences = %M(%LL),\n", getPreferencesFn, source.id)
+                    .add("fallbackUrls = listOf(\n")
+                    .indent()
+                    .apply { urlSpec.mirrors.forEach { add("%S,\n", it.url) } }
+                    .unindent()
+                    .add("),\n")
+                    .add("title = %S,\n", strings.mirrorTitle)
+                    .add("automatic = %S,\n", strings.mirrorAutomatic)
+                    .unindent()
+                    .add(")")
+                    .build()
+                fileProps += PropertySpec.builder(prefsName, fetchedUrlPrefsClass)
+                    .addModifiers(KModifier.PRIVATE)
+                    .initializer(initializer)
+                    .build()
+                addProperty(
+                    PropertySpec.builder("baseUrl", String::class.asClassName(), KModifier.OVERRIDE)
+                        .getter(FunSpec.getterBuilder().addStatement("return %N.baseUrl", prefsName).build())
+                        .build(),
+                )
+                addProperty(
+                    PropertySpec.builder("fetchedUrlPreferences", fetchedUrlPrefsClass, KModifier.OVERRIDE, KModifier.PROTECTED)
+                        .getter(FunSpec.getterBuilder().addStatement("return %N", prefsName).build())
                         .build(),
                 )
                 addPreferenceScreen(isConfigurable) { addStatement("%N.setupPreferenceScreen(screen)", prefsName) }

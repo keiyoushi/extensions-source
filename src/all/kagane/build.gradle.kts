@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Kagane"
-    versionCode = 37
+    versionCode = 38
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -14,7 +14,7 @@ keiyoushi {
         source {
             lang = it
             baseUrl {
-                mirrors(
+                fetched(
                     "https://kagane.cx",
                     "https://kagane.moe",
                     "https://kagane.net",
@@ -24,6 +24,9 @@ keiyoushi {
     }
 
     deeplink {
+        host("kagane.cx")
+        host("kagane.moe")
+        host("kagane.net")
         path("/series/..*")
     }
 }

@@ -6,6 +6,7 @@ import io.github.keiyoushi.gradle.internal.BaseUrl.Mirror
 class BaseUrlConfig {
     private val mirrors = mutableListOf<Mirror>()
     private var custom: BaseUrl.Custom? = null
+    private var fetched: BaseUrl.Fetched? = null
 
     /** Declares selectable mirror urls; the first is the default and each mirror's host is shown in the picker. */
     fun mirrors(vararg urls: String) {
@@ -24,12 +25,22 @@ class BaseUrlConfig {
         custom = BaseUrl.Custom(defaultUrl)
     }
 
+    /**
+     * Declares base urls the source looks up at runtime with `fetchBaseUrls`; [fallbackUrls] are used until the first
+     * lookup succeeds.
+     */
+    fun fetched(vararg fallbackUrls: String) {
+        require(fallbackUrls.isNotEmpty()) { "baseUrl { fetched(...) } needs at least one url" }
+        fetched = BaseUrl.Fetched(fallbackUrls.toList())
+    }
+
     internal fun build(): BaseUrl {
-        check(!(mirrors.isNotEmpty() && custom != null)) {
-            "source { baseUrl { } }: use mirrors(...) or custom(...), not both"
+        check(listOf(mirrors.isNotEmpty(), custom != null, fetched != null).count { it } <= 1) {
+            "source { baseUrl { } }: use only one of mirrors(...), custom(...) or fetched(...)"
         }
         return custom
+            ?: fetched
             ?: mirrors.takeIf { it.isNotEmpty() }?.let { BaseUrl.Mirrors(it.toList()) }
-            ?: error("source { baseUrl { } } is empty — call mirrors(...) or custom(...)")
+            ?: error("source { baseUrl { } } is empty — call mirrors(...), custom(...) or fetched(...)")
     }
 }

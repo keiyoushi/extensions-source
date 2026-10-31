@@ -45,6 +45,7 @@ internal fun BaseUrl.toMetadata(): BaseUrlMetadata = when (this) {
     is BaseUrl.Static -> BaseUrlMetadata("static", url)
     is BaseUrl.Mirrors -> BaseUrlMetadata("mirrors", mirrors.first().url, mirrors.map { it.toMetadata() })
     is BaseUrl.Custom -> BaseUrlMetadata("custom", defaultUrl)
+    is BaseUrl.Fetched -> BaseUrlMetadata("fetched", defaultUrl, fallbackUrls.map { MirrorMetadata(it) })
 }
 
 private fun BaseUrl.Mirror.toMetadata(): MirrorMetadata = MirrorMetadata(url, label.orEmpty())
