@@ -7,6 +7,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -31,22 +32,23 @@ abstract class DragonTranslationOrg : Madara() {
         return MangasPage(parseArchive(document), document.selectFirst("a.nextpostslink") != null)
     }
 
-    override val filterGenresSelector = ".filters"
-    override fun archiveSelector() = "a:has(> div.ac-img)"
+    // The site hashes its theme classes, so these use WordPress classes, structure and labels
+    override val filterGenresSelector = "body"
+    override fun archiveSelector() = "a:has(img.wp-post-image)"
     override val archiveUrlSelector = "a"
 
-    override val mangaDetailsSelectorTitle = "div.hero__in h1"
-    override val mangaDetailsSelectorStatus = "div.sir:has(span.l:contains(Estado)) span.v"
-    override val mangaDetailsSelectorDescription = "div.hero__in div.clamp"
-    override val mangaDetailsSelectorThumbnail = "div.hero__in img.wp-post-image"
-    override val mangaDetailsSelectorGenre = "div.hero__in a[href*=/manga-genre/]"
-    override val seriesTypeSelector = "div.hero__in h1 span.manga-title-badges"
-    override val altNameSelector = "div.sir:has(span.l:contains(Alternativo)) span.v"
+    override val mangaDetailsSelectorTitle = ".type-wp-manga h1"
+    override val mangaDetailsSelectorStatus = "span:matchesOwn(^Estado$) + span"
+    override val mangaDetailsSelectorDescription = "div:has(> p):has(+ button)"
+    override val mangaDetailsSelectorThumbnail = "img.wp-post-image"
+    override val mangaDetailsSelectorGenre = "div > a[href*=/manga-genre/]"
+    override val seriesTypeSelector = "h1 span"
+    override val altNameSelector = "span:matchesOwn(^Alternativo$) + span"
 
-    override val pageListParseSelector = "div.reading-content img.wp-manga-chapter-img"
+    override val pageListParseSelector = "img.wp-manga-chapter-img"
 
     override fun archiveManga(element: Element, id: String) = super.archiveManga(element, id)?.apply {
-        element.attr("title").takeIf(String::isNotBlank)?.let { title = it }
+        element.attrOrNull("title")?.let { title = it }
     }
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
@@ -55,7 +57,7 @@ abstract class DragonTranslationOrg : Madara() {
         mangaPath: String,
         id: String,
         mangaPage: Document?,
-    ) = mangaPage!!.selectFirst("div.mk-chapters script[type=application/json]")!!.data()
+    ) = mangaPage!!.selectFirst("script[type=application/json]:containsData(mangaId)")!!.data()
         .parseAs<ChapterListDto>().items.map { chapterDto ->
             SChapter.create().apply {
                 setUrlWithoutDomain(chapterDto.url)
