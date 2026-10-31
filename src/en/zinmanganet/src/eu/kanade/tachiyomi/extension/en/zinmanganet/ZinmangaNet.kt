@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.zinmanganet
 
 import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
@@ -42,4 +43,9 @@ abstract class ZinmangaNet : MadaraNoAjax() {
         }
         return (first.chapters + rest.flatten()).map { it.toSChapter(mangaPath) }.distinctBy(SChapter::url)
     }
+
+    // The image CDN answers 403 when the Referer is a chapter page
+    override fun getImageRequest(page: Page) = super.getImageRequest(page).newBuilder()
+        .header("Referer", "$baseUrl/")
+        .build()
 }

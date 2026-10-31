@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.kunmangaonline
 
 import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
@@ -60,6 +61,9 @@ abstract class KunMangaOnline : MadaraNoAjax() {
     override fun imageFromElement(element: Element) = listOf("data-backup", "src", "data-src", "data-lazy-src", "data-aload")
         .map { element.absUrl(it) }
         .firstOrNull { it.startsWith("http") && !it.contains("${baseUrl.toHttpUrl().host}/thumb/") }
+
+    // The image CDN answers 403 when the Referer is a chapter page
+    override fun getImageRequest(page: Page) = super.getImageRequest(page).newBuilder().header("Referer", "$baseUrl/").build()
 
     companion object {
         private const val POSTS_PER_PAGE = 20

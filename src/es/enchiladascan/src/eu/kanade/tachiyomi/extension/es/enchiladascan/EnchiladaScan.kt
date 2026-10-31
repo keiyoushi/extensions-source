@@ -17,6 +17,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class EnchiladaScan : KeiSource() {
 
+    // Google Drive answers 403 to browser image requests (Sec-Fetch-Dest: image)
+    override val imageFetch = Fetch.NONE
+
     override val supportsLatest = false
 
     private val domainUrl: String
