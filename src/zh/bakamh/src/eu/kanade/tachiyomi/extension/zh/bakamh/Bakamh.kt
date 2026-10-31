@@ -1,12 +1,15 @@
 package eu.kanade.tachiyomi.extension.zh.bakamh
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import okhttp3.FormBody
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import java.time.format.DateTimeFormatter
@@ -46,8 +49,31 @@ abstract class Bakamh : Madara() {
         fetchChapters,
     )
 
-    override fun parsePages(document: Document) = document.selectFirst(".mkjp-ea-lock")?.let { error("本章节需要登录后阅读") }
-        ?: super.parsePages(document)
+    @Volatile
+    private var readerScript: ReaderScript? = null
 
-    fun String.slug() = toHttpUrl().encodedPath.trimEnd('/').substringAfterLast('/')
+    override suspend fun fetchChapterDocument(chapterUrl: String) = super.fetchChapterDocument(chapterUrl).also { document ->
+        if (document.selectFirst(READER_CONFIG_SELECTOR) == null) return@also
+        sendReaderBeacon(chapterUrl)
+        val url = document.selectFirst("script#mkjp-reader-window-js")!!.absUrl("src")
+        if (readerScript?.url != url) readerScript = ReaderScript(url, client.get(url).body.string())
+    }
+
+    // The reader's mkjp_rv beacon; chapters read without it end in the site's third-party tool warning
+    private suspend fun sendReaderBeacon(chapterUrl: String) {
+        val headers = headersBuilder().set("Referer", chapterUrl).build()
+        val body = FormBody.Builder().add("action", "mkjp_rv").build()
+        client.post("$baseUrl/wp-admin/admin-ajax.php", headers, body, ensureSuccess = false).close()
+    }
+
+    override fun parsePages(document: Document): List<Page> {
+        document.selectFirst(".mkjp-ea-lock__title")?.let { title ->
+            val needsLogin = document.selectFirst(".mkjp-ea-lock [data-target='#form-login']") != null
+            error(if (needsLogin) "需在 WebView 中登录，账号有封禁风险" else title.text())
+        }
+        document.selectFirst(".mkjp-tool-warning")?.let { error(it.text()) }
+        val config = document.selectFirst(READER_CONFIG_SELECTOR)!!.data()
+        val slots = document.select(READER_SLOT_SELECTOR).size
+        return readerScript!!.pageUrls(config, slots).mapIndexed { index, url -> Page(index, document.location(), url) }
+    }
 }
