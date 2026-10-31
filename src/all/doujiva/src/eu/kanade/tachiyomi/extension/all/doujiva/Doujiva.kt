@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -24,6 +25,7 @@ private const val PAGE_LIMIT = 24
 @Source
 abstract class Doujiva : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     private val apiUrl get() = "$baseUrl/api/v1"
 
     // Stay well under the observed 100 req/min API budget.
@@ -51,7 +53,7 @@ abstract class Doujiva : KeiSource() {
             .addQueryParameter("limit", PAGE_LIMIT.toString())
             .build()
 
-        val response = client.get(url).parseAs<SearchResponse>()
+        val response = client.get(url, Fetch.XHR).parseAs<SearchResponse>()
         if (!response.ok || response.data.isEmpty()) {
             return MangasPage(emptyList(), false)
         }
@@ -94,7 +96,7 @@ abstract class Doujiva : KeiSource() {
         val slug = chapter.memo["slug"]?.jsonPrimitive?.content
             ?: throw Exception("Missing Doujiva manga slug for chapter: ${chapter.url}")
 
-        val response = client.get("$apiUrl/manga/$slug/chapters/$chapterId")
+        val response = client.get("$apiUrl/manga/$slug/chapters/$chapterId", Fetch.XHR)
             .parseAs<ChapterPagesResponse>()
 
         return response.data.mapIndexed { index, page ->
@@ -111,7 +113,7 @@ abstract class Doujiva : KeiSource() {
             .addQueryParameter("limit", PAGE_LIMIT.toString())
             .build()
 
-        val response = client.get(url).parseAs<MangaListResponse>()
+        val response = client.get(url, Fetch.XHR).parseAs<MangaListResponse>()
         if (!response.ok || response.data.isEmpty()) {
             return MangasPage(emptyList(), false)
         }
@@ -121,7 +123,7 @@ abstract class Doujiva : KeiSource() {
     }
 
     private suspend fun fetchMangaDto(slug: String): MangaDto? {
-        val response = client.get("$apiUrl/manga/$slug").parseAs<MangaDetailResponse>()
+        val response = client.get("$apiUrl/manga/$slug", Fetch.XHR).parseAs<MangaDetailResponse>()
         if (!response.ok) return null
         return response.data
     }

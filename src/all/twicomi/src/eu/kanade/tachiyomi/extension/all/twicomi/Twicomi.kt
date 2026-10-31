@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -20,6 +21,7 @@ import java.lang.IllegalArgumentException
 @Source
 abstract class Twicomi : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     private val apiUrl = "https://api.twicomi.com/api/v2"
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList("$apiUrl/manga/featured/list?page_no=$page&page_limit=24".toHttpUrl())
@@ -27,7 +29,7 @@ abstract class Twicomi : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList("$apiUrl/manga/list?order_by=create_time&page_no=$page&page_limit=24".toHttpUrl())
 
     private suspend fun getMangaList(url: HttpUrl): MangasPage {
-        val data = client.get(url).parseAs<TwicomiResponse<MangaListWithCount>>()
+        val data = client.get(url, Fetch.XHR).parseAs<TwicomiResponse<MangaListWithCount>>()
         val manga = data.response.mangaList.map { it.toSManga() }
 
         return MangasPage(manga, url.hasNextPage(data.response.totalCount))
@@ -59,7 +61,7 @@ abstract class Twicomi : KeiSource() {
             return getMangaList(url)
         }
 
-        val data = client.get(url).parseAs<TwicomiResponse<AuthorListWithCount>>()
+        val data = client.get(url, Fetch.XHR).parseAs<TwicomiResponse<AuthorListWithCount>>()
         val manga = data.response.authorList.map { it.author.toSManga() }
 
         return MangasPage(manga, url.hasNextPage(data.response.totalCount))
@@ -106,7 +108,7 @@ abstract class Twicomi : KeiSource() {
             page += 1
 
             val url = "$apiUrl/author/manga/list?screen_name=$screenName&order_by=create_time&order=asc&page_no=$page&page_limit=$pageLimit"
-            val data = client.get(url).parseAs<TwicomiResponse<MangaListWithCount>>()
+            val data = client.get(url, Fetch.XHR).parseAs<TwicomiResponse<MangaListWithCount>>()
 
             results.addAll(data.response.mangaList)
             totalCount = data.response.totalCount

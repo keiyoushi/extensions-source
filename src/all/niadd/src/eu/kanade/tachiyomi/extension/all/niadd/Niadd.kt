@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -25,11 +26,13 @@ import java.util.Locale
 @Source
 abstract class Niadd : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
+
     // Causes pageList 302
     override fun Headers.Builder.configureHeaders() = removeAll("Referer")
 
     // Popular
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/list/Hot-Manga.html").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/list/Hot-Manga.html", Fetch.DOCUMENT).asJsoup())
 
     private fun popularMangaSelector() = "div.manga-item"
 
@@ -61,11 +64,11 @@ abstract class Niadd : KeiSource() {
         val url = "$baseUrl/search/".toHttpUrl().newBuilder()
             .addQueryParameter("name", query)
             .build()
-        return parseMangaList(client.get(url).asJsoup())
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // Latest
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/list/New-Update.html").asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/list/New-Update.html", Fetch.DOCUMENT).asJsoup())
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -81,7 +84,7 @@ abstract class Niadd : KeiSource() {
 
     // Details
     private suspend fun fetchDetails(manga: SManga): SManga = SManga.create().apply {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val infoElement = document.select("div.bookside-general, div.detail-general")
 
         url = manga.url
@@ -159,7 +162,7 @@ abstract class Niadd : KeiSource() {
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val chaptersUrl = baseUrl + manga.url.removeSuffix(".html") + "/chapters.html"
-        val document = client.get(chaptersUrl).asJsoup()
+        val document = client.get(chaptersUrl, Fetch.DOCUMENT).asJsoup()
         document.selectFirst("ul.chapter-list")!!
 
         return document.select(chapterListSelector).map { chapterFromElement(it) }
@@ -181,7 +184,7 @@ abstract class Niadd : KeiSource() {
     }
 
     // Pages
-    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter)).asJsoup())
+    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup())
 
     private suspend fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
@@ -210,7 +213,7 @@ abstract class Niadd : KeiSource() {
                 .set("Referer", currentUrl)
                 .build()
 
-            return pageListParse(client.get(sourceUrl, requestHeaders).asJsoup())
+            return pageListParse(client.get(sourceUrl, requestHeaders, Fetch.DOCUMENT).asJsoup())
         }
 
         // One image per sub page; resolve them lazily instead of fetching every sub page up front
@@ -231,7 +234,7 @@ abstract class Niadd : KeiSource() {
         return pages
     }
 
-    override suspend fun getImageUrl(page: Page): String = client.get(page.url).asJsoup()
+    override suspend fun getImageUrl(page: Page): String = client.get(page.url, Fetch.DOCUMENT).asJsoup()
         .selectFirst(PAGE_IMAGE_SELECTOR)!!
         .attr("abs:src")
 

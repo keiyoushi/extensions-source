@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -24,6 +25,7 @@ import java.util.Locale
 @Source
 abstract class MangaYi : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
@@ -47,7 +49,7 @@ abstract class MangaYi : KeiSource() {
     }
 
     private suspend fun fetchMangasPage(payload: SearchRequestDto, page: Int): MangasPage {
-        val response = client.post("$baseUrl/api/search", payload.toJsonRequestBody())
+        val response = client.post("$baseUrl/api/search", Fetch.XHR, payload.toJsonRequestBody())
         val dto = response.parseAs<SearchResponseDto>()
 
         pageSize = maxOf(pageSize, dto.results.size)
@@ -60,7 +62,7 @@ abstract class MangaYi : KeiSource() {
     // ============================== Updates ==============================
 
     override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate {
-        val document = client.get("$baseUrl/read/${manga.url}/").asJsoup()
+        val document = client.get("$baseUrl/read/${manga.url}/", Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
     }
 
@@ -95,7 +97,7 @@ abstract class MangaYi : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("div.c-images img").mapIndexed { index, img ->
             Page(index, imageUrl = img.attr("abs:src"))
         }

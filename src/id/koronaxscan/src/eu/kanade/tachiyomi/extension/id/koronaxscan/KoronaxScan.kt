@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -16,6 +17,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class KoronaxScan : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     override suspend fun getPopularManga(page: Int): MangasPage = fetchMangas().sortedByDescending { it.ratingValue }.toMangasPage()
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = fetchMangas().sortedByDescending { it.latestChapterAt }.toMangasPage()
@@ -25,7 +27,7 @@ abstract class KoronaxScan : KeiSource() {
     }.toMangasPage()
 
     // the site has no paginated listing; it fetches every title once and sorts/searches client-side
-    private suspend fun fetchMangas(): List<MangaDto> = client.get("$API_URL/api/mangas").parseAs<MangaListDto>().data.filter { it.isListed }
+    private suspend fun fetchMangas(): List<MangaDto> = client.get("$API_URL/api/mangas", Fetch.XHR).parseAs<MangaListDto>().data.filter { it.isListed }
 
     private fun List<MangaDto>.toMangasPage() = MangasPage(map { it.toSManga() }, false)
 
@@ -39,12 +41,12 @@ abstract class KoronaxScan : KeiSource() {
         return SMangaUpdate(detail.toSManga(), detail.chapters.map { it.toSChapter(detail.slug) })
     }
 
-    private suspend fun fetchManga(slug: String): MangaDto = client.get("$API_URL/api/mangas/$slug").parseAs<MangaDetailDto>().data
+    private suspend fun fetchManga(slug: String): MangaDto = client.get("$API_URL/api/mangas/$slug", Fetch.XHR).parseAs<MangaDetailDto>().data
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val slug = chapter.url.substringBefore('/')
         val number = chapter.url.substringAfter('/')
-        return client.get("$API_URL/api/mangas/$slug/chapter/$number").parseAs<PagesDto>().pages.mapIndexed { index, page ->
+        return client.get("$API_URL/api/mangas/$slug/chapter/$number", Fetch.XHR).parseAs<PagesDto>().pages.mapIndexed { index, page ->
             Page(index, imageUrl = page.imageUrl.toImageUrl())
         }
     }

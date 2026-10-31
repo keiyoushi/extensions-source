@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -22,12 +23,13 @@ import kotlin.time.Instant
 @Source
 abstract class KomikNextGOnline : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     override val supportsLatest = false
 
     // ======================== Popular ========================
     // The redesigned home page no longer lists comics, the comic archive only has covers
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/comic/page/$page/").asJsoup()
+        val document = client.get("$baseUrl/comic/page/$page/", Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select("span.comic-thumbnail-wrapper").map { element ->
             SManga.create().apply {
@@ -77,7 +79,7 @@ abstract class KomikNextGOnline : KeiSource() {
             }.build()
         }
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select("#left-content ul#comic-list li.comic, #left-content article.comic").map(::mangaFromElement)
         val hasNextPage = document.selectFirst("a.next.page-numbers") != null
@@ -92,7 +94,7 @@ abstract class KomikNextGOnline : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val details = SManga.create().apply {
             title = document.selectFirst("meta[property=\"og:title\"]")!!.attr("content").substringBefore(" - ")
@@ -115,7 +117,7 @@ abstract class KomikNextGOnline : KeiSource() {
 
     // ======================== Pages ========================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         return document.select("div#spliced-comic img").mapIndexed { i, element ->
             Page(i, imageUrl = element.attr("abs:src"))

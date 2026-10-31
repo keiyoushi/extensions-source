@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -32,6 +33,7 @@ abstract class Desu :
     KeiSource(),
     ConfigurableSource {
 
+    override val imageFetch = Fetch.IMAGE
     private val preferences by getPreferencesLazy()
 
     override fun Headers.Builder.configureHeaders() = apply {
@@ -149,7 +151,7 @@ abstract class Desu :
             url.addQueryParameter("search", query)
         }
 
-        val response = client.get(url.build())
+        val response = client.get(url.build(), Fetch.XHR)
 
         val page = response.parseAs<PageWrapperDto<MangaDetDto>>()
 
@@ -171,7 +173,7 @@ abstract class Desu :
     ): SMangaUpdate = coroutineScope {
         val mangaDeferred = if (fetchDetails) {
             async {
-                val responseManga = client.get("$baseUrl$API_URL${manga.url}/")
+                val responseManga = client.get("$baseUrl$API_URL${manga.url}/", Fetch.XHR)
                 responseManga.parseAs<InfoWrapperDto<MangaDetDto>>().manga.toSManga()
             }
         } else {
@@ -180,7 +182,7 @@ abstract class Desu :
 
         val chaptersDeferred = if (fetchChapters) {
             async {
-                val responseChapter = client.get("$baseUrl$API_URL${manga.url}/chapters")
+                val responseChapter = client.get("$baseUrl$API_URL${manga.url}/chapters", Fetch.XHR)
                 val objChapter = responseChapter.parseAs<SeriesWrapperDto<List<ChaptersDto>>>().chapters
                 objChapter.map { chapter ->
                     val fullNumStr = "${chapter.volume}. Глава ${chapter.number}"
@@ -214,7 +216,7 @@ abstract class Desu :
         val chapterId = chapter.url
         val url = "$baseUrl$API_URL$titleId/chapters/$chapterId"
 
-        val response = client.get(url.toHttpUrl())
+        val response = client.get(url.toHttpUrl(), Fetch.XHR)
 
         val result = response.parseAs<ChapterWrapperDto<ChapterDataDto>>()
 

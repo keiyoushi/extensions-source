@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -22,6 +23,8 @@ import kotlin.time.Instant
 
 @Source
 abstract class KawiiManga : KeiSource() {
+    override val imageFetch = Fetch.IMAGE
+
     private val apiUrl = "https://manga-api.kawaii-anime.com/api/manga"
 
     private var token: String? = null
@@ -38,18 +41,18 @@ abstract class KawiiManga : KeiSource() {
     }
 
     private suspend fun fetchToken(): String {
-        val data = client.get("$apiUrl/token", headers).parseAs<Token>()
+        val data = client.get("$apiUrl/token", headers, Fetch.XHR).parseAs<Token>()
         token = data.token
         tokenExpiry = Clock.System.now() + (data.expiresIn - 120).seconds
         return data.token
     }
 
     private suspend fun apiGet(url: String): Response {
-        var response = client.get(url, authHeaders(), ensureSuccess = false)
+        var response = client.get(url, authHeaders(), Fetch.XHR, ensureSuccess = false)
         if (response.code == 401) {
             response.close()
             token = null
-            response = client.get(url, authHeaders(), ensureSuccess = false)
+            response = client.get(url, authHeaders(), Fetch.XHR, ensureSuccess = false)
         }
         if (!response.isSuccessful) throw HttpException(response.code)
         return response

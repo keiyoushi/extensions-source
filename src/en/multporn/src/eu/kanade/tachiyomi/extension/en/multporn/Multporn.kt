@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -24,6 +25,7 @@ import org.jsoup.nodes.Element
 @Source
 abstract class Multporn : KeiSource() {
 
+    override val imageFetch = Fetch.IMAGE
     override fun Headers.Builder.configureHeaders() = apply {
         set("User-Agent", HEADER_USER_AGENT)
         set("Content-Type", HEADER_CONTENT_TYPE)
@@ -92,7 +94,7 @@ abstract class Multporn : KeiSource() {
             filters.flatMap {
                 it.stateURIs.map { queryURI ->
                     async {
-                        val response = client.get("$baseUrl/${it.uri}/$queryURI?page=0,$page", ensureSuccess = false)
+                        val response = client.get("$baseUrl/${it.uri}/$queryURI?page=0,$page", Fetch.DOCUMENT, ensureSuccess = false)
                         if (response.code != 200) {
                             response.close()
                             return@async null
@@ -128,7 +130,7 @@ abstract class Multporn : KeiSource() {
     }
 
     private suspend fun fetchMangaList(url: HttpUrl): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(popularMangaSelector).map { popularMangaFromElement(it) }
         val hasNextPage = document.select(popularMangaNextPageSelector).firstOrNull() != null
         return MangasPage(mangas, hasNextPage)
@@ -186,7 +188,7 @@ abstract class Multporn : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val updatedManga = if (fetchDetails) {
-            mangaDetailsParse(manga, client.get(getMangaUrl(manga)).asJsoup())
+            mangaDetailsParse(manga, client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup())
         } else {
             manga
         }
@@ -205,7 +207,7 @@ abstract class Multporn : KeiSource() {
     // Pages
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(".jb-image img").mapIndexed { i, image ->
             Page(i, imageUrl = image.absUrl("src").replace("/styles/juicebox_2k/public", "").substringBefore("?"))
         }

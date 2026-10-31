@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -28,6 +29,7 @@ abstract class TaddyInk :
     KeiSource(),
     ConfigurableSource {
 
+    override val imageFetch = Fetch.IMAGE
     private val taddyLang = ""
 
     override val supportsLatest = false
@@ -55,7 +57,7 @@ abstract class TaddyInk :
             .addQueryParameter("limit", POPULAR_MANGA_LIMIT.toString())
             .build()
 
-        return parseManga(client.get(url).parseAs())
+        return parseManga(client.get(url, Fetch.XHR).parseAs())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -63,7 +65,7 @@ abstract class TaddyInk :
         // pathSegments[1] is the slug used to identify the comic
         url.pathSegments.getOrNull(1) ?: return null
 
-        val comic = client.get(url).parseAs<Comic>()
+        val comic = client.get(url, Fetch.XHR).parseAs<Comic>()
         return TaddyUtils.getManga(comic).apply { this.url = url.toString() }
     }
 
@@ -92,7 +94,7 @@ abstract class TaddyInk :
             url.addQueryParameter("tags", tagFilter.state)
         }
 
-        return parseManga(client.get(url.build()).parseAs())
+        return parseManga(client.get(url.build(), Fetch.XHR).parseAs())
     }
 
     private fun parseManga(comicSeries: ComicResults): MangasPage {
@@ -107,7 +109,7 @@ abstract class TaddyInk :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val comic = client.get(manga.url).parseAs<Comic>()
+        val comic = client.get(manga.url, Fetch.XHR).parseAs<Comic>()
         val sssUrl = comic.url
         val issues = comic.issues.orEmpty()
 
@@ -125,7 +127,7 @@ abstract class TaddyInk :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val issueUuid = chapter.url.substringAfterLast("#")
-        val comic = client.get(chapter.url).parseAs<Comic>()
+        val comic = client.get(chapter.url, Fetch.XHR).parseAs<Comic>()
 
         val issue = comic.issues.orEmpty().firstOrNull { it.identifier == issueUuid }
 
