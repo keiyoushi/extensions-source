@@ -1,7 +1,9 @@
 package eu.kanade.tachiyomi.extension.all.mangadotnet
 
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.markdownList
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.ratingStars
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
@@ -13,7 +15,6 @@ import kotlinx.serialization.json.JsonTransformingSerializer
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.serializer
-import kotlin.math.roundToInt
 
 @Serializable
 class Data<T>(
@@ -240,8 +241,7 @@ class Manga(
         description = buildString {
             val rating = this@Manga.rating
             if (rating != null) {
-                val stars = (rating / 2).roundToInt().coerceIn(0, 5)
-                append("${"★".repeat(stars)}${"☆".repeat(5 - stars)} $rating\n\n")
+                append("${ratingStars(rating.toDouble())} $rating\n\n")
             }
 
             val metaInfo = buildList {
@@ -283,21 +283,11 @@ class Manga(
                 animeNewsNetworkId?.let { "[AnimeNewsNetwork](https://www.animenewsnetwork.com/encyclopedia/manga.php?id=$it)" },
                 mangadexID?.let { "[MangaDex](https://mangadex.org/title/$it)" },
                 sourceUrl?.let { "[Source]($it)" },
-            ).also { links ->
-                if (links.isNotEmpty()) {
-                    append("\n**Links:**\n")
-                    links.forEach { link ->
-                        append("- ", link, "\n")
-                    }
-                }
+            ).let { links ->
+                markdownList("Links", links, escape = false)?.let { append("\n", it, "\n") }
             }
 
-            if (altTitles.isNotEmpty()) {
-                append("\n**Alternative Names:**\n")
-                altTitles.forEach { altTitle ->
-                    append("- ", altTitle.trim(), "\n")
-                }
-            }
+            markdownList("Alternative Names", altTitles)?.let { append("\n", it, "\n") }
         }.trim()
         initialized = true
     }

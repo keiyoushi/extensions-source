@@ -1,12 +1,12 @@
 package eu.kanade.tachiyomi.extension.en.reimanga
 
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.ratingStars
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import kotlin.math.roundToInt
 
 @Serializable
 class Manga(
@@ -76,8 +76,7 @@ class MangaPage(
             thumbnail_url = cover ?: "$baseUrl/covers/$id/thumbnail.png"
             description = buildString {
                 if (rating > 0.0) {
-                    val filled = (rating / 2).roundToInt().coerceIn(0, 5)
-                    append("★".repeat(filled) + "☆".repeat(5 - filled))
+                    append(ratingStars(rating))
                     append(" ")
                     append(rating)
                     append("\n\n")

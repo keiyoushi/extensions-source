@@ -2,13 +2,16 @@ package eu.kanade.tachiyomi.extension.en.toonkotsu
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.escapeMarkdown
+import keiyoushi.utils.markdownLink
+import keiyoushi.utils.markdownList
+import keiyoushi.utils.ratingStars
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.roundToInt
 
 @Serializable
 class BrowseDto(
@@ -80,7 +83,7 @@ class SeriesDto(
 
     fun toSMangaDetails(baseUrl: String, showSpoilerTags: Boolean, showAdult: Boolean, mangabaka: MangabakaDto) = toSManga(baseUrl, showSpoilerTags).apply {
         val info = listOfNotNull(
-            score?.let { (it / 20.0).roundToInt().let { stars -> "★".repeat(stars) + "☆".repeat(5 - stars) } + " ${it / 10.0}" },
+            score?.let { "${ratingStars(it.toDouble(), max = 100)} ${it / 10.0}" },
             (year ?: mangabaka.year)?.toString(),
             (mangabaka.finalVolume ?: muStatus?.let { VOLUMES_REGEX.find(it)?.groupValues?.get(1) })?.let { "$it volumes" },
             // The site counts chapters only once a series has ended
@@ -113,16 +116,16 @@ class SeriesDto(
                 alt + mangabaka.titles.map { it.title }
             ).distinct() - title
         val extra = listOfNotNull(
-            magazines.joinToString(" · ") { it.name }.ifEmpty { null }?.let { "**Magazines:** $it" },
-            altTitles.joinToString(" · ").ifEmpty { null }?.let { "**Alt titles:** $it" },
+            magazines.joinToString(" · ") { it.name.escapeMarkdown() }.ifEmpty { null }?.let { "**Magazines:** $it" },
             editionOf?.let { "**Edition of:** ${it.toLink(baseUrl)}" },
             editions.filter { showAdult || !it.adult }.joinToString(" · ") { it.toLink(baseUrl) }.ifEmpty { null }?.let { "**Editions:** $it" },
-            links.joinToString(" · ").ifEmpty { null }?.let { "**Links:** $it" },
         )
         description = listOfNotNull(
             info.joinToString(" · ").ifEmpty { null },
             this@SeriesDto.description?.takeIf { it.isNotBlank() } ?: mangabaka.description,
             extra.joinToString("\n").ifEmpty { null },
+            markdownList("Links", links, escape = false),
+            markdownList("Alternative Names", altTitles),
         ).joinToString("\n\n").ifEmpty { null }
     }
 }
@@ -142,7 +145,7 @@ class AdaptationDto(val id: Long, val format: String? = null, val year: Int? = n
 
 @Serializable
 class EditionDto(private val hid: String, private val title: String, val adult: Boolean = false) {
-    fun toLink(baseUrl: String) = "[${title.replace("[", "\\[").replace("]", "\\]")}]($baseUrl/title/$hid)"
+    fun toLink(baseUrl: String) = markdownLink(title, "$baseUrl/title/$hid")
 }
 
 @Serializable

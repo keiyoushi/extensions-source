@@ -52,6 +52,7 @@ or fix them directly by submitting a Pull Request.
         - [JsonElement accessor helpers](#jsonelement-accessor-helpers)
         - [ZIP streaming - `zipDirectoryAsync` / `readZipEntry`](#zip-streaming---zipdirectoryasync--readzipentry)
         - [Jsoup helpers - `asJsoup` / `attrOrNull` / `textOrNull`](#jsoup-helpers---asjsoup--attrornull--textornull)
+        - [Description helpers - `toMarkdown` / `markdownList` / `markdownLink` / `escapeMarkdown` / `ratingStars`](#description-helpers---tomarkdown--markdownlist--markdownlink--escapemarkdown--ratingstars)
         - [Cryptography - `decodeHex` / `rc4` / AES helpers](#cryptography---decodehex--rc4--aes-helpers)
         - [Binary endian helpers](#binary-endian-helpers)
         - [Decompression - `Inflater.inflate`](#decompression---inflaterinflate)
@@ -1183,6 +1184,24 @@ val lastChapterElement = document.selectLast(".chapter-item")
 // Null-safe text extraction (returns null when empty):
 val title = element.textOrNull()
 val directText = element.ownTextOrNull() // excludes text of nested child elements
+```
+
+##### Description helpers - `toMarkdown` / `markdownList` / `markdownLink` / `escapeMarkdown` / `ratingStars`
+
+`SManga.description` is Markdown. These helpers escape site text so it isn't mistaken for it:
+
+```kotlin
+import keiyoushi.utils.escapeMarkdown
+import keiyoushi.utils.markdownLink
+import keiyoushi.utils.markdownList
+import keiyoushi.utils.ratingStars
+import keiyoushi.utils.toMarkdown
+
+val synopsis = document.selectFirst(".synopsis")?.toMarkdown() // keepNewlines = true for plain newlines
+val names = markdownList("Alternative Names", altTitles) // null when empty
+val links = markdownList("Links", stores.map { markdownLink(it.name, it.url) }, escape = false)
+val credit = "**Publisher:** ${publisher.escapeMarkdown()}"
+val stars = ratingStars(rating) // out of 10, or set `max`
 ```
 
 ##### Cryptography - `decodeHex` / `rc4` / `xor` / AES helpers

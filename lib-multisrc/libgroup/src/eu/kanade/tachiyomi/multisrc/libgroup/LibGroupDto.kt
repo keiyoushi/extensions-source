@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.multisrc.libgroup
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.ratingStars
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -143,22 +144,8 @@ class Manga(
         status = parseStatus(isLicensed, scanlateStatus.label, this@Manga.status.label)
         genre = type.label.ifBlank { "Манга" } + ", " + ageRestriction.label + ", " +
             genres.joinToString { it.name.trim() } + ", " + tags.joinToString { it.name.trim() }
-        description = getOppositeLanguage(isEng, rusName, engName) + rating.average.parseAverage() + " " + rating.average +
+        description = getOppositeLanguage(isEng, rusName, engName) + ratingStars(rating.average.toDouble()) + " " + rating.average +
             " (голосов: " + rating.votes + ")\n" + otherNames.joinAltNames() + summary.parseSummary()
-    }
-
-    private fun Float.parseAverage(): String = when {
-        this > 9.5 -> "★★★★★"
-        this > 8.5 -> "★★★★✬"
-        this > 7.5 -> "★★★★☆"
-        this > 6.5 -> "★★★✬☆"
-        this > 5.5 -> "★★★☆☆"
-        this > 4.5 -> "★★✬☆☆"
-        this > 3.5 -> "★★☆☆☆"
-        this > 2.5 -> "★✬☆☆☆"
-        this > 1.5 -> "★☆☆☆☆"
-        this > 0.5 -> "✬☆☆☆☆"
-        else -> "☆☆☆☆☆"
     }
 
     private fun parseStatus(isLicensed: Boolean, statusTranslate: String, statusTitle: String): Int = when {

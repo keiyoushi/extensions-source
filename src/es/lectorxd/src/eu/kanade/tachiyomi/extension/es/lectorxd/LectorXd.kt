@@ -14,6 +14,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.ratingStars
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -569,11 +570,8 @@ abstract class LectorXd : KeiSource() {
             .setScale(1, RoundingMode.DOWN)
             .toPlainString()
 
-        val filledStars = rating.toInt()
-
         return buildString {
-            append("★".repeat(filledStars))
-            append("☆".repeat(5 - filledStars))
+            append(ratingStars(rating.toDouble(), max = 5))
             append(" ")
             append(ratingText)
             append("/5.0")

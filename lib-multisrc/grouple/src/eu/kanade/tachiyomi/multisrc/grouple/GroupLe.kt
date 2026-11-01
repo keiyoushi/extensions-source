@@ -20,6 +20,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.ratingStars
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.async
@@ -335,7 +336,7 @@ abstract class GroupLe :
         val ratingSummary = ratingValue?.let { rating ->
             val ratingVotes = document.selectFirst(".cr-hero-rating__text")?.text()?.filter { it.isDigit() } ?: "0"
 
-            "${ratingToStars(rating)} $rating (голосов: $ratingVotes)"
+            "${ratingStars(rating.toDouble())} $rating (голосов: $ratingVotes)"
         }
 
         val descriptionText = document.selectFirst(".cr-description__content")?.text()
@@ -367,20 +368,6 @@ abstract class GroupLe :
         "R", "G", "PG" -> "16+"
         "PG-13" -> "12+"
         else -> rawAgeValue
-    }
-
-    protected fun ratingToStars(ratingValue: Float): String = when {
-        ratingValue > 9.5f -> "★★★★★"
-        ratingValue > 8.5f -> "★★★★✬"
-        ratingValue > 7.5f -> "★★★★☆"
-        ratingValue > 6.5f -> "★★★✬☆"
-        ratingValue > 5.5f -> "★★★☆☆"
-        ratingValue > 4.5f -> "★★✬☆☆"
-        ratingValue > 3.5f -> "★★☆☆☆"
-        ratingValue > 2.5f -> "★✬☆☆☆"
-        ratingValue > 1.5f -> "★☆☆☆☆"
-        ratingValue > 0.5f -> "✬☆☆☆☆"
-        else -> "☆☆☆☆☆"
     }
 
     // ============================== Chapters Details ===============================

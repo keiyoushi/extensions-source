@@ -17,6 +17,7 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.ratingStars
 import keiyoushi.utils.string
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -49,19 +50,6 @@ abstract class Desu :
         authorsStr: String? = authors?.joinToString { it.name },
     ): SManga {
         val ratingValue = score?.value ?: 0.0f
-        val ratingStar = when {
-            ratingValue > 9.5 -> "★★★★★"
-            ratingValue > 8.5 -> "★★★★✬"
-            ratingValue > 7.5 -> "★★★★☆"
-            ratingValue > 6.5 -> "★★★✬☆"
-            ratingValue > 5.5 -> "★★★☆☆"
-            ratingValue > 4.5 -> "★★✬☆☆"
-            ratingValue > 3.5 -> "★★☆☆☆"
-            ratingValue > 2.5 -> "★✬☆☆☆"
-            ratingValue > 1.5 -> "★☆☆☆☆"
-            ratingValue > 0.5 -> "✬☆☆☆☆"
-            else -> "☆☆☆☆☆"
-        }
 
         val rawAgeStop = when (content_rating) {
             "no" -> ""
@@ -98,7 +86,7 @@ abstract class Desu :
                 name
             } else {
                 russian
-            } + "\n" + ratingStar + " " + ratingValue + " (голосов: " +
+            } + "\n" + ratingStars(ratingValue.toDouble()) + " " + ratingValue + " (голосов: " +
                 totalVotes + ")\n" + altName + description
             manga.genre = ("$category, $rawAgeStop, $genresStr").split(", ").filter { it.isNotEmpty() }.joinToString { it.trim() }
             manga.status = when (trans_status) {

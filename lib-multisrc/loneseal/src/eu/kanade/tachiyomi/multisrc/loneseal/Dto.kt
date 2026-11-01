@@ -3,9 +3,11 @@ package eu.kanade.tachiyomi.multisrc.loneseal
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.toMarkdown
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import org.jsoup.Jsoup
 import kotlin.time.Instant
 
 @Serializable
@@ -57,7 +59,7 @@ class SeriesDetailDto(
         thumbnail_url = posterImageUrl
         author = authorName
         artist = artistName
-        description = synopsis?.let { it.toMarkdownDescription() }
+        description = synopsis?.let { Jsoup.parseBodyFragment(it).body().toMarkdown(keepNewlines = true) }
         genre = buildList {
             if (primaryGenre != null) add(primaryGenre)
             addAll(genres.map { it.name })
@@ -118,16 +120,6 @@ class LatestComicUpdateDto(
         thumbnail_url = posterImageUrl
     }
 }
-
-private val synopsisAnchorRegex = """<a\s+href\s*=\s*["']([^"']+)["'][^>]*>(.*?)</a>""".toRegex(RegexOption.IGNORE_CASE)
-
-private fun String.toMarkdownDescription(): String = replace(synopsisAnchorRegex) { "[${it.groupValues[2].trim()}](${it.groupValues[1].trim()})" }
-    .replace("<strong>", "**")
-    .replace("</strong>", "**")
-    .replace("<p>", "\n\n")
-    .replace("</p>", "\n\n")
-    .replace("<", "\\<")
-    .replace(">", "\\>")
 
 private fun formatChapterNumber(number: String): String = number.removeSuffix(".00")
 

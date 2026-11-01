@@ -2,13 +2,14 @@ package eu.kanade.tachiyomi.extension.en.comix
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.markdownLink
+import keiyoushi.utils.markdownList
+import keiyoushi.utils.ratingStars
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import java.math.BigDecimal
-import java.math.RoundingMode
 import java.util.Calendar
 
 const val MANGA_ID_MEMO = "mangaId"
@@ -85,20 +86,13 @@ class Manga(
             if (ratedAvg == 0.0) return ""
 
             val score = ratedAvg.toBigDecimal()
-            val stars = score.div(BigDecimal(2))
-                .setScale(0, RoundingMode.HALF_UP).toInt()
-
             val scoreString = if (score.scale() == 0) {
                 score.toPlainString()
             } else {
                 score.stripTrailingZeros().toPlainString()
             }
 
-            return buildString {
-                append("★".repeat(stars))
-                if (stars < 5) append("☆".repeat(5 - stars))
-                append(" $scoreString")
-            }
+            return "${ratingStars(ratedAvg)} $scoreString"
         }
 
     fun toSManga(
@@ -127,11 +121,8 @@ class Manga(
 
             synopsis?.takeUnless { it.isEmpty() }?.let { append(it) }
 
-            val actualAltTitles = altTitles.ifEmpty { altTitlesOld }
-            if (altTitlesInDesc && actualAltTitles.isNotEmpty()) {
-                append("\n\n")
-                append("**Alternative Names**:\n")
-                append(actualAltTitles.joinToString("\n") { "- $it" })
+            if (altTitlesInDesc) {
+                markdownList("Alternative Names", altTitles.ifEmpty { altTitlesOld })?.let { append("\n\n", it) }
             }
 
             if (showExtraInfo) {
@@ -141,11 +132,9 @@ class Manga(
                     append(extras.joinToString("\n"))
                 }
 
-                val trackerLinks = getTrackerLinks()
-                if (trackerLinks.isNotEmpty()) {
+                markdownList("Trackers", getTrackerLinks(), escape = false)?.let {
                     if (isNotEmpty()) append("\n\n")
-                    append("**Trackers**:\n")
-                    append(trackerLinks.joinToString("\n") { "- $it" })
+                    append(it)
                 }
             }
 
@@ -197,12 +186,12 @@ class Manga(
         )
         val knownLinks = siteNames.mapNotNull { (key, name) ->
             val url = linkMap[key]?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            "[$name]($url)"
+            markdownLink(name, url)
         }
         val unknownLinks = linkMap.filterKeys { k -> siteNames.none { it.first == k } }
             .mapNotNull { (key, url) ->
                 val validUrl = url?.takeIf { it.startsWith("http") } ?: return@mapNotNull null
-                "[${key.uppercase()}]($validUrl)"
+                markdownLink(key.uppercase(), validUrl)
             }
         return knownLinks + unknownLinks
     }

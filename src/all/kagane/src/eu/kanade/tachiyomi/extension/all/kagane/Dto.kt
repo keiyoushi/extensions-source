@@ -2,6 +2,9 @@ package eu.kanade.tachiyomi.extension.all.kagane
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.escapeMarkdown
+import keiyoushi.utils.markdownLink
+import keiyoushi.utils.markdownList
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
@@ -262,7 +265,7 @@ class DetailsDto(
 
             if (sourceName != null && sourceId != null) {
                 if (isNotEmpty()) append("\n")
-                append("**Source**: [$sourceName]($baseUrl/sources/$sourceId)\n")
+                append("**Source**: ${markdownLink(sourceName, "$baseUrl/sources/$sourceId")}\n")
             }
 
             seriesStaff
@@ -270,40 +273,27 @@ class DetailsDto(
                 .sortedBy { it.priority }
                 .groupBy { it.role }
                 .forEach { (role, members) ->
-                    append("**$role**: ${members.joinToString { it.name.displayWithNative(it.nativeName) }}\n")
+                    append("**$role**: ${members.joinToString { it.name.displayWithNative(it.nativeName).escapeMarkdown() }}\n")
                 }
 
             if (showDetails) {
                 val official = seriesLinks.filter { it.kind == "Official" }
                 val trackers = seriesLinks.filter { it.kind == "Tracker" }
                 val others = seriesLinks.filter { it.kind != null && it.kind != "Official" && it.kind != "Tracker" }
-                val linkSections = buildString {
-                    listOf(
-                        "**Official Link(s)**:" to official,
-                        "**Tracker(s)**:" to trackers,
-                        "**Other(s)**:" to others,
-                    )
-                        .filter { it.second.isNotEmpty() }
-                        .forEachIndexed { index, (header, links) ->
-                            if (index > 0) append("\n")
-                            append("$header\n")
-                            links.forEach { link ->
-                                append("- [${link.label ?: link.url}](${link.url})\n")
-                            }
-                        }
-                }
+                val linkSections = listOf(
+                    "Official Link(s)" to official,
+                    "Tracker(s)" to trackers,
+                    "Other(s)" to others,
+                ).mapNotNull { (label, links) ->
+                    markdownList(label, links.map { markdownLink(it.label ?: it.url, it.url) }, escape = false)
+                }.joinToString("\n\n")
                 if (linkSections.isNotEmpty()) {
                     if (isNotEmpty()) append("\n")
-                    append(linkSections)
+                    append(linkSections, "\n")
                 }
             }
 
-            if (seriesAlternateTitles.isNotEmpty()) {
-                append("\n**Associated Name(s):**\n")
-                seriesAlternateTitles.forEach { alt ->
-                    append("- ${alt.title}\n")
-                }
-            }
+            markdownList("Associated Name(s)", seriesAlternateTitles.map { it.title })?.let { append("\n", it, "\n") }
         }.trim()
 
         author = byAuthorRoles.sortedBy { it.priority }.distinctBy { it.staffId }.joinToString { it.name }

@@ -19,10 +19,14 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.markdownLink
+import keiyoushi.utils.markdownList
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.ratingStars
 import keiyoushi.utils.runWebView
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonString
+import keiyoushi.utils.toMarkdown
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -37,10 +41,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
-import org.jsoup.nodes.TextNode
 import java.io.IOException
-import kotlin.math.roundToInt
 import kotlin.random.Random
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -152,20 +153,19 @@ abstract class Webnex :
                 else -> SManga.UNKNOWN
             }
             val rating = document.selectFirst(".series-numbers a.series-number-link")?.let { link ->
-                val score = link.text().toFloatOrNull() ?: return@let null
-                val stars = (score / 2).roundToInt()
-                "★".repeat(stars) + "☆".repeat(5 - stars) + " ${link.text()}"
+                val score = link.text().toDoubleOrNull() ?: return@let null
+                "${ratingStars(score)} ${link.text()}"
             }
             // Year, original language and content rating; type and demographic are in genres
             val facts = document.select(".series-facts > :not(.fact-status, a[href*=kind=], a[href*=demographic=])").map { it.text() }
             val altTitles = document.select("details.series-more li").map { it.text() }.distinct() - title
-            val links = document.select(".tracker-row a").map { "[${it.attr("title")}](${it.absUrl("href")})" }
+            val links = document.select(".tracker-row a").map { markdownLink(it.attr("title"), it.absUrl("href")) }
             description = listOfNotNull(
                 (listOfNotNull(rating) + facts).joinToString(" · ").ifEmpty { null },
-                document.select(".series-desc p").joinToString("\n\n") { it.toMarkdown().trim() }.ifEmpty { null },
+                document.select(".series-desc p").joinToString("\n\n") { it.toMarkdown() }.ifEmpty { null },
                 listOfNotNull(
-                    altTitles.ifEmpty { null }?.joinToString("\n", "**Alt titles:**\n") { "- $it" },
-                    links.ifEmpty { null }?.joinToString("\n", "**Links:**\n") { "- $it" },
+                    markdownList("Alternative Names", altTitles),
+                    markdownList("Links", links, escape = false),
                 ).joinToString("\n\n").ifEmpty { null },
             ).joinToString("\n\n").ifEmpty { null }
         }
@@ -370,21 +370,6 @@ abstract class Webnex :
             placeholder.parent()!!.insertChildren(placeholder.siblingIndex(), chunk.childNodes())
             placeholder.remove()
             chunk.remove()
-        }
-    }
-
-    // Keep line breaks and links, descriptions render as Markdown.
-    private fun Element.toMarkdown(): String = buildString {
-        childNodes().forEach { node ->
-            when (node) {
-                is TextNode -> append(node.text())
-                is Element -> when (node.normalName()) {
-                    "br" -> append('\n')
-                    "a" -> append("[${node.text()}](${node.absUrl("href")})")
-                    "strong", "b" -> append("**${node.toMarkdown()}**")
-                    else -> append(node.toMarkdown())
-                }
-            }
         }
     }
 
