@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ko.blacktoon
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,7 +8,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
-import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -19,44 +17,12 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.OkHttpClient
-import okio.IOException
 import kotlin.math.min
 import kotlin.random.Random
 
 @Source
 abstract class BlackToon : KeiSource() {
-    private var currentBaseUrlHost = ""
-
-    override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->
-        if (currentBaseUrlHost.isBlank()) {
-            noRedirectClient.newCall(GET(baseUrl, headers).newBuilder().fetch(Fetch.DOCUMENT).build()).execute().use {
-                currentBaseUrlHost = it.headers["location"]?.toHttpUrlOrNull()?.host
-                    ?: throw IOException("unable to get updated url")
-            }
-        }
-
-        val request = chain.request().newBuilder().apply {
-            if (chain.request().url.toString().startsWith(baseUrl)) {
-                url(
-                    chain.request().url.newBuilder()
-                        .host(currentBaseUrlHost)
-                        .build(),
-                )
-            }
-            header("Referer", "https://$currentBaseUrlHost/")
-            header("Origin", "https://$currentBaseUrlHost")
-        }.build()
-
-        return@addInterceptor chain.proceed(request)
-    }
-
-    private val noRedirectClient by lazy {
-        network.client.newBuilder()
-            .followRedirects(false)
-            .build()
-    }
+    override suspend fun fetchBaseUrls() = listOf(client.get(ENTRY_URL, Fetch.DOCUMENT, ensureSuccess = false).use { it.request.url.toString() })
 
     private var db: List<SeriesItem>? = null
     private val dbMutex = Mutex()
@@ -126,17 +92,7 @@ abstract class BlackToon : KeiSource() {
 
     override fun getFilterList(data: JsonElement?) = getFilters()
 
-    override fun getMangaUrl(manga: SManga): String = buildString {
-        if (currentBaseUrlHost.isBlank()) {
-            append(baseUrl)
-        } else {
-            append("https://")
-            append(currentBaseUrlHost)
-        }
-        append("/webtoon/")
-        append(manga.url)
-        append(".html")
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/webtoon/${manga.url}.html"
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -171,17 +127,7 @@ abstract class BlackToon : KeiSource() {
         return data.map { it.toSChapter(manga.url) }.reversed()
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = buildString {
-        if (currentBaseUrlHost.isBlank()) {
-            append(baseUrl)
-        } else {
-            append("https://")
-            append(currentBaseUrlHost)
-        }
-        append("/webtoons/")
-        append(chapter.url)
-        append(".html")
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/webtoons/${chapter.url}.html"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get("$baseUrl/webtoons/${chapter.url}.html", Fetch.DOCUMENT).asJsoup()
@@ -193,6 +139,7 @@ abstract class BlackToon : KeiSource() {
     }
 
     companion object {
+        private const val ENTRY_URL = "https://blacktoon.me"
         private val INC_URL1_REGEX = Regex("""inc_url1\s*=\s*"([^"]+)"""")
         private val INC_URL2_REGEX = Regex("""inc_url2\s*=\s*"([^"]+)"""")
         private val IMG_DOMAIN_REGEX = Regex("""var img_domain\s*=\s*"([^"]+)"""")
