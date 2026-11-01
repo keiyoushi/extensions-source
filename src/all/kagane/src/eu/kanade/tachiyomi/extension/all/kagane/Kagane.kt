@@ -18,7 +18,6 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
@@ -43,6 +42,7 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import okio.IOException
+import org.jsoup.Jsoup
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -65,7 +65,9 @@ abstract class Kagane :
     // The image host 404s without the Origin of the mirror that issued the token
     override val imageFetch = Fetch.XHR
 
-    override suspend fun fetchBaseUrls(): List<String> = client.get(HUB_URL, Fetch.DOCUMENT).asJsoup()
+    override suspend fun fetchBaseUrls(): List<String> = client.get(HUB_URL, Fetch.DOCUMENT)
+        .use { Jsoup.parse(it.peekBody(HUB_BYTES).string(), HUB_URL) }
+        // Mirror cards
         .select("li:has(p[aria-live]) a[href^=https://]")
         .map { it.absUrl("href") }
 
@@ -344,7 +346,7 @@ abstract class Kagane :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host.substringBeforeLast('.') != baseUrl.toHttpUrl().host.substringBeforeLast('.')) return null
         val segments = url.pathSegments
-        if (segments.size < 2) return null
+        if (segments.size < 2 || segments[0] != "series") return null
         val seriesId = segments[1].takeLast(36)
         return parseMangaDetails(getMangaById(seriesId)).apply {
             this.url = seriesId
@@ -692,6 +694,7 @@ abstract class Kagane :
 
     companion object {
         private const val HUB_URL = "https://kagane.org/"
+        private const val HUB_BYTES = 128 * 1024L
 
         private const val MAX_SOURCE_FILTER = 50
         private const val CONTENT_RATING = "pref_content_rating"

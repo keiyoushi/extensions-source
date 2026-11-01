@@ -7,27 +7,40 @@ import java.net.URI
 
 class MirrorPreferences(
     private val preferences: SharedPreferences,
-    private val mirrors: Array<Pair<String, String>>,
+    private val defaultMirrors: Array<Pair<String, String>>,
     private val title: String,
-) {
+) : FetchableBaseUrl {
     private val prefKey = "preferred_mirror"
-    private val entries = mirrors.map { (label, url) ->
-        label.takeIf { it.isNotBlank() }
-            ?: runCatching { URI(url).host }.getOrDefault(url)
-    }
+    private val fetchedKey = "fetchedMirrors"
+
+    private val mirrors: List<Pair<String, String>>
+        get() = preferences.getString(fetchedKey, null)?.split(",")?.map { "" to it } ?: defaultMirrors.asList()
+
+    private val index: Int
+        get() = (preferences.getString(prefKey, "0")?.toIntOrNull() ?: 0).coerceIn(0, mirrors.size - 1)
 
     val baseUrl: String
-        get() {
-            val index = preferences.getString(prefKey, "0")?.toIntOrNull() ?: 0
-            val safeIndex = index.coerceIn(0, mirrors.size - 1)
-            return mirrors[safeIndex].second
-        }
+        get() = mirrors[index].second
+
+    override fun update(urls: List<String>) {
+        val current = baseUrl
+        val newIndex = if (index == 0) 0 else urls.indexOf(current).coerceAtLeast(0)
+        preferences.edit()
+            .putString(fetchedKey, urls.joinToString(","))
+            .putString(prefKey, newIndex.toString())
+            .apply()
+    }
 
     fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val mirrors = mirrors
+        if (mirrors.size < 2) return
         ListPreference(screen.context).apply {
             key = prefKey
             title = this@MirrorPreferences.title
-            entries = this@MirrorPreferences.entries.toTypedArray()
+            entries = mirrors.map { (label, url) ->
+                label.takeIf { it.isNotBlank() }
+                    ?: runCatching { URI(url).host }.getOrDefault(url)
+            }.toTypedArray()
             entryValues = Array(mirrors.size) { it.toString() }
             summary = "%s"
             setDefaultValue("0")

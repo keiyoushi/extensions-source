@@ -14,7 +14,7 @@ keiyoushi {
         source {
             lang = it
             baseUrl {
-                fetched("https://kagane.moe")
+                mirrors("https://kagane.moe")
             }
         }
     }

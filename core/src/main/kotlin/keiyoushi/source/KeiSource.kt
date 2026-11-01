@@ -138,23 +138,38 @@ abstract class KeiSource : HttpSource() {
                 }
             }
         }.build().also {
-            fetchedUrlPreferences?.refresh(::fetchBaseUrls)
+            fetchBaseUrlsInBackground()
         }
     }
 
     /**
-     * Base urls of a `baseUrl { fetched(...) }` source.
+     * Base url preferences of a source overriding [fetchBaseUrls].
      * Do not override by hand.
      */
-    protected open val fetchedUrlPreferences: FetchedUrlPreferences? get() = null
+    protected open val fetchableBaseUrl: FetchableBaseUrl? get() = null
 
     /**
      * Fetches the site's current base urls, in the site's order: one url, or every mirror it lists.
      *
-     * Required with `baseUrl { fetched(...) }`. Called on a background coroutine once per app launch; the last
-     * fetched urls, or the fallback urls, are used until it succeeds.
+     * Needs a `mirrors(...)` or `custom(...)` baseUrl. Called on a background coroutine once per app launch: the urls
+     * replace the mirror list, or the first one becomes the custom url and its default.
      */
-    protected open suspend fun fetchBaseUrls(): List<String> = throw UnsupportedOperationException("fetchBaseUrls not implemented")
+    protected open suspend fun fetchBaseUrls(): List<String> = emptyList()
+
+    @OptIn(DelicateCoroutinesApi::class)
+    private fun fetchBaseUrlsInBackground() {
+        val preferences = fetchableBaseUrl ?: return
+        GlobalScope.launch(Dispatchers.IO) {
+            try {
+                val urls = fetchBaseUrls()
+                    .mapNotNull { it.toHttpUrlOrNull()?.resolve("/")?.toString()?.removeSuffix("/") }
+                    .distinct()
+                if (urls.isNotEmpty()) preferences.update(urls)
+            } catch (e: Exception) {
+                Log.e(name, "Failed to fetch base urls", e)
+            }
+        }
+    }
 
     /**
      * Customizes the base Headers builder. Subclasses can override this to append source-specific
