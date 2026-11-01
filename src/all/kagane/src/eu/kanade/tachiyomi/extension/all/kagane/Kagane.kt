@@ -335,7 +335,7 @@ abstract class Kagane :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) return null
+        if (url.host !in LINK_HOSTS) return null
         val segments = url.pathSegments
         if (segments.size < 2) return null
         val seriesId = segments[1].takeLast(36)
@@ -684,6 +684,7 @@ abstract class Kagane :
     // ============================= Utilities ==============================
 
     companion object {
+        private val LINK_HOSTS = setOf("kagane.cx", "kagane.moe", "kagane.net")
         private const val MAX_SOURCE_FILTER = 50
         private const val CONTENT_RATING = "pref_content_rating"
 
