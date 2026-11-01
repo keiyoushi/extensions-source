@@ -131,7 +131,9 @@ abstract class IkigaiMangas : KeiSource() {
     }
 
     private suspend fun fetchQuerySeriesList(): List<QwikSeriesDto> {
-        val url = getQfuncUrlFromWebView(baseUrl, headers)
+        // The WebView skips the client's base url lookup
+        val homeUrl = client.get(baseUrl, Fetch.DOCUMENT).use { it.request.url.toString() }
+        val url = getQfuncUrlFromWebView(homeUrl, headers)
         val qfunc = url.queryParameter("qfunc")!!
         val payload = """{"_entry":"1","_objs":["\u0002_#s_$qfunc",["0"]]}"""
         val body = payload.toRequestBody()

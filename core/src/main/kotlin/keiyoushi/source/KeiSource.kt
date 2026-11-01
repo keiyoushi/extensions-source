@@ -164,13 +164,15 @@ abstract class KeiSource : HttpSource() {
      * Needs a `mirrors(...)` or `custom(...)` baseUrl. Runs once per source per app launch, before its first request:
      * the urls replace the mirror list, or the first one becomes the custom url and its default.
      *
-     * @param client the source's client, for the lookup; [KeiSource.client] waits for this function.
+     * @param client the client to use for the lookup: requests on [KeiSource.client] wait for it to finish.
      */
     protected open suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = emptyList()
 
     private fun fetchBaseUrlsBlocking(preferences: FetchableBaseUrl) {
+        // Without the interceptor that waits for this lookup, and with its own request slots
         val lookupClient = client.newBuilder()
             .dispatcher(Dispatcher())
+            .callTimeout(BASE_URL_FETCH_TIMEOUT)
             .apply { interceptors().removeAll { it is BaseUrlFetchInterceptor } }
             .build()
         try {

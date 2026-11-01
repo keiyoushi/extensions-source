@@ -14,35 +14,29 @@ internal class BaseUrlFetchInterceptor(
     private val baseUrl: () -> String,
     private val fetch: () -> Unit,
 ) : Interceptor {
-    @Volatile
-    private var fetched = false
-
-    @Volatile
-    private var oldUrl: HttpUrl? = null
+    private val oldUrl: HttpUrl? by lazy {
+        val old = baseUrl()
+        fetch()
+        old.takeIf { it != baseUrl() }?.toHttpUrl()
+    }
 
     override fun intercept(chain: Interceptor.Chain): Response {
-        if (!fetched) {
-            synchronized(this) {
-                if (!fetched) {
-                    val old = baseUrl()
-                    fetch()
-                    if (baseUrl() != old) oldUrl = old.toHttpUrl()
-                    fetched = true
-                }
-            }
-        }
-
         val request = chain.request()
         val old = oldUrl?.takeIf { it.host == request.url.host } ?: return chain.proceed(request)
         return chain.proceed(request.moveTo(old, baseUrl().toHttpUrl()))
     }
 
-    private fun Request.moveTo(old: HttpUrl, new: HttpUrl): Request = newBuilder().apply {
-        url(url.newBuilder().scheme(new.scheme).host(new.host).port(new.port).build())
+    private fun Request.moveTo(old: HttpUrl, new: HttpUrl): Request {
         val oldOrigin = old.toString().removeSuffix("/")
         val newOrigin = new.toString().removeSuffix("/")
-        for (name in listOf("Referer", "Origin")) {
-            header(name)?.takeIf { it.startsWith(oldOrigin) }?.let { header(name, newOrigin + it.removePrefix(oldOrigin)) }
-        }
-    }.build()
+        fun String.moved() = if (startsWith(oldOrigin)) newOrigin + removePrefix(oldOrigin) else this
+
+        val request = this
+        return newBuilder().apply {
+            url(request.url.newBuilder().scheme(new.scheme).host(new.host).port(new.port).build())
+            request.header("Referer")?.let { header("Referer", it.moved()) }
+            request.header("Origin")?.let { header("Origin", it.moved()) }
+            request.tag(FromPage::class.java)?.let { tag(FromPage::class.java, FromPage(it.page.moved())) }
+        }.build()
+    }
 }
