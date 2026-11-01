@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -48,7 +49,7 @@ abstract class YomuComics : KeiSource() {
             }
             .build()
 
-        val result = client.get(url).parseAs<ListDto>()
+        val result = client.get(url, Fetch.XHR).parseAs<ListDto>()
 
         return MangasPage(result.series.map(SeriesDto::toSManga), result.hasNextPage)
     }
@@ -70,7 +71,7 @@ abstract class YomuComics : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.url.substringAfterLast('/')
-        val details = client.get("$API_URL/manga/$slug").parseAs<MangaDto>()
+        val details = client.get("$API_URL/manga/$slug", Fetch.XHR).parseAs<MangaDto>()
 
         return SMangaUpdate(manga = details.toSManga(), chapters = details.chapterList)
     }
@@ -78,12 +79,12 @@ abstract class YomuComics : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (slug, number) = chapter.location()
 
-        return client.get("$API_URL/chapter/$slug/$number").parseAs<PagesDto>().toPageList()
+        return client.get("$API_URL/chapter/$slug/$number", Fetch.XHR).parseAs<PagesDto>().toPageList()
     }
 
     override val supportsFilterFetching: Boolean get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$API_URL/genres")
+    override suspend fun fetchFilterData(): JsonElement = client.get("$API_URL/genres", Fetch.XHR)
         .parseAs<List<String>>()
         .toJsonElement()
 

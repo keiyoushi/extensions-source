@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -22,7 +23,6 @@ import okhttp3.Response
 
 @Source
 abstract class VoraToon : KeiSource() {
-
     private val baseHost get() = baseUrl.toHttpUrl().host
 
     private val apiUrl get() = "https://$baseHost/api/proxy"
@@ -56,7 +56,6 @@ abstract class VoraToon : KeiSource() {
     override fun Headers.Builder.configureHeaders() = apply {
         set("Accept", "application/json")
         set("Accept-language", "en-US,en;q=0.9,id;q=0.8")
-        set("sec-fetch-site", "same-origin")
     }
 
     override suspend fun getPopularManga(page: Int) = parseSeriesListResponse(
@@ -68,6 +67,7 @@ abstract class VoraToon : KeiSource() {
                 .addQueryParameter("sort", "popularity")
                 .addQueryParameter("sortOrder", "desc")
                 .build(),
+            Fetch.XHR,
         ),
     )
 
@@ -80,6 +80,7 @@ abstract class VoraToon : KeiSource() {
                 .addQueryParameter("sort", "latest")
                 .addQueryParameter("sortOrder", "desc")
                 .build(),
+            Fetch.XHR,
         ),
     )
 
@@ -105,6 +106,7 @@ abstract class VoraToon : KeiSource() {
                     }
                 }
                 .build(),
+            Fetch.XHR,
         ),
     )
 
@@ -115,8 +117,8 @@ abstract class VoraToon : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
         val slug = manga.getSlug(baseUrl)
-        val details = if (fetchDetails) async { client.get("$apiUrl/series/$slug") } else null
-        val chapterList = if (fetchChapters) async { client.get("$apiUrl/series/$slug/chapters") } else null
+        val details = if (fetchDetails) async { client.get("$apiUrl/series/$slug", Fetch.XHR) } else null
+        val chapterList = if (fetchChapters) async { client.get("$apiUrl/series/$slug/chapters", Fetch.XHR) } else null
 
         SMangaUpdate(
             details?.await()?.parseAs<SeriesDetailResponse>()?.data?.toSManga() ?: manga,
@@ -143,6 +145,7 @@ abstract class VoraToon : KeiSource() {
         val (slug, chapterIndex) = chapter.getSlugAndIndex(baseUrl)
         return client.get(
             "$apiUrl/series/$slug/chapters/$chapterIndex",
+            Fetch.XHR,
         ).parseAs<ChapterDetailResponse>().data.toPageList()
     }
 
@@ -155,7 +158,7 @@ abstract class VoraToon : KeiSource() {
 
     override val supportsFilterFetching: Boolean get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres").parseAs()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres", Fetch.XHR).parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data?.parseAs<GenreResponse>()?.data?.map { it.toPair() }

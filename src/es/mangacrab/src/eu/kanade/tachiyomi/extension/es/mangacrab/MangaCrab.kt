@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -50,7 +51,7 @@ abstract class MangaCrab : KeiSource() {
             .build()
 
         val dto = client
-            .get(url)
+            .get(url, Fetch.XHR)
             .parseAs<MangaCrabMangasDto>()
 
         return MangasPage(
@@ -145,7 +146,7 @@ abstract class MangaCrab : KeiSource() {
 
         val detailsDto = if (savedMangaId == null) {
             client
-                .get("$baseUrl/api/mv/mangas/by-slug/$slug")
+                .get("$baseUrl/api/mv/mangas/by-slug/$slug", Fetch.XHR)
                 .parseAs<MangaCrabMangaDto>()
         } else {
             null
@@ -156,7 +157,7 @@ abstract class MangaCrab : KeiSource() {
         val detailsDeferred = if (savedMangaId != null && fetchDetails) {
             async {
                 client
-                    .get("$baseUrl/api/mv/mangas/by-slug/$slug")
+                    .get("$baseUrl/api/mv/mangas/by-slug/$slug", Fetch.XHR)
                     .parseAs<MangaCrabMangaDto>()
             }
         } else {
@@ -168,6 +169,7 @@ abstract class MangaCrab : KeiSource() {
                 client
                     .get(
                         "$baseUrl/api/mv/mangas/$mangaId/chapters?per_page=$CHAPTERS_PER_PAGE",
+                        Fetch.XHR,
                     )
                     .parseAs<MangaCrabChaptersDto>()
             }
@@ -226,7 +228,7 @@ abstract class MangaCrab : KeiSource() {
             .build()
 
         val chapterDto = client
-            .get(url)
+            .get(url, Fetch.XHR)
             .parseAs<MangaCrabChapterDto>()
 
         if (chapterDto.is_locked || chapterDto.is_vip_chapter || !chapterDto.can_download) {
@@ -255,7 +257,7 @@ abstract class MangaCrab : KeiSource() {
             .orEmpty()
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val pageUrl = page.imageUrl.orEmpty()
         val imageUrl = pageUrl.substringBefore("#nodeHeader=")
         val securityHeader = pageUrl.substringAfter("#nodeHeader=", "")

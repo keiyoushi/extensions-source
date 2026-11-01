@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -47,7 +48,7 @@ abstract class Manhastro :
     // ============================== Popular ==============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val result = client.get("$apiUrl/rank/diario")
+        val result = client.get("$apiUrl/rank/diario", Fetch.XHR)
             .parseAs<ApiResponse<List<MangaDto>>>(transform = ::cleanJsonResponse)
 
         return MangasPage(result.data.map { it.toSManga() }, false)
@@ -56,7 +57,7 @@ abstract class Manhastro :
     // ============================== Latest ==============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val result = client.get("$apiUrl/lancamentos")
+        val result = client.get("$apiUrl/lancamentos", Fetch.XHR)
             .parseAs<ApiResponse<List<MangaDto>>>(transform = ::cleanJsonResponse)
 
         return MangasPage(result.data.distinctBy { it.mangaId }.map { it.toSManga() }, false)
@@ -81,7 +82,7 @@ abstract class Manhastro :
                 ?.let { addQueryParameter("genero", it.joinToString(",")) }
         }.build()
 
-        val result = client.get(url).parseAs<ApiResponse<List<MangaDto>>>(transform = ::cleanJsonResponse)
+        val result = client.get(url, Fetch.XHR).parseAs<ApiResponse<List<MangaDto>>>(transform = ::cleanJsonResponse)
         return MangasPage(result.data.map { it.toSManga() }, result.meta?.hasMore ?: false)
     }
 
@@ -99,7 +100,7 @@ abstract class Manhastro :
 
         val details = async {
             if (fetchDetails) {
-                client.get("$apiUrl/dados?manga_id=$mangaId")
+                client.get("$apiUrl/dados?manga_id=$mangaId", Fetch.XHR)
                     .parseAs<ApiResponse<List<MangaDto>>>(transform = ::cleanJsonResponse)
                     .data.firstOrNull()?.toSManga()
                     ?: throw Exception("Manga not found")
@@ -117,7 +118,7 @@ abstract class Manhastro :
     // ============================== Chapters ==============================
 
     private suspend fun fetchChapterList(mangaId: String): List<SChapter> {
-        val result = client.get("$apiUrl/dados/$mangaId")
+        val result = client.get("$apiUrl/dados/$mangaId", Fetch.XHR)
             .parseAs<ApiResponse<List<ChapterDto>>>(transform = ::cleanJsonResponse)
 
         return result.data.map { chapter ->
@@ -139,7 +140,7 @@ abstract class Manhastro :
     // ============================== Pages ==============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val result = client.get("$apiUrl/paginas/${chapter.url.substringAfterLast("/")}")
+        val result = client.get("$apiUrl/paginas/${chapter.url.substringAfterLast("/")}", Fetch.XHR)
             .parseAs<PagesResponse>(transform = ::cleanJsonResponse)
         val chapterData = result.data.chapter ?: return emptyList()
 

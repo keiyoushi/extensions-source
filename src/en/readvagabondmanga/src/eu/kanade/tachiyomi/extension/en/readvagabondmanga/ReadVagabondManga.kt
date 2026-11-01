@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -19,7 +20,7 @@ abstract class ReadVagabondManga : KeiSource() {
     override val supportsLatest = false
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val mangas = client.get("$baseUrl/api/mihon/mangas").parseAs<List<MangaDto>>()
+        val mangas = client.get("$baseUrl/api/mihon/mangas", Fetch.XHR).parseAs<List<MangaDto>>()
         return MangasPage(mangas.map { manga -> manga.toSManga() }, false)
     }
 
@@ -30,7 +31,7 @@ abstract class ReadVagabondManga : KeiSource() {
             .addQueryParameter("q", query)
             .addQueryParameter("page", page.toString())
             .build()
-        val mangas = client.get(url).parseAs<List<MangaDto>>()
+        val mangas = client.get(url, Fetch.XHR).parseAs<List<MangaDto>>()
         return MangasPage(mangas.map { manga -> manga.toSManga() }, false)
     }
 
@@ -44,14 +45,14 @@ abstract class ReadVagabondManga : KeiSource() {
 
         val details = async {
             if (fetchDetails) {
-                client.get("$baseUrl/api/mihon/mangas/$mangaId").parseAs<MangaDto>().toSManga()
+                client.get("$baseUrl/api/mihon/mangas/$mangaId", Fetch.XHR).parseAs<MangaDto>().toSManga()
             } else {
                 manga
             }
         }
         val chapterList = async {
             if (fetchChapters) {
-                client.get("$baseUrl/api/mihon/mangas/$mangaId/chapters")
+                client.get("$baseUrl/api/mihon/mangas/$mangaId/chapters", Fetch.XHR)
                     .parseAs<List<ChapterDto>>()
                     .map { chapter -> chapter.toSChapter() }
             } else {
@@ -64,7 +65,7 @@ abstract class ReadVagabondManga : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val mangaId = "$baseUrl${chapter.url}".toHttpUrl().fragment
-        val chapterDto = client.get("$baseUrl/api/mihon/mangas/$mangaId/chapters/${chapter.chapter_number.toInt()}")
+        val chapterDto = client.get("$baseUrl/api/mihon/mangas/$mangaId/chapters/${chapter.chapter_number.toInt()}", Fetch.XHR)
             .parseAs<ChapterDto>()
         return (1..chapterDto.pageCount).map { page ->
             Page(

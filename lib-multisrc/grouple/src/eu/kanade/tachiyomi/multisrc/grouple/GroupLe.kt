@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -41,6 +42,7 @@ import java.util.Locale
 abstract class GroupLe :
     KeiSource(),
     ConfigurableSource {
+
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     protected open val siteId: Int get() = 0
@@ -49,9 +51,6 @@ abstract class GroupLe :
 
     private val apiHeaders get() = headersBuilder()
         .set("Accept", "application/json, text/plain, */*")
-        .set("Sec-Fetch-Dest", "empty")
-        .set("Sec-Fetch-Mode", "cors")
-        .set("Sec-Fetch-Site", "cross-site")
         .build()
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
@@ -145,6 +144,7 @@ abstract class GroupLe :
                     val loginRequest = request.newBuilder()
                         .url(loginUrl)
                         .headers(headers)
+                        .header("Origin", baseUrl)
                         .post(verifyBody)
                         .build()
 
@@ -227,7 +227,7 @@ abstract class GroupLe :
             }
         }.build()
 
-        val result = client.get(url, apiHeaders).parseAs<SearchResponse>()
+        val result = client.get(url, apiHeaders, Fetch.XHR).parseAs<SearchResponse>()
         val mangas = result.list.map { it.toSManga() }
         return MangasPage(mangas, result.hasNextPage)
     }
@@ -251,7 +251,7 @@ abstract class GroupLe :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val newUrl = manga.url
-        val document = client.get("${baseUrl}$newUrl").asJsoup()
+        val document = client.get("${baseUrl}$newUrl", Fetch.DOCUMENT).asJsoup()
 
         val mangaNew = parseMangaDetails(document, newUrl)
         val chaptersNew = if (fetchChapters) {
@@ -474,7 +474,7 @@ abstract class GroupLe :
                 httpUrl
             }
         }
-        val document = client.get(url, ensureSuccess = false).use { response ->
+        val document = client.get(url, Fetch.DOCUMENT, ensureSuccess = false).use { response ->
             if (!response.isSuccessful) {
                 if (response.code == 404) {
                     throw Exception("Для просмотра главы необходима авторизация через WebView\uD83C\uDF0E (Ошибка 404). Авторизуйтесь в WebView и обновите мангу.")
@@ -539,7 +539,7 @@ abstract class GroupLe :
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val url = "$baseUrl/list/like${manga.url.substringBefore("__")}"
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return document.select(".entity-cards-grid .similar-item-card").mapNotNull {
             SManga.create().apply {
                 setUrlWithoutDomain(it.selectFirst("a.entity-card-tile")?.absUrl("href") ?: return@mapNotNull null)
@@ -556,8 +556,8 @@ abstract class GroupLe :
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
         // Так же доступны в API /api/catalog/elementsByType?type=
         // Для каждого типа фильтров свой запрос, например жанры: /api/catalog/elementsByType?type=2
-        val resultDeferred = async { client.get("$baseUrl/search/advanced").asJsoup() }
-        val result2Deferred = async { client.get("$baseUrl/api/catalog/elementsByType?type=40").parseAs<FiltersAPIResponse>() }
+        val resultDeferred = async { client.get("$baseUrl/search/advanced", Fetch.DOCUMENT).asJsoup() }
+        val result2Deferred = async { client.get("$baseUrl/api/catalog/elementsByType?type=40", Fetch.XHR).parseAs<FiltersAPIResponse>() }
 
         val result = resultDeferred.await()
         val result2 = result2Deferred.await()

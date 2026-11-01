@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -28,7 +29,6 @@ import java.util.Locale
 
 @Source
 abstract class MangaShi : KeiSource() {
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         rateLimit(2)
     }
@@ -77,7 +77,7 @@ abstract class MangaShi : KeiSource() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        client.get(url).use {
+        client.get(url, Fetch.DOCUMENT).use {
             return catalogParse(it.asJsoup())
         }
     }
@@ -86,7 +86,7 @@ abstract class MangaShi : KeiSource() {
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val result = client.get("$baseUrl/catalog/").asJsoup()
+        val result = client.get("$baseUrl/catalog/", Fetch.DOCUMENT).asJsoup()
 
         return result.selectFirst(".genre-flyout")?.select(".group")?.map {
             it.selectFirst("span")?.text() to it.selectFirst("input")?.attr("value")
@@ -133,7 +133,7 @@ abstract class MangaShi : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val newUrl = manga.url
-        val document = client.get("${baseUrl}$newUrl").asJsoup()
+        val document = client.get("${baseUrl}$newUrl", Fetch.DOCUMENT).asJsoup()
 
         val mangaNew = parseMangaDetails(document, newUrl)
 
@@ -207,7 +207,7 @@ abstract class MangaShi : KeiSource() {
         nextUrl = nextUrl?.substringAfter("?")
 
         while (nextUrl != null) {
-            client.get("${chapUrl}$nextUrl").use { nextResponse ->
+            client.get("${chapUrl}$nextUrl", Fetch.DOCUMENT).use { nextResponse ->
                 val fragment = Jsoup.parseBodyFragment(nextResponse.body.string(), baseUrl)
                 chapters.addAll(fragment.select("a[href*=\"/glava\"]").mapNotNull(::parseChapter))
                 nextUrl = fragment.selectFirst("nav.flex a:last-child:contains(Дальше)")
@@ -266,7 +266,7 @@ abstract class MangaShi : KeiSource() {
     // ========================= Pages =========================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
         return document.select("img.reader-image").mapIndexed { i, img ->
             Page(i, imageUrl = img.imgAttr())
         }

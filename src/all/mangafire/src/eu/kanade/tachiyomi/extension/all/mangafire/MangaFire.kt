@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -32,7 +33,6 @@ import okhttp3.Response
 abstract class MangaFire :
     KeiSource(),
     ConfigurableSource {
-
     private val langCode: String
         get() = when (lang) {
             "es-419" -> "es-la"
@@ -57,11 +57,12 @@ abstract class MangaFire :
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/api/titles".toHttpUrl().newBuilder().apply {
             addQueryParameter("order[views_30d]", "desc")
+            addQueryParameter("languages[]", langCode)
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", "50")
             ContentRatingFilter(contentRating).addToUri(this)
         }.build()
-        return client.get(url).use { response ->
+        return client.get(url, Fetch.XHR).use { response ->
             parseMangaList(response)
         }
     }
@@ -71,11 +72,12 @@ abstract class MangaFire :
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/api/titles".toHttpUrl().newBuilder().apply {
             addQueryParameter("order[chapter_updated_at]", "desc")
+            addQueryParameter("languages[]", langCode)
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", "50")
             ContentRatingFilter(contentRating).addToUri(this)
         }.build()
-        return client.get(url).use { response ->
+        return client.get(url, Fetch.XHR).use { response ->
             parseMangaList(response)
         }
     }
@@ -101,7 +103,7 @@ abstract class MangaFire :
                 val tagUrl = "$baseUrl/api/tags".toHttpUrl().newBuilder().apply {
                     addQueryParameter("keyword", authorQuery)
                 }.build()
-                val tags = client.get(tagUrl).parseAs<TagResponse>()
+                val tags = client.get(tagUrl, Fetch.XHR).parseAs<TagResponse>()
                 tags.data.firstOrNull { it.type == "author" || it.type == "artist" }?.id?.toString()
             }
 
@@ -114,6 +116,7 @@ abstract class MangaFire :
             if (query.isNotBlank()) {
                 addQueryParameter("keyword", query.trim())
             }
+            addQueryParameter("languages[]", langCode)
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", "50")
 
@@ -126,7 +129,7 @@ abstract class MangaFire :
                 .forEach { it.addToUri(this) }
         }.build()
 
-        return client.get(url).use { response ->
+        return client.get(url, Fetch.XHR).use { response ->
             parseMangaList(response)
         }
     }
@@ -150,7 +153,7 @@ abstract class MangaFire :
         SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
     }
 
-    private suspend fun fetchMangaDetails(hid: String): SManga = client.get("$baseUrl/api/titles/$hid").parseAs<MangaDetailsResponse>().data.toSManga()
+    private suspend fun fetchMangaDetails(hid: String): SManga = client.get("$baseUrl/api/titles/$hid", Fetch.XHR).parseAs<MangaDetailsResponse>().data.toSManga()
 
     private suspend fun fetchChapters(manga: SManga): List<SChapter> {
         var page = 1
@@ -162,7 +165,7 @@ abstract class MangaFire :
 
         if (displayVolumes) {
             val url = "$baseUrl/api/titles/$hid/volumes"
-            val volumes = client.get(url).parseAs<ApiResponse<VolumeDto>>().items
+            val volumes = client.get(url, Fetch.XHR).parseAs<ApiResponse<VolumeDto>>().items
             if (volumes.isNotEmpty()) {
                 val items = volumes.filter { it.language == langCode }
                     .forEach { chapters.add(it.toSChapter(manga.url)) }
@@ -198,7 +201,7 @@ abstract class MangaFire :
             .addQueryParameter("page", "1")
             .addQueryParameter("limit", "200")
             .build()
-        val firstData = client.get(firstUrl).parseAs<ApiResponse<ChapterDto>>()
+        val firstData = client.get(firstUrl, Fetch.XHR).parseAs<ApiResponse<ChapterDto>>()
         val lastPage = firstData.meta?.lastPage ?: 1
 
         val allItems = mutableListOf<ChapterDto>()
@@ -214,7 +217,7 @@ abstract class MangaFire :
                         .addQueryParameter("page", page.toString())
                         .addQueryParameter("limit", "200")
                         .build()
-                    client.get(url).parseAs<ApiResponse<ChapterDto>>().items
+                    client.get(url, Fetch.XHR).parseAs<ApiResponse<ChapterDto>>().items
                 }
             }
             deferred.awaitAll().forEach { allItems.addAll(it) }
@@ -238,7 +241,7 @@ abstract class MangaFire :
             "$baseUrl/api/chapters/$chapterId"
         }
 
-        val data = client.get(url).parseAs<PagesResponse>()
+        val data = client.get(url, Fetch.XHR).parseAs<PagesResponse>()
         return data.data.pages.mapIndexed { index, page ->
             Page(index, imageUrl = page.url)
         }

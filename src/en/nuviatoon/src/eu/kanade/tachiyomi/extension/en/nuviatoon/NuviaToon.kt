@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -27,7 +28,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 abstract class NuviaToon :
     KeiSource(),
     ConfigurableSource {
-
     private val preferences by getPreferencesLazy()
 
     override fun Headers.Builder.configureHeaders() = add("Accept", "application/json")
@@ -50,7 +50,7 @@ abstract class NuviaToon :
             addQueryParameter("sort", sort)
         }.build()
 
-        return client.get(url).parseAs<ComicsResponse>().toMangasPage()
+        return client.get(url, Fetch.XHR).parseAs<ComicsResponse>().toMangasPage()
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -71,13 +71,13 @@ abstract class NuviaToon :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val detail = client.get("$baseUrl/api/comics/${manga.url}").parseAs<DetailResponse>().data
+        val detail = client.get("$baseUrl/api/comics/${manga.url}", Fetch.XHR).parseAs<DetailResponse>().data
         return SMangaUpdate(detail.toSManga(), detail.toSChapterList(preferences.hideLockedChapters()))
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val id = chapter.memo["chapterId"]?.stringOrNull ?: return emptyList()
-        val response = client.get("$baseUrl/api/comic-chapters/$id/content", ensureSuccess = false)
+        val response = client.get("$baseUrl/api/comic-chapters/$id/content", Fetch.XHR, ensureSuccess = false)
         if (!response.isSuccessful) {
             response.close()
             throw when (response.code) {

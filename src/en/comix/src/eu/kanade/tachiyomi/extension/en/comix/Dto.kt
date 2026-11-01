@@ -20,6 +20,7 @@ const val CHAPTER_LIST_DEDUPLICATED_MEMO = "chapterListDeduplicated"
 const val CHAPTER_LIST_BLACKLIST_MEMO = "chapterListBlacklist"
 const val CHAPTER_LIST_COMPLETE_MEMO = "chapterListComplete"
 const val CHAPTER_LIST_FETCHED_AT_MEMO = "chapterListFetchedAt"
+const val CHAPTER_DATA_VERSION_MEMO = "chapterDataVersion"
 
 @Serializable
 class Term(
@@ -32,7 +33,7 @@ class TagSearchResponse(
 )
 
 @Serializable
-class TagSearchHit(val id: Int)
+class TagSearchHit(val id: Int, val label: String)
 
 @Serializable
 class Manga(
@@ -319,29 +320,14 @@ class Chapter(
     }
 }
 
+// One message from the reader page walk
 @Serializable
-class ChapterPages(
-    val baseUrl: String = "",
-    val items: List<PageDto>,
-    private val alt: List<String>? = null,
-    private val node: String? = null,
-) {
-    // Alt hosts in the site reader's retry order
-    fun altHosts(host: String, index: Int): List<String> {
-        if (alt.isNullOrEmpty()) return emptyList()
-        val label = host.substringBefore('.')
-        val start = index % alt.size
-        val domains = alt.drop(start) + alt.take(start)
-        val hosts = domains.map { "$label.$it" } + domains.map { "${node ?: label}.$it" }
-        return List(6) { hosts[it % hosts.size] }
-    }
-
-    @Serializable
-    class PageDto(
-        val url: String,
-        val s: Int = 0,
-    )
-}
+class CaptureMessage(
+    val type: String,
+    val total: Int? = null,
+    val index: Int? = null,
+    val url: String? = null,
+)
 
 private val DATE_REGEX = Regex("""^(\d+)\s*(s|m|h|d|w|mo|mos|y|yr|yrs|min|mins|sec|secs|hr|hrs|day|days|week|weeks|month|months|year|years)$""")
 

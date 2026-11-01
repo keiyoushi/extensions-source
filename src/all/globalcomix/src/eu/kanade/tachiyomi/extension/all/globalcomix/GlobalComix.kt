@@ -20,6 +20,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -59,7 +60,6 @@ abstract class GlobalComix :
             "ms" -> "my"
             "sv" -> "se"
             "uk" -> "ua"
-            "zh-Hant" -> "zh"
             else -> lang
         }
 
@@ -98,7 +98,7 @@ abstract class GlobalComix :
         orderBy?.let { url.addQueryParameter("sort", it) }
         query?.let { url.addQueryParameter("q", it) }
 
-        return client.get(url.build()).parseAs<MangasDto>().payload!!.let { dto ->
+        return client.get(url.build(), Fetch.XHR).parseAs<MangasDto>().payload!!.let { dto ->
             MangasPage(
                 dto.results.map { it -> it.createManga() },
                 dto.pagination.hasNextPage,
@@ -126,7 +126,7 @@ abstract class GlobalComix :
             .addPathSegment(slug)
             .build()
 
-        return client.get(url).parseAs<MangaDto>().payload!!
+        return client.get(url, Fetch.XHR).parseAs<MangaDto>().payload!!
             .results
             .createManga()
     }
@@ -150,7 +150,7 @@ abstract class GlobalComix :
             .addQueryParameter("all", "true")
             .build()
 
-        return client.get(url).parseAs<ChaptersDto>().payload!!.results.filterNot { dto ->
+        return client.get(url, Fetch.XHR).parseAs<ChaptersDto>().payload!!.results.filterNot { dto ->
             dto.isPremium && !preferences.showLockedChapters
         }.map { it.createChapter() }
     }
@@ -161,7 +161,7 @@ abstract class GlobalComix :
         val chapterKey = chapter.url
         val chapterWebUrl = "$WEB_CHAPTER_URL/$chapterKey"
 
-        return client.get("$API_CHAPTER_URL/$chapterKey").parseAs<ChapterDto>()
+        return client.get("$API_CHAPTER_URL/$chapterKey", Fetch.XHR).parseAs<ChapterDto>()
             .payload!!
             .results
             .page_objects!!

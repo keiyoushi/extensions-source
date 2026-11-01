@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -29,7 +30,7 @@ abstract class ArabManhwa : KeiSource() {
             addPathSegment("")
             if (sort != null) addQueryParameter("sort", sort)
         }.build()
-        return parseList(client.get(url).asJsoup())
+        return parseList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -38,7 +39,7 @@ abstract class ArabManhwa : KeiSource() {
             addPathSegment("")
             addQueryParameter("s", query)
         }.build()
-        return parseList(client.get(url).asJsoup())
+        return parseList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private fun parseList(document: Document): MangasPage {
@@ -54,7 +55,7 @@ abstract class ArabManhwa : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "manga") return null
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseDetails(document).apply { this.url = url.encodedPath }
     }
 
@@ -64,7 +65,7 @@ abstract class ArabManhwa : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val knownDates = chapters.associate { it.url to it.date_upload }
         val chapterList = document.select("a.chapter-row").map { element ->
             SChapter.create().apply {
@@ -104,7 +105,7 @@ abstract class ArabManhwa : KeiSource() {
         return knownDate?.takeIf { it in oldest..newest } ?: newest
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select(".reader img[data-src]")
         .mapIndexed { i, img -> Page(i, imageUrl = img.absUrl("data-src")) }
 

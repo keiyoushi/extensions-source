@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -21,7 +22,7 @@ abstract class SenManga : KeiSource() {
 
     private val apiUrl get() = "$baseUrl/api"
 
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$apiUrl/directory?order=Popular&page=$page").parseAs<DirectoryResponse>().toMangasPage()
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$apiUrl/directory?order=Popular&page=$page", Fetch.XHR).parseAs<DirectoryResponse>().toMangasPage()
 
     private fun DirectoryResponse.toMangasPage(): MangasPage {
         val mangas = series.map { it.toSManga() }
@@ -31,7 +32,7 @@ abstract class SenManga : KeiSource() {
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val data = client.get("$apiUrl/home").parseAs<HomeResponse>()
+        val data = client.get("$apiUrl/home", Fetch.XHR).parseAs<HomeResponse>()
         val mangas = data.series.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
@@ -56,7 +57,7 @@ abstract class SenManga : KeiSource() {
             url.addQueryParameter("order", it.toUriPart())
         }
 
-        return client.get(url.build()).parseAs<DirectoryResponse>().toMangasPage()
+        return client.get(url.build(), Fetch.XHR).parseAs<DirectoryResponse>().toMangasPage()
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(
@@ -71,7 +72,7 @@ abstract class SenManga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val data = client.get("$apiUrl/manga/${manga.url}").parseAs<SeriesDto>()
+        val data = client.get("$apiUrl/manga/${manga.url}", Fetch.XHR).parseAs<SeriesDto>()
         val mangaSlug = data.slug
 
         val chapterList = data.chapterList?.map { chapter ->
@@ -86,7 +87,7 @@ abstract class SenManga : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get("$apiUrl/read/${chapter.url}").parseAs<ReadResponse>()
+        val data = client.get("$apiUrl/read/${chapter.url}", Fetch.XHR).parseAs<ReadResponse>()
         return data.pages.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
         }

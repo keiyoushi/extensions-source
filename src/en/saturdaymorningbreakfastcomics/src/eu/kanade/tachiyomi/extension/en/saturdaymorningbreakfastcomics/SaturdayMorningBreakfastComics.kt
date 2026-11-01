@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.saturdaymorningbreakfastcomics
 
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -76,10 +78,10 @@ abstract class SaturdayMorningBreakfastComics : KeiSource() {
         if (!fetchChapters) return SMangaUpdate(makeSManga(), chapters)
 
         // the archive page responds with HTTP 500 despite serving the full list
-        val response = client.get(getMangaUrl(manga), ensureSuccess = false)
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT, ensureSuccess = false)
         if (!response.isSuccessful && response.code != 500) {
             response.close()
-            throw Exception("HTTP ${response.code}")
+            throw HttpException(response.code)
         }
 
         val chapterList = response.asJsoup().select("option[value*=\"comic/\"]")
@@ -98,7 +100,14 @@ abstract class SaturdayMorningBreakfastComics : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        // the chapter pages respond with HTTP 500 despite serving the full page
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT, ensureSuccess = false)
+        if (!response.isSuccessful && response.code != 500) {
+            response.close()
+            throw HttpException(response.code)
+        }
+
+        val document = response.asJsoup()
         val pages = mutableListOf<Page>()
         val image = document.select("img#cc-comic")
         pages.add(Page(0, "", image.attr("abs:src")))

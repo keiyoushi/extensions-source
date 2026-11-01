@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.zettruyen
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -8,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -20,7 +20,6 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.jsoup.nodes.Document
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -75,7 +74,7 @@ abstract class ZetTruyen : KeiSource() {
             }
         }.build()
 
-        return parseMangaPage(client.get(url).asJsoup())
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private fun parseMangaPage(document: Document): MangasPage {
@@ -104,7 +103,7 @@ abstract class ZetTruyen : KeiSource() {
         if (!isDetailUrl && !isChapterUrl) return null
 
         val mangaPath = "/truyen-tranh/$slug"
-        return parseMangaDetails(client.get("$baseUrl$mangaPath").asJsoup()).apply {
+        return parseMangaDetails(client.get("$baseUrl$mangaPath", Fetch.DOCUMENT).asJsoup()).apply {
             setUrlWithoutDomain(mangaPath)
         }
     }
@@ -119,7 +118,7 @@ abstract class ZetTruyen : KeiSource() {
 
         val detailsDeferred = if (fetchDetails) {
             async {
-                client.get(getMangaUrl(manga)).use { response ->
+                client.get(getMangaUrl(manga), Fetch.DOCUMENT).use { response ->
                     parseMangaDetails(response.asJsoup())
                 }
             }
@@ -201,7 +200,7 @@ abstract class ZetTruyen : KeiSource() {
             .add("Accept", "application/json")
             .build()
 
-        return client.get(apiUrl, apiHeaders).parseAs<ChapterListResponse>()
+        return client.get(apiUrl, apiHeaders, Fetch.XHR).parseAs<ChapterListResponse>()
     }
 
     private fun parseChapterList(data: ChapterData, slug: String): List<SChapter> = data.chapters.map { chapter ->
@@ -217,7 +216,7 @@ abstract class ZetTruyen : KeiSource() {
 
     // ============================== Pages =================================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl${chapter.url}").use { response ->
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).use { response ->
         val document = response.asJsoup()
         document.select("div.center img").mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("src"))
@@ -226,12 +225,5 @@ abstract class ZetTruyen : KeiSource() {
                 Page(index, imageUrl = element.absUrl("src"))
             }
         }
-    }
-
-    override fun imageRequest(page: Page): Request {
-        val imageHeaders = headers.newBuilder()
-            .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-            .build()
-        return GET(page.imageUrl!!, imageHeaders)
     }
 }

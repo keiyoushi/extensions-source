@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.pt.xxxyaoi
 import android.webkit.WebResourceResponse
 import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
@@ -25,23 +26,20 @@ abstract class XXXYaoi : MadaraNoAjax() {
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3, 1.seconds)
 
-    override fun Headers.Builder.configureHeaders() = set("Upgrade-Insecure-Requests", "1")
-        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-        .set("Sec-GPC", "1")
-        .set("Sec-Fetch-User", "?1")
-        .set("Sec-Fetch-Site", "none")
-        .set("Sec-Fetch-Mode", "navigate")
-        .set("Sec-Fetch-Dest", "document")
-        .set("Priority", "u=0, i")
+    override fun Headers.Builder.configureHeaders() = set("Sec-GPC", "1")
         .set("Pragma", "no-cache")
 
     override val mangaSubString = "bl"
+    override val genreDirectory = "genero"
 
     override val mangaDetailsSelectorTitle = ".xyaoi-main-title, h1"
     override val mangaDetailsSelectorAuthor = "a[href*=author]"
     override val mangaDetailsSelectorArtist = "a[href*=artist]"
     override val mangaDetailsSelectorStatus = "span:contains(status) + span"
     override val mangaDetailsSelectorDescription = "[class*=synopsis]"
+    override val mangaDetailsSelectorGenre = ".xyaoi-genres-list a"
+    override val mangaDetailsSelectorTag = ".wp-manga-tags-list a"
+    override val seriesTypeSelector = "span:contains(tipo) + span:not(:contains(Não informado))"
 
     override fun searchCardSelector() = ".xyaoi-search-card"
 
@@ -53,12 +51,13 @@ abstract class XXXYaoi : MadaraNoAjax() {
     }
 
     override suspend fun fetchChapterDocument(chapterUrl: String): Document {
-        val html = client.get(chapterUrl).body.string()
+        val html = client.get(chapterUrl, Fetch.DOCUMENT).body.string()
         val rendered = try {
             runWebView<String> {
                 userAgent = headers["User-Agent"].orEmpty()
+                // A script load error makes the site's ad check delete the decoded pages
                 interceptRequest { request ->
-                    if (request.isForMainFrame) null else WebResourceResponse("text/plain", null, 403, "Blocked", null, ByteArrayInputStream(ByteArray(0)))
+                    if (request.isForMainFrame) null else WebResourceResponse("text/javascript", null, 200, "OK", null, ByteArrayInputStream(ByteArray(0)))
                 }
                 onPageFinished {
                     evaluateJs("document.documentElement.outerHTML") { resolve(it.parseAs<String>()) }

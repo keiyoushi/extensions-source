@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.lib.randomua.addRandomUAPreference
 import keiyoushi.lib.randomua.setRandomUserAgent
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -162,10 +163,10 @@ abstract class ProjectSuki :
             .addPathSegment((page - 1).toString())
             .build()
 
-        return searchMangaParse(client.get(url).asJsoup())
+        return searchMangaParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = searchMangaParse(client.get(homepageUrl).asJsoup(), overrideHasNextPage = false)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = searchMangaParse(client.get(homepageUrl, Fetch.DOCUMENT).asJsoup(), overrideHasNextPage = false)
 
     private inline fun <reified T> HttpUrl.Builder.applyPSFilter(
         from: FilterList,
@@ -203,7 +204,7 @@ abstract class ProjectSuki :
                 .encodedQuery(urlQuery)
                 .build()
 
-            return searchMangaParse(client.get(searchUrl).asJsoup(), overrideHasNextPage = false)
+            return searchMangaParse(client.get(searchUrl, Fetch.DOCUMENT).asJsoup(), overrideHasNextPage = false)
         }
 
         return MangasPage(emptyList(), hasNextPage = false)
@@ -230,7 +231,7 @@ abstract class ProjectSuki :
                     .applyPSFilter<ProjectSukiFilters.Artist>(from = filters)
                     .build()
 
-                searchMangaParse(client.get(url).asJsoup())
+                searchMangaParse(client.get(url, Fetch.DOCUMENT).asJsoup())
             }
         }
     }
@@ -267,7 +268,7 @@ abstract class ProjectSuki :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document: Document = client.get(getMangaUrl(manga)).asJsoup()
+        val document: Document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val extractor = DataExtractor(document)
 
         return SMangaUpdate(

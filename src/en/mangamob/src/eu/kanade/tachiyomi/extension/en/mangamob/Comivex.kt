@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -25,7 +26,6 @@ import java.util.Calendar
 abstract class Comivex :
     KeiSource(),
     ConfigurableSource {
-
     private val preferences by getPreferencesLazy()
 
     private val hideStaleExploreEntries: Boolean
@@ -33,14 +33,14 @@ abstract class Comivex :
 
     // ============================== Popular ===============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/explore/?sort_by=Views&results=$page&ajax=1").exploreParse()
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/explore/?sort_by=Views&results=$page&ajax=1", Fetch.DOCUMENT).exploreParse()
 
     // =============================== Latest ===============================
     // /latest/ orders by chapter publication; /explore/?sort_by=Updated
     // orders by metadata mtime and surfaces stale series.
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val mangas = client.get("$baseUrl/latest/").asJsoup().select("article.u-card")
+        val mangas = client.get("$baseUrl/latest/", Fetch.DOCUMENT).asJsoup().select("article.u-card")
             .mapNotNull(::parseLatestCard)
             .distinctBy { it.url }
         return MangasPage(mangas, false)
@@ -75,7 +75,7 @@ abstract class Comivex :
             addQueryParameter("ajax", "1")
         }.build()
 
-        return client.get(url).exploreParse()
+        return client.get(url, Fetch.DOCUMENT).exploreParse()
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(
@@ -111,7 +111,7 @@ abstract class Comivex :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val details = SManga.create().apply {
             title = document.selectFirst(".md-title")?.text() ?: throw Exception("Title not found")
@@ -165,7 +165,7 @@ abstract class Comivex :
 
     // =============================== Pages ================================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup().select("#chapter-images .page-wrapper img").mapIndexed { index, img ->
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup().select("#chapter-images .page-wrapper img").mapIndexed { index, img ->
         Page(index, imageUrl = img.attr("abs:src"))
     }
 

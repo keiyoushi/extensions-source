@@ -144,3 +144,10 @@ class GlobalAppState(
 class GlobalAppSession(
     val accsessToken: String? = null,
 )
+
+@Serializable
+class VisitTokenResponse(
+    val status: Boolean = false,
+    val token: String? = null,
+    @SerialName("expires_at") val expiresAt: Long? = null,
+)

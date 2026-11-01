@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Yaoi.me"
-    versionCode = 0
+    versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 

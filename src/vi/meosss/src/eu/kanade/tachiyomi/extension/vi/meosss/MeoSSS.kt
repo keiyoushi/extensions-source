@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -35,7 +36,7 @@ abstract class MeoSSS : KeiSource() {
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/dang-thinh-hanh/").asJsoup()
+        val document = client.get("$baseUrl/dang-thinh-hanh/", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".manga-item-details").map { it.mangaFromPopularElement() }
         return MangasPage(mangas, hasNextPage = false)
     }
@@ -50,7 +51,7 @@ abstract class MeoSSS : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/moi-cap-nhat/" + if (page > 1) "page/$page/" else ""
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".manga-item-grid").map { it.mangaFromGridElement() }
         val hasNextPage = document.selectFirst(nextPageSelector) != null
         return MangasPage(mangas, hasNextPage)
@@ -89,7 +90,7 @@ abstract class MeoSSS : KeiSource() {
             }
         }.build()
 
-        return parseSearchManga(client.get(url))
+        return parseSearchManga(client.get(url, Fetch.DOCUMENT))
     }
 
     private fun parseSearchManga(response: Response): MangasPage {
@@ -146,7 +147,7 @@ abstract class MeoSSS : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
         val mangaDeferred = if (fetchDetails) {
-            async { parseMangaDetails(client.get(getMangaUrl(manga)).asJsoup(), manga) }
+            async { parseMangaDetails(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup(), manga) }
         } else {
             null
         }
@@ -179,7 +180,7 @@ abstract class MeoSSS : KeiSource() {
         var page = 1
 
         while (true) {
-            val doc = client.get("$mangaUrl/chap/page/$page/").asJsoup()
+            val doc = client.get("$mangaUrl/chap/page/$page/", Fetch.DOCUMENT).asJsoup()
 
             val pageChapters = doc.select(".chapter-item").map { chapterFromElement(it) }
             if (pageChapters.isEmpty()) break
@@ -207,7 +208,7 @@ abstract class MeoSSS : KeiSource() {
     // ============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("#chapter-content img").filterNot { it.closest(".init-manga-chapter-ad") != null }
             .mapIndexed { index, img ->
                 Page(index, imageUrl = img.attr("data-original-src").ifEmpty { img.imgUrl() })
@@ -218,7 +219,7 @@ abstract class MeoSSS : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/bo-loc-nang-cao/").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/bo-loc-nang-cao/", Fetch.DOCUMENT).asJsoup()
         .select("input[name=genre[]]")
         .map { input ->
             GenreOption(
@@ -236,7 +237,7 @@ abstract class MeoSSS : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val relatedSection = document.select("h2")
             .firstOrNull { it.text() == "Truyện liên quan" }
             ?.parent()

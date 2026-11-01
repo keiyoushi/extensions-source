@@ -7,12 +7,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -23,6 +25,13 @@ import java.util.Calendar
 
 @Source
 abstract class Holotoon : KeiSource() {
+    // Client hint Chrome sends with its User-Agent, required on /read/
+    override fun Headers.Builder.configureHeaders() = apply {
+        CHROME_VERSION_REGEX.find(get("User-Agent").orEmpty())?.let {
+            val version = it.groupValues[1]
+            set("Sec-CH-UA", "\"Chromium\";v=\"$version\", \"Google Chrome\";v=\"$version\", \"Not.A/Brand\";v=\"99\"")
+        }
+    }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getBrowsePage(page = page, sort = "popular")
 
@@ -67,7 +76,7 @@ abstract class Holotoon : KeiSource() {
             if (page > 1) addQueryParameter("page", page.toString())
         }.build()
 
-        return parseMangasPage(client.get(url).asJsoup(), page)
+        return parseMangasPage(client.get(url, Fetch.DOCUMENT).asJsoup(), page)
     }
 
     private fun parseMangasPage(document: Document, page: Int): MangasPage {
@@ -88,7 +97,9 @@ abstract class Holotoon : KeiSource() {
             SManga.create().apply {
                 this.title = title
                 setUrlWithoutDomain(path)
-                thumbnail_url = card.selectFirst("img")?.absUrl("src")?.takeIf(String::isNotBlank)
+                thumbnail_url = card.selectFirst("img")
+                    ?.let { it.absUrl("data-src").ifBlank { it.absUrl("src") } }
+                    ?.takeIf(String::isNotBlank)
             }
         }
 
@@ -105,7 +116,7 @@ abstract class Holotoon : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val path = normalizeMangaPath(manga.url)
-        val document = client.get("$baseUrl$path").asJsoup()
+        val document = client.get("$baseUrl$path", Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(
             manga = parseDetails(document, path),
@@ -120,7 +131,7 @@ abstract class Holotoon : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val path = normalizeMangaPath(url.encodedPath)
         if (!path.startsWith("/comic/")) return null
-        return parseDetails(client.get("$baseUrl$path").asJsoup(), path)
+        return parseDetails(client.get("$baseUrl$path", Fetch.DOCUMENT).asJsoup(), path)
     }
 
     private fun parseDetails(document: Document, path: String): SManga {
@@ -212,7 +223,7 @@ abstract class Holotoon : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val readerImages = document.select("#reader-pages img")
         val images = if (readerImages.isNotEmpty()) {
             readerImages
@@ -283,7 +294,7 @@ abstract class Holotoon : KeiSource() {
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/browse").asJsoup()
+        val document = client.get("$baseUrl/browse", Fetch.DOCUMENT).asJsoup()
         return document.select("select[name=genre] option").mapNotNull { option ->
             val value = option.attr("value").trim()
             val name = option.text().trim()
@@ -310,6 +321,7 @@ abstract class Holotoon : KeiSource() {
         private val ARTIST_REGEX = Regex("Artist:\\s*(.*?)\\s+(?:Year:|Views:|Uploaded by:)", RegexOption.IGNORE_CASE)
         private val CHAPTER_NUMBER_REGEX = Regex("\\d+(?:\\.\\d+)?")
         private val NUMBER_REGEX = Regex("\\d+")
+        private val CHROME_VERSION_REGEX = Regex("""Chrome/(\d+)""")
         private val STATUS_VALUES = setOf("ongoing", "completed", "hiatus", "dropped")
     }
 }

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -30,7 +31,7 @@ abstract class Liliana : KeiSource() {
 
     // ============================== Popular ===============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = popularMangaParse(client.get("$baseUrl/ranking/week/$page").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = popularMangaParse(client.get("$baseUrl/ranking/week/$page", Fetch.DOCUMENT).asJsoup())
 
     protected open fun popularMangaParse(document: Document): MangasPage {
         val elements = document.select(popularMangaSelector())
@@ -55,7 +56,7 @@ abstract class Liliana : KeiSource() {
 
     // =============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = popularMangaParse(client.get("$baseUrl/all-manga/$page/?sort=last_update&status=0").asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = popularMangaParse(client.get("$baseUrl/all-manga/$page/?sort=last_update&status=0", Fetch.DOCUMENT).asJsoup())
 
     // =============================== Search ===============================
 
@@ -78,7 +79,7 @@ abstract class Liliana : KeiSource() {
             addPathSegment("")
         }.build()
 
-        return popularMangaParse(client.get(url).asJsoup())
+        return popularMangaParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private suspend fun postSearch(query: String): MangasPage {
@@ -92,7 +93,7 @@ abstract class Liliana : KeiSource() {
             add("X-Requested-With", "XMLHttpRequest")
         }.build()
 
-        val mangaList = client.post("$baseUrl/ajax/search", formHeaders, formBody)
+        val mangaList = client.post("$baseUrl/ajax/search", formHeaders, Fetch.XHR, formBody)
             .parseAs<SearchResponseDto>().list.map { manga ->
                 SManga.create().apply {
                     setUrlWithoutDomain(manga.url)
@@ -108,14 +109,14 @@ abstract class Liliana : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "manga" || url.pathSegments.size < 2) return null
 
         val mangaUrl = "/manga/${url.pathSegments[1]}"
-        return mangaDetailsParse(client.get(baseUrl + mangaUrl).asJsoup()).apply { this.url = mangaUrl }
+        return mangaDetailsParse(client.get(baseUrl + mangaUrl, Fetch.DOCUMENT).asJsoup()).apply { this.url = mangaUrl }
     }
 
     // =============================== Filters ==============================
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = parseFilters(client.get("$baseUrl/filter").asJsoup()).toJsonElement()
+    override suspend fun fetchFilterData(): JsonElement = parseFilters(client.get("$baseUrl/filter", Fetch.DOCUMENT).asJsoup()).toJsonElement()
 
     protected open fun parseFilters(document: Document) = FilterData(
         genreName = document.selectFirst("div.advanced-genres > h3")?.text() ?: "",
@@ -173,7 +174,7 @@ abstract class Liliana : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             mangaDetailsParse(document),
             document.select(chapterListSelector()).map { chapterFromElement(it) },
@@ -217,7 +218,7 @@ abstract class Liliana : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
-        val document = client.get(chapterUrl).asJsoup()
+        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
         val script = document.selectFirst("script:containsData(const CHAPTER_ID)")?.data()
             ?: throw Exception("Failed to get chapter id")
 
@@ -230,7 +231,7 @@ abstract class Liliana : KeiSource() {
             add("X-Requested-With", "XMLHttpRequest")
         }.build()
 
-        val data = client.get("$baseUrl/ajax/image/list/chap/$chapterId", pageHeaders)
+        val data = client.get("$baseUrl/ajax/image/list/chap/$chapterId", pageHeaders, Fetch.XHR)
             .parseAs<PageListResponseDto>()
 
         if (!data.status) {
@@ -261,11 +262,10 @@ abstract class Liliana : KeiSource() {
         return !path.endsWith(".svg") && !lowerUrl.contains("loading_comments")
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("Accept", "image/avif,image/webp,*/*")
         .header("Host", page.imageUrl!!.toHttpUrl().host)
         .removeHeader("Referer")
-        .removeHeader("Origin")
         .build()
 
     // ============================= Utilities ==============================

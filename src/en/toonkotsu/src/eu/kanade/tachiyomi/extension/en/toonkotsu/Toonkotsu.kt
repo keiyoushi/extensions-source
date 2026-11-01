@@ -15,9 +15,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.aesCtr
+import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
@@ -35,16 +38,11 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.buffer
-import okio.cipherSource
-import javax.crypto.Cipher
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class Toonkotsu :
     KeiSource(),
     ConfigurableSource {
-
     private val preferences by getPreferencesLazy {
         if (contains(PREF_DEDUPLICATE_CHAPTERS)) {
             val editor = edit().remove(PREF_DEDUPLICATE_CHAPTERS)
@@ -73,7 +71,7 @@ abstract class Toonkotsu :
             if (!showAdult) addQueryParameter("sfw", "1")
             applyContentPreferences()
         }.build()
-        val data = client.get(url).parseAs<LatestDto>()
+        val data = client.get(url, Fetch.XHR).parseAs<LatestDto>()
         val mangas = data.items.map { it.series }.distinctBy { it.hid }.map { it.toSManga(baseUrl, showSpoilerTags) }
         return MangasPage(mangas, data.hasNextPage)
     }
@@ -112,7 +110,7 @@ abstract class Toonkotsu :
             params()
             applyContentPreferences()
         }.build()
-        val data = client.get(url).parseAs<BrowseDto>()
+        val data = client.get(url, Fetch.XHR).parseAs<BrowseDto>()
         return MangasPage(data.items.map { it.toSManga(baseUrl, showSpoilerTags) }, data.hasNextPage)
     }
 
@@ -145,7 +143,7 @@ abstract class Toonkotsu :
                     addQueryParameter("limit", "42")
                     if (!showAdult) addQueryParameter("sfw", "1")
                 }.build()
-                val data = client.get(groupUrl).parseAs<GroupPageDto>()
+                val data = client.get(groupUrl, Fetch.XHR).parseAs<GroupPageDto>()
                 MangasPage(data.items.map { it.toSManga(baseUrl, showSpoilerTags) }, data.hasNextPage)
             }
             else -> super.getMangasByUrl(url, page)
@@ -169,17 +167,26 @@ abstract class Toonkotsu :
     ): SMangaUpdate = coroutineScope {
         val hid = getMangaUrl(manga).toHttpUrl().pathSegments[1]
         val mangabaka = if (fetchDetails) async { fetchMangabaka(hid) } else null
-        val data = client.get("$baseUrl/cdn/v1/series/$hid").parseAs<SeriesResponse>()
+        val englishCovers = preferences.getBoolean(PREF_ENGLISH_COVERS, false)
+        val covers = if (fetchDetails && englishCovers) async { fetchCovers(hid) } else null
+        val data = client.get("$baseUrl/cdn/v1/series/$hid", Fetch.XHR).parseAs<SeriesResponse>()
         // Without details the description stays null, which the app keeps as stored
         val details = mangabaka?.let { data.series.toSMangaDetails(baseUrl, showSpoilerTags, showAdult, it.await()) }
             ?: data.series.toSManga(baseUrl, showSpoilerTags)
+        // Null keeps the stored cover on a chapters-only refresh
+        if (englishCovers && !data.series.isEnglishOriginal) {
+            details.thumbnail_url = covers?.await()?.earliestEnglishUrl(baseUrl) ?: details.thumbnail_url.takeIf { fetchDetails }
+        }
         // One per chapter ranks by likes, a request of its own
         val needsLikes = preferences.getString(PREF_CHAPTER_LIST, ONE_PER_GROUP) == ONE_PER_CHAPTER
         SMangaUpdate(details, if (fetchChapters || !needsLikes) chapterList(data, manga.url) else chapters)
     }
 
+    // The site's Covers tab
+    private suspend fun fetchCovers(hid: String): CoversDto = client.get("$baseUrl/cdn/v1/series/$hid/covers", Fetch.XHR).parseAs()
+
     // The site's Details tab and External Links; `{"available":false}` when it has none
-    private suspend fun fetchMangabaka(hid: String): MangabakaDto = client.get("$baseUrl/api/v1/series/$hid/mangabaka").parseAs()
+    private suspend fun fetchMangabaka(hid: String): MangabakaDto = client.get("$baseUrl/api/v1/series/$hid/mangabaka", Fetch.XHR).parseAs()
 
     private suspend fun chapterList(data: SeriesResponse, mangaUrl: String): List<SChapter> {
         val allUploads = data.chapters.flatMap { it.withAlts() }
@@ -233,7 +240,7 @@ abstract class Toonkotsu :
         val url = "$baseUrl/api/manga/chapter-likes".toHttpUrl().newBuilder()
             .addQueryParameter("seriesId", seriesId.toString())
             .build()
-        return client.get(url).parseAs<LikesDto>().counts
+        return client.get(url, Fetch.XHR).parseAs<LikesDto>().counts
     }
 
     private fun commaList(key: String, default: String) = preferences.getString(key, default).orEmpty().split(',').map(String::trim).filter(String::isNotEmpty)
@@ -242,7 +249,7 @@ abstract class Toonkotsu :
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val hid = getMangaUrl(manga).toHttpUrl().pathSegments[1]
-        return client.get("$baseUrl/cdn/v1/series/$hid").parseAs<SeriesResponse>().recs.map { it.toSManga(baseUrl, showSpoilerTags) }
+        return client.get("$baseUrl/cdn/v1/series/$hid", Fetch.XHR).parseAs<SeriesResponse>().recs.map { it.toSManga(baseUrl, showSpoilerTags) }
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -255,7 +262,7 @@ abstract class Toonkotsu :
 
     private suspend fun fetchChapter(id: String, chapterUrl: String, unlocked: Boolean = false): ChapterResponse {
         val unlocksBefore = unlocks
-        val response = client.get("$baseUrl/api/manga/chapter/$id", ensureSuccess = false)
+        val response = client.get("$baseUrl/api/manga/chapter/$id", Fetch.XHR, ensureSuccess = false)
         if (response.isSuccessful) return response.parseAs()
         if (response.code != 429) {
             response.close()
@@ -278,7 +285,7 @@ abstract class Toonkotsu :
     private suspend fun unlock(chapterUrl: String, unlocksBefore: Int) = unlockMutex.withLock {
         if (unlocks != unlocksBefore) return@withLock
         val token = getTurnstileToken(url = chapterUrl, siteKey = TURNSTILE_SITE_KEY)
-        client.post("$baseUrl/api/manga/unlock", body = UnlockBody(token).toJsonRequestBody()).close()
+        client.post("$baseUrl/api/manga/unlock", fetch = Fetch.XHR, body = UnlockBody(token).toJsonRequestBody()).close()
         unlocks++
     }
 
@@ -292,15 +299,12 @@ abstract class Toonkotsu :
 
         val key = Base64.decode(fragment.substringBefore("."), Base64.URL_SAFE)
         val nonce = Base64.decode(fragment.substringAfter("."), Base64.URL_SAFE)
-        val cipher = Cipher.getInstance("AES/CTR/NoPadding").apply {
-            init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(nonce.copyOf(16)))
-        }
-        val body = response.body.source().cipherSource(cipher).buffer()
+        val body = response.body.source().aesDecrypt(aesCtr(key, nonce.copyOf(16))).buffer()
             .asResponseBody(response.body.contentType(), response.body.contentLength())
         return response.newBuilder().body(body).build()
     }
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/cdn/v1/facets?sfw=0").parseAs<FacetsDto>().toJsonElement()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/cdn/v1/facets?sfw=0", Fetch.XHR).parseAs<FacetsDto>().toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val facets = data?.parseAs<FacetsDto>()
@@ -406,6 +410,13 @@ abstract class Toonkotsu :
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_ENGLISH_COVERS
+            title = "Prefer English covers"
+            summary = "From the site's Covers tab"
+            setDefaultValue(false)
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
             key = PREF_SPOILER_TAGS
             title = "Show spoiler tags"
             summary = "Include tags the site marks as spoilers in the genres"
@@ -424,6 +435,7 @@ abstract class Toonkotsu :
         private const val PREF_PREFERRED_SOURCES = "pref_preferred_sources"
         private const val PREF_PREFERRED_GROUPS = "pref_preferred_groups"
         private const val PREF_HIDDEN_GROUPS = "pref_hidden_groups"
+        private const val PREF_ENGLISH_COVERS = "pref_english_covers"
         private const val DEFAULT_PREFERRED_GROUPS = "Official"
         private const val ALL_UPLOADS = "all"
         private const val ONE_PER_GROUP = "group"

@@ -12,6 +12,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -67,7 +69,7 @@ abstract class Hiper :
             val acceptHeaders = headers.newBuilder()
                 .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
                 .build()
-            network.client.newCall(GET(baseUrl, acceptHeaders)).execute().close()
+            network.client.newCall(GET(baseUrl, acceptHeaders).newBuilder().fetch(Fetch.DOCUMENT).build()).execute().close()
             chain.proceed(chain.request())
         } else {
             response
@@ -146,7 +148,7 @@ abstract class Hiper :
             .addQueryParameter("input", input)
             .build()
 
-        return parseSearchMangaList(client.get(url))
+        return parseSearchMangaList(client.get(url, Fetch.XHR))
     }
 
     protected open fun parseSearchMangaList(response: Response): MangasPage {
@@ -193,7 +195,7 @@ abstract class Hiper :
             .addQueryParameter("input", input.toString())
             .build()
 
-        return parseMangaDetails(client.get(url))
+        return parseMangaDetails(client.get(url, Fetch.XHR))
     }
 
     protected open fun parseMangaDetails(response: Response): SManga {
@@ -249,7 +251,7 @@ abstract class Hiper :
             .addQueryParameter("input", input.toString())
             .build()
 
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         val element = response.parseAs<List<JsonElement>>().last()
         val chaptersDTO = element["result"]["data"]["json"]!!.parseAs<List<ChapterDto>>()
 
@@ -329,13 +331,13 @@ abstract class Hiper :
         val chapterUrl = getChapterUrl(chapter)
         val url = pageListUrl(chapter)
 
-        val pages = parsePages(client.get(url, ensureSuccess = false))
+        val pages = parsePages(client.get(url, Fetch.XHR, ensureSuccess = false))
 
         return pages?.takeIf { it.isNotEmpty() } ?: run {
             fetchHeadersWv(chapterUrl)
 
             wvHeaders?.let {
-                parsePages(client.get(url, ensureSuccess = false)) ?: emptyList()
+                parsePages(client.get(url, Fetch.XHR, ensureSuccess = false)) ?: emptyList()
             } ?: error("Failed to get headers")
         }
     }
@@ -356,7 +358,7 @@ abstract class Hiper :
 
     protected open suspend fun fetchHeadersWv(url: String) {
         wvMutex.withLock {
-            val doc = client.get(url).asJsoup()
+            val doc = client.get(url, Fetch.DOCUMENT).asJsoup()
 
             runWebView(timeout = 15.seconds) {
                 userAgent = headers["User-Agent"] ?: ""

@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.head
 import keiyoushi.network.rateLimit
@@ -83,7 +84,7 @@ abstract class LibGroup :
 
     private var constants: Constants? = null
 
-    private suspend fun fetchConstants(): Constants = client.get("$apiDomain/api/constants?fields[]=genres&fields[]=tags&fields[]=types&fields[]=scanlateStatus&fields[]=status&fields[]=format&fields[]=ageRestriction&fields[]=imageServers")
+    private suspend fun fetchConstants(): Constants = client.get("$apiDomain/api/constants?fields[]=genres&fields[]=tags&fields[]=types&fields[]=scanlateStatus&fields[]=status&fields[]=format&fields[]=ageRestriction&fields[]=imageServers", Fetch.XHR)
         .parseAs<Data<Constants>>().data
         .also { constants = it }
 
@@ -167,7 +168,7 @@ abstract class LibGroup :
             add("Accept", "application/json")
             add("Authorization", token)
         }.build()
-        client.get("$apiDomain/api/auth/me", headers, ensureSuccess = false).use { response ->
+        client.get("$apiDomain/api/auth/me", headers, Fetch.XHR, ensureSuccess = false).use { response ->
             return when (response.code) {
                 401 -> throw Exception("Попробуйте авторизоваться через WebView🌎︎. Для завершения авторизации может потребоваться перезапустить приложение с полной остановкой.")
                 else -> true
@@ -177,13 +178,13 @@ abstract class LibGroup :
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/ru/manga${manga.url}"
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangasPage(client.get("$apiDomain/api/latest-updates?page=$page"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangasPage(client.get("$apiDomain/api/latest-updates?page=$page", Fetch.XHR))
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$apiDomain/api/manga".toHttpUrl().newBuilder()
             .addQueryParameter("site_id[]", siteId.toString())
             .addQueryParameter("page", page.toString())
-        return parseMangasPage(client.get(url.build()))
+        return parseMangasPage(client.get(url.build(), Fetch.XHR))
     }
 
     private fun parseMangasPage(response: Response): MangasPage {
@@ -226,7 +227,7 @@ abstract class LibGroup :
             .addQueryParameter("fields[]", "status_id")
             .addQueryParameter("fields[]", "artists")
 
-        return client.get(url.build()).parseAs<Data<Manga>>().data.toSManga(isEng())
+        return client.get(url.build(), Fetch.XHR).parseAs<Data<Manga>>().data.toSManga(isEng())
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -240,11 +241,11 @@ abstract class LibGroup :
         return "$baseUrl/ru/$slugUrl/read/v$volume/c$number?$branchStr$userStr"
     }
 
-    private suspend fun getDefaultBranch(id: String): List<Branch> = client.get("$apiDomain/api/branches/$id").parseAs<Data<List<Branch>>>().data
+    private suspend fun getDefaultBranch(id: String): List<Branch> = client.get("$apiDomain/api/branches/$id", Fetch.XHR).parseAs<Data<List<Branch>>>().data
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val slugUrl = manga.url.removePrefix("/")
-        val chaptersData = client.get("$apiDomain/api/manga${manga.url}/chapters").parseAs<Data<List<Chapter>>>()
+        val chaptersData = client.get("$apiDomain/api/manga${manga.url}/chapters", Fetch.XHR).parseAs<Data<List<Chapter>>>()
             .also { if (it.data.isEmpty()) return emptyList() }
         val sortingList = preferences.getString(SORTING_PREF, "ms_mixing")
         val defaultBranchId = if ((sortingList == "ms_mixing") && (chaptersData.data.getBranchCount() > 1)) {
@@ -282,7 +283,7 @@ abstract class LibGroup :
         if (!chapter.url.contains("--")) throw Exception(urlChangedError(name))
         if (chapter.name.contains("$$")) throw Exception("Глава не куплена")
 
-        return client.get("$apiDomain/api/manga${chapter.url}").parseAs<Data<Pages>>().data
+        return client.get("$apiDomain/api/manga${chapter.url}", Fetch.XHR).parseAs<Data<Pages>>().data
             .toPageList()
             .sortedBy { it.index }
     }
@@ -305,13 +306,13 @@ abstract class LibGroup :
         return "$server${page.url}"
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .headers(imageHeader())
         .build()
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val titleId = url.pathSegments.getOrNull(2)?.takeIf { it.isNotEmpty() } ?: return null
-        return client.get("$apiDomain/api/manga/$titleId").parseAs<Data<MangaShort>>().data.toSManga(isEng())
+        return client.get("$apiDomain/api/manga/$titleId", Fetch.XHR).parseAs<Data<MangaShort>>().data.toSManga(isEng())
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -393,7 +394,7 @@ abstract class LibGroup :
                 else -> {}
             }
         }
-        return parseMangasPage(client.get(url.build()))
+        return parseMangasPage(client.get(url.build(), Fetch.XHR))
     }
 
     // Filters

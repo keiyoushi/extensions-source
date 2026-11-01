@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -15,9 +16,8 @@ import keiyoushi.utils.asJsoup
 abstract class CloneManga : KeiSource() {
 
     override val supportsLatest = false
-
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/viewer_landing.php").asJsoup()
+        val document = client.get("$baseUrl/viewer_landing.php", Fetch.DOCUMENT).asJsoup()
         val mangas = document.getElementsByClass("comicPreviewContainer").map { element ->
             val attr = element.getElementsByClass("comicPreview").attr("style")
             SManga.create().apply {
@@ -49,7 +49,7 @@ abstract class CloneManga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val seriesPath = document.location().removePrefix(baseUrl)
         val scriptContent = document.getElementsByTag("script")[3].toString()
         val numChapters = PAGE_REGEX.findAll(scriptContent)
@@ -70,7 +70,7 @@ abstract class CloneManga : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val imgAbsoluteUrl = document.getElementsByClass("subsectionContainer").first()!!
             .select("img").first()!!.absUrl("src")
         return listOf(Page(1, imageUrl = imgAbsoluteUrl))

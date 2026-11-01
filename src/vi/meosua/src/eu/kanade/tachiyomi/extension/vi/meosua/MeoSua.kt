@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -39,7 +40,7 @@ abstract class MeoSua : KeiSource() {
         val url = "$baseUrl/xem-nhieu-nhat/".toHttpUrl().newBuilder()
             .addQueryParameter("trang", page.toString())
             .build()
-        return parseMangaList(client.get(url))
+        return parseMangaList(client.get(url, Fetch.DOCUMENT))
     }
 
     // ============================== Latest ================================
@@ -48,7 +49,7 @@ abstract class MeoSua : KeiSource() {
         val url = "$baseUrl/truyen-moi-cap-nhat/".toHttpUrl().newBuilder()
             .addQueryParameter("trang", page.toString())
             .build()
-        return parseMangaList(client.get(url))
+        return parseMangaList(client.get(url, Fetch.DOCUMENT))
     }
 
     // ============================== Search ================================
@@ -58,7 +59,7 @@ abstract class MeoSua : KeiSource() {
             val url = "$baseUrl/".toHttpUrl().newBuilder()
                 .addQueryParameter("s", query)
                 .build()
-            return parseSearchManga(client.get(url))
+            return parseSearchManga(client.get(url, Fetch.DOCUMENT))
         }
 
         val genrePath = filters.firstInstanceOrNull<GenreFilter>()?.selectedPath()
@@ -66,7 +67,7 @@ abstract class MeoSua : KeiSource() {
             val url = "$baseUrl$genrePath".toHttpUrl().newBuilder()
                 .addQueryParameter("trang", page.toString())
                 .build()
-            return parseMangaList(client.get(url))
+            return parseMangaList(client.get(url, Fetch.DOCUMENT))
         }
 
         return getLatestUpdates(page)
@@ -131,7 +132,7 @@ abstract class MeoSua : KeiSource() {
         val detailUrl = if (url.pathSegments.firstOrNull() == "truyen") {
             url
         } else {
-            val chapterDocument = client.get(url).asJsoup()
+            val chapterDocument = client.get(url, Fetch.DOCUMENT).asJsoup()
             if (chapterDocument.selectFirst("#view-chapter") == null) return null
             chapterDocument.selectFirst("a[href*=\"/truyen/\"]")
                 ?.absUrl("href")
@@ -151,7 +152,7 @@ abstract class MeoSua : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
@@ -180,7 +181,7 @@ abstract class MeoSua : KeiSource() {
             val pageUrl = getMangaUrl(manga).toHttpUrl().newBuilder()
                 .setQueryParameter("trang", page.toString())
                 .build()
-            val pageDocument = client.get(pageUrl).asJsoup()
+            val pageDocument = client.get(pageUrl, Fetch.DOCUMENT).asJsoup()
             allChapters += pageDocument
                 .select("#chapter-list-tab .chapter-item, .tab-story .chapter-list .chapter-item")
                 .mapNotNull(::chapterFromElement)
@@ -233,7 +234,7 @@ abstract class MeoSua : KeiSource() {
     // ============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         if (document.selectFirst("#view-chapter .lock-card, #view-chapter #unlock-chapter, #view-chapter #xu-lock") != null) {
             throw Exception(lockedChapterMessage)
@@ -260,7 +261,7 @@ abstract class MeoSua : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/the-loai/").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/the-loai/", Fetch.DOCUMENT).asJsoup()
         .select("a.uk-button[href*=\"/the-loai/\"]:not(.uk-disabled)")
         .map { link ->
             GenreOption(
@@ -282,7 +283,7 @@ abstract class MeoSua : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val relatedSlider = document.select("h3")
             .firstOrNull { it.text().equals("Truyện khác của nhóm", ignoreCase = true) }
             ?.nextElementSibling()

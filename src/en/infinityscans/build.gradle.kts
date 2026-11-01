@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "InfinityScans"
-    versionCode = 14
+    versionCode = 16
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

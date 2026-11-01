@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -33,7 +34,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class Pawchive :
     KeiSource(),
     ConfigurableSource {
-
     private val preferences = getPreferences()
 
     private val apiPath = "api/v1"
@@ -132,7 +132,7 @@ abstract class Pawchive :
                 if (fav != null) {
                     val url = "$baseUrl/$apiPath/account/favorites"
 
-                    apiClient.get(url, ensureSuccess = false).use { response ->
+                    apiClient.get(url, Fetch.XHR, ensureSuccess = false).use { response ->
                         if (response.isSuccessful) {
                             response.parseAs<List<PawchiveFavoritesDto>>()
                         } else {
@@ -149,7 +149,7 @@ abstract class Pawchive :
                 val url = "$baseUrl/$apiPath/creators"
                 val cacheControl = CacheControl.Builder().maxStale(30.minutes).build()
 
-                apiClient.get(url, cacheControl).use { response ->
+                apiClient.get(url, Fetch.XHR, cacheControl).use { response ->
                     if (!response.isSuccessful) {
                         throw Exception("HTTP error ${response.code}")
                     }
@@ -221,7 +221,7 @@ abstract class Pawchive :
         val cache = CacheControl.Builder().maxStale(30.minutes).build()
         val url = "$baseUrl/$apiPath/creators"
 
-        return apiClient.get(url, cache, ensureSuccess = false).use { response ->
+        return apiClient.get(url, Fetch.XHR, cache, ensureSuccess = false).use { response ->
             if (!response.isSuccessful) {
                 return null
             }
@@ -254,7 +254,7 @@ abstract class Pawchive :
             while (offset < prefMaxPost && hasNextPage) {
                 val url = "$baseUrl/$apiPath${manga.url}/posts?o=$offset"
 
-                val page: List<PawchivePostDto> = apiClient.get(url).parseAs()
+                val page: List<PawchivePostDto> = apiClient.get(url, Fetch.XHR).parseAs()
 
                 page.forEach { post ->
                     if (post.images.isNotEmpty()) {
@@ -288,7 +288,7 @@ abstract class Pawchive :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = "$baseUrl/$apiPath${chapter.url}"
 
-        apiClient.get(url).use { response ->
+        apiClient.get(url, Fetch.XHR).use { response ->
             val postData: PawchivePostDto = response.parseAs()
 
             val useLowRes = preferences.getBoolean(USE_LOW_RES_IMG, false)

@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -46,7 +47,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class SpyFakku :
     KeiSource(),
     ConfigurableSource {
-
     private val baseImageUrl = "$TMP_CDN_URL/image"
 
     private val baseApiUrl get() = "$baseUrl/api"
@@ -96,7 +96,7 @@ abstract class SpyFakku :
 
     // ============================== Popular ==============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseApiUrl/library?sort=released_at&page=$page").toMangasPage()
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseApiUrl/library?sort=released_at&page=$page", Fetch.XHR).toMangasPage()
 
     private fun Response.toMangasPage(): MangasPage {
         val library = parseAs<HentaiLib>()
@@ -108,7 +108,7 @@ abstract class SpyFakku :
 
     // ============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get("$baseApiUrl/library?sort=created_at&page=$page").toMangasPage()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get("$baseApiUrl/library?sort=created_at&page=$page", Fetch.XHR).toMangasPage()
 
     // ============================== Search ===============================
 
@@ -151,7 +151,7 @@ abstract class SpyFakku :
             addQueryParameter("page", page.toString())
         }.build()
 
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.XHR).toMangasPage()
     }
 
     // ============================== Details ==============================
@@ -236,7 +236,7 @@ abstract class SpyFakku :
         if (!chapter.url.contains("&hash=") && !chapter.url.contains("?")) {
             val path = ARCHIVE_REGEX.replace(chapter.url) { "/g/${it.groupValues[1]}" }.substringBefore("?")
 
-            client.get(baseApiUrl + path, ensureSuccess = false).use { response ->
+            client.get(baseApiUrl + path, Fetch.XHR, ensureSuccess = false).use { response ->
                 if (response.isSuccessful) {
                     val hentai = response.parseAs<Hentai>()
                     return List(hentai.pages) { index ->
@@ -247,7 +247,7 @@ abstract class SpyFakku :
 
             repeat(3) {
                 try {
-                    client.get("$baseUrl$path/__data.json", ensureSuccess = false).use { response ->
+                    client.get("$baseUrl$path/__data.json", Fetch.XHR, ensureSuccess = false).use { response ->
                         if (response.isSuccessful) {
                             val add = getAdditionals(response.parseAs<Nodes>().nodes.last().data)
                             return List(add.pages) { index ->
@@ -292,7 +292,7 @@ abstract class SpyFakku :
     private suspend fun getShortHentai(manga: SManga): ShortHentai {
         val path = ARCHIVE_REGEX.replace(manga.url) { "/g/${it.groupValues[1]}" }.substringBefore("?")
 
-        client.get(baseApiUrl + path, ensureSuccess = false).use { response ->
+        client.get(baseApiUrl + path, Fetch.XHR, ensureSuccess = false).use { response ->
             if (response.isSuccessful) {
                 return response.parseAs<ShortHentai>()
             }
@@ -300,7 +300,7 @@ abstract class SpyFakku :
 
         repeat(3) {
             try {
-                client.get("$baseUrl$path/__data.json", ensureSuccess = false).use { response ->
+                client.get("$baseUrl$path/__data.json", Fetch.XHR, ensureSuccess = false).use { response ->
                     if (response.isSuccessful) {
                         return getAdditionals(response.parseAs<Nodes>().nodes.last().data)
                     }

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -34,7 +35,7 @@ abstract class MangaBlackCat : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        return parseMangaList(client.get(url).asJsoup())
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -43,7 +44,7 @@ abstract class MangaBlackCat : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        return parseMangaList(client.get(url).asJsoup())
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -53,7 +54,7 @@ abstract class MangaBlackCat : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        return parseMangaList(client.get(url).asJsoup())
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private fun parseMangaList(document: Document): MangasPage {
@@ -84,7 +85,7 @@ abstract class MangaBlackCat : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val mangaUrl = getMangaUrl(manga)
-        val document = client.get(mangaUrl).asJsoup()
+        val document = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(
             mangaDetailsParse(document, manga),
@@ -125,7 +126,7 @@ abstract class MangaBlackCat : KeiSource() {
             val nextPageHeaders = headersBuilder()
                 .set("Referer", document.location())
                 .build()
-            document = client.get(nextPageUrl, nextPageHeaders).asJsoup()
+            document = client.get(nextPageUrl, nextPageHeaders, Fetch.DOCUMENT).asJsoup()
         }
 
         return chapters
@@ -187,7 +188,7 @@ abstract class MangaBlackCat : KeiSource() {
         ?.takeUnless { it.isBlank() }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val chapterUrl = document.location()
 
         val bootPages = BOOT_JSON_REGEX.findAll(document.html())
@@ -205,8 +206,7 @@ abstract class MangaBlackCat : KeiSource() {
             .mapIndexed { index, imageUrl -> Page(index, chapterUrl, imageUrl) }
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
-        .header("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*")
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("Referer", page.url)
         .build()
 

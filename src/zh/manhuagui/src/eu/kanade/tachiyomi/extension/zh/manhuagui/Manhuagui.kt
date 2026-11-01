@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.lzstring.LZString
 import keiyoushi.lib.unpacker.Unpacker
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -47,7 +48,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class Manhuagui :
     KeiSource(),
     ConfigurableSource {
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val imageServer = arrayOf("https://i.hamreus.com", "https://cf.hamreus.com")
@@ -85,7 +85,7 @@ abstract class Manhuagui :
         }
     }
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/list/view_p$page.html").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/list/view_p$page.html", Fetch.DOCUMENT).asJsoup())
 
     private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select("ul#contList > li").map(::mangaFromElement)
@@ -93,7 +93,7 @@ abstract class Manhuagui :
         return MangasPage(mangas, hasNextPage)
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/list/update_p$page.html").asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/list/update_p$page.html", Fetch.DOCUMENT).asJsoup())
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = if (query.isNotEmpty()) {
@@ -122,7 +122,7 @@ abstract class Manhuagui :
             }
         }
 
-        val response = client.get(url)
+        val response = client.get(url, Fetch.DOCUMENT)
         val path = response.request.url.encodedPath
         val document = response.asJsoup()
         return when {
@@ -182,7 +182,7 @@ abstract class Manhuagui :
         if (!url.host.endsWith("manhuagui.com") && !url.host.endsWith("mhgui.com")) return null
         val id = url.pathSegments.getOrNull(1) ?: return null
 
-        val document = client.get("$baseUrl/comic/$id").asJsoup()
+        val document = client.get("$baseUrl/comic/$id", Fetch.DOCUMENT).asJsoup()
         return SManga.create().apply {
             parseDetails(document)
             this.url = "/comic/$id/"
@@ -196,7 +196,7 @@ abstract class Manhuagui :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
 
         val bid = Regex("""\d+""").find(manga.url)?.value
         if (fetchDetails && bid != null) {
@@ -210,6 +210,7 @@ abstract class Manhuagui :
                     client.post(
                         "$baseUrl/tools/submit_ajax.ashx?action=user_check_login",
                         ajaxHeaders,
+                        Fetch.XHR,
                         FormBody.Builder().build(),
                         ensureSuccess = false,
                     ).close()
@@ -218,6 +219,7 @@ abstract class Manhuagui :
                     client.get(
                         "$baseUrl/tools/vote.ashx?act=get&bid=$bid",
                         ajaxHeaders,
+                        Fetch.XHR,
                         ensureSuccess = false,
                     ).close()
                 }.onFailure { it.printStackTrace() }
@@ -286,7 +288,7 @@ abstract class Manhuagui :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         if (document.selectFirst("#erroraudit_show") != null && !getShowR18()) {
             error("R18作品显示开关未开启或未生效")
         }

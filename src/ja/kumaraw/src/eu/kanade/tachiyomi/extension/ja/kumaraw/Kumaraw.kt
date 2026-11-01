@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -36,7 +37,7 @@ abstract class Kumaraw : KeiSource() {
 
     // Popular
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
 
         val mangasTopDay = document.select("div#top_day div.story_item")
         val mangasTopMonth = document.select("div#top_month div.story_item")
@@ -53,7 +54,7 @@ abstract class Kumaraw : KeiSource() {
     // Latest
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val pageStr = if (page > 1) "/latest/$page" else ""
-        val document = client.get(baseUrl + pageStr).asJsoup()
+        val document = client.get(baseUrl + pageStr, Fetch.DOCUMENT).asJsoup()
         val mangas = document
             .select("div.recoment_box div.story_item")
             .map(::searchMangaFromElement)
@@ -68,7 +69,7 @@ abstract class Kumaraw : KeiSource() {
         val slug = url.pathSegments.getOrNull(1) ?: return null
 
         // Rewrite to strip suffixes after slug
-        return mangaDetailsParse(client.get("$baseUrl/manga/$slug").asJsoup())
+        return mangaDetailsParse(client.get("$baseUrl/manga/$slug", Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -76,7 +77,7 @@ abstract class Kumaraw : KeiSource() {
             .addQueryParameter("search", query)
             .build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document
             .select("div.recoment_box div.story_item")
             .map(::searchMangaFromElement)
@@ -108,7 +109,7 @@ abstract class Kumaraw : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(
             mangaDetailsParse(document),
@@ -211,7 +212,7 @@ abstract class Kumaraw : KeiSource() {
 
     // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val script = document.selectFirst("script:containsData(slides_p_path)")?.data()
             ?: throw Exception("スクリプトからの画像URL抽出に失敗しました") // TODO: check MTL
 

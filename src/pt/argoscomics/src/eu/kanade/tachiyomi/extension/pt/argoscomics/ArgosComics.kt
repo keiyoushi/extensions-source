@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -33,7 +34,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class ArgosComics : KeiSource() {
-
     override fun OkHttpClient.Builder.configureClient() = readTimeout(2.minutes)
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
@@ -60,12 +60,12 @@ abstract class ArgosComics : KeiSource() {
             .addPathSegment("projetos")
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(url, rscHeaders).extractNextJs<MangasListDto>()!!.toMangasPage()
+        return client.get(url, rscHeaders, Fetch.XHR).extractNextJs<MangasListDto>()!!.toMangasPage()
     }
 
     // ======================== Latest =============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get(baseUrl, rscHeaders).extractNextJs<LatestMangas>()!!.toMangasPage()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get(baseUrl, rscHeaders, Fetch.XHR).extractNextJs<LatestMangas>()!!.toMangasPage()
 
     // ======================== Search =============================
 
@@ -79,7 +79,7 @@ abstract class ArgosComics : KeiSource() {
             .set("Next-Action", getSearchToken(baseUrl) ?: throw Exception(WARNING))
             .build()
         val payload = listOf(query).toJsonRequestBody()
-        val dto = client.post(baseUrl, searchHeaders, payload).extractNextJs<List<MangaDto>>() ?: emptyList()
+        val dto = client.post(baseUrl, searchHeaders, Fetch.XHR, payload).extractNextJs<List<MangaDto>>() ?: emptyList()
         return MangasPage(dto.map(MangaDto::toSManga), false)
     }
 
@@ -97,7 +97,7 @@ abstract class ArgosComics : KeiSource() {
 
     private suspend fun findToken(url: String, regex: Regex, latest: Token?, build: (String, String) -> Unit): String? {
         if (latest != null) {
-            regex.find(client.get(url).body.string())?.groupValues?.last()
+            regex.find(client.get(url, Fetch.SCRIPT).body.string())?.groupValues?.last()
                 ?.also {
                     build(it, latest.url.toString())
                     return it
@@ -107,7 +107,7 @@ abstract class ArgosComics : KeiSource() {
         val urls = getNextJSChunks(url)
 
         for (url in urls) {
-            val token = regex.find(client.get(url).body.string())
+            val token = regex.find(client.get(url, Fetch.SCRIPT).body.string())
                 ?.groupValues?.last()
                 ?.also { build(it, url.toString()) }
             if (!token.isNullOrBlank()) return token
@@ -116,7 +116,7 @@ abstract class ArgosComics : KeiSource() {
     }
 
     private suspend fun getNextJSChunks(url: String): List<HttpUrl> {
-        val document = client.get(url, ensureSuccess = false).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT, ensureSuccess = false).asJsoup()
         val chunksElement = document.select("script[src*=chunks]:not([nomodule]):not([id])")
             .map { it.absUrl("src") }
             .reversed()
@@ -144,7 +144,7 @@ abstract class ArgosComics : KeiSource() {
                 val detailsHeaders = headers.newBuilder()
                     .set("Next-Action", getDetailsToken(url) ?: throw Exception(WARNING))
                     .build()
-                client.post(url, detailsHeaders, payload).extractNextJs<MangaDetailsDto>()!!.toSManga()
+                client.post(url, detailsHeaders, Fetch.XHR, payload).extractNextJs<MangaDetailsDto>()!!.toSManga()
             } else {
                 manga
             }
@@ -157,7 +157,7 @@ abstract class ArgosComics : KeiSource() {
                 val chaptersHeaders = headers.newBuilder()
                     .set("Next-Action", getChapterToken(url) ?: throw Exception(WARNING))
                     .build()
-                val response = client.post(url, chaptersHeaders, payload)
+                val response = client.post(url, chaptersHeaders, Fetch.XHR, payload)
                 val pathSegment = url.substringAfter(baseUrl)
                 response.extractNextJs<VolumeChapterDto>()!!.toChapterList(pathSegment)
             } else {
@@ -182,7 +182,7 @@ abstract class ArgosComics : KeiSource() {
         val pagesHeaders = headers.newBuilder()
             .set("Next-Action", getPagesToken(url) ?: throw Exception(WARNING))
             .build()
-        val response = client.post(url, pagesHeaders, payload)
+        val response = client.post(url, pagesHeaders, Fetch.XHR, payload)
         if (response.request.url.encodedPath == "/login") error("Acesse sua conta")
         val body = response.body.string()
         val dto = body.extractNextJsRsc<MangaDetailsDto>()

@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -37,7 +38,7 @@ abstract class ArvenScans :
         val url = "$API_URL/works/most-read".toHttpUrl().newBuilder()
             .addQueryParameter("limit", "20")
             .build()
-        val works = client.get(url).parseAs<DataDto<List<WorkDto>>>().data
+        val works = client.get(url, Fetch.XHR).parseAs<DataDto<List<WorkDto>>>().data
         return MangasPage(works.map { it.toSManga(API_URL) }, false)
     }
 
@@ -56,7 +57,7 @@ abstract class ArvenScans :
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", "24")
         }.build()
-        val data = client.get(url).parseAs<PagedDto<WorkDto>>()
+        val data = client.get(url, Fetch.XHR).parseAs<PagedDto<WorkDto>>()
         return MangasPage(data.data.map { it.toSManga(API_URL) }, data.hasNextPage)
     }
 
@@ -70,7 +71,7 @@ abstract class ArvenScans :
                     .addPathSegments("resolve/work")
                     .addPathSegment(slug)
                     .build()
-                client.get(resolveUrl).parseAs<WorkIdDto>().workId
+                client.get(resolveUrl, Fetch.XHR).parseAs<WorkIdDto>().workId
             }
             "reader" -> {
                 val chapterId = segments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
@@ -78,7 +79,7 @@ abstract class ArvenScans :
                     .addPathSegment("chapters")
                     .addPathSegment(chapterId)
                     .build()
-                client.get(chapterUrl).parseAs<WorkIdDto>().workId
+                client.get(chapterUrl, Fetch.XHR).parseAs<WorkIdDto>().workId
             }
             else -> return null
         }
@@ -96,8 +97,8 @@ abstract class ArvenScans :
     ): SMangaUpdate = coroutineScope {
         val details = if (fetchDetails) {
             async {
-                val genres = async { client.get("$API_URL/works/${manga.url}/genres").parseAs<DataDto<List<GenreDto>>>().data }
-                val work = client.get("$API_URL/works/${manga.url}").parseAs<WorkDto>()
+                val genres = async { client.get("$API_URL/works/${manga.url}/genres", Fetch.XHR).parseAs<DataDto<List<GenreDto>>>().data }
+                val work = client.get("$API_URL/works/${manga.url}", Fetch.XHR).parseAs<WorkDto>()
                 work.toSManga(API_URL, genres.await())
             }
         } else {
@@ -113,9 +114,9 @@ abstract class ArvenScans :
             .addQueryParameter("limit", "100")
             .addQueryParameter("order", "desc")
             .build()
-        val first = client.get(pageUrl(1)).parseAs<PagedDto<ChapterDto>>()
+        val first = client.get(pageUrl(1), Fetch.XHR).parseAs<PagedDto<ChapterDto>>()
         val rest = (2..first.totalPages).map { page ->
-            async { client.get(pageUrl(page)).parseAs<PagedDto<ChapterDto>>().data }
+            async { client.get(pageUrl(page), Fetch.XHR).parseAs<PagedDto<ChapterDto>>().data }
         }.awaitAll()
         val showPaid = preferences.getBoolean(SHOW_PAID_PREF, false)
         (first.data + rest.flatten())
@@ -126,13 +127,13 @@ abstract class ArvenScans :
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/reader/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val images = client.get("$API_URL/chapters/${chapter.url}").parseAs<ChapterPagesDto>().images
+        val images = client.get("$API_URL/chapters/${chapter.url}", Fetch.XHR).parseAs<ChapterPagesDto>().images
         return images.mapIndexed { index, path -> Page(index, imageUrl = API_URL + path) }
     }
 
     override val supportsFilterFetching: Boolean get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$API_URL/genres").parseAs<DataDto<List<GenreDto>>>().data
+    override suspend fun fetchFilterData(): JsonElement = client.get("$API_URL/genres", Fetch.XHR).parseAs<DataDto<List<GenreDto>>>().data
         .filter { (it.workCount ?: 0) > 0 }
         .toJsonElement()
 

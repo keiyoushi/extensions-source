@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import getFilters
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -104,9 +105,9 @@ abstract class HDoujin :
             .build()
 
         val response = if (post) {
-            client.post(newUrl, headers, FormBody.Builder().build(), ensureSuccess = false)
+            client.post(newUrl, headers, Fetch.XHR, FormBody.Builder().build(), ensureSuccess = false)
         } else {
-            client.get(newUrl, headers, ensureSuccess = false)
+            client.get(newUrl, headers, Fetch.XHR, ensureSuccess = false)
         }
 
         if (response.code in listOf(400, 403)) {

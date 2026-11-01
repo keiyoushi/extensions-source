@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -35,7 +36,6 @@ import kotlin.concurrent.withLock
 abstract class HolyScans :
     KeiSource(),
     ConfigurableSource {
-
     override val supportsLatest = false
 
     private val preferences by getPreferencesLazy()
@@ -54,7 +54,7 @@ abstract class HolyScans :
 
         val referer = "$baseUrl/manga/?m_orderby=views"
         val popularHeaders = headers.newBuilder().set("Referer", referer).build()
-        return parseAjaxMangaList(client.post("$baseUrl/wp-admin/admin-ajax.php", popularHeaders, form))
+        return parseAjaxMangaList(client.post("$baseUrl/wp-admin/admin-ajax.php", popularHeaders, Fetch.XHR, form))
     }
 
     // ============================== Latest ===============================
@@ -70,7 +70,7 @@ abstract class HolyScans :
                 .add("keyword", query)
                 .build()
 
-            val dto = client.post("$baseUrl/wp-admin/admin-ajax.php", body = form).parseAs<LiveSearchResponse>()
+            val dto = client.post("$baseUrl/wp-admin/admin-ajax.php", fetch = Fetch.XHR, body = form).parseAs<LiveSearchResponse>()
             val document = Jsoup.parseBodyFragment(dto.data, baseUrl)
             val mangas = document.select("a.holy-live-result-item").map { element ->
                 SManga.create().apply {
@@ -94,7 +94,7 @@ abstract class HolyScans :
         types.forEach { form.add("types[]", it) }
         statuses.forEach { form.add("statuses[]", it) }
 
-        return parseAjaxMangaList(client.post("$baseUrl/wp-admin/admin-ajax.php", body = form.build()))
+        return parseAjaxMangaList(client.post("$baseUrl/wp-admin/admin-ajax.php", fetch = Fetch.XHR, body = form.build()))
     }
 
     private fun parseAjaxMangaList(response: Response): MangasPage {
@@ -125,7 +125,7 @@ abstract class HolyScans :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         manga.apply {
             title = document.selectFirst("h1.hs-title")?.text() ?: throw Exception("Manga başlığı bulunamadı")
@@ -157,7 +157,7 @@ abstract class HolyScans :
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val (chapterUrl, documentHtml) = client.get(getChapterUrl(chapter)).use {
+        val (chapterUrl, documentHtml) = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).use {
             it.request.url.toString() to it.body.string()
         }
 
@@ -183,14 +183,13 @@ abstract class HolyScans :
             .set("X-Requested-With", "XMLHttpRequest")
             .build()
 
-        val dto = client.post("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, form).parseAs<PagesResponse>()
+        val dto = client.post("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, Fetch.XHR, form).parseAs<PagesResponse>()
         return dto.urls.mapIndexed { i, url ->
             Page(i, url = chapter.url, imageUrl = url)
         }
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
-        .header("Accept", "image/avif,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5")
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("Referer", baseUrl + page.url)
         .build()
 
@@ -263,7 +262,7 @@ abstract class HolyScans :
                             .add("rememberme", "forever")
                             .build()
 
-                        val loginRequest = POST("$baseUrl/giris/", headers, form)
+                        val loginRequest = POST("$baseUrl/giris/", headers.newBuilder().set("Origin", baseUrl).build(), form)
                         chain.proceed(loginRequest).close()
                     }
                 }

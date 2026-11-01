@@ -41,7 +41,7 @@ class StatusFilter :
         ),
     )
 
-class Genre(name: String, val id: String = name) : Filter.TriState(name)
+class Genre(name: String, val id: String = name) : Filter.CheckBox(name)
 class GenreListFilter(genres: List<Genre>) : Filter.Group<Genre>("Genre", genres)
 
 open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {

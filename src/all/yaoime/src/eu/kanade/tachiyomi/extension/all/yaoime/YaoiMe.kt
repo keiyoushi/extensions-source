@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.aesDecrypt
@@ -20,8 +21,10 @@ import keiyoushi.utils.decodeHex
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.int
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha256
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -29,9 +32,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.TextNode
-import java.security.MessageDigest
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class YaoiMe :
@@ -73,7 +73,7 @@ abstract class YaoiMe :
             if (page > 1) addQueryParameter("page", page.toString())
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val covers = document.select("a.tile").associate { it.attr("href") to it.selectFirst("img")?.coverUrl() }
         val mangas = document.select("a.card-title").map { link ->
             SManga.create().apply {
@@ -93,7 +93,7 @@ abstract class YaoiMe :
         if (url.host != baseUrl.toHttpUrl().host) return null
         if (url.pathSegments.firstOrNull() !in setOf("series", "chapter")) return null
         val id = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
-        return client.get("$baseUrl/series/$id").asJsoup().toSManga()
+        return client.get("$baseUrl/series/$id", Fetch.DOCUMENT).asJsoup().toSManga()
     }
 
     override suspend fun fetchMangaUpdate(
@@ -102,7 +102,7 @@ abstract class YaoiMe :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         if (!fetchChapters) return SMangaUpdate(document.toSManga(), chapters)
 
         val chapterList = document.extractNextJs<ChapterListDto>()?.let { list ->
@@ -164,7 +164,7 @@ abstract class YaoiMe :
         initialized = true
     }
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga)).asJsoup()
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         .select("main a[title][href^=/series/]")
         .map { link ->
             SManga.create().apply {
@@ -190,21 +190,19 @@ abstract class YaoiMe :
     private suspend fun readerChapter(seriesId: Int, chapterId: Long): ReaderChapterDto {
         val path = "/api/reader/chapter?s=$seriesId&c=$chapterId"
         val time = System.currentTimeMillis().toString()
-        val signature = Mac.getInstance("HmacSHA256")
-            .apply { init(SecretKeySpec(SIGN_KEY.decodeHex(), "HmacSHA256")) }
-            .doFinal("$path $time".toByteArray())
+        val signature = "$path $time".hmacSha256(SIGN_KEY.decodeHex())
         val signedHeaders = headersBuilder()
             .set("x-yf-t", time)
             .set("x-yf-s", Base64.encodeToString(signature, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP))
             .build()
-        return client.get("$baseUrl$path", signedHeaders).parseAs<ReaderDto>().chapter
+        return client.get("$baseUrl$path", signedHeaders, Fetch.XHR).parseAs<ReaderDto>().chapter
     }
 
     private fun unseal(sealed: String): List<String> {
         val data = Base64.decode(sealed, Base64.URL_SAFE)
         val salt = data.copyOfRange(0, 16)
         val iv = data.copyOfRange(16, 28)
-        val key = MessageDigest.getInstance("SHA-256").digest(SEAL_KEY.decodeHex() + salt)
+        val key = (SEAL_KEY.decodeHex() + salt).sha256()
         return data.copyOfRange(28, data.size)
             .aesDecrypt(aesGcm(key, iv))
             .decodeToString()
@@ -216,7 +214,7 @@ abstract class YaoiMe :
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter/${chapter.memo[MEMO_SOURCE]!!.int}/${chapter.url}"
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/browse").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/browse", Fetch.DOCUMENT).asJsoup()
         .extractNextJs<FilterDataDto>()!!
         .toJsonElement()
 

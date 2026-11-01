@@ -150,7 +150,6 @@ class Manga(
     private val tags: List<TagCategory> = emptyList(),
     private val description: String? = null,
     private val photo: String? = null,
-    private val hiatus: String? = null,
     private val status: String? = null,
     @SerialName("source_url")
     private val sourceUrl: String? = null,
@@ -230,11 +229,11 @@ class Manga(
             }
         }.joinToString()
         status = when {
-            "One Shot" in this@Manga.genres -> SManga.COMPLETED
-            this@Manga.hiatus == "Yes" -> SManga.ON_HIATUS
             else -> when (this@Manga.status?.lowercase()) {
                 "ongoing" -> SManga.ONGOING
                 "completed" -> SManga.COMPLETED
+                "hiatus" -> SManga.ON_HIATUS
+                "cancelled" -> SManga.CANCELLED
                 else -> SManga.UNKNOWN
             }
         }
@@ -305,6 +304,12 @@ class Manga(
 }
 
 @Serializable
+class Group(
+    val id: Int,
+    val name: String,
+)
+
+@Serializable
 class Chapter(
     val id: Int,
     @SerialName("chapter_number")
@@ -326,13 +331,7 @@ class Chapter(
     val pageCount: Int? = null,
     val source: String = "user",
     val groups: List<Group> = emptyList(),
-) {
-    @Serializable
-    class Group(
-        val id: Int,
-        val name: String,
-    )
-}
+)
 
 @Serializable
 class Volume(
@@ -347,6 +346,7 @@ class Volume(
     val date: String? = null,
     val source: String = "user",
     val language: String? = null,
+    val groups: List<Group> = emptyList(),
 )
 
 @Serializable

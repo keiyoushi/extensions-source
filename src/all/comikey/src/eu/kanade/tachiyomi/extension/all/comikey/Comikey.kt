@@ -14,6 +14,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -58,9 +60,9 @@ abstract class Comikey :
 
     private val preferences = getPreferences()
 
-    override suspend fun getPopularManga(page: Int) = parsePopularManga(client.get("$baseUrl/comics/?order=-views&page=$page"))
+    override suspend fun getPopularManga(page: Int) = parsePopularManga(client.get("$baseUrl/comics/?order=-views&page=$page", Fetch.DOCUMENT))
 
-    override suspend fun getLatestUpdates(page: Int) = parsePopularManga(client.get("$baseUrl/comics/?page=$page"))
+    override suspend fun getLatestUpdates(page: Int) = parsePopularManga(client.get("$baseUrl/comics/?page=$page", Fetch.DOCUMENT))
 
     private fun parsePopularManga(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -74,7 +76,7 @@ abstract class Comikey :
         val segments = url.pathSegments
         if (segments.size < 3) return null
         val slug = "${segments[1]}/${segments[2]}"
-        return parseMangaDetails(client.get("$baseUrl/comics/$slug").asJsoup())
+        return parseMangaDetails(client.get("$baseUrl/comics/$slug", Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -92,7 +94,7 @@ abstract class Comikey :
                 .forEach { it.addToUri(this) }
         }.build()
 
-        return parsePopularManga(client.get(url))
+        return parsePopularManga(client.get(url, Fetch.DOCUMENT))
     }
 
     private fun searchMangaFromElement(element: Element) = SManga.create().apply {
@@ -116,7 +118,7 @@ abstract class Comikey :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(
             manga = parseMangaDetails(document),
@@ -194,7 +196,7 @@ abstract class Comikey :
             gundamToken?.let { addQueryParameter("token", gundamToken) }
         }.build()
 
-        val data = client.get(chapterUrl).parseAs<ComikeyEpisodeListResponse>()
+        val data = client.get(chapterUrl, Fetch.XHR).parseAs<ComikeyEpisodeListResponse>()
         val currentTime = System.currentTimeMillis()
 
         return data.episodes
@@ -221,7 +223,7 @@ abstract class Comikey :
     override val supportsRelatedMangas = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return doc.select("div.similar-series li").mapNotNull {
             val a = it.selectFirst("a") ?: return@mapNotNull null
@@ -273,7 +275,7 @@ abstract class Comikey :
                             removeAll("X-Requested-With")
                         }.build()
 
-                        val response = client.newCall(GET(url.toString(), requestHeaders)).execute()
+                        val response = client.newCall(GET(url.toString(), requestHeaders).newBuilder().fetch(Fetch.XHR).build()).execute()
                         manifestRedirect = response.request.url
 
                         WebResourceResponse(

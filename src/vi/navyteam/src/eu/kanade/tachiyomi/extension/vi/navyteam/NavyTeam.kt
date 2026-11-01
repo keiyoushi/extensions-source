@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -39,7 +40,7 @@ abstract class NavyTeam : KeiSource() {
         val url = "$baseUrl/danh-sach-truyen/truyen-tranh".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".comic-item").mapNotNull { card ->
             val link = card.selectFirst("a[href*=/truyen/]") ?: return@mapNotNull null
             val title = card.selectFirst(".comic-title")?.text()?.takeIf(String::isNotBlank)
@@ -77,7 +78,7 @@ abstract class NavyTeam : KeiSource() {
         val url = "$baseUrl/api/search-story".toHttpUrl().newBuilder()
             .addQueryParameter("keyword", query)
             .build()
-        val mangas = client.get(url).parseAs<List<SearchResult>>().map(SearchResult::toSManga)
+        val mangas = client.get(url, Fetch.XHR).parseAs<List<SearchResult>>().map(SearchResult::toSManga)
         return MangasPage(mangas, false)
     }
 
@@ -96,7 +97,7 @@ abstract class NavyTeam : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga.url),
             chapters = parseChapterList(document),
@@ -146,7 +147,7 @@ abstract class NavyTeam : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = client
-        .get(getChapterUrl(chapter))
+        .get(getChapterUrl(chapter), Fetch.DOCUMENT)
         .asJsoup()
         .select("img.manga-img")
         .mapIndexed { index, image -> Page(index, imageUrl = image.absUrl("src")) }

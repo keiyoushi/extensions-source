@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.post
@@ -57,7 +58,7 @@ abstract class EbookJapan :
             .addQueryParameter("isRatingHigh", "1")
             .build()
 
-        val result = client.get(url).parseAs<RankingResponse>().rankingTitles
+        val result = client.get(url, Fetch.XHR).parseAs<RankingResponse>().rankingTitles
         val mangas = result.unificationTitles.map { it.toSManga() }
         return MangasPage(mangas, start + PER_PAGE < result.totalResults)
     }
@@ -70,7 +71,7 @@ abstract class EbookJapan :
             .addQueryParameter("results", PER_PAGE.toString())
             .build()
 
-        val result = client.get(url).parseAs<LatestResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<LatestResponse>()
         val mangas = result.items.map { it.toSManga() }
         return MangasPage(mangas, start + PER_PAGE < result.totalResults)
     }
@@ -84,7 +85,7 @@ abstract class EbookJapan :
             .addQueryParameter("sort", "weeklyPurchasedRanking")
             .build()
 
-        val result = client.get(url).parseAs<SearchResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<SearchResponse>()
         val mangas = result.items.map { it.toSManga() }
         return MangasPage(mangas, start + PER_PAGE < result.totalResults)
     }
@@ -101,7 +102,7 @@ abstract class EbookJapan :
             val url = "$apiUrl/books/titleV2/sync".toHttpUrl().newBuilder()
                 .addQueryParameter("titleId", manga.url)
                 .build()
-            client.get(url).parseAs<DetailResponse>()
+            client.get(url, Fetch.XHR).parseAs<DetailResponse>()
         }
 
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
@@ -127,7 +128,7 @@ abstract class EbookJapan :
             .addQueryParameter("isSortAsc", "0")
             .build()
 
-        return client.get(url).parseAs<StoryListResponse>().stories
+        return client.get(url, Fetch.XHR).parseAs<StoryListResponse>().stories
             .filter { !hideLocked || !it.isLocked }
             .map { it.toSChapter() }
     }
@@ -137,7 +138,7 @@ abstract class EbookJapan :
             .addQueryParameter("titleId", titleId)
             .build()
 
-        return client.get(url).parseAs<PublicationListResponse>().publications.orEmpty()
+        return client.get(url, Fetch.XHR).parseAs<PublicationListResponse>().publications.orEmpty()
             .filter { !hideLocked || !it.isLocked }
             .reversed()
             .map { it.toSChapter() }
@@ -158,12 +159,12 @@ abstract class EbookJapan :
             light = false,
         ).toJsonRequestBody()
 
-        val session = client.post("$viewerUrl/open_book", body).parseAs<OpenBookResponse>()
+        val session = client.post("$viewerUrl/open_book", Fetch.XHR, body).parseAs<OpenBookResponse>()
         val drmUrl = "$viewerUrl/get_drm".toHttpUrl().newBuilder()
             .addQueryParameter("session_id", session.sessionId)
             .build()
 
-        val drm = client.get(drmUrl).parseAs<DrmResponse>()
+        val drm = client.get(drmUrl, Fetch.XHR).parseAs<DrmResponse>()
         if (!drm.isFixedLayout) {
             throw Exception("Novels and other reflowable books are not supported.")
         }

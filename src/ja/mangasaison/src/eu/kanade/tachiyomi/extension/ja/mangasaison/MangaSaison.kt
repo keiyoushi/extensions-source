@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -64,6 +65,7 @@ abstract class MangaSaison :
         val limit = page * pageLimit
         val result = client.post(
             apiUrl,
+            Fetch.XHR,
             graphQLBody(
                 query = POPULAR_QUERY,
                 operationName = "storeLatestWeeklySalesRankings",
@@ -79,6 +81,7 @@ abstract class MangaSaison :
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val result = client.post(
             apiUrl,
+            Fetch.XHR,
             graphQLBody(
                 query = LATEST_QUERY,
                 operationName = "newArrivalContents",
@@ -109,7 +112,7 @@ abstract class MangaSaison :
                 "longDescription",
             ),
         ).toJsonRequestBody()
-        val result = client.post(algoliaUrl, algoliaHeaders, body).parseAs<SearchResponse>()
+        val result = client.post(algoliaUrl, algoliaHeaders, Fetch.XHR, body).parseAs<SearchResponse>()
         val mangas = result.hits.map(Hit::toSManga)
         val hasNextPage = result.hasNextPage()
         return MangasPage(mangas, hasNextPage)
@@ -126,6 +129,7 @@ abstract class MangaSaison :
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val result = client.post(
             apiUrl,
+            Fetch.XHR,
             graphQLBody(
                 query = DETAILS_QUERY,
                 operationName = "bookTitleDetail",
@@ -149,14 +153,14 @@ abstract class MangaSaison :
             .addQueryParameter("distributionId", distributionId)
             .build()
 
-        val content = client.get(contentUrl, cacheControl = FORCE_NETWORK).parseAs<ViewerResponse>()
+        val content = client.get(contentUrl, Fetch.XHR, cacheControl = FORCE_NETWORK).parseAs<ViewerResponse>()
         val accessUrl = "$viewerUrl/access-provider".toHttpUrl().newBuilder()
             .apply { if (content.contentType != "main") addPathSegment(content.contentType) }
             .addQueryParameter("contentId", content.contentId)
             .addQueryParameter("distributionId", distributionId)
             .build()
 
-        val access = client.get(accessUrl, cacheControl = FORCE_NETWORK).parseAs<AccessResponse>()
+        val access = client.get(accessUrl, Fetch.XHR, cacheControl = FORCE_NETWORK).parseAs<AccessResponse>()
         val zipUrl = access.url
         val entries = client.zipDirectory(zipUrl).entries.associateBy(Entry::name)
         val spine = client.readZipEntry(zipUrl, entries.getValue("META-INF/package.json")).buffer().parseAs<MdPackage>().spine

@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -42,7 +43,7 @@ abstract class RawUwU : KeiSource() {
             url.addPathSegment("genre").addPathSegment(genre.values[genre.state].path)
         }
         url.addQueryParameter("page", page.toString())
-        val response = client.get(url.build())
+        val response = client.get(url.build(), Fetch.XHR)
         return parseMangasPage(response)
     }
 
@@ -66,7 +67,7 @@ abstract class RawUwU : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() !in setOf("raw", "read")) return null
 
         val mangaId = url.pathSegments.getOrNull(1) ?: return null
-        val result = client.get("$baseUrl/spa/manga/$mangaId").parseAs<MangaDetailResponseDto>()
+        val result = client.get("$baseUrl/spa/manga/$mangaId", Fetch.XHR).parseAs<MangaDetailResponseDto>()
 
         return parseMangaDetails(result).apply {
             this.url = mangaId
@@ -80,7 +81,7 @@ abstract class RawUwU : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val result = client.get("$baseUrl/spa/manga/${manga.url}").parseAs<MangaDetailResponseDto>()
+        val result = client.get("$baseUrl/spa/manga/${manga.url}", Fetch.XHR).parseAs<MangaDetailResponseDto>()
         return SMangaUpdate(parseMangaDetails(result), parseChapterList(result))
     }
 
@@ -125,7 +126,7 @@ abstract class RawUwU : KeiSource() {
         val mangaId = segments[1]
         val chapterNum = segments[2].removePrefix("chapter-")
 
-        val result = client.get("$baseUrl/spa/manga/$mangaId/$chapterNum").parseAs<ChapterPageResponseDto>()
+        val result = client.get("$baseUrl/spa/manga/$mangaId/$chapterNum", Fetch.DOCUMENT).parseAs<ChapterPageResponseDto>()
 
         val chapterDetail = result.chapterDetail
         val document = Jsoup.parseBodyFragment(chapterDetail.chapterContent, chapterDetail.server)
@@ -147,7 +148,7 @@ abstract class RawUwU : KeiSource() {
     }
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/genre/all").asJsoup()
+        val document = client.get("$baseUrl/genre/all", Fetch.DOCUMENT).asJsoup()
         val genres = document.select(".genre-list a[id]").map {
             Genre(it.attr("title").toGenreName(), it.id())
         }

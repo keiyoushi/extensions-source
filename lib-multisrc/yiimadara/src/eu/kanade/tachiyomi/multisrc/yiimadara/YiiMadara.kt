@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -77,7 +78,7 @@ abstract class YiiMadara : KeiSource() {
         val url = listUrl(path, page).apply {
             if (order != null) addQueryParameter("orderby", order)
         }.build()
-        return mangaListParse(client.get(url).asJsoup(), rawListing = path == rawPath)
+        return mangaListParse(client.get(url, Fetch.DOCUMENT).asJsoup(), rawListing = path == rawPath)
     }
 
     // =============================== Search ===============================
@@ -91,7 +92,7 @@ abstract class YiiMadara : KeiSource() {
                 addQueryParameter(searchParam, query.replace('\'', '’'))
                 addQueryParameter("page", page.toString())
             }.build()
-            return mangaListParse(client.get(url).asJsoup())
+            return mangaListParse(client.get(url, Fetch.DOCUMENT).asJsoup())
         }
 
         val path = filters.firstInstanceOrNull<GenreFilter>()?.value?.takeIf(String::isNotEmpty)
@@ -102,7 +103,7 @@ abstract class YiiMadara : KeiSource() {
         val url = listUrl(path, page).apply {
             if (!sort.isNullOrEmpty()) addQueryParameter("orderby", sort)
         }.build()
-        return mangaListParse(client.get(url).asJsoup(), rawListing = path == rawPath)
+        return mangaListParse(client.get(url, Fetch.DOCUMENT).asJsoup(), rawListing = path == rawPath)
     }
 
     protected open fun listUrl(path: String, page: Int): HttpUrl.Builder = baseUrl.toHttpUrl().newBuilder().apply {
@@ -151,7 +152,7 @@ abstract class YiiMadara : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetailsParse(document).apply { url = manga.url }, chapterListParse(document))
     }
 
@@ -204,7 +205,7 @@ abstract class YiiMadara : KeiSource() {
     override val supportsRelatedMangas = true
 
     // Served from the HTTP cache right after the details request
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga)).asJsoup()
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         .select(".related-manga a:has(img), .relations-box a:has(img), .relation-content a:has(img)")
         .map { link ->
             SManga.create().apply {
@@ -236,7 +237,7 @@ abstract class YiiMadara : KeiSource() {
 
     // =============================== Pages ================================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select(".read-content img")
         .mapIndexed { index, element -> Page(index, imageUrl = element.imgUrl()) }
 
@@ -244,7 +245,7 @@ abstract class YiiMadara : KeiSource() {
 
     // =============================== Filters ==============================
 
-    override suspend fun fetchFilterData(): JsonElement = client.get(baseUrl).asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         .select("a[href*=genre/]")
         .map { it.text() to it.absUrl("href").toHttpUrl().encodedPath.trim('/') }
         .distinctBy { it.second }

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -59,7 +60,6 @@ abstract class MangaMillion : KeiSource() {
 
     override fun Headers.Builder.configureHeaders() = apply {
         if (token.isNotEmpty()) set("Access-Token", token)
-        set("Accept", "*/*")
         set("Accept-Language", "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7")
     }
 
@@ -70,7 +70,7 @@ abstract class MangaMillion : KeiSource() {
             .addQueryParameter("service_language", serviceLang)
             .build()
 
-        client.post(url, EMPTY_BODY).parseAsProto<TokenResponse>().token.accessToken
+        client.post(url, Fetch.XHR, EMPTY_BODY).parseAsProto<TokenResponse>().token.accessToken
             .also { preferences.edit().putString(TOKEN_PREF_KEY, it).apply() }
     }
 
@@ -80,7 +80,7 @@ abstract class MangaMillion : KeiSource() {
             .addQueryParameter("avif_enable", "true")
             .build()
 
-        val result = client.get(url).parseAsProto<SeriesResponse>()
+        val result = client.get(url, Fetch.XHR).parseAsProto<SeriesResponse>()
         val mangas = result.allSeries.seriesList
             .filter { lang in it.languages }
             .sortedByDescending { it.series.views }
@@ -94,7 +94,7 @@ abstract class MangaMillion : KeiSource() {
             .addQueryParameter("avif_enable", "true")
             .build()
 
-        val result = client.get(url).parseAsProto<SeriesResponse>()
+        val result = client.get(url, Fetch.XHR).parseAsProto<SeriesResponse>()
         val mangas = result.allSeries.seriesList
             .filter { lang in it.languages }
             .sortedByDescending { it.series.uploadTime }
@@ -122,7 +122,7 @@ abstract class MangaMillion : KeiSource() {
             }
             .build()
 
-        val result = client.get(url).parseAsProto<SearchResponse>()
+        val result = client.get(url, Fetch.XHR).parseAsProto<SearchResponse>()
         val mangas = result.allSeries.seriesList
             .filter { lang in it.languages }
             .map { it.series.toSManga() }
@@ -137,7 +137,7 @@ abstract class MangaMillion : KeiSource() {
             .addQueryParameter("avif_enable", "true")
             .build()
 
-        return client.get(url).parseAsProto<SearchParameterResponse>().searchParameter.toJsonElement()
+        return client.get(url, Fetch.XHR).parseAsProto<SearchParameterResponse>().searchParameter.toJsonElement()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
@@ -166,7 +166,7 @@ abstract class MangaMillion : KeiSource() {
                 .addQueryParameter("avif_enable", "true")
                 .addQueryParameter("original_title_id", manga.url)
                 .build()
-            client.get(url).parseAsProto<DetailsResponse>().detailsEntry.details.toSManga()
+            client.get(url, Fetch.XHR).parseAsProto<DetailsResponse>().detailsEntry.details.toSManga()
         }
         val chapterList = async {
             if (!fetchChapters) return@async chapters
@@ -177,7 +177,7 @@ abstract class MangaMillion : KeiSource() {
                 .addQueryParameter("translated_language", lang)
                 .build()
 
-            client.get(url).parseAsProto<ChapterResponse>().chapterEntry.chapterGroups
+            client.get(url, Fetch.XHR).parseAsProto<ChapterResponse>().chapterEntry.chapterGroups
                 .flatMap { it.chapterList }
                 .filter { it.isAvailable }
                 .map { it.toSChapter(manga.url) }
@@ -212,7 +212,7 @@ abstract class MangaMillion : KeiSource() {
             .addQueryParameter("quality", "middle")
             .build()
 
-        val viewer = client.get(url).parseAsProto<ViewerResponse>().viewer
+        val viewer = client.get(url, Fetch.XHR).parseAsProto<ViewerResponse>().viewer
         return viewer.pageList.mapIndexed { index, page ->
             Page(index, imageUrl = page.imageUrl + "#${viewer.key}:${viewer.iv}")
         }

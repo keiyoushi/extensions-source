@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -43,7 +44,7 @@ abstract class SummerToon : MangaThemesia() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         if (document.selectFirst("main.mauve-chapter-gate") != null) {
             throw Exception("Log in via WebView to read.")
         }
@@ -71,7 +72,7 @@ abstract class SummerToon : MangaThemesia() {
             .add("recheck", "0")
             .add("env", """{"opera":false,"brave":false,"ios":false,"mobile":true,"webview":false}""")
             .build()
-        val grant = client.post(ajaxUrl, decision).parseAs<AjaxDto<DecisionDto>>().data.grant
+        val grant = client.post(ajaxUrl, Fetch.XHR, decision).parseAs<AjaxDto<DecisionDto>>().data.grant
 
         val manifest = FormBody.Builder()
             .add("action", "stgate_manifest")
@@ -79,7 +80,7 @@ abstract class SummerToon : MangaThemesia() {
             .add("chapter_id", chapterId)
             .add("grant", grant)
             .build()
-        return client.post(ajaxUrl, manifest).parseAs<AjaxDto<ManifestDto>>().data.images
+        return client.post(ajaxUrl, Fetch.XHR, manifest).parseAs<AjaxDto<ManifestDto>>().data.images
             .mapIndexed { index, url -> Page(index, imageUrl = url) }
     }
 

@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.post
@@ -29,7 +30,6 @@ import okhttp3.Response
 abstract class Coolmic :
     KeiSource(),
     ConfigurableSource {
-
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "$baseUrl/api/v1"
     private val cdnUrl get() = "https://en-img.$domain"
@@ -62,7 +62,7 @@ abstract class Coolmic :
                 }
             }.build()
 
-        val result = client.get(url).parseAs<SeriesResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<SeriesResponse>()
         val mangas = result.results.map { it.toSManga(cdnUrl) }
         val hasNextPage = page * SEARCH_SIZE < result.total
         return MangasPage(mangas, hasNextPage)
@@ -81,7 +81,7 @@ abstract class Coolmic :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val result = client.get(getMangaUrl(manga)).parsePageObjects()
+        val result = client.get(getMangaUrl(manga), Fetch.DOCUMENT).parsePageObjects()
 
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val updatedChapters = result.episodes
@@ -100,7 +100,7 @@ abstract class Coolmic :
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/episodes/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val result = client.get("$apiUrl/viewer/comic/secure_episodes/${chapter.url}").parseAs<ViewerResponse>()
+        val result = client.get("$apiUrl/viewer/comic/secure_episodes/${chapter.url}", Fetch.XHR).parseAs<ViewerResponse>()
         if (result.imageData.isNullOrEmpty()) throw Exception("Log in via WebView and purchase this chapter to read.")
         return result.imageData.map {
             Page(it.num - 1, it.path)
@@ -108,7 +108,7 @@ abstract class Coolmic :
     }
 
     override suspend fun getImageUrl(page: Page): String {
-        val response = client.get(page.url)
+        val response = client.get(page.url, Fetch.XHR)
         val url = response.request.url
         val result = response.parseAs<PageResponse>()
         val key = fetchKey(result.kmsEncryptedDataKey, result.fileName)
@@ -132,6 +132,7 @@ abstract class Coolmic :
         return client.post(
             "$apiUrl/decryption_keys",
             newHeaders,
+            Fetch.XHR,
             KeyRequestBody(encryptedKey, fileName).toJsonRequestBody(),
             ensureSuccess = false,
         )
@@ -141,7 +142,7 @@ abstract class Coolmic :
 
     private suspend fun csrfToken(refresh: Boolean = false): String {
         if (refresh) cachedCsrfToken = null
-        return cachedCsrfToken ?: client.get(baseUrl, CacheControl.FORCE_NETWORK).asJsoup()
+        return cachedCsrfToken ?: client.get(baseUrl, Fetch.DOCUMENT, CacheControl.FORCE_NETWORK).asJsoup()
             .selectFirst("meta[name=csrf-token]")!!
             .attr("content")
             .also { cachedCsrfToken = it }

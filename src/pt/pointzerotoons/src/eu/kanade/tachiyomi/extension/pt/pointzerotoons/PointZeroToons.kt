@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -26,7 +27,7 @@ abstract class PointZeroToons : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", getFilterList())
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get(mangaListUrl(page, "updated")).asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get(mangaListUrl(page, "updated"), Fetch.DOCUMENT).asJsoup())
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val sort = sortFilterList[filters.firstInstance<SortFilter>().state].first
@@ -34,7 +35,7 @@ abstract class PointZeroToons : KeiSource() {
         val type = typeFilterList[filters.firstInstance<TypeFilter>().state].first
         val genre = genreFilterList[filters.firstInstance<GenreFilter>().state].first
 
-        return parseMangaList(client.get(mangaListUrl(page, sort, query, status, type, genre)).asJsoup())
+        return parseMangaList(client.get(mangaListUrl(page, sort, query, status, type, genre), Fetch.DOCUMENT).asJsoup())
     }
 
     private fun mangaListUrl(
@@ -73,7 +74,7 @@ abstract class PointZeroToons : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val chapterList = document.select("article.inkra-chapter-item").map { item ->
             SChapter.create().apply {
@@ -108,7 +109,7 @@ abstract class PointZeroToons : KeiSource() {
         }
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select("figure.inkra-reader-page img")
         .mapIndexed { index, img -> Page(index, imageUrl = img.absUrl("src")) }
 

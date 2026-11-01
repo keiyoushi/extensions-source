@@ -7,19 +7,17 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 
 @Source
 abstract class WaManga : KeiSource() {
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Accept", "*/*")
 
     // ─────────────────────────────────────────────────────────────────────────
     // Catalog
@@ -35,9 +33,9 @@ abstract class WaManga : KeiSource() {
         .addQueryParameter("sortDescending", sortDescending.toString())
         .build()
 
-    override suspend fun getPopularManga(page: Int): MangasPage = catalogParse(client.get(catalogUrl(page, "likes")))
+    override suspend fun getPopularManga(page: Int): MangasPage = catalogParse(client.get(catalogUrl(page, "likes"), Fetch.XHR))
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = catalogParse(client.get(catalogUrl(page, "updatedAt")))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = catalogParse(client.get(catalogUrl(page, "updatedAt"), Fetch.XHR))
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val builder = catalogBuilder(page)
@@ -90,7 +88,7 @@ abstract class WaManga : KeiSource() {
             }
         }
 
-        return catalogParse(client.get(builder.build()))
+        return catalogParse(client.get(builder.build(), Fetch.XHR))
     }
 
     private fun catalogParse(response: Response): MangasPage {
@@ -110,7 +108,7 @@ abstract class WaManga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val (details, related) = client.get("$baseUrl/${manga.url}/$SVELTE_DATA_SUFFIX").parseMangaDetails()
+        val (details, related) = client.get("$baseUrl/${manga.url}/$SVELTE_DATA_SUFFIX", Fetch.XHR).parseMangaDetails()
 
         val updated = details.toSManga(baseUrl)
         if (related != null) {
@@ -139,7 +137,7 @@ abstract class WaManga : KeiSource() {
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         manga.relatedFromMemo()?.let { return it }
 
-        val sameMangas = client.get("$baseUrl/${manga.url}/$SVELTE_DATA_SUFFIX").parseRelatedMangas()
+        val sameMangas = client.get("$baseUrl/${manga.url}/$SVELTE_DATA_SUFFIX", Fetch.XHR).parseRelatedMangas()
         return sameMangas.map { it.toSManga(baseUrl) }
     }
 
@@ -159,7 +157,7 @@ abstract class WaManga : KeiSource() {
         if (parts.size < 3) throw IllegalStateException("Invalid chapter URL format: ${chapter.url}")
         val (type, slug, position) = parts
 
-        val files = client.get("$baseUrl/$type/$slug/glava-$position/$SVELTE_DATA_SUFFIX")
+        val files = client.get("$baseUrl/$type/$slug/glava-$position/$SVELTE_DATA_SUFFIX", Fetch.XHR)
             .parseSvelte<PagesDto>().chapter.files
 
         return files

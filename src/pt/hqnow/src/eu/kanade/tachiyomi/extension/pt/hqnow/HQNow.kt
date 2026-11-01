@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -208,7 +209,7 @@ abstract class HQNow : KeiSource() {
     private suspend inline fun <reified T> graphQLRequest(query: String, operationName: String, variables: JsonObject? = null): T {
         val body = graphQLBody(query = query, operationName = operationName, variables = variables)
 
-        return client.post(GRAPHQL_URL, body = body).parseGraphQLAs<T>()
+        return client.post(GRAPHQL_URL, Fetch.XHR, body).parseGraphQLAs<T>()
     }
 
     private fun String.toSlug(): String = Normalizer

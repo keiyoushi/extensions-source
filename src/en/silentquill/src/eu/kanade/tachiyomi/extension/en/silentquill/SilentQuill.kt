@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -29,7 +30,7 @@ abstract class SilentQuill : KeiSource() {
         .set("rsc", "1")
         .build()
 
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get(baseUrl, rscHeaders).toMangasPage { element ->
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get(baseUrl, rscHeaders, Fetch.XHR).toMangasPage { element ->
         element is JsonObject &&
             element.getStringOrNull("className")?.contains("grid-cols-4") == true &&
             element.firstObjectOrNull { it.getStringOrNull("href") != null } != null
@@ -47,7 +48,7 @@ abstract class SilentQuill : KeiSource() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        return client.get(searchUrl, rscHeaders).toMangasPage(
+        return client.get(searchUrl, rscHeaders, Fetch.XHR).toMangasPage(
             hasNextPage = { it.firstObjectOrNull { obj -> obj.getStringOrNull("href")?.contains("page=${page + 1}") == true } != null },
             cards = { it.firstObjectOrNull { obj -> obj.getStringOrNull("className")?.contains("grid-cols") == true }?.getArrayOrNull("children") },
         ) { element ->
@@ -92,7 +93,7 @@ abstract class SilentQuill : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val updatedChapters = document.extractNextJs<List<ChapterResponse>>()
             .orEmpty()
             .map { it.toSChapter(manga.url) }
@@ -121,7 +122,7 @@ abstract class SilentQuill : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val result = client.get(getChapterUrl(chapter), rscHeaders).extractNextJs<ViewerResponse>()
+        val result = client.get(getChapterUrl(chapter), rscHeaders, Fetch.XHR).extractNextJs<ViewerResponse>()
         return result?.pages.orEmpty().mapIndexed { index, url ->
             Page(index, imageUrl = baseUrl + url.url)
         }

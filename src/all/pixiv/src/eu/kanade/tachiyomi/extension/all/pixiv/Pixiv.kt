@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -46,7 +47,7 @@ abstract class Pixiv :
      * returned as a [Result.failure].
      */
     private suspend inline fun <reified T> HttpUrl.Builder.executeApi(): Result<T> {
-        val resp = client.get(build(), apiHeaders, ensureSuccess = false).parseAs<PixivApiResponse>()
+        val resp = client.get(build(), apiHeaders, Fetch.XHR, ensureSuccess = false).parseAs<PixivApiResponse>()
         if (resp.error) {
             return Result.failure(PixivApiException(resp.message))
         }
@@ -267,7 +268,7 @@ abstract class Pixiv :
         return PagedBuffer { p ->
             searchUsers.setEncodedQueryParameter("p", p.toString())
 
-            val doc = client.get(searchUsers.build(), searchHeaders, ensureSuccess = false).asJsoup()
+            val doc = client.get(searchUsers.build(), searchHeaders, Fetch.DOCUMENT, ensureSuccess = false).asJsoup()
             val nextDataScript = doc.selectFirst("script#__NEXT_DATA__")?.data() ?: return@PagedBuffer null
 
             val pageProps = nextDataScript.parseAs<PixivNextData>().props.pageProps

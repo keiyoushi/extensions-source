@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -41,7 +42,7 @@ abstract class ColorlibAnime : KeiSource() {
             addQueryParameter("search", query)
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".product__page__content > [style]:has(.col-6) .product__item").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.select("a.img-link").attr("abs:href"))
@@ -58,7 +59,7 @@ abstract class ColorlibAnime : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "manga") return null
 
-        return parseDetails(client.get(url).asJsoup())?.apply { this.url = url.encodedPath }
+        return parseDetails(client.get(url, Fetch.DOCUMENT).asJsoup())?.apply { this.url = url.encodedPath }
     }
 
     // Details and chapters come from the same page
@@ -68,7 +69,7 @@ abstract class ColorlibAnime : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(parseDetails(document) ?: manga, parseChapters(document))
     }
 
@@ -106,7 +107,7 @@ abstract class ColorlibAnime : KeiSource() {
 
     // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(".container .read-img > img").mapIndexed { i, element ->
             Page(i, imageUrl = element.attr("abs:src"))
         }

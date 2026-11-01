@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -31,7 +32,7 @@ abstract class Hentairead : KeiSource() {
     private fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
 
     private suspend fun mangasPage(url: String): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".manga-item").map(::mangaFromElement)
         return MangasPage(mangas, document.selectFirst("a[rel=next]") != null)
     }
@@ -102,7 +103,7 @@ abstract class Hentairead : KeiSource() {
 
     private suspend fun getTagId(tag: String, type: String): Int? {
         val url = "$baseUrl/wp-admin/admin-ajax.php?action=search_manga_terms&search=$tag&taxonomy=$type".replace("artist", "manga_artist")
-        return client.get(url).parseAs<Results>().results
+        return client.get(url, Fetch.XHR).parseAs<Results>().results
             .firstOrNull { it.text.lowercase() == tag.lowercase() }
             ?.id
     }
@@ -132,7 +133,7 @@ abstract class Hentairead : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.size < 2) return null
         val mangaUrl = "$baseUrl/hentai/${url.pathSegments[1]}/"
-        return mangaDetailsParse(client.get(mangaUrl).asJsoup()).apply {
+        return mangaDetailsParse(client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()).apply {
             setUrlWithoutDomain(mangaUrl)
         }
     }
@@ -143,19 +144,39 @@ abstract class Hentairead : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = if (fetchDetails) {
-            mangaDetailsParse(client.get(getMangaUrl(manga)).asJsoup()).apply { url = manga.url }
-        } else {
-            manga
-        }
-        val chapter = SChapter.create().apply {
-            name = "Chapter"
-            url = manga.url
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        val collectionsUrl = document.selectFirst("#mangaCollection a")?.absUrl("href")
+        val details = mangaDetailsParse(document).apply { url = manga.url }
+
+        fun createChapter(chapNum: Float = -1f, chapUrl: String = "", chapTitle: String = ""): SChapter = SChapter.create().apply {
+            val titleText = chapTitle.ifEmpty { document.selectFirst("div.manga-titles h1")!!.text() }
+            chapter_number = if (chapNum == -1f) 1f else chapNum
+            name = "${if (chapter_number % 1f == 0f) chapter_number.toInt() else chapter_number} - $titleText"
+            url = chapUrl.ifEmpty { manga.url }
             if (details.description?.contains("Scanlators") == true) {
                 scanlator = details.description?.substringAfter("Scanlators: ")?.substringBefore("\n")
             }
         }
-        return SMangaUpdate(details, listOf(chapter))
+
+        val allChapters = mutableListOf<SChapter>()
+
+        if (collectionsUrl.isNullOrBlank()) {
+            allChapters.add(createChapter())
+        } else if (fetchChapters) {
+            val collectionsPage = client.get(collectionsUrl, Fetch.DOCUMENT).asJsoup()
+            for (element: Element in collectionsPage.select("div.manga-item__wrapper")) {
+                val chapNum = element.selectFirst("div.collection-badge")!!.text().toFloat()
+                val chapUrl = element.selectFirst("a.manga-item__link")!!.absUrl("href")
+                val chapTitle = element.selectFirst("a.manga-item__link")!!.text()
+                allChapters.add(createChapter(chapNum, chapUrl, chapTitle))
+            }
+        } else {
+            return SMangaUpdate(details, chapters)
+        }
+
+        allChapters.sortByDescending { it.chapter_number } // Fixes some chapters being out of place
+
+        return SMangaUpdate(details, allChapters)
     }
 
     private fun mangaDetailsParse(document: Document): SManga {
@@ -210,7 +231,7 @@ abstract class Hentairead : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         // There's like 2 non-English entries where this breaks
         val url = "${chapter.url}english/p/1/".let { if (it.startsWith("http")) it else baseUrl + it }
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val pageBaseUrl = document.selectFirst("[id=single-chapter-js-extra]")?.data()
             ?.let { chapterExtraDataRegex.find(it)?.groups }?.get(1)?.value

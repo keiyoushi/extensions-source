@@ -4,6 +4,9 @@ import keiyoushi.utils.reactFlight.ReactFlightBigInt
 import keiyoushi.utils.reactFlight.ReactFlightNumber
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import okio.ByteString.Companion.toByteString
+import org.jsoup.Jsoup
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -133,5 +136,41 @@ class NextJsTest {
         s!!
         assertEquals("Lazy Manga", s.mangaTitle)
         assertEquals(listOf("Deferred Title", "42 chapters"), s.children)
+    }
+
+    @Test
+    fun appRouterRowsSplitAcrossPushes() {
+        // Next.js inlines the stream as one push per chunk, cutting after a T row header and mid-row.
+        val body = fixture("largetext")
+        val cuts = Regex("""[0-9a-f]+:T[0-9a-f]+,""").findAll(body).map { it.range.last + 1 } +
+            (body.indexOf("\"body\"") + 1)
+        val scripts = (listOf(0) + cuts + body.length).zipWithNext { from, to ->
+            "<script>self.__next_f.push([1,${JsonPrimitive(body.substring(from, to))}])</script>"
+        }
+        val html = "<script>(self.__next_f=self.__next_f||[]).push([0])</script>" + scripts.joinToString("")
+
+        val t = Jsoup.parse(html).extractNextJs<LargeText>()
+        assertNotNull(t)
+        t!!
+        assertEquals("big", t.title)
+        assertEquals("Lorem ipsum dolor sit amet. ".repeat(60), t.body)
+        assertEquals("héllo wörld 你好 🚀 ".repeat(80), t.unicode)
+    }
+
+    @Test
+    fun appRouterBinaryPushes() {
+        // [3, base64] pushes carry raw bytes; they join the stream like text pushes.
+        val bytes = fixture("largetext").toByteArray()
+        val cut = fixture("largetext").substringBefore("你").toByteArray().size + 1
+        val scripts = listOf(bytes.copyOfRange(0, cut), bytes.copyOfRange(cut, bytes.size)).joinToString("") {
+            "<script>self.__next_f.push([3,\"${it.toByteString().base64()}\"])</script>"
+        }
+        val html = "<script>self.__next_f.push([2,null])</script>$scripts"
+
+        val t = Jsoup.parse(html).extractNextJs<LargeText>()
+        assertNotNull(t)
+        t!!
+        assertEquals("big", t.title)
+        assertEquals("héllo wörld 你好 🚀 ".repeat(80), t.unicode)
     }
 }

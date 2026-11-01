@@ -92,5 +92,5 @@ val RESOLUTION_PREF_DEFAULT_VALUE = RESOLUTION_PREF_ENTRY_VALUES[3]
 const val SORT_PREF_KEY = "SORT"
 const val SORT_PREF_TITLE = "Page Sort"
 val SORT_PREF_ENTRIES = arrayOf("Position", "Date", "Rating")
-val SORT_PREF_ENTRY_VALUES = arrayOf("position", "date_newest", "rating_all_time")
+val SORT_PREF_ENTRY_VALUES = arrayOf("date_oldest", "date_newest", "rating_all_time")
 val SORT_PREF_DEFAULT_VALUE = SORT_PREF_ENTRY_VALUES[0]

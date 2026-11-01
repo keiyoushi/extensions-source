@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -34,16 +35,15 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class TruyenQQVN : KeiSource() {
-
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2, 1.seconds)
 
     // ============================== Popular ===============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(client.get(listUrl("/truyen-hot", page)))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(client.get(listUrl("/truyen-hot", page), Fetch.DOCUMENT))
 
     // =============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaPage(client.get(listUrl("/truyen-moi", page)))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaPage(client.get(listUrl("/truyen-moi", page), Fetch.DOCUMENT))
 
     // =============================== Search ===============================
 
@@ -61,7 +61,7 @@ abstract class TruyenQQVN : KeiSource() {
             listUrl(path, page)
         }
 
-        return parseMangaPage(client.get(url))
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT))
     }
 
     private fun listUrl(path: String, page: Int): HttpUrl = "$baseUrl$path".toHttpUrl().newBuilder()
@@ -98,7 +98,7 @@ abstract class TruyenQQVN : KeiSource() {
         val slug = segments.firstOrNull()?.takeIf { it !in RESERVED_PATHS } ?: return null
         val path = "/$slug"
 
-        return parseMangaDetails(client.get("$baseUrl$path").asJsoup()).apply {
+        return parseMangaDetails(client.get("$baseUrl$path", Fetch.DOCUMENT).asJsoup()).apply {
             setUrlWithoutDomain(path)
         }
     }
@@ -112,7 +112,7 @@ abstract class TruyenQQVN : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         // Details and the full chapter list come from the same page.
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(
             manga = parseMangaDetails(document),
@@ -178,7 +178,7 @@ abstract class TruyenQQVN : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val images = document.select("img.lazy[data-src]")
 
         // Some series hide their chapters behind a Google sign-in. The session cookie set by
@@ -196,7 +196,7 @@ abstract class TruyenQQVN : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get(baseUrl).asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         .select("a[href*=/the-loai/]")
         .mapNotNull { element ->
             val slug = element.absUrl("href").toHttpUrlOrNull()

@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Manhuaren"
-    versionCode = 0
+    versionCode = 2
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

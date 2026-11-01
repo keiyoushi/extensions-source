@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -21,7 +22,6 @@ import java.util.Locale
 abstract class SwordsComic : KeiSource() {
 
     override val supportsLatest = false
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(TextInterceptor())
     }
@@ -60,7 +60,7 @@ abstract class SwordsComic : KeiSource() {
         val manga = createManga().apply { initialized = true }
 
         val chapters = if (fetchChapters) {
-            client.get(getMangaUrl(manga)).asJsoup()
+            client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
                 .select("a.archive-tile")
                 .map { element ->
                     SChapter.create().apply {
@@ -81,7 +81,7 @@ abstract class SwordsComic : KeiSource() {
     // Pages
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val imageElement = client.get(getChapterUrl(chapter)).asJsoup().select("img#comic-image")
+        val imageElement = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup().select("img#comic-image")
         if (!imageElement.hasAttr("title")) {
             return listOf(Page(0, "", imageElement.attr("abs:src")))
         }

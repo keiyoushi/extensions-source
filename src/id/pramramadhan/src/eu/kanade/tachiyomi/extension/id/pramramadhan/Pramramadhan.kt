@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -22,12 +23,11 @@ import java.util.Locale
 
 @Source
 abstract class Pramramadhan : KeiSource() {
-
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int): MangasPage {
         if (page > 1) return MangasPage(emptyList(), false)
 
-        val document = client.get("$baseUrl/search.php?sort=popular&page=$page").asJsoup()
+        val document = client.get("$baseUrl/search.php?sort=popular&page=$page", Fetch.DOCUMENT).asJsoup()
         return mangaListParse(document)
     }
 
@@ -35,7 +35,7 @@ abstract class Pramramadhan : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         if (page > 1) return MangasPage(emptyList(), false)
 
-        val document = client.get("$baseUrl/search.php?sort=newest&page=$page").asJsoup()
+        val document = client.get("$baseUrl/search.php?sort=newest&page=$page", Fetch.DOCUMENT).asJsoup()
         return mangaListParse(document)
     }
 
@@ -63,7 +63,7 @@ abstract class Pramramadhan : KeiSource() {
             }
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return mangaListParse(document)
     }
 
@@ -86,7 +86,7 @@ abstract class Pramramadhan : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             mangaDetailsParse(document).apply { url = manga.url },
             chapterListParse(document),
@@ -103,7 +103,7 @@ abstract class Pramramadhan : KeiSource() {
         if (slug.isEmpty()) return null
 
         val mangaUrl = "/series/$slug"
-        val document = client.get(getMangaUrl(SManga.create().apply { this.url = mangaUrl })).asJsoup()
+        val document = client.get(getMangaUrl(SManga.create().apply { this.url = mangaUrl }), Fetch.DOCUMENT).asJsoup()
         if (document.selectFirst("h1.series-title") == null) return null
 
         return mangaDetailsParse(document).apply {
@@ -172,7 +172,7 @@ abstract class Pramramadhan : KeiSource() {
 
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("div.reader-container img.page").mapIndexed { index, element ->
             Page(index, imageUrl = element.attr("abs:src"))
         }

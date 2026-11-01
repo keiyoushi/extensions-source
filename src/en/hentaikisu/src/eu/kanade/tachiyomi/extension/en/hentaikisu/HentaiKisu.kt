@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -17,12 +18,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
 abstract class HentaiKisu : KeiSource() {
-
     override val supportsLatest = false
 
     // ============================== Popular ==============================
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val mangas = client.get("$baseUrl/backend/infinite.index.php?p=$page")
+        val mangas = client.get("$baseUrl/backend/infinite.index.php?p=$page", Fetch.XHR)
             .parseAs<List<Dto>>()
             .map { it.toSManga() }
         return MangasPage(mangas, mangas.isNotEmpty())
@@ -36,7 +36,7 @@ abstract class HentaiKisu : KeiSource() {
         val url = "$baseUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("s", query)
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val elements = document.select("div.book-list a")
 
         val mangas = elements.mapNotNull { element ->
@@ -59,7 +59,7 @@ abstract class HentaiKisu : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         val chapterUrl = response.request.url.encodedPath
         val document = response.asJsoup()
 
@@ -88,7 +88,7 @@ abstract class HentaiKisu : KeiSource() {
     // =============================== Pages ===============================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val readUrl = chapter.url.replace("/g/", "/read/")
-        val document = client.get(baseUrl + readUrl).asJsoup()
+        val document = client.get(baseUrl + readUrl, Fetch.DOCUMENT).asJsoup()
         val scriptContent = document.selectFirst("script:containsData(la =)")?.data()
             ?: throw Exception("Could not find page data")
 

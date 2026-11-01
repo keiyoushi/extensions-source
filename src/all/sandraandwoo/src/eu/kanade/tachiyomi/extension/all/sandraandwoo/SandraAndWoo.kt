@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -19,6 +20,7 @@ import kotlin.math.floor
 
 @Source
 abstract class SandraAndWoo : KeiSource() {
+
     override val supportsLatest = false
 
     private val writer = "Oliver Knörzer"
@@ -105,7 +107,7 @@ abstract class SandraAndWoo : KeiSource() {
     }
 
     private suspend fun getChapterList(manga: SManga): List<SChapter> {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val elements = document.select("#column a").reversed()
 
         val initial = Pair(0f, SChapter.create())
@@ -116,7 +118,7 @@ abstract class SandraAndWoo : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val imgUrl = document.selectFirst("#comic img")?.absUrl("src") ?: ""
 
         return listOf(Page(0, imageUrl = imgUrl))

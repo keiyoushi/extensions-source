@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
@@ -164,7 +165,7 @@ abstract class Luscious :
             .addQueryParameter("variables", input.toJsonString())
             .build()
 
-        val data = client.get(url).parseAs<AlbumListResponse>()
+        val data = client.get(url, Fetch.XHR).parseAs<AlbumListResponse>()
         with(data.data.album.list) {
             return MangasPage(
                 this.items.map {
@@ -187,7 +188,7 @@ abstract class Luscious :
             .addQueryParameter("variables", input.toJsonString())
             .build()
 
-        return client.get(url).parseAs<AlbumGetResponse>().data.album.get
+        return client.get(url, Fetch.XHR).parseAs<AlbumGetResponse>().data.album.get
     }
 
     // Latest
@@ -204,7 +205,7 @@ abstract class Luscious :
         var hasMore = true
 
         while (hasMore) {
-            val data = client.get(buildAlbumPicturesPageUrl(id, page)).parseAs<AlbumListOwnPicturesResponse>()
+            val data = client.get(buildAlbumPicturesPageUrl(id, page), Fetch.XHR).parseAs<AlbumListOwnPicturesResponse>()
             val pictureItems = parsePictures(data)
 
             if (pictureItems.isEmpty()) {
@@ -315,7 +316,7 @@ abstract class Luscious :
         val endPage = chunk * 20
 
         for (page in startPage..endPage) {
-            val data = client.get(buildAlbumPicturesPageUrl(id, page)).parseAs<AlbumListOwnPicturesResponse>()
+            val data = client.get(buildAlbumPicturesPageUrl(id, page), Fetch.XHR).parseAs<AlbumListOwnPicturesResponse>()
             val pictureItems = parsePictures(data)
 
             if (pictureItems.isEmpty()) break
@@ -391,7 +392,7 @@ abstract class Luscious :
             .addQueryParameter("variables", input.toJsonString())
             .build()
 
-        val data = client.get(url).parseAs<AlbumRelatedResponse>()
+        val data = client.get(url, Fetch.XHR).parseAs<AlbumRelatedResponse>()
         with(data.data.album.listRelated) {
             return listOfNotNull(
                 moreLikeThis,
@@ -477,5 +478,8 @@ abstract class Luscious :
 
     fun getMergeChapterPref(): Boolean = preferences.getBoolean("${MERGE_CHAPTER_PREF_KEY}_$lang", MERGE_CHAPTER_PREF_DEFAULT_VALUE)
     fun getResolutionPref(): String? = preferences.getString("${RESOLUTION_PREF_KEY}_$lang", RESOLUTION_PREF_DEFAULT_VALUE)
-    fun getSortPref(): String? = preferences.getString("${SORT_PREF_KEY}_$lang", SORT_PREF_DEFAULT_VALUE)
+
+    // older versions stored "position", which the API no longer accepts (HTTP 400)
+    fun getSortPref(): String = preferences.getString("${SORT_PREF_KEY}_$lang", SORT_PREF_DEFAULT_VALUE)
+        .takeIf { it in SORT_PREF_ENTRY_VALUES } ?: SORT_PREF_DEFAULT_VALUE
 }

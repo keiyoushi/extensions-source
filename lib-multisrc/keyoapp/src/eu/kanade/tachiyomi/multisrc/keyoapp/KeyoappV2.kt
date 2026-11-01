@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
@@ -33,7 +34,7 @@ abstract class KeyoappV2 : KeyoappBase() {
             .addQueryParameter("_ajax", "recent-chapters")
             .addQueryParameter("page", page.toString())
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("article.ru-card").map { it.toLatestSManga() }
         val hasNextPage = document.selectFirst("button[aria-label=\"Next recently updated page\"]:not([disabled])") != null
         return MangasPage(mangas, hasNextPage)
@@ -66,7 +67,7 @@ abstract class KeyoappV2 : KeyoappBase() {
             filters.filterIsInstance<MultiSelectFilter>().forEach { it.addToUri(this) }
         }.build()
 
-        val data = client.get(url).parseAs<AjaxSearchResponseDto>()
+        val data = client.get(url, Fetch.XHR).parseAs<AjaxSearchResponseDto>()
         val mangas = data.html.asJsoup(baseUrl).select("a.group[href]").filterNot { it.isNovel() }.map { it.toSManga() }
         return MangasPage(mangas, data.hasMore)
     }
@@ -83,7 +84,7 @@ abstract class KeyoappV2 : KeyoappBase() {
         if (url.host != baseUrl.toHttpUrl().host) return null
         url.pathSegments.filter(String::isNotEmpty).singleOrNull() ?: return null
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         document.selectFirst("[data-series-uid]")?.let {
             val slug = it.attr("data-series-slug")
@@ -93,7 +94,7 @@ abstract class KeyoappV2 : KeyoappBase() {
         // Series slug from a chapter page
         val seriesSlug = document.selectFirst("#sidebar-ch-list[data-series-slug]")?.attr("data-series-slug")
             ?: return null
-        return parseMangaDetails(client.get(seriesUrl(seriesSlug)).asJsoup(), seriesSlug).apply { initialized = true }
+        return parseMangaDetails(client.get(seriesUrl(seriesSlug), Fetch.DOCUMENT).asJsoup(), seriesSlug).apply { initialized = true }
     }
 
     override suspend fun fetchMangaUpdate(
@@ -105,7 +106,7 @@ abstract class KeyoappV2 : KeyoappBase() {
         val slug = manga.url.removePrefix("/")
         val detailsDeferred = if (fetchDetails) {
             async {
-                val document = client.get(seriesUrl(slug)).asJsoup()
+                val document = client.get(seriesUrl(slug), Fetch.DOCUMENT).asJsoup()
                 if (document.selectFirst("[data-series-uid]") == null) {
                     throw Exception("Series not found")
                 }
@@ -150,7 +151,7 @@ abstract class KeyoappV2 : KeyoappBase() {
             .addQueryParameter("series_slug", slug)
             .build()
 
-        val data = client.get(apiUrl).parseAs<ChaptersResponseDto>()
+        val data = client.get(apiUrl, Fetch.XHR).parseAs<ChaptersResponseDto>()
         val rowsDocument = data.rowsHtml.asJsoup(baseUrl)
 
         return rowsDocument.select("a.chapter-row[href]")
@@ -168,7 +169,7 @@ abstract class KeyoappV2 : KeyoappBase() {
 
     // =============================== Pages ===============================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select("#strip-reader img.reader-page")
         .mapIndexed { i, element -> Page(i, imageUrl = element.absUrl("src")) }
 
@@ -176,7 +177,7 @@ abstract class KeyoappV2 : KeyoappBase() {
 
     override suspend fun fetchFilterData(): JsonElement {
         val url = baseUrl.toHttpUrl().newBuilder().addQueryParameter("browse", "1").build()
-        val tags = client.get(url).asJsoup()
+        val tags = client.get(url, Fetch.DOCUMENT).asJsoup()
             .select("#fsel-genres a[role=option][href]")
             .mapNotNull { it.absUrl("href").toHttpUrl().queryParameter("tag[]") }
         if (tags.isEmpty()) throw Exception("Genre tags not found")

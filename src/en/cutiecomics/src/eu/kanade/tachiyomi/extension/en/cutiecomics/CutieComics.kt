@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -30,7 +31,7 @@ abstract class CutieComics : KeiSource() {
     }
 
     // ============================== Popular ===============================
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/page/$page").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/page/$page", Fetch.DOCUMENT).asJsoup())
 
     private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select("#dle-content > div.w25").map { element ->
@@ -56,7 +57,7 @@ abstract class CutieComics : KeiSource() {
         if (url.host != baseUrlHost) return null
         val id = url.pathSegments.getOrNull(0)?.takeIf { it.isNotEmpty() } ?: return null
 
-        val response = client.get("$baseUrl/$id")
+        val response = client.get("$baseUrl/$id", Fetch.DOCUMENT)
         val responseUrl = response.request.url.toString()
         return parseDetails(response.asJsoup()).apply {
             setUrlWithoutDomain(responseUrl)
@@ -73,7 +74,7 @@ abstract class CutieComics : KeiSource() {
             .add("result_from", "${(page - 1) * 20 + 1}")
             .add("story", query)
             .build()
-        return parseMangaList(client.post("$baseUrl/index.php?do=search", body).asJsoup())
+        return parseMangaList(client.post("$baseUrl/index.php?do=search", Fetch.DOCUMENT, body).asJsoup())
     }
 
     // =========================== Manga Details ============================
@@ -84,7 +85,7 @@ abstract class CutieComics : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val updatedManga = if (fetchDetails) {
-            parseDetails(client.get(getMangaUrl(manga)).asJsoup()).apply { url = manga.url }
+            parseDetails(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()).apply { url = manga.url }
         } else {
             manga
         }
@@ -109,7 +110,7 @@ abstract class CutieComics : KeiSource() {
 
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("div.galery > img").mapIndexed { index, item ->
             Page(index, imageUrl = item.absUrl("src"))
         }

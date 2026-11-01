@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -31,7 +32,7 @@ abstract class MangaXiaoSi : KeiSource() {
     // ============================== Popular ==============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/rank").asJsoup()
+        val document = client.get("$baseUrl/rank", Fetch.DOCUMENT).asJsoup()
 
         val popularSection = document.selectFirst(".mh-list.col3.top-cat > li:has(.title:contains(人气榜))")
 
@@ -47,7 +48,7 @@ abstract class MangaXiaoSi : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList("$baseUrl/update?page=$page".toHttpUrl())
 
     private suspend fun getMangaList(url: HttpUrl): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select(".mh-item").mapNotNull { element ->
             parseMangaFromElement(element, ".title a")
@@ -89,7 +90,7 @@ abstract class MangaXiaoSi : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         document.selectFirst(".banner_detail_form .info")?.let { info ->
             manga.apply {
@@ -129,7 +130,7 @@ abstract class MangaXiaoSi : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         return document.select(".comicpage img").mapIndexed { index, element ->
             val url = element.absUrl("data-original").ifEmpty { element.absUrl("src") }

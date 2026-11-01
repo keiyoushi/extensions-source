@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
+import keiyoushi.utils.aesDecrypt
+import keiyoushi.utils.aesGcm
 import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.rc4
@@ -19,9 +21,7 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.nio.charset.StandardCharsets
-import javax.crypto.Cipher
 import javax.crypto.Mac
-import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 private fun OkHttpClient.getString(url: String): String {
@@ -297,14 +297,8 @@ object PagesCrypto {
         val cipherBytes = raw.copyOfRange(12, raw.size)
 
         val aesKey = token.hmacSha256(enc)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(
-            Cipher.DECRYPT_MODE,
-            SecretKeySpec(aesKey, "AES"),
-            GCMParameterSpec(128, iv),
-        )
-        cipher.updateAAD(path.toByteArray(StandardCharsets.UTF_8))
-        val plain = cipher.doFinal(cipherBytes)
+        val cipher = aesGcm(aesKey, iv).apply { updateAAD(path.toByteArray(StandardCharsets.UTF_8)) }
+        val plain = cipherBytes.aesDecrypt(cipher)
         return String(plain, StandardCharsets.UTF_8).parseAs()
     }
 

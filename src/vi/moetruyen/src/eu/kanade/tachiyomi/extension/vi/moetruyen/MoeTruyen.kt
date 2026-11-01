@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -19,7 +20,6 @@ import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParseDate
 import keiyoushi.utils.ui.askInput
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -45,11 +45,6 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class MoeTruyen : KeiSource() {
 
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
-        set("Sec-Fetch-Dest", "document")
-        set("Sec-Fetch-Mode", "navigate")
-    }
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(imgxInterceptor())
         rateLimit(3)
@@ -63,7 +58,7 @@ abstract class MoeTruyen : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        return parseMangaList(client.get(url).asJsoup())
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // ============================== Latest ================================
@@ -73,7 +68,7 @@ abstract class MoeTruyen : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        return parseMangaList(client.get(url).asJsoup())
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
@@ -146,7 +141,7 @@ abstract class MoeTruyen : KeiSource() {
             }
             .build()
 
-        return parseMangaList(client.get(url).asJsoup())
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -191,7 +186,7 @@ abstract class MoeTruyen : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
             chapters = if (fetchChapters) fetchChapterList(document) else chapters,
@@ -232,7 +227,7 @@ abstract class MoeTruyen : KeiSource() {
             }
 
             currentPageUrl = nextChapterPageUrl
-            currentDocument = client.get(currentPageUrl).asJsoup()
+            currentDocument = client.get(currentPageUrl, Fetch.DOCUMENT).asJsoup()
         }
 
         return chapters
@@ -281,11 +276,11 @@ abstract class MoeTruyen : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = "$baseUrl${chapter.url}"
-        var document = client.get(chapterUrl).asJsoup()
+        var document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
 
         if (isCommentLocked(document)) {
             unlockByComment(chapter, document, chapterUrl)
-            document = client.get(chapterUrl).asJsoup()
+            document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
             if (isCommentLocked(document)) {
                 throw Exception("Không thể mở khóa chương này")
             }
@@ -335,7 +330,7 @@ abstract class MoeTruyen : KeiSource() {
         return text.contains("Bạn phải bình luận") || text.contains("yêu cầu bình luận")
     }
 
-    private suspend fun isLoggedIn(): Boolean = client.get("$baseUrl/auth/session", ensureSuccess = false).use { response ->
+    private suspend fun isLoggedIn(): Boolean = client.get("$baseUrl/auth/session", Fetch.XHR, ensureSuccess = false).use { response ->
         response.isSuccessful && response.parseAs<AuthSession>().session != null
     }
 
@@ -366,7 +361,7 @@ abstract class MoeTruyen : KeiSource() {
             .set("Accept", "application/json")
             .set("Idempotency-Key", requestId)
             .build()
-        val response = client.post("$previousChapterUrl/comments", requestHeaders, body, ensureSuccess = false)
+        val response = client.post("$previousChapterUrl/comments", requestHeaders, Fetch.XHR, body, ensureSuccess = false)
         if (!response.isSuccessful) {
             val code = response.code
             val errorBody = response.body.string()
@@ -456,7 +451,7 @@ abstract class MoeTruyen : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/manga").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/manga", Fetch.DOCUMENT).asJsoup()
         .select(".filter-option[data-genre]")
         .mapNotNull { element ->
             val id = element.attr("data-genre").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
@@ -474,7 +469,7 @@ abstract class MoeTruyen : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         val section = document.selectFirst("section[aria-labelledby=manga-related-similar-title]")
             ?: return emptyList()
 

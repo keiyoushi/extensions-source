@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -16,15 +17,14 @@ import java.time.format.DateTimeFormatter
 
 @Source
 abstract class Toptoon : KeiSource() {
-
     // Popular
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val jsonUrl = client.get("$baseUrl/ranking").use { it.body.string() }
+        val jsonUrl = client.get("$baseUrl/ranking", Fetch.DOCUMENT).use { it.body.string() }
             .substringAfter("jsonFileUrl: [\"")
             .substringBefore("\"")
             .replace("\\/", "/")
-        val mangas = client.get("https:$jsonUrl").parseAs<PopularResponseDto>().adult.map {
+        val mangas = client.get("https:$jsonUrl", Fetch.XHR).parseAs<PopularResponseDto>().adult.map {
             it.toSManga()
         }
         return MangasPage(mangas, false)
@@ -53,10 +53,10 @@ abstract class Toptoon : KeiSource() {
     }
 
     private suspend fun fetchAllManga(): Collection<MangaDto> {
-        val jsonUrl = client.get("$baseUrl/search").use { it.body.string() }
+        val jsonUrl = client.get("$baseUrl/search", Fetch.DOCUMENT).use { it.body.string() }
             .substringAfter("var jsonFileUrl = '")
             .substringBefore("'")
-        return client.get("https:$jsonUrl").parseAs<Map<String, MangaDto>>().values
+        return client.get("https:$jsonUrl", Fetch.XHR).parseAs<Map<String, MangaDto>>().values
     }
 
     // Details & Chapters
@@ -67,7 +67,7 @@ abstract class Toptoon : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         if (response.request.url.pathSegments[0].isEmpty()) {
             response.close()
             throw Exception("请到WebView确认年满18岁")
@@ -109,7 +109,7 @@ abstract class Toptoon : KeiSource() {
     // Pages
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter))
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         val pathSegments = response.request.url.pathSegments
         if (pathSegments[0].isEmpty()) {
             response.close()

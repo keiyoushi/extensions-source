@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.utils.asJsoup
@@ -89,13 +90,13 @@ abstract class Mangarama :
             if (query?.isNotBlank() == true) addQueryParameter("mcf_search", query.trim())
         }.build()
 
-        val mangas = parseArchive(client.get(url).asJsoup())
+        val mangas = parseArchive(client.get(url, Fetch.DOCUMENT).asJsoup())
         return MangasPage(mangas, false)
     }
 
     // ============================ Filters =============================
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/$mangaSubString/").asJsoup()
+        val document = client.get("$baseUrl/$mangaSubString/", Fetch.DOCUMENT).asJsoup()
         return FiltersData(
             genres = document.select(".mcf-genre-scroll .mcf-genre-item").mapNotNull { data ->
                 val id = data.selectFirst("input")?.attr("value") ?: return@mapNotNull null
@@ -144,10 +145,10 @@ abstract class Mangarama :
             .add("maction", "get_chapters")
             .build()
 
-        val ajaxResponse = client.post("$baseUrl${mangaPath.trimEnd('/')}/ajax/chapters/", xhrHeaders, body)
+        val ajaxResponse = client.post("$baseUrl${mangaPath.trimEnd('/')}/ajax/chapters/", xhrHeaders, Fetch.XHR.from(mangaPath), body)
             .asJsoup()
 
-        val mainPage = mangaPage ?: client.get("$baseUrl$mangaPath").asJsoup()
+        val mainPage = mangaPage ?: client.get("$baseUrl$mangaPath", Fetch.DOCUMENT).asJsoup()
         val json = mainPage.selectFirst("script:containsData(ManhvaChapterListUI)")?.data()
             ?: throw Exception("Manga data not found")
 
@@ -190,7 +191,7 @@ abstract class Mangarama :
         if (chapter.memo["locked"]?.string == "true") throw Exception("Цей розділ доступний лише з Преміум.")
 
         val chapterUrl = getChapterUrl(chapter)
-        val data = client.get(chapterUrl).asJsoup()
+        val data = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
 
         val json = data.selectFirst("script:containsData(window.MANHVA_READER_CONFIG)")?.data()
             ?: throw Exception("Chapter data not found")
@@ -211,7 +212,7 @@ abstract class Mangarama :
             .set("X-WP-Nonce", dataJson.restNonce)
             .build()
 
-        val dataImages = client.get(imagesUrl, nonceHeaders).parseAs<Images>()
+        val dataImages = client.get(imagesUrl, nonceHeaders, Fetch.XHR).parseAs<Images>()
 
         return dataImages.pages.mapIndexed { index, string ->
             // url sets `Referrer` header to `chapterUrl`
@@ -219,12 +220,9 @@ abstract class Mangarama :
         }
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page)
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page)
         .newBuilder()
         .header("Referer", page.url)
-        .header("Sec-Fetch-Dest", "image")
-        .header("Sec-Fetch-Mode", "no-cors")
-        .header("Sec-Fetch-Site", "same-site")
         .header("Sec-GPC", "1")
         .build()
 

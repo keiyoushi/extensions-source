@@ -8,6 +8,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -24,7 +26,6 @@ import java.io.IOException
 
 @Source
 abstract class Utifa : KeiSource() {
-
     private val apiUrl get() = "$baseUrl/api"
 
     override val supportsFilterFetching = true
@@ -59,7 +60,7 @@ abstract class Utifa : KeiSource() {
         updateStatus: String? = null,
     ): MangasPage {
         val body = MangaListBody(page, PAGE_SIZE, keyword, orderBy, order, theme, grade, updateStatus)
-        val data = client.post("$apiUrl/manga/common/list", body = body.toJsonRequestBody()).parseData<MangaPageDto>()
+        val data = client.post("$apiUrl/manga/common/list", fetch = Fetch.XHR, body = body.toJsonRequestBody()).parseData<MangaPageDto>()
         return MangasPage(data.records.map { it.toSManga(apiUrl) }, data.current < data.pages)
     }
 
@@ -81,7 +82,7 @@ abstract class Utifa : KeiSource() {
         val url = "$apiUrl/manga/common/get".toHttpUrl().newBuilder()
             .addQueryParameter("id", manga.url)
             .build()
-        val data = client.get(url).parseData<MangaDto>()
+        val data = client.get(url, Fetch.XHR).parseData<MangaDto>()
         return SMangaUpdate(data.toSManga(apiUrl), data.chapters.map { it.toSChapter() }.reversed())
     }
 
@@ -89,7 +90,7 @@ abstract class Utifa : KeiSource() {
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/manga/chapter/${chapter.url}"
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(chapterPagesUrl(chapter.url)).parseData<ChapterPagesDto>()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(chapterPagesUrl(chapter.url), Fetch.XHR).parseData<ChapterPagesDto>()
         .chapters.mapIndexed { index, file -> Page(index, imageUrl = "$apiUrl${file.url}#${chapter.url}") }
 
     private fun chapterPagesUrl(chapterId: String) = "$apiUrl/manga/common/getChapterList".toHttpUrl().newBuilder()
@@ -118,7 +119,7 @@ abstract class Utifa : KeiSource() {
         val now = System.currentTimeMillis()
         resigned?.let { if (it.chapterId == chapterId && now - it.fetchedAt < RESIGNED_TTL) return it.urls }
         val urls = try {
-            val response = client.newCall(GET(chapterPagesUrl(chapterId), headers)).execute()
+            val response = client.newCall(GET(chapterPagesUrl(chapterId), headers).newBuilder().fetch(Fetch.XHR).build()).execute()
             if (!response.isSuccessful) {
                 response.close()
                 throw IOException("HTTP error ${response.code}")
@@ -133,7 +134,7 @@ abstract class Utifa : KeiSource() {
 
     private class ResignedPages(val chapterId: String, val fetchedAt: Long, val urls: List<HttpUrl>)
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/manga/common/categoryTree").parseData()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/manga/common/categoryTree", Fetch.XHR).parseData()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val categories = data?.parseAs<List<CategoryDto>>() ?: return FilterList()

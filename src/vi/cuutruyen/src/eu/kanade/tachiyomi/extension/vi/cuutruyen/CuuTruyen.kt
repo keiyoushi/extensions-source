@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -57,7 +58,7 @@ abstract class CuuTruyen :
             .addQueryParameter("page", page.toString())
             .addQueryParameter("per_page", pageSize.toString())
             .build()
-        return client.get(url).parseAs<MangaListResponse>().toMangasPage()
+        return client.get(url, Fetch.XHR).parseAs<MangaListResponse>().toMangasPage()
     }
 
     // ============================== Latest ================================
@@ -67,7 +68,7 @@ abstract class CuuTruyen :
             .addQueryParameter("page", page.toString())
             .addQueryParameter("per_page", latestPageSize.toString())
             .build()
-        return client.get(url).parseAs<MangaListResponse>().toMangasPage()
+        return client.get(url, Fetch.XHR).parseAs<MangaListResponse>().toMangasPage()
     }
 
     // ============================== Search ================================
@@ -87,7 +88,7 @@ abstract class CuuTruyen :
             .addQueryParameter("page", page.toString())
             .addQueryParameter("per_page", pageSize.toString())
             .build()
-        return client.get(url).parseAs<MangaListResponse>().toMangasPage()
+        return client.get(url, Fetch.XHR).parseAs<MangaListResponse>().toMangasPage()
     }
 
     // =========================== Manga Details ============================
@@ -108,7 +109,7 @@ abstract class CuuTruyen :
         val mangaId = manga.url.substringAfterLast('/')
         val updatedManga = async {
             if (fetchDetails) {
-                client.get("$baseUrl/api/v2/mangas/$mangaId")
+                client.get("$baseUrl/api/v2/mangas/$mangaId", Fetch.XHR)
                     .parseAs<MangaDetailResponse>()
                     .data
                     .toSManga(useMobileCover)
@@ -118,7 +119,7 @@ abstract class CuuTruyen :
         }
         val updatedChapters = async {
             if (fetchChapters) {
-                client.get("$baseUrl/api/v2/mangas/$mangaId/chapters")
+                client.get("$baseUrl/api/v2/mangas/$mangaId/chapters", Fetch.XHR)
                     .parseAs<ChapterListResponse>()
                     .data
                     .map { it.toSChapter(mangaId) }
@@ -135,7 +136,7 @@ abstract class CuuTruyen :
 
     // =============================== Pages ================================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/api/v2/chapters/${chapter.url}")
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/api/v2/chapters/${chapter.url}", Fetch.XHR)
         .parseAs<ChapterReaderResponse>()
         .data
         .pages
@@ -148,7 +149,7 @@ abstract class CuuTruyen :
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/v2/tags/popular")
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/v2/tags/popular", Fetch.XHR)
         .parseAs<TagResponse>()
         .data
         .allTags()

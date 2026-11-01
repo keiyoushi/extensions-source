@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -87,7 +88,7 @@ abstract class KumoPoi : KeiSource() {
             }
         }.build()
 
-        val response = client.get(url).parseAs<ComicListResponse>()
+        val response = client.get(url, Fetch.XHR).parseAs<ComicListResponse>()
         return MangasPage(response.items.map { it.toSManga() }, response.hasNextPage)
     }
 
@@ -98,7 +99,7 @@ abstract class KumoPoi : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = getComicSlug(manga.url)
-        val response = client.get("$API_BASE/comics/$slug").parseAs<ComicDetailsResponse>()
+        val response = client.get("$API_BASE/comics/$slug", Fetch.XHR).parseAs<ComicDetailsResponse>()
         return SMangaUpdate(response.data.toSManga(), response.data.toSChapterList())
     }
 
@@ -118,7 +119,7 @@ abstract class KumoPoi : KeiSource() {
             .add("x-app-signature", signature)
             .build()
 
-        val response = client.get("$API_BASE_HOST$path", pageHeaders).parseAs<PagesResponse>()
+        val response = client.get("$API_BASE_HOST$path", pageHeaders, Fetch.XHR).parseAs<PagesResponse>()
         if (response.data.locked) {
             throw Exception("Chapter terkunci (Premium)")
         }

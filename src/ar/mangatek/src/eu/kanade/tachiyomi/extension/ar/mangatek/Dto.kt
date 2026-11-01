@@ -2,9 +2,12 @@ package eu.kanade.tachiyomi.extension.ar.mangatek
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.time.Instant
 
 @Serializable
@@ -30,7 +33,7 @@ class MangaData(
         this.url = url
         title = this@MangaData.title
         description = this@MangaData.description
-        genre = tags.map { it.name }.joinToString()
+        genre = tags.joinToString { it.name }
         thumbnail_url = cover
         status = when (this@MangaData.status) {
             "ongoing" -> SManga.ONGOING
@@ -52,11 +55,11 @@ class Chapter(
     private val chapterNumber: String,
     @SerialName("created_at")
     private val createdAt: String,
+    private val isAI: Int,
 ) {
     fun toSChapter(mangaSlug: String) = SChapter.create().apply {
-        name = this@Chapter.title?.takeIf {
-            it.isNotBlank()
-        } ?: "Chapter $chapterNumber"
+        val title = this@Chapter.title?.takeIf { it.isNotEmpty() } ?: "Chapter $chapterNumber"
+        name = if (isAI == 1) "$title (مترجم)" else title
         url = "/reader/$mangaSlug/$chapterNumber"
         date_upload = Instant.tryParse(createdAt)
     }
@@ -103,16 +106,58 @@ class Bubble(
 
 @Serializable
 class ChapterProps(
-    val imageUrls: List<String> = emptyList(),
+    val imageUrls: List<JsonElement> = emptyList(),
+    val mangaSlug: String? = null,
+    val chapterRef: String? = null,
     val overlayBlob: String? = null,
-    @SerialName("overlay_page_offset") val overlayPageOffset: Int? = null,
+    val overlayPageOffset: Int? = null,
+    val textMode: String? = null,
     val chapterId: Long? = null,
     val unlockToken: String? = null,
 )
 
 @Serializable
+class ReaderImage(
+    val url: String,
+    val isTrap: Boolean = false,
+    val pending: Boolean = false,
+)
+
+// Entries are a plain url, or an object marking a pending page or an off-screen decoy
+fun List<JsonElement>.toReaderImages() = map {
+    if (it is JsonPrimitive) ReaderImage(it.content) else it.parseAs<ReaderImage>()
+}
+
+@Serializable
+class PagesRequest(
+    private val chapterId: Long,
+    private val mangaSlug: String,
+    private val chapterNumber: String,
+    private val token: String,
+    private val proof: String,
+)
+
+@Serializable
+class PagesResponse(
+    val data: List<JsonElement>,
+)
+
+@Serializable
+class UnlockRequest(
+    private val chapterId: Long,
+    private val token: String,
+    private val proof: String,
+    private val esid: String,
+    private val nonce: String? = null,
+    private val pow: String? = null,
+)
+
+@Serializable
 class UnlockResponse(
     val overlay: String? = null,
+    val ks: String? = null,
     val key: String? = null,
-    @SerialName("overlay_page_offset") val overlayPageOffset: Int? = null,
+    @SerialName("needs_challenge") val needsChallenge: Boolean = false,
+    val nonce: String? = null,
+    @SerialName("pow_bits") val powBits: Int? = null,
 )

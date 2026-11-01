@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
@@ -26,7 +27,6 @@ import okhttp3.Response
 abstract class MantaComics :
     KeiSource(),
     ConfigurableSource {
-
     private val apiUrl get() = "https://" + baseUrl.toHttpUrl().host
 
     private val preferences: SharedPreferences by getPreferencesLazy()
@@ -42,7 +42,7 @@ abstract class MantaComics :
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$apiUrl/manta/v1/search/series?cat=New&lang=$lang"
 
-        return parseSearchManga(client.get(url))
+        return parseSearchManga(client.get(url, Fetch.XHR))
     }
 
     // =============================== Latest ===============================
@@ -64,7 +64,7 @@ abstract class MantaComics :
             }
         }.build()
 
-        return parseSearchManga(client.get(url))
+        return parseSearchManga(client.get(url, Fetch.XHR))
     }
 
     private fun parseSearchManga(response: Response) = response.parseAs<MantaResponse<List<Series<Title>>>>().data
@@ -77,7 +77,7 @@ abstract class MantaComics :
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val seriesUrl = "$apiUrl/front/v1/series/${manga.url}?lang=$lang"
-        val related = client.get(seriesUrl).parseAs<MantaResponse<RelatedSeries>>().data
+        val related = client.get(seriesUrl, Fetch.XHR).parseAs<MantaResponse<RelatedSeries>>().data
         return related.relatedSeriesList.map { it.toSManga(lang) }
     }
 
@@ -105,7 +105,7 @@ abstract class MantaComics :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val seriesUrl = "$apiUrl/front/v1/series/${manga.url}?lang=$lang"
-        val response = client.get(seriesUrl, headers)
+        val response = client.get(seriesUrl, headers, Fetch.XHR)
         val mantaResponse = response.parseAs<MantaResponse<Series<Details>>>()
         val series = mantaResponse.data
         val details = series.data
@@ -149,7 +149,7 @@ abstract class MantaComics :
                 .set("Authorization", "Bearer $token")
                 .build()
 
-            token = client.get("$apiUrl/manta/v1/login", headers)
+            token = client.get("$apiUrl/manta/v1/login", headers, Fetch.XHR)
                 .parseAs<MantaResponse<Token>>().data.token
         }
 
@@ -161,7 +161,7 @@ abstract class MantaComics :
             headers
         }
 
-        client.get(url, headers).use { response ->
+        client.get(url, headers, Fetch.XHR).use { response ->
             val images = response.parseAs<MantaResponse<Episode>>().data.cutImages.orEmpty()
                 .map { it.toString() }
             // Locked chapters return real preview images followed by "just-black.jpg" placeholders.

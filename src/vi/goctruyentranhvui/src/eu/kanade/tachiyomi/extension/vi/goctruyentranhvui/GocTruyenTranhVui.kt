@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -42,10 +43,6 @@ abstract class GocTruyenTranhVui :
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(::authInterceptor)
         rateLimit(3)
-    }
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
-        removeAll("Origin")
     }
 
     private val xhrHeaders: Headers
@@ -114,7 +111,7 @@ abstract class GocTruyenTranhVui :
             }
         }.build()
 
-        return parseMangaPage(client.get(url, xhrHeaders))
+        return parseMangaPage(client.get(url, xhrHeaders, Fetch.XHR))
     }
 
     private fun parseMangaPage(response: Response): MangasPage {
@@ -127,7 +124,7 @@ abstract class GocTruyenTranhVui :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrlOrNull()?.host) return null
         if (url.pathSegments.size < 2 || url.pathSegments[0] != "truyen") return null
-        return parseMangaDetails(client.get(url).asJsoup(), url)
+        return parseMangaDetails(client.get(url, Fetch.DOCUMENT).asJsoup(), url)
     }
 
     // =========================== Manga Details ============================
@@ -137,7 +134,7 @@ abstract class GocTruyenTranhVui :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = client.get(getMangaUrl(manga).toHttpUrl()).use { response ->
+    ): SMangaUpdate = client.get(getMangaUrl(manga).toHttpUrl(), Fetch.DOCUMENT).use { response ->
         val document = response.asJsoup()
         val newManga = parseMangaDetails(document, response.request.url)
 
@@ -175,7 +172,7 @@ abstract class GocTruyenTranhVui :
     private suspend fun parseChapterList(manga: SManga): List<SChapter> {
         val mangaId = manga.url.substringBefore(':')
         val slug = manga.url.substringAfter(':')
-        val result = client.get("$baseUrl/api/comic/$mangaId/chapter?limit=-1", xhrHeaders)
+        val result = client.get("$baseUrl/api/comic/$mangaId/chapter?limit=-1", xhrHeaders, Fetch.XHR)
             .parseAs<ResultDto<ChapterListDto>>()
 
         val chapters = result.result?.chapters ?: throw Exception(result.errorMessage ?: "Phiên làm việc đã hết hạn, vui lòng tải lại.")
@@ -208,7 +205,7 @@ abstract class GocTruyenTranhVui :
             .build()
 
         suspend fun requestImages(): List<Page>? {
-            return client.post("$baseUrl/api/chapter/loadAll", body).use { response ->
+            return client.post("$baseUrl/api/chapter/loadAll", Fetch.XHR, body).use { response ->
                 val result = runCatching { response.parseAs<ResultDto<ImageListDto>>() }.getOrNull()
                 val imageList = result?.result?.data ?: return@use null
 
@@ -228,7 +225,7 @@ abstract class GocTruyenTranhVui :
         if (pages == null) {
             // Gọi "mồi" đến trang chi tiết để làm mới cookie
             val mangaUrl = "$baseUrl/truyen/$slug"
-            client.get(mangaUrl).close()
+            client.get(mangaUrl, Fetch.DOCUMENT).close()
             // Thử lần 2 sau khi đã có cookie mới
             pages = requestImages()
         }
@@ -261,7 +258,7 @@ abstract class GocTruyenTranhVui :
 
     override suspend fun fetchFilterData(): JsonElement {
         getToken()
-        return client.get("$baseUrl/api/category", xhrHeaders).parseAs()
+        return client.get("$baseUrl/api/category", xhrHeaders, Fetch.XHR).parseAs()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {

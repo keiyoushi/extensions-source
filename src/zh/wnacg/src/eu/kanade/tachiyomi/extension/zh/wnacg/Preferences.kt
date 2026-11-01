@@ -8,6 +8,8 @@ import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -85,6 +87,10 @@ val SharedPreferences.urlList get() = getString(URL_LIST_PREF, DEFAULT_LIST)
     .toValidUrlList()
     .ifEmpty { DEFAULT_LIST.toValidUrlList() }
 
+var SharedPreferences.extraCategories: List<Pair<String, String>>
+    get() = getString(EXTRA_CATEGORIES_PREF, null)?.parseAs<List<Pair<String, String>>>().orEmpty()
+    set(value) = edit().putString(EXTRA_CATEGORIES_PREF, value.toJsonString()).apply()
+
 val SharedPreferences.titleBlacklist: List<String>
     get() = getString(TITLE_BLACKLIST_PREF, "")
         .orEmpty()
@@ -105,8 +111,6 @@ private fun titleBlacklistSummary(value: String?) = value?.takeIf(String::isNotB
     ?: TITLE_BLACKLIST_SUMMARY
 
 private fun maxScanPagesSummary(value: Int) = "当前值：$value\n$BLACKLIST_MAX_SCAN_PAGES_SUMMARY"
-
-fun getCiBaseUrl() = DEFAULT_LIST.replace(",", "#, ")
 
 fun SharedPreferences.preferenceMigration() {
     if (getString(DEFAULT_LIST_PREF, "")!! != DEFAULT_LIST) {
@@ -151,6 +155,10 @@ class UpdateUrlInterceptor(private val preferences: SharedPreferences) : Interce
 
         val statusCode = failedResponse.code
         failedResponse.close()
+        // A guest 404 isn't a dead mirror
+        if (statusCode == 404 && isLoginOnlyPath(request.url.encodedPath)) {
+            throw IOException(LOGIN_HINT)
+        }
         if (isUpdated || updateUrl(chain)) {
             throw IOException("网址已自动更新，请重启应用")
         }
@@ -184,9 +192,15 @@ private fun String.toValidUrlList(): List<String> = split(',')
     .map(String::trim)
     .filter { it.toHttpUrlOrNull() != null }
 
+// Guests get 404 on some galleries and on login-only categories
+private fun isLoginOnlyPath(path: String) = path.startsWith("/photos-") || unlistedCategoryId(path) != null
+
+const val LOGIN_HINT = "内容不存在或需要登录，请在 WebView 中登录后重试"
+
 private const val DEFAULT_LIST_PREF = "defaultBaseUrl"
 private const val URL_LIST_PREF = "baseUrlList"
 private const val URL_INDEX_PREF = "baseUrlIndex"
+private const val EXTRA_CATEGORIES_PREF = "extraCategories"
 private const val TITLE_BLACKLIST_PREF = "titleBlacklist"
 private const val BLACKLIST_MAX_SCAN_PAGES_PREF = "blacklistMaxScanPages"
 private const val FILTER_SEARCH_RESULTS_PREF = "filterSearchResults"

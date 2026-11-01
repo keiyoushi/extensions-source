@@ -12,6 +12,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -99,7 +101,7 @@ abstract class MediocreToons :
         }
 
         val body = LoginRequestDto(loginEmail.trim(), loginPassword).toJsonRequestBody()
-        val response = client.newCall(POST("$API_URL$LOGIN_PATH", headers, body)).execute()
+        val response = client.newCall(POST("$API_URL$LOGIN_PATH", headers, body).newBuilder().fetch(Fetch.XHR).build()).execute()
 
         if (!response.isSuccessful) {
             val message = runCatching { response.parseAs<ErrorDto>().message }.getOrNull()
@@ -127,7 +129,7 @@ abstract class MediocreToons :
         preferences.edit().remove(TOKEN_PREF).apply()
     }
 
-    override suspend fun getPopularManga(page: Int) = client.get(searchUrl(page, POPULAR_SORT)).parseAs<MangaListDto>().toMangasPage()
+    override suspend fun getPopularManga(page: Int) = client.get(searchUrl(page, POPULAR_SORT), Fetch.XHR).parseAs<MangaListDto>().toMangasPage()
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$API_URL/obras/atualizadas-recentes".toHttpUrl().newBuilder()
@@ -136,10 +138,10 @@ abstract class MediocreToons :
             .addQueryParameter("formato", LATEST_FORMAT)
             .build()
 
-        return client.get(url).parseAs<MangaListDto>().toMangasPage()
+        return client.get(url, Fetch.XHR).parseAs<MangaListDto>().toMangasPage()
     }
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = client.get(searchUrl(page, filters.firstInstanceOrNull<SortFilter>()?.selected, query, filters)).parseAs<MangaListDto>().toMangasPage()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = client.get(searchUrl(page, filters.firstInstanceOrNull<SortFilter>()?.selected, query, filters), Fetch.XHR).parseAs<MangaListDto>().toMangasPage()
 
     private fun searchUrl(page: Int, sort: String?, query: String = "", filters: FilterList = FilterList()): HttpUrl {
         val url = "$API_URL/obras/buscar".toHttpUrl().newBuilder()
@@ -171,7 +173,7 @@ abstract class MediocreToons :
 
         val id = url.pathSegments.getOrNull(1)?.toIntOrNull() ?: return null
 
-        return client.get("$API_URL/obras/$id").parseAs<MangaDetailsDto>().toSManga()
+        return client.get("$API_URL/obras/$id", Fetch.XHR).parseAs<MangaDetailsDto>().toSManga()
     }
 
     override suspend fun fetchMangaUpdate(
@@ -180,15 +182,15 @@ abstract class MediocreToons :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = client.get("$API_URL/obras/${manga.url.substringAfter("/obra/")}").parseAs<MangaDetailsDto>()
+        val details = client.get("$API_URL/obras/${manga.url.substringAfter("/obra/")}", Fetch.XHR).parseAs<MangaDetailsDto>()
 
         return SMangaUpdate(details.toSManga(), details.toChapterList())
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val details = client.get("$API_URL/capitulos/${chapter.url.substringAfter("/capitulo/")}").parseAs<ChapterDetailsDto>()
+        val details = client.get("$API_URL/capitulos/${chapter.url.substringAfter("/capitulo/")}", Fetch.XHR).parseAs<ChapterDetailsDto>()
 
-        return client.get(details.pageListUrl).parseAs<List<PageDto>>().toPageList()
+        return client.get(details.pageListUrl, Fetch.XHR).parseAs<List<PageDto>>().toPageList()
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(FormatFilter(), StatusFilter(), SortFilter())

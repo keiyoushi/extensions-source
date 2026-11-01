@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -250,9 +251,9 @@ abstract class KManga :
             .build()
 
         return if (body != null) {
-            client.post(url, newHeaders, body)
+            client.post(url, newHeaders, Fetch.XHR, body)
         } else {
-            client.get(url, newHeaders)
+            client.get(url, newHeaders, Fetch.XHR)
         }
     }
 

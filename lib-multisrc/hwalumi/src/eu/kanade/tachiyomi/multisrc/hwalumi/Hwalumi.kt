@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -25,12 +26,12 @@ import java.time.temporal.ChronoUnit
 abstract class Hwalumi : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/all-series?sort=popular&lang=id&page=$page").asJsoup()
+        val document = client.get("$baseUrl/all-series?sort=popular&lang=id&page=$page", Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document, page)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/all-series?sort=latest&lang=id&page=$page").asJsoup()
+        val document = client.get("$baseUrl/all-series?sort=latest&lang=id&page=$page", Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document, page)
     }
 
@@ -50,7 +51,7 @@ abstract class Hwalumi : KeiSource() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document, page)
     }
 
@@ -94,7 +95,7 @@ abstract class Hwalumi : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(mangaUrl(manga.url)).asJsoup()
+        val document = client.get(mangaUrl(manga.url), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(parseMangaDetails(manga, document), parseChapterList(document))
     }
 
@@ -131,7 +132,7 @@ abstract class Hwalumi : KeiSource() {
         }
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = documentImages(client.get(baseUrl + chapter.url).asJsoup())
+    override suspend fun getPageList(chapter: SChapter): List<Page> = documentImages(client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup())
 
     private fun documentImages(document: Document): List<Page> = document.select("img[alt^=\"Page \"]")
         .map { it.attr("abs:src") }
@@ -172,7 +173,7 @@ abstract class Hwalumi : KeiSource() {
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/browse").asJsoup()
+        val document = client.get("$baseUrl/browse", Fetch.DOCUMENT).asJsoup()
         val genres = document.select("label[data-bf-genre-name] input.bf-genre-cb[value]").mapNotNull { input ->
             val value = input.attr("value").trim()
             val name = input.parent()?.selectFirst("span.truncate")?.text()?.trim() ?: return@mapNotNull null

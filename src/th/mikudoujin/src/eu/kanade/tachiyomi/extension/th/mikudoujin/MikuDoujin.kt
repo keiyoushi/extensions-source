@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -37,7 +38,7 @@ abstract class MikuDoujin : KeiSource() {
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/?page=$page").asJsoup()
+        val document = client.get("$baseUrl/?page=$page", Fetch.DOCUMENT).asJsoup()
         return mangaListParse(document)
     }
 
@@ -52,13 +53,13 @@ abstract class MikuDoujin : KeiSource() {
             val form = FormBody.Builder()
                 .add("keysearch", query.trim())
                 .build()
-            val document = client.post("$baseUrl/controller/search/general/", body = form).asJsoup()
+            val document = client.post("$baseUrl/controller/search/general/", fetch = Fetch.DOCUMENT, body = form).asJsoup()
             return mangaListParse(document)
         }
 
         val genre = filters.firstInstanceOrNull<GenreFilter>()?.toUriPart()
         if (!genre.isNullOrEmpty()) {
-            val document = client.get("$baseUrl/$genre/?page=$page").asJsoup()
+            val document = client.get("$baseUrl/$genre/?page=$page", Fetch.DOCUMENT).asJsoup()
             return mangaListParse(document)
         }
 
@@ -88,7 +89,7 @@ abstract class MikuDoujin : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             mangaDetailsParse(document).apply { url = manga.url },
             chapterListParse(document, manga.url),
@@ -101,7 +102,7 @@ abstract class MikuDoujin : KeiSource() {
         val slug = url.pathSegments.firstOrNull().orEmpty()
         if (slug.isEmpty() || slug in EXCLUDED_PATHS) return null
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         if (document.selectFirst("div.sr-card-body") == null) return null
 
         return mangaDetailsParse(document).apply {
@@ -164,7 +165,7 @@ abstract class MikuDoujin : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val query = "div#v-pills-tabContent img.lazy, div#v-pills-tabContent img.page-img"
         return document.select(query).mapIndexed { i, img ->
             val url = img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }

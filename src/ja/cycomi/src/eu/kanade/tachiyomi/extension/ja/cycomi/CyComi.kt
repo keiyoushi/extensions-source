@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -41,7 +42,7 @@ abstract class CyComi :
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val mangas = client.get("$apiUrl/titleRanking/title/list?categoryId=1")
+        val mangas = client.get("$apiUrl/titleRanking/title/list?categoryId=1", Fetch.XHR)
             .parseAs<Data<List<TitleList>>>().data
             .map { it.toSManga() }
         return MangasPage(mangas, false)
@@ -50,7 +51,7 @@ abstract class CyComi :
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val day = ZonedDateTime.now(jst).minusHours(12).dayOfWeek
         val dayValue = if (day == DayOfWeek.SUNDAY) 0 else day.value
-        return client.get("$apiUrl/title/serialization/list/$dayValue").toMangasPage()
+        return client.get("$apiUrl/title/serialization/list/$dayValue", Fetch.XHR).toMangasPage()
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -58,11 +59,11 @@ abstract class CyComi :
             val url = "$apiUrl/search/list/1".toHttpUrl().newBuilder()
                 .addQueryParameter("word", query)
                 .build()
-            return client.get(url).toMangasPage()
+            return client.get(url, Fetch.XHR).toMangasPage()
         }
 
         val filter = filters.firstInstance<CategoryFilter>()
-        return client.get("$apiUrl/title/serialization/list/${filter.value}").toMangasPage()
+        return client.get("$apiUrl/title/serialization/list/${filter.value}", Fetch.XHR).toMangasPage()
     }
 
     private fun Response.toMangasPage(): MangasPage {
@@ -84,7 +85,7 @@ abstract class CyComi :
             val url = "$apiUrl/title/detail".toHttpUrl().newBuilder()
                 .addQueryParameter("titleId", manga.url)
                 .build()
-            client.get(url).parseAs<Data<DetailsResponse>>().data.toSManga()
+            client.get(url, Fetch.XHR).parseAs<Data<DetailsResponse>>().data.toSManga()
         }
 
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
@@ -104,7 +105,7 @@ abstract class CyComi :
                         .addQueryParameter("titleId", manga.url)
                         .build()
                     runCatching {
-                        client.get(url, FORCE_NETWORK)
+                        client.get(url, Fetch.XHR, FORCE_NETWORK)
                             .parseAs<Data<List<StatusResponse>>>().data
                             .associate { it.id to it.isLocked }
                     }.getOrNull()
@@ -116,7 +117,7 @@ abstract class CyComi :
                     .addQueryParameter("titleId", manga.url)
                     .addQueryParameter("sort", "2")
                     .build()
-                client.get(url).parseAs<Data<List<ChapterListResponse>>>().data
+                client.get(url, Fetch.XHR).parseAs<Data<List<ChapterListResponse>>>().data
             }
 
             val locked = lockedById.await()
@@ -136,7 +137,7 @@ abstract class CyComi :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val body = ViewerRequestBody(chapter.memo["titleId"]!!.int, chapter.url.toInt()).toJsonRequestBody()
-        val pages = client.post("$apiUrl/chapter/page/list", body).parseAs<Data<ViewerResponse>>().data.pages
+        val pages = client.post("$apiUrl/chapter/page/list", Fetch.XHR, body).parseAs<Data<ViewerResponse>>().data.pages
         if (pages.isEmpty()) {
             throw Exception("Log in via WebView and rent or purchase this chapter to read.")
         }

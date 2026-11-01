@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -41,12 +42,12 @@ abstract class Yiimanga : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage {
         val path = popularPath ?: return getLatestUpdates(page)
         val url = listUrl(path, page = page).addQueryParameter("order", "views").build()
-        return mangaListParse(client.get(url).asJsoup())
+        return mangaListParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // =============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaListParse(client.get(listUrl(page = page).build()).asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaListParse(client.get(listUrl(page = page).build(), Fetch.DOCUMENT).asJsoup())
 
     // =============================== Search ===============================
 
@@ -62,7 +63,7 @@ abstract class Yiimanga : KeiSource() {
             if (genre.isEmpty()) return getLatestUpdates(page)
             genreUrl(genre, page)
         }
-        return mangaListParse(client.get(url).asJsoup())
+        return mangaListParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     protected open fun genreUrl(genre: String, page: Int): HttpUrl = listUrl("genre", genre, page = page).build()
@@ -101,7 +102,7 @@ abstract class Yiimanga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetailsParse(document).apply { url = manga.url }, chapterListParse(document))
     }
 
@@ -157,13 +158,13 @@ abstract class Yiimanga : KeiSource() {
 
     // =============================== Pages ================================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select(".reading-content img, .read-content img")
         .mapIndexed { index, element -> Page(index, imageUrl = element.absUrl("src")) }
 
     // =============================== Filters ==============================
 
-    override suspend fun fetchFilterData(): JsonElement = client.get(baseUrl).asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         .select(".genre-list a, a.item-nav[href*=/genre/], a.item-nav-mb[href*=/genre/]")
         .map { it.text() to it.absUrl("href").toHttpUrl().pathSegments[1] }
         .distinctBy { it.second }

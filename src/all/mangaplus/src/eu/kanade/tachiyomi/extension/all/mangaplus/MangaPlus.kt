@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.Fetch
 import keiyoushi.network.XorInterceptor
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
@@ -101,7 +102,7 @@ abstract class MangaPlus :
     private val preferences = getPreferences()
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val result = client.get("$API_URL/title_list/rankingV2?lang=$internalLangName&type=hottest&clang=$internalLangName")
+        val result = client.get("$API_URL/title_list/rankingV2?lang=$internalLangName&type=hottest&clang=$internalLangName", Fetch.XHR)
             .parseAsProto<MangaPlusResponse>()
 
         val titles = result.successOrThrow().titleRankingView!!.rankedTitles
@@ -112,7 +113,7 @@ abstract class MangaPlus :
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val result = client.get("$API_URL/web/web_homeV4?lang=$internalLangName&clang=$internalLangName")
+        val result = client.get("$API_URL/web/web_homeV4?lang=$internalLangName&clang=$internalLangName", Fetch.XHR)
             .parseAsProto<MangaPlusResponse>()
 
         val webHomeView = result.successOrThrow().webHomeView!!
@@ -137,12 +138,12 @@ abstract class MangaPlus :
         val useAllTitles = query.isNotEmpty() && genreSlug.isEmpty() && typeFilter.isDefault
 
         val titles = if (useAllTitles) {
-            client.get("$API_URL/title_list/allV2").parseAsProto<MangaPlusResponse>()
+            client.get("$API_URL/title_list/allV2", Fetch.XHR).parseAsProto<MangaPlusResponse>()
                 .successOrThrow().allTitlesView!!.allTitlesGroup
                 .flatMap(AllTitlesGroup::titles)
                 .filterByLang()
         } else {
-            client.get(allTitlesV3Url(typeFilter.type)).parseAsProto<MangaPlusResponse>()
+            client.get(allTitlesV3Url(typeFilter.type), Fetch.XHR).parseAsProto<MangaPlusResponse>()
                 .successOrThrow().allTitlesViewV3!!.titles
                 .filter { genreSlug.isEmpty() || it.genres.any { genre -> genre.slug == genreSlug } }
                 .map(AllTitlesV3Entry::title)
@@ -161,7 +162,7 @@ abstract class MangaPlus :
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val result = client.get(allTitlesV3Url(TypeFilter.DEFAULT_TYPE)).parseAsProto<MangaPlusResponse>()
+        val result = client.get(allTitlesV3Url(TypeFilter.DEFAULT_TYPE), Fetch.XHR).parseAsProto<MangaPlusResponse>()
         return result.success?.allTitlesViewV3?.tags.orEmpty().toJsonElement()
     }
 
@@ -221,7 +222,7 @@ abstract class MangaPlus :
         if (genres.isEmpty()) return emptyList()
 
         val titleId = manga.url.substringAfterLast("/")
-        val result = client.get(allTitlesV3Url(TypeFilter.DEFAULT_TYPE)).parseAsProto<MangaPlusResponse>()
+        val result = client.get(allTitlesV3Url(TypeFilter.DEFAULT_TYPE), Fetch.XHR).parseAsProto<MangaPlusResponse>()
 
         return result.success?.allTitlesViewV3?.titles.orEmpty()
             .filter { entry -> entry.genres.any { it.name in genres } }
@@ -238,7 +239,7 @@ abstract class MangaPlus :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.url.substringAfterLast("/")
-        val result = client.get(mangaViewerUrl(chapterId)).parseAsProto<MangaPlusResponse>()
+        val result = client.get(mangaViewerUrl(chapterId), Fetch.XHR).parseAsProto<MangaPlusResponse>()
 
         val viewer = result.successOrThrow { error ->
             when {
@@ -258,7 +259,7 @@ abstract class MangaPlus :
             }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val imageHeaders = headersBuilder()
             .set("Plus-Vw-Token", page.url)
             .build()
@@ -266,7 +267,7 @@ abstract class MangaPlus :
     }
 
     private suspend fun getTitleDetails(titleId: String): TitleDetailView {
-        val result = client.get("$API_URL/title_detailV3?title_id=$titleId&clang=$internalLangName")
+        val result = client.get("$API_URL/title_detailV3?title_id=$titleId&clang=$internalLangName", Fetch.XHR)
             .parseAsProto<MangaPlusResponse>()
 
         return result.successOrThrow { error ->
@@ -279,7 +280,7 @@ abstract class MangaPlus :
     }
 
     private suspend fun titleIdFromChapter(chapterId: String): String? {
-        val result = client.get(mangaViewerUrl(chapterId)).parseAsProto<MangaPlusResponse>()
+        val result = client.get(mangaViewerUrl(chapterId), Fetch.XHR).parseAsProto<MangaPlusResponse>()
         return result.success?.mangaViewer?.titleId?.toString()
     }
 

@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.es.ikigaimangas
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -13,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.post
@@ -31,9 +31,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.jsoup.nodes.Element
 import java.text.Normalizer
@@ -45,59 +46,25 @@ import kotlin.time.Duration.Companion.seconds
 abstract class IkigaiMangas :
     KeiSource(),
     ConfigurableSource {
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addCookie("is-adult-enabled" to "true")
         .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
-
-    private val domainMutex = Mutex()
-    private var domainFetched = false
-
-    private suspend fun fetchDomainUrl() {
-        if (domainFetched || !preferences.fetchDomainPref()) return
-        domainMutex.withLock {
-            if (domainFetched || !preferences.fetchDomainPref()) return
-
-            try {
-                val initClient = network.client
-                val headers = super.headersBuilder().build()
-                val document = initClient.get("https://ikigaimangas.com", headers).asJsoup()
-                val scriptUrl = document.selectFirst("button[on:click]:containsOwn(Ir al sitio)")?.attr("on:click")
-                    ?: return
-                initClient.get("https://ikigaimangas.com/build/$scriptUrl", headers).use { response ->
-                    val script = response.body.string()
-                    val domain = script.substringAfter("i(\"").substringBefore("\"")
-                    val host = initClient.newCall(GET(domain, headers)).execute().request.url.host
-                    val newDomain = "https://$host"
-                    preferences.edit().putString(BASE_URL_PREF, newDomain).apply()
-                    domainFetched = true
-                }
-            } catch (_: Exception) {}
-        }
-    }
 
     private val imageCdnUrl: String = "https://image2.ikigaimangas.cloud"
 
     private val preferences = getPreferences()
-
-    override fun Headers.Builder.configureHeaders() = apply {
-        set("Sec-Fetch-Dest", "document")
-        set("Sec-Fetch-Mode", "navigate")
-        set("Sec-Fetch-Site", "cross-site")
-    }
 
     private val dateFormat = DateTimeFormatter.ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'Z", Locale.ENGLISH)
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         fetchDomainUrl()
 
-        val document = client.get("$baseUrl/clasificacion/").asJsoup()
+        val document = client.get("$baseUrl/clasificacion/", Fetch.DOCUMENT).asJsoup()
 
         val mangaList = document.select("div.grid > div.card").map { element ->
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src")
                 title = element.selectFirst(".card-body .card-title")!!.text()
-                val seriesUrl = element.selectFirst(".card-actions > a.btn[href]")!!.attr("href")
-                url = seriesUrl.substringAfterLast("/series/").substringBefore("/")
+                url = element.selectFirst(".card-actions > a.btn[href]")!!.seriesSlug()
             }
         }
         return MangasPage(mangaList, false)
@@ -106,13 +73,16 @@ abstract class IkigaiMangas :
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         fetchDomainUrl()
 
-        val document = client.get("$baseUrl/?pagina=$page").asJsoup()
+        val latestUrl = baseUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("pagina", page.toString())
+            .build()
+        val document = client.get(latestUrl, Fetch.DOCUMENT).asJsoup()
 
         val mangaList = document.select("section[aria-labelledby=new-chapters-heading] > ul.grid:last-of-type a.card").map { element ->
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src")
                 title = element.selectFirst(".card-body .card-title")!!.text()
-                url = element.attr("href").substringAfterLast("/series/").substringBefore("/")
+                url = element.seriesSlug()
             }
         }
         val hasNextPage = document.selectFirst("nav[aria-label=pagination] > a:last-child:not([class*=btn-disabled])") != null
@@ -155,13 +125,13 @@ abstract class IkigaiMangas :
 
         searchUrl.addQueryParameter("pagina", page.toString())
 
-        val document = client.get(searchUrl.build()).asJsoup()
+        val document = client.get(searchUrl.build(), Fetch.DOCUMENT).asJsoup()
 
         val mangaList = document.select("section[aria-labelledby=archive-heading] > ul.grid a.card").map { element ->
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src")
                 title = element.selectFirst("h3")!!.text()
-                url = element.attr("href").substringAfterLast("/series/").substringBefore("/")
+                url = element.seriesSlug()
             }
         }
         val hasNextPage = document.selectFirst("nav[aria-label=pagination] > a:last-child:not([class*=btn-disabled])") != null
@@ -176,17 +146,15 @@ abstract class IkigaiMangas :
     }
 
     private suspend fun fetchQuerySeriesList(): List<QwikSeriesDto> {
-        val qfunc = getQfuncFromWebView(baseUrl, headers)
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("qfunc", qfunc)
-            .build()
+        val url = getQfuncUrlFromWebView(baseUrl, headers)
+        val qfunc = url.queryParameter("qfunc")!!
         val payload = """{"_entry":"1","_objs":["\u0002_#s_$qfunc",["0"]]}"""
         val body = payload.toRequestBody()
         val headers = headersBuilder()
             .set("X-QRL", qfunc)
             .set("Content-Type", "application/qwik-json")
             .build()
-        return client.post(url, headers, body).parseAs<QwikData>().parseAsList<QwikSeriesDto>()
+        return client.post(url, headers, Fetch.XHR, body).parseAs<QwikData>().parseAsList<QwikSeriesDto>()
     }
 
     private fun qwikDataParse(query: String, contentFilter: ContentFilter, seriesList: List<QwikSeriesDto>, page: Int): MangasPage {
@@ -209,7 +177,6 @@ abstract class IkigaiMangas :
         .lowercase()
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/series/${manga.url}/"
-    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -219,14 +186,14 @@ abstract class IkigaiMangas :
     ): SMangaUpdate {
         fetchDomainUrl()
 
-        val document = client.get("$baseUrl/series/${manga.url}/").asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val mainContent = document.selectFirst("main")!!
         val updatedManga = SManga.create().apply {
             title = mainContent.selectFirst(".card-body .card-title")!!.text()
             thumbnail_url = mainContent.selectFirst("article.card figure > img")?.attr("abs:src")
             description = mainContent.selectFirst(".card-body > p")?.text()
             status = parseStatus(mainContent.selectFirst("figure > ul a[href*=?estados]")?.text())
-            genre = mainContent.select(".card-body > ul > li > a[href*=?generos]").joinToString { it.text().trim() }
+            genre = mainContent.select(".card-body > ul > li > a[href*=?generos]").joinToString { it.text() }
         }
 
         if (!fetchChapters) {
@@ -248,13 +215,13 @@ abstract class IkigaiMangas :
         val remainingChapters = coroutineScope {
             (2..lastPage).map { page ->
                 async {
-                    val url = "$baseUrl/series/${manga.url}/"
+                    val url = getMangaUrl(manga)
                         .toHttpUrl()
                         .newBuilder()
                         .addQueryParameter("pagina", page.toString())
                         .build()
 
-                    client.get(url).asJsoup()
+                    client.get(url, Fetch.DOCUMENT).asJsoup()
                         .select("section.card > ul.grid a.card")
                         .map(::chapterFromElement)
                 }
@@ -277,6 +244,8 @@ abstract class IkigaiMangas :
         else -> SManga.UNKNOWN
     }
 
+    private fun Element.seriesSlug() = absUrl("href").toHttpUrl().pathSegments[1]
+
     private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.attr("abs:href"))
         name = element.selectFirst(".card-body .card-title")!!.text()
@@ -287,17 +256,11 @@ abstract class IkigaiMangas :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         fetchDomainUrl()
 
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("section div > img").mapIndexed { i, element ->
             Page(i, imageUrl = element.attr("abs:src"))
         }
     }
-
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
-        .header("Sec-Fetch-Dest", "image")
-        .header("Sec-Fetch-Mode", "no-cors")
-        .header("Sec-Fetch-Site", "cross-site")
-        .build()
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         ContentFilter(),
@@ -319,10 +282,10 @@ abstract class IkigaiMangas :
 
     private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, true)
 
-    private suspend fun getQfuncFromWebView(
+    private suspend fun getQfuncUrlFromWebView(
         url: String,
         headers: Headers,
-    ): String = runWebView(timeout = 20.seconds) {
+    ): HttpUrl = runWebView(timeout = 20.seconds) {
         val pool = ('a'..'z') + ('A'..'Z')
         val interfaceName = (1..(10..20).random())
             .map { pool.random() }
@@ -333,8 +296,12 @@ abstract class IkigaiMangas :
         blockImages = true
         userAgent = headers["User-Agent"].orEmpty()
 
-        webMessageBridge(interfaceName) { qfunc, replyProxy ->
-            if (replyProxy.isMainFrame != false) resolve(qfunc)
+        webMessageBridge(interfaceName) { message, replyProxy ->
+            val qfuncUrl = message.toHttpUrlOrNull() ?: return@webMessageBridge
+            val originHost = replyProxy.sourceOrigin?.toHttpUrlOrNull()?.host
+            if (replyProxy.isMainFrame != false && (originHost == null || originHost == qfuncUrl.host)) {
+                resolve(qfuncUrl)
+            }
         }
 
         injectAtDocumentStart(
@@ -343,9 +310,8 @@ abstract class IkigaiMangas :
                     const originalFetch = window.fetch;
                     window.fetch = function (resource, options) {
                         const url = typeof resource === "string" ? resource : resource?.url ?? "";
-                        const qfunc = url.match(/[?&]qfunc=([^&]+)/)?.[1];
-                        if (qfunc) {
-                            window.$interfaceName.postMessage(decodeURIComponent(qfunc));
+                        if (/[?&]qfunc=/.test(url)) {
+                            window.$interfaceName.postMessage(new URL(url, location.href).href);
                             return new Promise(() => {});
                         }
                         return originalFetch.apply(this, arguments);
@@ -372,6 +338,29 @@ abstract class IkigaiMangas :
         )
 
         loadUrl(url)
+    }
+
+    private val domainMutex = Mutex()
+    private var domainFetched = false
+
+    private suspend fun fetchDomainUrl() {
+        if (domainFetched || !preferences.fetchDomainPref()) return
+        domainMutex.withLock {
+            if (domainFetched || !preferences.fetchDomainPref()) return
+
+            try {
+                val initClient = network.client
+                val headers = super.headersBuilder().build()
+                val document = initClient.get("https://ikigaimangas.com", headers, Fetch.DOCUMENT).asJsoup()
+                val scriptUrl = document.selectFirst("button[on:click]:containsOwn(Ir al sitio)")?.attr("on:click")
+                    ?: return
+                val script = initClient.get("https://ikigaimangas.com/build/$scriptUrl", headers, Fetch.SCRIPT).body.string()
+                val domain = script.substringAfter("i(\"").substringBefore("\"")
+                val host = initClient.get(domain, headers, Fetch.DOCUMENT, ensureSuccess = false).use { it.request.url.host }
+                preferences.edit().putString(BASE_URL_PREF, "https://$host").apply()
+                domainFetched = true
+            } catch (_: Exception) {}
+        }
     }
 
     companion object {

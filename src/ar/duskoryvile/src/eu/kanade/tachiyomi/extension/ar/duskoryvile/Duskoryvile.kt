@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -45,6 +46,7 @@ abstract class Duskoryvile :
     override suspend fun getPopularManga(page: Int) = popularMangaParse(
         client.get(
             "$baseUrl/series-list/",
+            Fetch.DOCUMENT,
         ).asJsoup(),
     )
 
@@ -82,7 +84,7 @@ abstract class Duskoryvile :
         val url = "$baseUrl/search/".toHttpUrl().newBuilder().apply {
             addQueryParameter("q", query)
         }.build()
-        return popularMangaParse(client.get(url).asJsoup())
+        return popularMangaParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // ============================== MangaUpdate ==============================
@@ -93,7 +95,7 @@ abstract class Duskoryvile :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(parseDetails(doc), parseChapters(doc))
     }
 
@@ -129,7 +131,7 @@ abstract class Duskoryvile :
 
     // =============================== Pages ===============================
 
-    override suspend fun getPageList(chapter: SChapter) = client.get(getChapterUrl(chapter))
+    override suspend fun getPageList(chapter: SChapter) = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         .asJsoup().select(".dap-pages img.dap-page").mapIndexed { index, element ->
             val imageUrl = if (element.hasAttr("data-src")) {
                 element.absUrl("data-src")
@@ -184,6 +186,7 @@ abstract class Duskoryvile :
                     .url("$baseUrl/wp-login.php")
                     .post(loginBody)
                     .headers(headers)
+                    .header("Origin", baseUrl)
                     .build()
 
                 chain.proceed(loginRequest).close()

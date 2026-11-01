@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.moetruyen
 
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
@@ -41,6 +42,7 @@ internal class ImgxAccessClient(
         val bootstrap = client.post(
             "$baseUrl${config.bootstrapUrl}",
             jsonHeaders(),
+            Fetch.XHR,
             BootstrapRequest(
                 readerPublicKey = keyPair.publicKey,
                 bootstrapProof = bootstrapProof,
@@ -82,6 +84,7 @@ internal class ImgxAccessClient(
             val response = client.post(
                 "$baseUrl${config.requestPath}",
                 jsonHeaders(),
+                Fetch.XHR,
                 PageAccessRequest(
                     pageIndexes = indexes,
                     pageAccessProof = PageAccessProof(
@@ -116,9 +119,6 @@ internal class ImgxAccessClient(
         .set("Content-Type", "application/json")
         .set("Origin", baseUrl)
         .set("Referer", chapterUrl)
-        .set("Sec-Fetch-Dest", "empty")
-        .set("Sec-Fetch-Mode", "cors")
-        .set("Sec-Fetch-Site", "same-origin")
         .build()
 
     companion object {

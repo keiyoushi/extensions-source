@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Argos Comics"
-    versionCode = 62
+    versionCode = 64
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -32,14 +33,13 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class VyvyManga : KeiSource() {
-
     private val dateFormat = DateTimeFormatter.ofPattern("MMM dd, yyy", Locale.US)
     private val relativeDateRegex = Regex("""(\d+)""")
 
     // Popular
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/search" + if (page != 1) "?page=$page" else ""
-        return parseMangasPage(client.get(url))
+        return parseMangasPage(client.get(url, Fetch.DOCUMENT))
     }
 
     private fun parseMangasPage(response: Response): MangasPage {
@@ -58,7 +58,7 @@ abstract class VyvyManga : KeiSource() {
     // Latest
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/search?sort=updated_at" + if (page != 1) "&page=$page" else ""
-        return parseMangasPage(client.get(url))
+        return parseMangasPage(client.get(url, Fetch.DOCUMENT))
     }
 
     // Search
@@ -85,7 +85,7 @@ abstract class VyvyManga : KeiSource() {
             }
         }
 
-        return parseMangasPage(client.get(url.build()))
+        return parseMangasPage(client.get(url.build(), Fetch.DOCUMENT))
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -114,7 +114,7 @@ abstract class VyvyManga : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val mangaUrl = manga.url
-        val document = client.get(baseUrl + mangaUrl).asJsoup()
+        val document = client.get(baseUrl + mangaUrl, Fetch.DOCUMENT).asJsoup()
 
         val manga = SManga.create().apply {
             title = document.selectFirst("h1")!!.text()
@@ -161,13 +161,13 @@ abstract class VyvyManga : KeiSource() {
         val mangaUrl = chapter.memo["mangaUrl"]?.string ?: error("Refresh to reload chapters")
 
         // Chapter links expire after a few hours
-        val url = client.get(baseUrl + mangaUrl).asJsoup()
+        val url = client.get(baseUrl + mangaUrl, Fetch.DOCUMENT).asJsoup()
             .select(".list-group > a")
             .firstOrNull { it.selectFirst("span")!!.text() == chapter.name }
             ?.absUrl("href")
             ?: error("Refresh to reload chapters")
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return document.select("img.d-block").mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("data-src"))
         }
@@ -202,7 +202,7 @@ abstract class VyvyManga : KeiSource() {
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/search").asJsoup()
+        val document = client.get("$baseUrl/search", Fetch.DOCUMENT).asJsoup()
 
         return document.select(".check-genre div div:has(.checkbox-genre)").map {
             GenreData(

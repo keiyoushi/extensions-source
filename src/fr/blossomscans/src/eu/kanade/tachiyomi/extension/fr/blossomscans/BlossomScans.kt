@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -78,7 +79,7 @@ abstract class BlossomScans :
             }
         }.build()
 
-        val response = client.get(url).parseAs<SeriesListResponse>()
+        val response = client.get(url, Fetch.XHR).parseAs<SeriesListResponse>()
         val mangas = response.data.map { it.toSManga(baseUrl) }
         return MangasPage(mangas, response.pagination.page < response.pagination.totalPages)
     }
@@ -107,7 +108,7 @@ abstract class BlossomScans :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = client.get("$baseUrl/api/series/${manga.url}").parseAs<SeriesDetailsDto>()
+        val details = client.get("$baseUrl/api/series/${manga.url}", Fetch.XHR).parseAs<SeriesDetailsDto>()
         return SMangaUpdate(
             details.toSManga(baseUrl),
             details.chapters.filterNot { it.isLocked && hidePremium }.map { it.toSChapter(details.slug) },
@@ -116,7 +117,7 @@ abstract class BlossomScans :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val slug = chapter.memo.getString("mangaSlug")
-        val details = client.get("$baseUrl/api/series/$slug").parseAs<SeriesDetailsDto>()
+        val details = client.get("$baseUrl/api/series/$slug", Fetch.XHR).parseAs<SeriesDetailsDto>()
         val entry = details.chapters.firstOrNull { it.chapterId == chapter.url } ?: return emptyList()
         return entry.pageUrls(baseUrl).mapIndexed { index, imageUrl ->
             Page(index, url = getChapterUrl(chapter), imageUrl = imageUrl)
@@ -125,7 +126,7 @@ abstract class BlossomScans :
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/genres").parseAs()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/genres", Fetch.XHR).parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data?.parseAs<List<String>>().orEmpty()

@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
@@ -58,7 +59,7 @@ abstract class MechaComic :
             .addQueryParameter("page", page.toString())
             .build()
 
-        val result = client.get(url).parseAs<RankingResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<RankingResponse>()
         val mangas = result.rankingBooks.map { it.toSManga(cdnUrl) }
         return MangasPage(mangas, result.pagination.hasNextPage())
     }
@@ -74,7 +75,7 @@ abstract class MechaComic :
             .addQueryParameter("page", page.toString())
             .build()
 
-        val result = client.get(url).parseAs<RecentResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<RecentResponse>()
         val mangas = result.books.map { it.toSManga(cdnUrl) }
         return MangasPage(mangas, result.hasNextPage)
     }
@@ -94,7 +95,7 @@ abstract class MechaComic :
             }
             .build()
 
-        val document = client.get(url, desktopHeaders).asJsoup()
+        val document = client.get(url, desktopHeaders, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("li.p-bookList_item").map {
             val link = it.selectFirst("dt.p-book_title a")!!
             SManga.create().apply {
@@ -115,7 +116,7 @@ abstract class MechaComic :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga), desktopHeaders).asJsoup()
+        val document = client.get(getMangaUrl(manga), desktopHeaders, Fetch.DOCUMENT).asJsoup()
         val details = SManga.create().apply {
             title = document.selectFirst(".p-bookInfo_title h1")!!.text()
             author = document.select("#js-anchor-defList dt:contains(作家) + dd .p-sepList_item").joinToString { it.text() }
@@ -159,7 +160,7 @@ abstract class MechaComic :
         val pageUrl = url.toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(pageUrl, desktopHeaders).asJsoup()
+        return client.get(pageUrl, desktopHeaders, Fetch.DOCUMENT).asJsoup()
     }
 
     private fun Document.parseChapters(hideLocked: Boolean): List<SChapter> = select("ol.p-chapterList li.p-chapterList_item:has(dl.p-chapterList_txtArea)").mapNotNull {
@@ -214,7 +215,7 @@ abstract class MechaComic :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = coroutineScope {
-        val viewerUrl = noRedirectClient.get(getChapterUrl(chapter), ensureSuccess = false)
+        val viewerUrl = noRedirectClient.get(getChapterUrl(chapter), Fetch.DOCUMENT, ensureSuccess = false)
             .use { it.header("Location") }
             ?.toHttpUrlOrNull()
         val contentsUrl = viewerUrl?.let {
@@ -229,8 +230,8 @@ abstract class MechaComic :
             .addQueryParameter("ver", viewerUrl.queryParameter("ver"))
             .build()
 
-        val contentData = async { client.get(contentsRequestUrl).parseAs<ContentData>() }
-        val cryptoKey = async { client.get(baseUrl + manifestPath).parseAs<CryptoKey>().cryptokey }
+        val contentData = async { client.get(contentsRequestUrl, Fetch.XHR).parseAs<ContentData>() }
+        val cryptoKey = async { client.get(baseUrl + manifestPath, Fetch.XHR).parseAs<CryptoKey>().cryptokey }
 
         contentData.await().imagePaths().mapIndexed { i, path ->
             Page(i, imageUrl = "$directory$path#key=${cryptoKey.await()}")

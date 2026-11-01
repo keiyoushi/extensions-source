@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.unpacker.SubstringExtractor
 import keiyoushi.lib.unpacker.Unpacker
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
@@ -62,7 +63,7 @@ abstract class Mangabz :
         append(old, 0, old.length - 3).append(urlSuffix)
     }
 
-    private suspend fun getMangaList(url: String): MangasPage = parseMangaList(client.get(url).asJsoup()).apply {
+    private suspend fun getMangaList(url: String): MangasPage = parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup()).apply {
         for (manga in mangas) manga.stripMirror()
     }
 
@@ -75,7 +76,7 @@ abstract class Mangabz :
         val titleId = url.pathSegments[0]
         val mirrorPath = "$titleId/".toMirror()
 
-        val document = client.get("$baseUrl/$mirrorPath").asJsoup()
+        val document = client.get("$baseUrl/$mirrorPath", Fetch.DOCUMENT).asJsoup()
         return SManga.create().apply {
             this.url = document.location().removePrefix(baseUrl)
             parseDetails(document)
@@ -103,7 +104,7 @@ abstract class Mangabz :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url.toMirror()).asJsoup()
+        val document = client.get(baseUrl + manga.url.toMirror(), Fetch.DOCUMENT).asJsoup()
         manga.parseDetails(document)
         return SMangaUpdate(manga, parseChapterList(document))
     }
@@ -145,7 +146,7 @@ abstract class Mangabz :
             cache = realCache
         }
 
-        val script = client.get(page.url).use { Unpacker.unpack(it.body.string()) }
+        val script = client.get(page.url, Fetch.SCRIPT).use { Unpacker.unpack(it.body.string()) }
         val parser = SubstringExtractor(script)
         val prefix = parser.substringBetween("pix=\"", "\"")
         // 2 pages, or 15 if server cache is ready
@@ -160,7 +161,7 @@ abstract class Mangabz :
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = parseCategories(client.get("$baseUrl/manga-list-p1/").asJsoup()).toJsonElement()
+    override suspend fun fetchFilterData(): JsonElement = parseCategories(client.get("$baseUrl/manga-list-p1/", Fetch.DOCUMENT).asJsoup()).toJsonElement()
 
     override fun getFilterList(data: JsonElement?) = getFilterListInternal(data?.parseAs<List<CategoryData>>())
 

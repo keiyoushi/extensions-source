@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -29,7 +30,7 @@ abstract class JJCOS : KeiSource() {
     // ============================== Popular ==============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val posts = client.get(indexUrlBuilder(page = page).build()).parseAs<IndexDto>().posts
+        val posts = client.get(indexUrlBuilder(page = page).build(), Fetch.XHR).parseAs<IndexDto>().posts
 
         return toMangasPage(posts, page)
     }
@@ -59,7 +60,7 @@ abstract class JJCOS : KeiSource() {
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val posts = client.get(indexUrlBuilder(page = page, query = query).build()).parseAs<IndexDto>().posts
+        val posts = client.get(indexUrlBuilder(page = page, query = query).build(), Fetch.XHR).parseAs<IndexDto>().posts
         val trimmedQuery = query.trim()
 
         val filteredPosts = if (trimmedQuery.isEmpty()) {
@@ -83,7 +84,7 @@ abstract class JJCOS : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         val postPath = response.request.url.encodedPath
         val document = response.asJsoup()
 
@@ -125,7 +126,7 @@ abstract class JJCOS : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val imageUrls = extractImageUrls(document)
 
         return imageUrls.mapIndexed { index, imageUrl ->

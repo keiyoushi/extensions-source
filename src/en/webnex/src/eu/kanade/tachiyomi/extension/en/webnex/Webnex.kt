@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -12,17 +13,23 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
 import keiyoushi.utils.textOrNull
+import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
@@ -32,18 +39,21 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.TextNode
+import java.io.IOException
 import kotlin.math.roundToInt
+import kotlin.random.Random
+import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 @Source
 abstract class Webnex :
     KeiSource(),
     ConfigurableSource {
-
     private val preferences by getPreferencesLazy()
 
     // The site rejects the app's default Cache-Control (max-age=600)
@@ -53,7 +63,10 @@ abstract class Webnex :
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchManga(page, "", FilterList(SortFilter("coverage"), RatingFilter(preferences.rating)))
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchManga(page, "", FilterList(SortFilter("updated"), RatingFilter(preferences.rating)))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getCards(
+        baseUrl.toHttpUrl().newBuilder().addQueryParameter("latest", page.toString()).build(),
+        "section.latest-section",
+    )
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/browse".toHttpUrl().newBuilder().apply {
@@ -65,9 +78,9 @@ abstract class Webnex :
         return getCards(url)
     }
 
-    private suspend fun getCards(url: HttpUrl): MangasPage {
-        val document = client.get(url).asDocument()
-        val mangas = document.select("li.card-item a.card-link").map { element ->
+    private suspend fun getCards(url: HttpUrl, section: String = ""): MangasPage {
+        val document = client.get(url, Fetch.DOCUMENT).asDocument()
+        val mangas = document.select("$section li.card-item a.card-link").map { element ->
             SManga.create().apply {
                 this.url = element.absUrl("href").toHttpUrl().pathSegments[1]
                 title = element.selectFirst(".card-title")!!.text()
@@ -75,7 +88,7 @@ abstract class Webnex :
                 genre = element.selectFirst(".card-kind")?.textOrNull()
             }
         }
-        val hasNextPage = document.selectFirst("a[rel=next]") != null
+        val hasNextPage = document.selectFirst("a[aria-label=Next page]") != null
 
         return MangasPage(mangas, hasNextPage)
     }
@@ -98,7 +111,7 @@ abstract class Webnex :
         if (url.host != baseUrl.toHttpUrl().host) return null
         val slug = when (url.pathSegments[0]) {
             "manga" -> url.pathSegments.getOrNull(1) ?: return null
-            "read" -> client.get(url.newBuilder().query(null).build()).extractNextJs<ReaderPropsDto> {
+            "read" -> client.get(url.newBuilder().query(null).build(), Fetch.DOCUMENT).extractNextJs<ReaderPropsDto> {
                 it is JsonObject && "chapter" in it && "series" in it
             }?.series?.id ?: return null
             else -> return null
@@ -120,7 +133,7 @@ abstract class Webnex :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asDocument()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asDocument()
         val details = SManga.create().apply {
             url = manga.url
             title = document.selectFirst("h1.series-title")!!.text()
@@ -151,9 +164,9 @@ abstract class Webnex :
                 (listOfNotNull(rating) + facts).joinToString(" · ").ifEmpty { null },
                 document.select(".series-desc p").joinToString("\n\n") { it.toMarkdown().trim() }.ifEmpty { null },
                 listOfNotNull(
-                    altTitles.joinToString(" · ").ifEmpty { null }?.let { "**Alt titles:** $it" },
-                    links.joinToString(" · ").ifEmpty { null }?.let { "**Links:** $it" },
-                ).joinToString("\n").ifEmpty { null },
+                    altTitles.ifEmpty { null }?.joinToString("\n", "**Alt titles:**\n") { "- $it" },
+                    links.ifEmpty { null }?.joinToString("\n", "**Links:**\n") { "- $it" },
+                ).joinToString("\n\n").ifEmpty { null },
             ).joinToString("\n\n").ifEmpty { null }
         }
         if (!fetchChapters) return SMangaUpdate(details, chapters)
@@ -162,7 +175,7 @@ abstract class Webnex :
         val mangaUrl = getMangaUrl(manga).toHttpUrl()
         val otherPages = coroutineScope {
             (2..lastPage).map { page ->
-                async { client.get(mangaUrl.newBuilder().addQueryParameter("page", page.toString()).build()).asDocument() }
+                async { client.get(mangaUrl.newBuilder().addQueryParameter("page", page.toString()).build(), Fetch.DOCUMENT).asDocument() }
             }.awaitAll()
         }
 
@@ -195,7 +208,7 @@ abstract class Webnex :
                     scanlator = element.selectFirst(".ch-source, .ch-source-name")?.textOrNull()
                     date_upload = Instant.tryParse(element.selectFirst("time.ch-time")?.attr("datetime"))
                 },
-                likes = element.selectFirst(".ch-likes")?.text()?.filter(Char::isDigit)?.toIntOrNull() ?: 0,
+                likes = element.selectFirst(".ch-likes")?.text()?.filter { it in '0'..'9' }?.toIntOrNull() ?: 0,
                 warning = false,
             )
             val others = element.select(".ch-sources-menu a.ch-sources-item").map { item ->
@@ -232,25 +245,50 @@ abstract class Webnex :
 
     // Inverts the site's timeAgo(): "4w ago" means 4 weeks up to the 30 days where "1mo" takes over, so take the middle.
     private fun String?.parseTimeAgo(): Long {
-        if (this == "just now") return System.currentTimeMillis()
+        if (this == "just now") return Clock.System.now().toEpochMilliseconds()
         val match = TIME_AGO_REGEX.matchEntire(this ?: return 0L) ?: return 0L
         val index = TIME_AGO_UNITS.indexOfFirst { it.first == match.groupValues[2] }
         val unit = TIME_AGO_UNITS[index].second
         val count = match.groupValues[1].toInt()
         val upper = minOf(unit * (count + 1), TIME_AGO_UNITS.getOrNull(index - 1)?.second ?: Duration.INFINITE)
-        return System.currentTimeMillis() - ((unit * count + upper) / 2).inWholeMilliseconds
+        return (Clock.System.now() - (unit * count + upper) / 2).toEpochMilliseconds()
     }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/read/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter).toHttpUrl()
-        val pagesUrl = chapterUrl.newBuilder().addPathSegment("pages").build()
-        val reader = client.get(pagesUrl).parseAs<ReaderDto>()
+        val reader = readerFetch(chapterUrl).parseAs<ReaderDto>()
 
         // Relative /api/image/ paths or absolute CDN urls
         return reader.pages.mapIndexed { index, url ->
             Page(index, imageUrl = chapterUrl.resolve(url)!!.toString())
+        }
+    }
+
+    private val readerMutex = Mutex()
+
+    // The page list refuses non-browser clients, and WebView navigations (X-Requested-With): fetch from a blank page
+    private suspend fun readerFetch(chapterUrl: HttpUrl): String = readerMutex.withLock {
+        val script = javaClass.getResource("/assets/reader_fetch.js")!!.readText()
+        val bridge = "wnx" + Random.nextLong().toULong().toString(36)
+        val result = try {
+            runWebView<String>(timeout = 20.seconds) {
+                blockImages = true
+                userAgent = headers["User-Agent"]!!
+                webMessageBridge(bridge, setOf(baseUrl)) { resolve(it) }
+                loadData("$baseUrl/", "<script>($script)(${chapterUrl.encodedPath.toJsonString()}, ${bridge.toJsonString()})</script>")
+            }.parseAs<WebFetchDto>()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            throw IOException(e.message, e)
+        }
+
+        when (result.status) {
+            200 -> result.body
+            0 -> throw IOException("Failed to load the page list")
+            else -> throw HttpException(result.status)
         }
     }
 
@@ -278,7 +316,7 @@ abstract class Webnex :
         ListPreference(screen.context).apply {
             key = PREF_RATING
             title = "Content rating"
-            summary = "Used for popular, latest and search. The Content rating filter overrides it.\nCurrent: %s"
+            summary = "Used for popular and search. The Content rating filter overrides it.\nCurrent: %s"
             entries = RATING_OPTIONS.map { it.first }.toTypedArray()
             entryValues = RATING_OPTIONS.map { it.second }.toTypedArray()
             setDefaultValue("")

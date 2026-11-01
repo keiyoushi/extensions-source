@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -25,7 +26,6 @@ import javax.net.ssl.X509TrustManager
 abstract class Megatokyo : KeiSource() {
 
     override val supportsLatest = false
-
     private val dateParser = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.US)
 
     override fun OkHttpClient.Builder.configureClient() = ignoreAllSSLErrors()
@@ -72,7 +72,7 @@ abstract class Megatokyo : KeiSource() {
         val updatedManga = if (fetchDetails) createManga() else manga
         if (!fetchChapters) return SMangaUpdate(updatedManga, chapters)
 
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val chapterList = document.select("div.content h2:contains(Comics by Date) + div ul li a[name]")
             .map { element ->
                 SChapter.create().apply {
@@ -87,7 +87,7 @@ abstract class Megatokyo : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("#strip img").mapIndexed { i, element ->
             Page(i, imageUrl = element.absUrl("src"))
         }

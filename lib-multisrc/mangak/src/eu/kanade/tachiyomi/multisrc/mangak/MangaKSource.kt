@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
@@ -68,7 +69,7 @@ abstract class MangaKSource :
             }
         }.build()
 
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         val dto = response.parseAs<SearchResponseDto>()
         return MangasPage(dto.items.map { it.toSManga() }, dto.hasNext)
     }
@@ -87,7 +88,7 @@ abstract class MangaKSource :
             }
         }.build()
 
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         val dto = response.parseAs<SearchResponseDto>()
         return MangasPage(dto.items.map { it.toSManga() }, dto.hasNext)
     }
@@ -143,7 +144,7 @@ abstract class MangaKSource :
             if (excludedGenres.isNotEmpty()) addQueryParameter("exclude", excludedGenres.joinToString(","))
         }.build()
 
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         val dto = response.parseAs<SearchResponseDto>()
         return MangasPage(dto.items.map { it.toSManga() }, dto.hasNext)
     }
@@ -169,7 +170,7 @@ abstract class MangaKSource :
             (fetchChapters && manga.memo["id"]?.jsonPrimitive?.contentOrNull == null)
 
         val nextJsData = if (needsNextJsData) {
-            val response = client.get(detailsUrl)
+            val response = client.get(detailsUrl, Fetch.DOCUMENT)
             response.extractNextJs<NextJsDto> {
                 it is JsonObject && "pageProps" in it
             } ?: throw IllegalStateException("Could not extract Next.js data for: $detailsUrl")
@@ -203,7 +204,7 @@ abstract class MangaKSource :
 
     private suspend fun fetchChaptersByApiId(id: String): List<SChapter> {
         val url = "$apiUrl/titles/$id/chapters?cv=${System.currentTimeMillis()}"
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         val chapterList = response.parseAs<ChapterListResponseDto>().chapters
 
         return chapterList.sortedByDescending { it.chapterNumber ?: 0f }
@@ -214,7 +215,7 @@ abstract class MangaKSource :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
-        val response = client.get(chapterUrl)
+        val response = client.get(chapterUrl, Fetch.DOCUMENT)
         val dto = response.extractNextJs<NextJsDto> {
             it is JsonObject && "pageProps" in it
         }
@@ -228,7 +229,7 @@ abstract class MangaKSource :
 
     // ============================== Filters ==============================
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres").parseAs<JsonElement>()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres", Fetch.XHR).parseAs<JsonElement>()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = getGenreList(data, getBlacklist())

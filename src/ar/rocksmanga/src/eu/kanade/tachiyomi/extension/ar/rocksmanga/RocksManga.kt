@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -71,7 +72,7 @@ abstract class RocksManga : KeiSource() {
             if (exclude.isNotEmpty()) addQueryParameter("genre_exclude", exclude.joinToString(","))
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".catalog-grid-compact .unit, main .unit").distinct().map { it.toSManga() }
         return MangasPage(mangas, document.selectFirst("li.page-item > a.page-link[rel=next]") != null)
     }
@@ -91,7 +92,7 @@ abstract class RocksManga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val details = document.extractNextJs<DetailsDto> { it is JsonObject && "readHref" in it }!!.manga
         val chapterList = document.extractNextJs<ChapterListDto> { it is JsonObject && "mangaSlug" in it && "chapters" in it }!!
@@ -105,14 +106,14 @@ abstract class RocksManga : KeiSource() {
     // ================================= Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.extractNextJs<ReaderDto> { it is JsonObject && "chapter" in it && "manga" in it }!!
             .chapter.pages.mapIndexed { i, path -> Page(i, imageUrl = "$apiUrl$path") }
     }
 
     // ================================= Filters =================================
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/browse").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/browse", Fetch.DOCUMENT).asJsoup()
         .extractNextJs<GenresDto> { it is JsonObject && "genres" in it && "filters" in it }!!
         .toJsonElement()
 

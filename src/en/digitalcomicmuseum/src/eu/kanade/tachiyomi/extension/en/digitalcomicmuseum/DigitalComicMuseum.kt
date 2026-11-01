@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -20,7 +21,7 @@ abstract class DigitalComicMuseum : KeiSource() {
     // Latest
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/stats.php?ACT=latest&start=${page - 1}00&limit=100").asJsoup()
+        val document = client.get("$baseUrl/stats.php?ACT=latest&start=${page - 1}00&limit=100", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("tbody > .mainrow").map { element ->
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src")
@@ -36,7 +37,7 @@ abstract class DigitalComicMuseum : KeiSource() {
     // Popular
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/stats.php?ACT=topdl&start=${page - 1}00&limit=100").asJsoup()
+        val document = client.get("$baseUrl/stats.php?ACT=topdl&start=${page - 1}00&limit=100", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("tbody > .mainrow").map { element ->
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src")
@@ -59,7 +60,7 @@ abstract class DigitalComicMuseum : KeiSource() {
         val url = "$baseUrl/index.php".toHttpUrl().newBuilder()
             .addQueryParameter("ACT", "dosearch")
             .build()
-        val document = client.post(url, requestBody).asJsoup()
+        val document = client.post(url, Fetch.DOCUMENT, requestBody).asJsoup()
         val mangas = document.select("#search-results tbody > tr").map { element ->
             SManga.create().apply {
                 val baseElement = element.selectFirst("td > a")!!
@@ -78,7 +79,7 @@ abstract class DigitalComicMuseum : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val elements = document.select(".tableborder")
         elements.first()?.let { firstElement ->
@@ -105,14 +106,14 @@ abstract class DigitalComicMuseum : KeiSource() {
     // Pages
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(".reader-page-list a.reader-page-link").mapIndexed { index, element ->
             Page(index, url = element.attr("abs:href"))
         }
     }
 
     override suspend fun getImageUrl(page: Page): String {
-        val document = client.get(page.url).asJsoup()
+        val document = client.get(page.url, Fetch.DOCUMENT).asJsoup()
         return document.selectFirst("img.reader-page-image")!!.absUrl("src")
     }
 }

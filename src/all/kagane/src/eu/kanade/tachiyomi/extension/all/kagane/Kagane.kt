@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.kagane
 
+import android.util.LruCache
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
@@ -13,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -21,6 +23,7 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
+import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
@@ -29,6 +32,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
@@ -36,14 +41,17 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.Response
 import okio.IOException
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 
 @Source
 abstract class Kagane :
     KeiSource(),
     ConfigurableSource {
-
     private val kaganeLangs: List<String>
         get() = listOf(lang)
 
@@ -57,12 +65,13 @@ abstract class Kagane :
         rateLimit(3)
     }
 
+    // The image host 404s without the site's Origin
+    override val imageFetch = Fetch.XHR
+
     private fun refreshTokenInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val url = request.url
-        if (!url.queryParameterNames.contains("token")) {
-            return chain.proceed(request)
-        }
+        val urlToken = url.queryParameter("token") ?: return chain.proceed(request)
 
         val chapterId = if (url.pathSegments[4] == "datasaver") {
             url.pathSegments[5]
@@ -70,27 +79,42 @@ abstract class Kagane :
             url.pathSegments[4]
         }
 
-        var response = chain.proceed(
-            request.newBuilder()
-                .url(url.newBuilder().setQueryParameter("token", accessToken).build())
-                .build(),
-        )
+        val token = pageTokens.get(chapterId)?.value ?: urlToken
+        val response = chain.proceed(request.withToken(token))
 
-        if (response.code == 401 || response.code == 403 || response.code == 507) {
-            response.close()
-            val challenge = runBlocking {
-                runCatching { getChallengeResponse(chapterId) }
-            }.getOrElse { throw IOException("Failed to retrieve token") }
-
-            accessToken = challenge.accessToken
-            response = chain.proceed(
-                request.newBuilder()
-                    .url(url.newBuilder().setQueryParameter("token", accessToken).build())
-                    .build(),
-            )
+        if (response.code != 401 && response.code != 403 && response.code != 507) {
+            return response
         }
 
-        return response
+        response.close()
+        if (response.code == 403 && response.header("Content-Type").orEmpty().startsWith("text/html")) {
+            throw IOException("${url.host} is blocking this network, try another connection")
+        }
+
+        return chain.proceed(request.withToken(refreshToken(chapterId, token)))
+    }
+
+    private fun Request.withToken(token: String): Request = newBuilder()
+        .url(url.newBuilder().setQueryParameter("token", token).build())
+        .build()
+
+    @Synchronized
+    private fun refreshToken(chapterId: String, rejected: String): String {
+        val known = pageTokens.get(chapterId)
+        if (known != null && known.value != rejected) return known.value
+
+        val now = Clock.System.now()
+        if (known != null && now - known.issuedAt < TOKEN_REFRESH_INTERVAL) {
+            throw IOException("Failed to retrieve token")
+        }
+
+        pageTokens.put(chapterId, PageToken(rejected, now))
+        val challenge = runBlocking {
+            runCatching { getChallengeResponse(chapterId) }
+        }.getOrElse { throw IOException("Failed to retrieve token") }
+
+        pageTokens.put(chapterId, PageToken(challenge.accessToken, now))
+        return challenge.accessToken
     }
 
     // ============================== Popular ===============================
@@ -100,7 +124,8 @@ abstract class Kagane :
         "",
         FilterList(
             SortFilter(Filter.Sort.Selection(1, false)),
-            ContentRatingFilter(contentRating.toSet()),
+            ContentRatingFilter(contentRating.toSet(), showPornographic, showDisturbing),
+            FormatFilter(excludedFormats),
             GenresFilter(emptyList(), excludedGenreIds),
 
         ),
@@ -113,7 +138,8 @@ abstract class Kagane :
         "",
         FilterList(
             SortFilter(Filter.Sort.Selection(6, false)),
-            ContentRatingFilter(contentRating.toSet()),
+            ContentRatingFilter(contentRating.toSet(), showPornographic, showDisturbing),
+            FormatFilter(excludedFormats),
             GenresFilter(emptyList(), excludedGenreIds),
         ),
     )
@@ -146,12 +172,15 @@ abstract class Kagane :
                     is MatchAllGenresFilter -> {
                         genresMatchAll = if (filter.state) true else null
                     }
+
                     is MatchAllTagsFilter -> {
                         tagsMatchAll = if (filter.state) true else null
                     }
+
                     is SortFilter -> {
                         sortParam = filter.toUriPart()
                     }
+
                     else -> {}
                 }
             }
@@ -207,6 +236,48 @@ abstract class Kagane :
                         filter.addToJsonObject(this)
                     }
 
+                    is StaffSearchFilter -> {
+                        val (include, exclude) = resolveMemberEntries(filter.state) { searchStaff(it) }
+                        if (include.isNotEmpty() || exclude.isNotEmpty()) {
+                            putJsonObject("staff") {
+                                putJsonArray("values") { include.distinct().forEach { add(it) } }
+                                if (exclude.isNotEmpty()) {
+                                    putJsonArray("exclude") { exclude.distinct().forEach { add(it) } }
+                                }
+                            }
+                        }
+                    }
+
+                    is GroupsSearchFilter -> {
+                        val (include, exclude) = resolveMemberEntries(filter.state) { searchGroups(it) }
+                        if (include.isNotEmpty() || exclude.isNotEmpty()) {
+                            putJsonObject("groups") {
+                                putJsonArray("values") { include.distinct().forEach { add(it) } }
+                                if (exclude.isNotEmpty()) {
+                                    putJsonArray("exclude") { exclude.distinct().forEach { add(it) } }
+                                }
+                            }
+                        }
+                    }
+
+                    is YearFilter -> {
+                        filter.parseRange()?.let { range ->
+                            putJsonObject("start_year") {
+                                range.first?.let { put("min", it) }
+                                range.second?.let { put("max", it) }
+                            }
+                        }
+                    }
+
+                    is ChapterCountFilter -> {
+                        filter.parseRange()?.let { range ->
+                            putJsonObject("current_books") {
+                                range.first?.let { put("min", it) }
+                                range.second?.let { put("max", it) }
+                            }
+                        }
+                    }
+
                     is JsonFilter -> {
                         filter.addToJsonObject(this)
                     }
@@ -227,24 +298,66 @@ abstract class Kagane :
             if (sortParam.isNotEmpty()) addQueryParameter("sort", sortParam)
         }.build()
 
-        val response = client.post(url, body)
+        val response = client.post(url, Fetch.XHR, body)
         val dto = response.parseAs<SearchDto>()
         val mangas = dto.content.map { it.toSManga(apiUrl, showSource, sources, cleanTitle) }
         return MangasPage(mangas, hasNextPage = dto.hasNextPage())
+    }
+
+    private suspend fun resolveMemberEntries(
+        input: String,
+        search: suspend (String) -> List<String>,
+    ): Pair<List<String>, List<String>> {
+        val include = mutableListOf<String>()
+        val exclude = mutableListOf<String>()
+        input.split(",").forEach { entry ->
+            val trimmed = entry.trim()
+            if (trimmed.isEmpty()) return@forEach
+            val isExclude = trimmed.startsWith("-")
+            val name = if (isExclude) trimmed.removePrefix("-").trim() else trimmed
+            if (name.isEmpty()) return@forEach
+            search(name).forEach { if (isExclude) exclude.add(it) else include.add(it) }
+        }
+        return include to exclude
+    }
+
+    private suspend fun searchStaff(name: String): List<String> {
+        val body = buildJsonObject { put("name", name) }.toJsonRequestBody()
+        return client.post("$apiUrl/search/staff", Fetch.XHR, body)
+            .parseAs<StaffSearchDto>()
+            .content
+            .filter { staff ->
+                staff.name.equals(name, ignoreCase = true) ||
+                    staff.nativeName?.equals(name, ignoreCase = true) == true ||
+                    staff.alternateNames.any { it.equals(name, ignoreCase = true) }
+            }
+            .map { it.staffId }
+    }
+
+    private suspend fun searchGroups(name: String): List<String> {
+        val url = "$apiUrl/groups/search".toHttpUrl().newBuilder()
+            .addQueryParameter("q", name)
+            .addQueryParameter("limit", "8")
+            .build()
+        return client.get(url, Fetch.XHR)
+            .parseAs<GroupSearchDto>()
+            .items
+            .filter { it.title.equals(name, ignoreCase = true) }
+            .map { it.groupId }
     }
 
     // ====================== Manga Details + Chapters ======================
 
     private suspend fun getMangaById(seriesId: String): DetailsDto {
         val url = "$apiUrl/series/$seriesId"
-        return client.get(url).parseAs<DetailsDto>()
+        return client.get(url, Fetch.XHR).parseAs<DetailsDto>()
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) return null
+        if (url.host !in LINK_HOSTS) return null
         val segments = url.pathSegments
         if (segments.size < 2) return null
-        val seriesId = segments[1]
+        val seriesId = segments[1].takeLast(36)
         return parseMangaDetails(getMangaById(seriesId)).apply {
             this.url = seriesId
             initialized = true
@@ -255,10 +368,14 @@ abstract class Kagane :
         val sourceName = details.sourceId?.let { sourceId ->
             sources[sourceId]
         }
-        return details.toSManga(apiUrl, sourceName, baseUrl, showEdition, showSource, cleanTitle)
+        return details.toSManga(apiUrl, sourceName, baseUrl, showEdition, showSource, showDetails, cleanTitle)
     }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
+    override fun getMangaUrl(manga: SManga): String {
+        val slug = manga.memoString("slug")
+        val seriesSegment = if (slug != null) "$slug-${manga.url}" else manga.url
+        return "$baseUrl/series/$seriesSegment"
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -271,9 +388,13 @@ abstract class Kagane :
         val updatedManga = if (fetchDetails) {
             val dto = getMangaById(seriesId)
             parseMangaDetails(dto).apply {
-                if (!dto.trackerId.isNullOrEmpty()) {
-                    memo = buildJsonObject {
+                memo = buildJsonObject {
+                    if (!dto.trackerId.isNullOrEmpty()) {
                         put("trackerId", dto.trackerId)
+                    }
+                    put("format", dto.format ?: "")
+                    if (!dto.slug.isNullOrBlank()) {
+                        put("slug", dto.slug)
                     }
                 }
             }
@@ -281,9 +402,10 @@ abstract class Kagane :
             manga
         }
         val updatedChapters = if (fetchChapters) {
-            val index = client.get("$apiUrl/series/$seriesId/books/index?fields=List")
+            val index = client.get("$apiUrl/series/$seriesId/books/index?fields=List", Fetch.XHR)
                 .parseAs<BookIndexDto>()
-            parseChapterList(index.toBooks(), updatedManga.genre?.substringBefore(", "), seriesId)
+            val slug = updatedManga.memoString("slug")
+            parseChapterList(index.toBooks(), chapterFormat(updatedManga), seriesId, slug)
         } else {
             chapters
         }
@@ -291,7 +413,12 @@ abstract class Kagane :
         return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    private fun parseChapterList(books: List<ChapterDto.Book>, format: String?, seriesId: String): List<SChapter> {
+    private fun SManga.memoString(key: String): String? = memo[key]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+
+    private fun chapterFormat(manga: SManga): String? = manga.memoString("format")
+        ?: manga.genre?.substringBefore(", ")
+
+    private fun parseChapterList(books: List<ChapterDto.Book>, format: String?, seriesId: String, slug: String?): List<SChapter> {
         val useSourceChapterNumber = format in setOf(
             "Dark Horse Comics",
             "Flame Comics",
@@ -300,11 +427,16 @@ abstract class Kagane :
         )
 
         return books.sortedByDescending { it.number }.map { book ->
-            book.toSChapter(seriesId, useSourceChapterNumber, chapterTitleMode)
+            book.toSChapter(seriesId, slug, useSourceChapterNumber, chapterTitleMode)
         }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String {
+        val slug = chapter.memo["seriesSlug"]?.stringOrNull?.takeIf { it.isNotBlank() }
+        val parts = chapter.url.split("/")
+        if (slug == null || parts.size != 5) return "$baseUrl${chapter.url}"
+        return "$baseUrl/series/$slug-${parts[2].takeLast(36)}/reader/${parts[4]}"
+    }
 
     // =========================== Related Manga ============================
     override val supportsRelatedMangas = true
@@ -312,7 +444,7 @@ abstract class Kagane :
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val trackerId = manga.memo["trackerId"]?.string ?: return emptyList()
 
-        val series = client.get("$apiUrl/trackers/$trackerId/series")
+        val series = client.get("$apiUrl/trackers/$trackerId/series", Fetch.XHR)
             .parseAs<TrackerDto>()
             .bookSeries
         return series
@@ -326,10 +458,11 @@ abstract class Kagane :
             error("Outdated chapter URL. Please refresh the chapter list")
         }
 
-        val chapterId = "$baseUrl${chapter.url}".toHttpUrl().pathSegments.last()
+        val chapterId = "$baseUrl${chapter.url}".toHttpUrl().pathSegments.last().takeLast(36)
         val challengeResp = getChallengeResponse(chapterId)
 
-        accessToken = challengeResp.accessToken
+        val accessToken = challengeResp.accessToken
+        pageTokens.put(chapterId, PageToken(accessToken, Clock.System.now()))
         val cacheUrl = challengeResp.cacheUrl
 
         val pageList = challengeResp.manifest?.pages ?: emptyList()
@@ -348,20 +481,23 @@ abstract class Kagane :
         }
     }
 
-    private var accessToken: String = ""
+    private class PageToken(val value: String, val issuedAt: Instant)
+
+    // Tokens are valid for one book only
+    private val pageTokens = LruCache<String, PageToken>(16)
+
     private var integrityToken: String = ""
-    private var integrityExp = System.currentTimeMillis()
+    private var integrityExp = Instant.DISTANT_PAST
 
     private suspend fun getIntegrityToken(): String {
-        if (integrityExp < System.currentTimeMillis()) {
-            client.get("$baseUrl/").close()
-
+        if (integrityExp < Clock.System.now()) {
             val res = client.post(
                 "$baseUrl/api/integrity",
+                Fetch.XHR,
                 "".toJsonRequestBody(),
             ).parseAs<IntegrityDto>()
             integrityToken = res.token
-            integrityExp = res.exp * 1000
+            integrityExp = Instant.fromEpochSeconds(res.exp)
         }
 
         return integrityToken
@@ -378,7 +514,7 @@ abstract class Kagane :
 
         val headers = headers.newBuilder().add("x-integrity-token", integrityToken).build()
 
-        val response = client.post(challengeUrl.toString(), headers, challengeBody)
+        val response = client.post(challengeUrl.toString(), headers, Fetch.XHR, challengeBody)
 
         return response.parseAs<ChallengeDto>()
     }
@@ -387,13 +523,33 @@ abstract class Kagane :
 
     private val contentRating: List<String>
         get() {
-            val maxRating = prefs.getString(CONTENT_RATING, CONTENT_RATING_DEFAULT)
+            val stored = prefs.getString(CONTENT_RATING, null).removeLegacyRating()
+            val maxRating = stored ?: CONTENT_RATING_DEFAULT
             val index = CONTENT_RATINGS.indexOfFirst { it == maxRating }
             return CONTENT_RATINGS.slice(0..index.coerceAtLeast(0))
         }
 
+    private val showPornographic: Boolean
+        get() = contentRating.last() == "eighteenplus" && prefs.getBoolean(PORN_PREF, false)
+
+    private val showDisturbing: Boolean
+        get() = contentRating.last() == "eighteenplus" && prefs.getBoolean(DISTURBING_PREF, false)
+
+    // Legacy value mapping from before the site-model settings change; kept so existing
+    // installs keep their content rating. Should be removed in a later version update
+    // (versionCode = 37+).
+    private fun String?.removeLegacyRating(): String? = when (this) {
+        "safe", "fifteenplus", "eighteenplus" -> this
+        "suggestive" -> "fifteenplus"
+        "erotica", "pornographic" -> "eighteenplus"
+        else -> null
+    }
+
     private val excludedGenreIds: Set<String>
         get() = prefs.getStringSet(GENRES_ID_PREF, emptySet()) ?: emptySet()
+
+    private val excludedFormats: Set<String>
+        get() = prefs.getStringSet(FORMATS_PREF, emptySet()) ?: emptySet()
 
     private val sourceDisplayMode: String
         get() = prefs.getString(SOURCE_DISPLAY_MODE, SOURCE_DISPLAY_MODE_DEFAULT) ?: SOURCE_DISPLAY_MODE_DEFAULT
@@ -407,6 +563,9 @@ abstract class Kagane :
     private val showSource: Boolean
         get() = !cleanTitle && prefs.getBoolean(SHOW_SOURCE, SHOW_SOURCE_DEFAULT)
 
+    private val showDetails: Boolean
+        get() = prefs.getBoolean(SHOW_DETAILS, SHOW_DETAILS_DEFAULT)
+
     private val dataSaver
         get() = prefs.getBoolean(DATA_SAVER, false)
 
@@ -414,18 +573,44 @@ abstract class Kagane :
         get() = prefs.getString(CHAPTER_TITLE_MODE, CHAPTER_TITLE_MODE_DEFAULT)!!
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
+        val contentRatingPref = ListPreference(screen.context).apply {
             key = CONTENT_RATING
             title = "Content Rating"
             entries =
-                CONTENT_RATINGS.map { it.replaceFirstChar { c -> c.uppercase() } }.toTypedArray()
+                CONTENT_RATINGS.map { CONTENT_RATING_LABELS.getValue(it) }.toTypedArray()
             entryValues = CONTENT_RATINGS
             summary = "%s"
             setDefaultValue(CONTENT_RATING_DEFAULT)
-        }.let(screen::addPreference)
+        }
+
+        val pornSwitch = SwitchPreferenceCompat(screen.context).apply {
+            key = PORN_PREF
+            title = "Show pornographic"
+            summary = "Sexually explicit content"
+            setDefaultValue(true)
+            setVisible(contentRating.last() == "eighteenplus")
+        }
+
+        val disturbingSwitch = SwitchPreferenceCompat(screen.context).apply {
+            key = DISTURBING_PREF
+            title = "Show disturbing"
+            summary = "Series marked disturbing, such as graphic violence or abuse"
+            setDefaultValue(true)
+            setVisible(contentRating.last() == "eighteenplus")
+        }
+
+        contentRatingPref.setOnPreferenceChangeListener { _, newValue ->
+            val enabled = newValue.toString() == "eighteenplus"
+            pornSwitch.setVisible(enabled)
+            disturbingSwitch.setVisible(enabled)
+            true
+        }
+
+        listOf(contentRatingPref, pornSwitch, disturbingSwitch).forEach(screen::addPreference)
 
         val genreFilter = getFilterList().firstInstanceOrNull<GenresFilter>()
-        val genreMap = genreFilter?.state?.associate { it.id to it.name.replaceFirstChar { c -> c.uppercase() } } ?: emptyMap()
+        val genreMap =
+            genreFilter?.state?.associate { it.id to it.name.replaceFirstChar { c -> c.uppercase() } } ?: emptyMap()
 
         MultiSelectListPreference(screen.context).apply {
             key = GENRES_ID_PREF
@@ -442,6 +627,21 @@ abstract class Kagane :
                 @Suppress("UNCHECKED_CAST")
                 val selected = values as Set<String>
                 this.summary = selected.mapNotNull { genreMap[it] }.joinToString()
+                true
+            }
+        }.let(screen::addPreference)
+
+        MultiSelectListPreference(screen.context).apply {
+            key = FORMATS_PREF
+            title = "Exclude Formats"
+            entries = FORMAT_OPTIONS.toTypedArray()
+            entryValues = FORMAT_OPTIONS.toTypedArray()
+            summary = FORMAT_OPTIONS.filter { it in excludedFormats }.joinToString()
+            setDefaultValue(emptySet<String>())
+            setOnPreferenceChangeListener { _, values ->
+                @Suppress("UNCHECKED_CAST")
+                val selected = values as Set<String>
+                this.summary = FORMAT_OPTIONS.filter { it in selected }.joinToString()
                 true
             }
         }.let(screen::addPreference)
@@ -483,6 +683,13 @@ abstract class Kagane :
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_DETAILS
+            title = "Show details in description"
+            summary = "Rating, content rating, format, languages, year, volumes, views and links"
+            setDefaultValue(SHOW_DETAILS_DEFAULT)
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
             key = DATA_SAVER
             title = "Data saver"
             setDefaultValue(false)
@@ -501,17 +708,29 @@ abstract class Kagane :
     // ============================= Utilities ==============================
 
     companion object {
+        private val TOKEN_REFRESH_INTERVAL = 1.minutes
+        private val LINK_HOSTS = setOf("kagane.cx", "kagane.moe", "kagane.net")
         private const val MAX_SOURCE_FILTER = 50
         private const val CONTENT_RATING = "pref_content_rating"
-        private const val CONTENT_RATING_DEFAULT = "pornographic"
+
+        // Legacy values (safe/suggestive/erotica/pornographic) are mapped on read.
+        private const val CONTENT_RATING_DEFAULT = "safe"
         internal val CONTENT_RATINGS = arrayOf(
             "safe",
-            "suggestive",
-            "erotica",
-            "pornographic",
+            "fifteenplus",
+            "eighteenplus",
+        )
+        internal val CONTENT_RATING_LABELS = mapOf(
+            "safe" to "Safe",
+            "fifteenplus" to "Fifteen Plus",
+            "eighteenplus" to "Eighteen Plus",
         )
 
+        private const val PORN_PREF = "pref_show_pornographic"
+        private const val DISTURBING_PREF = "pref_show_disturbing"
+
         private const val GENRES_ID_PREF = "pref_genre_id_exclude"
+        private const val FORMATS_PREF = "pref_format_exclude"
 
         private const val SOURCE_DISPLAY_MODE = "pref_source_display_mode"
         private const val SOURCE_DISPLAY_MODE_DEFAULT = "all"
@@ -524,6 +743,9 @@ abstract class Kagane :
 
         private const val SHOW_EDITION = "pref_show_edition"
         private const val SHOW_EDITION_DEFAULT = false
+
+        private const val SHOW_DETAILS = "pref_show_details"
+        private const val SHOW_DETAILS_DEFAULT = true
 
         private const val DATA_SAVER = "data_saver_default"
 
@@ -549,19 +771,20 @@ abstract class Kagane :
 
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
         val genresDeferred = async {
-            client.get("$apiUrl/genres/list")
+            client.get("$apiUrl/genres/list", Fetch.XHR)
                 .parseAs<List<GenreDto>>()
                 .associate { it.id to it.genreName }
         }
 
         val tagsDeferred = async {
-            client.get("$apiUrl/tags/list")
+            client.get("$apiUrl/tags/list", Fetch.XHR)
                 .parseAs<List<TagDto>>()
                 .associate { it.tagName.lowercase() to it.id }
         }
         val sourcesDeferred = async {
             client.post(
                 "$apiUrl/sources/list",
+                Fetch.XHR,
                 buildJsonObject { put("source_types", null) }.toJsonRequestBody(),
             )
                 .parseAs<SourcesDto>().sources
@@ -586,8 +809,8 @@ abstract class Kagane :
 
         val filters = mutableListOf(
             SortFilter(),
-            ContentRatingFilter(contentRating.toSet()),
-            FormatFilter(),
+            ContentRatingFilter(contentRating.toSet(), showPornographic, showDisturbing),
+            FormatFilter(excludedFormats),
             PublicationStatusFilter(),
             Filter.Separator(),
         )
@@ -609,17 +832,27 @@ abstract class Kagane :
 
             filters.addAll(
                 listOf(
-                    MatchAllGenresFilter(),
                     GenresFilter(
                         meta.getGenresList(),
                         excludedGenreIds,
                     ),
-                    MatchAllTagsFilter(),
+                    MatchAllGenresFilter(),
                     TagsSearchFilter(meta.tags),
+                    MatchAllTagsFilter(),
                     SourcesFilter(sourceFilters),
+                    Filter.Separator(),
                 ),
             )
         }
+
+        filters.addAll(
+            listOf(
+                YearFilter(),
+                ChapterCountFilter(),
+                StaffSearchFilter(),
+                GroupsSearchFilter(),
+            ),
+        )
 
         return FilterList(filters)
     }

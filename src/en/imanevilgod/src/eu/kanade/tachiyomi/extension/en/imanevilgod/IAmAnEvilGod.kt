@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -17,7 +18,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 abstract class IAmAnEvilGod : KeiSource() {
 
     override val supportsLatest = false
-
     // --- Catalogue (single entry) ---
 
     private fun createManga() = SManga.create().apply {
@@ -42,7 +42,7 @@ abstract class IAmAnEvilGod : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(baseUrl).asJsoup()
+        val doc = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
 
         val details = SManga.create().apply {
             title = "I'm An Evil God"
@@ -69,7 +69,7 @@ abstract class IAmAnEvilGod : KeiSource() {
     // --- Page list ---
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val doc = client.get(getChapterUrl(chapter)).asJsoup()
+        val doc = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         // Chapter pages are <img> tags inside the post content
         return doc.select("div.entry-content img")
             .mapIndexed { index, el ->

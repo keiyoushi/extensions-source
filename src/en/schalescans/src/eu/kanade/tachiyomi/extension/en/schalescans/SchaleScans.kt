@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.boolean
@@ -42,8 +43,6 @@ abstract class SchaleScans :
     private val apiHeaders: Headers get() = headersBuilder().add("apikey", API_KEY).build()
 
     private val showNsfw get() = preferences.getBoolean(PREF_SHOW_NSFW, true)
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = removeAll("Origin")
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
         val request = chain.request()
@@ -82,7 +81,7 @@ abstract class SchaleScans :
             sort?.let { addQueryParameter("order", it) }
         }.build()
 
-        val series = client.get(url, apiHeaders).parseAs<List<SeriesDto>>()
+        val series = client.get(url, apiHeaders, Fetch.XHR).parseAs<List<SeriesDto>>()
             .filter { it.hasChapters }
             .let { list -> if (sort == null) list.sortedByDescending { it.latestAt } else list }
 
@@ -100,7 +99,7 @@ abstract class SchaleScans :
             .addQueryParameter("chapters.limit", "1")
             .build()
 
-        return client.get(apiUrl, apiHeaders).parseAs<List<SeriesDto>>().firstOrNull()?.toSManga()
+        return client.get(apiUrl, apiHeaders, Fetch.XHR).parseAs<List<SeriesDto>>().firstOrNull()?.toSManga()
     }
 
     override suspend fun fetchMangaUpdate(
@@ -120,7 +119,7 @@ abstract class SchaleScans :
             .addQueryParameter("chapters.order", "chapter_number.desc")
             .build()
 
-        val series = client.get(url, apiHeaders).parseAs<List<SeriesDetailsDto>>().first()
+        val series = client.get(url, apiHeaders, Fetch.XHR).parseAs<List<SeriesDetailsDto>>().first()
         return SMangaUpdate(series.toSManga(), series.toSChapterList())
     }
 
@@ -133,7 +132,7 @@ abstract class SchaleScans :
             .addQueryParameter("chapters.limit", "1")
             .build()
 
-        val series = client.get(url, apiHeaders).parseAs<List<SeriesDto>>()
+        val series = client.get(url, apiHeaders, Fetch.XHR).parseAs<List<SeriesDto>>()
         val genres = series.first { it.id == manga.url }.genres
         val showNsfw = showNsfw
 
@@ -152,7 +151,7 @@ abstract class SchaleScans :
             .addQueryParameter("chapter_pages.order", "page_number.asc")
             .build()
 
-        val data = client.get(url, apiHeaders).parseAs<List<ChapterPagesDto>>().first()
+        val data = client.get(url, apiHeaders, Fetch.XHR).parseAs<List<ChapterPagesDto>>().first()
         val imageHost = if (data.series.isR18) "https://img-r18.$domain" else "https://img.$domain"
 
         return data.pages.mapIndexed { i, page ->
@@ -176,7 +175,7 @@ abstract class SchaleScans :
             .addQueryParameter("order", "name.asc")
             .build()
 
-        return client.get(url, apiHeaders).parseAs<List<GenreDto>>()
+        return client.get(url, apiHeaders, Fetch.XHR).parseAs<List<GenreDto>>()
             .map { it.name }
             .toJsonElement()
     }

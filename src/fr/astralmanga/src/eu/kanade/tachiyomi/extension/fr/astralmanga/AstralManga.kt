@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -87,7 +88,7 @@ abstract class AstralManga : KeiSource() {
                 }
             }
         }.build()
-        return parseMangaApiResponse(client.get(url))
+        return parseMangaApiResponse(client.get(url, Fetch.XHR))
     }
 
     // ========================= Filters =========================
@@ -96,6 +97,7 @@ abstract class AstralManga : KeiSource() {
 
     override suspend fun fetchFilterData() = client.get(
         "$baseUrl/catalog",
+        Fetch.DOCUMENT,
     ).extractNextJs<Genres>()!!.genres.map {
         it.name
     }.toJsonElement()
@@ -121,6 +123,7 @@ abstract class AstralManga : KeiSource() {
         val response = client.get(
             getMangaUrl(manga).cacheBust(),
             rscHeaders,
+            Fetch.XHR,
         )
 
         val mangaUuid = response.request.url.pathSegments[1]
@@ -162,6 +165,7 @@ abstract class AstralManga : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(
             getChapterUrl(chapter),
+            Fetch.DOCUMENT,
         ).asJsoup()
         val images = document.extractNextJs<List<RscImageDto>>()
         if (images != null) {
@@ -203,7 +207,7 @@ abstract class AstralManga : KeiSource() {
         val url = "$baseUrl/api/s3/presign-get".toHttpUrl().newBuilder()
             .addQueryParameter("key", s3Key)
             .build()
-        client.get(url).parseAs<PresignResponseDto>().url
+        client.get(url, Fetch.XHR).parseAs<PresignResponseDto>().url
     } catch (_: Exception) {
         null
     }

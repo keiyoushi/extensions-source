@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
 import keiyoushi.lib.speedbinb.fetchPages
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
@@ -58,7 +59,7 @@ abstract class MangaPlaza :
             addQueryParameter("sort", filters.firstInstance<SortFilter>().value)
             addQueryParameter("page", page.toString())
         }.build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     private fun Response.toMangasPage(): MangasPage {
@@ -83,7 +84,7 @@ abstract class MangaPlaza :
     ): SMangaUpdate = coroutineScope {
         val details = async {
             if (!fetchDetails) return@async manga
-            val document = client.get(getMangaUrl(manga)).asJsoup()
+            val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
             SManga.create().apply {
                 title = document.selectFirst(".detailBlock h1")!!.text()
                 author = document.select(".detailBlock .authorName a").joinToString { it.text() }
@@ -106,11 +107,11 @@ abstract class MangaPlaza :
                 .addQueryParameter("title_id", manga.url)
                 .addQueryParameter("order", "down")
 
-            val firstPage = client.get(listUrl.setQueryParameter("page", "1").build()).parseAs<ApiResponse<ContentList>>().data
+            val firstPage = client.get(listUrl.setQueryParameter("page", "1").build(), Fetch.XHR).parseAs<ApiResponse<ContentList>>().data
             val lastPage = Jsoup.parseBodyFragment(firstPage.htmlPage).select("a[data-page]").maxOfOrNull { it.attr("data-page").toInt() } ?: 1
             val otherPages = (2..lastPage).map { page ->
                 val pageUrl = listUrl.setQueryParameter("page", page.toString()).build()
-                async { client.get(pageUrl).parseAs<ApiResponse<ContentList>>().data }
+                async { client.get(pageUrl, Fetch.XHR).parseAs<ApiResponse<ContentList>>().data }
             }
 
             (listOf(firstPage) + otherPages.awaitAll()).flatMap { page ->
@@ -154,7 +155,7 @@ abstract class MangaPlaza :
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val genres = client.get("$apiUrl/genre/all_genre").parseAs<ApiResponse<GenreList>>().data
+        val genres = client.get("$apiUrl/genre/all_genre", Fetch.XHR).parseAs<ApiResponse<GenreList>>().data
         return GenreList(genres.genres, genres.tags.distinctBy { it.id }.sortedBy { it.name }).toJsonElement()
     }
 

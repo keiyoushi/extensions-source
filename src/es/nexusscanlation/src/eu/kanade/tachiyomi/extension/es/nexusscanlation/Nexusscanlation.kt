@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -35,9 +36,6 @@ abstract class Nexusscanlation : KeiSource() {
     private val apiHeaders: Headers
         get() = headers.newBuilder()
             .add("Accept", "application/json, text/plain, */*")
-            .add("sec-fetch-dest", "empty")
-            .add("sec-fetch-mode", "cors")
-            .add("sec-fetch-site", "same-site")
             .build()
 
     // ======================= Manga URLs ===================================
@@ -58,7 +56,7 @@ abstract class Nexusscanlation : KeiSource() {
             .addQueryParameter("orden", "popular")
             .build()
 
-        val root = client.get(url, apiHeaders).parseAs<CatalogResponseDto>()
+        val root = client.get(url, apiHeaders, Fetch.XHR).parseAs<CatalogResponseDto>()
         return MangasPage(root.data.orEmpty().mapNotNull(::catalogToManga), root.meta?.hasNext ?: false)
     }
 
@@ -71,7 +69,7 @@ abstract class Nexusscanlation : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        val root = client.get(url, apiHeaders).parseAs<LandingResponseDto>()
+        val root = client.get(url, apiHeaders, Fetch.XHR).parseAs<LandingResponseDto>()
         val mangaList = root.latestUpdates.orEmpty()
             .distinctBy { it.serieSlug }
             .mapNotNull(::landingToManga)
@@ -88,7 +86,7 @@ abstract class Nexusscanlation : KeiSource() {
                 .addQueryParameter("q", query)
                 .addQueryParameter("page", page.toString())
                 .build()
-            val root = client.get(url, apiHeaders).parseAs<CatalogResponseDto>()
+            val root = client.get(url, apiHeaders, Fetch.XHR).parseAs<CatalogResponseDto>()
             return MangasPage(root.data.orEmpty().mapNotNull(::catalogToManga), root.meta?.hasNext ?: false)
         }
 
@@ -120,7 +118,7 @@ abstract class Nexusscanlation : KeiSource() {
             }
         }
 
-        val root = client.get(urlBuilder.build(), apiHeaders).parseAs<CatalogResponseDto>()
+        val root = client.get(urlBuilder.build(), apiHeaders, Fetch.XHR).parseAs<CatalogResponseDto>()
         return MangasPage(root.data.orEmpty().mapNotNull(::catalogToManga), root.meta?.hasNext ?: false)
     }
 
@@ -128,7 +126,7 @@ abstract class Nexusscanlation : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiBaseUrl/catalog/genres?has_series=true", apiHeaders).parseAs()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiBaseUrl/catalog/genres?has_series=true", apiHeaders, Fetch.XHR).parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val filters = mutableListOf<Filter<*>>(
@@ -156,7 +154,7 @@ abstract class Nexusscanlation : KeiSource() {
         val slug = segments[1].takeIf { it.isNotBlank() } ?: return null
 
         val apiUrl = "$apiBaseUrl/series/$slug".toHttpUrl()
-        val payload = client.get(apiUrl, apiHeaders).parseAs<SeriesPayloadDto>()
+        val payload = client.get(apiUrl, apiHeaders, Fetch.XHR).parseAs<SeriesPayloadDto>()
         return seriesToManga(payload.serie)
     }
 
@@ -169,7 +167,7 @@ abstract class Nexusscanlation : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val url = "$apiBaseUrl/series/${manga.url}".toHttpUrl()
-        val payload = client.get(url, apiHeaders).parseAs<SeriesPayloadDto>()
+        val payload = client.get(url, apiHeaders, Fetch.XHR).parseAs<SeriesPayloadDto>()
 
         val series = seriesToManga(payload.serie)
         val seriesSlug = payload.serie.slug
@@ -194,7 +192,7 @@ abstract class Nexusscanlation : KeiSource() {
         val ecies = Ecies()
         val headers = apiHeaders.newBuilder().add("X-Rs", ecies.publicKey).build()
 
-        val body = client.get(url, headers).body.string()
+        val body = client.get(url, headers, Fetch.XHR).body.string()
 
         val chapterPagesDto = runCatching { body.parseAs<ChapterPagesWrapperDto>().data }
             .getOrNull()

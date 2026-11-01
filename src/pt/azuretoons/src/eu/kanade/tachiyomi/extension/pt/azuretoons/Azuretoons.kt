@@ -12,6 +12,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -86,7 +88,7 @@ abstract class Azuretoons :
             ).toJsonRequestBody()
             val loginHeaders = headers.newBuilder().set("Accept", "application/json").build()
             val response = network.client.newCall(
-                POST("$apiUrl/auth/login", loginHeaders, body),
+                POST("$apiUrl/auth/login", loginHeaders, body).newBuilder().fetch(Fetch.XHR).build(),
             ).execute()
 
             if (!response.isSuccessful) {
@@ -104,13 +106,12 @@ abstract class Azuretoons :
         }
     }
 
-    override fun Headers.Builder.configureHeaders() = set("Accept", ACCEPT)
-        .set("Accept-Language", ACCEPT_LANGUAGE)
+    override fun Headers.Builder.configureHeaders() = set("Accept-Language", ACCEPT_LANGUAGE)
         .set("Pragma", PRAGMA)
 
     // ============================== Popular (Browse) =======================
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val dto = client.get("$apiUrl/obras").parseAs<List<AzuretoonsMangaDto>>()
+        val dto = client.get("$apiUrl/obras", Fetch.XHR).parseAs<List<AzuretoonsMangaDto>>()
         val mangas = dto.sortedByDescending { it.viewCount }.map { it.toSManga() }
         return MangasPage(mangas, hasNextPage = false)
     }
@@ -118,14 +119,14 @@ abstract class Azuretoons :
     // ============================= Latest ===================================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val dto = client.get("$apiUrl/obras").parseAs<List<AzuretoonsMangaDto>>()
+        val dto = client.get("$apiUrl/obras", Fetch.XHR).parseAs<List<AzuretoonsMangaDto>>()
         val mangas = dto.map { it.toSManga() }
         return MangasPage(mangas, hasNextPage = false)
     }
 
     // =============================== Search (na mão: filtra por título) =====
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val dto = client.get("$apiUrl/obras").parseAs<List<AzuretoonsMangaDto>>()
+        val dto = client.get("$apiUrl/obras", Fetch.XHR).parseAs<List<AzuretoonsMangaDto>>()
         val mangas = dto
             .map { it.toSManga() }
             .let { list ->
@@ -146,7 +147,7 @@ abstract class Azuretoons :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.url.substringAfter("/obra/").substringBefore("/")
-        val dto = client.get("$apiUrl/obras/slug/$slug").parseAs<AzuretoonsMangaDto>()
+        val dto = client.get("$apiUrl/obras/slug/$slug", Fetch.XHR).parseAs<AzuretoonsMangaDto>()
         val chapterList = dto.chapters
             .map { it.toSChapter(dto.slug) }
             .distinctBy { it.url }
@@ -158,7 +159,7 @@ abstract class Azuretoons :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.url.substringAfter("/capitulo/")
         val slug = chapter.url.substringAfter("/obra/").substringBefore("/")
-        return client.get("$apiUrl/chapters/read/$slug/$chapterId")
+        return client.get("$apiUrl/chapters/read/$slug/$chapterId", Fetch.XHR)
             .parseAs<AzuretoonsChapterDetailDto>()
             .toPageList()
     }
@@ -180,7 +181,6 @@ abstract class Azuretoons :
     }
 
     companion object {
-        private const val ACCEPT = "*/*"
         private const val ACCEPT_LANGUAGE = "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
         private const val PRAGMA = "no-cache"
         private const val EMAIL_PREF = "email"

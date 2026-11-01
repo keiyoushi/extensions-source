@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.e4p.E4PInterceptor
 import keiyoushi.lib.e4p.E4PManifestReader
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -57,7 +58,7 @@ abstract class JNovel :
             .addQueryParameter("page", page.toString())
             .build()
 
-        return client.get(url, rscHeaders).toMangasPage()
+        return client.get(url, rscHeaders, Fetch.XHR).toMangasPage()
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
@@ -72,7 +73,7 @@ abstract class JNovel :
             addFilter("rentals", filters.firstInstance<RentalFilter>())
         }.build()
 
-        return client.get(url, rscHeaders).toMangasPage()
+        return client.get(url, rscHeaders, Fetch.XHR).toMangasPage()
     }
 
     private fun Response.toMangasPage(): MangasPage {
@@ -87,7 +88,7 @@ abstract class JNovel :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val result = requireNotNull(client.get(getMangaUrl(manga), rscHeaders).extractNextJs<SeriesDetailsResponse>())
+        val result = requireNotNull(client.get(getMangaUrl(manga), rscHeaders, Fetch.XHR).extractNextJs<SeriesDetailsResponse>())
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val chapterList = result.volumes.flatMap { volume ->
             val owned = volume.volume?.owned == true
@@ -104,10 +105,10 @@ abstract class JNovel :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val embedUrl = document.selectFirst("iframe[src^='$viewerUrl']")?.absUrl("src")
             ?: throw Exception("Log in via WebView and purchase this chapter to read.")
-        val manifestUrl = client.get("$embedUrl/info.json").parseAs<Manifest>().e4pManifest
+        val manifestUrl = client.get("$embedUrl/info.json", Fetch.XHR).parseAs<Manifest>().e4pManifest
         return manifestReader.extractPagesFromEncryptedManifest(manifestUrl.toHttpUrl())
     }
 

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -29,7 +30,7 @@ import org.jsoup.nodes.Element
 @Source
 abstract class Yupmanga : KeiSource() {
 
-    // Cached CSRF token populated by the token interceptor during normal browsing flow.
+// Cached CSRF token populated by the token interceptor during normal browsing flow.
     private var csrfToken: String = ""
 
     // Peeks at every HTML response to extract the token values without consuming the body.
@@ -58,9 +59,9 @@ abstract class Yupmanga : KeiSource() {
             .add("X-Requested-With", "XMLHttpRequest")
             .build()
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseSeriesList(client.get("$baseUrl/top").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseSeriesList(client.get("$baseUrl/top", Fetch.DOCUMENT).asJsoup())
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseSeriesList(client.get("$baseUrl/?page=$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseSeriesList(client.get("$baseUrl/?page=$page", Fetch.DOCUMENT).asJsoup())
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.length < 3) {
@@ -71,7 +72,7 @@ abstract class Yupmanga : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         document.selectFirst("main > div.container > div[class^=bg-red]:has(p)")?.let {
             throw Exception("Límite de solicitudes alcanzado. Intente de nuevo en unos minutos.")
         }
@@ -111,7 +112,7 @@ abstract class Yupmanga : KeiSource() {
     }
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return manga.apply {
             val container = document.selectFirst("main > div.container")
                 ?: throw Exception("No se pudo encontrar la información del manga")
@@ -147,7 +148,7 @@ abstract class Yupmanga : KeiSource() {
                 .addQueryParameter("order", "newest_first")
                 .build()
 
-            val chapterListDto = client.get(url, apiHeaders).parseAs<ChapterListDto>()
+            val chapterListDto = client.get(url, apiHeaders, Fetch.XHR).parseAs<ChapterListDto>()
 
             val doc = Jsoup.parseBodyFragment(chapterListDto.html, baseUrl)
             allChapters.addAll(parseChapterList(doc, mangaId))
@@ -196,7 +197,7 @@ abstract class Yupmanga : KeiSource() {
         // If opened directly from the library/cached details and csrfToken is empty,
         // we must fetch the series page to trigger the interceptor and populate the values.
         if (csrfToken.isEmpty() && mangaId.isNotEmpty()) {
-            client.get("$baseUrl/series.php?id=$mangaId").close()
+            client.get("$baseUrl/series.php?id=$mangaId", Fetch.DOCUMENT).close()
         }
 
         val requestHeaders = apiHeaders.newBuilder().apply {
@@ -206,7 +207,7 @@ abstract class Yupmanga : KeiSource() {
         }.build()
 
         val anchorUrl = "$baseUrl/ajax/get_anchor.php?s=$mangaId"
-        val anchorValue = client.get(anchorUrl, requestHeaders).parseAs<AnchorDto>().v ?: throw Exception("Failed to get anchor")
+        val anchorValue = client.get(anchorUrl, requestHeaders, Fetch.XHR).parseAs<AnchorDto>().v ?: throw Exception("Failed to get anchor")
 
         val challengeBody = FormBody.Builder()
             .add("chapter", chapterId)
@@ -216,7 +217,7 @@ abstract class Yupmanga : KeiSource() {
             .build()
         val challengeUrl = "$baseUrl/ajax/get_challenge.php"
 
-        val challenge = client.post(challengeUrl, apiHeaders, challengeBody).parseAs<ChallengeDto>()
+        val challenge = client.post(challengeUrl, apiHeaders, Fetch.XHR, challengeBody).parseAs<ChallengeDto>()
         if (!challenge.success || challenge.challengeJs == null || challenge.challengeId == null) {
             throw Exception("Error fetching challenge")
         }
@@ -269,7 +270,7 @@ abstract class Yupmanga : KeiSource() {
             .add("answer", answer)
             .build()
 
-        val tokenDto = client.post("$baseUrl/ajax/get_reader_token.php", apiHeaders, formBody).parseAs<TokenDto>()
+        val tokenDto = client.post("$baseUrl/ajax/get_reader_token.php", apiHeaders, Fetch.XHR, formBody).parseAs<TokenDto>()
         if (!tokenDto.success || tokenDto.token.isNullOrEmpty()) {
             throw Exception("Información desactualizada. Refresque la lista de capítulos.")
         }
@@ -281,7 +282,7 @@ abstract class Yupmanga : KeiSource() {
             .addQueryParameter("page", "1")
             .build()
 
-        val response = client.get(readerUrl)
+        val response = client.get(readerUrl, Fetch.DOCUMENT)
         val requestUrl = response.request.url
         val document = response.asJsoup()
 

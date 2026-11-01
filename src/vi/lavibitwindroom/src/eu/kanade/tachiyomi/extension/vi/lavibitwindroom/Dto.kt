@@ -11,15 +11,14 @@ import kotlin.time.Instant
 
 @Serializable
 class SeriesDto(
-    val id: Int,
-    val slug: String,
-    val title: String,
+    private val slug: String,
+    private val title: String,
     @SerialName("cover_url") private val coverUrl: String? = null,
     private val author: String? = null,
     private val description: String? = null,
     private val status: String? = null,
     private val tags: List<String>? = null,
-    val chapters: List<ChapterDto> = emptyList(),
+    private val chapters: List<ChapterDto> = emptyList(),
 ) {
     fun toSManga() = SManga.create().apply {
         url = slug
@@ -37,6 +36,8 @@ class SeriesDto(
         status = when (this@SeriesDto.status?.lowercase()) {
             "đang ra" -> SManga.ONGOING
             "hoàn thành" -> SManga.COMPLETED
+            "tạm ngưng" -> SManga.ON_HIATUS
+            "drop", "đã drop" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
     }
@@ -48,22 +49,24 @@ class SeriesDto(
 
 @Serializable
 class ChapterDto(
-    val id: Int,
+    private val id: Int,
     @SerialName("chapter_number") val chapterNumber: Float,
     private val title: String? = null,
     @SerialName("created_at") private val createdAt: String? = null,
+    @SerialName("is_locked") private val isLocked: Boolean = false,
 ) {
     fun toSChapter(slug: String) = SChapter.create().apply {
         url = id.toString()
+        val number = chapterNumber.toString().removeSuffix(".0")
         name = buildString {
-            append("Chapter ${chapterNumber.toString().removeSuffix(".0")}")
+            if (isLocked) append("🔒 ")
+            append("Chapter $number")
             this@ChapterDto.title?.takeIf { it.isNotBlank() }?.let { append(": $it") }
         }
         date_upload = Instant.tryParse(createdAt)
         memo = buildJsonObject {
-            put("chapter_id", id)
             put("slug", slug)
-            put("chapter_number", chapterNumber.toString().removeSuffix(".0"))
+            put("chapter_number", number)
         }
         chapter_number = chapterNumber
     }
@@ -72,4 +75,9 @@ class ChapterDto(
 @Serializable
 class PageDto(
     @SerialName("image_url") val imageUrl: String,
+)
+
+@Serializable
+class TagListDto(
+    val tags: List<String> = emptyList(),
 )

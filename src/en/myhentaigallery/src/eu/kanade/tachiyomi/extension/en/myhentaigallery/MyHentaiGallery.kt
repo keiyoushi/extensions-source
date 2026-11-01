@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -20,7 +21,6 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class MyHentaiGallery : KeiSource() {
-
     // =============================== Popular ================================
 
     override suspend fun getPopularManga(page: Int): MangasPage = parseComicListing("$baseUrl/views/$page".toHttpUrl())
@@ -40,7 +40,7 @@ abstract class MyHentaiGallery : KeiSource() {
             else -> null
         }?.takeIf { it.all(Char::isDigit) } ?: return null
 
-        val document = client.get("$baseUrl/g/$id").asJsoup()
+        val document = client.get("$baseUrl/g/$id", Fetch.DOCUMENT).asJsoup()
         return mangaDetailsParse(SManga.create().apply { this.url = "/g/$id" }, document)
     }
 
@@ -93,7 +93,7 @@ abstract class MyHentaiGallery : KeiSource() {
     // =========================== Comic Listing ==============================
 
     private suspend fun parseComicListing(url: HttpUrl): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select("div.comic-inner").map { element ->
             SManga.create().apply {
@@ -115,7 +115,7 @@ abstract class MyHentaiGallery : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val updatedChapters = listOf(
             SChapter.create().apply {
@@ -163,7 +163,7 @@ abstract class MyHentaiGallery : KeiSource() {
 
     // ============================== Page List ===============================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup().select("div.comic-thumb img[src]").mapIndexed { i, img ->
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup().select("div.comic-thumb img[src]").mapIndexed { i, img ->
         Page(i, imageUrl = img.absUrl("src").replace("/thumbnail/", "/original/").encodeSpaces())
     }
 
@@ -208,7 +208,7 @@ abstract class MyHentaiGallery : KeiSource() {
     private suspend fun loadTagLookup(uriPart: String): Map<String, String> {
         val tagUrlRegex = Regex("""/$uriPart/(\d+)(?:[/?#]|$)""", RegexOption.IGNORE_CASE)
 
-        return client.get("$baseUrl/tag/$uriPart").asJsoup()
+        return client.get("$baseUrl/tag/$uriPart", Fetch.DOCUMENT).asJsoup()
             .select("a[href*='/$uriPart/']")
             .mapNotNull { element ->
                 val id = tagUrlRegex.find(element.attr("href"))?.groupValues?.get(1)

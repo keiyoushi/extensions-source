@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -43,14 +44,14 @@ abstract class HentaiReadio : KeiSource() {
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/?act=search&f[status]=all&f[sortby]=top-manga&pageNum=$page").asJsoup()
+        val document = client.get("$baseUrl/?act=search&f[status]=all&f[sortby]=top-manga&pageNum=$page", Fetch.DOCUMENT).asJsoup()
         return parseFilteredManga(document)
     }
 
     // =============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/?act=search&f[status]=all&f[sortby]=lastest-chap&pageNum=$page").asJsoup()
+        val document = client.get("$baseUrl/?act=search&f[status]=all&f[sortby]=lastest-chap&pageNum=$page", Fetch.DOCUMENT).asJsoup()
         return parseFilteredManga(document)
     }
 
@@ -91,7 +92,7 @@ abstract class HentaiReadio : KeiSource() {
         if (!statusAdded) url.addQueryParameter("f[status]", "all")
         if (!sortAdded) url.addQueryParameter("f[sortby]", "lastest-chap")
 
-        val document = client.get(url.build()).asJsoup()
+        val document = client.get(url.build(), Fetch.DOCUMENT).asJsoup()
         return parseFilteredManga(document)
     }
 
@@ -121,7 +122,7 @@ abstract class HentaiReadio : KeiSource() {
             throw Exception("Unsupported URL")
         }
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseMangaDetails(document).apply { setUrlWithoutDomain(url.toString()) }
     }
 
@@ -158,14 +159,14 @@ abstract class HentaiReadio : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
     }
 
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
         return document.select(".page-chapter img").mapIndexed { index, img ->
             // Prefer data-src (lazy-loaded) over src which may be a placeholder
             val url = img.absUrl("data-src").ifEmpty { img.absUrl("src") }

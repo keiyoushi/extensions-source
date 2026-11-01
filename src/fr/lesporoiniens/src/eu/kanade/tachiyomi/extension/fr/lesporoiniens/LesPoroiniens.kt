@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -58,7 +59,7 @@ abstract class LesPoroiniens : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val direct = try {
-            val document = client.get(url).asJsoup()
+            val document = client.get(url, Fetch.DOCUMENT).asJsoup()
             document.selectFirst(SERIES_DATA_SELECTOR)?.html()?.parseAs<SeriesData>()
         } catch (e: CancellationException) {
             throw e
@@ -89,7 +90,7 @@ abstract class LesPoroiniens : KeiSource() {
     }
 
     private suspend fun fetchCatalogue(): List<SeriesData> {
-        val config = client.get("$baseUrl/data/config.json").parseAs<ConfigResponse>()
+        val config = client.get("$baseUrl/data/config.json", Fetch.XHR).parseAs<ConfigResponse>()
         return fetchSeriesFiles(config.localSeriesFiles)
     }
 
@@ -97,7 +98,7 @@ abstract class LesPoroiniens : KeiSource() {
         fileNames.map { fileName ->
             async {
                 try {
-                    client.get("$baseUrl/data/series/$fileName").parseAs<SeriesData>()
+                    client.get("$baseUrl/data/series/$fileName", Fetch.XHR).parseAs<SeriesData>()
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) {
@@ -113,7 +114,7 @@ abstract class LesPoroiniens : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val seriesData = document.selectFirst(SERIES_DATA_SELECTOR)!!.html().parseAs<SeriesData>()
         return SMangaUpdate(seriesData.toDetailedSManga(), buildChapterList(seriesData))
     }
@@ -153,7 +154,7 @@ abstract class LesPoroiniens : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val chapterNumber = chapter.url.trimEnd('/').substringAfterLast('/')
         val jsonData = document.selectFirst(READER_DATA_SELECTOR)!!.html()
 
@@ -166,10 +167,10 @@ abstract class LesPoroiniens : KeiSource() {
 
         val imageUrls = if (chapterUrl.contains("imgchest")) {
             val chapterId = chapterUrl.substringAfterLast("/")
-            client.get("$baseUrl/api/imgchest-chapter-pages?id=$chapterId").parseAs<List<PageData>>()
+            client.get("$baseUrl/api/imgchest-chapter-pages?id=$chapterId", Fetch.XHR).parseAs<List<PageData>>()
                 .map { it.link }
         } else {
-            client.get("$baseUrl$chapterUrl").parseAs<List<String>>()
+            client.get("$baseUrl$chapterUrl", Fetch.XHR).parseAs<List<String>>()
         }
         return imageUrls.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)

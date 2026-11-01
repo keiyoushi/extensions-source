@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -189,7 +190,7 @@ abstract class Xkcd :
         val now = System.currentTimeMillis()
         if (comicDateMapping == null || now - comicDateMappingTime > CACHE_EXPIRY_MS) {
             comicDateMapping = try {
-                client.get("$ENGLISH_BASE_URL/archive/").asJsoup().select("#middleContainer > a").associate { element ->
+                client.get("$ENGLISH_BASE_URL/archive/", Fetch.DOCUMENT).asJsoup().select("#middleContainer > a").associate { element ->
                     val number = element.attr("href").removeSurrounding("/").toInt()
                     val date = element.attr("title") // "2026-1-9" format
                     number to date
@@ -205,7 +206,7 @@ abstract class Xkcd :
     private suspend fun getAllComicsAsChapters(): List<SChapter> {
         val now = System.currentTimeMillis()
         if (allChaptersCache == null || now - allChaptersCacheTime > CACHE_EXPIRY_MS) {
-            allChaptersCache = chapterListParse(client.get(baseUrl + archive))
+            allChaptersCache = chapterListParse(client.get(baseUrl + archive, if (lang == "zh") Fetch.XHR else Fetch.DOCUMENT))
             allChaptersCacheTime = now
         }
         return allChaptersCache!!
@@ -373,7 +374,7 @@ abstract class Xkcd :
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
         val container = document.selectFirst(imageSelector)
             ?: error(interactiveText)
 
@@ -415,7 +416,7 @@ abstract class Xkcd :
 
     private suspend fun fetchThumbnailUrlForChapter(chapter: SChapter): String {
         return try {
-            client.get(baseUrl + chapter.url, ensureSuccess = false).use { response ->
+            client.get(baseUrl + chapter.url, Fetch.DOCUMENT, ensureSuccess = false).use { response ->
                 if (!response.isSuccessful) {
                     return defaultFallbackThumbnail
                 }

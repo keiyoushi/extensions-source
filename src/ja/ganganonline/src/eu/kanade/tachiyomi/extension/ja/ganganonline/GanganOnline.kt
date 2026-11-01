@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -21,21 +22,21 @@ import okhttp3.Response
 abstract class GanganOnline : KeiSource() {
     override val supportsLatest = false
 
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/rensai").parseMangaList()
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/rensai", Fetch.DOCUMENT).parseMangaList()
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
             val url = "$baseUrl/search/result".toHttpUrl().newBuilder()
                 .addQueryParameter("keyword", query)
                 .build()
-            return client.get(url).parseMangaList()
+            return client.get(url, Fetch.DOCUMENT).parseMangaList()
         }
 
         val filter = filters.firstInstance<CategoryFilter>()
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegments(filter.toUriPart().removePrefix("/"))
             .build()
-        return client.get(url).parseMangaList()
+        return client.get(url, Fetch.DOCUMENT).parseMangaList()
     }
 
     private fun Response.parseMangaList(): MangasPage {
@@ -80,7 +81,7 @@ abstract class GanganOnline : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         val mangaUrl = response.request.url.toString()
             .substringBefore("/chapter")
             .substringAfter(baseUrl)
@@ -95,7 +96,7 @@ abstract class GanganOnline : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get(getChapterUrl(chapter)).parseAsNextData<PageListDto>()
+        val data = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).parseAsNextData<PageListDto>()
         return data.pages.mapIndexed { i, page ->
             val imageUrl = (page.image ?: page.linkImage)!!.imageUrl
             Page(i, imageUrl = baseUrl + imageUrl)

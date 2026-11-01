@@ -10,7 +10,7 @@ import okhttp3.Request
 @Source
 abstract class HiveScans : Iken() {
 
-    override fun imageRequest(page: Page): Request = GET(
+    override fun getImageRequest(page: Page): Request = GET(
         page.imageUrl!!,
         headers,
         CacheControl.Builder().noCache().build(),

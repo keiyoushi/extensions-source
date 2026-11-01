@@ -2,8 +2,6 @@ package eu.kanade.tachiyomi.extension.en.vizshonenjump
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -12,7 +10,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
@@ -21,17 +21,16 @@ import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.obj
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.CacheControl
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.io.IOException
-import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -48,6 +47,7 @@ abstract class Viz :
     private var loggedIn: Boolean? = null
 
     override fun OkHttpClient.Builder.configureClient() = apply {
+        rateLimit(2) { it.encodedPath == "/manga/get_manga_url" }
         addInterceptor(ImageInterceptor())
         addInterceptor {
             val request = it.request()
@@ -59,10 +59,8 @@ abstract class Viz :
         }
     }
 
-    // ============================== Popular ==============================
-
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$baseUrl/manga-books/$servicePath/section/trending-manga", cacheControl = CacheControl.FORCE_NETWORK)
+        val response = client.get("$baseUrl/manga-books/$servicePath/section/trending-manga", Fetch.DOCUMENT, cacheControl = CacheControl.FORCE_NETWORK)
         return parseMangaPage(response)
     }
 
@@ -73,18 +71,16 @@ abstract class Viz :
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val response = client.get("$baseUrl/manga-books/$servicePath/section/free-chapters", cacheControl = CacheControl.FORCE_NETWORK)
+        val response = client.get("$baseUrl/manga-books/$servicePath/section/free-chapters", Fetch.DOCUMENT, cacheControl = CacheControl.FORCE_NETWORK)
         return parseMangaPage(response)
     }
-
-    // ============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("search", query)
             .addQueryParameter("category", searchPath)
             .build()
-        val document = client.get(url, cacheControl = CacheControl.FORCE_NETWORK).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT, cacheControl = CacheControl.FORCE_NETWORK).asJsoup()
         val mangas = document.select("div.p-cs-tile a.o_property-link").map(::mangaFromElement)
             .filter { manga -> manga.title.contains(query, true) }
         return MangasPage(mangas, false)
@@ -100,20 +96,14 @@ abstract class Viz :
             this.url = seriesSlug
         }
 
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
-            .manga
-            .apply {
-                initialized = true
-            }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
         title = element.selectFirst("div.pad-x-rg")!!.text()
         thumbnail_url = element.selectFirst("div.pos-r img.disp-bl")?.absUrl("data-original")
-        setUrlWithoutDomain(element.absUrl("href").toHttpUrl().pathSegments[2])
+        url = element.absUrl("href").toHttpUrl().pathSegments[2]
     }
-
-    // ============================== Updates ==============================
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/$servicePath/chapters/${manga.url}"
 
@@ -130,7 +120,7 @@ abstract class Viz :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga), cacheControl = CacheControl.FORCE_NETWORK).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT, cacheControl = CacheControl.FORCE_NETWORK).asJsoup()
 
         val seriesIntro = document.selectFirst("section#series-intro")!!
         val sManga = SManga.create().apply {
@@ -170,9 +160,7 @@ abstract class Viz :
                 } else {
                     name = lock + (it.selectFirst("div:nth-child(2) table")?.selectFirst("td")?.text() ?: "Oneshot")
                     dateTable.selectFirst("td[align=right], td > span")?.text()?.let { dateStr ->
-                        date_upload = runCatching {
-                            LocalDate.parse(dateStr, DATE_FORMATTER).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-                        }.getOrDefault(0L)
+                        date_upload = DATE_FORMATTER.tryParseDate(dateStr, ZoneOffset.UTC)
                     }
                 }
 
@@ -191,10 +179,8 @@ abstract class Viz :
         return SMangaUpdate(sManga, chapterList)
     }
 
-    // =============================== Pages ===============================
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val pageCount = document.selectFirst("script:containsData(var pages)")!!.data()
             .substringAfter("= ")
             .substringBefore(";")
@@ -203,7 +189,7 @@ abstract class Viz :
         checkIfIsLoggedIn()
         val chapterId = chapter.memo.getStringOrNull("id")
             ?: throw Exception("Refresh chapter list")
-        val hasAccess = client.newCall(pageUrlRequest(chapterId, "0")).execute().parseAs<Dto>().ok
+        val hasAccess = fetchPageUrl(chapterId, "0").ok
         if (hasAccess == 0) {
             throw Exception("Log in via WebView and subscribe to the website's service.")
         }
@@ -217,14 +203,11 @@ abstract class Viz :
         val parts = page.url.toHttpUrl()
         val chapterId = parts.pathSegments.first()
         val index = parts.fragment!!
-        val response = client.newCall(pageUrlRequest(chapterId, index)).awaitSuccess()
-        val result = response.parseAs<Dto>()
+        val result = fetchPageUrl(chapterId, index)
         return "${result.data.obj.values.first().string}#scramble"
     }
 
-    // ============================= Utilities =============================
-
-    private fun pageUrlRequest(chapterId: String, index: String): Request {
+    private suspend fun fetchPageUrl(chapterId: String, index: String): Dto {
         val login = if (loggedIn == true) "active" else "false"
         val newHeaders = headersBuilder()
             .set("X-Client-Login", login)
@@ -236,18 +219,18 @@ abstract class Viz :
             .addQueryParameter("pages", index)
             .build()
 
-        return GET(pageUrl, newHeaders, CacheControl.FORCE_NETWORK)
+        return client.get(pageUrl, newHeaders, Fetch.XHR, CacheControl.FORCE_NETWORK).parseAs()
     }
 
-    private val subcription = Regex("""var $subscriber\s*=\s*(true|false)""")
+    private val subscription = Regex("""var $subscriber\s*=\s*(true|false)""")
 
     private suspend fun checkIfIsLoggedIn(): Boolean = try {
-        val document = client.get("$baseUrl/account/refresh_login_links").asJsoup()
+        val document = client.get("$baseUrl/account/refresh_login_links", Fetch.DOCUMENT).asJsoup()
         loggedIn = document.selectFirst("div#o_account-links-content")
             ?.attr("logged_in")?.toBoolean() ?: false
 
         document.selectFirst("script:containsData($subscriber)")?.data()
-            ?.let { subcription.find(it) }
+            ?.let { subscription.find(it) }
             ?.groupValues?.get(1)?.toBoolean() ?: false
     } catch (_: Exception) {
         loggedIn = false

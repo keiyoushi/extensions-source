@@ -3,6 +3,8 @@ package eu.kanade.tachiyomi.extension.zh.hanabimanga
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
+import keiyoushi.utils.aesDecrypt
+import keiyoushi.utils.aesGcm
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.readIntLittleEndian
 import keiyoushi.utils.sha256
@@ -13,9 +15,6 @@ import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import java.io.ByteArrayOutputStream
 import java.io.IOException
-import javax.crypto.Cipher
-import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 class TileScrambleInterceptor : Interceptor {
 
@@ -49,12 +48,7 @@ private object TicketDecoder {
         require(nonce.size == 12) { "nonce must be 12 bytes, got ${nonce.size}" }
         require(ticket.size >= 17) { "ticket too short: ${ticket.size}" }
 
-        val ciphertext = ticket.copyOf(ticket.size - 16)
-        val authTag = ticket.copyOfRange(ticket.size - 16, ticket.size)
-
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(STATIC_KEY, "AES"), GCMParameterSpec(128, nonce))
-        val plain = cipher.doFinal(ciphertext + authTag)
+        val plain = ticket.aesDecrypt(aesGcm(STATIC_KEY, nonce))
         return plain.toString(Charsets.US_ASCII)
     }
 }

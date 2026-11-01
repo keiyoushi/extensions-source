@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -26,7 +27,7 @@ abstract class VerComics : KeiSource() {
 
     // ============================== Popular ==============================
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$baseUrl/$urlSuffix/page/$page")
+        val response = client.get("$baseUrl/$urlSuffix/page/$page", Fetch.DOCUMENT)
         val document = response.asJsoup()
         val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
         val hasNextPage = document.selectFirst(popularMangaNextPageSelector()) != null
@@ -61,7 +62,7 @@ abstract class VerComics : KeiSource() {
             url.addPathSegments(page.toString())
             url.addQueryParameter("s", query)
 
-            val response = client.get(url.build())
+            val response = client.get(url.build(), Fetch.DOCUMENT)
             return searchMangaParse(response.asJsoup())
         }
 
@@ -80,7 +81,7 @@ abstract class VerComics : KeiSource() {
             }
         }
 
-        val response = client.get(url.build())
+        val response = client.get(url.build(), Fetch.DOCUMENT)
         return searchMangaParse(response.asJsoup())
     }
 
@@ -110,7 +111,7 @@ abstract class VerComics : KeiSource() {
         var sManga = manga
 
         if (fetchDetails) {
-            val response = client.get(baseUrl + manga.url)
+            val response = client.get(baseUrl + manga.url, Fetch.DOCUMENT)
             val document = response.asJsoup()
 
             sManga = SManga.create().apply {
@@ -153,7 +154,7 @@ abstract class VerComics : KeiSource() {
             "div.post-imgs > img"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(baseUrl + chapter.url)
+        val response = client.get(baseUrl + chapter.url, Fetch.DOCUMENT)
         val document = response.asJsoup()
         return document.select(pageListSelector).mapIndexed { i, img ->
             Page(i, imageUrl = img.imgAttr() ?: img.attr("abs:src"))
