@@ -127,8 +127,9 @@ abstract class VinaHentai : KeiSource() {
 
     private fun mapMangaGrid(element: Element): SManga = SManga.create().apply {
         setUrlWithoutDomain(element.absUrl("href"))
-        val titleDiv = element.selectFirst("div.truncate.font-semibold[title]")
-        title = titleDiv?.attr("title") ?: titleDiv?.text() ?: ""
+        title = element.select("div[title]")
+            .firstOrNull { it.attr("title").isNotBlank() }
+            ?.attr("title")!!
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
