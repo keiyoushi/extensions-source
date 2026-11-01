@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "ProComic"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

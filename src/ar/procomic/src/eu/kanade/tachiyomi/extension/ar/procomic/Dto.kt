@@ -31,6 +31,44 @@ class MetaDto(
 )
 
 @Serializable
+class TopFeedDto(
+    val data: List<ContentDto>,
+    val meta: HomeMetaDto,
+)
+
+@Serializable
+class LatestFeedDto(
+    val data: List<LatestDto>,
+    val meta: HomeMetaDto,
+)
+
+@Serializable
+class HomeMetaDto(
+    val hasMore: Boolean,
+)
+
+@Serializable
+class LatestDto(
+    private val mangaId: Int,
+    private val mangaSlug: String,
+    private val mangaTitle: String,
+    private val type: String,
+    private val coverImage: String? = null,
+    private val isBlockedSeries: Boolean = false,
+) {
+    val isReadable get() = type != "novel" && !isBlockedSeries
+
+    fun toSManga() = SManga.create().apply {
+        url = mangaId.toString()
+        title = mangaTitle
+        thumbnail_url = coverImage
+        memo = buildJsonObject {
+            put("slug", mangaSlug)
+        }
+    }
+}
+
+@Serializable
 class ContentWrapperDto(
     val data: ContentDto,
 )
@@ -210,6 +248,27 @@ class RegisterRequestDto(
 @Serializable
 class RegisterResponseDto(
     val deviceId: String,
+)
+
+@Serializable
+class ErrorDto(
+    private val errorCode: String? = null,
+    private val code: String? = null,
+) {
+    val value get() = errorCode?.takeIf { it.isNotBlank() } ?: code
+}
+
+@Serializable
+class AttestChallengeDto(
+    val nonce: String,
+)
+
+@Serializable
+class AttestRequestDto(
+    val publicKeyDer: String,
+    val nonce: String,
+    val chain: List<String>,
+    val clientError: String,
 )
 
 object StringOrListSerializer : JsonTransformingSerializer<String>(String.serializer()) {
