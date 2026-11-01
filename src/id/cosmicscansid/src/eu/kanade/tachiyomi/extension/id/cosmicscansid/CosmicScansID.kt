@@ -41,9 +41,8 @@ abstract class CosmicScansID : KeiSource() {
 
     private val apiUrl = "https://cdncid.csmcscns.id/v1/manga"
 
-    private val cursorCache = mutableMapOf<String, String>()
-
-    private val lastPage = mutableMapOf<String, Int>()
+    // Next page's cursor and the listing it belongs to
+    private var nextCursor: Pair<String, String>? = null
 
     private val imageSessions = LruCache<String, ImageSession>(16)
 
@@ -61,35 +60,13 @@ abstract class CosmicScansID : KeiSource() {
         .trimEnd('/')
 
     // ============================== Popular ===============================
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        val key = "popular"
-        if (page > 1 && cursorCache["$key:$page"].isNullOrBlank()) {
-            return MangasPage(emptyList(), false)
-        }
-        lastPage[key] = page
-        val url = "$apiUrl/filter".toHttpUrl().newBuilder()
-            .addQueryParameter("limit", PAGE_SIZE.toString())
-            .addQueryParameter("order_by", "popular")
-            .addCursor(key, page)
-            .build()
-        val response = client.get(url, Fetch.XHR)
-        return parseMangaPage(response, key)
+    override suspend fun getPopularManga(page: Int): MangasPage = browse("popular", page) {
+        addQueryParameter("order_by", "popular")
     }
 
     // =============================== Latest ===============================
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val key = "update"
-        if (page > 1 && cursorCache["$key:$page"].isNullOrBlank()) {
-            return MangasPage(emptyList(), false)
-        }
-        lastPage[key] = page
-        val url = "$apiUrl/filter".toHttpUrl().newBuilder()
-            .addQueryParameter("limit", PAGE_SIZE.toString())
-            .addQueryParameter("order_by", "update")
-            .addCursor(key, page)
-            .build()
-        val response = client.get(url, Fetch.XHR)
-        return parseMangaPage(response, key)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = browse("update", page) {
+        addQueryParameter("order_by", "update")
     }
 
     // =============================== Search ===============================
@@ -99,31 +76,15 @@ abstract class CosmicScansID : KeiSource() {
         filters: FilterList,
     ): MangasPage {
         if (query.isNotBlank()) {
-            if (page > 1) return MangasPage(emptyList(), false)
             val url = "$apiUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("limit", "48")
                 .addQueryParameter("q", query)
                 .build()
-            val response = client.get(url, Fetch.XHR)
-            val result = response.parseAs<MangaListResponse>()
+            val result = client.get(url, Fetch.XHR).parseAs<MangaListResponse>()
             return MangasPage(result.data.map { it.toSManga() }, false)
         }
 
-        val key = searchKey(query, filters, "filter")
-        if (page > 1 && cursorCache["$key:$page"].isNullOrBlank()) {
-            return MangasPage(emptyList(), false)
-        }
-        lastPage[key] = page
-        val url = "$apiUrl/filter".toHttpUrl().newBuilder()
-            .addQueryParameter("limit", PAGE_SIZE.toString())
-            .apply {
-                addFilters(filters)
-                addCursor(key, page)
-            }
-            .build()
-
-        val response = client.get(url, Fetch.XHR)
-        return parseMangaPage(response, key)
+        return browse(searchKey(filters), page) { addFilters(filters) }
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -150,7 +111,7 @@ abstract class CosmicScansID : KeiSource() {
         val response = client.get("$apiUrl/mangaDetail/$slug", Fetch.XHR)
         val data = response.parseAs<MangaDetailResponse>().data
         val parsedChapters = data.chapters.orEmpty()
-            .filter { it.slug?.isNotBlank() == true && it.redirectLink.isNullOrBlank() }
+            .filter { it.redirectLink.isNullOrBlank() }
             .map { it.toSChapter() }
         return SMangaUpdate(
             manga = data.toSMangaDetails(slug),
@@ -225,20 +186,17 @@ abstract class CosmicScansID : KeiSource() {
     override fun getFilterList(data: JsonElement?): FilterList = getCosmicScansIDFilterList()
 
     // ============================= Utilities ==============================
-    private fun parseMangaPage(response: Response, key: String): MangasPage {
-        val result = response.parseAs<MangaListResponse>()
-        val page = lastPage[key] ?: 1
-        if (!result.cursor?.nextCursor.isNullOrBlank()) {
-            cursorCache["$key:${page + 1}"] = result.cursor.nextCursor.orEmpty()
-        }
-        return MangasPage(result.data.map { it.toSManga() }, result.cursor?.hasNext == true)
-    }
-
-    private fun Builder.addCursor(key: String, page: Int): Builder = apply {
+    private suspend fun browse(key: String, page: Int, params: Builder.() -> Unit): MangasPage {
+        val url = "$apiUrl/filter".toHttpUrl().newBuilder()
+            .addQueryParameter("limit", PAGE_SIZE.toString())
+            .apply(params)
         if (page > 1) {
-            cursorCache["$key:$page"]?.takeIf { it.isNotBlank() }
-                ?.let { addQueryParameter("after", it) }
+            val cursor = nextCursor?.takeIf { it.first == key } ?: return MangasPage(emptyList(), false)
+            url.addQueryParameter("after", cursor.second)
         }
+        val result = client.get(url.build(), Fetch.XHR).parseAs<MangaListResponse>()
+        nextCursor = result.cursor?.nextCursor?.let { key to it }
+        return MangasPage(result.data.map { it.toSManga() }, result.cursor?.hasNext == true)
     }
 
     private fun Builder.addFilters(filters: FilterList): Builder = apply {
@@ -263,9 +221,7 @@ abstract class CosmicScansID : KeiSource() {
             .forEach { addQueryParameter("genres_slug", it.slug) }
     }
 
-    private fun searchKey(query: String, filters: FilterList, endpoint: String): String = listOf(
-        endpoint,
-        query,
+    private fun searchKey(filters: FilterList): String = listOf(
         filters.firstInstanceOrNull<OrderFilter>()?.value.orEmpty(),
         filters.firstInstanceOrNull<StatusFilter>()?.value.orEmpty(),
         filters.firstInstanceOrNull<TypeFilter>()?.value.orEmpty(),
