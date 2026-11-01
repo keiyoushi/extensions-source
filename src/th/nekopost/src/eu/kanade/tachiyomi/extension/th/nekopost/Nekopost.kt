@@ -255,20 +255,20 @@ abstract class Nekopost : KeiSource() {
         val segments = chapter.url.split('/')
         val request = ChapterInfoRequest(segments[0].toInt(), segments[1].toInt())
 
-        val response = client.post("$baseUrl/handler/cinfo", apiHeaders, Fetch.XHR, request.toJsonRequestBody())
+        val response = client.post("$baseUrl/api/handler/cinfo", apiHeaders, Fetch.XHR, request.toJsonRequestBody())
 
         // Not JSON: the body is base64 of a CryptoJS payload, so it has to be read as text and
         // decrypted before it can be parsed.
         val decrypted = response.body.string().cryptoJsDecrypt(CIPHER_PASSPHRASE)
 
         val info = decrypted.parseAs<RawChapterInfo>()
-        val base = "${fileHost(info.projectId.toInt())}/collectManga/${info.projectId}/${info.chapterId}"
 
         // The site's own reader sorts by pageNo rather than trusting the returned order.
+        // pageName is a signed absolute URL; the same path without its verify token returns 403.
         return info.pageItem
-            .sortedBy { it.pageNo.toInt() }
+            .sortedBy { it.pageNo }
             .mapIndexed { index, item ->
-                Page(index, imageUrl = "$base/${item.pageName ?: item.fileName}")
+                Page(index, imageUrl = item.pageName)
             }
     }
 
