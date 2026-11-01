@@ -11,6 +11,7 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
@@ -154,12 +155,33 @@ abstract class Wurmz : KeiSource() {
 
     // ======================== Pages ==========================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val bodyString = client.get(getChapterUrl(chapter), rscHeaders, Fetch.XHR).body.string()
-        val pageList = bodyString.extractNextJsRsc<PageListDto> {
-            it is JsonObject && it.containsKey("images")
-        } ?: throw Exception("Gagal memproses daftar gambar")
+        val chapterUrl = getChapterUrl(chapter)
+        val rscUrl = chapterUrl.toHttpUrl().newBuilder().addQueryParameter("_rsc", "").build()
 
-        return pageList.images.mapIndexed { index, imageUrl ->
+        val pages = runCatching {
+            client.get(rscUrl, rscHeaders, Fetch.XHR).extractNextJs<PageListDto> {
+                it is JsonObject && it.containsKey("images")
+            }?.images
+        }.getOrNull()
+
+        if (!pages.isNullOrEmpty()) {
+            return pages.mapIndexed { index, imageUrl ->
+                Page(index, imageUrl = imageUrl)
+            }
+        }
+
+        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
+        val fallbackImages = document.extractNextJs<PageListDto> {
+            it is JsonObject && it.containsKey("images")
+        }?.images ?: document.select("div.reader-page img[src], .reader-image").mapNotNull {
+            it.attr("abs:src").ifEmpty { null }
+        }
+
+        if (fallbackImages.isEmpty()) {
+            throw Exception("Gagal memproses daftar gambar")
+        }
+
+        return fallbackImages.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
         }
     }
