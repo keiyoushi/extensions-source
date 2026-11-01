@@ -143,7 +143,7 @@ abstract class BookOrbit :
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/series/${manga.url}"
 
-    // Details and chapters both come from the series' book list, so always return both.
+    // Details come from the first page of the series' book list; the full chapter list can take several more.
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -152,9 +152,11 @@ abstract class BookOrbit :
     ): SMangaUpdate {
         val firstPage = getSeriesBooksPage(manga.url, 0, BOOKS_PAGE_SIZE)
         val books = firstPage.items.toMutableList()
-        var page = 1
-        while (books.size < firstPage.total) {
-            books += getSeriesBooksPage(manga.url, page++, BOOKS_PAGE_SIZE).items
+        if (fetchChapters) {
+            var page = 1
+            while (books.size < firstPage.total) {
+                books += getSeriesBooksPage(manga.url, page++, BOOKS_PAGE_SIZE).items
+            }
         }
 
         val updatedManga = SManga.create().apply {
@@ -162,10 +164,14 @@ abstract class BookOrbit :
             title = firstPage.seriesInfo.name
             author = firstPage.seriesInfo.authors.joinToString()
             genre = books.flatMap { it.genres }.distinct().joinToString()
-            thumbnail_url = books.lastOrNull()?.let { thumbnailUrl(baseUrl, it.id) } ?: manga.thumbnail_url
+            // Books are newest first, so the series' first book is only known once all pages are loaded
+            thumbnail_url = books.lastOrNull()?.takeIf { books.size >= firstPage.total }
+                ?.let { thumbnailUrl(baseUrl, it.id) }
+                ?: manga.thumbnail_url
         }
 
-        return SMangaUpdate(updatedManga, books.filter { it.isComic }.map { it.toSChapter() })
+        val chapterList = if (fetchChapters) books.filter { it.isComic }.map { it.toSChapter() } else chapters
+        return SMangaUpdate(updatedManga, chapterList)
     }
 
     private suspend fun getSeriesBooksPage(seriesId: String, page: Int, size: Int): SeriesBooksPageDto {
