@@ -14,4 +14,9 @@ keiyoushi {
         lang = "en"
         baseUrl = "https://sacachispa.site"
     }
+
+    deeplink {
+        path("/manga/..*")
+        path("/read/..*")
+    }
 }

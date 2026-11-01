@@ -155,7 +155,7 @@ abstract class RavenManga : KeiSource() {
             document = client.post(url, headers, Fetch.DOCUMENT, body.build()).asJsoup()
         }
         return document.select("main.contenedor-imagen > section img[src], main > img[src]").mapIndexed { i, element ->
-            Page(i, imageUrl = element.absUrl("src"))
+            Page(i, imageUrl = element.absUrl("src").trim())
         }
     }
 

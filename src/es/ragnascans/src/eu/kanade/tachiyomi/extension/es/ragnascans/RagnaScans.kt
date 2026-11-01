@@ -131,9 +131,8 @@ abstract class RagnaScans : KeiSource() {
         title = document.selectFirst("h1")!!.text()
         thumbnail_url = document.selectFirst(".cover-wrapper img")?.absUrl("src")
 
-        val infoWrap = document.select(".flex.flex-wrap.items-center.gap-x-3")
-        author = infoWrap.selectFirst("span:contains(Autor:)")?.text()?.substringAfter("Autor:")?.trim()
-        artist = infoWrap.selectFirst("span:contains(Ilustrador:)")?.text()?.substringAfter("Ilustrador:")?.trim()
+        author = document.selectFirst(".flex.flex-wrap.items-center.gap-x-3 span:contains(Autor:)")?.text()?.substringAfter("Autor:")?.trim()
+        artist = document.selectFirst(".flex.flex-wrap.items-center.gap-x-3 span:contains(Ilustrador:)")?.text()?.substringAfter("Ilustrador:")?.trim()
 
         description = document.selectFirst("#sinopsisWrapper p")?.text()
 
