@@ -62,6 +62,9 @@ abstract class Kagane :
         rateLimit(3)
     }
 
+    // The image host 404s without the site's Origin
+    override val imageFetch = Fetch.XHR
+
     private fun refreshTokenInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val url = request.url
