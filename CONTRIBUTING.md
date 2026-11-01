@@ -1032,31 +1032,14 @@ val data = client.post(
 
 ##### GraphQL GET requests - `graphQLGet`
 
-For sources that send GraphQL over HTTP GET instead of POST, use `graphQLGet`:
+For sources that send GraphQL over HTTP GET instead of POST, use the suspend `OkHttpClient.graphQLGet`.
+It sends the request and returns the `Response`, taking the source's own `headers` when none are
+passed. `ensureSuccess` behaves as in [HTTP requests](#http-requests---okhttpclientget--post--put--head),
+and it additionally takes a `cacheControl`, defaulting to a 10-minute max-age, and a required `fetch`, passed by name.
 
 ```kotlin
 import keiyoushi.utils.graphQLGet
 
-val request = graphQLGet(
-    url = "$baseUrl/graphql",
-    headers = headers,
-    query = $$"""
-    query SearchManga($page: Int!) {
-      mangas(page: $page) {
-        id
-      }
-    }
-    """,
-    variables = variables
-)
-```
-
-Inside a `KeiSource`, use the suspend `OkHttpClient` overload instead: it sends the request and
-returns the `Response`, taking the source's own `headers` when none are passed. `ensureSuccess`
-behaves as in [HTTP requests](#http-requests---okhttpclientget--post--put--head), and it
-additionally takes a `cacheControl`, defaulting to a 10-minute max-age, and a required `fetch`, passed by name.
-
-```kotlin
 val data = client.graphQLGet(
     url = "$baseUrl/graphql",
     operationName = "SearchManga",
