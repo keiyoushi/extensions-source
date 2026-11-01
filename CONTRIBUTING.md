@@ -492,7 +492,7 @@ For sites that move domains and publish where they are, e.g. on a page listing t
 
 ```kotlin
 override suspend fun fetchBaseUrls(): List<String> =
-    client.get("https://hub.example.org/").asJsoup()
+    client.get("https://hub.example.org/", Fetch.DOCUMENT).asJsoup()
         .select("a.mirror")
         .map { it.absUrl("href") }
 ```

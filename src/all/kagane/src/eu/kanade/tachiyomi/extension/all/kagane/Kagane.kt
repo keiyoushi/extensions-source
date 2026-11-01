@@ -62,7 +62,7 @@ abstract class Kagane :
         rateLimit(3)
     }
 
-    override suspend fun fetchBaseUrls(): List<String> = client.get(HUB_URL).asJsoup()
+    override suspend fun fetchBaseUrls(): List<String> = client.get(HUB_URL, Fetch.DOCUMENT).asJsoup()
         .select("li:has(p[aria-live]) a[href^=https://]")
         .map { it.absUrl("href") }
 
