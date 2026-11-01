@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.util.Base64
 import androidx.preference.SwitchPreferenceCompat
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.decodeProtoBase64
@@ -50,14 +51,14 @@ val SharedPreferences.langData: List<LangData>
 private val langDataMutex = Mutex()
 
 suspend fun updateLangData(client: OkHttpClient, headers: Headers, preferences: SharedPreferences, baseUrl: String) = langDataMutex.withLock {
-    val lastUpdated = client.get("$baseUrl/0_sources/last_updated.txt", headers)
+    val lastUpdated = client.get("$baseUrl/0_sources/last_updated.txt", headers, Fetch.XHR)
         .use { it.body.string().substringBefore('\n').toLong() }
 
     if (lastUpdated <= preferences.lastUpdated) return@withLock
 
     val editor = preferences.edit().putLong(LAST_UPDATED_PREF, lastUpdated)
 
-    val episodes = client.get("$baseUrl/0_sources/episodes.json", headers)
+    val episodes = client.get("$baseUrl/0_sources/episodes.json", headers, Fetch.XHR)
         .parseAs<List<EpisodeDto>>()
 
     val total = episodes.size
@@ -71,7 +72,7 @@ suspend fun updateLangData(client: OkHttpClient, headers: Headers, preferences: 
         null
     }
 
-    val langs = client.get("$baseUrl/0_sources/langs.json", headers)
+    val langs = client.get("$baseUrl/0_sources/langs.json", headers, Fetch.XHR)
         .parseAs<LangsDto>().entries.map { (key, dto) ->
             Lang(
                 key = key,
@@ -104,7 +105,7 @@ private fun SharedPreferences.Editor.chooseLang(langs: List<Lang>) {
 
 private suspend fun fetchTitles(client: OkHttpClient, headers: Headers): Map<String, String> {
     val url = "https://framagit.org/search?project_id=76196&search=core/mod-header.php:4"
-    val document = client.get(url, headers).asJsoup()
+    val document = client.get(url, headers, Fetch.DOCUMENT).asJsoup()
     val result = hashMapOf<String, String>()
     for (file in document.selectFirst(Evaluator.Class("search-results"))!!.children()) {
         val filename = file.selectFirst(Evaluator.Tag("strong"))!!.ownText()

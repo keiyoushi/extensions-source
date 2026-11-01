@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 
@@ -12,7 +13,7 @@ abstract class ComicBorder : GigaViewer() {
     override val supportsLatest = false
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val mangas = client.get(baseUrl).asJsoup().select("section.top-series").map {
+        val mangas = client.get(baseUrl, Fetch.DOCUMENT).asJsoup().select("section.top-series").map {
             SManga.create().apply {
                 title = it.selectFirst("h3")!!.text()
                 thumbnail_url = it.selectFirst(".top-key-image")?.absUrl("data-src")

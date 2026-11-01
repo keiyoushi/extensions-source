@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -29,7 +30,7 @@ abstract class RavenManga : KeiSource() {
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div#div-diario figure, div#div-semanal figure, div#div-mensual figure")
             .map { element ->
                 SManga.create().apply {
@@ -44,7 +45,7 @@ abstract class RavenManga : KeiSource() {
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("section.flex > div.grid > figure").map { element ->
             SManga.create().apply {
                 thumbnail_url = element.selectFirst("img")?.absUrl("src")
@@ -62,7 +63,7 @@ abstract class RavenManga : KeiSource() {
         if (isSearch && query.length < 2) throw Exception("La búsqueda debe tener al menos 2 caracteres")
         val url = if (isSearch) "$baseUrl/comics" else "$baseUrl/comics?page=$page"
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         if (isSearch) {
             val mangas = parseMangaList(document, query)
@@ -103,7 +104,7 @@ abstract class RavenManga : KeiSource() {
             throw Exception("URL no soportada")
         }
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseMangaDetails(document).apply { setUrlWithoutDomain(url.toString()) }
     }
 
@@ -113,7 +114,7 @@ abstract class RavenManga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
     }
 
@@ -142,7 +143,7 @@ abstract class RavenManga : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        var document = client.get(baseUrl + chapter.url).asJsoup()
+        var document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
         val form = document.selectFirst("form#redirectForm[method=post]")
         if (form != null) {
             val url = form.absUrl("action")
@@ -151,10 +152,10 @@ abstract class RavenManga : KeiSource() {
             form.select("input").forEach {
                 body.add(it.attr("name"), it.attr("value"))
             }
-            document = client.post(url, headers, body.build()).asJsoup()
+            document = client.post(url, headers, Fetch.DOCUMENT, body.build()).asJsoup()
         }
         return document.select("main.contenedor-imagen > section img[src], main > img[src]").mapIndexed { i, element ->
-            Page(i, imageUrl = element.absUrl("src"))
+            Page(i, imageUrl = element.absUrl("src").trim())
         }
     }
 

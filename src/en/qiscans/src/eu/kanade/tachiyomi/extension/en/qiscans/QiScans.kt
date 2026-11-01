@@ -17,9 +17,6 @@ abstract class QiScans : EZManhwa() {
     override val apiUrl = "https://api.qimanga.com/api/v1"
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = addEZManhwaHeaders()
-        .set("Sec-Fetch-Dest", "empty")
-        .set("Sec-Fetch-Mode", "cors")
-        .set("Sec-Fetch-Site", "same-site")
 
     // QiScans search endpoint ignores filters — only send the query when searching.
     override fun searchMangaUrl(page: Int, query: String, filters: FilterList): HttpUrl {

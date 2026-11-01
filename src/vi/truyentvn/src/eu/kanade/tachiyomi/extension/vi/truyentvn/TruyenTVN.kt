@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -53,17 +54,17 @@ abstract class TruyenTVN : KeiSource() {
 
     // ============================== Popular ===============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(client.get(buildPagedUrl(popularPath, page)).asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(client.get(buildPagedUrl(popularPath, page), Fetch.DOCUMENT).asJsoup())
 
     // =============================== Latest ================================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaPage(client.get(buildPagedUrl(latestPath, page)).asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaPage(client.get(buildPagedUrl(latestPath, page), Fetch.DOCUMENT).asJsoup())
 
     // =============================== Search ================================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
-            return parseAjaxSearch(client.post("$baseUrl$ajaxPath", ajaxHeaders, buildSearchBody(query)))
+            return parseAjaxSearch(client.post("$baseUrl$ajaxPath", ajaxHeaders, Fetch.XHR, buildSearchBody(query)))
         }
 
         val searchPath = if (page > 1) "/advanced-search/page/$page" else "/advanced-search"
@@ -87,7 +88,7 @@ abstract class TruyenTVN : KeiSource() {
             }
         }.build()
 
-        return parseMangaPage(client.get(url).asJsoup())
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private fun HttpUrl.Builder.addFilter(name: String, value: String) {
@@ -140,7 +141,7 @@ abstract class TruyenTVN : KeiSource() {
     ): SMangaUpdate {
         val cachedMangaId = manga.memo["mangaId"]?.stringOrNull
         val document = if (fetchDetails || (fetchChapters && cachedMangaId == null)) {
-            client.get(getMangaUrl(manga)).asJsoup()
+            client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         } else {
             null
         }
@@ -237,7 +238,7 @@ abstract class TruyenTVN : KeiSource() {
             .add("per_page", perPage.toString())
             .build()
 
-        return client.post("$baseUrl$ajaxPath", ajaxHeaders, formBody)
+        return client.post("$baseUrl$ajaxPath", ajaxHeaders, Fetch.XHR, formBody)
             .parseAs<ChaptersAjaxResponseDto>()
             .data()
     }
@@ -281,7 +282,7 @@ abstract class TruyenTVN : KeiSource() {
     // ================================ Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val images = document.select("main.webtoon-mode img.page-image")
             .ifEmpty { document.select("#webtoonContainer img.page-image, #webtoonContainer img") }
 
@@ -297,7 +298,7 @@ abstract class TruyenTVN : KeiSource() {
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/advanced-search").asJsoup()
+        val document = client.get("$baseUrl/advanced-search", Fetch.DOCUMENT).asJsoup()
         val categories = document.select("select[name=category] option[value]")
             .mapNotNull { option ->
                 val slug = option.attr("value").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
@@ -320,7 +321,7 @@ abstract class TruyenTVN : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return document.select("#similar-series div.comic-card > a[href$='.html']")
             .map { parseMangaElement(it) }
             .distinctBy { it.url }

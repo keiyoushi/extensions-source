@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
@@ -47,7 +48,7 @@ abstract class YnJn :
             .addQueryParameter("rankingType", "RANKING")
             .build()
 
-        val result = client.get(url).parseAs<RankingResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<RankingResponse>()
         val mangas = result.data.ranking.titles.map { it.title.toSManga() }
         return MangasPage(mangas, false)
     }
@@ -55,7 +56,7 @@ abstract class YnJn :
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val today = currentDateJst
         val featureId = latestFeature?.takeIf { it.first == today }?.second
-            ?: client.get("$apiUrl/title/feature?displayLocation=TOP_PAGE_RENSAI").parseAs<DataResponse>()
+            ?: client.get("$apiUrl/title/feature?displayLocation=TOP_PAGE_RENSAI", Fetch.XHR).parseAs<DataResponse>()
                 .data.info!!.id.also { latestFeature = today to it }
 
         val url = "$apiUrl/title/feature".toHttpUrl().newBuilder()
@@ -63,7 +64,7 @@ abstract class YnJn :
             .addQueryParameter("page", page.toString())
             .build()
 
-        val result = client.get(url).parseAs<DataResponse>().data
+        val result = client.get(url, Fetch.XHR).parseAs<DataResponse>().data
         val mangas = result.titles.map { it.toSManga() }
         val hasNextPage = result.hasNext == true
         return MangasPage(mangas, hasNextPage)
@@ -83,7 +84,7 @@ abstract class YnJn :
             addQueryParameter("sort", "TITLE_SORT_POPULARITY")
         }.build()
 
-        val result = client.get(url).parseAs<DataResponse>().data
+        val result = client.get(url, Fetch.XHR).parseAs<DataResponse>().data
         val mangas = result.titles.map { it.toSManga() }
         val hasNextPage = (page - 1) * 12 + mangas.size < result.totalCount
         return MangasPage(mangas, hasNextPage)
@@ -94,7 +95,7 @@ abstract class YnJn :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != domain || url.pathSegments.firstOrNull() !in setOf("title", "viewer")) return null
         val id = url.pathSegments.getOrNull(1)?.toIntOrNull() ?: return null
-        return client.get("$apiUrl/book/$id", ensureSuccess = false).parseAs<TitleDetails>()
+        return client.get("$apiUrl/book/$id", Fetch.XHR, ensureSuccess = false).parseAs<TitleDetails>()
             .data.book?.toSManga()?.apply { initialized = true }
     }
 
@@ -107,7 +108,7 @@ abstract class YnJn :
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, true)
         val details = async {
             if (!fetchDetails) return@async manga
-            client.get("$apiUrl/book/${manga.url}").parseAs<TitleDetails>().data.book!!.toSManga()
+            client.get("$apiUrl/book/${manga.url}", Fetch.XHR).parseAs<TitleDetails>().data.book!!.toSManga()
         }
 
         val chapterList = async {
@@ -116,7 +117,7 @@ abstract class YnJn :
                 .addQueryParameter("isGetAll", "true")
                 .build()
 
-            client.get(url).parseAs<ChapterDetails>().data.episodes
+            client.get(url, Fetch.XHR).parseAs<ChapterDetails>().data.episodes
                 .filter { !hideLocked || !it.isLocked }
                 .map { it.toSChapter(manga.url) }
                 .reversed()
@@ -136,14 +137,14 @@ abstract class YnJn :
             .addQueryParameter("episodeId", chapter.url)
             .build()
 
-        return client.get(url).parseAs<ViewerDetails>().data.pages.mapNotNull { it.mangaPage }.map {
+        return client.get(url, Fetch.XHR).parseAs<ViewerDetails>().data.pages.mapNotNull { it.mangaPage }.map {
             Page(it.pageNumber, imageUrl = "${it.pageImageUrl}#scramble")
         }
     }
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/labels").parseAs<LabelsResponse>().data.labels.toJsonElement()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/labels", Fetch.XHR).parseAs<LabelsResponse>().data.labels.toJsonElement()
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         CategoryFilter(data?.parseAs<List<Label>>().orEmpty()),

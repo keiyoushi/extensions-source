@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -35,7 +36,7 @@ abstract class HattoriScans : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList())
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/latest").asJsoup()
+        val document = client.get("$baseUrl/latest", Fetch.DOCUMENT).asJsoup()
         // Skeleton placeholders share the card class but have no title
         val mangas = document.select(".latest-poster:has(h3)").map { card ->
             SManga.create().apply {
@@ -51,12 +52,12 @@ abstract class HattoriScans : KeiSource() {
     // The site's list API has no filtering or paging and the catalog is small,
     // so the whole list is fetched once and filtered locally.
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = coroutineScope {
-        val listDeferred = async { client.get("$baseUrl/api/manga?limit=$LIST_LIMIT").parseAs<List<MangaListItemDto>>() }
+        val listDeferred = async { client.get("$baseUrl/api/manga?limit=$LIST_LIMIT", Fetch.XHR).parseAs<List<MangaListItemDto>>() }
         val matchedIds = query.trim().takeIf { it.isNotBlank() }?.let { q ->
             val url = "$baseUrl/api/manga/search".toHttpUrl().newBuilder()
                 .addQueryParameter("q", q)
                 .build()
-            client.get(url).parseAs<List<SearchItemDto>>().mapTo(HashSet()) { it.id }
+            client.get(url, Fetch.XHR).parseAs<List<SearchItemDto>>().mapTo(HashSet()) { it.id }
         }
 
         val type = filters.firstInstanceOrNull<TypeFilter>()?.selected.orEmpty()
@@ -95,7 +96,7 @@ abstract class HattoriScans : KeiSource() {
             return null
         }
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotBlank() } ?: return null
-        return client.get("$baseUrl/api/manga/$slug").parseAs<MangaDetailsDto>().toSManga(baseUrl)
+        return client.get("$baseUrl/api/manga/$slug", Fetch.XHR).parseAs<MangaDetailsDto>().toSManga(baseUrl)
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
@@ -110,18 +111,18 @@ abstract class HattoriScans : KeiSource() {
     ): SMangaUpdate = coroutineScope {
         val details = async {
             if (!fetchDetails) return@async manga
-            client.get("$baseUrl/api/manga/${manga.url}").parseAs<MangaDetailsDto>().toSManga(baseUrl)
+            client.get("$baseUrl/api/manga/${manga.url}", Fetch.XHR).parseAs<MangaDetailsDto>().toSManga(baseUrl)
         }
         val chapterList = async {
             if (!fetchChapters) return@async chapters
-            client.get("$baseUrl/api/manga/${manga.url}/chapters").parseAs<ChapterListDto>()
+            client.get("$baseUrl/api/manga/${manga.url}/chapters", Fetch.XHR).parseAs<ChapterListDto>()
                 .chapters.map { it.toSChapter(manga.url) }
         }
         SMangaUpdate(details.await(), chapterList.await())
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter))
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         val pages = response.extractNextJs<ChapterPagesDto> { it is JsonObject && "pages" in it }
             ?: throw Exception("Sayfa listesi bulunamadı")
         return pages.pages.mapIndexed { index, path ->

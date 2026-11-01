@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -41,6 +42,7 @@ abstract class BanchanScan : KeiSource() {
             "$baseUrl/api/data/chapters?select=$CHAPTER_FIELDS" +
                 "&status=eq.published&order=published_at.desc.nullslast,created_at.desc" +
                 "&limit=$PAGE_SIZE&offset=$offset",
+            Fetch.XHR,
         ).parseAs<List<ChapterDto>>()
 
         if (chapters.isEmpty()) return MangasPage(emptyList(), false)
@@ -48,6 +50,7 @@ abstract class BanchanScan : KeiSource() {
         val webtoonIds = chapters.map { it.webtoonId }.distinct()
         val webtoonsById = client.get(
             "$baseUrl/api/data/webtoons?select=*&id=in.(${webtoonIds.joinToString(",")})",
+            Fetch.XHR,
         ).parseAs<List<WebtoonDto>>().associateBy { it.id }
 
         val mangas = webtoonIds.mapNotNull { webtoonsById[it]?.toSManga() }
@@ -111,25 +114,27 @@ abstract class BanchanScan : KeiSource() {
         return client.get(
             "$baseUrl/api/data/chapter_pages?select=image_url,sort_order" +
                 "&chapter_id=eq.$chapterId&order=sort_order.asc",
+            Fetch.XHR,
         ).parseAs<List<ChapterPageDto>>().map { Page(it.sortOrder, imageUrl = it.imageUrl) }
     }
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/data/genres?select=name&order=name.asc&limit=500").parseAs()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/data/genres?select=name&order=name.asc&limit=500", Fetch.XHR).parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data?.parseAs<List<GenreDto>>()?.map { it.name }.orEmpty()
         return if (genres.isEmpty()) FilterList() else FilterList(GenreFilter(genres))
     }
 
-    private suspend fun homeData(): HomeDataDto = client.get("$baseUrl/api/home-data").parseAs()
+    private suspend fun homeData(): HomeDataDto = client.get("$baseUrl/api/home-data", Fetch.XHR).parseAs()
 
     private suspend fun findWebtoonBySlug(slug: String): WebtoonDto? = homeData().webtoons.firstOrNull { it.title.toSlug() == slug }
 
-    private suspend fun fetchWebtoonDetails(id: String): WebtoonDto = client.get("$baseUrl/api/data/webtoons?select=*&id=eq.$id&limit=1").parseAs<List<WebtoonDto>>().first()
+    private suspend fun fetchWebtoonDetails(id: String): WebtoonDto = client.get("$baseUrl/api/data/webtoons?select=*&id=eq.$id&limit=1", Fetch.XHR).parseAs<List<WebtoonDto>>().first()
 
     private suspend fun fetchChapterList(id: String, slug: String): List<SChapter> {
         val chapters = client.get(
             "$baseUrl/api/data/chapters?select=$CHAPTER_FIELDS&webtoon_id=eq.$id&status=eq.published",
+            Fetch.XHR,
         ).parseAs<List<ChapterDto>>()
 
         val showSeason = chapters.mapNotNull { it.seasonOrNull }.distinct().size > 1

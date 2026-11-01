@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -159,7 +160,7 @@ abstract class MagazinePocket :
                 .add("episode_id_list", episodeIdList)
                 .build()
 
-            client.post("$apiUrl/episode/list", hashedHeaders(mapOf("episode_id_list" to episodeIdList)), body)
+            client.post("$apiUrl/episode/list", hashedHeaders(mapOf("episode_id_list" to episodeIdList)), Fetch.XHR, body)
                 .parseAs<EpisodeListResponse>().episodeList
                 .filter { !hideLocked || !it.isLocked }
                 .map { it.toSChapter() }
@@ -209,7 +210,7 @@ abstract class MagazinePocket :
 
     private suspend fun hashedGet(url: HttpUrl): Response {
         val queryParams = url.queryParameterNames.associateWith { url.queryParameter(it)!! }
-        return client.get(url, hashedHeaders(queryParams))
+        return client.get(url, hashedHeaders(queryParams), Fetch.XHR)
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

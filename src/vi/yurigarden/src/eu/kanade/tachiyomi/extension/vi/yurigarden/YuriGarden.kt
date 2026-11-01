@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -74,7 +75,6 @@ abstract class YuriGarden :
 
     private val apiHeaders: Headers
         get() = headersBuilder()
-            .set("Referer", "$baseUrl/")
             .add("x-app-origin", "https://yurigarden.com")
             .add("x-custom-lang", "vi")
             .add("Accept", "application/json")
@@ -134,13 +134,13 @@ abstract class YuriGarden :
         loadAuthToken()
         val staleToken = cachedAuthToken?.takeIf(String::isNotBlank)
             ?: throw IOException(loginRequiredMessage)
-        val response = client.get(url, apiHeaders)
+        val response = client.get(url, apiHeaders, Fetch.XHR)
         if (response.code != 401) return response
 
         response.close()
         if (!refreshAuthToken(staleToken)) throw IOException(loginRequiredMessage)
 
-        return client.get(url, apiHeaders).also { retryResponse ->
+        return client.get(url, apiHeaders, Fetch.XHR).also { retryResponse ->
             if (retryResponse.code == 401) {
                 cachedAuthToken = null
                 authChecked = false
@@ -436,13 +436,12 @@ abstract class YuriGarden :
         if (!forceRefresh) cachedMangaToken?.let { return@withLock it }
 
         val headers = headersBuilder()
-            .set("Referer", "$baseUrl/")
             .set("Accept", "application/json")
             .set("x-tsr-serverFn", "true")
             .build()
 
         val token = client
-            .get("$baseUrl/_serverFn/${getMangaTokenServerFn()}", headers)
+            .get("$baseUrl/_serverFn/${getMangaTokenServerFn()}", headers, Fetch.XHR)
             .parseAs<ServerFnNode>()
             .let { extractServerFnValue(it, "token") }
             ?: throw IOException("Không lấy được khóa giải mã chương")
@@ -454,12 +453,12 @@ abstract class YuriGarden :
     private suspend fun getMangaTokenServerFn(): String = mangaTokenServerFnMutex.withLock {
         cachedMangaTokenServerFn?.let { return@withLock it }
 
-        val html = client.get(baseUrl, headers).use { it.body.string() }
+        val html = client.get(baseUrl, headers, Fetch.DOCUMENT).use { it.body.string() }
 
         val mainScript = mainScriptRegex.find(html)?.groupValues?.get(1)
             ?: throw IOException("Không tìm thấy bundle chính")
         val mainScriptUrl = mainScript.toHttpUrlOrNull()?.toString() ?: "$baseUrl$mainScript"
-        val mainScriptBody = client.get(mainScriptUrl, headers).use { it.body.string() }
+        val mainScriptBody = client.get(mainScriptUrl, headers, Fetch.SCRIPT).use { it.body.string() }
 
         val routeIndex = mainScriptBody.indexOf(chapterRoutePath)
         val searchBody = if (routeIndex > 0) {
@@ -492,7 +491,7 @@ abstract class YuriGarden :
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement = client
-        .get("$apiBaseUrl/resources/systems_vi.json", apiHeaders)
+        .get("$apiBaseUrl/resources/systems_vi.json", apiHeaders, Fetch.XHR)
         .parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {

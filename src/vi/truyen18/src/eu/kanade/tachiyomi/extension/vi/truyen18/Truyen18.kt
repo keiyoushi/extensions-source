@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -44,11 +45,11 @@ abstract class Truyen18 : KeiSource() {
 
     // ============================== Popular ===============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(client.get(buildPagedUrl("/xem-nhieu-nhat", page)))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(client.get(buildPagedUrl("/xem-nhieu-nhat", page), Fetch.DOCUMENT))
 
     // ============================== Latest ================================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaPage(client.get(buildPagedUrl("/moi-cap-nhat", page)))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaPage(client.get(buildPagedUrl("/moi-cap-nhat", page), Fetch.DOCUMENT))
 
     // ============================== Search ================================
 
@@ -64,7 +65,7 @@ abstract class Truyen18 : KeiSource() {
             buildPagedUrl("/category/$genreSlug", page).toHttpUrl()
         }
 
-        return parseMangaPage(client.get(url))
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT))
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -129,7 +130,7 @@ abstract class Truyen18 : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
             chapters = parseChapterList(document),
@@ -235,7 +236,7 @@ abstract class Truyen18 : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterSlug = getChapterUrl(chapter).toHttpUrl().pathSegments.lastOrNull()
             ?: return emptyList()
-        val chapterData = client.get(getChapterUrl(chapter)).asJsoup()
+        val chapterData = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
             .extractNextJs<ReaderChapter> { element ->
                 element is JsonObject &&
                     element.getStringOrNull("slug") == chapterSlug &&
@@ -256,7 +257,7 @@ abstract class Truyen18 : KeiSource() {
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val categoryList = document.select("h2")
             .firstOrNull { it.text().contains("Danh sách thể loại") }
             ?.parent()
@@ -282,7 +283,7 @@ abstract class Truyen18 : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val relatedSection = document.select("h2")
             .firstOrNull { it.text().contains("Bạn có thể đọc thêm") }
             ?.closest("section")

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -88,7 +89,7 @@ abstract class Ososedki : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(buildPhotoUrl(manga.url)).asJsoup()
+        val document = client.get(buildPhotoUrl(manga.url), Fetch.DOCUMENT).asJsoup()
         val albumId = manga.url
 
         val modelTags = document.extractTags(AUTHOR_SELECTOR)
@@ -152,7 +153,7 @@ abstract class Ososedki : KeiSource() {
     // ========================= Pages =========================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(buildPhotoUrl(chapter.url)).asJsoup()
+        val document = client.get(buildPhotoUrl(chapter.url), Fetch.DOCUMENT).asJsoup()
 
         val imageUrls = document.select(PAGE_SELECTOR)
             .map { it.absUrl("href") }
@@ -178,7 +179,7 @@ abstract class Ososedki : KeiSource() {
             }
             .build()
 
-        val data = client.get(url).parseAs<AlbumsResponseDto>()
+        val data = client.get(url, Fetch.XHR).parseAs<AlbumsResponseDto>()
         val document = Jsoup.parseBodyFragment(data.html, baseUrl)
 
         val mangas = document.select(ENTRY_SELECTOR)

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -49,7 +50,7 @@ abstract class CosmicScansID : KeiSource() {
             .addQueryParameter("order_by", "popular")
             .addCursor(key, page)
             .build()
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         return parseMangaPage(response, key)
     }
 
@@ -65,7 +66,7 @@ abstract class CosmicScansID : KeiSource() {
             .addQueryParameter("order_by", "update")
             .addCursor(key, page)
             .build()
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         return parseMangaPage(response, key)
     }
 
@@ -81,7 +82,7 @@ abstract class CosmicScansID : KeiSource() {
                 .addQueryParameter("limit", "48")
                 .addQueryParameter("q", query)
                 .build()
-            val response = client.get(url)
+            val response = client.get(url, Fetch.XHR)
             val result = response.parseAs<MangaListResponse>()
             return MangasPage(result.data.map { it.toSManga() }, false)
         }
@@ -99,7 +100,7 @@ abstract class CosmicScansID : KeiSource() {
             }
             .build()
 
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         return parseMangaPage(response, key)
     }
 
@@ -124,7 +125,7 @@ abstract class CosmicScansID : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.slug()
-        val response = client.get("$apiUrl/mangaDetail/$slug")
+        val response = client.get("$apiUrl/mangaDetail/$slug", Fetch.XHR)
         val data = response.parseAs<MangaDetailResponse>().data
         val parsedChapters = data.chapters.orEmpty()
             .filter { it.slug?.isNotBlank() == true && it.redirectLink.isNullOrBlank() }
@@ -138,7 +139,7 @@ abstract class CosmicScansID : KeiSource() {
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val slug = chapter.url.substringAfterLast('/')
-        val response = client.get("$apiUrl/readingPage/$slug")
+        val response = client.get("$apiUrl/readingPage/$slug", Fetch.XHR)
         val data = response.parseAs<ReadingPageResponse>().data
         if (!data.redirectLink.isNullOrBlank()) return emptyList()
         val chapterUrl = getChapterUrl(chapter)

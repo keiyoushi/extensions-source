@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -58,9 +59,9 @@ abstract class Alphapolis :
         }
     }
 
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/manga/official/ranking?category=total", desktopHeaders).toMangasPage()
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/manga/official/ranking?category=total", desktopHeaders, Fetch.DOCUMENT).toMangasPage()
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get("$baseUrl/manga/official/search?page=$page", desktopHeaders).toMangasPage()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get("$baseUrl/manga/official/search?page=$page", desktopHeaders, Fetch.DOCUMENT).toMangasPage()
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         fun Builder.addFilter(param: String, filter: Filter.Group<FilterTag>) = filter.state.filter { it.state }.forEachIndexed { i, option -> addQueryParameter("$param[$i]", option.value) }
@@ -76,7 +77,7 @@ abstract class Alphapolis :
                 addFilter("rental", filters.firstInstance<RentalFilter>())
                 addFilter("is_free_daily", "enable", filters.firstInstance<DailyFreeFilter>())
             }.build()
-        return client.get(url, desktopHeaders).toMangasPage()
+        return client.get(url, desktopHeaders, Fetch.DOCUMENT).toMangasPage()
     }
 
     private fun Response.toMangasPage(): MangasPage {
@@ -101,7 +102,7 @@ abstract class Alphapolis :
     ): SMangaUpdate = coroutineScope {
         val mangas = async {
             if (!fetchDetails) return@async manga
-            val document = client.get(getMangaUrl(manga), desktopHeaders).asJsoup()
+            val document = client.get(getMangaUrl(manga), desktopHeaders, Fetch.DOCUMENT).asJsoup()
             SManga.create().apply {
                 title = document.selectFirst(".manga-detail-description > .title > h1")!!.text()
                 val authors = document.select(".manga-detail-description .author-label .authors .mangaka").toList()
@@ -127,7 +128,7 @@ abstract class Alphapolis :
             if (!fetchChapters) return@async chapters
             val mangaId = (baseUrl + manga.url).toHttpUrl().pathSegments.last().toInt()
             val body = ChapterRequestBody(mangaId).toJsonRequestBody()
-            val result = client.post("$baseUrl/manga/official/episodes.json", xsrfHeaders(), body).parseAs<ChapterResponse>()
+            val result = client.post("$baseUrl/manga/official/episodes.json", xsrfHeaders(), Fetch.XHR, body).parseAs<ChapterResponse>()
             val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
             result.episodes.filter { !hideLocked || !it.isLocked }.map { it.toSChapter(baseUrl) }.reversed()
         }
@@ -150,7 +151,7 @@ abstract class Alphapolis :
 
         for (resolution in listOf("full_hd", "standard")) {
             val body = ViewerRequestBody(episodeId, false, mangaId, false, resolution).toJsonRequestBody()
-            val result = client.post("$baseUrl/manga/official/viewer.json", viewerHeaders, body).parseAs<ViewerResponse>()
+            val result = client.post("$baseUrl/manga/official/viewer.json", viewerHeaders, Fetch.XHR, body).parseAs<ViewerResponse>()
             val page = result.page ?: continue
             val keys = page.placeholder.extractKeys()
             val pages = page.images.mapIndexed { i, img ->

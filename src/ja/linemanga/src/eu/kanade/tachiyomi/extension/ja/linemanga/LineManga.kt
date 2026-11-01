@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
@@ -55,7 +56,7 @@ abstract class LineManga :
             .addQueryParameter("page", page.toString())
             .build()
 
-        return client.get(url).parseAs<EntryResponse>().result.toMangasPage()
+        return client.get(url, Fetch.XHR).parseAs<EntryResponse>().result.toMangasPage()
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -65,7 +66,7 @@ abstract class LineManga :
             .addQueryParameter("page", page.toString())
             .build()
 
-        return client.get(url).parseAs<Result>().toMangasPage()
+        return client.get(url, Fetch.XHR).parseAs<Result>().toMangasPage()
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -75,7 +76,7 @@ abstract class LineManga :
                 .addQueryParameter("page", page.toString())
                 .build()
 
-            return client.get(url).parseAs<EntryResponse>().result.toMangasPage()
+            return client.get(url, Fetch.XHR).parseAs<EntryResponse>().result.toMangasPage()
         }
 
         val filter = filters.firstInstance<CategoryFilter>()
@@ -90,7 +91,7 @@ abstract class LineManga :
             }
             .build()
 
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         return if (filter.type == GENDER_RANKING) {
             response.parseAs<EntryResponse>().result
         } else {
@@ -123,7 +124,7 @@ abstract class LineManga :
             }
             .build()
 
-        val result = client.get(url).parseAs<EntryDetails>().result
+        val result = client.get(url, Fetch.XHR).parseAs<EntryDetails>().result
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val chapterList = result.rows
             .filter { !hideLocked || !it.isLocked }
@@ -143,7 +144,7 @@ abstract class LineManga :
             .addQueryParameter("id", chapter.url)
             .build()
 
-        val options = client.get(url).parseViewer()
+        val options = client.get(url, Fetch.DOCUMENT).parseViewer()
         return if (options.isPortal) parsePortalPages(options.portalPages) else parseImgPages(options.imgs)
     }
 

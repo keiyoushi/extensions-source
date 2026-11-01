@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -34,7 +35,7 @@ abstract class LavibitWindroom : KeiSource() {
             .set("Accept-Profile", "public")
             .build()
 
-    private suspend fun apiGet(url: HttpUrl): Response = client.get(url, apiHeaders)
+    private suspend fun apiGet(url: HttpUrl): Response = client.get(url, apiHeaders, Fetch.XHR)
 
     private fun apiUrlBuilder() = "$apiUrl/series".toHttpUrl().newBuilder()
         .addQueryParameter("select", seriesSelect)

@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.uk.faust
 
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.sha256
@@ -131,6 +133,7 @@ class AuthInterceptor(
                 .header(HEADER_SIGN, signature)
                 .header(HEADER_OBFUSCATION, OBFUSCATION_MODE)
                 .header(HEADER_CONTENT, JSON_CONTENT_TYPE)
+                .fetch(Fetch.XHR)
                 .build()
 
             val client = clientProvider()

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -37,7 +38,7 @@ abstract class Inkrush : KeiSource() {
             addQueryParameter("page", page.toString())
             if (type.isNotEmpty()) addQueryParameter("type", type)
         }.build()
-        val catalog = client.get(url).parseAs<CatalogDto>()
+        val catalog = client.get(url, Fetch.XHR).parseAs<CatalogDto>()
         return MangasPage(catalog.comics.map { it.toSManga(baseUrl) }, catalog.hasNextPage)
     }
 
@@ -60,7 +61,7 @@ abstract class Inkrush : KeiSource() {
             addQueryParameter("language", lang)
             addQueryParameter("compact", "1")
         }.build()
-        return client.get(url).parseAs()
+        return client.get(url, Fetch.XHR).parseAs()
     }
 
     // each chapter lists releases from several upstream groups; without `release`, the site
@@ -69,7 +70,7 @@ abstract class Inkrush : KeiSource() {
         val url = apiUrl("pages")
             .addQueryParameter("id", chapter.url.substringAfter('/'))
             .build()
-        return client.get(url).parseAs<PagesDto>().pages.mapIndexed { index, page ->
+        return client.get(url, Fetch.XHR).parseAs<PagesDto>().pages.mapIndexed { index, page ->
             Page(index, imageUrl = baseUrl + page.src)
         }
     }

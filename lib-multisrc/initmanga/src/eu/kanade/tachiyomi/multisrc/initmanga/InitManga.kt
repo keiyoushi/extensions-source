@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -78,7 +79,7 @@ abstract class InitManga :
                 .addQueryParameter("term", query)
                 .addQueryParameter("page", page.toString())
                 .build()
-            val results = client.get(url).parseAs<List<SearchDto>>()
+            val results = client.get(url, Fetch.XHR).parseAs<List<SearchDto>>()
             // Search also returns other post types (stickers); the endpoint has no type filter
             val mangas = results.filter { it.postType == "manga" }.map { it.toSManga() }
             return MangasPage(mangas, results.size == SEARCH_PAGE_SIZE)
@@ -95,7 +96,7 @@ abstract class InitManga :
 
     private suspend fun getMangaList(url: HttpUrl.Builder, page: Int): MangasPage {
         if (page > 1) url.addPathSegment("page").addPathSegment(page.toString())
-        val document = client.get(url.addPathSegment("").build()).asJsoup()
+        val document = client.get(url.addPathSegment("").build(), Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select("div.manga-card, div.manga-item-grid > div.uk-panel").map { card ->
             SManga.create().apply {
@@ -127,7 +128,7 @@ abstract class InitManga :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val mangaUrl = getMangaUrl(manga)
-        val document = client.get(mangaUrl).asJsoup()
+        val document = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
 
         manga.apply {
             title = document.selectFirst("h1")!!.text()
@@ -151,7 +152,7 @@ abstract class InitManga :
 
     override val supportsRelatedMangas = true
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga)).asJsoup()
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         .select("div.manga-item-slider")
         .map { card ->
             SManga.create().apply {
@@ -220,12 +221,12 @@ abstract class InitManga :
             .addQueryParameter("per_page", "50")
             .addQueryParameter("paged", page.toString())
             .build()
-        return client.get(url).parseAs()
+        return client.get(url, Fetch.XHR).parseAs()
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
-        val document = client.get(chapterUrl).asJsoup()
+        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
         if (document.selectFirst("div.lock-card") != null) return emptyList()
 
         val scripts = document.scriptContents()
@@ -262,7 +263,7 @@ abstract class InitManga :
     private suspend fun fetchChapterKey(payload: EncryptedPayloadDto, chapterUrl: String): ByteArray {
         val keyHeaders = headers.newBuilder().set("Referer", chapterUrl).build()
         val body = ChapterKeyRequestDto(payload.cid!!, payload.e!!, payload.g!!).toJsonRequestBody()
-        return client.post("$baseUrl/wp-json/initmanga/v1/chapter-key", keyHeaders, body)
+        return client.post("$baseUrl/wp-json/initmanga/v1/chapter-key", keyHeaders, Fetch.XHR, body)
             .parseAs<ChapterKeyResponseDto>().key.decodeHex()
     }
 
@@ -282,7 +283,7 @@ abstract class InitManga :
 
     override suspend fun fetchFilterData(): JsonElement {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment(mangaUrlDirectory).addPathSegment("").build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return document.select("ul.uk-list.uk-text-small a")
             .map { GenreData(it.ownText(), it.absUrl("href").toHttpUrl().encodedPath) }
             .toJsonElement()

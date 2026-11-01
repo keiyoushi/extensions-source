@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -28,7 +29,7 @@ abstract class HentaiCosplay : KeiSource() {
 
     private val dateCache = ConcurrentHashMap<String, String>()
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseListing(client.get("$baseUrl/ranking/page/$page/"))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseListing(client.get("$baseUrl/ranking/page/$page/", Fetch.DOCUMENT))
 
     private fun parseListing(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -76,7 +77,7 @@ abstract class HentaiCosplay : KeiSource() {
         return MangasPage(entries, hasNextPage)
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseListing(client.get("$baseUrl/search/page/$page/"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseListing(client.get("$baseUrl/search/page/$page/", Fetch.DOCUMENT))
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = if (query.isNotEmpty()) {
@@ -91,13 +92,13 @@ abstract class HentaiCosplay : KeiSource() {
             }
         }
 
-        return parseListing(client.get(url))
+        return parseListing(client.get(url, Fetch.DOCUMENT))
     }
 
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/ranking-tag/").asJsoup()
+        val document = client.get("$baseUrl/ranking-tag/", Fetch.DOCUMENT).asJsoup()
 
         return buildList {
             add(Pair("", ""))
@@ -143,7 +144,7 @@ abstract class HentaiCosplay : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         if (fetchDetails) {
-            val document = client.get(getMangaUrl(manga)).asJsoup()
+            val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
             manga.apply {
                 genre = document.select("#detail_tag a[href*=/tag/]").eachText().joinToString()
@@ -166,7 +167,7 @@ abstract class HentaiCosplay : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("amp-img[src*=upload]:not(.related-thumbnail)")
             .mapIndexed { index, element ->
                 Page(

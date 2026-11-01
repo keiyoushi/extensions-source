@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -36,7 +37,7 @@ abstract class HentaiPill : KeiSource() {
                 addQueryParameter("page", page.toString())
                 filters.firstInstance<SortFilter>().toUriPart().takeIf { it.isNotEmpty() }?.let { addQueryParameter("sort", it) }
             }.build()
-            return parseMangaList(client.get(url).asJsoup())
+            return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
         }
 
         val tag = filters.filterIsInstance<TagFilter>().firstOrNull { it.state.isNotBlank() }
@@ -49,7 +50,7 @@ abstract class HentaiPill : KeiSource() {
             addPathSegments(path)
             if (page > 1) addPathSegment(page.toString())
         }.build()
-        return parseMangaList(client.get(url).asJsoup())
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private fun parseMangaList(document: Document): MangasPage {
@@ -80,7 +81,7 @@ abstract class HentaiPill : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val details = SManga.create().apply {
             url = manga.url
@@ -115,7 +116,7 @@ abstract class HentaiPill : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/gallery/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("div.reading-pages-content img.lazy").mapIndexed { index, img ->
             Page(index, imageUrl = img.absUrl("data-src"))
         }

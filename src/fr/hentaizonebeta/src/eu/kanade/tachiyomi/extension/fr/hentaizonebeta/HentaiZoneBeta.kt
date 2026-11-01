@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -104,7 +105,7 @@ abstract class HentaiZoneBeta : KeiSource() {
             }
         }.build()
 
-        val response = client.get(url).parseAs<SearchResponseDto>()
+        val response = client.get(url, Fetch.XHR).parseAs<SearchResponseDto>()
         val mangas = response.manga.map { it.toSManga() }
         val hasNextPage = response.hasNextPage && !response.nextCursor.isNullOrBlank()
 
@@ -154,7 +155,7 @@ abstract class HentaiZoneBeta : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val apiUrl = "$baseUrl/api/v1/manga/single/${manga.url}"
-        val mangaDetail = client.get(apiUrl).parseAs<MangaDetailDto>()
+        val mangaDetail = client.get(apiUrl, Fetch.XHR).parseAs<MangaDetailDto>()
 
         val updatedManga = mangaDetail.toSManga()
         val chapterList = mangaDetail.chapters.map { it.toSChapter(manga.url) }
@@ -199,7 +200,7 @@ abstract class HentaiZoneBeta : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (mangaSlug, chapterSlug) = chapter.url.split('/')
         val apiUrl = "$baseUrl/api/v1/chapters/$mangaSlug/$chapterSlug"
-        val response = client.get(apiUrl).parseAs<ChapterImagesDto>()
+        val response = client.get(apiUrl, Fetch.XHR).parseAs<ChapterImagesDto>()
 
         return response.images.mapIndexed { index, img ->
             Page(index, imageUrl = img.url)

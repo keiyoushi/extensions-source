@@ -119,21 +119,15 @@ class IkiruChapterListDto(
 
 @Serializable
 class IkiruChapterItemDto(
-    private val slug: String,
     private val title: String? = null,
-    private val number: Float? = null,
+    private val number: Float,
     private val createdAt: String? = null,
 ) {
+    // the API no longer sends a chapter slug; the site's reader route is chapter-<number>
     fun toSChapter(mangaSlug: String): SChapter = SChapter.create().apply {
-        val fallbackSegment = if (number != null && number >= 0) {
-            "chapter-${formatChapterNumber(number)}"
-        } else {
-            slug.removePrefix("$mangaSlug-")
-        }
-
-        this.url = "/manga/$mangaSlug/${chapterRegex.findAll(slug).lastOrNull()?.value ?: fallbackSegment}"
+        this.url = "/manga/$mangaSlug/chapter-${formatChapterNumber(number)}"
         this.name = cleanChapterName(title, number)
-        this.chapter_number = number ?: -1f
+        this.chapter_number = number
         this.date_upload = Instant.tryParse(createdAt)
     }
 
@@ -156,7 +150,6 @@ class IkiruChapterItemDto(
     private fun formatChapterNumber(number: Float): String = if (number % 1 == 0f) number.toInt().toString() else number.toString()
 
     companion object {
-        private val chapterRegex = Regex("chapter-[\\d.]+(?:-\\w+)?", RegexOption.IGNORE_CASE)
         private val chapterTitleRegex = Regex("(Chapter\\s*[\\d.]+(?:\\s*[:\\-].*)?)", RegexOption.IGNORE_CASE)
     }
 }

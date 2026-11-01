@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -31,7 +32,7 @@ abstract class Doujins : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         val chapterUrl = response.request.url.toString()
         val document = response.asJsoup()
 
@@ -63,7 +64,7 @@ abstract class Doujins : KeiSource() {
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val mangas = client.get(getLatestPageUrl(page)).parseAs<FoldersDto>().folders.map {
+        val mangas = client.get(getLatestPageUrl(page), Fetch.XHR).parseAs<FoldersDto>().folders.map {
             SManga.create().apply {
                 setUrlWithoutDomain(it.link)
                 title = it.name
@@ -88,7 +89,7 @@ abstract class Doujins : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter))
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         val pageUrl = response.request.url.toString()
         val document = response.asJsoup()
         return document.select(".doujin").mapIndexed { i, page ->
@@ -96,7 +97,7 @@ abstract class Doujins : KeiSource() {
         }
     }
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseGalleryPage(client.get("$baseUrl/top/month").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseGalleryPage(client.get("$baseUrl/top/month", Fetch.DOCUMENT).asJsoup())
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val seriesFilter = filters.firstInstance<SeriesFilter>()
@@ -123,7 +124,7 @@ abstract class Doujins : KeiSource() {
             }
         }
 
-        return parseGalleryPage(client.get(url).asJsoup())
+        return parseGalleryPage(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private fun parseGalleryPage(document: Document): MangasPage {

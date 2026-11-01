@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -133,7 +134,7 @@ abstract class Madokami :
         else -> "image/jpeg"
     }.toMediaType()
 
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/recent").use { response ->
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/recent", Fetch.DOCUMENT).use { response ->
         val document = response.asJsoup()
         val mangas = document.select("table.mobile-files-table tbody tr td:nth-child(1) a:nth-child(1)").mapNotNull { element ->
             mangaFromElement(element)
@@ -162,7 +163,7 @@ abstract class Madokami :
                 .build()
         }
 
-        return client.get(url).use { response ->
+        return client.get(url, Fetch.DOCUMENT).use { response ->
             val document = response.asJsoup()
             val mangas = document.select("div.container table tbody tr td:nth-child(1) a:nth-child(1), table.mobile-files-table tbody tr td:nth-child(1) a:nth-child(1)").mapNotNull { element ->
                 mangaFromElement(element)
@@ -192,7 +193,7 @@ abstract class Madokami :
         val detailsUrl = getMangaDetailsUrl(manga)
         val chaptersUrl = (baseUrl + "/" + manga.url.trimStart('/')).toHttpUrl()
 
-        return client.get(detailsUrl).use { response ->
+        return client.get(detailsUrl, Fetch.DOCUMENT).use { response ->
             val document = response.asJsoup()
             val related = parseRelatedManga(document, detailsUrl.toString()).toMutableList()
 
@@ -250,7 +251,7 @@ abstract class Madokami :
         val chaptersUrl = (baseUrl + "/" + manga.url.trimStart('/')).toHttpUrl()
 
         if (fetchDetails && fetchChapters && detailsUrl == chaptersUrl) {
-            client.get(detailsUrl).use { response ->
+            client.get(detailsUrl, Fetch.DOCUMENT).use { response ->
                 val document = response.asJsoup()
                 return@coroutineScope SMangaUpdate(
                     manga = parseMangaDetails(document).apply {
@@ -264,7 +265,7 @@ abstract class Madokami :
 
         val detailsDeferred = if (fetchDetails) {
             async {
-                client.get(detailsUrl).use { parseMangaDetails(it.asJsoup()) }
+                client.get(detailsUrl, Fetch.DOCUMENT).use { parseMangaDetails(it.asJsoup()) }
             }
         } else {
             null
@@ -272,7 +273,7 @@ abstract class Madokami :
 
         val chaptersDeferred = if (fetchChapters) {
             async {
-                client.get(chaptersUrl).use { parseChapterList(it.asJsoup()) }
+                client.get(chaptersUrl, Fetch.DOCUMENT).use { parseChapterList(it.asJsoup()) }
             }
         } else {
             null
@@ -473,7 +474,7 @@ abstract class Madokami :
         }
 
         require(chapter.url.startsWith("/")) { "Refresh chapter list" }
-        return client.get(baseUrl + chapter.url).use { response ->
+        return client.get(baseUrl + chapter.url, Fetch.DOCUMENT).use { response ->
             val document = response.asJsoup()
             val element = document.select("div#reader")
             val path = element.attr("data-path")

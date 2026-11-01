@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -147,7 +148,7 @@ abstract class PornhwadbReader : KeiSource() {
         }
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter))
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         .extractNextJs<ReaderChapter> { it is JsonObject && "edition" in it && it["pages"] is JsonArray }!!
         .toPages()
 
@@ -176,7 +177,7 @@ abstract class PornhwadbReader : KeiSource() {
         )
     }
 
-    private suspend fun fetchDocument(url: String) = client.get(url).asJsoup().apply { resolveStreamedSegments() }
+    private suspend fun fetchDocument(url: String) = client.get(url, Fetch.DOCUMENT).asJsoup().apply { resolveStreamedSegments() }
 
     // React streams late Suspense content into hidden `S:n` divs and moves each one into its
     // `P:n` placeholder with JS, do the same so parts of a card aren't left elsewhere in the page

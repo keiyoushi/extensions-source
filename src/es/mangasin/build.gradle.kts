@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Mangas.in"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "mmrcms"

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -16,7 +17,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 abstract class Supermega : KeiSource() {
 
     override val supportsLatest = false
-
     private fun createManga(): SManga = SManga.create().apply {
         setUrlWithoutDomain("/")
         title = "SUPER MEGA"
@@ -41,7 +41,7 @@ abstract class Supermega : KeiSource() {
     ): SMangaUpdate {
         val manga = createManga()
         val chapters = if (fetchChapters) {
-            val document = client.get(baseUrl).asJsoup()
+            val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
             val latestComicNumber = document.selectFirst("[name='bigbuttonprevious']")
                 ?.parent()?.attr("abs:href")?.toHttpUrlOrNull()?.queryParameter("i")?.toIntOrNull()?.plus(1) ?: 0
 
@@ -59,7 +59,7 @@ abstract class Supermega : KeiSource() {
         return SMangaUpdate(manga, chapters)
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(baseUrl + chapter.url).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
         .select("img[border='4']").mapIndexed { i, element ->
             Page(i, imageUrl = element.absUrl("src"))
         }

@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -28,7 +29,6 @@ import java.util.Locale
 
 @Source
 abstract class TodayManga : KeiSource() {
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(2)
     }
@@ -38,7 +38,7 @@ abstract class TodayManga : KeiSource() {
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/category/most-popular".addPage(page)).asJsoup()
+        val document = client.get("$baseUrl/category/most-popular".addPage(page), Fetch.DOCUMENT).asJsoup()
         val mangaList = document.select("section > main > div.series-info").map { popularMangaFromElement(it) }
         val hasNextPage = document.selectFirst(".pagination > ul > li.active + li:has(a)") != null
         return MangasPage(mangaList, hasNextPage)
@@ -53,7 +53,7 @@ abstract class TodayManga : KeiSource() {
     // =============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/category/recent".addPage(page)).asJsoup()
+        val document = client.get("$baseUrl/category/recent".addPage(page), Fetch.DOCUMENT).asJsoup()
         val mangaList = document.select("ul.series > li").map { latestUpdatesFromElement(it) }
         val hasNextPage = document.selectFirst(".pagination > ul > li.active + li:has(a)") != null
         return MangasPage(mangaList, hasNextPage)
@@ -97,7 +97,7 @@ abstract class TodayManga : KeiSource() {
             }
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangaList = document.select("section div.serie")
             .map { popularMangaFromElement(it) }
             .ifEmpty {
@@ -145,7 +145,7 @@ abstract class TodayManga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
 
         val manga = SManga.create().apply {
             with(document.selectFirst(".series-info")!!) {
@@ -222,16 +222,15 @@ abstract class TodayManga : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
 
         return document.select(".chapter-content > img[data-index]").map { img ->
             Page(img.attr("data-index").toInt(), imageUrl = img.imgAttr())
         }.sortedBy { it.index }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val imgHeaders = headersBuilder().apply {
-            add("Accept", "image/avif,image/webp,*/*")
             add("Host", page.imageUrl!!.toHttpUrl().host)
         }.build()
         return GET(page.imageUrl!!, imgHeaders)

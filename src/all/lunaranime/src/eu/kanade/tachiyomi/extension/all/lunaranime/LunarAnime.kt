@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -26,7 +27,6 @@ import java.util.concurrent.ConcurrentHashMap
 
 @Source
 abstract class LunarAnime : KeiSource() {
-
     private val internalLang: String = when (lang) {
         "pt-BR" -> "pt-br"
         else -> lang
@@ -56,7 +56,7 @@ abstract class LunarAnime : KeiSource() {
     private suspend fun siteKey(): String {
         cachedSiteKey?.let { return it }
         val key = runCatching {
-            client.get("$API_URL/api/captcha/config".toHttpUrl())
+            client.get("$API_URL/api/captcha/config".toHttpUrl(), Fetch.XHR)
                 .parseAs<LunarCaptchaConfig>()
                 .readerPrimarySitekey
         }.getOrNull()?.takeIf { it.isNotBlank() } ?: FALLBACK_SITE_KEY
@@ -101,7 +101,7 @@ abstract class LunarAnime : KeiSource() {
             }
         }.build()
 
-        val result = client.get(url).parseAs<LunarRecentResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<LunarRecentResponse>()
         return MangasPage(
             mangas = result.mangas.map { it.toSManga() },
             hasNextPage = (result.page * result.limit) < result.totalCount,
@@ -146,7 +146,7 @@ abstract class LunarAnime : KeiSource() {
             addQueryParameter("sort", "relevance")
         }.build()
 
-        val result = client.get(url).parseAs<LunarSearchResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<LunarSearchResponse>()
         return MangasPage(
             mangas = result.manga.map { it.toSManga() },
             hasNextPage = result.page < result.totalPages,
@@ -182,7 +182,7 @@ abstract class LunarAnime : KeiSource() {
             .addPathSegment(slug)
             .build()
 
-        return client.get(url).parseAs<LunarMangaResponse>().manga.toSManga()
+        return client.get(url, Fetch.XHR).parseAs<LunarMangaResponse>().manga.toSManga()
     }
 
     // ============================== Chapters ==============================
@@ -197,13 +197,13 @@ abstract class LunarAnime : KeiSource() {
             .addPathSegments("api/manga/password/info")
             .addPathSegment(slug)
             .build()
-        val passwordInfo = client.get(passwordUrl).parseAs<LunarPasswordInfoResponse>()
+        val passwordInfo = client.get(passwordUrl, Fetch.XHR).parseAs<LunarPasswordInfoResponse>()
 
         val requestUrl = API_URL.toHttpUrl().newBuilder()
             .addPathSegments("api/manga")
             .addPathSegment(slug)
             .build()
-        val result = client.get(requestUrl).parseAs<LunarChapterListResponse>()
+        val result = client.get(requestUrl, Fetch.XHR).parseAs<LunarChapterListResponse>()
 
         return result.data.filter {
             lang == "all" || it.language == internalLang
@@ -220,12 +220,12 @@ abstract class LunarAnime : KeiSource() {
 
     private suspend fun viewChapter(slug: String, number: String, lang: String) {
         val ratingUrl = "$API_URL/api/manga/rating/status/$slug/$number"
-        val ratingResp = client.get(ratingUrl, ensureSuccess = false)
+        val ratingResp = client.get(ratingUrl, Fetch.XHR, ensureSuccess = false)
         ratingResp.close()
 
         val body = ViewRequestBody(slug, number, lang).toJsonRequestBody()
         val viewUrl = "$API_URL/api/manga/chapter/view"
-        val viewResp = client.post(viewUrl, body, ensureSuccess = false)
+        val viewResp = client.post(viewUrl, Fetch.XHR, body, ensureSuccess = false)
         viewResp.close()
     }
 
@@ -234,7 +234,7 @@ abstract class LunarAnime : KeiSource() {
         val language = chapterUrl.queryParameter("lang") ?: "en"
         val (slug, chapterNumber) = chapterUrl.pathSegments.takeLast(2)
 
-        val seeds = crypto.extractSeeds(client.get(chapterUrl).asJsoup())
+        val seeds = crypto.extractSeeds(client.get(chapterUrl, Fetch.DOCUMENT).asJsoup())
 
         // Required requests or fake images are returned
         viewChapter(slug, chapterNumber, language)
@@ -281,7 +281,7 @@ abstract class LunarAnime : KeiSource() {
             }
         }.build()
 
-        val sessionData = client.get(url, requestHeaders).parseAs<LunarPageListResponse>()
+        val sessionData = client.get(url, requestHeaders, Fetch.XHR).parseAs<LunarPageListResponse>()
             .data?.sessionData
             ?: error("session_data is empty")
 
@@ -295,10 +295,9 @@ abstract class LunarAnime : KeiSource() {
             images.all { it.contains(DECOY_PATH) }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val imageHeaders = headersBuilder()
             .set("Referer", baseUrl + page.url)
-            .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
             .build()
         return GET(page.imageUrl!!, imageHeaders)
     }

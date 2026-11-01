@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -58,7 +59,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class Jinmantiantang :
     KeiSource(),
     ConfigurableSource {
-
     private val preferences = getPreferences { preferenceMigration() }
 
     override val supportsRelatedMangas get() = true
@@ -233,7 +233,7 @@ abstract class Jinmantiantang :
 
     // The app's server list, or a snapshot of it when the list fails
     private suspend fun fetchServers(): List<String> = try {
-        val text = client.get(SERVER_LIST_URL).body.string().trimStart('\uFEFF')
+        val text = client.get(SERVER_LIST_URL, Fetch.XHR).body.string().trimStart('\uFEFF')
         decrypt(text, SERVER_LIST_SECRET).parseAs<ServerListDto>().server
     } catch (e: CancellationException) {
         throw e
@@ -259,12 +259,12 @@ abstract class Jinmantiantang :
 
     private suspend inline fun <reified T> apiGet(url: HttpUrl, token: String? = null): T {
         val timestamp = timestamp()
-        return client.get(url, apiHeaders(timestamp, token)).decode(timestamp)
+        return client.get(url, apiHeaders(timestamp, token), Fetch.XHR).decode(timestamp)
     }
 
     private suspend inline fun <reified T> apiPost(url: HttpUrl, body: RequestBody, token: String? = null, ensureSuccess: Boolean = true): T {
         val timestamp = timestamp()
-        return client.post(url, apiHeaders(timestamp, token), body, ensureSuccess).decode(timestamp)
+        return client.post(url, apiHeaders(timestamp, token), Fetch.XHR, body, ensureSuccess).decode(timestamp)
     }
 
     // The API sometimes answers 200 with a plain-text server error

@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
@@ -56,7 +57,7 @@ abstract class HentaiHand :
             url.addQueryParameter("languages[${-index - 1}]", it.toString())
         }
         // if (altLangId != null) url.addQueryParameter("languages", altLangId.toString())
-        return parseMangasPage(client.get(url.build()))
+        return parseMangasPage(client.get(url.build(), Fetch.XHR))
     }
 
     // Latest
@@ -70,7 +71,7 @@ abstract class HentaiHand :
         hhLangId.forEachIndexed { index, it ->
             url.addQueryParameter("languages[${-index - 1}]", it.toString())
         }
-        return parseMangasPage(client.get(url.build()))
+        return parseMangasPage(client.get(url.build(), Fetch.XHR))
     }
 
     // Search
@@ -89,7 +90,7 @@ abstract class HentaiHand :
         val lookupUrl = "$baseUrl/api/$uri".toHttpUrl().newBuilder()
             .addQueryParameter("q", query)
             .build()
-        val results = client.get(lookupUrl).parseAs<ResponseDto<List<IdDto>>>().data
+        val results = client.get(lookupUrl, Fetch.XHR).parseAs<ResponseDto<List<IdDto>>>().data
         if (results.isEmpty()) {
             return null
         }
@@ -169,7 +170,7 @@ abstract class HentaiHand :
             }
         }
 
-        return parseMangasPage(client.get(url.build()))
+        return parseMangasPage(client.get(url.build(), Fetch.XHR))
     }
 
     // Details
@@ -183,7 +184,7 @@ abstract class HentaiHand :
         val slug = manga.url.removePrefix("/en/comic/")
         if (!this.chapters) {
             // details and the single chapter come from the same endpoint
-            val comic = client.get("$baseUrl/api/comics/$slug").body.string()
+            val comic = client.get("$baseUrl/api/comics/$slug", Fetch.XHR).body.string()
             return SMangaUpdate(
                 comic.parseAs<MangaDetailsResponseDto>().toSMangaDetails(),
                 listOf(comic.parseAs<ChapterResponseDto>().toSChapter()),
@@ -191,15 +192,15 @@ abstract class HentaiHand :
         }
 
         return coroutineScope {
-            val details = async { if (fetchDetails) client.get("$baseUrl/api/comics/$slug").parseAs<MangaDetailsResponseDto>().toSMangaDetails() else manga }
-            val chapterList = async { if (fetchChapters) client.get("$baseUrl/api/comics/$slug/chapters").parseAs<ChapterListResponseDto>().map { it.toSChapter(slug) } else chapters }
+            val details = async { if (fetchDetails) client.get("$baseUrl/api/comics/$slug", Fetch.XHR).parseAs<MangaDetailsResponseDto>().toSMangaDetails() else manga }
+            val chapterList = async { if (fetchChapters) client.get("$baseUrl/api/comics/$slug/chapters", Fetch.XHR).parseAs<ChapterListResponseDto>().map { it.toSChapter(slug) } else chapters }
             SMangaUpdate(details.await(), chapterList.await())
         }
     }
 
     // Pages
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/api/comics/${chapter.url}/images").parseAs<PageListResponseDto>().toPageList()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/api/comics/${chapter.url}/images", Fetch.XHR).parseAs<PageListResponseDto>().toPageList()
 
     // Authorization
 
@@ -223,7 +224,7 @@ abstract class HentaiHand :
 
     private fun login(chain: Interceptor.Chain, username: String, password: String): String {
         val body = LoginRequestDto(username, password, rememberMe = true).toJsonRequestBody()
-        val response = chain.proceed(POST("$baseUrl/api/login", headers, body))
+        val response = chain.proceed(POST("$baseUrl/api/login", headers.newBuilder().set("Origin", baseUrl).build(), body))
         if (response.code == 401) {
             throw IOException("Failed to login, check if username and password are correct")
         }

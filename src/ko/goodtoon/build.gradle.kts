@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "GoodToon"
-    versionCode = 1
+    versionCode = 3
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "madara"
@@ -14,7 +14,7 @@ keiyoushi {
     source {
         lang = "ko"
         baseUrl {
-            custom("https://www.goodtoon007.com")
+            custom("https://www.goodtoon008.com")
         }
     }
 

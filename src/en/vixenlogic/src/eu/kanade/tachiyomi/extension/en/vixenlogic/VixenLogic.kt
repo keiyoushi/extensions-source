@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -27,7 +28,6 @@ abstract class VixenLogic : KeiSource() {
     }
 
     override val supportsLatest: Boolean = false
-
     private val dateFormat = DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.ENGLISH)
 
     private fun parseDate(dateStr: String): Long = when (dateStr.lowercase()) {
@@ -60,7 +60,7 @@ abstract class VixenLogic : KeiSource() {
             return SMangaUpdate(manga, chapters)
         }
 
-        val archives = client.get("$baseUrl/archives/").asJsoup()
+        val archives = client.get("$baseUrl/archives/", Fetch.DOCUMENT).asJsoup()
         val comicItems = archives.select(".comic-item")
 
         val chapters = comicItems.map { ci ->
@@ -81,7 +81,7 @@ abstract class VixenLogic : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl/${chapter.url}", headers).asJsoup()
+        val document = client.get("$baseUrl/${chapter.url}", headers, Fetch.DOCUMENT).asJsoup()
         return document.select("#comic p a img").mapIndexed { index, img ->
             val imgUrl = img.absUrl("src").ifEmpty { img.attr("src") }
             Page(index, imageUrl = imgUrl)

@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -33,7 +34,7 @@ abstract class Rawdevartart : KeiSource() {
     )
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val response = client.get("$baseUrl/spa/latest-manga?page=$page")
+        val response = client.get("$baseUrl/spa/latest-manga?page=$page", Fetch.XHR)
         val data = response.parseAs<MangaListResponseDto>()
 
         return data.toMangasPage()
@@ -63,7 +64,7 @@ abstract class Rawdevartart : KeiSource() {
             }
         }.build()
 
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         val data = response.parseAs<MangaListResponseDto>()
 
         return data.toMangasPage()
@@ -75,14 +76,14 @@ abstract class Rawdevartart : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get("$baseUrl/$MANGA_API_PREFIX/${manga.url}")
+        val response = client.get("$baseUrl/$MANGA_API_PREFIX/${manga.url}", Fetch.XHR)
         val data = response.parseAs<MangaResponseDto>()
 
         return SMangaUpdate(data.toSManga(), data.toSChapterList())
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$baseUrl/${chapter.url}")
+        val response = client.get("$baseUrl/${chapter.url}", Fetch.XHR)
         val data = response.parseAs<ChapterResponseDto>()
 
         return data.toPageList()
@@ -112,7 +113,7 @@ abstract class Rawdevartart : KeiSource() {
     }
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/genre/all").asJsoup()
+        val document = client.get("$baseUrl/genre/all", Fetch.DOCUMENT).asJsoup()
 
         val genres = document.select(".genre-list a[id]")
             .map {

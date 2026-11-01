@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -36,7 +37,7 @@ abstract class Dilib : KeiSource() {
             .addQueryParameter("sort", popularOrder)
             .build()
 
-        return parseBrowsePage(client.get(url))
+        return parseBrowsePage(client.get(url, Fetch.DOCUMENT))
     }
 
     // ============================== Latest ================================
@@ -79,7 +80,7 @@ abstract class Dilib : KeiSource() {
             }
             .build()
 
-        return parseBrowsePage(client.get(url))
+        return parseBrowsePage(client.get(url, Fetch.DOCUMENT))
     }
 
     // ============================== Manga List ============================
@@ -132,7 +133,7 @@ abstract class Dilib : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
             chapters = if (fetchChapters) parseChapterList(document) else chapters,
@@ -177,7 +178,7 @@ abstract class Dilib : KeiSource() {
         if (readUrl.isNullOrEmpty()) return emptyList()
 
         val baseChapterPath = readUrl.substringBefore("-chap-")
-        val chapterDocument = client.get(readUrl).asJsoup()
+        val chapterDocument = client.get(readUrl, Fetch.DOCUMENT).asJsoup()
         val options = chapterDocument.select("select option")
 
         return options.mapNotNull { option ->
@@ -199,7 +200,7 @@ abstract class Dilib : KeiSource() {
             .reversed()
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val imageHeaders = headers.newBuilder()
             .set("Referer", page.url)
             .build()
@@ -208,7 +209,7 @@ abstract class Dilib : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
-        val document = client.get(chapterUrl).asJsoup()
+        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
         val images = document.select("div#primary > img.border")
 
         return images.mapIndexedNotNull { index, element ->

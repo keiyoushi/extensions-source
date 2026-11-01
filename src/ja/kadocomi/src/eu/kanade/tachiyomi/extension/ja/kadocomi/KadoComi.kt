@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.XorInterceptor
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
@@ -41,7 +42,7 @@ abstract class KadoComi :
             .addQueryParameter("offset", offset.toString())
             .build()
 
-        return client.get(url).toMangasPage(offset)
+        return client.get(url, Fetch.DOCUMENT).toMangasPage(offset)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -51,7 +52,7 @@ abstract class KadoComi :
             .addQueryParameter("offset", offset.toString())
             .build()
 
-        return client.get(url).toMangasPage(offset)
+        return client.get(url, Fetch.DOCUMENT).toMangasPage(offset)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -64,7 +65,7 @@ abstract class KadoComi :
             .addQueryParameter("sortBy", sort)
             .build()
 
-        return client.get(url).toMangasPage(offset)
+        return client.get(url, Fetch.DOCUMENT).toMangasPage(offset)
     }
 
     private fun Response.toMangasPage(offset: Int): MangasPage {
@@ -89,7 +90,7 @@ abstract class KadoComi :
             .addQueryParameter("workCode", manga.url.substringAfterLast("/"))
             .build()
 
-        val result = client.get(url).parseAs<DetailsResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<DetailsResponse>()
         return SMangaUpdate(
             result.work.toSManga(),
             result.latestEpisodes.result
@@ -104,7 +105,7 @@ abstract class KadoComi :
             .addQueryParameter("imageSizeType", IMAGE_SIZE)
             .build()
 
-        val manuscript = client.get(url).parseAs<ViewerResponse>().manuscripts
+        val manuscript = client.get(url, Fetch.XHR).parseAs<ViewerResponse>().manuscripts
         if (manuscript.isEmpty()) throw Exception("このチャプターは非公開です\nChapter is not available!")
         return manuscript.mapIndexed { index, pages ->
             Page(index, imageUrl = "${pages.drmImageUrl}#${pages.drmHash}")

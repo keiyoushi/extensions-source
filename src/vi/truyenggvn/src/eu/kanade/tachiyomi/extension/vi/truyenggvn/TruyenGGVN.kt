@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -36,14 +37,14 @@ abstract class TruyenGGVN : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/tim-kiem-nang-cao/trang-$page.html?status=-1&country=0&sort=4&category=&notcategory=&minchapter=0"
-        return parseMangaPage(client.get(url))
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT))
     }
 
     // =============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/tim-kiem-nang-cao/trang-$page.html?status=-1&country=0&sort=2&category=&notcategory=&minchapter=0"
-        return parseMangaPage(client.get(url))
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT))
     }
 
     // =============================== Search ===============================
@@ -91,7 +92,7 @@ abstract class TruyenGGVN : KeiSource() {
                 .build()
         }
 
-        return parseMangaPage(client.get(url))
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT))
     }
 
     private fun parseMangaPage(response: Response): MangasPage {
@@ -122,7 +123,7 @@ abstract class TruyenGGVN : KeiSource() {
         val mangaSlug = segments[1].substringBefore("-chap-")
         val mangaPath = "/truyen-tranh/$mangaSlug"
 
-        val document = client.get("$baseUrl$mangaPath").asJsoup()
+        val document = client.get("$baseUrl$mangaPath", Fetch.DOCUMENT).asJsoup()
         return parseMangaDetails(document).apply {
             setUrlWithoutDomain(mangaPath)
         }
@@ -136,7 +137,7 @@ abstract class TruyenGGVN : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             parseMangaDetails(document),
             parseChapterList(document),
@@ -187,7 +188,7 @@ abstract class TruyenGGVN : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter), CacheControl.FORCE_NETWORK).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT, CacheControl.FORCE_NETWORK).asJsoup()
         return document.select(".page-chapter img:not([src*='stress.gif'])").mapIndexedNotNull { index, element ->
             val url = element.absUrl("data-original")
                 .ifEmpty { element.absUrl("data-cdn") }
@@ -202,7 +203,7 @@ abstract class TruyenGGVN : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-kiem-nang-cao.html").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-kiem-nang-cao.html", Fetch.DOCUMENT).asJsoup()
         .select(".advsearch-form .genre-list .genre-item")
         .mapNotNull { element ->
             val id = element.selectFirst("span[data-id]")?.attr("data-id") ?: return@mapNotNull null

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -27,7 +28,7 @@ abstract class Asgardscans : KeiSource() {
             .addQueryParameter("page", page.toString())
             .apply(params).build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val manga = document.select(".grid a.group").map { el ->
             SManga.create().apply {
                 setUrlWithoutDomain(el.absUrl("href"))
@@ -59,7 +60,7 @@ abstract class Asgardscans : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = parseDetails(document, manga)
         val updatedChapters = parseChapters(document)
@@ -133,7 +134,7 @@ abstract class Asgardscans : KeiSource() {
     private val pageRegex = Regex("""imageUrl:"([^"]+)["]""")
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl/${chapter.url}").asJsoup()
+        val document = client.get("$baseUrl/${chapter.url}", Fetch.DOCUMENT).asJsoup()
 
         val script = document.select("script:not([src])")
             .map { it.data() }

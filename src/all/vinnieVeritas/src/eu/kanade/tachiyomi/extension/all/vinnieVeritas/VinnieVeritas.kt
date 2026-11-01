@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -15,7 +16,6 @@ import keiyoushi.utils.asJsoup
 abstract class VinnieVeritas : KeiSource() {
 
     override val supportsLatest = false
-
     companion object {
         private val ONCLICK_REGEX = Regex("""changeToComic\("(.+?)"\)""")
     }
@@ -67,7 +67,7 @@ CCC es el nombre de la segunda ciudad mas grande que hay, no son siglas ni la ab
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val chapterList = if (fetchChapters) {
-            val document = client.get(getMangaUrl(manga)).asJsoup()
+            val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
             document.select(".cccLeftInd .cccArchiveEntry[onclick]").map { element ->
                 SChapter.create().apply {
                     val comicName = ONCLICK_REGEX.find(element.attr("onclick"))?.groupValues?.get(1) ?: ""
@@ -83,7 +83,7 @@ CCC es el nombre de la segunda ciudad mas grande que hay, no son siglas ni la ab
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val imgSelector = if (lang == "en") {
             "img.cccComic.crazylan-en"
         } else {

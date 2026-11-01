@@ -6,14 +6,14 @@ plugins {
 
 keiyoushi {
     name = "Dokiraw"
-    versionCode = 17
+    versionCode = 19
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
         lang = "ja"
         baseUrl {
-            custom("https://dokiraw.cam")
+            custom("https://dokiraw.city")
         }
     }
 

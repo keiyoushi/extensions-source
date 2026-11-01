@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
@@ -28,7 +29,6 @@ import java.io.IOException
 abstract class Komiic :
     KeiSource(),
     ConfigurableSource {
-
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor { chain ->
             val origin = chain.request()
@@ -59,7 +59,7 @@ abstract class Komiic :
         client.cookieJar.loadForRequest(chain.request().url).find { it.name == "komiic-access-token" }?.let {
             val payload = Base64.decode(it.value.split(".")[1], Base64.DEFAULT).decodeToString()
             if (System.currentTimeMillis() + 3600_000 >= payload.parseAs<JwtPayload>().exp * 1000) {
-                val response = chain.proceed(POST("$baseUrl/auth/refresh", headers)).apply { close() }
+                val response = chain.proceed(POST("$baseUrl/auth/refresh", headers.newBuilder().set("Origin", baseUrl).build())).apply { close() }
                 if (!response.isSuccessful) throw IOException("刷新 Token 失敗：HTTP ${response.code}")
             }
         }
@@ -83,7 +83,7 @@ abstract class Komiic :
     private val SManga.id get() = url.substringAfterLast("/")
     private val SChapter.id get() = url.substringAfterLast("/")
 
-    private suspend fun OkHttpClient.query(body: RequestBody) = post("$baseUrl/api/query", body)
+    private suspend fun OkHttpClient.query(body: RequestBody) = post("$baseUrl/api/query", Fetch.XHR, body)
 
     private suspend fun mangasPage(page: Int, orderBy: OrderBy): MangasPage {
         val pagination = Pagination((page - 1) * PAGE_SIZE, orderBy)
@@ -168,6 +168,6 @@ abstract class Komiic :
     }
 
     // Image
-    override fun imageRequest(page: Page) = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page) = super.getImageRequest(page).newBuilder()
         .addHeader("Accept", "*/*").header("Referer", page.url).build()
 }

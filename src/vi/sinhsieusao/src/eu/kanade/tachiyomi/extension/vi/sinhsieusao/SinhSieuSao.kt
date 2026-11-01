@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -35,7 +36,7 @@ abstract class SinhSieuSao : KeiSource() {
         val url = "$baseUrl/api/v1/works/top".toHttpUrl().newBuilder()
             .addQueryParameter("period", "monthly")
             .build()
-        val result = client.get(url).parseAs<TopWorksResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<TopWorksResponse>()
         val mangas = result.items.map { it.toSManga(baseUrl) }
         return MangasPage(mangas, false)
     }
@@ -47,7 +48,7 @@ abstract class SinhSieuSao : KeiSource() {
             .addQueryParameter("items", "20")
             .addQueryParameter("page", page.toString())
             .build()
-        val result = client.get(url).parseAs<WorksResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<WorksResponse>()
         val mangas = result.items.map { it.toSManga(baseUrl) }
         val hasNextPage = result.meta.pagy.page < result.meta.pagy.pages
         return MangasPage(mangas, hasNextPage)
@@ -98,7 +99,7 @@ abstract class SinhSieuSao : KeiSource() {
             }
         }
 
-        val result = client.get(url.build()).parseAs<WorksResponse>()
+        val result = client.get(url.build(), Fetch.XHR).parseAs<WorksResponse>()
         val mangas = result.items.map { it.toSManga(baseUrl) }
         val hasNextPage = result.meta.pagy.page < result.meta.pagy.pages
         return MangasPage(mangas, hasNextPage)
@@ -132,9 +133,9 @@ abstract class SinhSieuSao : KeiSource() {
         return SMangaUpdate(work.toSManga(baseUrl), updatedChapters)
     }
 
-    private suspend fun fetchWork(workId: String): WorkDto = client.get("$baseUrl/api/v1/works/$workId").parseAs()
+    private suspend fun fetchWork(workId: String): WorkDto = client.get("$baseUrl/api/v1/works/$workId", Fetch.XHR).parseAs()
 
-    private suspend fun fetchMangaChapters(mangaId: Int, workId: Int): List<SChapter> = client.get("$baseUrl/api/v1/mangas/$mangaId")
+    private suspend fun fetchMangaChapters(mangaId: Int, workId: Int): List<SChapter> = client.get("$baseUrl/api/v1/mangas/$mangaId", Fetch.XHR)
         .parseAs<MangaDto>()
         .chapters
         .filter { it.processingStatus == "processed" }
@@ -142,7 +143,7 @@ abstract class SinhSieuSao : KeiSource() {
         .map { it.toSChapter(workId) }
 
     private suspend fun fetchAlbumChapters(albumId: Int, workId: Int): List<SChapter> {
-        val album = client.get(albumUrl(albumId)).parseAs<AlbumResponse>()
+        val album = client.get(albumUrl(albumId), Fetch.XHR).parseAs<AlbumResponse>()
         return listOf(album.toSChapter(workId))
     }
 
@@ -151,7 +152,7 @@ abstract class SinhSieuSao : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         if (chapter.url.startsWith("album:")) {
             val albumId = chapter.url.removePrefix("album:").substringBefore(':').toInt()
-            val album = client.get(albumUrl(albumId)).parseAs<AlbumResponse>()
+            val album = client.get(albumUrl(albumId), Fetch.XHR).parseAs<AlbumResponse>()
             return album.photos
                 .sortedBy { it.order }
                 .mapIndexed { index, photo ->
@@ -161,7 +162,7 @@ abstract class SinhSieuSao : KeiSource() {
         }
 
         val chapterId = chapter.url.substringAfterLast('/')
-        val chapterDetails = client.get("$baseUrl/api/v1/chapters/$chapterId")
+        val chapterDetails = client.get("$baseUrl/api/v1/chapters/$chapterId", Fetch.XHR)
             .parseAs<ChapterDetailDto>()
         return chapterDetails.pages
             .sortedBy { it.order }
@@ -200,7 +201,7 @@ abstract class SinhSieuSao : KeiSource() {
         val url = "$baseUrl/api/v1/tags".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(url).parseAs()
+        return client.get(url, Fetch.XHR).parseAs()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {

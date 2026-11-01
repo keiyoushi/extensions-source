@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -46,7 +47,7 @@ abstract class CelestialMoon : KeiSource() {
 
     private val apiUrl get() = baseHttpUrl.resolve("/api/index.php")!!
 
-    private suspend fun fetchCatalog(): StateDto = client.get(apiUrl.newBuilder().addQueryParameter("action", "public").build())
+    private suspend fun fetchCatalog(): StateDto = client.get(apiUrl.newBuilder().addQueryParameter("action", "public").build(), Fetch.XHR)
         .parseAs<CatalogDto>().state
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter(0)))
@@ -116,7 +117,7 @@ abstract class CelestialMoon : KeiSource() {
             .addQueryParameter("book", book)
             .addQueryParameter("number", number)
             .build()
-        return client.get(url).parseAs<ReaderDto>().chapter.pages.mapIndexed { i, page ->
+        return client.get(url, Fetch.XHR).parseAs<ReaderDto>().chapter.pages.mapIndexed { i, page ->
             Page(i, imageUrl = page.src)
         }
     }

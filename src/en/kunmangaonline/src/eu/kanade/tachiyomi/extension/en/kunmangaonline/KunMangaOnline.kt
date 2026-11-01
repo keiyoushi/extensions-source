@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
@@ -34,7 +35,7 @@ abstract class KunMangaOnline : MadaraNoAjax() {
         val slug = "$baseUrl$mangaPath".toHttpUrl().pathSegments.getOrNull(1) ?: return emptyList()
 
         val firstUrl = "$baseUrl/api/comics/$slug/chapters?page=1&per_page=$CHAPTERS_PER_PAGE&order=desc"
-        val firstResponse = client.get(firstUrl, apiHeaders)
+        val firstResponse = client.get(firstUrl, apiHeaders, Fetch.XHR.from(mangaPath))
         val firstPage = firstResponse.parseAs<ChapterListResponse>().data
 
         val allChapters = firstPage.chapters.map { it.toSChapter(slug) }.toMutableList()
@@ -46,7 +47,7 @@ abstract class KunMangaOnline : MadaraNoAjax() {
                         val apiUrl = firstResponse.request.url.newBuilder()
                             .setQueryParameter("page", page.toString())
                             .build()
-                        client.get(apiUrl, apiHeaders).parseAs<ChapterListResponse>().data.chapters
+                        client.get(apiUrl, apiHeaders, Fetch.XHR.from(mangaPath)).parseAs<ChapterListResponse>().data.chapters
                     }
                 }.awaitAll().forEach { chapters ->
                     allChapters.addAll(chapters.map { it.toSChapter(slug) })
@@ -61,7 +62,8 @@ abstract class KunMangaOnline : MadaraNoAjax() {
         .map { element.absUrl(it) }
         .firstOrNull { it.startsWith("http") && !it.contains("${baseUrl.toHttpUrl().host}/thumb/") }
 
-    override fun imageRequest(page: Page) = super.imageRequest(page).newBuilder().header("Referer", "$baseUrl/").build()
+    // The image CDN answers 403 when the Referer is a chapter page
+    override fun getImageRequest(page: Page) = super.getImageRequest(page).newBuilder().header("Referer", "$baseUrl/").build()
 
     companion object {
         private const val POSTS_PER_PAGE = 20

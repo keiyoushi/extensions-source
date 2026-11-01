@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -76,7 +77,7 @@ abstract class OTruyen : KeiSource() {
             params.forEach { (k, v) -> addQueryParameter(k, v) }
         }.build()
 
-        client.get(url, headers).use { response ->
+        client.get(url, headers, Fetch.XHR).use { response ->
             return parseMangaPage(response)
         }
     }
@@ -108,7 +109,7 @@ abstract class OTruyen : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val url = "$apiUrl/truyen-tranh/${manga.url}"
-        client.get(url).use { response ->
+        client.get(url, Fetch.XHR).use { response ->
             val res = response.parseAs<DataDto<EntryData>>()
             val details = parseMangaDetails(res.data.item)
             val chaptersList = parseChapterList(res.data.item)
@@ -134,7 +135,7 @@ abstract class OTruyen : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.url.substringBefore(":")
-        client.get("$cdnUrl/v1/api/chapter/$chapterId").use { response ->
+        client.get("$cdnUrl/v1/api/chapter/$chapterId", Fetch.XHR).use { response ->
             val res = response.parseAs<DataDto<PageDto>>()
             return res.data.toPage()
         }
@@ -144,7 +145,7 @@ abstract class OTruyen : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/the-loai").use {
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/the-loai", Fetch.XHR).use {
         it.parseAs<JsonElement>()
     }
 

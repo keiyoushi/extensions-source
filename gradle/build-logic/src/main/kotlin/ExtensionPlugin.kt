@@ -22,6 +22,7 @@ import io.github.keiyoushi.gradle.internal.extensions.libs
 import io.github.keiyoushi.gradle.internal.extensions.plugins
 import io.github.keiyoushi.gradle.internal.extensionsLib
 import io.github.keiyoushi.gradle.internal.toMetadata
+import io.github.keiyoushi.gradle.tasks.ComputeContentHashTask
 import io.github.keiyoushi.gradle.tasks.CreateExtensionJarTask
 import io.github.keiyoushi.gradle.tasks.GenerateManifestTask
 import io.github.keiyoushi.gradle.tasks.GenerateSourceInfoTask
@@ -34,6 +35,7 @@ import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.create
 import org.gradle.kotlin.dsl.dependencies
 import org.gradle.kotlin.dsl.findByType
+import org.gradle.kotlin.dsl.property
 import org.gradle.kotlin.dsl.register
 import org.gradle.kotlin.dsl.withType
 
@@ -161,6 +163,7 @@ class ExtensionPlugin : Plugin<Project> {
         val sourceInfoTask = tasks.register<GenerateSourceInfoTask>("generateSourceInfo") {
             this.outputFile.set(layout.buildDirectory.file("keiyoushi-source-info.json"))
         }
+        val contentHash = objects.property<String>()
 
         val proguardConfiguration = configurations.create("proguard") {
             isCanBeConsumed = false
@@ -235,6 +238,14 @@ class ExtensionPlugin : Plugin<Project> {
                         outputJar.set(layout.buildDirectory.file(filenameProvider.map { "outputs/jar/${variant.name}/$it.jar" }))
                     }
 
+                    val contentHashTask = tasks.register<ComputeContentHashTask>("compute${variantName}ContentHash") {
+                        apkDir.set(variant.artifacts.get(SingleArtifact.APK))
+                        extensionJar.set(createTask.flatMap { it.outputJar })
+                        manifestFile.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
+                        outputFile.set(layout.buildDirectory.file("intermediates/content_hash/${variant.name}/hash.txt"))
+                    }
+                    contentHash.set(contentHashTask.flatMap { it.outputFile }.map { it.asFile.readText() })
+
                     tasks.matching { it.name == "assemble$variantName" }
                         .configureEach { dependsOn(signTask) }
                 }
@@ -289,7 +300,7 @@ class ExtensionPlugin : Plugin<Project> {
             val contentWarningOrdinal = keiyoushi.contentWarning.get().ordinal + 1
             val libVersionValue = keiyoushi.libVersion.get()
 
-            val sourceInfoJsonProvider = androidVersionCodeProvider.zip(versionNameProvider) { code, name ->
+            val sourceInfoJsonProvider = androidVersionCodeProvider.zip(versionNameProvider, ::Pair).zip(contentHash) { (code, name), hash ->
                 Json.encodeToString(
                     ExtensionMetadata(
                         // Always the module directory (e.g. "en.example"), even when pkgName
@@ -303,6 +314,7 @@ class ExtensionPlugin : Plugin<Project> {
                         extensionLib = libVersionValue,
                         contentWarning = contentWarningOrdinal,
                         sources = sourceInfos,
+                        contentHash = hash,
                     ),
                 )
             }

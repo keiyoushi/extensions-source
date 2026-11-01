@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -15,7 +16,6 @@ import keiyoushi.utils.asJsoup
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -32,9 +32,6 @@ abstract class WeebCentral : KeiSource() {
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(1, 2.seconds) { it.host == baseUrlHost }
     }
-
-    // Origin causes some thumbnails to mismatch
-    override fun Headers.Builder.configureHeaders() = removeAll("Origin")
 
     // ============================== Popular ===============================
 
@@ -58,7 +55,7 @@ abstract class WeebCentral : KeiSource() {
             addQueryParameter("display_mode", "Full Display")
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("article > section > a").map { element ->
             SManga.create().apply {
                 thumbnail_url = element.sourceImg()
@@ -108,7 +105,7 @@ abstract class WeebCentral : KeiSource() {
     }
 
     private suspend fun getMangaDetails(manga: SManga): SManga {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
 
         return SManga.create().apply {
             with(document.select("section[x-data] > section")[0]) {
@@ -162,7 +159,7 @@ abstract class WeebCentral : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
 
         val currentId = document.location().toHttpUrl().pathSegments[1]
         val coverTemplate = document.sourceImg()
@@ -199,7 +196,7 @@ abstract class WeebCentral : KeiSource() {
         val seriesId = (baseUrl + manga.url).toHttpUrl().pathSegments[1]
         val url = "$baseUrl/series/$seriesId/full-chapter-list"
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         // Descending
         val chapters = document.select("div[x-data] > a")
@@ -233,15 +230,14 @@ abstract class WeebCentral : KeiSource() {
             ?.toString()
             ?: (baseUrl + chapter.url)
 
-        val document = client.get(newUrl).asJsoup()
+        val document = client.get(newUrl, Fetch.DOCUMENT).asJsoup()
         return document.select("section[x-data~=scroll] > img").mapIndexed { index, element ->
             Page(index, imageUrl = element.attr("abs:src"))
         }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val imgHeaders = headersBuilder().apply {
-            add("Accept", "image/avif,image/webp,*/*")
             add("Host", page.imageUrl!!.toHttpUrl().host)
         }.build()
 

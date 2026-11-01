@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -65,7 +66,7 @@ abstract class Mangainua :
                 .add("result_from", (1 + 12 * (page - 1)).toString())
                 .build()
 
-            client.post(url, body).use { response ->
+            client.post(url, Fetch.DOCUMENT, body).use { response ->
                 return mangaParse(response, true)
             }
         }
@@ -98,7 +99,7 @@ abstract class Mangainua :
             if (page > 1) addPathSegments("page/$page/")
         }.build()
 
-        client.get(url).use { response ->
+        client.get(url, Fetch.DOCUMENT).use { response ->
             return mangaParse(response, false)
         }
     }
@@ -154,7 +155,7 @@ abstract class Mangainua :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val newUrl = manga.url
-        val document = client.get("${baseUrl}$newUrl").asJsoup()
+        val document = client.get("${baseUrl}$newUrl", Fetch.DOCUMENT).asJsoup()
 
         val mangaNew = if (fetchDetails) {
             SManga.create().apply {
@@ -234,12 +235,12 @@ abstract class Mangainua :
             .add(userHashQuery, userHash)
             .build()
 
-        return client.post("$baseUrl/$endpoint", ajaxHeaders(), newBody)
+        return client.post("$baseUrl/$endpoint", ajaxHeaders(), Fetch.XHR, newBody)
     }
 
     // ============================== Images ======================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get("$baseUrl${chapter.url}")
+        val data = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT)
         val document = getAjaxImages(data)
         return document.asJsoup().select("li img").mapIndexed { index, element ->
             Page(index, imageUrl = element.attr("data-src"))
@@ -254,7 +255,7 @@ abstract class Mangainua :
         val newsId = document.selectFirst("div#comics")!!.attr("data-news_id")
         val url = "$baseUrl/$endpoint&news_id=$newsId&action=show&$userHashQuery=$userHash"
 
-        return client.get(url, ajaxHeaders())
+        return client.get(url, ajaxHeaders(), Fetch.XHR)
     }
 
     // ============================== Utilities ======================================

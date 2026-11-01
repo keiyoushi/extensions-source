@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -54,7 +55,7 @@ abstract class WebtoonClub :
     }
 
     private suspend fun getCards(listUrl: HttpUrl): MangasPage {
-        val document = client.get(listUrl).asJsoup()
+        val document = client.get(listUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("a[href^=/webtoon/]:has(img[data-cover])").map { element ->
             SManga.create().apply {
                 this.url = element.absUrl("href").toHttpUrl().pathSegments[1]
@@ -107,12 +108,12 @@ abstract class WebtoonClub :
         // The chapter list API takes the numeric id, found only on the series page
         val knownId = manga.memo[COMIC_ID]?.intOrNull
         val details = async {
-            if (fetchDetails || knownId == null) parseDetails(manga, client.get(getMangaUrl(manga)).asJsoup()) else manga
+            if (fetchDetails || knownId == null) parseDetails(manga, client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()) else manga
         }
         val chapterList = async {
             if (!fetchChapters) return@async chapters
             val comicId = knownId ?: details.await().memo[COMIC_ID]!!.int
-            client.get("$baseUrl/api/comics/$comicId/chapters").parseAs<ChaptersDto>().chapters.map { it.toSChapter(manga.url) }
+            client.get("$baseUrl/api/comics/$comicId/chapters", Fetch.XHR).parseAs<ChaptersDto>().chapters.map { it.toSChapter(manga.url) }
         }
 
         SMangaUpdate(details.await(), chapterList.await())
@@ -157,7 +158,7 @@ abstract class WebtoonClub :
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/webtoon/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val reader = client.get(getChapterUrl(chapter)).asJsoup().extractNextJs<ReaderChapterDto> {
+        val reader = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup().extractNextJs<ReaderChapterDto> {
             it is JsonObject && "images" in it && "comicId" in it
         }!!
 
@@ -168,7 +169,7 @@ abstract class WebtoonClub :
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/genres").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/genres", Fetch.DOCUMENT).asJsoup()
         .select("a[href^=/genre/]:has(span[title])")
         .map { it.selectFirst("span")!!.text() to it.absUrl("href").toHttpUrl().pathSegments[1] }
         .sortedBy { it.first.lowercase() }

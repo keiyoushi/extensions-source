@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
@@ -84,12 +85,12 @@ abstract class MikrokosmosFansub : KeiSource() {
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(TypeFilter(), StatusFilter())
 
-    private suspend fun fetchSeries(): List<SeriesDto> = client.get("$baseUrl/api/series")
+    private suspend fun fetchSeries(): List<SeriesDto> = client.get("$baseUrl/api/series", Fetch.XHR)
         .parseAs<SeriesListDto>()
         .data
         .filter { !it.isDraft && it.type != "Web Novel" }
 
-    private suspend fun fetchChapters(slug: String): List<ChapterDto> = client.get("$baseUrl/api/series?seriesId=$slug")
+    private suspend fun fetchChapters(slug: String): List<ChapterDto> = client.get("$baseUrl/api/series?seriesId=$slug", Fetch.XHR)
         .parseAs<ChapterListDto>()
         .chapters
 

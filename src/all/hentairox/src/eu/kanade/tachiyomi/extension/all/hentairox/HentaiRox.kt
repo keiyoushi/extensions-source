@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
@@ -72,7 +73,7 @@ abstract class HentaiRox : GalleryAdults() {
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val id = manga.url.trimEnd('/').substringAfterLast('/')
-        val html = client.get("$baseUrl/api/gallery/$id/related", xhrHeaders)
+        val html = client.get("$baseUrl/api/gallery/$id/related", xhrHeaders, Fetch.XHR)
             .parseAs<RelatedResponse>()
             .html
 
@@ -87,7 +88,7 @@ abstract class HentaiRox : GalleryAdults() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val galleryId = chapter.url.trimEnd('/').substringAfterLast('/')
-        val document = client.get("$baseUrl/$pageUri/$galleryId/1/").asJsoup()
+        val document = client.get("$baseUrl/$pageUri/$galleryId/1/", Fetch.DOCUMENT).asJsoup()
 
         val pagesJson = document.selectFirst("script#readerPagesJson")?.data()
             ?: error("Failed to load page list")

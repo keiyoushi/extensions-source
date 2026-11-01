@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
@@ -24,7 +25,7 @@ abstract class Keyoapp : KeyoappBase() {
 
     // ============================== Popular ==============================
 
-    override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get(baseUrl).asJsoup())
+    override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get(baseUrl, Fetch.DOCUMENT).asJsoup())
 
     open val popularMangaTitleSelector = listOf(
         "Popular",
@@ -55,7 +56,7 @@ abstract class Keyoapp : KeyoappBase() {
 
     // ============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int) = latestUpdatesParse(client.get("$baseUrl/latest/").asJsoup())
+    override suspend fun getLatestUpdates(page: Int) = latestUpdatesParse(client.get("$baseUrl/latest/", Fetch.DOCUMENT).asJsoup())
 
     open fun latestUpdatesSelector(): String = "div.grid > div.group"
 
@@ -74,7 +75,7 @@ abstract class Keyoapp : KeyoappBase() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val segments = url.pathSegments.getOrNull(1) ?: return null
-        return mangaDetailsParse(client.get(url).asJsoup())
+        return mangaDetailsParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     open fun searchUrlBuilder(query: String, page: Int) = "$baseUrl/series".toHttpUrl().newBuilder().apply {
@@ -88,7 +89,7 @@ abstract class Keyoapp : KeyoappBase() {
             }
         }.build()
 
-        return parseSearchManga(client.get(url))
+        return parseSearchManga(client.get(url, Fetch.DOCUMENT))
     }
 
     open fun searchMangaSelector() = "#searched_series_page > button"
@@ -134,7 +135,7 @@ abstract class Keyoapp : KeyoappBase() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetailsParse(doc), chapterListParse(doc))
     }
 
@@ -202,7 +203,7 @@ abstract class Keyoapp : KeyoappBase() {
 
     // =============================== Pages ===============================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter)).asJsoup())
+    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup())
 
     open fun pageListParse(document: Document): List<Page> {
         val cdnUrl = getCdnUrl(document)
@@ -252,7 +253,7 @@ abstract class Keyoapp : KeyoappBase() {
         )
     }
 
-    open suspend fun requestGeneres() = client.get("$baseUrl/series/")
+    open suspend fun requestGeneres() = client.get("$baseUrl/series/", Fetch.DOCUMENT)
 
     protected open fun parseGenres(document: Document): Map<String, String> {
         val script = document

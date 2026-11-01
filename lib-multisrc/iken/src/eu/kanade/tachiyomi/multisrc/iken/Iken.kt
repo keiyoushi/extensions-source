@@ -13,6 +13,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -114,7 +116,7 @@ abstract class Iken :
             val pageUrl = url.newBuilder()
                 .addQueryParameter("page", (page + skipped).toString())
                 .build()
-            val mangasPage = parseSearchMangaList(client.get(pageUrl))
+            val mangasPage = parseSearchMangaList(client.get(pageUrl, Fetch.XHR))
             if (mangasPage.mangas.isNotEmpty() || !mangasPage.hasNextPage) {
                 if (mangasPage.hasNextPage && skipped > 0) skippedPages[key] = skipped else skippedPages.remove(key)
                 return mangasPage
@@ -148,7 +150,7 @@ abstract class Iken :
                         .addQueryParameter("page", page++.toString())
                         .addQueryParameter("perPage", "100")
                         .build()
-                    val data = client.get(url).parseAs<PostsResponse>()
+                    val data = client.get(url, Fetch.XHR).parseAs<PostsResponse>()
                     data.novelPosts.mapTo(this) { it.id }
                 } while (data.novelPosts.isNotEmpty() && size < data.novelTotalCount)
             }.also {
@@ -207,7 +209,7 @@ abstract class Iken :
 
     protected open val genreFilterKey: String = "genreIds"
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/api/genres").parseAs<JsonElement>()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/api/genres", Fetch.XHR).parseAs<JsonElement>()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genresList = data?.let {
@@ -246,7 +248,7 @@ abstract class Iken :
             .addQueryParameter("postSlug", slug)
             .build()
 
-        val response = client.get(mangaUrl)
+        val response = client.get(mangaUrl, Fetch.DOCUMENT)
         val data = response.parseAs<MangaDto>()
         if (data.post.isNovel) throw IOException("Novels are unsupported")
         updateViews(data.post.id)
@@ -300,7 +302,7 @@ abstract class Iken :
             }
             val chaptersDeferred = async {
                 if (fetchChapters) {
-                    val response = client.get("$apiUrl/api/chapters?postId=$id")
+                    val response = client.get("$apiUrl/api/chapters?postId=$id", Fetch.XHR)
                     val chapterData = response.parseAs<ChapterDto>().post
                     chapterData.chapters.getVisible(slug)
                 } else {
@@ -338,7 +340,7 @@ abstract class Iken :
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val id = manga.url.substringAfterLast("#")
-        val response = client.get("$apiUrl/api/recommendations?postId=$id&limit=25")
+        val response = client.get("$apiUrl/api/recommendations?postId=$id&limit=25", Fetch.XHR)
 
         return response.parseAs<RelatedMangaDto>().recommendations.filterNot {
             it.isNovel
@@ -355,7 +357,7 @@ abstract class Iken :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val id = chapter.memo["id"]?.int ?: throw Exception("Refresh Chapter List")
-        val response = client.get("$apiUrl/api/chapter?chapterId=$id")
+        val response = client.get("$apiUrl/api/chapter?chapterId=$id", Fetch.XHR)
 
         val data = response.parseAs<PageResponse>().chapter
 
@@ -402,7 +404,7 @@ abstract class Iken :
                 "$apiUrl/api/analytics/updateViews",
                 headers,
                 ViewQuery(postId, chapterId).toJsonRequestBody(),
-            ),
+            ).newBuilder().fetch(Fetch.XHR).build(),
         ).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) = Unit
             override fun onResponse(call: Call, response: Response) {

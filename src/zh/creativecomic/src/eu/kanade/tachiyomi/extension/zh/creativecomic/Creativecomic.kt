@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.aesCbc
@@ -95,7 +96,7 @@ abstract class Creativecomic : KeiSource() {
     }
 
     private suspend fun getMangaList(url: HttpUrl): MangasPage {
-        val data = client.get(url, getApiHeaders()).parseAs<PopularResponseDto>().data
+        val data = client.get(url, getApiHeaders(), Fetch.XHR).parseAs<PopularResponseDto>().data
         val page = url.queryParameter("page")!!.toInt()
         val rowsPerPage = url.queryParameter("rows_per_page")!!.toInt()
         val hasNextPage = data.total > page * rowsPerPage
@@ -138,13 +139,13 @@ abstract class Creativecomic : KeiSource() {
     ): SMangaUpdate = coroutineScope {
         val details = async {
             if (!fetchDetails) return@async manga
-            client.get("$apiUrl/book/${manga.url}/info", getApiHeaders())
+            client.get("$apiUrl/book/${manga.url}/info", getApiHeaders(), Fetch.XHR)
                 .parseAs<DetailsResponseDto>().data.toSManga()
                 .apply { url = manga.url }
         }
         val chapterList = async {
             if (!fetchChapters) return@async chapters
-            client.get("$apiUrl/book/${manga.url}/chapter", getApiHeaders())
+            client.get("$apiUrl/book/${manga.url}/chapter", getApiHeaders(), Fetch.XHR)
                 .parseAs<ChapterListResponseDto>().data.chapters
                 .map { it.toSChapter() }
                 .reversed()
@@ -154,13 +155,13 @@ abstract class Creativecomic : KeiSource() {
 
     // Pages
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/book/chapter/${chapter.url}", getApiHeaders())
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/book/chapter/${chapter.url}", getApiHeaders(), Fetch.XHR)
         .parseAs<PageListResponseDto>().data.chapter.proportion.mapIndexed { index, it ->
             Page(index, it.id.toString())
         }
 
     override suspend fun getImageUrl(page: Page): String {
-        val encryptedKey = client.get("$apiUrl/book/chapter/image/${page.url}", getApiHeaders())
+        val encryptedKey = client.get("$apiUrl/book/chapter/image/${page.url}", getApiHeaders(), Fetch.XHR)
             .parseAs<ImageUrlResponseDto>().data.key
         val (pageKey, pageIv) = getPageKeyIv()
         val decryptedKey = Base64.decode(encryptedKey, Base64.DEFAULT).aesDecrypt(aesCbc(pageKey, pageIv)).decodeToString()

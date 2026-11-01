@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "MG Komik"
-    versionCode = 80
+    versionCode = 81
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 

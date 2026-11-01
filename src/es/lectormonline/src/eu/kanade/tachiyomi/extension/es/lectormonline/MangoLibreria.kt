@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -69,16 +70,16 @@ abstract class MangoLibreria : KeiSource() {
     // ============================== Popular ==============================
     // The list pages render card <img> tags without src (covers are set by JS
     // during hydration), so covers are read from SvelteKit's data endpoint instead.
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get(dataJsonUrl(page, sort = "views")).parseAsDataJson()
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get(dataJsonUrl(page, sort = "views"), Fetch.XHR).parseAsDataJson()
 
     // ============================== Latest ===============================
-    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get(dataJsonUrl(page)).parseAsDataJson()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get(dataJsonUrl(page), Fetch.XHR).parseAsDataJson()
 
     // ============================== Search ===============================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = if (query.isBlank()) {
-        client.get(dataJsonUrl(page, sort = "views")).parseAsDataJson()
+        client.get(dataJsonUrl(page, sort = "views"), Fetch.XHR).parseAsDataJson()
     } else {
-        client.get(dataJsonUrl(page, query = query)).parseAsDataJson()
+        client.get(dataJsonUrl(page, query = query), Fetch.XHR).parseAsDataJson()
     }
 
     private fun dataJsonUrl(page: Int, sort: String? = null, query: String? = null) = "$baseUrl/comics/__data.json".toHttpUrl().newBuilder().apply {
@@ -167,7 +168,7 @@ abstract class MangoLibreria : KeiSource() {
     }
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
-        val doc = client.get(baseUrl + manga.url).asJsoup()
+        val doc = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
         return SManga.create().apply {
             url = manga.url
             title = doc.selectFirst("h1")?.text().orEmpty()
@@ -194,7 +195,7 @@ abstract class MangoLibreria : KeiSource() {
                 .build()
                 .toString()
         }
-        val json = client.get(dataUrl).parseAs<JsonObject>()
+        val json = client.get(dataUrl, Fetch.XHR).parseAs<JsonObject>()
         val nodes = json.getArrayOrNull("nodes") ?: return emptyList()
         for (node in nodes) {
             val data = (node as? JsonObject)?.getArrayOrNull("data") ?: continue
@@ -237,7 +238,7 @@ abstract class MangoLibreria : KeiSource() {
         val dataUrl = "$baseUrl$path/__data.json".toHttpUrl().newBuilder()
             .addQueryParameter("x-sveltekit-invalidated", "01")
             .build()
-        val json = client.get(dataUrl).parseAs<JsonObject>()
+        val json = client.get(dataUrl, Fetch.XHR).parseAs<JsonObject>()
         val nodes = json.getArrayOrNull("nodes") ?: return emptyList()
         for (node in nodes) {
             val data = (node as? JsonObject)?.getArrayOrNull("data") ?: continue

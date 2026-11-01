@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -22,7 +23,7 @@ abstract class Schlockmercenary : KeiSource() {
     // Books
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl$ARCHIVE_URL").asJsoup()
+        val document = client.get("$baseUrl$ARCHIVE_URL", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div.archive-book").map { element ->
             val book = element.selectFirst("h4 > a")!!
             val thumbUrl = element.selectFirst("img")?.attr("abs:src") ?: "$baseUrl$DEFAULT_THUMBNAIL_URL"
@@ -50,7 +51,7 @@ abstract class Schlockmercenary : KeiSource() {
     ): SMangaUpdate {
         if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
-        val document = client.get("$baseUrl$ARCHIVE_URL").asJsoup()
+        val document = client.get("$baseUrl$ARCHIVE_URL", Fetch.DOCUMENT).asJsoup()
         val sanitizedTitle = manga.title.replace(TITLE_SANITIZATION_REGEX, "\\\\$1")
         val book = document.select("div.archive-book:contains($sanitizedTitle)")
 
@@ -69,7 +70,7 @@ abstract class Schlockmercenary : KeiSource() {
     // Pages
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl$ARCHIVE_URL").asJsoup()
+        val document = client.get("$baseUrl$ARCHIVE_URL", Fetch.DOCUMENT).asJsoup()
 
         val currentChapter = document.selectFirst("ul.chapters > li:not(ul > li > ul > li) > a[href=${chapter.url}]")
             ?: return emptyList()
@@ -102,7 +103,7 @@ abstract class Schlockmercenary : KeiSource() {
     }
 
     private suspend fun getImageUrlsForDay(day: String): List<String> {
-        val document = client.get("$baseUrl/$day").asJsoup()
+        val document = client.get("$baseUrl/$day", Fetch.DOCUMENT).asJsoup()
         return document.select("div#strip-$day > img").map { it.attr("abs:src") }
     }
 

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -32,11 +33,11 @@ abstract class GoDa : KeiSource() {
     // Popular + latest
     open fun popularMangaUrl(page: Int) = "$baseUrl/hots/page/$page"
 
-    override suspend fun getPopularManga(page: Int) = parsePopularMangas(client.get(popularMangaUrl(page)))
+    override suspend fun getPopularManga(page: Int) = parsePopularMangas(client.get(popularMangaUrl(page), Fetch.DOCUMENT))
 
     open fun latestUpdatesUrl(page: Int) = "$baseUrl/newss/page/$page"
 
-    override suspend fun getLatestUpdates(page: Int) = parseLatestMangas(client.get(latestUpdatesUrl(page)))
+    override suspend fun getLatestUpdates(page: Int) = parseLatestMangas(client.get(latestUpdatesUrl(page), Fetch.DOCUMENT))
 
     open fun parsePopularMangas(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -70,7 +71,7 @@ abstract class GoDa : KeiSource() {
             }
             filterUrl
         }
-        return parseSearchManga(client.get(url))
+        return parseSearchManga(client.get(url, Fetch.DOCUMENT))
     }
 
     open fun parseSearchManga(response: Response) = parsePopularMangas(response)
@@ -108,7 +109,7 @@ abstract class GoDa : KeiSource() {
         }
     }
 
-    open suspend fun getMangaDetails(manga: SManga) = parseMangaDetails(client.get(getMangaUrl(manga)).asJsoup())
+    open suspend fun getMangaDetails(manga: SManga) = parseMangaDetails(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup())
 
     open fun parseMangaDetails(document: Document) = SManga.create().apply {
         val mangaId = getMangaId(document)
@@ -139,7 +140,7 @@ abstract class GoDa : KeiSource() {
     }
 
     open suspend fun fetchChapterList(mangaId: String): List<SChapter> {
-        val response = client.get("$baseUrl/manga/get?mid=$mangaId&mode=all")
+        val response = client.get("$baseUrl/manga/get?mid=$mangaId&mode=all", Fetch.XHR)
         val document = response.asJsoup()
 
         return document.select(".chapteritem").asReversed().map { element ->
@@ -164,7 +165,7 @@ abstract class GoDa : KeiSource() {
 
     open fun pageListUrl(mangaId: String, chapterId: String) = "$baseUrl/chapter/getcontent?m=$mangaId&c=$chapterId"
 
-    override suspend fun getPageList(chapter: SChapter) = parsePageList(client.get(pageListUrl(chapter)))
+    override suspend fun getPageList(chapter: SChapter) = parsePageList(client.get(pageListUrl(chapter), Fetch.XHR))
 
     open fun parsePageList(response: Response) = response.asJsoup().select("#chapcontent > div > img").mapIndexed { index, element ->
         Page(index, imageUrl = element.attr("data-src").ifEmpty { element.attr("src") })
@@ -182,7 +183,7 @@ abstract class GoDa : KeiSource() {
     open val genresUrl = popularMangaUrl(1)
 
     override suspend fun fetchFilterData(): JsonElement {
-        val response = client.get(genresUrl)
+        val response = client.get(genresUrl, Fetch.DOCUMENT)
         return parseGenres(response.asJsoup()).toJsonElement()
     }
 

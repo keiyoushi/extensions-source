@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -59,7 +60,7 @@ abstract class TwoKinds : KeiSource() {
 
     // chapter list
 
-    private suspend fun fetchArchive(): Document = client.get("$baseUrl/archive/").asJsoup()
+    private suspend fun fetchArchive(): Document = client.get("$baseUrl/archive/", Fetch.DOCUMENT).asJsoup()
 
     data class TwoKindsPage(val url: String, val name: String)
 
@@ -120,7 +121,7 @@ abstract class TwoKinds : KeiSource() {
     }
 
     override suspend fun getImageUrl(page: Page): String {
-        val document = client.get(page.url).asJsoup()
+        val document = client.get(page.url, Fetch.DOCUMENT).asJsoup()
 
         return document.select("#content article img").first()!!.attr("src")
     }

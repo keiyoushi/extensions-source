@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -24,7 +25,6 @@ import kotlin.time.Instant
 
 @Source
 abstract class ReizuComics : KeiSource() {
-
     private val apiUrl = "https://zrydzcqveheuwviyerto.supabase.co/rest/v1"
     private val cdnUrl = "https://cdn.reizucomics.com"
 
@@ -49,7 +49,7 @@ abstract class ReizuComics : KeiSource() {
             put("p_language", "es")
             put("p_limit", limit)
         }.toJsonRequestBody()
-        val rows = client.post("$apiUrl/rpc/get_comics_by_period_views", apiHeaders, body)
+        val rows = client.post("$apiUrl/rpc/get_comics_by_period_views", apiHeaders, Fetch.XHR, body)
             .parseAs<List<RankingRow>>()
             .filter { it.work_type != "novel" }
         val entries = rows
@@ -79,7 +79,7 @@ abstract class ReizuComics : KeiSource() {
             put("p_offset", offset)
             put("p_limit", pageSize)
         }.toJsonRequestBody()
-        val rows = client.post("$apiUrl/rpc/get_comics_by_recent_chapter", apiHeaders, body)
+        val rows = client.post("$apiUrl/rpc/get_comics_by_recent_chapter", apiHeaders, Fetch.XHR, body)
             .parseAs<List<RecentRow>>()
         val total = rows.firstOrNull()?.total_count ?: 0
         val entries = rows
@@ -102,7 +102,7 @@ abstract class ReizuComics : KeiSource() {
             .addQueryParameter("limit", pageSize.toString())
             .addQueryParameter("offset", ((page - 1) * pageSize).toString())
             .build()
-        val rows = client.get(url, apiHeaders)
+        val rows = client.get(url, apiHeaders, Fetch.XHR)
             .parseAs<List<ComicRow>>()
             .filter { it.work_type != "novel" }
         return MangasPage(rows.map { it.toSManga() }, rows.size >= pageSize)
@@ -119,7 +119,7 @@ abstract class ReizuComics : KeiSource() {
             .addQueryParameter(column, "eq.$value")
             .addQueryParameter("limit", "1")
             .build()
-        return client.get(requestUrl, apiHeaders)
+        return client.get(requestUrl, apiHeaders, Fetch.XHR)
             .parseAs<List<ComicRow>>()
             .firstOrNull()
             ?.toSManga()
@@ -137,7 +137,7 @@ abstract class ReizuComics : KeiSource() {
             .addQueryParameter("is_published", "eq.true")
             .addQueryParameter("order", "chapter_number.desc")
             .build()
-        val rows = client.get(url, apiHeaders).parseAs<List<ChapterRow>>()
+        val rows = client.get(url, apiHeaders, Fetch.XHR).parseAs<List<ChapterRow>>()
         val details = rows.firstOrNull()?.comics?.toSManga() ?: manga
         return SMangaUpdate(details, rows.toSChapters(manga.url))
     }
@@ -155,7 +155,7 @@ abstract class ReizuComics : KeiSource() {
             .addQueryParameter("limit", "1")
             .addQueryParameter("id", "eq.$chapterId")
             .build()
-        val row = client.get(url, apiHeaders)
+        val row = client.get(url, apiHeaders, Fetch.XHR)
             .parseAs<List<ChapterPages>>()
             .firstOrNull()
             ?: throw Exception("Capítulo no encontrado")

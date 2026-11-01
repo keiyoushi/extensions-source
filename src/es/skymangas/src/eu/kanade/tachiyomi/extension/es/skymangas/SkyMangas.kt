@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -92,19 +93,19 @@ abstract class SkyMangas : KeiSource() {
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val url = apiUrl("manhuas", manga.url, "similar").addQueryParameter("limit", "8").build()
-        return client.get(url).parseAs<ApiResponse<List<MangaItem>>>().data.map { it.toSManga() }
+        return client.get(url, Fetch.XHR).parseAs<ApiResponse<List<MangaItem>>>().data.map { it.toSManga() }
     }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/leer/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (slug, number) = chapter.url.split('/', limit = 2)
-        return client.get(apiUrl("chapters", slug, number).build())
+        return client.get(apiUrl("chapters", slug, number).build(), Fetch.XHR)
             .parseAs<ApiResponse<ChapterPages>>().data.pages
             .mapIndexed { index, page -> Page(index, imageUrl = imageUrl(page.imageUrl)) }
     }
 
-    override suspend fun fetchFilterData(): JsonElement = client.get(apiUrl("manhuas", "filters").build())
+    override suspend fun fetchFilterData(): JsonElement = client.get(apiUrl("manhuas", "filters").build(), Fetch.XHR)
         .parseAs<ApiResponse<FilterData>>().data
         .toJsonElement()
 
@@ -132,11 +133,11 @@ abstract class SkyMangas : KeiSource() {
     private suspend fun fetchMangaList(url: HttpUrl.Builder, page: Int): MangasPage {
         url.addQueryParameter("page", page.toString())
         url.addQueryParameter("perPage", "24")
-        val response = client.get(url.build()).parseAs<PagedResponse<MangaItem>>()
+        val response = client.get(url.build(), Fetch.XHR).parseAs<PagedResponse<MangaItem>>()
         return MangasPage(response.data.map { it.toSManga() }, response.meta.page < response.meta.totalPages)
     }
 
-    private suspend fun fetchDetails(slug: String): MangaDetails = client.get(apiUrl("manhuas", slug).build())
+    private suspend fun fetchDetails(slug: String): MangaDetails = client.get(apiUrl("manhuas", slug).build(), Fetch.XHR)
         .parseAs<ApiResponse<MangaDetails>>().data
 
     private suspend fun fetchChapters(id: String, slug: String): List<SChapter> = coroutineScope {
@@ -151,7 +152,7 @@ abstract class SkyMangas : KeiSource() {
             .addQueryParameter("perPage", "100")
             .addQueryParameter("sort", "desc")
             .build()
-        return client.get(url).parseAs()
+        return client.get(url, Fetch.XHR).parseAs()
     }
 
     // The apps keep cached page urls, so a refused token is reissued from its release

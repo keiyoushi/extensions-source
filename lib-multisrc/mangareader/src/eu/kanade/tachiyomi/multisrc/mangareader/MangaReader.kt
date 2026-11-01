@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -77,7 +78,7 @@ abstract class MangaReader : KeiSource() {
     }.build()
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val response = client.get(searchMangaUrl(page, query, filters))
+        val response = client.get(searchMangaUrl(page, query, filters), Fetch.DOCUMENT)
         return searchMangaParse(response)
     }
 
@@ -126,7 +127,7 @@ abstract class MangaReader : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         parseMangaDetails(document, manga)
         return SMangaUpdate(manga, parseChapterList(document))
     }
@@ -215,7 +216,7 @@ abstract class MangaReader : KeiSource() {
     // =============================== Pages ================================
 
     open suspend fun getChapterId(chapter: SChapter): String {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
         return document.selectFirst("div[data-reading-id]")
             ?.attr("data-reading-id")
             .orEmpty()
@@ -239,7 +240,7 @@ abstract class MangaReader : KeiSource() {
             .add("X-Requested-With", "XMLHttpRequest")
             .build()
 
-        val response = client.get(getAjaxUrl(chapterId), ajaxHeaders)
+        val response = client.get(getAjaxUrl(chapterId), ajaxHeaders, Fetch.XHR)
         val document = response.parseHtmlProperty()
 
         return document.select(pageListParseSelector()).mapIndexed { index, element ->
@@ -251,11 +252,10 @@ abstract class MangaReader : KeiSource() {
         }
     }
 
-    override fun imageRequest(page: Page): Request = Request.Builder()
+    override fun getImageRequest(page: Page): Request = Request.Builder()
         .url(page.imageUrl!!)
         .headers(
             headers.newBuilder()
-                .removeAll("Origin")
                 .set("Referer", page.imageUrl!!)
                 .build(),
         )

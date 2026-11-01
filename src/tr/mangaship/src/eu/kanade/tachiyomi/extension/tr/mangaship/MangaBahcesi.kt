@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -30,7 +31,6 @@ import java.util.Calendar
 
 @Source
 abstract class MangaBahcesi : KeiSource() {
-
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(::decryptInterceptor)
 
     // Manga Bahçesi encrypts their image URLs (both covers and pages).
@@ -79,12 +79,14 @@ abstract class MangaBahcesi : KeiSource() {
     override suspend fun getPopularManga(page: Int) = parseMangas(
         client.get(
             "$baseUrl/Tr/PopulerMangalar?page=$page",
+            Fetch.DOCUMENT,
         ),
     )
 
     override suspend fun getLatestUpdates(page: Int) = parseMangas(
         client.get(
             "$baseUrl/Tr/YeniMangalar?page=$page",
+            Fetch.DOCUMENT,
         ),
     )
 
@@ -145,7 +147,7 @@ abstract class MangaBahcesi : KeiSource() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        val response = client.get(url)
+        val response = client.get(url, Fetch.DOCUMENT)
         // a single exact match redirects straight to the manga page
         if (response.request.url.pathSegments.getOrNull(1) == "Manga") {
             return MangasPage(listOf(parseDetails(response.asJsoup())), false)
@@ -162,7 +164,7 @@ abstract class MangaBahcesi : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val details = parseDetails(doc)
 
         return SMangaUpdate(details, parseChapters(doc, details.title))
@@ -209,7 +211,7 @@ abstract class MangaBahcesi : KeiSource() {
 
     // VIP chapters come back without any page scripts unless logged in as a VIP member
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val pages = mutableListOf<Page>()
         var i = 0
 
@@ -233,7 +235,7 @@ abstract class MangaBahcesi : KeiSource() {
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData() = client.get("$baseUrl/Tr/Mangalar")
+    override suspend fun fetchFilterData() = client.get("$baseUrl/Tr/Mangalar", Fetch.DOCUMENT)
         .asJsoup()
         .select("label.catalog-search__option:has(input[name=kategori])")
         .associate { it.text() to it.selectFirst("input")!!.attr("value") }

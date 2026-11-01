@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -60,12 +61,12 @@ abstract class Nortverse : KeiSource() {
     ): SMangaUpdate {
         if (!fetchChapters) return SMangaUpdate(comic(), chapters)
 
-        val firstPage = client.get(comicListUrl(1))
+        val firstPage = client.get(comicListUrl(1), Fetch.XHR)
         val totalPages = firstPage.header("X-WP-TotalPages")!!.toInt()
         val firstStrips = firstPage.parseAs<List<ComicDto>>()
         val strips = coroutineScope {
             val otherPages = (2..totalPages).map { page ->
-                async { client.get(comicListUrl(page)).parseAs<List<ComicDto>>() }
+                async { client.get(comicListUrl(page), Fetch.XHR).parseAs<List<ComicDto>>() }
             }
             firstStrips + otherPages.awaitAll().flatten()
         }
@@ -88,7 +89,7 @@ abstract class Nortverse : KeiSource() {
             .addQueryParameter("slug", chapter.url)
             .addQueryParameter("_fields", "content")
             .build()
-        val content = client.get(url).parseAs<List<ContentDto>>().first().content.rendered
+        val content = client.get(url, Fetch.XHR).parseAs<List<ContentDto>>().first().content.rendered
         return Jsoup.parseBodyFragment(content, baseUrl).select("img").mapIndexed { index, img ->
             // Full-size upload rather than the Jetpack-resized copy the page embeds
             val imageUrl = img.absUrl("src").toHttpUrl().newBuilder()

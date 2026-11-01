@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
@@ -36,11 +37,11 @@ abstract class FansubsCat : KeiSource() {
 
     // Popular
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$apiBaseUrl/manga/popular/$page"))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$apiBaseUrl/manga/popular/$page", Fetch.XHR))
 
     // Latest
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$apiBaseUrl/manga/recent/$page"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$apiBaseUrl/manga/recent/$page", Fetch.XHR))
 
     // Search
 
@@ -61,7 +62,7 @@ abstract class FansubsCat : KeiSource() {
         if (query.isNotBlank()) {
             builder.addQueryParameter("query", query)
         }
-        return parseMangaList(client.get(builder.build()))
+        return parseMangaList(client.get(builder.build(), Fetch.XHR))
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -88,16 +89,16 @@ abstract class FansubsCat : KeiSource() {
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}"
 
-    private suspend fun fetchMangaDetails(slug: String): SManga = client.get("$apiBaseUrl/manga/details/$slug").parseAs<ResultDto<MangaDto>>().result.toSManga()
+    private suspend fun fetchMangaDetails(slug: String): SManga = client.get("$apiBaseUrl/manga/details/$slug", Fetch.XHR).parseAs<ResultDto<MangaDto>>().result.toSManga()
 
-    private suspend fun fetchChapterList(slug: String): List<SChapter> = client.get("$apiBaseUrl/manga/chapters/$slug")
+    private suspend fun fetchChapterList(slug: String): List<SChapter> = client.get("$apiBaseUrl/manga/chapters/$slug", Fetch.XHR)
         .parseAs<ResultDto<List<ChapterDto>>>()
         .result
         .map { it.toSChapter() }
 
     // Pages
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiBaseUrl/manga/pages/${chapter.url.substringAfterLast('/')}")
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiBaseUrl/manga/pages/${chapter.url.substringAfterLast('/')}", Fetch.XHR)
         .parseAs<ResultDto<List<PageDto>>>()
         .result
         .mapIndexed { i, page -> page.toPage(i) }

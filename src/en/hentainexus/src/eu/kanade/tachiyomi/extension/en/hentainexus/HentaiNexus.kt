@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -113,12 +114,12 @@ abstract class HentaiNexus :
         return SMangaUpdate(manga, chapters)
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseResponse(client.get(baseUrl + (if (page > 1) "/page/$page" else "")))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseResponse(client.get(baseUrl + (if (page > 1) "/page/$page" else ""), Fetch.DOCUMENT))
 
     override suspend fun getPopularManga(page: Int): MangasPage = if (page > 1) {
         getSearchMangaList(page - 1, "sort:popular", getFilterList())
     } else {
-        parseResponse(client.get(baseUrl + POPULAR_NOW_PATH))
+        parseResponse(client.get(baseUrl + POPULAR_NOW_PATH, Fetch.DOCUMENT))
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = if (query.startsWith(PREFIX_ID_SEARCH)) {
@@ -126,7 +127,7 @@ abstract class HentaiNexus :
         MangasPage(
             listOf(
                 parseMangaResponse(
-                    client.get("$baseUrl/view/$id"),
+                    client.get("$baseUrl/view/$id", Fetch.DOCUMENT),
                 ).manga.apply { url = "/view/$id" },
             ),
             false,
@@ -139,14 +140,14 @@ abstract class HentaiNexus :
             }
             addQueryParameter("q", (combineQuery(filters) + query).trim())
         }.build()
-        parseResponse(client.get(url))
+        parseResponse(client.get(url, Fetch.DOCUMENT))
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val id = url.pathSegments.getOrNull(1)
             ?: throw Exception("Unsupported url")
         return parseMangaResponse(
-            client.get("$baseUrl/view/$id"),
+            client.get("$baseUrl/view/$id", Fetch.DOCUMENT),
         ).manga.apply { this.url = "/view/$id" }
     }
 
@@ -155,7 +156,7 @@ abstract class HentaiNexus :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = parseMangaResponse(client.get("$baseUrl${manga.url}"))
+    ): SMangaUpdate = parseMangaResponse(client.get("$baseUrl${manga.url}", Fetch.DOCUMENT))
 
     private val tagCountRegex = Regex("""\s*\([\d,]+\)$""")
 
@@ -172,7 +173,7 @@ abstract class HentaiNexus :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
 
         val script = document.selectFirst("script:containsData(initReader)")?.data()
             ?: throw Exception("Could not find initReader script; the page structure may have changed")

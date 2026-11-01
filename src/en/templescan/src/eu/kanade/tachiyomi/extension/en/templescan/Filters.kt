@@ -28,16 +28,22 @@ class StatusFilter :
         ).map { it to it },
     )
 
-class OrderFilter(default: String? = null) :
-    SelectFilter(
+private val ORDERS = listOf(
+    "Update Chapter" to "updated",
+    "Created At" to "created",
+    "Trending" to "views",
+    "Title" to "title",
+)
+
+class OrderFilter(default: String) :
+    Filter.Sort(
         "Order by",
-        listOf(
-            "Update Chapter" to "updated",
-            "Created At" to "created",
-            "Trending" to "views",
-        ),
-        default,
+        ORDERS.map { it.first }.toTypedArray(),
+        Selection(ORDERS.indexOfFirst { it.second == default }, false),
     ) {
+    val selected get() = ORDERS[state?.index ?: 0].second
+    val ascending get() = state?.ascending == true
+
     companion object {
         val POPULAR = FilterList(OrderFilter("views"))
         val LATEST = FilterList(OrderFilter("updated"))
@@ -46,5 +52,5 @@ class OrderFilter(default: String? = null) :
 
 fun getFilters() = FilterList(
     StatusFilter(),
-    OrderFilter(),
+    OrderFilter("views"),
 )

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -44,7 +45,7 @@ abstract class DaoMeoDen : KeiSource() {
             .addQueryParameter("order", popularOrder)
             .build()
 
-        return parseBrowsePage(client.get(url))
+        return parseBrowsePage(client.get(url, Fetch.DOCUMENT))
     }
 
     // ============================== Latest ================================
@@ -54,7 +55,7 @@ abstract class DaoMeoDen : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        return parseBrowsePage(client.get(url))
+        return parseBrowsePage(client.get(url, Fetch.DOCUMENT))
     }
 
     // ============================== Search ================================
@@ -94,7 +95,7 @@ abstract class DaoMeoDen : KeiSource() {
             }
             .build()
 
-        return parseBrowsePage(client.get(url))
+        return parseBrowsePage(client.get(url, Fetch.DOCUMENT))
     }
 
     // ============================== Manga List ============================
@@ -159,6 +160,7 @@ abstract class DaoMeoDen : KeiSource() {
         return client.post(
             "$baseUrl/apps/controllers/book/bookList.php",
             apiHeaders,
+            Fetch.XHR,
             body,
         )
     }
@@ -224,7 +226,7 @@ abstract class DaoMeoDen : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
             chapters = parseChapterList(document),
@@ -262,7 +264,7 @@ abstract class DaoMeoDen : KeiSource() {
     // ============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter))
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         val chapterUrl = response.request.url.toString()
         val document = response.asJsoup()
         val chapterId = extractScriptVariable(document, "chapterId") ?: return emptyList()
@@ -281,6 +283,7 @@ abstract class DaoMeoDen : KeiSource() {
         val payload = client.post(
             "$baseUrl/apps/controllers/book/bookChapterContent.php",
             apiHeaders,
+            Fetch.XHR,
             body,
         ).parseAs<ChapterContentApiResponse>()
 
@@ -300,7 +303,7 @@ abstract class DaoMeoDen : KeiSource() {
         }.distinctBy { it.imageUrl }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val imageHeaders = headers.newBuilder()
             .set("Referer", page.url)
             .build()
@@ -311,7 +314,7 @@ abstract class DaoMeoDen : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl$listPath").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl$listPath", Fetch.DOCUMENT).asJsoup()
         .select("#filterGenre .filter-item[data-slug]")
         .mapNotNull { element ->
             val id = element.attr("data-slug").takeIf { it.isNotEmpty() }
@@ -331,7 +334,7 @@ abstract class DaoMeoDen : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val relatedSection = document.select("span.widget-main")
             .firstOrNull { it.text().equals("Truyện đề xuất cùng loại", ignoreCase = true) }
             ?.closest("div.widgets")

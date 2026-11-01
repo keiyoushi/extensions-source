@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -29,9 +30,8 @@ abstract class LycanToons : KeiSource() {
         rateLimit(2)
     }
 
-    // The site refuses requests without Sec-Fetch-Site; its image CDN refuses any with Origin
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = removeAll("Origin")
-        .set("Sec-Fetch-Site", "same-origin")
+    // The site refuses requests without Sec-Fetch-Site
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("Sec-Fetch-Site", "same-origin")
 
     override suspend fun getPopularManga(page: Int): MangasPage = metricsRequest("popular", page).parseAs<PopularResponse>().toMangasPage()
 
@@ -56,7 +56,7 @@ abstract class LycanToons : KeiSource() {
             tags = tags.distinct(),
         )
 
-        return client.post("$baseUrl/api/series", payload.toJsonRequestBody())
+        return client.post("$baseUrl/api/series", Fetch.XHR, payload.toJsonRequestBody())
             .parseAs<SearchResponse>()
             .toMangasPage()
     }
@@ -78,7 +78,7 @@ abstract class LycanToons : KeiSource() {
 
         val details = async {
             if (fetchDetails) {
-                client.get("$baseUrl/series/$slug").extractNextJs<SeriesDto>()!!.toSManga()
+                client.get("$baseUrl/series/$slug", Fetch.XHR).extractNextJs<SeriesDto>()!!.toSManga()
             } else {
                 manga
             }
@@ -86,7 +86,7 @@ abstract class LycanToons : KeiSource() {
 
         val chapterList = async {
             if (fetchChapters) {
-                client.get("$baseUrl/series/$slug/1").extractNextJs<ChapterResponse>()!!.capitulos
+                client.get("$baseUrl/series/$slug/1", Fetch.XHR).extractNextJs<ChapterResponse>()!!.capitulos
                     .map { it.toSChapter(slug) }
                     .sortedByDescending { it.chapter_number }
             } else {
@@ -98,9 +98,9 @@ abstract class LycanToons : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterId = client.get(getChapterUrl(chapter)).extractNextJs<ChapterIdDto>()!!.capituloId
+        val chapterId = client.get(getChapterUrl(chapter), Fetch.XHR).extractNextJs<ChapterIdDto>()!!.capituloId
 
-        return client.get("$baseUrl/api/chapters/$chapterId/view-pages")
+        return client.get("$baseUrl/api/chapters/$chapterId/view-pages", Fetch.XHR)
             .parseAs<PageList>()
             .pages
             .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
@@ -112,7 +112,7 @@ abstract class LycanToons : KeiSource() {
         TagsFilter(),
     )
 
-    private suspend fun metricsRequest(path: String, page: Int) = client.get("$baseUrl/api/metrics/$path?limit=$PAGE_LIMIT&page=$page")
+    private suspend fun metricsRequest(path: String, page: Int) = client.get("$baseUrl/api/metrics/$path?limit=$PAGE_LIMIT&page=$page", Fetch.XHR)
 
     private fun SManga.slug(): String = url.substringBefore("?").substringAfterLast("/")
 

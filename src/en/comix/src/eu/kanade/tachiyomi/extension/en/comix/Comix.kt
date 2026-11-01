@@ -20,6 +20,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -50,7 +51,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -182,8 +182,6 @@ abstract class Comix :
 
         return response
     }
-
-    override fun Headers.Builder.configureHeaders() = add("Accept", "*/*")
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -330,7 +328,7 @@ abstract class Comix :
             .addQueryParameter("q", name)
             .addQueryParameter("limit", "20")
             .build()
-        val hits = client.get(url).parseAs<TagSearchResponse>().result
+        val hits = client.get(url, Fetch.XHR).parseAs<TagSearchResponse>().result
         if (hits.isEmpty()) throw Exception("No $type named \"$name\"")
         // Exact names when the site's fuzzy search has them
         val ids = hits.filter { it.label.equals(name, ignoreCase = true) }.ifEmpty { hits }.map { it.id.toString() }
@@ -614,13 +612,12 @@ abstract class Comix :
     private fun SChapter.groupId(): Int? = memo[CHAPTER_GROUP_ID_MEMO]?.int
 
     // Comix image domains block any image requests with Referer/Origin
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         // The reader may have moved the page to another host
         val imageUrl = synchronized(captures) { captures[page.url]?.pages?.get(page.index) }
             ?: page.imageUrl
-            ?: return super.imageRequest(page)
+            ?: return super.getImageRequest(page)
         val requestHeaders = headersBuilder()
-            .removeAll("Origin")
             .removeAll("Referer")
             .build()
         return GET(imageUrl, requestHeaders)

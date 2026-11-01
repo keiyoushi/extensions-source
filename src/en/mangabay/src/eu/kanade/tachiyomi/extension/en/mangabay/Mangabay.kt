@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -96,7 +97,7 @@ abstract class Mangabay : KeiSource() {
                     }
                 }
                 .build()
-            return parseMangaList(client.get(url))
+            return parseMangaList(client.get(url, Fetch.DOCUMENT))
         }
 
         val urlBuilder = baseUrl.toHttpUrl().newBuilder()
@@ -118,7 +119,7 @@ abstract class Mangabay : KeiSource() {
 
         val sort = filters.firstInstance<SortFilter>()
         if (sort.getSort().isEmpty()) {
-            return parseMangaList(client.get(url))
+            return parseMangaList(client.get(url, Fetch.DOCUMENT))
         }
 
         val form = FormBody.Builder()
@@ -134,7 +135,7 @@ abstract class Mangabay : KeiSource() {
                 }
             }
             .build()
-        return parseMangaList(client.post(url, form))
+        return parseMangaList(client.post(url, Fetch.DOCUMENT, form))
     }
 
     private fun parseMangaList(response: Response): MangasPage {
@@ -165,7 +166,7 @@ abstract class Mangabay : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = mangaDetailsParse(document).apply { url = manga.url },
             chapters = extractData(document)?.parseAs<ChapterListDto>()?.toSChapterList().orEmpty(),
@@ -230,7 +231,7 @@ abstract class Mangabay : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return document.select("section.sect--hot > .sect__content > a.poster").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
@@ -241,7 +242,7 @@ abstract class Mangabay : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         if (document.selectFirst(".gate") != null) throw Exception("This chapter is stuck on the site's age screen, try again later")
         val data = extractData(document)?.parseAs<PageListDto>() ?: return emptyList()
         return data.images.take(data.pages).mapIndexed { idx, img ->
@@ -264,7 +265,7 @@ abstract class Mangabay : KeiSource() {
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val script = client.get("$baseUrl/comix/").asJsoup()
+        val script = client.get("$baseUrl/comix/", Fetch.DOCUMENT).asJsoup()
             .selectFirst("script:containsData(window.__XFILTER__)")!!.data()
         return script
             .substringAfter("window.__XFILTER__ = ")

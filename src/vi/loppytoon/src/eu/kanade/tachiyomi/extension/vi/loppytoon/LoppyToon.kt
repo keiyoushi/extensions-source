@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -39,11 +40,11 @@ abstract class LoppyToon : KeiSource() {
 
     // ============================== Popular ===============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(client.get("$baseUrl/the-loai?type=1&sort=views&page=$page").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(client.get("$baseUrl/the-loai?type=1&sort=views&page=$page", Fetch.DOCUMENT).asJsoup())
 
     // =============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaPage(client.get("$baseUrl/the-loai?page=$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaPage(client.get("$baseUrl/the-loai?page=$page", Fetch.DOCUMENT).asJsoup())
 
     private fun parseMangaPage(document: Document): MangasPage {
         val mangaList = document.select("div.story-result-item, div.comic-item").mapNotNull(::mangaFromElement)
@@ -90,7 +91,7 @@ abstract class LoppyToon : KeiSource() {
             val url = "$baseUrl/api/search-story".toHttpUrl().newBuilder()
                 .addQueryParameter("keyword", query)
                 .build()
-            val results = client.get(url).parseAs<List<SearchResult>>()
+            val results = client.get(url, Fetch.XHR).parseAs<List<SearchResult>>()
             val mangaList = results.mapNotNull { result ->
                 val mangaUrl = "/truyen/${result.slug}"
                 if (mangaUrl.isNovelUrl()) return@mapNotNull null
@@ -125,7 +126,7 @@ abstract class LoppyToon : KeiSource() {
             url.addQueryParameter("genres", selectedGenreIds.joinToString(","))
         }
 
-        return parseMangaPage(client.get(url.build()).asJsoup())
+        return parseMangaPage(client.get(url.build(), Fetch.DOCUMENT).asJsoup())
     }
 
     // =============================== Details ==============================
@@ -144,7 +145,7 @@ abstract class LoppyToon : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
             chapters = if (fetchChapters) fetchChapterList(document, manga) else chapters,
@@ -197,7 +198,7 @@ abstract class LoppyToon : KeiSource() {
                 .addQueryParameter("offset", offset.toString())
                 .addQueryParameter("sortByPosition", "desc")
                 .build()
-            val chapterData = client.get(url).parseAs<ChapterResponse>()
+            val chapterData = client.get(url, Fetch.XHR).parseAs<ChapterResponse>()
             val newChapters = chapterData.html
                 .takeIf(String::isNotBlank)
                 ?.let { parseChapters(Jsoup.parseBodyFragment(it, baseUrl)) }
@@ -250,7 +251,7 @@ abstract class LoppyToon : KeiSource() {
 
     // ================================ Pages ===============================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select("img.manga-image")
         .mapIndexed { index, element ->
             val imageUrl = element.absUrl("src").ifEmpty { element.absUrl("data-src") }
@@ -262,7 +263,7 @@ abstract class LoppyToon : KeiSource() {
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/the-loai?type=1").asJsoup()
+        val document = client.get("$baseUrl/the-loai?type=1", Fetch.DOCUMENT).asJsoup()
         val groups = document.select(".filter-table .frow").mapNotNull { row ->
             val label = row.selectFirst(".flabel")?.text()?.trim() ?: return@mapNotNull null
             val isPhanLoai = label.contains("Phân Loại", ignoreCase = true)
@@ -290,7 +291,7 @@ abstract class LoppyToon : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val heading = document.select("h2, h3")
             .firstOrNull { it.text().contains("Đề xuất", ignoreCase = true) }
             ?: return emptyList()

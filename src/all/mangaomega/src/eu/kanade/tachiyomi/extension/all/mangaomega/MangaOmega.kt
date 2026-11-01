@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -99,7 +100,7 @@ abstract class MangaOmega : KeiSource() {
             .addQueryParameter("_fields", "content")
             .build()
         val post = try {
-            client.get(url).parseAs<ContentDto>()
+            client.get(url, Fetch.XHR).parseAs<ContentDto>()
         } catch (e: HttpException) {
             if (e.code != 404) throw e
             // deleted posts never show up in modified_after, so drop them once noticed
@@ -111,9 +112,8 @@ abstract class MangaOmega : KeiSource() {
             .mapIndexed { index, img -> Page(index, imageUrl = img.absUrl("src")) }
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .removeHeader("Referer")
-        .removeHeader("Origin")
         .build()
 
     private class Series(val key: String, val posts: List<CachedPost>, val chapters: List<CachedPost>) {
@@ -172,10 +172,10 @@ abstract class MangaOmega : KeiSource() {
             modifiedAfter?.let { addQueryParameter("modified_after", it.toString()) }
         }.build()
 
-        val firstPage = client.get(url(1), CacheControl.FORCE_NETWORK)
+        val firstPage = client.get(url(1), Fetch.XHR, CacheControl.FORCE_NETWORK)
         val totalPages = firstPage.header("X-WP-TotalPages")?.toInt() ?: 1
         val rest = (2..totalPages).map { page ->
-            async { client.get(url(page), CacheControl.FORCE_NETWORK).parseAs<List<PostDto>>() }
+            async { client.get(url(page), Fetch.XHR, CacheControl.FORCE_NETWORK).parseAs<List<PostDto>>() }
         }
         (firstPage.parseAs<List<PostDto>>() + rest.awaitAll().flatten()).distinctBy { it.id }
     }

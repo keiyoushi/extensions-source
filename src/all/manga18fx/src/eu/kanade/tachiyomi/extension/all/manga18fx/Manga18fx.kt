@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.yiimadara.YiiMadara
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -25,10 +26,10 @@ abstract class Manga18fx : YiiMadara() {
         val url = "$baseUrl/hot-manga".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
-        return mangaListParse(client.get(url).asJsoup())
+        return mangaListParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaListParse(client.get(listUrl("page", page).build()).asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaListParse(client.get(listUrl("page", page).build(), Fetch.DOCUMENT).asJsoup())
 
     // Legacy Madara chapter URLs are absolute and end with ?style=list
     override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.startsWith("http")) chapter.url else super.getChapterUrl(chapter)

@@ -1,12 +1,12 @@
 // Open the chapter's sealed pages with the site's own reader module
 async (input) => {
-    let sitekey = null;
+    let challenge = null;
     window.turnstile = {
         render: (el, options) => {
             if (input.token) {
                 setTimeout(() => options.callback(input.token));
             } else {
-                sitekey = options.sitekey;
+                challenge = { sitekey: options.sitekey, action: options.action, cdata: options.cData };
                 setTimeout(() => options["error-callback"]());
             }
             return "shim";
@@ -26,7 +26,7 @@ async (input) => {
     try {
         pages = await reader.fetchManifest(opened, input.chapterId, input.seriesSlug, opened.q);
     } catch (e) {
-        if (sitekey) e.sitekey = sitekey;
+        if (challenge) Object.assign(e, challenge);
         throw e;
     }
     return pages.map((page) => ({ n: page.n, src: page.src, srcset: page.srcset }));

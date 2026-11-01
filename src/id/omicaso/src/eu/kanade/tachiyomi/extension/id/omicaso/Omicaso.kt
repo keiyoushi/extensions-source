@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -27,7 +28,7 @@ import java.time.format.DateTimeFormatter
 abstract class Omicaso : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val catalog = client.get("$baseUrl/api/manga.php?page=1&limit=1&mode=all").parseAs<CatalogDto>()
+        val catalog = client.get("$baseUrl/api/manga.php?page=1&limit=1&mode=all", Fetch.XHR).parseAs<CatalogDto>()
         return MangasPage(catalog.sections.trending.all.map { it.toSManga() }, false)
     }
 
@@ -45,14 +46,14 @@ abstract class Omicaso : KeiSource() {
             if (query.isNotBlank()) addQueryParameter("q", query.trim())
         }.build()
 
-        val catalog = client.get(url).parseAs<CatalogDto>()
+        val catalog = client.get(url, Fetch.XHR).parseAs<CatalogDto>()
         return MangasPage(catalog.items.map { it.toSManga() }, catalog.hasMore)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val slug = url.queryParameter("slug") ?: url.queryParameter("manga") ?: return null
-        return parseMangaDetails(client.get(mangaPageUrl(slug)).asJsoup(), slug)
+        return parseMangaDetails(client.get(mangaPageUrl(slug), Fetch.DOCUMENT).asJsoup(), slug)
     }
 
     override fun getMangaUrl(manga: SManga) = mangaPageUrl(manga.slug())
@@ -64,7 +65,7 @@ abstract class Omicaso : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.slug()
-        val document = client.get("${mangaPageUrl(slug)}&order=desc").asJsoup()
+        val document = client.get("${mangaPageUrl(slug)}&order=desc", Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, slug),
             chapters = parseChapterList(document),
@@ -104,7 +105,7 @@ abstract class Omicaso : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("img[data-reader-image]").mapIndexed { index, img ->
             Page(index, imageUrl = img.attr("abs:src"))
         }
@@ -112,7 +113,7 @@ abstract class Omicaso : KeiSource() {
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData() = client.get(baseUrl).asJsoup()
+    override suspend fun fetchFilterData() = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         .select("select[data-genre-select] option[value~=.+]")
         .map { GenreDto(it.text().replace(genreCountRegex, ""), it.attr("value")) }
         .toJsonElement()

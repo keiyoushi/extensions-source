@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -39,7 +40,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class BiliManga :
     KeiSource(),
     ConfigurableSource {
-
     private val pref by getPreferencesLazy()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -54,7 +54,6 @@ abstract class BiliManga :
 
     override fun Headers.Builder.configureHeaders() = apply {
         add("Accept-Language", "zh")
-        add("Accept", "*/*")
     }
 
     // Customize
@@ -108,9 +107,9 @@ abstract class BiliManga :
         val names = client.cookieJar.loadForRequest(baseUrl.toHttpUrl()).map { it.name }
         if (!names.contains("jieqiSearchCss") || !names.contains("jieqiSearchJs")) {
             coroutineScope {
-                launch { client.get("$baseUrl/search.html?search_guard=css").close() }
+                launch { client.get("$baseUrl/search.html?search_guard=css", Fetch.DOCUMENT).close() }
                 launch {
-                    COOKIE_REGEX.find(client.get("$baseUrl/search.html?search_guard=js").body.string())
+                    COOKIE_REGEX.find(client.get("$baseUrl/search.html?search_guard=js", Fetch.DOCUMENT).body.string())
                         ?.groupValues?.get(1)
                         ?.let { cookie ->
                             val url = baseUrl.toHttpUrl()
@@ -119,7 +118,7 @@ abstract class BiliManga :
                 }
             }
         }
-        client.get("$baseUrl/search.html?search_guard=redeem", CacheControl.FORCE_NETWORK)
+        client.get("$baseUrl/search.html?search_guard=redeem", Fetch.DOCUMENT, CacheControl.FORCE_NETWORK)
         val cookies = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
         if (cookies.find { it.name == "jieqiSearchTicket" }?.value.isNullOrEmpty()) throw Exception("獲取搜索憑證失敗，請稍後重試")
     }
@@ -191,12 +190,12 @@ abstract class BiliManga :
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val suffix = pref.getString(PREF_POPULAR_MANGA_DISPLAY, "/top/weekvisit/%d.html")!!
-        return mangaPageParse(client.get(baseUrl + String.format(suffix, page)))
+        return mangaPageParse(client.get(baseUrl + String.format(suffix, page), Fetch.DOCUMENT))
     }
 
     // Latest
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaPageParse(client.get("$baseUrl/top/lastupdate/$page.html"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaPageParse(client.get("$baseUrl/top/lastupdate/$page.html", Fetch.DOCUMENT))
 
     // Search
 
@@ -204,7 +203,7 @@ abstract class BiliManga :
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (!MANGA_ID_REGEX.matches(url.encodedPath)) return null
-        return client.get(url).parseManga()
+        return client.get(url, Fetch.DOCUMENT).parseManga()
     }
 
     // /${Sort}_${Theme}_${Status}_${Anime}_${Region}_${Type}_${Time}_${Novel}_${page}_0_${Year}_${Award}.html
@@ -217,7 +216,7 @@ abstract class BiliManga :
             url.addPathSegment("filter")
                 .addPathSegment("${filters[5]}_${filters[1]}_${filters[9]}_${filters[6]}_${filters[3]}_${filters[2]}_${filters[10]}_${filters[7]}_${page}_0_${filters[4]}_${filters[8]}.html")
         }
-        val response = client.get(url.build())
+        val response = client.get(url.build(), Fetch.DOCUMENT)
         if (response.request.url.pathSegments.contains("detail")) {
             return MangasPage(listOf(response.parseManga()), false)
         }
@@ -233,14 +232,14 @@ abstract class BiliManga :
         fetchChapters: Boolean,
     ) = supervisorScope {
         val asyncManga = if (fetchDetails) {
-            async { client.get(baseUrl + manga.url).parseManga() }
+            async { client.get(baseUrl + manga.url, Fetch.DOCUMENT).parseManga() }
         } else {
             CompletableDeferred(manga)
         }
 
         val asyncChapters = if (fetchChapters) {
             async {
-                val doc = client.get("$baseUrl/read/${manga.id}/catalog").asJsoup()
+                val doc = client.get("$baseUrl/read/${manga.id}/catalog", Fetch.DOCUMENT).asJsoup()
                 val info = doc.selectFirst(".chapter-sub-title")!!.text()
                 val title = doc.selectFirst(".book-title")!!.text()
                 val date = DATE_FORMAT.tryParse(DATE_REGEX.find(info)?.value)
@@ -260,7 +259,7 @@ abstract class BiliManga :
     override val supportsRelatedMangas = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return doc.select("#book-friend-list-container").last()?.select(".module-slide-a")?.map {
             SManga.create().apply {
                 setUrlWithoutDomain(it.absUrl("href"))
@@ -273,7 +272,7 @@ abstract class BiliManga :
     // Page
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(baseUrl + chapter.url)
+        val response = client.get(baseUrl + chapter.url, Fetch.DOCUMENT)
         return response.asJsoup().let { doc ->
             val images = doc.select(".imagecontent")
             check(images.isNotEmpty()) {

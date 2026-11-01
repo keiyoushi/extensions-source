@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangalix
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -8,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -20,11 +20,9 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.io.IOException
 import java.util.Locale
 
@@ -35,11 +33,6 @@ abstract class Mangalix : KeiSource() {
         val host = baseUrl.toHttpUrl().host
         rateLimit(2) { it.host == host }
     }
-
-    private val imageHeaders: Headers
-        get() = headersBuilder()
-            .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-            .build()
 
     override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(
         loadCatalog().map { it.toSManga(baseUrl) },
@@ -157,16 +150,14 @@ abstract class Mangalix : KeiSource() {
             }
     }
 
-    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, imageHeaders)
-
     private suspend fun loadCatalog(): List<MangaDto> {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val scriptUrl = document.selectFirst("link[rel=modulepreload][href*=/assets/manga-data-]")
             ?.absUrl("href")
             ?.takeIf(String::isNotBlank)
             ?: throw IOException("Catalog script not found")
 
-        val script = client.get(scriptUrl).body.string()
+        val script = client.get(scriptUrl, Fetch.SCRIPT).body.string()
 
         CATALOG_START_REGEX.findAll(script).forEach { match ->
             val element = runCatching {
@@ -189,7 +180,7 @@ abstract class Mangalix : KeiSource() {
         return terms.all(searchable::contains)
     }
 
-    private suspend fun readChapters(slug: String): List<ChapterDto> = client.get("$baseUrl/chapters/$slug.json").parseAs()
+    private suspend fun readChapters(slug: String): List<ChapterDto> = client.get("$baseUrl/chapters/$slug.json", Fetch.XHR).parseAs()
 
     private fun String.resolveImageUrl(): String = when {
         startsWith("\$TEMP") -> replaceFirst("\$TEMP", "https://temp.compsci88.com")

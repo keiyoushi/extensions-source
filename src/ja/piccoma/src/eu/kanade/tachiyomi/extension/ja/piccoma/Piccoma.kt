@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -43,7 +44,7 @@ abstract class Piccoma :
             .addQueryParameter("page", page.toString())
             .build()
 
-        val document = client.get(requestUrl).asJsoup()
+        val document = client.get(requestUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("li a:has(div.PCOM-prdList_info)").map {
             SManga.create().apply {
                 url = it.absUrl("href").toHttpUrl().pathSegments.last()
@@ -64,7 +65,7 @@ abstract class Piccoma :
                 .addQueryParameter("tab_type", "T")
                 .build()
 
-            val result = client.get(url, xHeaders).parseAs<SearchResponseDto>()
+            val result = client.get(url, xHeaders, Fetch.XHR).parseAs<SearchResponseDto>()
             val mangas = result.data.products
                 .filter { it.isAudio != 1 && it.isAnime != 1 }
                 .map { it.toSManga() }
@@ -77,7 +78,7 @@ abstract class Piccoma :
     }
 
     private suspend fun getRanking(path: String): MangasPage {
-        val document = client.get("$baseUrl/web/ranking/$path").asJsoup()
+        val document = client.get("$baseUrl/web/ranking/$path", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("section.PCM-productRanking li > a").map {
             SManga.create().apply {
                 url = it.absUrl("href").toHttpUrl().pathSegments.last()
@@ -97,7 +98,7 @@ abstract class Piccoma :
     ): SMangaUpdate = coroutineScope {
         val details = async {
             if (!fetchDetails) return@async manga
-            val document = client.get(getMangaUrl(manga)).asJsoup()
+            val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
             val statusText = document.selectFirst("ul.PCM-productStatus")?.text()
 
             SManga.create().apply {
@@ -129,7 +130,7 @@ abstract class Piccoma :
     }
 
     private suspend fun getEpisodes(manga: SManga, hideLocked: Boolean): List<SChapter> {
-        val document = client.get("${getMangaUrl(manga)}/episodes?etype=E").asJsoup()
+        val document = client.get("${getMangaUrl(manga)}/episodes?etype=E", Fetch.DOCUMENT).asJsoup()
         val mangaTitle = document.selectFirst(".PCM-headTitle_name")?.text()
 
         return document.selectFirst("ul#js_episodeList")?.select("li").orEmpty().mapNotNull {
@@ -160,7 +161,7 @@ abstract class Piccoma :
     }
 
     private suspend fun getVolumes(manga: SManga, hideLocked: Boolean): List<SChapter> {
-        val document = client.get("${getMangaUrl(manga)}/episodes?etype=V").asJsoup()
+        val document = client.get("${getMangaUrl(manga)}/episodes?etype=V", Fetch.DOCUMENT).asJsoup()
         val mangaTitle = document.selectFirst(".PCM-headTitle_name")?.text()
 
         return document.selectFirst("ul#js_volumeList")?.select("li").orEmpty().mapNotNull {
@@ -192,7 +193,7 @@ abstract class Piccoma :
     private fun String.stripTitle(mangaTitle: String?): String = if (mangaTitle != null) replace(mangaTitle, "").trim() else this
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val script = document.selectFirst("script:containsData(var _pdata_)")?.data()
             ?: throw Exception("Log in via Webview and purchase this product to read.")
 

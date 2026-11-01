@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -20,14 +21,14 @@ abstract class Hanime1 : KeiSource() {
     private val comicHomepage get() = "$baseUrl/comics"
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(comicHomepage).asJsoup()
+        val document = client.get(comicHomepage, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("h3:containsOwn(發燒漫畫) ~ div.comic-rows-videos-div")
             .map { comicDivToManga(it) }
         return MangasPage(mangas, false)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$comicHomepage?page=$page").asJsoup()
+        val document = client.get("$comicHomepage?page=$page", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("h3:containsOwn(最新上傳) ~ div.comic-rows-videos-div")
             .map { comicDivToManga(it) }
         val hasNextPage = document.select("ul.pagination a[rel=next]").isNotEmpty()
@@ -44,7 +45,7 @@ abstract class Hanime1 : KeiSource() {
             searchUrl.addQueryParameter("sort", it)
         }
 
-        val document = client.get(searchUrl.build()).asJsoup()
+        val document = client.get(searchUrl.build(), Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div#comics-search-tag-top-row + div div.comic-rows-videos-div")
             .map { comicDivToManga(it) }
         val hasNextPage = document.select("ul.pagination a[rel=next]").isNotEmpty()
@@ -57,7 +58,7 @@ abstract class Hanime1 : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         val requestUrl = response.request.url.toString()
         val document = response.asJsoup()
 
@@ -98,7 +99,7 @@ abstract class Hanime1 : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val currentImage = document.select("img#current-page-image")
         val dataExtension = currentImage.attr("data-extension")
         val dataPrefix = currentImage.attr("data-prefix")
@@ -107,7 +108,7 @@ abstract class Hanime1 : KeiSource() {
         // Galleries mix jpg/webp per page and data-extension only matches the first one; the comic page
         // lists a thumbnail ("<n>t.<ext>") per page with the right extension
         val comicUrl = getChapterUrl(chapter).substringBeforeLast("/")
-        val extensions = client.get(comicUrl).asJsoup()
+        val extensions = client.get(comicUrl, Fetch.DOCUMENT).asJsoup()
             .select("a[href^=$comicUrl/] img[data-srcset]")
             .associate {
                 val number = it.parent()!!.attr("href").substringAfterLast("/")

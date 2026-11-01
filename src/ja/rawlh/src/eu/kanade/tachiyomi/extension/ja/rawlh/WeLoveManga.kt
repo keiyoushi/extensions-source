@@ -17,7 +17,7 @@ abstract class WeLoveManga : FMReader() {
     override fun pageListParse(document: Document): List<Page> = base64PageListParse(document)
 
     // Referer needs to be chapter URL
-    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, headersBuilder().set("Referer", page.url).build())
+    override fun getImageRequest(page: Page): Request = GET(page.imageUrl!!, headersBuilder().set("Referer", page.url).build())
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         element.select(headerSelector).let {

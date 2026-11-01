@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -22,14 +23,13 @@ import java.util.Locale
 
 @Source
 abstract class HentaiFantasy : KeiSource() {
-
     companion object {
         private val pagesUrlPattern = Regex(""""url":"(.*?)"""")
         private val dateFormat = DateTimeFormatter.ofPattern("yyyy.M.d", Locale.ROOT)
     }
 
     // ── Popular ──────────────────────────────────────────────────────────────
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/most_downloaded/$page/").asJsoup().parseMangaList()
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/most_downloaded/$page/", Fetch.DOCUMENT).asJsoup().parseMangaList()
 
     private fun Document.parseMangaList(): MangasPage {
         val mangas = select("article.element").map { element ->
@@ -44,7 +44,7 @@ abstract class HentaiFantasy : KeiSource() {
     }
 
     // ── Latest ───────────────────────────────────────────────────────────────
-    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get("$baseUrl/latest/$page/").asJsoup().parseMangaList()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get("$baseUrl/latest/$page/", Fetch.DOCUMENT).asJsoup().parseMangaList()
 
     // ── Search ───────────────────────────────────────────────────────────────
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -75,7 +75,7 @@ abstract class HentaiFantasy : KeiSource() {
             paths.size == 1 -> "tag/${paths[0]}/$page"
             else -> "search_tags"
         }
-        val document = client.post("$baseUrl/$searchPath", form.build()).asJsoup()
+        val document = client.post("$baseUrl/$searchPath", Fetch.DOCUMENT, form.build()).asJsoup()
 
         val articleElements = document.select("article.element")
         if (articleElements.isNotEmpty()) {
@@ -103,7 +103,7 @@ abstract class HentaiFantasy : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(parseMangaDetails(document, manga), parseChapterList(document))
     }
 
@@ -147,7 +147,7 @@ abstract class HentaiFantasy : KeiSource() {
     }
 
     // ── Page List ─────────────────────────────────────────────────────────────
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).use {
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).use {
         val body = it.body.string()
         pagesUrlPattern.findAll(body).mapIndexed { index, match ->
             Page(index, imageUrl = match.groupValues[1].replace("\\/", "/"))

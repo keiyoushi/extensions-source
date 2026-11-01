@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Jmanga"
-    versionCode = 8
+    versionCode = 9
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "mangareader"
@@ -14,7 +14,7 @@ keiyoushi {
     source {
         lang = "ja"
         baseUrl {
-            custom("https://jmanga.voto")
+            custom("https://jmanga.cool")
         }
     }
 }

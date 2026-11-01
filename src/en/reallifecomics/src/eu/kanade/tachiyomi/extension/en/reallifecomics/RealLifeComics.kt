@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -69,7 +70,7 @@ abstract class RealLifeComics : KeiSource() {
     ): SMangaUpdate {
         if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
-        val chapterList = client.get(getMangaUrl(manga)).asJsoup()
+        val chapterList = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
             .select(".calendar tbody tr td a")
             .map(::chapterFromElement)
             .distinctBy { it.url }
@@ -102,7 +103,7 @@ abstract class RealLifeComics : KeiSource() {
     // Page
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val image = client.get(getChapterUrl(chapter)).asJsoup().selectFirst(".comic img")?.attr("abs:src").orEmpty()
+        val image = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup().selectFirst(".comic img")?.attr("abs:src").orEmpty()
         return listOf(Page(0, imageUrl = image))
     }
 

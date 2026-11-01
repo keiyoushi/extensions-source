@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
 import keiyoushi.lib.speedbinb.fetchPages
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -29,7 +30,7 @@ abstract class GaugauMonsterPlus : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(SpeedBinbInterceptor())
 
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/list/works?page=$page").toMangasPage()
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/list/works?page=$page", Fetch.DOCUMENT).toMangasPage()
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
@@ -51,7 +52,7 @@ abstract class GaugauMonsterPlus : KeiSource() {
             }
         }.build()
 
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     private fun Response.toMangasPage(): MangasPage {
@@ -74,7 +75,7 @@ abstract class GaugauMonsterPlus : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}/episodes").asJsoup()
+        val document = client.get("$baseUrl${manga.url}/episodes", Fetch.DOCUMENT).asJsoup()
         val details = SManga.create().apply {
             title = document.selectFirst(".mbOff h1")!!.text()
             author = document.select(".list__text span a").joinToString { it.text() }
@@ -118,7 +119,7 @@ abstract class GaugauMonsterPlus : KeiSource() {
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/list/work/${chapter.memo["work"]!!.string}/episodes/${chapter.url}"
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.fetchPages(client.get(getChapterUrl(chapter)).asJsoup())
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.fetchPages(client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup())
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("フリーワード検索はジャンル検索では機能しません"),

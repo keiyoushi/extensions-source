@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -33,7 +34,7 @@ abstract class MangaDiyari : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        val response = client.get(url).parseAs<LatestUpdatesResponse>()
+        val response = client.get(url, Fetch.XHR).parseAs<LatestUpdatesResponse>()
         return MangasPage(response.updates.map { it.toSManga(baseUrl) }, response.hasMore)
     }
 
@@ -71,7 +72,7 @@ abstract class MangaDiyari : KeiSource() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        val response = client.get(url).parseAs<SeriesListResponse>()
+        val response = client.get(url, Fetch.XHR).parseAs<SeriesListResponse>()
         return MangasPage(response.series.map { it.toSManga(baseUrl) }, response.hasMore)
     }
 
@@ -97,7 +98,7 @@ abstract class MangaDiyari : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = client.get("$baseUrl/api/series/${manga.url}").parseAs<SeriesDetailsResponse>()
+        val details = client.get("$baseUrl/api/series/${manga.url}", Fetch.XHR).parseAs<SeriesDetailsResponse>()
         return SMangaUpdate(
             details.series.toSManga(baseUrl),
             details.chapters
@@ -107,7 +108,7 @@ abstract class MangaDiyari : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$baseUrl/api/chapters/${chapter.url}").parseAs<ChapterPagesResponse>()
+        val response = client.get("$baseUrl/api/chapters/${chapter.url}", Fetch.XHR).parseAs<ChapterPagesResponse>()
         return response.pages
             .sortedBy { it.pageNumber }
             .mapIndexed { index, page ->

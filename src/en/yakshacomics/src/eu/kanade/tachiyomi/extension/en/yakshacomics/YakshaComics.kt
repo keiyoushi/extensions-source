@@ -32,7 +32,7 @@ abstract class YakshaComics : Madara() {
             .add("challenge", token)
             .build()
 
-        val validateResponse = chain.proceed(POST("$baseUrl/hcdn-cgi/jschallenge-validate", headers, body))
+        val validateResponse = chain.proceed(POST("$baseUrl/hcdn-cgi/jschallenge-validate", headers.newBuilder().set("Origin", baseUrl).build(), body))
         validateResponse.use {
             if (!it.isSuccessful) {
                 throw IOException("Failed to bypass js challenge!")

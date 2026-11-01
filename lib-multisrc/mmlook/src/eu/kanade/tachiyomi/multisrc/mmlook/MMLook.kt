@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.lib.unpacker.Unpacker
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -35,7 +36,7 @@ abstract class MMLook : KeiSource() {
 
     private fun SManga.formatUrl() = apply { if (useLegacyMangaUrl) url = "/$url/" }
 
-    private suspend fun fetchRanking(id: String) = parseRanking(client.get("$desktopUrl/rank/$id").asJsoup())
+    private suspend fun fetchRanking(id: String) = parseRanking(client.get("$desktopUrl/rank/$id", Fetch.DOCUMENT).asJsoup())
 
     override suspend fun getPopularManga(page: Int) = fetchRanking("1")
 
@@ -66,6 +67,7 @@ abstract class MMLook : KeiSource() {
         if (query.isNotBlank()) {
             val document = client.post(
                 "$desktopUrl/s",
+                Fetch.DOCUMENT,
                 FormBody.Builder().add("k", query.take(12)).build(),
             ).asJsoup()
             return parseSearch(document)
@@ -78,7 +80,7 @@ abstract class MMLook : KeiSource() {
 
                 is CategoryFilter -> if (filter.state > 0) {
                     val id = filter.options[filter.state].value
-                    return parseRanking(client.get("$desktopUrl/sort/$id").asJsoup())
+                    return parseRanking(client.get("$desktopUrl/sort/$id", Fetch.DOCUMENT).asJsoup())
                 }
 
                 else -> {}
@@ -113,7 +115,7 @@ abstract class MMLook : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val mangaId = manga.url.removeSurrounding("/")
-        val document = client.get("$desktopUrl/$mangaId/").asJsoup()
+        val document = client.get("$desktopUrl/$mangaId/", Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             mangaDetailsParse(document),
             if (fetchChapters) fetchChapterList(document, mangaId) else chapters,
@@ -162,6 +164,7 @@ abstract class MMLook : KeiSource() {
         if (container.selectFirst(".chaplist-more") != null) {
             client.post(
                 "$desktopUrl/morechapter",
+                Fetch.XHR,
                 FormBody.Builder().addEncoded("id", mangaId).build(),
             ).parseAs<ResponseDto>().data
                 .mapTo(chapters) { it.toSChapter(mangaId) }
@@ -178,7 +181,7 @@ abstract class MMLook : KeiSource() {
     override fun getChapterUrl(chapter: SChapter) = chapter.fullUrl().certificateWorkaround()
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(chapter.fullUrl()).asJsoup()
+        val document = client.get(chapter.fullUrl(), Fetch.DOCUMENT).asJsoup()
         val id = document.selectFirst(".readerContainer")!!.attr("data-id").toInt()
         return document.selectFirst("script:containsData(eval)")!!.data()
             .let(Unpacker::unpack)

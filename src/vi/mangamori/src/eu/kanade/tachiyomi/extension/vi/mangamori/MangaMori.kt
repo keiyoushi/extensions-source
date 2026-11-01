@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -28,7 +29,7 @@ abstract class MangaMori : KeiSource() {
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("a.group.block.h-full[href^=/truyen/]")
             .mapNotNull { card ->
                 val titleElement = card.selectFirst("h3") ?: return@mapNotNull null
@@ -65,7 +66,7 @@ abstract class MangaMori : KeiSource() {
         val url = "$baseUrl/api/search".toHttpUrl().newBuilder()
             .addQueryParameter("q", query)
             .build()
-        val result = client.get(url).parseAs<SearchResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<SearchResponse>()
         return MangasPage(result.data.map(SearchComic::toSManga), false)
     }
 
@@ -89,7 +90,7 @@ abstract class MangaMori : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.url.substringAfterLast('/')
-        val document = client.get("$baseUrl/truyen/$slug").asJsoup()
+        val document = client.get("$baseUrl/truyen/$slug", Fetch.DOCUMENT).asJsoup()
         val titleElement = document.selectFirst("h1") ?: return SMangaUpdate(manga, chapters)
         val detailsContainer = titleElement.parent()
         val statusText = detailsContainer?.select("span")
@@ -124,7 +125,7 @@ abstract class MangaMori : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val payload = document.extractNextJs<ReaderPayload> { element ->
             element is JsonObject &&
                 "chapter" in element &&

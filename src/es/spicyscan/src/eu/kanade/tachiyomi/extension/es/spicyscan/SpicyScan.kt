@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -37,7 +38,7 @@ abstract class SpicyScan : KeiSource() {
         .addQueryParameter("state", "")
         .addQueryParameter("loading", "true")
 
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get(filterUrlBuilder(page, SortFilter.ID_POPULAR).build())
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get(filterUrlBuilder(page, SortFilter.ID_POPULAR).build(), Fetch.XHR)
         .parseAs<FilterResponseDto>().toMangasPage()
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -49,7 +50,7 @@ abstract class SpicyScan : KeiSource() {
                 .addQueryParameter("query", query)
                 .build()
 
-            val result = client.get(url).parseAs<List<MangaDto>>()
+            val result = client.get(url, Fetch.XHR).parseAs<List<MangaDto>>()
             return MangasPage(
                 mangas = result.map { it.toSManga() },
                 hasNextPage = false,
@@ -75,10 +76,10 @@ abstract class SpicyScan : KeiSource() {
             }
         }
 
-        return client.get(url.build()).parseAs<FilterResponseDto>().toMangasPage()
+        return client.get(url.build(), Fetch.XHR).parseAs<FilterResponseDto>().toMangasPage()
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get(filterUrlBuilder(page, SortFilter.ID_LATEST).build())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get(filterUrlBuilder(page, SortFilter.ID_LATEST).build(), Fetch.XHR)
         .parseAs<FilterResponseDto>().toMangasPage()
 
     // details and chapters come from the same endpoint
@@ -88,14 +89,14 @@ abstract class SpicyScan : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val series = client.get("$apiBaseUrl/serie/${manga.url}").parseAs<SeriesResponseDto>().series
+        val series = client.get("$apiBaseUrl/serie/${manga.url}", Fetch.XHR).parseAs<SeriesResponseDto>().series
         return SMangaUpdate(
             series.toSMangaDetails(),
             series.toSChapterList(),
         )
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiBaseUrl/serie/${chapter.url}/").parseAs<PagesResponseDto>().toPageList()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiBaseUrl/serie/${chapter.url}/", Fetch.XHR).parseAs<PagesResponseDto>().toPageList()
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("Los filtros no se aplican a la búsqueda por texto"),

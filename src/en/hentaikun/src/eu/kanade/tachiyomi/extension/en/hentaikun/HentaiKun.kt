@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -47,7 +48,7 @@ abstract class HentaiKun : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val pageStr = if (page > 1) "$page/" else ""
-        val document = client.get("$baseUrl/manga/manga-list/most-viewed/$pageStr").asJsoup()
+        val document = client.get("$baseUrl/manga/manga-list/most-viewed/$pageStr", Fetch.DOCUMENT).asJsoup()
         return MangasPage(
             parseTableListing(document),
             hasNextPage = document.selectFirst("ul.pagination li[aria-label=Next]") != null,
@@ -58,7 +59,7 @@ abstract class HentaiKun : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val pageStr = if (page > 1) "$page/" else ""
-        val document = client.get("$baseUrl/manga/manga-list/last-updated/$pageStr").asJsoup()
+        val document = client.get("$baseUrl/manga/manga-list/last-updated/$pageStr", Fetch.DOCUMENT).asJsoup()
         return MangasPage(
             parseTableListing(document),
             hasNextPage = document.selectFirst("ul.pagination li[aria-label=Next]") != null,
@@ -72,7 +73,7 @@ abstract class HentaiKun : KeiSource() {
         val searchType = filters.firstInstanceOrNull<SearchTypeFilter>()?.toUriPart() ?: "title"
 
         val document = if (query.isNotBlank()) {
-            client.get("$baseUrl/manga/search/$searchType/${query.trim()}/$pageStr").asJsoup()
+            client.get("$baseUrl/manga/search/$searchType/${query.trim()}/$pageStr", Fetch.DOCUMENT).asJsoup()
         } else {
             return getPopularManga(page)
         }
@@ -131,14 +132,14 @@ abstract class HentaiKun : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
     }
 
     // ========================= Page List ====================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         val jsonData = document.select("script")
             .firstOrNull { it.data().contains("var jsondata=") }

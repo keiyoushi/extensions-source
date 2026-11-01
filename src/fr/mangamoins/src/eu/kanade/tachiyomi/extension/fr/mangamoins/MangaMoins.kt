@@ -8,6 +8,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -17,7 +19,6 @@ import java.util.Locale
 
 @Source
 abstract class MangaMoins : KeiSource() {
-
     private val apiUrl get() = "$baseUrl/api/v1"
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->
@@ -26,7 +27,7 @@ abstract class MangaMoins : KeiSource() {
 
         if (response.code == 403 && request.url.toString().contains("/api/v1/")) {
             response.close()
-            val homeRequest = GET(baseUrl, headers)
+            val homeRequest = GET(baseUrl, headers).newBuilder().fetch(Fetch.DOCUMENT).build()
             network.client.newCall(homeRequest).execute().close()
             return@addInterceptor chain.proceed(request)
         }
@@ -36,7 +37,7 @@ abstract class MangaMoins : KeiSource() {
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val result = client.get("$apiUrl/trend").parseAs<TrendResponse>()
+        val result = client.get("$apiUrl/trend", Fetch.XHR).parseAs<TrendResponse>()
         val mangas = result.data.map { it.toSManga() }
         return MangasPage(mangas, false) // Trend API has no pagination
     }
@@ -48,7 +49,7 @@ abstract class MangaMoins : KeiSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", MANGA_PAGE_LIMIT.toString())
             .build()
-        return client.get(url).parseAs<MangaListResponse>().toMangasPage()
+        return client.get(url, Fetch.XHR).parseAs<MangaListResponse>().toMangasPage()
     }
 
     private fun MangaListResponse.toMangasPage(): MangasPage {
@@ -69,7 +70,7 @@ abstract class MangaMoins : KeiSource() {
                 }
             }
             .build()
-        return client.get(url).parseAs<MangaListResponse>().toMangasPage()
+        return client.get(url, Fetch.XHR).parseAs<MangaListResponse>().toMangasPage()
     }
 
     // ============================== Details ===============================
@@ -83,7 +84,7 @@ abstract class MangaMoins : KeiSource() {
         val detailsUrl = "$apiUrl/manga".toHttpUrl().newBuilder()
             .addQueryParameter("manga", manga.url.toMangaSlug())
             .build()
-        val result = client.get(detailsUrl).parseAs<MangaDetailsResponse>()
+        val result = client.get(detailsUrl, Fetch.XHR).parseAs<MangaDetailsResponse>()
 
         val info = result.info
         val updatedManga = manga.apply {
@@ -140,7 +141,7 @@ abstract class MangaMoins : KeiSource() {
 
         try {
             val scriptUrl = "$baseUrl/includes/components/js/reader.js"
-            client.get(scriptUrl).use { response ->
+            client.get(scriptUrl, Fetch.SCRIPT).use { response ->
                 val script = response.body.string()
 
                 val pathSegment = pagesBaseUrl.removeSuffix("/").substringAfterLast("/")
@@ -179,7 +180,7 @@ abstract class MangaMoins : KeiSource() {
         val url = "$apiUrl/scan".toHttpUrl().newBuilder()
             .addQueryParameter("slug", chapterSlug)
             .build()
-        val data = client.get(url).parseAs<ScanResponse>()
+        val data = client.get(url, Fetch.XHR).parseAs<ScanResponse>()
         val salts = getSalts(data.pagesBaseUrl)
 
         val baseUrl = salts.fold(data.pagesBaseUrl.removeSuffix("/").removeSuffix("_b")) { url, salt ->

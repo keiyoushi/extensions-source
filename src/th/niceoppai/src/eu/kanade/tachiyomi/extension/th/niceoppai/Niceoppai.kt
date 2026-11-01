@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -27,17 +28,17 @@ import java.util.Locale
 @Source
 abstract class Niceoppai : KeiSource() {
     // Popular
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/manga_list/all/any/most-popular-monthly/$page").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/manga_list/all/any/most-popular-monthly/$page", Fetch.DOCUMENT).asJsoup())
 
     // Latest
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/manga_list/all/any/last-updated/$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/manga_list/all/any/last-updated/$page", Fetch.DOCUMENT).asJsoup())
 
     // Search
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val orderBy = ORDER_BY_FILTER_OPTIONS_VALUES[filters.firstInstanceOrNull<OrderByFilter>()?.state ?: 0]
 
         val document = if (query.isBlank()) {
-            client.get("$baseUrl/manga_list/all/any/$orderBy/$page").asJsoup()
+            client.get("$baseUrl/manga_list/all/any/$orderBy/$page", Fetch.DOCUMENT).asJsoup()
         } else {
             val url = baseUrl.toHttpUrl().newBuilder()
                 .addPathSegments("manga_list/search")
@@ -45,7 +46,7 @@ abstract class Niceoppai : KeiSource() {
                 .addPathSegment(orderBy)
                 .addPathSegment(page.toString())
                 .build()
-            client.get(url).asJsoup()
+            client.get(url, Fetch.DOCUMENT).asJsoup()
         }
 
         return parseMangaList(document)
@@ -71,7 +72,7 @@ abstract class Niceoppai : KeiSource() {
         val segments = url.pathSegments.filter { it.isNotEmpty() }
         val slug = segments.firstOrNull()?.takeIf { segments.size <= 2 && it != "manga_list" } ?: return null
 
-        return parseMangaDetails(client.get("$baseUrl/$slug/").asJsoup()).apply { initialized = true }
+        return parseMangaDetails(client.get("$baseUrl/$slug/", Fetch.DOCUMENT).asJsoup()).apply { initialized = true }
     }
 
     // Details + Chapters
@@ -81,7 +82,7 @@ abstract class Niceoppai : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(
             manga = if (fetchDetails) parseMangaDetails(document) else manga,
@@ -119,7 +120,7 @@ abstract class Niceoppai : KeiSource() {
 
         return coroutineScope {
             pageUrls.map { url ->
-                async { parseChapters(client.get(url).asJsoup()) }
+                async { parseChapters(client.get(url, Fetch.DOCUMENT).asJsoup()) }
             }.awaitAll().flatten()
         }
     }
@@ -139,7 +140,7 @@ abstract class Niceoppai : KeiSource() {
 
     // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("#image-container > center > img").mapIndexed { index, img ->
             Page(index, imageUrl = img.attr("abs:src"))
         }

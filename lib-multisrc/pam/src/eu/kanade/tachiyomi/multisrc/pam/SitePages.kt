@@ -2,6 +2,8 @@ package eu.kanade.tachiyomi.multisrc.pam
 
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.utils.WebViewTimeoutException
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
@@ -175,7 +177,7 @@ internal class SitePages(
     /** Reader worker, with its HKDF page-key import reported to reader.js. */
     private fun rewrittenWorker(webRequest: WebResourceRequest, bridge: String): WebResourceResponse {
         val url = webRequest.url.toString().toHttpUrl().newBuilder().removeAllQueryParameters(bridge).build()
-        val request = Request.Builder().url(url).headers(webRequest.requestHeaders.toHeaders()).build()
+        val request = Request.Builder().url(url).headers(webRequest.requestHeaders.toHeaders()).fetch(Fetch.SCRIPT).build()
         client().newCall(request).execute().use { upstream ->
             // The unpatched worker would only time out without the page key
             if (!upstream.isSuccessful) throw IOException("The site's reader did not load (HTTP ${upstream.code}), try opening the chapter in WebView")

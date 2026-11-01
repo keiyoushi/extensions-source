@@ -13,6 +13,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.head
 import keiyoushi.network.post
@@ -52,10 +54,7 @@ abstract class Dynasty :
         .rateLimit(1) { it.fragment != COVER_URL_FRAGMENT }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val homeHeaders = headersBuilder()
-            .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-            .build()
-        val document = client.get(baseUrl, homeHeaders).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
 
         val entries = document
             .select("h4:contains(Most Popular of Past 7 Days) ~ ul.cover-list a.thumbnail")
@@ -76,7 +75,7 @@ abstract class Dynasty :
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val data = client.get("$baseUrl/$CHAPTERS_DIR/added.json?page=${page - 1}")
+        val data = client.get("$baseUrl/$CHAPTERS_DIR/added.json?page=${page - 1}", Fetch.XHR)
             .parseAs<BrowseResponse>()
 
         val entries = LinkedHashSet<MangaEntry>()
@@ -188,7 +187,7 @@ abstract class Dynasty :
             }
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val parsed = parseSearchEntries(document)
         val entries = parsed.filterNot { entry ->
@@ -273,7 +272,7 @@ abstract class Dynasty :
             .add("query", query)
             .build()
 
-        val data = client.post(url, body)
+        val data = client.post(url, Fetch.XHR, body)
             .parseAs<List<TagSuggest>>()
 
         return data.firstOrNull {
@@ -299,7 +298,7 @@ abstract class Dynasty :
             .addPathSegment(directory)
             .addPathSegment("$permalink.json")
             .build()
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
 
         if (directory == CHAPTERS_DIR) {
             val data = response.parseAs<ChapterResponse>()
@@ -322,7 +321,7 @@ abstract class Dynasty :
                     .addQueryParameter("page", page.toString())
                     .build()
 
-                chapterItems += client.get(pageUrl).parseAs<MangaResponse>().taggings
+                chapterItems += client.get(pageUrl, Fetch.XHR).parseAs<MangaResponse>().taggings
                 page += 1
             }
 
@@ -544,7 +543,7 @@ abstract class Dynasty :
             .addPathSegment("$permalink.json")
             .build()
 
-        val data = client.get(url).parseAs<ChapterResponse>()
+        val data = client.get(url, Fetch.XHR).parseAs<ChapterResponse>()
 
         return data.pages.mapIndexed { index, page ->
             Page(index, imageUrl = baseUrl + page.url)
@@ -557,7 +556,7 @@ abstract class Dynasty :
             ?.randomOrNull()
             ?: return emptyList()
 
-        val data = client.get("$baseUrl/authors/$authorSlug.json").parseAs<AuthorResponse>()
+        val data = client.get("$baseUrl/authors/$authorSlug.json", Fetch.XHR).parseAs<AuthorResponse>()
         val related = LinkedHashSet<MangaEntry>()
 
         data.taggables.forEach { taggable ->
@@ -703,6 +702,7 @@ abstract class Dynasty :
             Request.Builder()
                 .url(chapterUrl)
                 .headers(headers)
+                .fetch(Fetch.XHR)
                 .build(),
         ).execute()
             .parseAs<ChapterResponse>()

@@ -69,11 +69,12 @@ object GatekeeperInterceptor : Interceptor {
             "$PREFIX$challengeId:$it".sha256().leadingZeroBits() >= bits
         }
 
-        // The challenge page is served with no-referrer
+        // The challenge page is served with no-referrer; its fetch() still sends the page's Origin, which the check needs
         val verifyRequest = Request.Builder()
             .url(request.url.resolve(field(VERIFY_URL_REGEX)) ?: throw IOException("Unsupported gatekeeper challenge"))
             .headers(request.headers)
             .removeHeader("Referer")
+            .header("Origin", request.url.resolve("/")!!.toString().removeSuffix("/"))
             .post(VerifyRequest(challengeId, field(TICKET_REGEX), nonce.toString()).toJsonRequestBody())
             .build()
 

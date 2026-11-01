@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -62,20 +63,20 @@ abstract class Cubari : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val series = client.get(seriesApiUrl(manga.url)).parseAs<SeriesDto>()
+        val series = client.get(seriesApiUrl(manga.url), Fetch.XHR).parseAs<SeriesDto>()
 
         return SMangaUpdate(series.toSManga(manga.url), parseChapterList(series, manga))
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = when {
         chapter.url.contains("/chapter/") -> {
-            client.get("$baseUrl${chapter.url}")
+            client.get("$baseUrl${chapter.url}", Fetch.XHR)
                 .parseAs<JsonArray>()
                 .mapIndexed { i, jsonEl -> Page(i, "", jsonEl.pageSrc()) }
         }
 
         else -> {
-            val series = client.get(seriesApiUrl(chapter.url)).parseAs<SeriesDto>()
+            val series = client.get(seriesApiUrl(chapter.url), Fetch.XHR).parseAs<SeriesDto>()
             seriesJsonPageListParse(series, chapter)
         }
     }
@@ -105,7 +106,7 @@ abstract class Cubari : KeiSource() {
     }
 
     private suspend fun fetchSeries(source: String, slug: String): SManga {
-        val series = client.get("$baseUrl/read/api/$source/series/$slug/").parseAs<SeriesDto>()
+        val series = client.get("$baseUrl/read/api/$source/series/$slug/", Fetch.XHR).parseAs<SeriesDto>()
         // Only tag for recently read on search; a failed tag shouldn't fail the search
         runCatching { tagHistory(source, slug) }
 

@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "NexusScanlation"
-    versionCode = 7
+    versionCode = 8
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 

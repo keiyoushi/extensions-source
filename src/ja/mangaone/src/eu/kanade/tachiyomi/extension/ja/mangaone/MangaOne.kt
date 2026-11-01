@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -42,7 +43,7 @@ abstract class MangaOne :
             .addQueryParameter("rq", "ranking")
             .build()
 
-        val result = client.get(url).parseAsProto<RankingResponseList>()
+        val result = client.get(url, Fetch.XHR).parseAsProto<RankingResponseList>()
         val mangas = result.categories.flatMap { it.rankingLists }.find { it.type == "すべて" }?.titles?.map { it.entry.toSManga() }.orEmpty()
         return MangasPage(mangas, false)
     }
@@ -53,7 +54,7 @@ abstract class MangaOne :
             .build()
 
         val dayIndex = LocalDate.now(JST).dayOfWeek.value - 1
-        val result = client.get(url).parseAsProto<LatestResponseList>()
+        val result = client.get(url, Fetch.XHR).parseAsProto<LatestResponseList>()
         val mangas = result.list[dayIndex].responseList.map { it.titles.entry.toSManga() }
         return MangasPage(mangas, false)
     }
@@ -72,7 +73,7 @@ abstract class MangaOne :
                 }
             }.build()
 
-        val result = client.post(url, EMPTY_BODY).parseAsProto<ResponseList>()
+        val result = client.post(url, Fetch.XHR, EMPTY_BODY).parseAsProto<ResponseList>()
         val mangas = result.responseList.map { it.titles.entry.toSManga() }
         return MangasPage(mangas, false)
     }
@@ -90,7 +91,7 @@ abstract class MangaOne :
                 .addQueryParameter("rq", "viewer_v2")
                 .addQueryParameter("title_id", manga.url)
                 .build()
-            client.post(url, EMPTY_BODY).parseAsProto<DetailResponse>().detailEntry.details.toSManga()
+            client.post(url, Fetch.XHR, EMPTY_BODY).parseAsProto<DetailResponse>().detailEntry.details.toSManga()
         }
 
         val chapterList = async {
@@ -103,7 +104,7 @@ abstract class MangaOne :
                 .addQueryParameter("sort_type", "desc")
                 .addQueryParameter("type", "chapter")
                 .build()
-            client.get(url).parseAsProto<ChapterResponse>().chapters.chapterList
+            client.get(url, Fetch.XHR).parseAsProto<ChapterResponse>().chapters.chapterList
                 .filter { !hideLocked || !it.isLocked }
                 .map { it.toSChapter(manga.url) }
         }
@@ -118,7 +119,7 @@ abstract class MangaOne :
             .addQueryParameter("chapter_id", chapter.url)
             .build()
 
-        val result = client.post(url, EMPTY_BODY).parseAsProto<ViewerResponse>()
+        val result = client.post(url, Fetch.XHR, EMPTY_BODY).parseAsProto<ViewerResponse>()
         if (result.pages.isNullOrEmpty()) {
             throw Exception("Log in via WebView and rent or purchase this chapter to read.")
         }
@@ -137,7 +138,7 @@ abstract class MangaOne :
         val url = apiUrl.toHttpUrl().newBuilder()
             .addQueryParameter("rq", "title/search")
             .build()
-        return client.get(url).parseAsProto<TagResponse>().tags.orEmpty().toJsonElement()
+        return client.get(url, Fetch.XHR).parseAsProto<TagResponse>().tags.orEmpty().toJsonElement()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {

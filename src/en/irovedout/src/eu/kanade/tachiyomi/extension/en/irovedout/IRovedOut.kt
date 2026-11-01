@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -37,14 +38,14 @@ abstract class IRovedOut : KeiSource() {
     ): SMangaUpdate {
         if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
-        val mainPage = client.get(baseUrl).asJsoup()
+        val mainPage = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val books = mainPage.select("#menu-menu > li > a[href^=$archiveUrl]")
 
         var chapterCounter = 1F
         val chaptersByBook = books.mapIndexed { bookIndex, book ->
             val bookNumber = bookIndex + 1
             val bookUrl = book.attr("href")
-            val bookPage = client.get(bookUrl).asJsoup()
+            val bookPage = client.get(bookUrl, Fetch.DOCUMENT).asJsoup()
             val chapterWraps = bookPage.select(".comic-archive-chapter-wrap")
             chapterWraps.map {
                 val chapterWrap = it.selectFirst(".comic-archive-chapter-wrap")!!
@@ -60,7 +61,7 @@ abstract class IRovedOut : KeiSource() {
     }
 
     override suspend fun getImageUrl(page: Page): String {
-        val comicPage = client.get(page.url).asJsoup()
+        val comicPage = client.get(page.url, Fetch.DOCUMENT).asJsoup()
         return comicPage.selectFirst("#comic img")!!.attr("src")
     }
 
@@ -70,7 +71,7 @@ abstract class IRovedOut : KeiSource() {
         val match = titleRegex.matchEntire(chapter.name) ?: return listOf()
         val bookNumber = match.groups[1]!!.value.toInt()
         val title = match.groups[2]!!.value
-        val bookPage = client.get(archiveUrl + if (bookNumber != 1) "-book-$bookNumber" else "").asJsoup()
+        val bookPage = client.get(archiveUrl + if (bookNumber != 1) "-book-$bookNumber" else "", Fetch.DOCUMENT).asJsoup()
         val chapterWrap = bookPage.select(".comic-archive-chapter-wrap").find { it.selectFirst(".comic-archive-chapter")!!.text() == title }
         val pageUrls = chapterWrap?.select(".comic-archive-list-wrap .comic-archive-title > a")?.map { it.attr("href") } ?: return listOf()
         return pageUrls.mapIndexed { pageIndex, pageUrl ->

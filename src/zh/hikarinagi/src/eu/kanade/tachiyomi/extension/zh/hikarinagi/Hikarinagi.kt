@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getArray
@@ -32,7 +33,6 @@ import okhttp3.Response
 
 @Source
 abstract class Hikarinagi : KeiSource() {
-
     override fun getHomeUrl() = "$baseUrl/mangas"
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())
@@ -62,13 +62,13 @@ abstract class Hikarinagi : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val filters = FilterList(SortFilter(Filter.Sort.Selection(1, false)))
-        val response = client.get(browseUrl(page, null, filters))
+        val response = client.get(browseUrl(page, null, filters), Fetch.DOCUMENT)
         return parseBrowse(response)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val filters = FilterList(SortFilter(Filter.Sort.Selection(0, false)))
-        val response = client.get(browseUrl(page, null, filters))
+        val response = client.get(browseUrl(page, null, filters), Fetch.DOCUMENT)
         return parseBrowse(response)
     }
 
@@ -82,7 +82,7 @@ abstract class Hikarinagi : KeiSource() {
     )
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val response = client.get(browseUrl(page, query, filters))
+        val response = client.get(browseUrl(page, query, filters), Fetch.DOCUMENT)
         return parseBrowse(response)
     }
 
@@ -96,7 +96,7 @@ abstract class Hikarinagi : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val data = client.get("$baseUrl/api/pages/mangas/${manga.url}").parseAs<MangaData>()
+        val data = client.get("$baseUrl/api/pages/mangas/${manga.url}", Fetch.XHR).parseAs<MangaData>()
         val sManga = data.manga.toSManga(data.people(), data.tags())
         val sChapters = data.chapters.map { it.toSChapter(manga.url, manga.memo.getLong("updateAt")) }
         return SMangaUpdate(sManga, sChapters.reversed())
@@ -104,7 +104,7 @@ abstract class Hikarinagi : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val cid = chapter.memo.getString("cid")
-        val response = client.get("$baseUrl/api/pages/mangas/reader/$cid/${chapter.url}", ensureSuccess = false)
+        val response = client.get("$baseUrl/api/pages/mangas/reader/$cid/${chapter.url}", Fetch.XHR, ensureSuccess = false)
         if (!response.isSuccessful) {
             response.close()
             if (response.code == 401) throw Exception("请先在 WebView 中登录") else throw HttpException(response.code)
@@ -118,8 +118,8 @@ abstract class Hikarinagi : KeiSource() {
         }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val token = ImageInterceptor.newToken()
-        return POST("${page.imageUrl!!}|$token", headers, buildJsonObject { put("p", token) }.toJsonRequestBody<JsonObject>())
+        return POST("${page.imageUrl!!}|$token", headers.newBuilder().set("Origin", baseUrl).build(), buildJsonObject { put("p", token) }.toJsonRequestBody<JsonObject>())
     }
 }

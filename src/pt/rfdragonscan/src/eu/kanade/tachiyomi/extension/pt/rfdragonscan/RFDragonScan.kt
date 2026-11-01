@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -29,7 +30,6 @@ import java.util.concurrent.ConcurrentHashMap
 
 @Source
 abstract class RFDragonScan : KeiSource() {
-
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(::loginInterceptor)
 
     // ============================== Popular ==============================
@@ -53,6 +53,7 @@ abstract class RFDragonScan : KeiSource() {
             headersBuilder()
                 .add("Rsc", "1")
                 .build(),
+            Fetch.XHR,
         ).extractNextJs<ProjectsPageDto>()
             ?: return MangasPage(emptyList(), false)
 
@@ -155,6 +156,7 @@ abstract class RFDragonScan : KeiSource() {
                 .add("Accept", "text/x-component")
                 .add("Referer", url)
                 .build(),
+            Fetch.XHR,
             body,
             ensureSuccess = ensureSuccess,
         )
@@ -185,7 +187,7 @@ abstract class RFDragonScan : KeiSource() {
             "$baseUrl/00000000/dummy/capitulo/1",
         ).map { url ->
             async {
-                client.get(url, ensureSuccess = false)
+                client.get(url, Fetch.DOCUMENT, ensureSuccess = false)
                     .asJsoup()
                     .select("script[src]")
                     .map { it.absUrl("src") }
@@ -197,7 +199,7 @@ abstract class RFDragonScan : KeiSource() {
 
         scripts.map { url ->
             async {
-                client.get(url, ensureSuccess = false).use {
+                client.get(url, Fetch.SCRIPT, ensureSuccess = false).use {
                     ACTION_ID_REGEX.findAll(it.body.string()).map { m -> m.destructured }.toList()
                 }
             }

@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.lib.synchrony.Deobfuscator
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.cryptoJsDecrypt
@@ -88,7 +89,7 @@ abstract class MangasIn : MMRCMS() {
     private var key = ""
 
     private suspend fun getKey(): String {
-        val script = client.get("$baseUrl/js/ads2.js").body.string()
+        val script = client.get("$baseUrl/js/ads2.js", Fetch.SCRIPT).body.string()
         val deobfuscatedScript = Deobfuscator.deobfuscateScript(script)
             ?: throw Exception("No se pudo desofuscar el script")
 

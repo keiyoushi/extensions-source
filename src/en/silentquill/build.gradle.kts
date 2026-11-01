@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "SilentQuill"
     pkgName = "en.armageddon"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

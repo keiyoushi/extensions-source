@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -38,7 +39,7 @@ abstract class Pornhwa18 : KeiSource() {
     private suspend fun listing(url: HttpUrl.Builder, page: Int): MangasPage {
         url.addPathSegment("q-data.json")
         if (page > 1) url.addQueryParameter("page", page.toString())
-        val all = client.get(url.build()).qwikLoader().parseAs<List<SeriesDto>>()
+        val all = client.get(url.build(), Fetch.XHR).qwikLoader().parseAs<List<SeriesDto>>()
         val mangas = all.drop((page - 1) * PAGE_SIZE).filter { it.slug.isNotBlank() }.map { it.toSManga() }
         return MangasPage(mangas, all.size >= page * PAGE_SIZE)
     }
@@ -64,9 +65,9 @@ abstract class Pornhwa18 : KeiSource() {
         return SMangaUpdate(series.toSMangaDetails(), series.toSChapters())
     }
 
-    private suspend fun fetchSeries(slug: String) = client.get("$baseUrl/comic/$slug/q-data.json").qwikLoader().parseAs<SeriesDto>()
+    private suspend fun fetchSeries(slug: String) = client.get("$baseUrl/comic/$slug/q-data.json", Fetch.XHR).qwikLoader().parseAs<SeriesDto>()
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("${getChapterUrl(chapter)}q-data.json")
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("${getChapterUrl(chapter)}q-data.json", Fetch.XHR)
         .qwikLoader()
         .parseAs<ReaderDto>()
         .data.chapters.first().images

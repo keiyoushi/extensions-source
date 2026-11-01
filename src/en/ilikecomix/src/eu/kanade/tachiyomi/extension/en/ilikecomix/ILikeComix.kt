@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -27,7 +28,7 @@ abstract class ILikeComix : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = if (page == 1) "$baseUrl/king-porn-comics/" else "$baseUrl/king-porn-comics/page/$page/"
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("article").mapNotNull(::parseEntry)
         return MangasPage(mangas, document.selectFirst("a.nextp") != null)
     }
@@ -40,7 +41,7 @@ abstract class ILikeComix : KeiSource() {
             .apply { if (page > 1) addPathSegments("page/$page") }
             .addQueryParameter("s", query)
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("article").mapNotNull(::parseEntry)
         return MangasPage(mangas, document.selectFirst("a.nextp") != null)
     }
@@ -50,7 +51,7 @@ abstract class ILikeComix : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val manga = SManga.create().apply { this.url = url.encodedPath.removePrefix("/") }
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val title = document.selectFirst("h1.post-title")?.text().orEmpty().trim()
         if (title.isBlank()) return null
         return parseMangaDetails(document, manga)
@@ -63,7 +64,7 @@ abstract class ILikeComix : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val updatedManga = if (fetchDetails) {
-            val document = client.get(getMangaUrl(manga)).asJsoup()
+            val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
             parseMangaDetails(document, manga)
         } else {
             manga
@@ -108,7 +109,7 @@ abstract class ILikeComix : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val figures = document.select("figure[data-pswp-src]")
             .map { it.attr("abs:data-pswp-src") }
         val images = document.select(".entry-content img")

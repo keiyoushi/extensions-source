@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -195,9 +196,9 @@ abstract class MangaUp :
 
     private suspend fun apiRequest(url: HttpUrl, post: Boolean = false): Response {
         val response = if (post) {
-            client.post(url, EMPTY_BODY, ensureSuccess = false)
+            client.post(url, Fetch.XHR, EMPTY_BODY, ensureSuccess = false)
         } else {
-            client.get(url, ensureSuccess = false)
+            client.get(url, Fetch.DOCUMENT, ensureSuccess = false)
         }
         if (response.isSuccessful) return response
         response.close()

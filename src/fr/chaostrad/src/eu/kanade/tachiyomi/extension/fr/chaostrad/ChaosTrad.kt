@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -47,7 +48,7 @@ abstract class ChaosTrad : KeiSource() {
         val mangaList = mutableListOf<SManga>()
         val addedUrls = mutableSetOf<String>()
 
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val submenu = document.selectFirst("#comics-main")?.nextElementSibling()
 
         submenu?.select("a[href]")?.forEach { link ->
@@ -67,7 +68,7 @@ abstract class ChaosTrad : KeiSource() {
                 }
                 href.startsWith("/search/") -> {
                     // May be a collection page or a redirect to a single series
-                    val subResponse = client.get("$baseUrl$href")
+                    val subResponse = client.get("$baseUrl$href", Fetch.DOCUMENT)
                     val finalPath = subResponse.request.url.encodedPath
                     val subDoc = subResponse.asJsoup()
 
@@ -148,7 +149,7 @@ abstract class ChaosTrad : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get("$baseUrl${manga.url}")
+        val response = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT)
         val finalPath = response.request.url.encodedPath
         val document = response.asJsoup()
 
@@ -194,7 +195,7 @@ abstract class ChaosTrad : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
         return document.select("img.comic-image").mapIndexed { index, img ->
             Page(index, imageUrl = img.absUrl("src"))
         }

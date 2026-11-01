@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -21,7 +22,7 @@ abstract class Nemesisscans : KeiSource() {
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList())
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val latest = client.get("$API_URL/latestepisodes?limit=50").parseAs<LatestDto>()
+        val latest = client.get("$API_URL/latestepisodes?limit=50", Fetch.XHR).parseAs<LatestDto>()
         val mangas = latest.data.map { it.series }.distinctBy { it.id }.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
@@ -39,14 +40,14 @@ abstract class Nemesisscans : KeiSource() {
             }
         }.addQueryParameter("page", page.toString()).build()
 
-        val result = client.get(url).parseAs<SeriesListDto>()
+        val result = client.get(url, Fetch.XHR).parseAs<SeriesListDto>()
         return MangasPage(result.data.map { it.toSManga() }, result.pagination.hasNextPage)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "series") return null
         val id = url.pathSegments.getOrNull(1)?.toIntOrNull() ?: return null
-        return client.get("$API_URL/series/$id").parseAs<SeriesDetailDto>().series.toSManga()
+        return client.get("$API_URL/series/$id", Fetch.XHR).parseAs<SeriesDetailDto>().series.toSManga()
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/series/${manga.url}"
@@ -57,7 +58,7 @@ abstract class Nemesisscans : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val detail = client.get("$API_URL/series/${manga.url}").parseAs<SeriesDetailDto>()
+        val detail = client.get("$API_URL/series/${manga.url}", Fetch.XHR).parseAs<SeriesDetailDto>()
         return SMangaUpdate(
             manga = detail.series.toSManga(),
             chapters = detail.episodes.map { it.toSChapter(detail.series.id) }.sortedByDescending { it.chapter_number },
@@ -71,7 +72,7 @@ abstract class Nemesisscans : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (seriesId, episodeNumber) = chapter.url.split("/")
-        val episode = client.get("$API_URL/series/$seriesId/episodes/$episodeNumber").parseAs<EpisodePagesDto>().episode
+        val episode = client.get("$API_URL/series/$seriesId/episodes/$episodeNumber", Fetch.XHR).parseAs<EpisodePagesDto>().episode
         return episode.images.sortedBy { it.order }.mapIndexed { index, image ->
             Page(index, imageUrl = image.url)
         }

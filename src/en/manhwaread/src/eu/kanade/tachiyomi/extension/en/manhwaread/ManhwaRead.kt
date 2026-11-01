@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -85,7 +86,7 @@ abstract class ManhwaRead : KeiSource() {
             }
         }
 
-        val document = client.get(urlBuilder.build()).asJsoup()
+        val document = client.get(urlBuilder.build(), Fetch.DOCUMENT).asJsoup()
         val mangas = document
             .select(".main-container .manga-item")
             .map(::searchMangaFromElement)
@@ -107,7 +108,7 @@ abstract class ManhwaRead : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val updatedManga = manga.apply {
             title = document.selectFirst("#mangaSummary .manga-titles h1")!!.text()
             artist = document.select("#mangaSummary .text-primary:contains(Artist:) + .flex a span:first-child").joinToString { it.text() }
@@ -196,7 +197,7 @@ abstract class ManhwaRead : KeiSource() {
 
     // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterDataString = client.get(getChapterUrl(chapter)).use { it.body.string() }
+        val chapterDataString = client.get(getChapterUrl(chapter), Fetch.XHR).use { it.body.string() }
             .let { PATTERN_CHAPTER_DATA.find(it)?.groupValues?.get(1) }
             ?: throw Exception("Chapter data not found")
 

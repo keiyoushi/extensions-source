@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -76,6 +77,7 @@ abstract class LectorTmoUnoriginal : KeiSource() {
 
     private suspend fun postArchiveFilter(nonce: String, page: Int, params: FormBody.Builder.() -> Unit) = client.post(
         "$baseUrl/wp-admin/admin-ajax.php",
+        fetch = Fetch.XHR,
         body = FormBody.Builder()
             .add("action", "mn_archive_filter")
             .add("nonce", nonce)
@@ -89,7 +91,7 @@ abstract class LectorTmoUnoriginal : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.first() != "manga") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
-        return client.get("$baseUrl/manga/$slug/").asJsoup().toSManga().apply {
+        return client.get("$baseUrl/manga/$slug/", Fetch.DOCUMENT).asJsoup().toSManga().apply {
             this.url = slug
             initialized = true
         }
@@ -101,7 +103,7 @@ abstract class LectorTmoUnoriginal : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val scanlator = document.selectFirst("a[href^=/grupo/] p.font-bold")?.textOrNull()
 
         val chapterList = document.select("#mn-chapters-list a.chapter-card").map { row ->
@@ -146,13 +148,13 @@ abstract class LectorTmoUnoriginal : KeiSource() {
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/manga-chapter/${chapter.url}/"
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select("main#reader-strip img")
         .mapIndexed { index, img ->
             Page(index, imageUrl = img.absUrl("data-src").ifEmpty { img.absUrl("src") })
         }
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/manga/").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/manga/", Fetch.DOCUMENT).asJsoup()
         .select("#filter-genre option[value~=.]")
         .map { FilterOption(it.text(), URLDecoder.decode(it.attr("value"), "UTF-8")) }
         .toJsonElement()
@@ -173,7 +175,7 @@ abstract class LectorTmoUnoriginal : KeiSource() {
 
     private suspend fun archiveNonce(failed: String? = null): String = nonceMutex.withLock {
         cachedNonce?.takeIf { it != failed }?.let { return it }
-        val script = client.get("$baseUrl/manga/", cacheControl = CacheControl.FORCE_NETWORK).asJsoup()
+        val script = client.get("$baseUrl/manga/", Fetch.DOCUMENT, cacheControl = CacheControl.FORCE_NETWORK).asJsoup()
             .selectFirst("script:containsData(MnArchive)")!!.data()
         nonceRegex.find(script)!!.groupValues[1].also { cachedNonce = it }
     }

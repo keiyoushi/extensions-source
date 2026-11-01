@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -18,13 +19,13 @@ import org.jsoup.nodes.Element
 abstract class HentaiComics : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/top-hentais/").asJsoup()
+        val document = client.get("$baseUrl/top-hentais/", Fetch.DOCUMENT).asJsoup()
         return MangasPage(document.select("article.w_item_b").map(::listingParse), false)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = if (page == 1) baseUrl else "$baseUrl/page/$page/"
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div.post").map(::postParse)
         val hasNextPage = document.selectFirst("a[href*=\"/page/${page + 1}/\"]") != null
         return MangasPage(mangas, hasNextPage)
@@ -57,7 +58,7 @@ abstract class HentaiComics : KeiSource() {
         val url = baseUrl.toHttpUrl().newBuilder()
             .addQueryParameter("s", query)
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return MangasPage(document.select("div.post").map(::postParse), false)
     }
 
@@ -67,7 +68,7 @@ abstract class HentaiComics : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl/${manga.url}").asJsoup()
+        val document = client.get("$baseUrl/${manga.url}", Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = manga.apply {
             val rawTitle = document.selectFirst("h1.post-title")?.text()?.trim().orEmpty()
@@ -89,7 +90,7 @@ abstract class HentaiComics : KeiSource() {
         return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/${chapter.url}").asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/${chapter.url}", Fetch.DOCUMENT).asJsoup()
         .select("div.single-post img[src*=\"/wp-content/uploads/\"]")
         .map { it.attr("src") }
         .mapIndexed { index, url -> Page(index, imageUrl = url) }

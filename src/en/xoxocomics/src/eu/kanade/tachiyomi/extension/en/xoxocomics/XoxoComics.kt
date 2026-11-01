@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.toJsonElement
@@ -51,7 +52,7 @@ abstract class XoxoComics : WPComics() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/comic-update?page=$page"
-        return parseMangaPage(client.get(url), latestUpdatesSelector(), ::latestUpdatesFromElement)
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT), latestUpdatesSelector(), ::latestUpdatesFromElement)
     }
 
     override fun latestUpdatesSelector() = "li.row"
@@ -95,7 +96,7 @@ abstract class XoxoComics : WPComics() {
             }.build()
         }
 
-        return parseMangaPage(client.get(url), searchMangaSelector(), ::searchMangaFromElement)
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT), searchMangaSelector(), ::searchMangaFromElement)
     }
 
     override suspend fun mangaUpdateParse(response: Response, manga: SManga, chapters: List<SChapter>): SMangaUpdate {
@@ -109,7 +110,7 @@ abstract class XoxoComics : WPComics() {
                 doc.select(chapterListSelector()).forEach { chapterList.add(chapterFromElement(it)) }
                 val nextUrl = doc.select("ul.pagination a[rel=next]").firstOrNull()?.absUrl("href")
                     ?: break
-                doc = client.get(nextUrl).asJsoup()
+                doc = client.get(nextUrl, Fetch.DOCUMENT).asJsoup()
             }
             chapterList
         }
@@ -121,9 +122,9 @@ abstract class XoxoComics : WPComics() {
         date_upload = element.select("div.col-xs-3").text().toDate()
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = parsePageList(client.get(baseUrl + "${chapter.url}/all"))
+    override suspend fun getPageList(chapter: SChapter): List<Page> = parsePageList(client.get(baseUrl + "${chapter.url}/all", Fetch.DOCUMENT))
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/comic-list").asJsoup().let { document ->
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/comic-list", Fetch.DOCUMENT).asJsoup().let { document ->
         parseGenres(document).toJsonElement()
     }
 
@@ -136,7 +137,7 @@ abstract class XoxoComics : WPComics() {
         },
     )
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .url(page.imageUrl!! + "#imagereq")
         .build()
 }

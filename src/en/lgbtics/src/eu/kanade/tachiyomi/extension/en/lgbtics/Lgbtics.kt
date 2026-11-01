@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
@@ -47,7 +48,7 @@ abstract class Lgbtics : MadaraNoAjax() {
     }
 
     private suspend fun tagPage(pagePath: String, basePath: String): List<TagDto> {
-        val document = client.get("$baseUrl/$pagePath/").asJsoup()
+        val document = client.get("$baseUrl/$pagePath/", Fetch.DOCUMENT).asJsoup()
         val prefix = "$baseUrl/$basePath/"
         return document.select("a[href^=\"$prefix\"]").mapNotNull { a ->
             val slug = a.absUrl("href").removePrefix(prefix).removeSuffix("/")
@@ -101,7 +102,7 @@ abstract class Lgbtics : MadaraNoAjax() {
             if (sortKey.isNotBlank()) addQueryParameter(orderQueryParameter, sortKey)
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return MangasPage(parseArchive(document), document.selectFirst(nextPageSelector()) != null)
     }
 

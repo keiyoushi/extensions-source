@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -19,6 +20,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 abstract class MoonlightTL : KeiSource() {
+
     protected val intl = Intl(
         lang,
         setOf("en", "es"),
@@ -29,7 +31,7 @@ abstract class MoonlightTL : KeiSource() {
     private val seriesPath = "/ver"
 
     // novel chapters are text without images, so they always end up as "No pages found"
-    private suspend fun getComics(): List<SeriesDto> = client.get("$baseUrl/api/comics").parseAs<ResponseDto<List<SeriesDto>>>().response
+    private suspend fun getComics(): List<SeriesDto> = client.get("$baseUrl/api/comics", Fetch.XHR).parseAs<ResponseDto<List<SeriesDto>>>().response
         .filterNot { it.isNovel }
 
     // /api/topSerie has no type field to filter novels with
@@ -42,7 +44,7 @@ abstract class MoonlightTL : KeiSource() {
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val responseData = client.get("$baseUrl/api/lastUpdates").parseAs<ResponseDto<List<SeriesDto>>>()
+        val responseData = client.get("$baseUrl/api/lastUpdates", Fetch.XHR).parseAs<ResponseDto<List<SeriesDto>>>()
 
         val mangas = responseData.response
             .filterNot { it.isNovel }
@@ -105,14 +107,14 @@ abstract class MoonlightTL : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.url.substringAfterLast('/')
-        val series = client.get("$baseUrl/api/showProject/$slug").parseAs<ResponseDto<SeriesDto>>().response
+        val series = client.get("$baseUrl/api/showProject/$slug", Fetch.XHR).parseAs<ResponseDto<SeriesDto>>().response
         return SMangaUpdate(
             series.toSMangaDetails(intl),
             series.chapters.map { it.toSChapter(seriesPath, series.slug, intl) },
         )
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter)).asJsoup())
+    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup())
 
     protected open suspend fun pageListParse(document: Document): List<Page> {
         var doc = document
@@ -124,7 +126,7 @@ abstract class MoonlightTL : KeiSource() {
             form.select("input").forEach {
                 body.add(it.attr("name"), it.attr("value"))
             }
-            doc = client.post(url, headers, body.build()).asJsoup()
+            doc = client.post(url, headers, Fetch.DOCUMENT, body.build()).asJsoup()
         }
         return doc.select("main.contenedor.read img, main > img").mapIndexed { i, element ->
             Page(i, imageUrl = element.imgAttr())

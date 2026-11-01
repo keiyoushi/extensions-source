@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -121,7 +122,7 @@ abstract class OniSaga :
         val state = if (cachedStateUrl == url && cachedState != null) {
             cachedState!!
         } else {
-            val doc = client.get(url).asJsoup()
+            val doc = client.get(url, Fetch.DOCUMENT).asJsoup()
 
             if (page == 1 && updates == null && prefExcluded.isEmpty()) {
                 return parseMangaList(doc)
@@ -160,6 +161,7 @@ abstract class OniSaga :
         val dto = client.post(
             "$baseUrl/livewire/update",
             buildLivewireHeaders(url.substringBefore("?")),
+            Fetch.XHR,
             request.toJsonRequestBody(livewireJson),
         ).parseAs<LivewireResponse>()
 
@@ -256,7 +258,7 @@ abstract class OniSaga :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val url = getMangaUrl(manga)
-        val doc = client.get(url).asJsoup()
+        val doc = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val details = mangaDetailsParse(doc)
         val chapterList = if (fetchChapters) fetchChapterList(doc) else chapters
@@ -421,7 +423,7 @@ abstract class OniSaga :
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val doc = client.get(baseUrl + manga.url).asJsoup()
+        val doc = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
         return relatedMangaListParse(doc)
     }
 
@@ -478,6 +480,7 @@ abstract class OniSaga :
                     val dto = client.post(
                         "$baseUrl/livewire/update",
                         buildLivewireHeaders(doc.location()),
+                        Fetch.XHR,
                         request.toJsonRequestBody(livewireJson),
                     ).parseAs<LivewireResponse>()
 
@@ -613,7 +616,7 @@ abstract class OniSaga :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = baseUrl + chapter.url
-        val body = client.get(chapterUrl).body.string()
+        val body = client.get(chapterUrl, Fetch.DOCUMENT).body.string()
 
         val token = READER_TOKEN_REGEX.find(body)?.groupValues?.get(1) ?: ""
         if (token.isBlank()) throw Exception("Could not find readerToken in chapter page")
@@ -649,7 +652,7 @@ abstract class OniSaga :
                 lastRequestTime = System.currentTimeMillis()
             }
 
-            val response = client.get(apiUrl, apiHeaders(token, chapterUrl), ensureSuccess = false)
+            val response = client.get(apiUrl, apiHeaders(token, chapterUrl), Fetch.XHR, ensureSuccess = false)
 
             // Handle 429 just in case (still holding the lock)
             if (response.code == 429) {
@@ -675,7 +678,7 @@ abstract class OniSaga :
             }
 
             if (!response.isSuccessful || dto.message?.contains("expired", ignoreCase = true) == true) {
-                val refreshBody = client.get(chapterUrl).body.string()
+                val refreshBody = client.get(chapterUrl, Fetch.DOCUMENT).body.string()
                 val newToken = READER_TOKEN_REGEX.find(refreshBody)?.groupValues?.get(1)
 
                 if (newToken.isNullOrBlank()) {
@@ -693,7 +696,7 @@ abstract class OniSaga :
         throw Exception("Failed to fetch image after 3 retries.")
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val referer = page.url.substringBeforeLast("#")
         return GET(page.imageUrl!!, headersBuilder().set("Referer", referer).build())
     }
@@ -702,8 +705,6 @@ abstract class OniSaga :
 
     private fun apiHeaders(token: String, referer: String) = headersBuilder()
         .set("X-Reader-Token", token)
-        .set("Sec-Fetch-Mode", "cors")
-        .set("Sec-Fetch-Site", "same-origin")
         .set("Referer", referer)
         .build()
 
@@ -738,13 +739,13 @@ abstract class OniSaga :
                 "${url.scheme}://${url.host}/manga/${pathSegments[1]}"
             }
             pathSegments.firstOrNull()?.equals("read", true) == true -> {
-                val doc = client.get(url.toString()).asJsoup()
+                val doc = client.get(url.toString(), Fetch.DOCUMENT).asJsoup()
                 doc.selectFirst("a[href*=\"/manga/\"]")?.absUrl("href") ?: return null
             }
             else -> return null
         }
 
-        val doc = client.get(mangaUrl).asJsoup()
+        val doc = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
         return mangaDetailsParse(doc).apply {
             setUrlWithoutDomain(mangaUrl)
         }

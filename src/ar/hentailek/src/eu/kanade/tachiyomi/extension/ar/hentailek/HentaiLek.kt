@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -55,7 +56,7 @@ abstract class HentaiLek : KeiSource() {
         }
         builder.addQueryParameter("page", page.toString())
 
-        val document = client.get(builder.build()).asJsoup()
+        val document = client.get(builder.build(), Fetch.DOCUMENT).asJsoup()
         return MangasPage(
             document.parseMangaList(),
             document.selectFirst("a[rel=next]") != null,
@@ -83,7 +84,7 @@ abstract class HentaiLek : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host) return null
         if (url.pathSegments.size != 2 || url.pathSegments[0] != "manga") return null
 
-        return client.get(url).asJsoup().parseDetails(url.encodedPath)
+        return client.get(url, Fetch.DOCUMENT).asJsoup().parseDetails(url.encodedPath)
     }
 
     override suspend fun fetchMangaUpdate(
@@ -92,7 +93,7 @@ abstract class HentaiLek : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(document.parseDetails(manga.url), document.parseChapters())
     }
@@ -154,7 +155,7 @@ abstract class HentaiLek : KeiSource() {
 
     // ================================ Pages ===============================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select("div.reader-page img")
         .mapIndexedNotNull { index, element ->
             element.absUrl("src").takeIf { it.isNotBlank() }?.let { Page(index, imageUrl = it) }

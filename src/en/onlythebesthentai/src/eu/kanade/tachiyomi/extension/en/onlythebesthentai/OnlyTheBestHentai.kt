@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -49,7 +50,7 @@ abstract class OnlyTheBestHentai : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     private suspend fun parseMangaList(url: String): MangasPage {
-        val doc = client.get(url).asJsoup()
+        val doc = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = doc.select("article.post").map(::elementToManga)
         return MangasPage(mangas, doc.selectFirst("a.next.page-numbers") != null)
     }
@@ -87,7 +88,7 @@ abstract class OnlyTheBestHentai : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val details = SManga.create().apply {
             title = doc.selectFirst("h1.manga-title")!!.text()
@@ -144,7 +145,7 @@ abstract class OnlyTheBestHentai : KeiSource() {
 
     // ============================== Page List ================================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select(".manga-gallery-wrapper figure.wp-block-image img")
         .mapIndexed { i: Int, img: Element -> Page(i, imageUrl = bestImageUrl(img)) }
 
@@ -187,7 +188,7 @@ abstract class OnlyTheBestHentai : KeiSource() {
         var totalPages = 1
 
         do {
-            val response = client.get("$baseUrl/wp-json/wp/v2/$restPath?per_page=100&page=$page")
+            val response = client.get("$baseUrl/wp-json/wp/v2/$restPath?per_page=100&page=$page", Fetch.XHR)
             if (page == 1) {
                 totalPages = response.header("X-WP-TotalPages")?.toIntOrNull() ?: 1
             }

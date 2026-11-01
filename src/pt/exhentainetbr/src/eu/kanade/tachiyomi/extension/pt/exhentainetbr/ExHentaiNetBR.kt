@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -31,7 +32,7 @@ abstract class ExHentaiNetBR : KeiSource() {
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/lista-de-mangas/page/$page").asJsoup()
+        val document = client.get("$baseUrl/lista-de-mangas/page/$page", Fetch.DOCUMENT).asJsoup()
         return parseMangaList(document, "article.itemP")
     }
 
@@ -50,7 +51,7 @@ abstract class ExHentaiNetBR : KeiSource() {
                 .build()
         }
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val isLetterSearch = url.queryParameter("letra") != null
         val selector = if (isLetterSearch) "article.itemP" else ".post article.itemP"
 
@@ -74,7 +75,7 @@ abstract class ExHentaiNetBR : KeiSource() {
             return null
         }
         val slug = url.pathSegments[1]
-        val document = client.get("$baseUrl/manga/$slug").asJsoup()
+        val document = client.get("$baseUrl/manga/$slug", Fetch.DOCUMENT).asJsoup()
 
         return SManga.create().apply {
             parseDetails(document)
@@ -88,7 +89,7 @@ abstract class ExHentaiNetBR : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = manga.apply { parseDetails(document) }
 
@@ -113,7 +114,7 @@ abstract class ExHentaiNetBR : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("div.manga_image > img").mapIndexed { index, element ->
             Page(index, imageUrl = element.imgAttr())
         }

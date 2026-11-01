@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -40,7 +41,7 @@ abstract class Senkuro : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
-    private suspend fun graphQL(body: RequestBody): Response = client.post(apiUrl, body)
+    private suspend fun graphQL(body: RequestBody): Response = client.post(apiUrl, Fetch.XHR, body)
 
     // ============================== Popular ==============================
     override suspend fun getPopularManga(page: Int): MangasPage {
