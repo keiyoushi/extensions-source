@@ -117,12 +117,12 @@ abstract class Reimanga :
         if (url.pathSegments.firstOrNull() != "manga") return null
         val slug = url.pathSegments.getOrNull(1) ?: return null
 
-        return fetchMangaUpdate(
+        return getMangaUpdate(
             SManga.create().apply { this.url = slug },
             emptyList(),
             fetchDetails = true,
             fetchChapters = false,
-        ).manga.apply { initialized = true }
+        ).manga
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
@@ -274,7 +274,6 @@ abstract class Reimanga :
             updateSummary(this, preferences.getStringSet(EXCLUDE_TAG_PREF, emptySet()))
 
             setOnPreferenceChangeListener { pref, newValue ->
-                @Suppress("UNCHECKED_CAST")
                 val updated = pref as MultiSelectListPreference
 
                 @Suppress("UNCHECKED_CAST")
