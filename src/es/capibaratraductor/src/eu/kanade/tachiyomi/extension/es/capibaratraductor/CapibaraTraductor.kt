@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.capibaratraductor
 
+import android.webkit.WebResourceResponse
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -12,11 +13,15 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.WebViewTimeoutException
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
 import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -27,6 +32,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
+import java.io.ByteArrayInputStream
+import java.io.IOException
 import kotlin.time.Clock
 
 @Source
@@ -152,23 +159,58 @@ abstract class CapibaraTraductor : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String {
         val (chapterSlug, seriesSlug, organizationSlug) = chapter.url.split("/", limit = 3)
 
-        return "$baseUrl/$organizationSlug/manga/$seriesSlug/chapters/$chapterSlug"
+        return if (chapter.memo["jointId"] != null) {
+            "$baseUrl/joint/manga/${chapter.memo["jointSlug"]?.stringOrNull ?: seriesSlug}/chapters/$chapterSlug"
+        } else {
+            "$baseUrl/$organizationSlug/manga/$seriesSlug/chapters/$chapterSlug"
+        }
     }
 
+    // The site's reader decodes the page tokens and removes decoy pages, read its result
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (chapterSlug, seriesSlug, organizationSlug) = chapter.url.split("/", limit = 3)
-
         val seriesPath = if (chapter.memo["jointId"] != null) {
             "joint/${chapter.memo["jointSlug"]?.stringOrNull ?: seriesSlug}"
         } else {
             "manga-custom/$seriesSlug"
         }
 
-        val result = client.get("$baseUrl/api/$seriesPath/chapter/$chapterSlug/pages", getScanHeaders(organizationSlug), Fetch.XHR)
-            .parseAs<Data<List<PageDto>>>()
-        return result.data.mapIndexed { i, page ->
-            Page(i, imageUrl = decodePageUrl(page.pg, result.rv!!, i))
+        // The site's login errors and empty chapters, which the reader only shows on screen
+        val pages = client.get("$baseUrl/api/$seriesPath/chapter/$chapterSlug/pages", getScanHeaders(organizationSlug), Fetch.XHR)
+            .parseAs<Data<JsonArray>>()
+            .data
+        if (pages.isEmpty()) return emptyList()
+
+        val script = javaClass.getResource("/assets/page_list.js")!!.readText()
+        val urls = try {
+            runWebView<List<String>> {
+                blockImages = true
+                userAgent = headers["User-Agent"].orEmpty()
+                // Keeps the site's ads out, but not Cloudflare's challenge
+                interceptRequest { request ->
+                    val host = request.url.host
+                    if (host == null || host == baseUrlHost || host.endsWith(".$baseUrlHost") || host == "challenges.cloudflare.com") {
+                        null
+                    } else {
+                        WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
+                    }
+                }
+                poll {
+                    evaluateJs(script) { result ->
+                        result.parseAs<List<String>?>()?.let(::resolve)
+                    }
+                }
+                loadUrl(getChapterUrl(chapter))
+            }
+        } catch (_: WebViewTimeoutException) {
+            throw Exception("Failed to load the chapter, open it in WebView")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            throw IOException(e.message, e)
         }
+
+        return urls.mapIndexed { index, url -> Page(index, imageUrl = url) }
     }
 
     override val supportsRelatedMangas get() = true
