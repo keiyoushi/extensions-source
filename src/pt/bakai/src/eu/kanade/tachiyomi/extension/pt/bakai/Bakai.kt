@@ -144,9 +144,9 @@ abstract class Bakai : KeiSource() {
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         // The reader image class has been renamed several times
-        // (mangaReaderImage -> mangaReaderImaage -> mangaReaderV2Image),
-        // so match the stable prefix instead of the exact class.
-        return document.select("img[class*=mangaReader]").mapIndexed { i, img ->
+        // (mangaReaderImage -> mangaReaderImaage -> mangaReaderV2Image -> mangaV2ReaderImage),
+        // so match the common "Reader" part instead of the exact class.
+        return document.select("img[class*=Reader]").mapIndexed { i, img ->
             val url = img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }
             Page(i, imageUrl = url)
         }
