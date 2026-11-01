@@ -15,13 +15,13 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -30,11 +30,27 @@ import java.util.Locale
 abstract class LuvEvaLand : KeiSource() {
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3)
 
+    // The site sometimes redirects manga/chapter pages to an ad interstitial at
+    // /un-lock?link=<target>. Follow the target ourselves when that happens.
+    private suspend fun getDocument(url: String): Document {
+        val response = client.get(url, Fetch.DOCUMENT)
+        val responseUrl = response.request.url
+        if (responseUrl.pathSegments.firstOrNull() != "un-lock") {
+            return response.asJsoup()
+        }
+
+        val target = responseUrl.queryParameter("link")
+        response.close()
+        if (target.isNullOrEmpty()) {
+            throw Exception("Blocked by unlock page")
+        }
+        return client.get(target, Fetch.DOCUMENT).asJsoup()
+    }
+
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$baseUrl/truyen-tranh", Fetch.DOCUMENT)
-        val document = response.asJsoup()
+        val document = getDocument("$baseUrl/truyen-tranh")
 
         val mangas = document.select("#total-tab-content .comic-item")
             .mapNotNull(::popularMangaFromElement)
@@ -66,8 +82,7 @@ abstract class LuvEvaLand : KeiSource() {
         val url = "$baseUrl/danh-sach-chuong-moi-cap-nhat".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
-        val response = client.get(url, Fetch.DOCUMENT)
-        val document = response.asJsoup()
+        val document = getDocument(url.toString())
 
         val mangas = document.select(".home__lg-book .book-vertical__item")
             .mapNotNull(::latestMangaFromElement)
@@ -104,8 +119,7 @@ abstract class LuvEvaLand : KeiSource() {
                 ?.filter { it.state }
                 ?.forEach { addQueryParameter("genres[]", it.id) }
         }.build()
-        val response = client.get(url, Fetch.DOCUMENT)
-        val document = response.asJsoup()
+        val document = getDocument(url.toString())
         val mangas = document.select("table.book__list tr.book__list-item")
             .mapNotNull(::searchMangaFromRow)
             .distinctBy { it.url }
@@ -147,8 +161,7 @@ abstract class LuvEvaLand : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT)
-        val document = response.asJsoup()
+        val document = getDocument("$baseUrl${manga.url}")
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
             chapters = parseChapterList(document),
@@ -203,14 +216,11 @@ abstract class LuvEvaLand : KeiSource() {
 
     // ============================== Chapters ==============================
 
-    private fun parseChapterList(document: Document): List<SChapter> {
-        val rowChapters = extractChapterRows(document)
-            .mapNotNull(::chapterFromRow)
-            .sortedByDescending { it.first }
-            .map { it.second }
-
-        return rowChapters
-    }
+    private fun parseChapterList(document: Document): List<SChapter> = extractChapterRows(document)
+        .mapNotNull(::chapterFromRow)
+        .sortedByDescending { it.first }
+        .map { it.second }
+        .distinctBy { it.url }
 
     private fun extractChapterRows(document: Document): List<Element> = document
         .select("table.list-chapter tbody tr, table.list-chapter__container tbody tr, .chapter-list-inner tr, tr.sort-item")
@@ -241,28 +251,17 @@ abstract class LuvEvaLand : KeiSource() {
         }
     }
 
-    private fun parseDate(date: String): Long = runCatching {
-        LocalDate.parse(date, dateFormat)
-            .atStartOfDay(dateZone)
-            .toInstant()
-            .toEpochMilli()
-    }.getOrDefault(0L)
+    private fun parseDate(date: String): Long = dateFormat.tryParseDate(date, dateZone)
 
     // ============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT)
-        val document = response.asJsoup()
+        val document = getDocument("$baseUrl${chapter.url}")
 
-        val images = document.select("#view-chapter img, #chapter-content img, .chapter-content img, .reading-content img, .content-chapter img, .box-chapter-content img")
+        return document.select("#view-chapter img, #chapter-content img, .chapter-content img, .reading-content img, .content-chapter img, .box-chapter-content img")
             .map { it.absUrl("data-src").ifEmpty { it.absUrl("src") } }
             .filter { it.isNotBlank() && !it.startsWith("data:image") }
-
-        if (images.isNotEmpty()) {
-            return images.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
-        }
-
-        throw Exception("Không tìm thấy hình ảnh cho chương này")
+            .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
 
     // ============================== Helpers ===============================
