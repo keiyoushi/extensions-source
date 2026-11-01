@@ -87,9 +87,9 @@ abstract class Picacomic :
     )
 
     // Latest + Popular
-    override suspend fun getPopularManga(page: Int) = parseSearchManga(client.get("$apiUrl/comics?page=$page&s=dd", Fetch.XHR))
+    override suspend fun getPopularManga(page: Int) = parseSearchManga(client.apiGet("$apiUrl/comics?page=$page&s=dd"))
 
-    override suspend fun getLatestUpdates(page: Int) = singlePageParse(client.get("$apiUrl/comics/random", Fetch.XHR), true)
+    override suspend fun getLatestUpdates(page: Int) = singlePageParse(client.apiGet("$apiUrl/comics/random"), true)
 
     private fun singlePageParse(response: Response, isRandom: Boolean = false): MangasPage {
         val comics = response.parseAs<PicaResponse>().data.comics!!.parseAs<List<PicaSearchComic>>()
@@ -136,12 +136,12 @@ abstract class Picacomic :
                 .addQueryParameter("s", sort ?: "dd")
                 .build()
 
-            return parseSearchManga(client.get(url, Fetch.XHR))
+            return parseSearchManga(client.apiGet(url))
         }
 
         // return comics from leaderboard
         if (!rankPath.isNullOrEmpty()) {
-            return singlePageParse(client.get("$apiUrl$rankPath", Fetch.XHR))
+            return singlePageParse(client.apiGet("$apiUrl$rankPath"))
         }
 
         if (query.isEmpty()) {
@@ -153,7 +153,7 @@ abstract class Picacomic :
                 }
                 .build()
 
-            return parseSearchManga(client.get(url, Fetch.XHR))
+            return parseSearchManga(client.apiGet(url))
         }
 
         // return comics from some search
@@ -161,7 +161,7 @@ abstract class Picacomic :
 
         val body = PicaSearchPayload(query, sort ?: "dd").toJsonString().toRequestBody()
 
-        return parseSearchManga(client.post(url, Fetch.XHR, body))
+        return parseSearchManga(client.apiPost(url, body))
     }
 
     private fun parseSearchManga(response: Response): MangasPage {
@@ -214,7 +214,7 @@ abstract class Picacomic :
     }
 
     private suspend fun getMangaDetails(manga: SManga): SManga {
-        val response = client.get(manga.url, Fetch.XHR)
+        val response = client.apiGet(manga.url)
         val comic = response.parseAs<PicaResponse>().data.comic!!
 
         return SManga.create().apply {
@@ -233,7 +233,7 @@ abstract class Picacomic :
     }
 
     private suspend fun getChapterList(manga: SManga): List<SChapter> {
-        val response = client.get("${manga.url}/eps?page=1", Fetch.XHR)
+        val response = client.apiGet("${manga.url}/eps?page=1")
         val eps = response.parseAs<PicaResponse>().data.eps!!
 
         val comicId = manga.url.comicId()
@@ -241,7 +241,7 @@ abstract class Picacomic :
         return coroutineScope {
             val restPages = (2..eps.pages).map { page ->
                 async {
-                    client.get("${manga.url}/eps?page=$page", Fetch.XHR).parseAs<PicaResponse>().data.eps!!.docs
+                    client.apiGet("${manga.url}/eps?page=$page").parseAs<PicaResponse>().data.eps!!.docs
                 }
             }
             listOf(eps.docs) + restPages.awaitAll()
@@ -259,14 +259,14 @@ abstract class Picacomic :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(chapter.url + "/pages?page=1", Fetch.XHR)
+        val response = client.apiGet(chapter.url + "/pages?page=1")
         val firstPage = response.parseAs<PicaResponse>().data.pages!!
 
         return coroutineScope {
             val restPages = (2..firstPage.pages).map { page ->
                 async {
                     val nextUrl = chapter.url + "/pages?page=$page"
-                    client.get(nextUrl, Fetch.XHR).parseAs<PicaResponse>().data.pages!!
+                    client.apiGet(nextUrl).parseAs<PicaResponse>().data.pages!!
                 }
             }
             listOf(firstPage) + restPages.awaitAll()
@@ -387,9 +387,9 @@ abstract class Picacomic :
         }.toHeaders()
     }
 
-    private suspend fun OkHttpClient.get(url: String) = get(url, picaHeaders(url), Fetch.XHR)
-    private suspend fun OkHttpClient.get(url: HttpUrl) = get(url, picaHeaders(url.toString()), Fetch.XHR)
-    private suspend fun OkHttpClient.post(url: String, body: RequestBody) = post(url, picaHeaders(url, "POST"), Fetch.XHR, body)
+    private suspend fun OkHttpClient.apiGet(url: String) = get(url, picaHeaders(url), Fetch.XHR)
+    private suspend fun OkHttpClient.apiGet(url: HttpUrl) = get(url, picaHeaders(url.toString()), Fetch.XHR)
+    private suspend fun OkHttpClient.apiPost(url: String, body: RequestBody) = post(url, picaHeaders(url, "POST"), Fetch.XHR, body)
 
     private fun Request.applyToken() = newBuilder().header("Authorization", token).build()
 
