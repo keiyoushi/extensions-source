@@ -14,7 +14,6 @@ class Data<T>(
     @SerialName("data") private val _data: T? = null,
     private val status: Boolean = true,
     private val message: String? = null,
-    val rv: String? = null,
 ) {
     val data get() = if (status) _data!! else throw Exception(message ?: "Unknown error")
 }
@@ -168,11 +167,6 @@ class SeriesChapterDto(
         }
     }
 }
-
-@Serializable
-class PageDto(
-    val pg: String,
-)
 
 @Serializable
 class FilterOptionDto(
