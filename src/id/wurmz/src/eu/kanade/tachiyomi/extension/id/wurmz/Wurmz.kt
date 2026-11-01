@@ -155,33 +155,12 @@ abstract class Wurmz : KeiSource() {
 
     // ======================== Pages ==========================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterUrl = getChapterUrl(chapter)
-        val rscUrl = chapterUrl.toHttpUrl().newBuilder().addQueryParameter("_rsc", "").build()
-
-        val pages = runCatching {
-            client.get(rscUrl, rscHeaders, Fetch.XHR).extractNextJs<PageListDto> {
-                it is JsonObject && it.containsKey("images")
-            }?.images
-        }.getOrNull()
-
-        if (!pages.isNullOrEmpty()) {
-            return pages.mapIndexed { index, imageUrl ->
-                Page(index, imageUrl = imageUrl)
-            }
-        }
-
-        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
-        val fallbackImages = document.extractNextJs<PageListDto> {
+        val url = getChapterUrl(chapter).toHttpUrl().newBuilder().addQueryParameter("_rsc", "").build()
+        val pageList = client.get(url, rscHeaders, Fetch.XHR).extractNextJs<PageListDto> {
             it is JsonObject && it.containsKey("images")
-        }?.images ?: document.select("div.reader-page img[src], .reader-image").mapNotNull {
-            it.attr("abs:src").ifEmpty { null }
-        }
+        } ?: throw Exception("Gagal memproses daftar gambar")
 
-        if (fallbackImages.isEmpty()) {
-            throw Exception("Gagal memproses daftar gambar")
-        }
-
-        return fallbackImages.mapIndexed { index, imageUrl ->
+        return pageList.images.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
         }
     }
