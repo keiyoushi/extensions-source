@@ -12,6 +12,8 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.aesCbc
+import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
@@ -25,9 +27,6 @@ import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import javax.crypto.Cipher
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class CoTruyenDay : KeiSource() {
@@ -168,14 +167,9 @@ abstract class CoTruyenDay : KeiSource() {
     }
 
     private fun decryptImageUrls(encrypted: EncryptedDto): List<String> {
-        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-        cipher.init(
-            Cipher.DECRYPT_MODE,
-            SecretKeySpec(aesKey, "AES"),
-            IvParameterSpec(Base64.decode(encrypted.iv, Base64.DEFAULT)),
-        )
-        val plain = cipher.doFinal(Base64.decode(encrypted.encryptedData, Base64.DEFAULT))
-        return String(plain, Charsets.UTF_8).parseAs<List<String>>()
+        val cipher = aesCbc(aesKey, Base64.decode(encrypted.iv, Base64.DEFAULT))
+        val plain = Base64.decode(encrypted.encryptedData, Base64.DEFAULT).aesDecrypt(cipher)
+        return plain.decodeToString().parseAs<List<String>>()
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
