@@ -342,7 +342,7 @@ abstract class Kagane :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) return null
+        if (url.host.substringBeforeLast('.') != baseUrl.toHttpUrl().host.substringBeforeLast('.')) return null
         val segments = url.pathSegments
         if (segments.size < 2) return null
         val seriesId = segments[1].takeLast(36)
