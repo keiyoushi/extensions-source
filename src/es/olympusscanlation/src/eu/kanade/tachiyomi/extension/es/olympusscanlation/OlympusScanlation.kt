@@ -22,6 +22,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerializationException
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
@@ -31,7 +32,7 @@ abstract class OlympusScanlation : KeiSource() {
 
     private val preferences = getPreferences()
 
-    override suspend fun fetchBaseUrls(): List<String> {
+    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> {
         val domain = client.get(DOMAIN_URL, Fetch.DOCUMENT).asJsoup().selectFirst("meta[property=og:url]")!!.attr("content")
         return listOf(client.get(domain, Fetch.DOCUMENT).use { it.request.url.toString() })
     }

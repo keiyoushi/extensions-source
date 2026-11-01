@@ -18,12 +18,13 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
+import okhttp3.OkHttpClient
 import kotlin.math.min
 import kotlin.random.Random
 
 @Source
 abstract class BlackToon : KeiSource() {
-    override suspend fun fetchBaseUrls(): List<String> = listOf(
+    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = listOf(
         client.get(ENTRY_URL, Fetch.DOCUMENT).use { it.request.url.toString() },
     )
 

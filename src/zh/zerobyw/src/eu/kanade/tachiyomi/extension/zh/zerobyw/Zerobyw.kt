@@ -15,6 +15,7 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Element
 
 @Source
@@ -22,7 +23,7 @@ abstract class Zerobyw : KeiSource() {
 
     override val supportsLatest = false
 
-    override suspend fun fetchBaseUrls(): List<String> = listOf(client.get(LATEST_DOMAIN_URL, Fetch.DOCUMENT).body.string())
+    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = listOf(client.get(LATEST_DOMAIN_URL, Fetch.DOCUMENT).body.string())
 
     override fun Headers.Builder.configureHeaders() = set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0")
 

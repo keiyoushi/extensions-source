@@ -12,6 +12,19 @@ class MirrorPreferences(
 ) : FetchableBaseUrl {
     private val prefKey = "preferred_mirror"
     private val fetchedKey = "fetchedMirrors"
+    private val fetchedFromKey = "fetchedMirrorsFrom"
+    private val hardcodedUrls = defaultMirrors.joinToString(",") { it.second }
+
+    init {
+        val fetchedFrom = preferences.getString(fetchedFromKey, null)
+        if (fetchedFrom != null && fetchedFrom != hardcodedUrls) {
+            preferences.edit()
+                .remove(fetchedKey)
+                .remove(fetchedFromKey)
+                .remove(prefKey)
+                .apply()
+        }
+    }
 
     private val mirrors: List<Pair<String, String>>
         get() = preferences.getString(fetchedKey, null)?.split(",")?.map { "" to it } ?: defaultMirrors.asList()
@@ -27,6 +40,7 @@ class MirrorPreferences(
         val newIndex = if (index == 0) 0 else urls.indexOf(baseUrl).coerceAtLeast(0)
         preferences.edit()
             .putString(fetchedKey, urls.joinToString(","))
+            .putString(fetchedFromKey, hardcodedUrls)
             .putString(prefKey, newIndex.toString())
             .apply()
     }

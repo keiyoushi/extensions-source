@@ -477,13 +477,13 @@ Like `mirrors`, the extension automatically implements `ConfigurableSource` and 
 Sites that move domains and publish where they are can update either mode at runtime. Override `fetchBaseUrls` to return the current URL, or every mirror in the site's order:
 
 ```kotlin
-override suspend fun fetchBaseUrls(): List<String> =
+override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> =
     client.get("https://hub.example.org/", Fetch.DOCUMENT).asJsoup()
         .select("a.mirror")
         .map { it.absUrl("href") }
 ```
 
-The lookup runs in the background once per source per app launch, the first time the source is browsed, searched or updated, and a failed one keeps the current URLs. With `mirrors`, the URLs replace the mirror list; the picker is hidden when only one is left. With `custom`, the first URL replaces the custom URL and becomes its default.
+The lookup runs once per source per app launch, before the first request, and uses the `client` it is given. Requests for the old URL move to the new one; a failed lookup keeps the current URLs. With `mirrors`, the URLs replace the mirror list; the picker is hidden when only one is left. With `custom`, the first URL replaces the custom URL and becomes its default. Changing the DSL URLs in an update clears the fetched ones.
 
 > [!IMPORTANT]
 > When using `mirrors(...)` or `custom(...)`, **do not** implement mirror/URL selection manually in your class using `SharedPreferences` or a `ListPreference` - the generated code handles it. Doing both will create duplicate preferences.
@@ -1383,7 +1383,7 @@ Optional overrides (each has a working default; override only when your source n
 | `val supportsFilterFetching: Boolean`                                 | `false`.                                                         | The source needs to fetch its filter options from the network - see filter fetching below.                                                                                                              |
 | `suspend fun fetchFilterData(): JsonElement`                          | Returns `JsonNull`.                                              | Paired with `supportsFilterFetching = true`.                                                                                                                                                              |
 | `fun getFilterList(data: JsonElement?): FilterList`                   | Returns an empty `FilterList`.                                   | The source has any filters at all, fetched or static.                                                                                                                                                    |
-| `suspend fun fetchBaseUrls(): List<String>`                           | Returns an empty list.                                           | The site publishes its current domain and the source uses `mirrors` or `custom` - see [baseUrl modes](#baseurl-modes).                                                                                  |
+| `suspend fun fetchBaseUrls(client: OkHttpClient): List<String>`       | Returns an empty list.                                           | The site publishes its current domain and the source uses `mirrors` or `custom` - see [baseUrl modes](#baseurl-modes).                                                                                  |
 | `fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder`    | No changes.                                                      | Timeouts, extra interceptors, cookie/cache/DNS config - `client` itself is `final` on `KeiSource`.                                                                                                       |
 | `fun Headers.Builder.configureHeaders(): Headers.Builder`             | No changes.                                                      | Extra default headers beyond the `Referer`/`Origin` `KeiSource` already sets - `headersBuilder()` itself is `final`.                                                                                     |
 

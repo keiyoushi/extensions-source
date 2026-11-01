@@ -310,7 +310,7 @@ abstract class IkigaiMangas : KeiSource() {
         loadUrl(url)
     }
 
-    override suspend fun fetchBaseUrls(): List<String> {
+    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> {
         val document = client.get(DOMAIN_URL, Fetch.DOCUMENT).asJsoup()
         val scriptUrl = document.selectFirst("button[on:click]:containsOwn(Ir al sitio)")!!.attr("on:click")
         val script = client.get("$DOMAIN_URL/build/$scriptUrl", Fetch.SCRIPT).body.string()
