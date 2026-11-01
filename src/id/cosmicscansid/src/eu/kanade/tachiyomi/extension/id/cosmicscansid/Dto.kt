@@ -1,12 +1,10 @@
 package eu.kanade.tachiyomi.extension.id.cosmicscansid
 
-import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import org.jsoup.Jsoup
 import java.util.Locale
 import kotlin.time.Instant
 
@@ -111,13 +109,33 @@ class ChapterDto(
 
 @Serializable
 class ReadingPageDto(
-    private val chapters: List<String>? = null,
+    val pageCount: Int? = null,
     @SerialName("redirect_link") val redirectLink: String? = null,
-) {
-    fun toPageList(chapterUrl: String = ""): List<Page> = chapters.orEmpty()
-        .mapNotNull { html ->
-            Jsoup.parse(html).selectFirst("img")?.attr("src")
-                ?.takeIf { it.isNotBlank() }
-        }
-        .mapIndexed { index, imageUrl -> Page(index, chapterUrl, imageUrl = imageUrl) }
-}
+)
+
+@Serializable
+class ImageConfigResponse(
+    val data: ImageConfig,
+)
+
+@Serializable
+class ImageConfig(
+    val turnstileSiteKey: String,
+)
+
+@Serializable
+class ImageSessionRequest(
+    @SerialName("turnstile_token") private val turnstileToken: String,
+    @SerialName("chapter_slug") private val chapterSlug: String,
+)
+
+@Serializable
+class ImageSessionResponse(
+    val data: ImageSession,
+)
+
+@Serializable
+class ImageSession(
+    val sessionId: String,
+    val axisKeys: List<String>,
+)
