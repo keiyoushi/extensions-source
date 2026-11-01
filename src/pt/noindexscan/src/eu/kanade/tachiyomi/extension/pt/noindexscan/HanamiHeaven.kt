@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.noindexscan
 
 import eu.kanade.tachiyomi.multisrc.madara.GenreRoute
-import eu.kanade.tachiyomi.multisrc.madara.MadaraBase
+import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
@@ -23,12 +23,18 @@ import org.jsoup.nodes.Element
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
-// madara_load_more answers 400, listings come from the catalogue page
 @Source
-abstract class HanamiHeaven : MadaraBase() {
+abstract class HanamiHeaven : MadaraNoAjax() {
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3, 2.seconds)
 
     override val mangaSubString = "todas-as-obras"
+    override val orderQueryParameter = "ordem"
+    override val searchQueryParameter = "busca"
+    override fun nextPageSelector() = ".mch-catalogue__pages a.next"
+
+    override fun archiveUrlBuilder(page: Int, order: String, path: String, query: String) = super.archiveUrlBuilder(1, order, path, query).apply {
+        if (page > 1) addQueryParameter("pagina", page.toString())
+    }
 
     override val completedStatus = super.completedStatus + "completa"
     override val hiatusStatus = super.hiatusStatus + "em espera"
@@ -52,13 +58,15 @@ abstract class HanamiHeaven : MadaraBase() {
 
     override fun getHomeUrl() = "$baseUrl/$mangaSubString/"
 
-    override suspend fun getPopularManga(page: Int) = catalogue(page) { addQueryParameter("ordem", "rating") }
+    override suspend fun getPopularManga(page: Int) = archivePage(page, "rating")
 
-    override suspend fun getLatestUpdates(page: Int) = catalogue(page)
+    override suspend fun getLatestUpdates(page: Int) = archivePage(page, "")
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = catalogue(page) {
-        if (query.isNotBlank()) addQueryParameter("busca", query)
-        filters.filterIsInstance<UrlFilter>().forEach { it.addTo(this) }
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = getHomeUrl().toHttpUrl().newBuilder().apply {
+            filters.filterIsInstance<UrlFilter>().forEach { it.addTo(this) }
+        }.build()
+        return archivePage(page, "", url.toString(), query)
     }
 
     // Chapter pages have no post id
@@ -71,7 +79,7 @@ abstract class HanamiHeaven : MadaraBase() {
     // Genre links carry the slug in ?genero=
     override fun parseDetails(document: Document, id: String, preserveUrl: String?): SManga = super.parseDetails(document, id, preserveUrl).apply {
         val genres = document.select(mangaDetailsSelectorGenre).mapNotNull { link ->
-            link.attr("abs:href").toHttpUrl().queryParameter("genero")?.let { GenreRoute(link.text(), it, "") }
+            link.attr("abs:href").toHttpUrl().queryParameter("genero")?.let { GenreRoute(link.text(), it, "/$mangaSubString/?genero[]=$it") }
         }
         memo = JsonObject(memo + ("genres" to genres.toJsonElement()))
     }
@@ -79,9 +87,6 @@ abstract class HanamiHeaven : MadaraBase() {
     override fun chapterFromElement(element: Element, mangaPath: String) = super.chapterFromElement(element, mangaPath)?.apply {
         date_upload = Instant.tryParse(element.selectFirst("time")?.attr("datetime"))
     }
-
-    // Several genero[] narrow the results instead of widening them
-    override suspend fun fetchRelatedMangaList(id: String, genres: List<GenreRoute>) = catalogue(1) { addQueryParameter("genero[]", genres.first().slug) }.mangas.filterNot { it.url == id }
 
     override suspend fun fetchFilterData(): JsonElement {
         val document = client.get(getHomeUrl(), Fetch.DOCUMENT).asJsoup()
@@ -102,15 +107,6 @@ abstract class HanamiHeaven : MadaraBase() {
                 if (genres.isNotEmpty()) add(GenreFilter("Gêneros", genres))
             },
         )
-    }
-
-    private suspend fun catalogue(page: Int, params: HttpUrl.Builder.() -> Unit = {}): MangasPage {
-        val url = getHomeUrl().toHttpUrl().newBuilder().apply {
-            params()
-            if (page > 1) addQueryParameter("pagina", page.toString())
-        }.build()
-        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
-        return MangasPage(parseArchive(document), document.selectFirst(".mch-catalogue__pages a.next") != null)
     }
 
     private fun metadataSelector(label: String, value: String) = ".mch-work__metadata div:has(> dt:contains($label)) $value"
