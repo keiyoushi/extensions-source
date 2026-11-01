@@ -35,7 +35,7 @@ private val ORDERS = listOf(
     "Title" to "title",
 )
 
-class OrderFilter(default: String = "updated") :
+class OrderFilter(default: String) :
     Filter.Sort(
         "Order by",
         ORDERS.map { it.first }.toTypedArray(),

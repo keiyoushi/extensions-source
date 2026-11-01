@@ -34,6 +34,9 @@ private val CATALOG_KEYS = setOf("thumbnail", "badge", "status", "created_at", "
 private val CHAPTER_KEYS = setOf("index", "chapter_title", "chapter_thumbnail", "created_at")
 
 @Serializable
+class TurnstileToken(private val token: String)
+
+@Serializable
 class CatalogFields(
     @SerialName("alternative_names") val alternativeNames: String? = null,
     val thumbnail: String? = null,
@@ -107,7 +110,6 @@ class SiteChapter(json: JsonObject) {
 
     val premium = json.filterKeys { it !in CHAPTER_KEYS }.values
         .mapNotNull { (it as? JsonPrimitive)?.takeUnless(JsonPrimitive::isString)?.intOrNull }
-        .also { check(it.size == 1) { UNEXPECTED_ROW } }
-        .single() > 0
+        .singleOrNull().let { it ?: error(UNEXPECTED_ROW) } > 0
     val createdAt = Instant.tryParse(json.getStringOrNull("created_at"))
 }

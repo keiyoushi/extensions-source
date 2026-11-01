@@ -12,15 +12,21 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.textOrNull
+import keiyoushi.utils.toJsonRequestBody
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -46,6 +52,12 @@ abstract class TempleScan :
     }
 
     override val imageFetch = Fetch.IMAGE
+
+    private val challengeMutex = Mutex()
+
+    private var challengePassedAt = 0L
+
+    private var challengeFailedAt = 0L
 
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", OrderFilter.POPULAR)
 
@@ -190,13 +202,38 @@ abstract class TempleScan :
     }
 
     // The site's WAF blocks the default `Cache-Control: max-age=600`
+    private suspend fun getPage(url: String) = client.get(url, Fetch.DOCUMENT, cacheControl = CacheControl.Builder().build()).asJsoup()
+
     private suspend fun fetchDocument(url: String): Document {
-        val response = client.get(url, Fetch.DOCUMENT, cacheControl = CacheControl.Builder().build())
-        if (response.request.url.encodedPath == "/challenge") {
-            response.close()
-            throw IOException("Open in WebView to pass the site's verification")
+        val startedAt = System.currentTimeMillis()
+        val document = getPage(url)
+        if (!document.isChallenge) return document
+
+        passChallenge(document, startedAt)
+        return getPage(url).also { if (it.isChallenge) throw IOException(SOLVE_MANUALLY) }
+    }
+
+    private val Document.isChallenge get() = location().toHttpUrl().encodedPath == "/challenge"
+
+    /** Solves the site's Turnstile and posts the token for its `tt-challenge` cookie. */
+    private suspend fun passChallenge(challengePage: Document, startedAt: Long) = challengeMutex.withLock {
+        // Another request may have passed it while this one waited
+        if (challengePassedAt > startedAt) return@withLock
+        // A challenge that just failed to solve would fail again; leave it to the user.
+        if (System.currentTimeMillis() - challengeFailedAt < CHALLENGE_BACKOFF) throw IOException(SOLVE_MANUALLY)
+
+        try {
+            val chunk = challengePage.selectFirst("script[src*=/app/challenge/page-]")!!.absUrl("src")
+            val siteKey = TURNSTILE_KEY.find(client.get(chunk, Fetch.SCRIPT).body.string())!!.value
+            val token = getTurnstileToken("$baseUrl/challenge", siteKey)
+            client.post("$baseUrl/api/turnstile/verify", Fetch.XHR.from("/challenge"), TurnstileToken(token).toJsonRequestBody()).close()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            challengeFailedAt = System.currentTimeMillis()
+            throw IOException(SOLVE_MANUALLY, e)
         }
-        return response.asJsoup()
+        challengePassedAt = System.currentTimeMillis()
     }
 
     private suspend fun fetchCatalog(): List<BrowseSeries> = fetchDocument("$baseUrl/comics")
@@ -220,5 +257,8 @@ abstract class TempleScan :
     companion object {
         private const val PREF_HIDE_LOCKED_CHAPTERS = "pref_hide_locked_chapters"
         private const val LOCK = "\uD83D\uDD12 "
+        private const val SOLVE_MANUALLY = "Open in WebView to pass the site's verification"
+        private const val CHALLENGE_BACKOFF = 5 * 60 * 1000L
+        private val TURNSTILE_KEY = Regex("0x4[A-Za-z0-9_-]{20,}")
     }
 }
