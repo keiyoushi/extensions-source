@@ -26,8 +26,8 @@ import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
 import keiyoushi.zip.Entry
-import keiyoushi.zip.coroutines.readZipEntry
-import keiyoushi.zip.coroutines.zipDirectory
+import keiyoushi.zip.readZipEntry
+import keiyoushi.zip.zipDirectory
 import okhttp3.CacheControl.Companion.FORCE_NETWORK
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
