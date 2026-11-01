@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -126,7 +127,7 @@ abstract class BookOrbit :
             }
             .build()
 
-        val data = client.get(url).parseAs<SeriesPageDto>()
+        val data = client.get(url, Fetch.XHR).parseAs<SeriesPageDto>()
         return MangasPage(data.items.map { it.toSManga(baseUrl) }, page * PAGE_SIZE < data.total)
     }
 
@@ -181,22 +182,22 @@ abstract class BookOrbit :
             .addQueryParameter("sort", "seriesIndex")
             .addQueryParameter("order", "desc")
             .build()
-        return client.get(url).parseAs()
+        return client.get(url, Fetch.XHR).parseAs()
     }
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/book/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val book = client.get("$baseUrl/api/v1/books/${chapter.url}").parseAs<BookDetailDto>()
+        val book = client.get("$baseUrl/api/v1/books/${chapter.url}", Fetch.XHR).parseAs<BookDetailDto>()
         val fileId = book.files.firstOrNull { it.isComic }?.id ?: return emptyList()
-        val pageCount = client.get("$baseUrl/api/v1/cbz/files/$fileId/pages").parseAs<PageCountDto>().pageCount
+        val pageCount = client.get("$baseUrl/api/v1/cbz/files/$fileId/pages", Fetch.XHR).parseAs<PageCountDto>().pageCount
 
         return List(pageCount) { index ->
             Page(index, imageUrl = "$baseUrl/api/v1/cbz/files/$fileId/pages/$index")
         }
     }
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/v1/libraries").parseAs<List<LibraryDto>>().toJsonElement()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/v1/libraries", Fetch.XHR).parseAs<List<LibraryDto>>().toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val libraries = data?.parseAs<List<LibraryDto>>().orEmpty()
