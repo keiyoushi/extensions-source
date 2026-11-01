@@ -163,6 +163,7 @@ abstract class SunsetManga : KeiSource() {
             .url(ajaxUrl)
             .post(body)
             .headers(headers)
+            .header("Origin", baseUrl)
             .build()
     }
 }

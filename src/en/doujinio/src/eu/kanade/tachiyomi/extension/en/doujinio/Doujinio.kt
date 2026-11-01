@@ -36,7 +36,7 @@ abstract class Doujinio : KeiSource() {
         rateLimit(2) { it.host == baseUrlHost }
     }
 
-    // Search/latest errors with 419 when referer or origin is present
+    // Search/latest errors with 419 when referer or origin is present; Fetch.NONE keeps core from adding Origin
     private val cleanHeaders
         get() = headersBuilder().apply {
             removeAll("Referer")
@@ -48,7 +48,7 @@ abstract class Doujinio : KeiSource() {
         val response = client.post(
             "$baseUrl/api/mangas/newest",
             cleanHeaders,
-            Fetch.XHR,
+            Fetch.NONE,
             body = LatestRequest(
                 limit = LATEST_LIMIT,
                 offset = (page - 1) * LATEST_LIMIT,
@@ -77,7 +77,7 @@ abstract class Doujinio : KeiSource() {
         val response = client.post(
             "$baseUrl/api/mangas/search",
             cleanHeaders,
-            Fetch.XHR,
+            Fetch.NONE,
             body = SearchRequest(
                 query,
                 page,

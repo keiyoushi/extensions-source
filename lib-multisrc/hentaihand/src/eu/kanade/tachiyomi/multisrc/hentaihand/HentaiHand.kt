@@ -224,7 +224,7 @@ abstract class HentaiHand :
 
     private fun login(chain: Interceptor.Chain, username: String, password: String): String {
         val body = LoginRequestDto(username, password, rememberMe = true).toJsonRequestBody()
-        val response = chain.proceed(POST("$baseUrl/api/login", headers, body))
+        val response = chain.proceed(POST("$baseUrl/api/login", headers.newBuilder().set("Origin", baseUrl).build(), body))
         if (response.code == 401) {
             throw IOException("Failed to login, check if username and password are correct")
         }

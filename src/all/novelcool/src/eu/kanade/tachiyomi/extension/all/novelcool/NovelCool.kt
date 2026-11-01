@@ -161,7 +161,8 @@ abstract class NovelCool :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        // Sent as built: to requests that look like a browser the site serves /go/rds/ ad redirects instead of chapter links
+        val document = client.get(getMangaUrl(manga), Fetch.NONE).asJsoup()
 
         val details = SManga.create().apply {
             url = manga.url
@@ -189,7 +190,8 @@ abstract class NovelCool :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        var doc = pageClient.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
+        // Sent as built, like the manga page above
+        var doc = pageClient.get(getChapterUrl(chapter), Fetch.NONE).asJsoup()
 
         // Chapter pages redirect (HTTP 302) to an intermediate "choose a source" page on a
         // partner domain (e.g. techsmartideas.com). That page contains a.vision-button links
@@ -201,7 +203,7 @@ abstract class NovelCool :
             val serverHeaders = headers.newBuilder()
                 .set("Referer", doc.baseUri())
                 .build()
-            doc = pageClient.get(serverUrl, serverHeaders, Fetch.DOCUMENT).asJsoup()
+            doc = pageClient.get(serverUrl, serverHeaders, Fetch.NONE).asJsoup()
         }
 
         // Parse all_imgs_url from the script using a robust approach: extract the array
@@ -231,7 +233,7 @@ abstract class NovelCool :
         } ?: emptyList()
 
     override suspend fun getImageUrl(page: Page): String {
-        val document = client.get(page.url, Fetch.DOCUMENT).asJsoup()
+        val document = client.get(page.url, Fetch.NONE).asJsoup()
         return document.select(".mangaread-manga-pic").attr("src")
     }
 

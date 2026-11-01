@@ -156,6 +156,7 @@ abstract class FoolSlide :
                 val form = FormBody.Builder().add("adult", "true").build()
                 request.newBuilder()
                     .removeHeader("Adult")
+                    .header("Origin", baseUrl)
                     .method("POST", form)
                     .build()
             } else {

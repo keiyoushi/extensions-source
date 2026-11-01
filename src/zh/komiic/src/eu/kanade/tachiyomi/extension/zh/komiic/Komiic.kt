@@ -59,7 +59,7 @@ abstract class Komiic :
         client.cookieJar.loadForRequest(chain.request().url).find { it.name == "komiic-access-token" }?.let {
             val payload = Base64.decode(it.value.split(".")[1], Base64.DEFAULT).decodeToString()
             if (System.currentTimeMillis() + 3600_000 >= payload.parseAs<JwtPayload>().exp * 1000) {
-                val response = chain.proceed(POST("$baseUrl/auth/refresh", headers)).apply { close() }
+                val response = chain.proceed(POST("$baseUrl/auth/refresh", headers.newBuilder().set("Origin", baseUrl).build())).apply { close() }
                 if (!response.isSuccessful) throw IOException("刷新 Token 失敗：HTTP ${response.code}")
             }
         }

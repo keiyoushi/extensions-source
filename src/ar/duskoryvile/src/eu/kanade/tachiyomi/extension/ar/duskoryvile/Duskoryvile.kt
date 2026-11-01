@@ -186,6 +186,7 @@ abstract class Duskoryvile :
                     .url("$baseUrl/wp-login.php")
                     .post(loginBody)
                     .headers(headers)
+                    .header("Origin", baseUrl)
                     .build()
 
                 chain.proceed(loginRequest).close()

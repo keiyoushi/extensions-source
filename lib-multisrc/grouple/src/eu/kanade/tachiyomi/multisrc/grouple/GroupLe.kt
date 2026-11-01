@@ -144,6 +144,7 @@ abstract class GroupLe :
                     val loginRequest = request.newBuilder()
                         .url(loginUrl)
                         .headers(headers)
+                        .header("Origin", baseUrl)
                         .post(verifyBody)
                         .build()
 

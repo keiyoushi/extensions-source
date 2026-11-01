@@ -48,7 +48,7 @@ abstract class MangaRomance : Madara() {
         val body = FormBody.Builder()
             .add("challenge", token.sha256().toHexString())
             .build()
-        chain.proceed(POST("$baseUrl/hcdn-cgi/jschallenge-validate", headers, body)).use {
+        chain.proceed(POST("$baseUrl/hcdn-cgi/jschallenge-validate", headers.newBuilder().set("Origin", baseUrl).build(), body)).use {
             if (!it.isSuccessful) throw IOException("Failed to pass browser check")
         }
     }

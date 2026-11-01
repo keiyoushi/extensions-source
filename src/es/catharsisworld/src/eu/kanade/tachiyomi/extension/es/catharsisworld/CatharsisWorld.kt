@@ -379,7 +379,7 @@ abstract class CatharsisWorld : KeiSource() {
     private fun mintPageTicket(chain: Interceptor.Chain, session: ChapterSession, pageIndex: Int): PageTicketResponse? {
         val request = POST(
             "$apiUrl/mangas/chapters/${session.chapterId}/page-ticket",
-            headers,
+            headers.newBuilder().set("Origin", baseUrl).build(),
             PageTicketRequest(pageIndex, session.token).toJsonRequestBody(),
         )
         val response = chain.proceed(request)

@@ -262,7 +262,7 @@ abstract class HolyScans :
                             .add("rememberme", "forever")
                             .build()
 
-                        val loginRequest = POST("$baseUrl/giris/", headers, form)
+                        val loginRequest = POST("$baseUrl/giris/", headers.newBuilder().set("Origin", baseUrl).build(), form)
                         chain.proceed(loginRequest).close()
                     }
                 }

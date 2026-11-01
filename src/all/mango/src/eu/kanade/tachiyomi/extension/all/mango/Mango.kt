@@ -199,7 +199,7 @@ abstract class Mango :
             .add("password", password)
             .build()
 
-        val loginRequest = POST("$basePath/login", headers, formBody)
+        val loginRequest = POST("$basePath/login", headers.newBuilder().set("Origin", baseUrl).build(), formBody)
         val response = chain.proceed(loginRequest)
 
         if (!response.isSuccessful || response.header("Set-Cookie") == null) {
