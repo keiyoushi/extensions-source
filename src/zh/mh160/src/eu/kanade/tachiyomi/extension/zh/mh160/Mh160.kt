@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -34,7 +35,7 @@ abstract class Mh160 : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = parseMobileList("$mobileUrl/kanmanhua/zaixian_recent.html")
 
     private suspend fun parseMobileList(url: String): MangasPage {
-        val mangas = client.get(url).asJsoup().select(".itemBox").mapNotNull(::mangaFromItemBox)
+        val mangas = client.get(url, Fetch.DOCUMENT).asJsoup().select(".itemBox").mapNotNull(::mangaFromItemBox)
         return MangasPage(mangas, hasNextPage = false)
     }
 
@@ -60,7 +61,7 @@ abstract class Mh160 : KeiSource() {
             val path = slug ?: "zaixian_hit.html"
             "$mobileUrl/kanmanhua/$path".toHttpUrl()
         }
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return if (query.isNotBlank()) parseMangaList(document) else parseCategoryPage(document)
     }
 
@@ -97,7 +98,7 @@ abstract class Mh160 : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val match = MANGA_URL_REGEX.find(url.encodedPath) ?: return null
         val mangaUrl = "/kanmanhua/${match.groupValues[1]}/"
-        val document = client.get(baseUrl + mangaUrl).asJsoup()
+        val document = client.get(baseUrl + mangaUrl, Fetch.DOCUMENT).asJsoup()
         return parseDetails(document).apply { this.url = mangaUrl }
     }
 
@@ -107,7 +108,7 @@ abstract class Mh160 : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseDetails(document),
             chapters = parseChapters(document),
@@ -140,7 +141,7 @@ abstract class Mh160 : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val html = client.get(baseUrl + chapter.url).use { it.body.string() }
+        val html = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).use { it.body.string() }
         val encoded = MURL_REGEX.find(html)?.groupValues?.get(1)
             ?: throw Exception("找不到图片列表，页面结构可能已更改")
         val decoded = String(Base64.decode(encoded, Base64.DEFAULT), Charsets.UTF_8)

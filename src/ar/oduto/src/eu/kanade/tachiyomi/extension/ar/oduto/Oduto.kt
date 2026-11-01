@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -14,6 +15,7 @@ import keiyoushi.utils.parseAs
 
 @Source
 abstract class Oduto : KeiSource() {
+
     override val supportsLatest get() = false
 
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -43,7 +45,7 @@ abstract class Oduto : KeiSource() {
     ): SMangaUpdate {
         if (fetchChapters) {
             val url = "$baseUrl/feeds/posts/summary/-/${manga.url}?alt=json&max-results=500"
-            val feed = client.get(url).parseAs<BloggerFeedResponse>()
+            val feed = client.get(url, Fetch.XHR).parseAs<BloggerFeedResponse>()
             return SMangaUpdate(manga, feed.feed.entry.map { it.toSChapter() })
         }
 
@@ -51,7 +53,7 @@ abstract class Oduto : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
         return document.select("div#post-body img").mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("src"))
         }

@@ -1,5 +1,4 @@
 package eu.kanade.tachiyomi.extension.pt.saikaiscan
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -7,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -16,7 +16,6 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.Response
 import kotlin.time.Duration.Companion.seconds
 
@@ -46,7 +45,7 @@ abstract class SaikaiScan : KeiSource() {
             .addQueryParameter("relationships", "language,type,format,latestReleases.separator")
             .build()
 
-        return parseSearch(client.get(apiEndpointUrl, apiHeaders))
+        return parseSearch(client.get(apiEndpointUrl, apiHeaders, Fetch.XHR))
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -73,7 +72,7 @@ abstract class SaikaiScan : KeiSource() {
             .forEach { it.addQueryParameter(apiEndpointUrl) }
 
         return parseSearch(
-            client.get(apiEndpointUrl.build(), apiHeaders),
+            client.get(apiEndpointUrl.build(), apiHeaders, Fetch.XHR),
         )
     }
 
@@ -103,6 +102,7 @@ abstract class SaikaiScan : KeiSource() {
         val result = client.get(
             apiEndpointUrl,
             apiHeaders,
+            Fetch.XHR,
         ).parseAs<PaginatedStories>()
 
         val story = result.data!![0]
@@ -127,6 +127,7 @@ abstract class SaikaiScan : KeiSource() {
         val result = client.get(
             apiEndpointUrl,
             apiHeaders,
+            Fetch.XHR,
         ).parseAs<ReleaseResult>()
 
         return result.data?.releaseImages.orEmpty().mapIndexed { i, obj ->
@@ -134,18 +135,11 @@ abstract class SaikaiScan : KeiSource() {
         }
     }
 
-    override fun imageRequest(page: Page): Request {
-        val imageHeaders = headersBuilder()
-            .add("Accept", ACCEPT_IMAGE)
-            .build()
-
-        return GET(page.imageUrl!!, imageHeaders)
-    }
-
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData() = client.get(
         "$apiUrl/api/genres",
+        Fetch.XHR,
     ).parseAs<GenresResult>().data.toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
@@ -160,7 +154,6 @@ abstract class SaikaiScan : KeiSource() {
     )
 
     companion object {
-        private const val ACCEPT_IMAGE = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
         private const val ACCEPT_JSON = "application/json, text/plain, */*"
         private const val COMIC_FORMAT_ID = "2"
         private const val PER_PAGE = "12"

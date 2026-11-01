@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -32,7 +33,7 @@ abstract class Klto9 : KeiSource() {
             .addQueryParameter("sort", "views")
             .addQueryParameter("sort_type", "DESC")
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseMangasPage(document)
     }
 
@@ -43,7 +44,7 @@ abstract class Klto9 : KeiSource() {
             .addQueryParameter("sort", "last_update")
             .addQueryParameter("sort_type", "DESC")
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseMangasPage(document)
     }
 
@@ -101,7 +102,7 @@ abstract class Klto9 : KeiSource() {
             url.addQueryParameter("ungenre", genreExclude.joinToString(","))
         }
 
-        val document = client.get(url.build()).asJsoup()
+        val document = client.get(url.build(), Fetch.DOCUMENT).asJsoup()
         return parseMangasPage(document)
     }
 
@@ -157,7 +158,7 @@ abstract class Klto9 : KeiSource() {
     }
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return SManga.create().apply {
             title = document.selectFirst("ol.breadcrumb li[itemprop=itemListElement]:last-child span")!!.text()
@@ -207,7 +208,7 @@ abstract class Klto9 : KeiSource() {
             .addQueryParameter("manga", slug)
             .build()
 
-        return client.get(url).parseAs<List<Dto>>().map { it.toSChapter() }
+        return client.get(url, Fetch.XHR).parseAs<List<Dto>>().map { it.toSChapter() }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -224,7 +225,7 @@ abstract class Klto9 : KeiSource() {
         val cid = if (chapter.url.contains("#")) {
             chapter.url.substringBefore("#")
         } else {
-            val document = client.get(getChapterUrl(chapter)).asJsoup()
+            val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
             document.selectFirst("input#chapter")?.attr("value")
                 ?: imageLoadRegex.find(document.html())?.groupValues?.get(1)
                 ?: throw Exception("Could not find chapter ID (cid) in fallback flow")
@@ -235,7 +236,7 @@ abstract class Klto9 : KeiSource() {
             .addQueryParameter("cid", cid)
             .build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return document.select("img").mapIndexed { index, img ->
             val src = img.absUrl("data-pagespeed-lazy-src").ifEmpty { img.absUrl("src") }
             Page(index, imageUrl = src)

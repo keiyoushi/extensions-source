@@ -12,6 +12,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -72,7 +74,7 @@ abstract class GreenShit :
             .addQueryParameter("pagina", page.toString())
             .addQueryParameter("gen_id", defaultGenreId)
             .build()
-        return parseMangaList(client.get(url))
+        return parseMangaList(client.get(url, Fetch.XHR))
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -81,7 +83,7 @@ abstract class GreenShit :
             .addQueryParameter("limite", limitPerPage)
             .addQueryParameter("gen_id", defaultGenreId)
             .build()
-        return parseMangaList(client.get(url))
+        return parseMangaList(client.get(url, Fetch.XHR))
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -117,7 +119,7 @@ abstract class GreenShit :
             }
         }
 
-        return parseMangaList(client.get(url.build()))
+        return parseMangaList(client.get(url.build(), Fetch.XHR))
     }
 
     private fun parseMangaList(response: Response): MangasPage {
@@ -148,11 +150,11 @@ abstract class GreenShit :
         return SMangaUpdate(dto.toSManga(cdnApiUrl, isDetails = true), chapterList)
     }
 
-    private suspend fun fetchManga(id: String) = client.get("$apiUrl/obras/$id").parseAs<GreenShitMangaDto>()
+    private suspend fun fetchManga(id: String) = client.get("$apiUrl/obras/$id", Fetch.XHR).parseAs<GreenShitMangaDto>()
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.url.substringAfter("/capitulo/")
-        val response = client.get("$apiUrl/capitulos/$chapterId", ensureSuccess = false)
+        val response = client.get("$apiUrl/capitulos/$chapterId", Fetch.XHR, ensureSuccess = false)
         if (response.code == 403) {
             val message = runCatching { response.parseAs<GreenShitErrorDto>().message }
                 .getOrElse { "Faça login" }
@@ -163,7 +165,7 @@ abstract class GreenShit :
 
     override val supportsFilterFetching get() = supportsFilters && (genresList.isEmpty() || tagsList.isEmpty())
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/obras/filtros").parseAs<JsonElement>()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/obras/filtros", Fetch.XHR).parseAs<JsonElement>()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         if (!supportsFilters) return FilterList()
@@ -265,7 +267,7 @@ abstract class GreenShit :
             val headers = headersBuilder().set("Accept", "application/json").build()
 
             val response = network.client.newCall(
-                POST("$apiUrl/auth/login", headers, body),
+                POST("$apiUrl/auth/login", headers, body).newBuilder().fetch(Fetch.XHR).build(),
             ).execute()
 
             if (!response.isSuccessful) {

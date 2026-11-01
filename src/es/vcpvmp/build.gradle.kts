@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "VCPVMP"
-    versionCode = 1
+    versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     theme = "vercomics"
@@ -21,5 +21,6 @@ keiyoushi {
         name = "VMP"
         lang = "es"
         baseUrl = "https://vermangasporno.com"
+        versionId = 2
     }
 }

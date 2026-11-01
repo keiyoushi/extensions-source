@@ -6,13 +6,17 @@ plugins {
 
 keiyoushi {
     name = "MHScans"
-    versionCode = 14
+    versionCode = 71
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
-    theme = "madara"
 
     source {
         lang = "es"
         baseUrl = "https://mhscans.com"
+        versionId = 2
+    }
+
+    deeplink {
+        path("/comics/..*")
     }
 }

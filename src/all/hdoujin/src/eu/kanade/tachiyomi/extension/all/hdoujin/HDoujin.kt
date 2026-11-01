@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import getFilters
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -104,9 +105,9 @@ abstract class HDoujin :
             .build()
 
         val response = if (post) {
-            client.post(newUrl, headers, FormBody.Builder().build(), ensureSuccess = false)
+            client.post(newUrl, headers, Fetch.XHR, FormBody.Builder().build(), ensureSuccess = false)
         } else {
-            client.get(newUrl, headers, ensureSuccess = false)
+            client.get(newUrl, headers, Fetch.XHR, ensureSuccess = false)
         }
 
         if (response.code in listOf(400, 403)) {
@@ -135,7 +136,7 @@ abstract class HDoujin :
             if (terms.isNotEmpty()) addQueryParameter("s", terms.joinToString(" "))
         }.build()
 
-        return client.get(url).parseEntries()
+        return clearanceRequest(url.toString()).parseEntries()
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -150,7 +151,7 @@ abstract class HDoujin :
             if (terms.isNotEmpty()) addQueryParameter("s", terms.joinToString(" "))
         }.build()
 
-        return client.get(url).parseEntries()
+        return clearanceRequest(url.toString()).parseEntries()
     }
 
     private fun Response.parseEntries(): MangasPage {
@@ -211,7 +212,7 @@ abstract class HDoujin :
             addQueryParameter("page", page.toString())
         }.build()
 
-        return client.get(url).parseEntries()
+        return clearanceRequest(url.toString()).parseEntries()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList = getFilters()
@@ -264,7 +265,7 @@ abstract class HDoujin :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val mangaDetail = client.get("$bookApiUrl/detail/${manga.url}").parseAs<MangaDetail>()
+        val mangaDetail = clearanceRequest("$bookApiUrl/detail/${manga.url}").parseAs<MangaDetail>()
 
         val updatedManga = mangaDetail.toSManga().apply {
             url = manga.url

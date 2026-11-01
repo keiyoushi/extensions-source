@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -20,7 +21,7 @@ abstract class HentaiThaiNet : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = if (page == 1) baseUrl else "$baseUrl/page-$page"
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val thumbnails = document.parseThumbnails()
         val mangas = document.select("a.col-6[href*=\"/t\"]").map { it.listingParse(thumbnails) }
         val hasNextPage = document.selectFirst("a[href*=\"page-${page + 1}\"]") != null
@@ -34,10 +35,10 @@ abstract class HentaiThaiNet : KeiSource() {
 
     private suspend fun getMaxPage(): Int {
         maxPageCache?.let { return it }
-        val homeHtml = client.get(baseUrl).asJsoup().html()
+        val homeHtml = client.get(baseUrl, Fetch.DOCUMENT).asJsoup().html()
         val firstMax = Regex("""page-(\d+)""").findAll(homeHtml)
             .map { it.groupValues[1].toInt() }.maxOrNull() ?: 1
-        val pageHtml = client.get("$baseUrl/page-$firstMax").asJsoup().html()
+        val pageHtml = client.get("$baseUrl/page-$firstMax", Fetch.DOCUMENT).asJsoup().html()
         val trueMax = Regex("""page-(\d+)""").findAll(pageHtml)
             .map { it.groupValues[1].toInt() }.maxOrNull() ?: firstMax
         maxPageCache = trueMax
@@ -49,7 +50,7 @@ abstract class HentaiThaiNet : KeiSource() {
         val sitePage = maxPage - page + 1
         if (sitePage < 1) return MangasPage(emptyList(), false)
         val url = if (sitePage == 1) baseUrl else "$baseUrl/page-$sitePage"
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val thumbnails = document.parseThumbnails()
         val mangas = document.select("a.col-6[href*=\"/t\"]").map { it.listingParse(thumbnails) }
         return MangasPage(mangas, sitePage > 1)
@@ -81,7 +82,7 @@ abstract class HentaiThaiNet : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl/${manga.url}").asJsoup()
+        val document = client.get("$baseUrl/${manga.url}", Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = manga.apply {
             val rawTitle = document.selectFirst("title")?.text()?.trim().orEmpty()
@@ -103,7 +104,7 @@ abstract class HentaiThaiNet : KeiSource() {
         return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/${chapter.url}").asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/${chapter.url}", Fetch.DOCUMENT).asJsoup()
         .select("img[src*=\"/thai/\"]")
         .map { it.attr("src") }
         .mapIndexed { index, url -> Page(index, imageUrl = url) }

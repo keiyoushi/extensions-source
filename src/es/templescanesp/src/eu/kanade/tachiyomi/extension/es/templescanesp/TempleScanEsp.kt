@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.es.templescanesp
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
@@ -34,7 +35,7 @@ abstract class TempleScanEsp : Madara() {
             ?.substringBefore(")")
     }
     override fun archiveSelector() = "div.group"
-    override val archiveUrlSelector = "div.manga > div a"
+    override val archiveUrlSelector = "a:has(h3)"
     override val archiveTitleSelector = "h3"
 
     override fun chapterListSelector() = "ul#list-chapters li > a"
@@ -60,7 +61,7 @@ abstract class TempleScanEsp : Madara() {
             }
         }.build()
 
-        return client.post(url, headers, body).asJsoup()
+        return client.post(url, headers, Fetch.DOCUMENT, body).asJsoup()
     }
 
     override val supportsFilterFetching get() = true

@@ -6,4 +6,5 @@ import keiyoushi.annotation.Source
 @Source
 abstract class AllPornComic : MadaraNoAjax() {
     override val mangaSubString = "porncomic"
+    override val supportsPostId = false
 }

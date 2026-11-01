@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
@@ -96,7 +97,7 @@ abstract class HenChan : MultiChan() {
             return chapterListParse(mangaPage)
         }
 
-        val response = client.get(baseUrl + manga.url.replace("/manga/", "/related/"), ensureSuccess = false)
+        val response = client.get(baseUrl + manga.url.replace("/manga/", "/related/"), Fetch.DOCUMENT, ensureSuccess = false)
         if (!response.isSuccessful) {
             response.close()
             // Error message for exceeding last page
@@ -157,7 +158,7 @@ abstract class HenChan : MultiChan() {
             val url = nextElement.attr("abs:href")
             if (url.isEmpty()) break
 
-            val nextPage = client.get(url).asJsoup()
+            val nextPage = client.get(url, Fetch.DOCUMENT).asJsoup()
             result.addAll(
                 nextPage.select(chapterListSelector()).map {
                     chapterFromElement(it)
@@ -186,7 +187,7 @@ abstract class HenChan : MultiChan() {
         } else {
             baseUrl + chapter.url
         }
-        return pageListParse(client.get(url, headersBuilder().add("Accept", "image/webp,image/apng").build()).body.string())
+        return pageListParse(client.get(url, headersBuilder().add("Accept", "image/webp,image/apng").build(), Fetch.DOCUMENT).body.string())
     }
 
     override fun pageListParse(html: String): List<Page> {

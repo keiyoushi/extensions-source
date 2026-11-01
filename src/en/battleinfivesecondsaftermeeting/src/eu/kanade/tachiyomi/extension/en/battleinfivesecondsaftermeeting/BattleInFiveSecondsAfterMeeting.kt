@@ -3,8 +3,6 @@ package eu.kanade.tachiyomi.extension.en.battleinfivesecondsaftermeeting
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 
@@ -33,8 +31,12 @@ abstract class BattleInFiveSecondsAfterMeeting : Madara() {
                 url = slug
                 name = element.selectFirst(".chapter-content")!!.text().removePrefix("Battle in 5 Seconds After Meeting, ")
                 date_upload = dates[href] ?: 0L
-                memo = buildJsonObject { put("mangaPath", mangaPath) }
             }
         }
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        if (chapter.url.contains('/')) error("Refresh the chapter list.")
+        return "$baseUrl/manga/${chapter.url}/"
     }
 }

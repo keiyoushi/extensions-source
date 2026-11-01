@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.mangaparkpublisher
 
+import android.util.Base64
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -7,6 +8,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.XorInterceptor
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -31,7 +34,7 @@ abstract class MangaParkPublisher : KeiSource() {
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy/M/d", Locale.ROOT).withZone(ZoneId.of("Asia/Tokyo"))
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor(ImageInterceptor())
+        addInterceptor(XorInterceptor { it.url.fragment?.let { f -> Base64.decode(f, Base64.DEFAULT) } })
         addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
@@ -43,9 +46,9 @@ abstract class MangaParkPublisher : KeiSource() {
         }
     }
 
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/ranking?target=all").toMangasPage()
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/ranking?target=all", Fetch.DOCUMENT).toMangasPage()
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get("$baseUrl/series").toMangasPage()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get("$baseUrl/series", Fetch.DOCUMENT).toMangasPage()
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val filter = filters.firstInstance<TypeFilter>()
@@ -62,7 +65,7 @@ abstract class MangaParkPublisher : KeiSource() {
             }
         }.build()
 
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     private fun Response.toMangasPage(): MangasPage {
@@ -83,7 +86,7 @@ abstract class MangaParkPublisher : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val titleInfo = document.selectFirst("div.titleMain div.titleInfo")!!
         val mangaDetails = SManga.create().apply {
             title = titleInfo.selectFirst("h1")!!.text()
@@ -120,7 +123,7 @@ abstract class MangaParkPublisher : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.memo["slug"]!!.string}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$apiUrl/${chapter.url}")
+        val response = client.get("$apiUrl/${chapter.url}", Fetch.XHR)
         val chapters = try {
             response.parseAs<ApiResponse>().data.chapter
         } catch (_: Exception) {

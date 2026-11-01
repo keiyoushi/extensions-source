@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.head
 import keiyoushi.source.KeiSource
@@ -109,7 +110,7 @@ abstract class LeslieAndVictims : KeiSource() {
 
     // ============================== Utilities =============================
 
-    private suspend fun fetchLibrary(): List<LibraryEntry> = client.get("$baseUrl/manga.json").parseAs()
+    private suspend fun fetchLibrary(): List<LibraryEntry> = client.get("$baseUrl/manga.json", Fetch.XHR).parseAs()
 
     private suspend fun findEntry(seriesId: String): LibraryEntry = fetchLibrary()
         .find { it.getId() == seriesId }

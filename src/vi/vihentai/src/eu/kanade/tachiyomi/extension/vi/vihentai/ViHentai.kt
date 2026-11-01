@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -40,7 +41,6 @@ import java.util.Locale
 abstract class ViHentai :
     KeiSource(),
     ConfigurableSource {
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     // ============================ Password Gate ============================
@@ -121,7 +121,7 @@ abstract class ViHentai :
 
     // ============================== Popular ===============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(client.get("$baseUrl/tim-kiem?sort=-views&filter[status]=2,1&page=$page"))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(client.get("$baseUrl/tim-kiem?sort=-views&filter[status]=2,1&page=$page", Fetch.DOCUMENT))
 
     private fun parseMangaPage(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -141,7 +141,7 @@ abstract class ViHentai :
 
     // =============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaPage(client.get("$baseUrl/tim-kiem?sort=-updated_at&filter[status]=2,1&page=$page"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaPage(client.get("$baseUrl/tim-kiem?sort=-updated_at&filter[status]=2,1&page=$page", Fetch.DOCUMENT))
 
     // =============================== Search ===============================
 
@@ -163,7 +163,7 @@ abstract class ViHentai :
             addQueryParameter("page", page.toString())
         }.build()
 
-        return parseMangaPage(client.get(url))
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT))
     }
 
     // =============================== Details ==============================
@@ -209,7 +209,7 @@ abstract class ViHentai :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
             chapters = parseChapterList(document),
@@ -231,7 +231,7 @@ abstract class ViHentai :
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
         val packedScript = document.select("script").map { it.data() }
             .firstOrNull { it.contains("eval(function(h,u,n,t,e,r)") }
             ?: return emptyList()
@@ -245,7 +245,7 @@ abstract class ViHentai :
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-kiem").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-kiem", Fetch.DOCUMENT).asJsoup()
         .select("label")
         .mapNotNull { element ->
             val id = genreIdRegex.matchEntire(element.attr("@click"))
@@ -265,7 +265,7 @@ abstract class ViHentai :
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         val relatedSectionTitles = listOf("Truyện cùng tác giả", "Có thể bạn thích")
 
         return relatedSectionTitles.flatMap { sectionTitle ->

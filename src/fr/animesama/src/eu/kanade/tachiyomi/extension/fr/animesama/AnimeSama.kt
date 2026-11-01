@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -32,11 +33,11 @@ abstract class AnimeSama : KeiSource() {
             .addQueryParameter("type[]", "Scans")
             .addQueryParameter("page", page.toString())
             .build()
-        return parseMangasPage(client.get(url).asJsoup(), "div#list_catalog > div")
+        return parseMangasPage(client.get(url, Fetch.DOCUMENT).asJsoup(), "div#list_catalog > div")
     }
 
     // ========================= Latest =========================
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangasPage(client.get(baseUrl).asJsoup(), "div#containerAjoutsScans > div", "scan/vf/")
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangasPage(client.get(baseUrl, Fetch.DOCUMENT).asJsoup(), "div#containerAjoutsScans > div", "scan/vf/")
 
     // ========================= Search =========================
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -44,7 +45,7 @@ abstract class AnimeSama : KeiSource() {
 
         val path = url.encodedPath.removeSuffix("/").substringBefore("/scan")
         val mangaUrl = url.newBuilder().encodedPath("$path/").build()
-        return detailsParse(client.get(mangaUrl).asJsoup())
+        return detailsParse(client.get(mangaUrl, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -58,7 +59,7 @@ abstract class AnimeSama : KeiSource() {
                 }
             }
             .build()
-        return parseMangasPage(client.get(url).asJsoup(), "div#list_catalog > div")
+        return parseMangasPage(client.get(url, Fetch.DOCUMENT).asJsoup(), "div#list_catalog > div")
     }
 
     private fun detailsParse(document: Document): SManga? {
@@ -84,7 +85,7 @@ abstract class AnimeSama : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         val url = response.request.url
         val document = response.asJsoup()
 
@@ -99,14 +100,14 @@ abstract class AnimeSama : KeiSource() {
     private fun SManga.populateMangaDetails(document: Document) {
         description = document.selectFirst("p#synopsisText")?.text()
 
-        genre = document.select("span.genre-pill")
+        genre = document.select(".genre-pill")
             .takeIf { it.isNotEmpty() }
             ?.joinToString { it.text() }
 
-        title = document.selectFirst("div.my-2 h1")!!.text()
-        thumbnail_url = document.selectFirst("img#coverOeuvre")?.absUrl("src")
-        author = document.selectFirst("span.info-lbl:contains(Créateur) + span.info-val")?.text()
-        status = parseStatus(document.selectFirst("span.info-lbl:contains(État) + span.info-val")?.text())
+        title = document.selectFirst("h1#titreOeuvre")!!.text()
+        thumbnail_url = document.selectFirst(".oe-affiche img")?.absUrl("src")
+        author = document.selectFirst("dl.oe-infos dt:contains(Auteur) + dd")?.text()
+        status = parseStatus(document.selectFirst("dl.oe-infos dt:contains(Statut) + dd")?.text())
     }
 
     private fun parseStatus(status: String?): Int = when (status?.lowercase()) {
@@ -149,12 +150,12 @@ abstract class AnimeSama : KeiSource() {
     }
 
     private suspend fun fetchScanChapters(scanUrl: HttpUrl, scanlatorGroup: String): List<SChapter> {
-        val subDocument = client.get(scanUrl).asJsoup()
+        val subDocument = client.get(scanUrl, Fetch.DOCUMENT).asJsoup()
         val mainPageLink = subDocument.selectFirst("a:has(#imgOeuvre.grayscale)")?.absUrl("href")
 
         var title = if (!mainPageLink.isNullOrEmpty()) {
             try {
-                client.get(mainPageLink).asJsoup().getWorkTitle()
+                client.get(mainPageLink, Fetch.DOCUMENT).asJsoup().getWorkTitle()
             } catch (_: Exception) {
                 ""
             }
@@ -172,7 +173,7 @@ abstract class AnimeSama : KeiSource() {
             .addQueryParameter("oeuvre", title)
             .build()
 
-        val apiResponse = client.get(chapterUrl)
+        val apiResponse = client.get(chapterUrl, Fetch.XHR)
         val apiImageCountJson = try {
             apiResponse.parseAs<Map<String, Int>>()
         } catch (_: Exception) {
@@ -217,7 +218,7 @@ abstract class AnimeSama : KeiSource() {
         val title = url.queryParameter("oeuvre")
         val chapterId = url.queryParameter("id")
 
-        val apiImageCountJson = client.get(url).parseAs<Map<String, Int>>()
+        val apiImageCountJson = client.get(url, Fetch.XHR).parseAs<Map<String, Int>>()
         val imageCount = apiImageCountJson[chapterId] ?: 0
 
         return (1..imageCount).map { index ->
@@ -229,7 +230,7 @@ abstract class AnimeSama : KeiSource() {
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/catalogue").asJsoup()
+        val document = client.get("$baseUrl/catalogue", Fetch.DOCUMENT).asJsoup()
         return document.select("#list_genres #genreList label").mapNotNull { labelElement ->
             val input = labelElement.selectFirst("input[name=genre[]]") ?: return@mapNotNull null
             val labelText = labelElement.selectFirst("span")?.text() ?: return@mapNotNull null
@@ -252,13 +253,13 @@ abstract class AnimeSama : KeiSource() {
     private fun parseMangasPage(document: Document, containerSelector: String, urlSuffixToRemove: String = ""): MangasPage {
         val mangas = document.select(containerSelector).map {
             SManga.create().apply {
-                title = it.selectFirst("h2.card-title")!!.text()
+                title = it.selectFirst(".as-carte-titre")!!.text()
                 val url = it.selectFirst("a")!!.absUrl("href")
                 setUrlWithoutDomain(if (urlSuffixToRemove.isNotEmpty()) url.removeSuffix(urlSuffixToRemove) else url)
                 thumbnail_url = it.selectFirst("img")?.absUrl("src")
             }
         }
-        val hasNextPage = document.selectFirst("#list_pagination > a.bg-sky-900 + a") != null
+        val hasNextPage = document.selectFirst("#list_pagination .pagi-actuelle + a") != null
         return MangasPage(mangas, hasNextPage)
     }
 

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
@@ -41,6 +42,7 @@ abstract class GoodToon : MadaraNoAjax() {
 
     override val searchQueryParameter = "q"
 
+    override val mangaDetailsSelectorTitle = "h1.summary-title, div.post-title h3, div.post-title h1, #manga-title > h1"
     override val mangaDetailsSelectorAuthor = "div.manga-summary-author .author-text, div.manga-summary-author"
     override val mangaDetailsSelectorStatus = "div.summary-meta-row .meta-value"
     override val mangaDetailsSelectorDescription = "div.manga-summary-desc"
@@ -106,7 +108,7 @@ abstract class GoodToon : MadaraNoAjax() {
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = emptyList()
 
     override suspend fun fetchFilterData(): JsonElement = buildJsonArray {
-        client.get(baseUrl).asJsoup().select("button.genre[data-genre]").forEach { element ->
+        client.get(baseUrl, Fetch.DOCUMENT).asJsoup().select("button.genre[data-genre]").forEach { element ->
             val slug = element.attrOrNull("data-genre") ?: return@forEach
             val name = element.textOrNull() ?: return@forEach
             add(

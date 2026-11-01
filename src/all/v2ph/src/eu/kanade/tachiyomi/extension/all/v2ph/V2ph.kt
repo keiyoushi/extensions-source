@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -30,7 +31,6 @@ import java.time.format.DateTimeFormatter
 abstract class V2ph : KeiSource() {
 
     override fun Headers.Builder.configureHeaders() = apply {
-        add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
         add("Accept-Language", "en-US,en;q=0.9")
     }
 
@@ -38,6 +38,7 @@ abstract class V2ph : KeiSource() {
     override suspend fun getPopularManga(page: Int) = popularMangaParse(
         client.get(
             "$baseUrl/category/best-quality?page=$page",
+            Fetch.DOCUMENT,
         ).asJsoup(),
     )
 
@@ -50,7 +51,7 @@ abstract class V2ph : KeiSource() {
     // ============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/?page=$page").asJsoup()
+        val document = client.get("$baseUrl/?page=$page", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("#latest-albums-title ~ .albums-list .card").mapNotNull(::mangaFromElement)
         val hasNextPage = document.selectFirst("ul.pagination li.page-item a:contains(Next)") != null
         return MangasPage(mangas, hasNextPage)
@@ -85,7 +86,7 @@ abstract class V2ph : KeiSource() {
             }
         }
 
-        return popularMangaParse(client.get(url).asJsoup())
+        return popularMangaParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // ============================== MangaUpdate ==============================
@@ -100,6 +101,7 @@ abstract class V2ph : KeiSource() {
     ): SMangaUpdate {
         val doc = client.get(
             getMangaUrl(manga),
+            Fetch.DOCUMENT,
         ).checkPaywall().asJsoup()
 
         return SMangaUpdate(parseDetails(doc), parseChapters(doc))
@@ -142,6 +144,7 @@ abstract class V2ph : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(
             getChapterUrl(chapter),
+            Fetch.DOCUMENT,
         ).checkPaywall().asJsoup()
 
         val photosCount = document.selectFirst("dl dt:contains(Photos) + dd")?.text()?.toIntOrNull() ?: 0
@@ -161,7 +164,7 @@ abstract class V2ph : KeiSource() {
             (2..maxPage).map { i ->
                 async {
                     val sep = if (chapter.url.contains("?")) "&" else "?"
-                    client.get("$baseUrl${chapter.url}${sep}page=$i", ensureSuccess = false).use { r ->
+                    client.get("$baseUrl${chapter.url}${sep}page=$i", Fetch.DOCUMENT, ensureSuccess = false).use { r ->
                         if (!r.isSuccessful) {
                             emptyList()
                         } else {

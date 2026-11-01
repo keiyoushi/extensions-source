@@ -11,6 +11,7 @@ abstract class Hizomanga : Madara() {
 
     override val mangaSubString = "serie"
 
-    override val mangaDetailsSelectorDescription = ".manga-excerpt"
+    override val mangaDetailsSelectorTitle = "div.manga-title > h2"
+    override val mangaDetailsSelectorDescription = ".manga-excerpt .excerpt-content:not(:empty)"
     override val mangaDetailsSelectorStatus = ".manga-status"
 }

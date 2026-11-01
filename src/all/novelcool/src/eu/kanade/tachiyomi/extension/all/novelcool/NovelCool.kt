@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -55,12 +56,12 @@ abstract class NovelCool :
 
     override suspend fun getPopularManga(page: Int): MangasPage = when (preference.useAppApi) {
         true -> commonApiRequest("$apiUrl/elite/hot/", page)
-        else -> parseMangasPage(client.get("$baseUrl/category/new_list.html").asJsoup())
+        else -> parseMangasPage(client.get("$baseUrl/category/new_list.html", Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = when (preference.useAppApi) {
         true -> commonApiRequest("$apiUrl/elite/latest/", page)
-        else -> parseMangasPage(client.get("$baseUrl/category/latest.html").asJsoup())
+        else -> parseMangasPage(client.get("$baseUrl/category/latest.html", Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -97,7 +98,7 @@ abstract class NovelCool :
             addQueryParameter("page", page.toString())
         }.build()
 
-        return parseMangasPage(client.get(url).asJsoup())
+        return parseMangasPage(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private fun parseMangasPage(document: Document): MangasPage {
@@ -115,7 +116,7 @@ abstract class NovelCool :
     override val supportsFilterFetching get() = !preference.useAppApi
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/search/").asJsoup()
+        val document = client.get("$baseUrl/search/", Fetch.DOCUMENT).asJsoup()
 
         return document.selectFirst(".category-list")
             ?.select(".category-id-item")
@@ -160,7 +161,8 @@ abstract class NovelCool :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        // Sent as built: to requests that look like a browser the site serves /go/rds/ ad redirects instead of chapter links
+        val document = client.get(getMangaUrl(manga), Fetch.NONE).asJsoup()
 
         val details = SManga.create().apply {
             url = manga.url
@@ -188,7 +190,8 @@ abstract class NovelCool :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        var doc = pageClient.get(getChapterUrl(chapter)).asJsoup()
+        // Sent as built, like the manga page above
+        var doc = pageClient.get(getChapterUrl(chapter), Fetch.NONE).asJsoup()
 
         // Chapter pages redirect (HTTP 302) to an intermediate "choose a source" page on a
         // partner domain (e.g. techsmartideas.com). That page contains a.vision-button links
@@ -200,7 +203,7 @@ abstract class NovelCool :
             val serverHeaders = headers.newBuilder()
                 .set("Referer", doc.baseUri())
                 .build()
-            doc = pageClient.get(serverUrl, serverHeaders).asJsoup()
+            doc = pageClient.get(serverUrl, serverHeaders, Fetch.NONE).asJsoup()
         }
 
         // Parse all_imgs_url from the script using a robust approach: extract the array
@@ -230,7 +233,7 @@ abstract class NovelCool :
         } ?: emptyList()
 
     override suspend fun getImageUrl(page: Page): String {
-        val document = client.get(page.url).asJsoup()
+        val document = client.get(page.url, Fetch.NONE).asJsoup()
         return document.select(".mangaread-manga-pic").attr("src")
     }
 
@@ -300,7 +303,7 @@ abstract class NovelCool :
             secret = APP_SECRET,
         )
 
-        val browse = client.post(url, payload.toJsonRequestBody()).parseAs<NovelCoolBrowseResponse>()
+        val browse = client.post(url, Fetch.XHR, payload.toJsonRequestBody()).parseAs<NovelCoolBrowseResponse>()
         val mangas = browse.list?.map {
             it.toSManga().apply {
                 setUrlWithoutDomain(it.url)

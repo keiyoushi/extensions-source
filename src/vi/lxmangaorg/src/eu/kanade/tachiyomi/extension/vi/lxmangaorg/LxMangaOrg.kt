@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -37,14 +38,14 @@ abstract class LxMangaOrg : KeiSource() {
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(
-        client.get(pagedUrl("/truyen-tranh-hot", page)),
+        client.get(pagedUrl("/truyen-tranh-hot", page), Fetch.DOCUMENT),
         page,
     )
 
     // ============================== Latest ================================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaPage(
-        client.get(pagedUrl("/moi-cap-nhat", page)),
+        client.get(pagedUrl("/moi-cap-nhat", page), Fetch.DOCUMENT),
         page,
     )
 
@@ -64,7 +65,7 @@ abstract class LxMangaOrg : KeiSource() {
             "$baseUrl$path".toHttpUrl()
         }
 
-        return parseMangaPage(client.get(pagedUrl(url, page)), page)
+        return parseMangaPage(client.get(pagedUrl(url, page), Fetch.DOCUMENT), page)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -113,7 +114,7 @@ abstract class LxMangaOrg : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = if (fetchDetails) parseMangaDetails(document, manga) else manga,
             chapters = if (fetchChapters) fetchChapterList(document, manga.url) else chapters,
@@ -167,7 +168,7 @@ abstract class LxMangaOrg : KeiSource() {
             .set("X-Requested-With", "XMLHttpRequest")
             .build()
 
-        return client.post("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, body)
+        return client.post("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, Fetch.XHR, body)
             .parseAs<ChapterListResponse>()
             .data
             .chapters
@@ -182,7 +183,7 @@ abstract class LxMangaOrg : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = client
-        .get("$baseUrl${chapter.url}")
+        .get("$baseUrl${chapter.url}", Fetch.DOCUMENT)
         .asJsoup()
         .select("img[alt^=Trang truyện]")
         .mapIndexed { index, element ->
@@ -212,7 +213,7 @@ abstract class LxMangaOrg : KeiSource() {
         return getFilters(filterData)
     }
 
-    private suspend fun fetchClassifications(): List<FilterOption> = client.get(baseUrl).asJsoup()
+    private suspend fun fetchClassifications(): List<FilterOption> = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         .select("a[href]")
         .mapNotNull { element ->
             val url = element.absUrl("href").toHttpUrlOrNull() ?: return@mapNotNull null
@@ -235,7 +236,7 @@ abstract class LxMangaOrg : KeiSource() {
         .distinctBy { it.path }
 
     private suspend fun fetchSitemapOptions(sitemapPath: String, optionPath: String): List<FilterOption> = client
-        .get("$baseUrl$sitemapPath")
+        .get("$baseUrl$sitemapPath", Fetch.DOCUMENT)
         .asJsoup()
         .select("loc")
         .mapNotNull { element ->
@@ -249,7 +250,7 @@ abstract class LxMangaOrg : KeiSource() {
         }
         .distinctBy { it.path }
 
-    private suspend fun fetchDirectoryPage(directoryPath: String, optionPath: String): List<FilterOption> = parseDirectoryOptions(client.get("$baseUrl$directoryPath").asJsoup(), optionPath)
+    private suspend fun fetchDirectoryPage(directoryPath: String, optionPath: String): List<FilterOption> = parseDirectoryOptions(client.get("$baseUrl$directoryPath", Fetch.DOCUMENT).asJsoup(), optionPath)
 
     private fun parseDirectoryOptions(document: Document, optionPath: String): List<FilterOption> = document
         .select("div.channel-item__name_details a[href*=$optionPath]")

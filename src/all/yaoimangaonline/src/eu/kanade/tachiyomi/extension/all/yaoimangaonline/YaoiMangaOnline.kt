@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -21,7 +22,7 @@ abstract class YaoiMangaOnline : KeiSource() {
 
     // =================== Popular ===================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangasPage(client.get("$baseUrl/page/$page/").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangasPage(client.get("$baseUrl/page/$page/", Fetch.DOCUMENT).asJsoup())
 
     private fun parseMangasPage(document: Document): MangasPage {
         val mangas = document.select(".post:not(.sticky):not(.category-gay-movies):not(.category-yaoi-anime) > div > a")
@@ -59,7 +60,7 @@ abstract class YaoiMangaOnline : KeiSource() {
             addQueryParameter("s", query)
         }.build()
 
-        return parseMangasPage(client.get(url).asJsoup())
+        return parseMangasPage(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // =================== Details ===================
@@ -70,7 +71,7 @@ abstract class YaoiMangaOnline : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document))
     }
 
@@ -109,7 +110,7 @@ abstract class YaoiMangaOnline : KeiSource() {
 
     // =================== Pages ===================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(baseUrl + chapter.url).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
         .select(".entry-content img")
         .mapIndexed { idx, img -> Page(idx, imageUrl = img.attr("src")) }
 

@@ -9,9 +9,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.WebViewTimeoutException
+import keiyoushi.utils.cryptoJsDecrypt
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebViewBlocking
@@ -61,7 +64,7 @@ abstract class Softkomik : KeiSource() {
                 .addQueryParameter("page", page.toString())
                 .build()
 
-            return client.get(url).parseAs<LibDataDto>().toMangasPage()
+            return client.get(url, Fetch.XHR).parseAs<LibDataDto>().toMangasPage()
         }
 
         val url = libraryUrlBuilder(page)
@@ -89,7 +92,7 @@ abstract class Softkomik : KeiSource() {
         .addQueryParameter("page", page.toString())
 
     private suspend fun getLibraryPage(url: HttpUrl): MangasPage {
-        val libData = client.get(url, rscHeaders).extractNextJs<LibDataDto>()
+        val libData = client.get(url, rscHeaders, Fetch.XHR).extractNextJs<LibDataDto>()
             ?: throw Exception("Could not find library data")
 
         return libData.toMangasPage()
@@ -113,9 +116,15 @@ abstract class Softkomik : KeiSource() {
         return getMangaDetails(slug)
     }
 
+    // Detail and chapter pages carry their data CryptoJS-encrypted in `pageProps._stk`.
+    private suspend inline fun <reified T> getPageProps(url: String): T {
+        val stk = client.get(url, Fetch.XHR).extractNextJs<EncryptedPropsDto>()?.stk
+            ?: throw Exception("Could not find page data")
+        return stk.cryptoJsDecrypt(pagePropsKey).parseAs()
+    }
+
     private suspend fun getMangaDetails(slug: String): SManga {
-        val manga = client.get("$baseUrl/$slug", rscHeaders).extractNextJs<MangaDetailsDto>()
-            ?: throw Exception("Could not find manga details")
+        val manga = getPageProps<MangaPropsDto>("$baseUrl/$slug").data
 
         return SManga.create().apply {
             url = slug
@@ -153,7 +162,7 @@ abstract class Softkomik : KeiSource() {
             manga.genre.orEmpty().contains(keyword, ignoreCase = true)
         }
         val slug = manga.url
-        val dto = client.get("$apiUrl/komik/$slug/chapter?limit=9999999").parseAs<ChapterListDto>()
+        val dto = client.get("$apiUrl/komik/$slug/chapter?limit=9999999", Fetch.XHR).parseAs<ChapterListDto>()
 
         return dto.chapter.map { chapter ->
             val chapterNumStr = chapter.chapter
@@ -193,11 +202,10 @@ abstract class Softkomik : KeiSource() {
         val slug = segments[0]
         val chapterNum = segments[2]
 
-        val data = client.get("$baseUrl${chapter.url}", rscHeaders)
-            .extractNextJs<ChapterPageDataDto>()
-            ?: throw Exception("Could not find chapter data")
+        val props = getPageProps<ChapterPropsDto>("$baseUrl${chapter.url}")
+        val data = props.data.data
 
-        val imageSrc = data.imageSrc.ifEmpty {
+        val imageSrc = props.imgList.ifEmpty {
             val urlApi = "$apiUrl/komik/$slug/chapter/$chapterNum/imgs/${data.id}"
 
             val token = getBearerTokenFromCookie()
@@ -212,7 +220,7 @@ abstract class Softkomik : KeiSource() {
                 headers
             }
 
-            client.get(urlApi, authHeaders).parseAs<ChapterPageImagesDto>().imageSrc
+            client.get(urlApi, authHeaders, Fetch.XHR).parseAs<ChapterPageImagesDto>().imageSrc
         }
 
         // for manga/manhwa that requires login, the API still returns 200 but with empty image list.
@@ -229,13 +237,6 @@ abstract class Softkomik : KeiSource() {
         return imageSrc.mapIndexed { i, img ->
             Page(i, imageUrl = "$imageBaseUrl/${img.removePrefix("/")}?id=$imageIdParam")
         }
-    }
-
-    override fun imageRequest(page: Page): Request {
-        val newHeaders = headersBuilder()
-            .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-            .build()
-        return GET(page.imageUrl!!, newHeaders)
     }
 
     // ============================= Utilities ==============================
@@ -401,12 +402,12 @@ abstract class Softkomik : KeiSource() {
                 .any { it.name == "zEm9be" || it.name == "AhyyL" }
 
             if (!hasCookies) {
-                client.newCall(GET(baseUrl)).execute().close()
-                client.newCall(GET("$baseUrl/api/me", apiHeaders)).execute().close()
+                client.newCall(GET(baseUrl).newBuilder().fetch(Fetch.DOCUMENT).build()).execute().close()
+                client.newCall(GET("$baseUrl/api/me", apiHeaders).newBuilder().fetch(Fetch.XHR).build()).execute().close()
             }
 
             val response = runCatching {
-                client.newCall(GET(route.sessionApiUrl, apiHeaders)).execute()
+                client.newCall(GET(route.sessionApiUrl, apiHeaders).newBuilder().fetch(Fetch.XHR).build()).execute()
             }.getOrNull()
 
             if (response?.isSuccessful == true) {
@@ -515,6 +516,9 @@ abstract class Softkomik : KeiSource() {
     private val sessionKeyChapterList = "chapter-list"
     private val sessionKeyChapterImage = "chapter-image"
     private val apiUrl = "https://api.softkomik.org"
+
+    // NEXT_PUBLIC_ENCRYPTION_KEY from the site's JS bundle.
+    private val pagePropsKey = "nYTInq9MwR4pWa8yeXtu/2iO3t9nGP65WHpWEvqpEdU="
 
     // Inlined in the site's chapter chunk as `String("...").trim()` and appended to every image URL.
     private val imageIdParam = "T4Kmwztku"

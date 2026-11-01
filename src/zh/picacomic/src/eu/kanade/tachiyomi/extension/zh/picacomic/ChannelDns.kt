@@ -2,6 +2,8 @@ package eu.kanade.tachiyomi.extension.zh.picacomic
 
 import android.content.SharedPreferences
 import eu.kanade.tachiyomi.network.GET
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.utils.parseAs
 import okhttp3.Dns
 import okhttp3.Headers
@@ -48,7 +50,7 @@ class ChannelDns(
                 "User-Agent",
                 "okhttp/3.8.1",
             ),
-        )
+        ).newBuilder().fetch(Fetch.XHR).build()
 
         try {
             val response = client.newCall(request).execute()

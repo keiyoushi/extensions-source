@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.applicationContext
@@ -40,7 +41,6 @@ import okhttp3.Dns
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.apache.commons.text.StringSubstitutor
@@ -98,47 +98,17 @@ class Komga(
     }
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor(::authenticate)
+        // One session cookie per host, shared with the app's Komga tracker, so one user per host
+        authenticator { _, response ->
+            if (apiKey.isNotBlank() || response.request.header("Authorization") != null) {
+                null // Give up if API key is set or we've already failed to authenticate.
+            } else {
+                response.request.newBuilder()
+                    .addHeader("Authorization", Credentials.basic(username, password))
+                    .build()
+            }
+        }
         dns(Dns.SYSTEM) // don't use DNS over HTTPS as it breaks IP addressing
-    }
-
-    // Cookies are shared between Komga sources on the same host, so the session goes in a header
-    @Volatile
-    private var session: Pair<String, String>? = null
-    private val loginLock = Any()
-
-    private fun authenticate(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        if (apiKey.isNotBlank() || username.isBlank()) {
-            return chain.proceed(request)
-        }
-
-        val credentials = Credentials.basic(username, password)
-        val token = session?.takeIf { it.first == credentials }?.second
-        if (token != null) {
-            val response = chain.proceed(request.newBuilder().header("X-Auth-Token", token).build())
-            if (response.code != 401) {
-                return response
-            }
-            response.close()
-        }
-
-        val newToken = synchronized(loginLock) {
-            // Another request may have logged in while this one waited
-            val latest = session?.takeIf { it.first == credentials && it.second != token }?.second
-            if (latest == null) {
-                val response = chain.proceed(
-                    request.newBuilder()
-                        .header("Authorization", credentials)
-                        .header("X-Auth-Token", "")
-                        .build(),
-                )
-                session = response.header("X-Auth-Token")?.let { credentials to it }
-                return response
-            }
-            latest
-        }
-        return chain.proceed(request.newBuilder().header("X-Auth-Token", newToken).build())
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -150,7 +120,7 @@ class Komga(
             ),
         )
 
-        return processSeriesPage(client.get(url), baseUrl)
+        return processSeriesPage(client.get(url, Fetch.XHR), baseUrl)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -162,7 +132,7 @@ class Komga(
             ),
         )
 
-        return processSeriesPage(client.get(url), baseUrl)
+        return processSeriesPage(client.get(url, Fetch.XHR), baseUrl)
     }
 
     private fun searchMangaUrl(page: Int, query: String, filters: FilterList): String {
@@ -220,7 +190,7 @@ class Komga(
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = searchMangaUrl(page, query, filters)
-        return processSeriesPage(client.get(url), baseUrl)
+        return processSeriesPage(client.get(url, Fetch.XHR), baseUrl)
     }
 
     private fun processSeriesPage(response: Response, baseUrl: String): MangasPage {
@@ -253,7 +223,7 @@ class Komga(
     override fun getMangaUrl(manga: SManga) = manga.url.replace("/api/v1", "")
 
     private suspend fun getMangaDetails(manga: SManga): SManga {
-        val response = client.get(manga.url)
+        val response = client.get(manga.url, Fetch.XHR)
 
         return if (response.isFromReadList()) {
             response.parseAs<ReadListDto>().toSManga(baseUrl)
@@ -278,7 +248,7 @@ class Komga(
             manga.url.isFromBook() -> "${manga.url}?unpaged=true&media_status=READY&deleted=false"
             else -> "${manga.url}/books?unpaged=true&media_status=READY&deleted=false"
         }
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
 
         if (response.isFromBook()) {
             val book = response.parseAs<BookDto>()
@@ -328,7 +298,7 @@ class Komga(
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val pages = client.get("${chapter.url}/pages").parseAs<List<PageDto>>()
+        val pages = client.get("${chapter.url}/pages", Fetch.XHR).parseAs<List<PageDto>>()
 
         return pages.map {
             val url = "${chapter.url}/pages/${it.number}" +
@@ -342,7 +312,7 @@ class Komga(
         }
     }
 
-    override fun imageRequest(page: Page) = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page) = super.getImageRequest(page).newBuilder()
         .header("Accept", "image/*,*/*;q=0.8").build()
 
     override fun getFilterList(data: JsonElement?): FilterList {
@@ -435,7 +405,7 @@ class Komga(
             loginJob?.cancel()
             loginJob = scope.launch {
                 try {
-                    val libraries = client.get("$baseUrl/api/v1/libraries").parseAs<List<LibraryDto>>()
+                    val libraries = client.get("$baseUrl/api/v1/libraries", Fetch.XHR).parseAs<List<LibraryDto>>()
                     handler.post {
                         preferences.edit()
                             .putString(PREF_LIBRARY_LIST, libraries.toJsonString())
@@ -469,6 +439,7 @@ class Komga(
             default = "",
             summary = addressSummary(baseUrl),
             getSummary = addressSummary,
+            dialogMessage = "Komga sources on the same hostname share one login, even on different ports. To use another account on the same server, add it under another hostname (an extra DNS entry).",
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI,
             validate = { it.toHttpUrlOrNull() != null },
             validationMessage = "The URL is invalid or malformed",
@@ -597,12 +568,12 @@ class Komga(
     )
 
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
-        val libraries = async { client.get("$baseUrl/api/v1/libraries").parseAs<List<LibraryDto>>() }
-        val collections = async { client.get("$baseUrl/api/v1/collections?unpaged=true").parseAs<PageWrapperDto<CollectionDto>>().content }
-        val genres = async { client.get("$baseUrl/api/v1/genres").parseAs<Set<String>>() }
-        val tags = async { client.get("$baseUrl/api/v1/tags").parseAs<Set<String>>() }
-        val publishers = async { client.get("$baseUrl/api/v1/publishers").parseAs<Set<String>>() }
-        val authors = async { client.get("$baseUrl/api/v1/authors").parseAs<List<AuthorDto>>().groupBy { it.role } }
+        val libraries = async { client.get("$baseUrl/api/v1/libraries", Fetch.XHR).parseAs<List<LibraryDto>>() }
+        val collections = async { client.get("$baseUrl/api/v1/collections?unpaged=true", Fetch.XHR).parseAs<PageWrapperDto<CollectionDto>>().content }
+        val genres = async { client.get("$baseUrl/api/v1/genres", Fetch.XHR).parseAs<Set<String>>() }
+        val tags = async { client.get("$baseUrl/api/v1/tags", Fetch.XHR).parseAs<Set<String>>() }
+        val publishers = async { client.get("$baseUrl/api/v1/publishers", Fetch.XHR).parseAs<Set<String>>() }
+        val authors = async { client.get("$baseUrl/api/v1/authors", Fetch.XHR).parseAs<List<AuthorDto>>().groupBy { it.role } }
 
         FilterData(
             libraries = libraries.await(),

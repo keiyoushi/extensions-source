@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -16,7 +17,6 @@ import org.jsoup.nodes.Element
 abstract class ElanSchool : KeiSource() {
 
     override val supportsLatest = false
-
     private fun mangaInfo(page: Int) = SManga.create().apply {
         url = "/chapters/?dps_paged=$page"
         title = "Elan School"
@@ -49,7 +49,7 @@ abstract class ElanSchool : KeiSource() {
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val allChaps = mutableListOf<SChapter>()
-        var document = client.get(getMangaUrl(manga)).asJsoup()
+        var document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         while (true) {
             val chapters = document.select(chapterListSelector()).map {
@@ -67,7 +67,7 @@ abstract class ElanSchool : KeiSource() {
             }
 
             val nextUrl = document.select(chapterNextPageSelector()).attr("href")
-            document = client.get(nextUrl).asJsoup()
+            document = client.get(nextUrl, Fetch.DOCUMENT).asJsoup()
         }
 
         return allChaps.reversed()
@@ -81,7 +81,7 @@ abstract class ElanSchool : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         // Linked images are the language flag, subscribe banner and next-chapter buttons
         return document.select("img[data-orig-file]").filter { it.closest("a") == null }.mapIndexed { i, img ->
             Page(i, "", img.attr("src"))

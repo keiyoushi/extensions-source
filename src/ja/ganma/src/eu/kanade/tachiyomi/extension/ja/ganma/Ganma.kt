@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.boolean
@@ -58,6 +59,7 @@ abstract class Ganma :
         val result = client.post(
             apiUrl,
             desktopHeaders,
+            Fetch.XHR,
             graphQLBody(
                 operationName = "home",
                 variables = EmptyVariables,
@@ -78,6 +80,7 @@ abstract class Ganma :
         val result = client.post(
             apiUrl,
             desktopHeaders,
+            Fetch.XHR,
             graphQLBody(
                 operationName = "serialMagazinesByDayOfWeek",
                 variables = DayOfWeekVariables(dayOfWeek, lastCursor),
@@ -96,6 +99,7 @@ abstract class Ganma :
             val result = client.post(
                 apiUrl,
                 desktopHeaders,
+                Fetch.XHR,
                 graphQLBody(
                     operationName = "magazinesByKeywordSearch",
                     variables = SearchVariables(query, lastCursor),
@@ -115,6 +119,7 @@ abstract class Ganma :
         val result = client.post(
             apiUrl,
             desktopHeaders,
+            Fetch.XHR,
             graphQLBody(
                 operationName = "finishedMagazines",
                 variables = FinishedVariables(lastCursor),
@@ -144,6 +149,7 @@ abstract class Ganma :
             client.post(
                 apiUrl,
                 desktopHeaders,
+                Fetch.XHR,
                 graphQLBody(
                     operationName = "magazineDetail",
                     variables = MagazineDetailVariables(manga.url),
@@ -157,6 +163,7 @@ abstract class Ganma :
             client.post(
                 apiUrl,
                 desktopHeaders,
+                Fetch.XHR,
                 graphQLBody(
                     operationName = "storyInfoList",
                     variables = ChapterListVariables(manga.url, 9999, null),
@@ -182,6 +189,7 @@ abstract class Ganma :
         val result = client.post(
             apiUrl,
             apiHeaders,
+            Fetch.XHR,
             graphQLBody(
                 operationName = "magazineStoryForReader",
                 variables = ViewerVariables(chapter.memo["alias"]!!.string, chapter.url),

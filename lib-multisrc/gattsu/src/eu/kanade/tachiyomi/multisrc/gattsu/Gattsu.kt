@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -23,8 +24,7 @@ import java.util.Locale
 
 abstract class Gattsu : KeiSource() {
 
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("Accept", ACCEPT)
-        .set("Accept-Language", ACCEPT_LANGUAGE)
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("Accept-Language", ACCEPT_LANGUAGE)
 
     // Website does not have a popular, so the latest listing is used instead.
     override val supportsLatest = false
@@ -33,7 +33,7 @@ abstract class Gattsu : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val path = if (page == 1) "" else "page/$page"
-        val document = client.get("$baseUrl/$path").asJsoup()
+        val document = client.get("$baseUrl/$path", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(latestUpdatesSelector()).map { element ->
             latestUpdatesFromElement(element)
         }
@@ -60,7 +60,7 @@ abstract class Gattsu : KeiSource() {
             .addQueryParameter("post_type", "post")
             .build()
 
-        val document = client.get(searchUrl).asJsoup()
+        val document = client.get(searchUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(searchMangaSelector()).map { element ->
             searchMangaFromElement(element)
         }
@@ -80,7 +80,7 @@ abstract class Gattsu : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.all(String::isEmpty)) return null
 
-        return mangaDetailsParse(client.get(url).asJsoup()).apply { setUrlWithoutDomain(url.toString()) }
+        return mangaDetailsParse(client.get(url, Fetch.DOCUMENT).asJsoup()).apply { setUrlWithoutDomain(url.toString()) }
     }
 
     // Details and chapters come from the same page
@@ -90,7 +90,7 @@ abstract class Gattsu : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document))
     }
 
@@ -136,15 +136,14 @@ abstract class Gattsu : KeiSource() {
         "div.meio div.post-box.listaImagens div.galeriaHtml img"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(pageListSelector())
             .mapIndexed { i, el ->
                 Page(i, document.location(), imageUrl = el.imgAttr().withoutSize())
             }
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
-        .header("Accept", ACCEPT_IMAGE)
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("Referer", page.url)
         .build()
 
@@ -159,9 +158,6 @@ abstract class Gattsu : KeiSource() {
     protected fun String.withoutSize(): String = this.replace(THUMB_SIZE_REGEX, ".")
 
     companion object {
-        private const val ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9," +
-            "image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9"
-        private const val ACCEPT_IMAGE = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
         private const val ACCEPT_LANGUAGE = "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7,es;q=0.6,gl;q=0.5"
 
         private val THUMB_SIZE_REGEX = "-\\d+x\\d+\\.".toRegex()

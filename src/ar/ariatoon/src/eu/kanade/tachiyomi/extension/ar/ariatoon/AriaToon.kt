@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -35,13 +36,13 @@ abstract class AriaToon : KeiSource() {
 
     // ============================== Popular ==============================
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$apiUrl/feed/mangas/popular?page=$page&limit=20")
+        val response = client.get("$apiUrl/feed/mangas/popular?page=$page&limit=20", Fetch.XHR)
         return response.toMangasPage()
     }
 
     // ============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val response = client.get("$apiUrl/mangas?page=$page&limit=20")
+        val response = client.get("$apiUrl/mangas?page=$page&limit=20", Fetch.XHR)
         return response.toMangasPage()
     }
 
@@ -62,7 +63,7 @@ abstract class AriaToon : KeiSource() {
         } else {
             "$apiUrl/mangas?page=$page&limit=20"
         }
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.XHR).toMangasPage()
     }
 
     // ==================== Details & Chapters ====================
@@ -76,13 +77,14 @@ abstract class AriaToon : KeiSource() {
     ): SMangaUpdate = coroutineScope {
         val detailsDeferred = async {
             if (!fetchDetails) return@async manga
-            val response = client.get("$apiUrl/mangas/${manga.url}")
+            val response = client.get("$apiUrl/mangas/${manga.url}", Fetch.XHR)
             response.parseAs<ItemResponseDto<MangaDto>>().data.toSManga(cdnUrl)
         }
         val chaptersDeferred = async {
             if (!fetchChapters) return@async chapters
             val response = client.get(
                 "$apiUrl/mangas/${manga.url}/episodes?direction=desc&publishStatus=published&limit=100&page=1",
+                Fetch.XHR,
             )
             val dto = response.parseAs<PaginatedResponseDto<ChapterDto>>()
             dto.data.orEmpty().map { it.toSChapter() }
@@ -98,7 +100,7 @@ abstract class AriaToon : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val mangaId = chapter.url.substringBefore("/episodes/")
         val episodeId = chapter.url.substringAfterLast("/")
-        val response = client.get("$apiUrl/mangas/$mangaId/episodes/$episodeId")
+        val response = client.get("$apiUrl/mangas/$mangaId/episodes/$episodeId", Fetch.XHR)
         val dto = response.parseAs<ItemResponseDto<EpisodeDetailsDto>>()
 
         return dto.data.images.mapIndexed { index, imageUrl ->

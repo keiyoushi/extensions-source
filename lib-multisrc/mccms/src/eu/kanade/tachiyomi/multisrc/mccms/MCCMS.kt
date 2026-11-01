@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -45,13 +46,12 @@ abstract class MCCMS : KeiSource() {
         .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
 
     override fun Headers.Builder.configureHeaders() = set("User-Agent", System.getProperty("http.agent")!!)
-        .removeAll("Origin")
 
     protected open fun SManga.cleanup(): SManga = this
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangasPage(client.get("$baseUrl/api/data/comic?page=$page&size=$PAGE_SIZE&order=hits"))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangasPage(client.get("$baseUrl/api/data/comic?page=$page&size=$PAGE_SIZE&order=hits", Fetch.XHR))
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangasPage(client.get("$baseUrl/api/data/comic?page=$page&size=$PAGE_SIZE&order=addtime"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangasPage(client.get("$baseUrl/api/data/comic?page=$page&size=$PAGE_SIZE&order=addtime", Fetch.XHR))
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val queries = buildList {
@@ -71,7 +71,7 @@ abstract class MCCMS : KeiSource() {
             append(baseUrl).append("/api/data/comic?")
             queries.joinTo(this, separator = "&")
         }
-        return parseMangasPage(client.get(url))
+        return parseMangasPage(client.get(url, Fetch.XHR))
     }
 
     private fun parseMangasPage(response: Response): MangasPage {
@@ -96,31 +96,31 @@ abstract class MCCMS : KeiSource() {
         val url = "$baseUrl/api/data/comic".toHttpUrl().newBuilder()
             .addQueryParameter("key", manga.title)
             .build()
-        val list = client.get(url).parseAs<List<MangaDto>>()
+        val list = client.get(url, Fetch.XHR).parseAs<List<MangaDto>>()
         return list.first { it.cleanUrl == manga.url }.toSManga().cleanup()
     }
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val id = manga.thumbnail_url!!.substringAfterLast('#', missingDelimiterValue = "").ifEmpty { throw Exception("请刷新漫画") }
-        val dataList: List<ChapterDataDto> = client.get("$baseUrl/api/data/chapter?mid=$id").parseAs() // unordered
+        val dataList: List<ChapterDataDto> = client.get("$baseUrl/api/data/chapter?mid=$id", Fetch.XHR).parseAs() // unordered
         val dateMap = HashMap<Int, Long>(dataList.size * 2)
         dataList.forEach { dateMap[it.id.toInt()] = it.date }
-        val list: List<ChapterDto> = client.get("$baseUrl/api/comic/chapter?mid=$id").parseAs()
+        val list: List<ChapterDto> = client.get("$baseUrl/api/comic/chapter?mid=$id", Fetch.XHR).parseAs()
         return list.map { it.toSChapter(date = dateMap[it.id.toInt()] ?: 0) }.asReversed()
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = config.pageListParse(client.get(baseUrl + chapter.url, if (config.useMobilePageList) headers else pcHeaders))
+    override suspend fun getPageList(chapter: SChapter): List<Page> = config.pageListParse(client.get(baseUrl + chapter.url, if (config.useMobilePageList) headers else pcHeaders, Fetch.DOCUMENT))
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
     // Don't send referer
-    override fun imageRequest(page: Page) = super.imageRequest(page).newBuilder().headers(pcHeaders).build()
+    override fun getImageRequest(page: Page) = super.getImageRequest(page).newBuilder().headers(pcHeaders).build()
 
     private inline fun <reified T> Response.parseAs(): T = parseAsRaw<ResultDto<T>>().data
 
     override val supportsFilterFetching get() = config.hasCategoryPage
 
-    override suspend fun fetchFilterData(): JsonElement = parseGenres(client.get("$baseUrl/category/", pcHeaders).asJsoup()).toJsonElement()
+    override suspend fun fetchFilterData(): JsonElement = parseGenres(client.get("$baseUrl/category/", pcHeaders, Fetch.DOCUMENT).asJsoup()).toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList = getFilters(data?.parseAsRaw<List<Pair<String, String>>>())
 }

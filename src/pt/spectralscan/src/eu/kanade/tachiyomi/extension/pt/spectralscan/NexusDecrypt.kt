@@ -2,10 +2,10 @@ package eu.kanade.tachiyomi.extension.pt.spectralscan
 
 import android.util.Base64
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha256
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
-import java.security.MessageDigest
 
 object NexusDecrypt {
 
@@ -29,10 +29,7 @@ object NexusDecrypt {
 
         for (i in 0 until NUM_KEYS) {
             val pattern = "_orion_key_${i}_v2_$CRYPTO_SECRET"
-            val hash = MessageDigest.getInstance("SHA-256").digest(pattern.toByteArray())
-            val hexKey = hash.joinToString("") { "%02x".format(it) }
-
-            val keyBytes = hexKey.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val keyBytes = pattern.sha256()
             val keyData = KeyData(
                 key = keyBytes,
                 sbox = IntArray(256),

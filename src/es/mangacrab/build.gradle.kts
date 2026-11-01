@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Manga Crab"
-    versionCode = 24
+    versionCode = 26
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 

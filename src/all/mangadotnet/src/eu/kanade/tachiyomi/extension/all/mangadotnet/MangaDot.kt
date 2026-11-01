@@ -18,6 +18,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
@@ -110,7 +112,8 @@ abstract class MangaDot :
     private val officialPriorityPatterns = listOf(
         "manga plus", "mangaplus", "viz media", "viz manga", "webtoon",
         "tapas", "mangadex", "k manga", "kmanga", "mangaup", "manga up",
-        "comikey", "shonen jump", "shounen jump", "shonenjump", "official",
+        "seven seas entertainment", "emaqi", "inkr", "kodansha usa", "lezhin",
+        "kodansha comics", "kadokawa", "mangaplaza", "comikey", "official",
     ).map { Regex("\\b${Regex.escape(it)}\\b") }
 
     private val demographicNames = setOf("Josei", "Seinen", "Shoujo", "Shounen")
@@ -152,7 +155,7 @@ abstract class MangaDot :
             browseStatusPref()?.also { addQueryParameter("status", it) }
         }.build()
 
-        val data = client.get(url).use { it.decodeRscAs<Data<ViewAllData>>().data }
+        val data = client.get(url, Fetch.XHR).use { it.decodeRscAs<Data<ViewAllData>>().data }
 
         return MangasPage(
             data.data.mangaList.orEmpty().map { it.toSManga(baseUrl) },
@@ -187,13 +190,14 @@ abstract class MangaDot :
                     if (page > 1) addQueryParameter("page", page.toString())
                     addQueryParameter("_routes", "pages/BookmarksPage")
                 }.build()
-                client.get(url).use { response -> parseBookmarksResponse(response) }
+                client.get(url, Fetch.XHR).use { response -> parseBookmarksResponse(response) }
             } else {
                 getViewAllPage(browseMode, page)
             }
         }
 
         val url = "$baseUrl/api/search".toHttpUrl().newBuilder().apply {
+            queryLang?.let { addQueryParameter("lang", it) }
             if (query.isNotBlank()) {
                 addQueryParameter("search", query)
             }
@@ -292,7 +296,7 @@ abstract class MangaDot :
             }
         }.build()
 
-        val data = client.get(url).use { it.parseAs<MangaList>() }
+        val data = client.get(url, Fetch.XHR).use { it.parseAs<MangaList>() }
 
         val hideAdultCovers = adultModePref() == "none"
         val mangaList = data.mangaList.orEmpty()
@@ -321,7 +325,7 @@ abstract class MangaDot :
                 )
                 val segment = if (chapterUrl.source == "user") "uploads" else "chapters"
                 val apiUrl = "$baseUrl/api/$segment/${chapterUrl.id}/images".toHttpUrl()
-                client.get(apiUrl).use { it.parseAs<Images>().manga.id.toString() }
+                client.get(apiUrl, Fetch.XHR).use { it.parseAs<Images>().manga.id.toString() }
             }
             else -> return null
         }
@@ -342,11 +346,11 @@ abstract class MangaDot :
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
         val facetsDeferred = async {
             val facetsUrl = "$baseUrl/api/search?facets=1".toHttpUrl()
-            client.get(facetsUrl).use { it.parseAs<MangaList>() }
+            client.get(facetsUrl, Fetch.XHR).use { it.parseAs<MangaList>() }
         }
         val tagsDeferred = async {
             val tagsUrl = "$baseUrl/api/manga/tags".toHttpUrl()
-            client.get(tagsUrl).use { it.parseAs<TagsResponse>() }
+            client.get(tagsUrl, Fetch.XHR).use { it.parseAs<TagsResponse>() }
         }
 
         val facetsResponse = facetsDeferred.await()
@@ -452,7 +456,7 @@ abstract class MangaDot :
             addAdultParam()
         }.build()
         val cache = CacheControl.Builder().maxAge(6.hours).build()
-        client.get(forYouUrl, cacheControl = cache).use { response ->
+        client.get(forYouUrl, Fetch.XHR, cacheControl = cache).use { response ->
             response.parseAs<MangaItemsResponse>().items
         }
     }.getOrElse { emptyList() }
@@ -461,7 +465,7 @@ abstract class MangaDot :
         if (!isLoggedIn()) return emptyList()
         val url = "$baseUrl/api/discovery/following-reads?limit=30"
         val cache = CacheControl.Builder().maxAge(6.hours).build()
-        client.get(url, cacheControl = cache).use { response ->
+        client.get(url, Fetch.XHR, cacheControl = cache).use { response ->
             response.parseAs<MangaItemsResponse>().items
         }
     }.getOrElse { emptyList() }
@@ -478,7 +482,7 @@ abstract class MangaDot :
         val detailsDeferred = async {
             if (fetchDetails) {
                 val url = "$baseUrl/manga/${manga.url}.data?_routes=pages/MangaDetailPage".toHttpUrl()
-                val data = client.get(url).use { it.decodeRscAs<Data<MangaData>>().data }
+                val data = client.get(url, Fetch.XHR).use { it.decodeRscAs<Data<MangaData>>().data }
                 data.mangaData.manga.toSManga(baseUrl, showTagsPref(), data.mangaData.volumeCount)
             } else {
                 manga
@@ -494,7 +498,7 @@ abstract class MangaDot :
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = coroutineScope {
         val url = "$baseUrl/manga/${manga.url}.data?_routes=pages/MangaDetailPage".toHttpUrl()
-        val dataDeferred = async { client.get(url).use { it.decodeRscAs<Data<RelatedData>>().data } }
+        val dataDeferred = async { client.get(url, Fetch.XHR).use { it.decodeRscAs<Data<RelatedData>>().data } }
         val followingReadsDeferred = async { fetchFollowingReads() }
         val forYouDeferred = async { fetchForYouItems() }
 
@@ -531,7 +535,7 @@ abstract class MangaDot :
                 val volumesUrl = "$baseUrl/api/manga/${manga.url}/volumes".toHttpUrl().newBuilder().apply {
                     queryLang?.let { addQueryParameter("lang", it) }
                 }.build()
-                client.get(volumesUrl).use { response ->
+                client.get(volumesUrl, Fetch.XHR).use { response ->
                     response.parseAs<List<Volume>>()
                         .filter { it.language == null || it.language.equals(lang, true) || it.language.equals(queryLang, true) }
                         .map { volume ->
@@ -539,7 +543,8 @@ abstract class MangaDot :
                                 url = ChapterUrl(volume.id.toString(), volume.source, true).toJsonString()
                                 name = "Volume ${(volume.volume ?: 0f).toString().removeSuffix(".0")}"
                                 chapter_number = 0f
-                                scanlator = (volume.group ?: volume.scanlator)?.takeIf { it.isNotBlank() }
+                                scanlator = volume.groups.map { it.name }.takeIf { it.isNotEmpty() }?.joinToString(" • ")
+                                    ?: (volume.group ?: volume.scanlator)?.takeIf { it.isNotBlank() }
                                 date_upload = Instant.tryParse(volume.date?.replace(" ", "T"))
                             }
                         }
@@ -615,7 +620,7 @@ abstract class MangaDot :
         val chaptersUrl = "$baseUrl/api/manga/${manga.url}/chapters/list".toHttpUrl().newBuilder().apply {
             queryLang?.let { addQueryParameter("lang", it) }
         }.build()
-        return client.get(chaptersUrl).use { response ->
+        return client.get(chaptersUrl, Fetch.XHR).use { response ->
             response.parseAs<List<Chapter>>()
                 .filter { it.language == null || it.language.equals(lang, true) || it.language.equals(queryLang, true) }
                 .map { chapter ->
@@ -628,7 +633,8 @@ abstract class MangaDot :
                             append(name.trim())
                         }
                         chapter_number = chapter.number ?: 0f
-                        scanlator = (chapter.group ?: chapter.scanlator)?.takeIf { it.isNotBlank() }
+                        scanlator = chapter.groups.map { it.name }.takeIf { it.isNotEmpty() }?.joinToString(" • ")
+                            ?: (chapter.group ?: chapter.scanlator)?.takeIf { it.isNotBlank() }
                         date_upload = Instant.tryParse(chapter.date?.replace(" ", "T"))
                     }
                 }
@@ -656,7 +662,7 @@ abstract class MangaDot :
         val segment = if (chapterUrl.source == "user") "uploads" else "chapters"
         val apiUrl = "$baseUrl/api/$segment/${chapterUrl.id}/images".toHttpUrl()
 
-        val data = client.get(apiUrl).use { it.parseAs<Images>() }
+        val data = client.get(apiUrl, Fetch.XHR).use { it.parseAs<Images>() }
 
         countViews(data.manga.id)
 
@@ -678,7 +684,7 @@ abstract class MangaDot :
 
     private fun countViews(mangaId: Int) {
         val url = "$baseUrl/api/manga/$mangaId/view"
-        val request = POST(url, headers, FormBody.Builder().build())
+        val request = POST(url, headers, FormBody.Builder().build()).newBuilder().fetch(Fetch.XHR).build()
         client.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
                 response.use {
@@ -694,7 +700,7 @@ abstract class MangaDot :
         })
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val referer = page.url.substringBeforeLast("#")
         return GET(page.imageUrl!!, headers.newBuilder().set("Referer", referer).build())
     }
@@ -857,8 +863,8 @@ abstract class MangaDot :
         val priorityPref = EditTextPreference(screen.context).apply {
             key = PREFERRED_SCANLATORS
             title = "Scanlator Priority"
-            summary = "Comma-separated, in order of preference. First match wins. Supports unofficial only if scanlator name matches website.\nDefaults to official scrapers: Manga Plus, VIZ Media, Webtoon, Tapas, MangaDex, K Manga, Manga UP, Comikey, Shonen Jump"
-            setDefaultValue("VIZ Media, MANGA Plus, MangaPlus, Official, Webtoon, Tapas, MangaDex, K Manga, Manga UP, Comikey, Shonen Jump")
+            summary = "Comma-separated, in order of preference. First match wins. Supports unofficial only if scanlator name matches website.\nDefaults to official sources: Manga Plus, VIZ Media, WebToon, Tapas, MangaDex, K Manga, Lezhin, Manga UP, Seven Seas Entertainment, Emaqi, INKR, Kodansha, Kadokawa, MangaPlaza, Comikey"
+            setDefaultValue("VIZ Media, MANGA Plus, MangaPlus, Official, WebToon, Tapas, Lezhin, MangaDex, K Manga, Manga UP, Seven Seas Entertainment, Emaqi, INKR, Kodansha USA, Kodansha Comics, Kadokawa, MangaPlaza, Comikey")
             setEnabled(preferences.getBoolean(DEDUPLICATE_CHAPTERS, false))
         }
         screen.addPreference(priorityPref)

@@ -65,11 +65,17 @@ class ChapterDto(
     private val title: String? = null,
     private val releasedLabel: String? = null,
 ) {
-    fun toSChapter(comicId: Int): SChapter = SChapter.create().apply {
+    fun toSChapter(comicId: Int, slug: String): SChapter = SChapter.create().apply {
+        val number = n?.let { if (it % 1f == 0f) it.toInt().toString() else it.toString() }
         url = "/$comicId/$id"
-        name = title ?: "Chapter ${n?.let { if (it % 1f == 0f) it.toInt().toString() else it.toString() }}"
+        name = title ?: "Chapter $number"
         date_upload = parseRelativeLabel(releasedLabel)
         chapter_number = n ?: 0F
+        if (number != null) {
+            memo = buildJsonObject {
+                put("path", "/read/id/$slug/ch$number-$id")
+            }
+        }
     }
 }
 

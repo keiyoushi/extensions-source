@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -28,7 +29,7 @@ abstract class MangaOnline : KeiSource() {
 
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList(popularFilter))
 
-    override suspend fun getLatestUpdates(page: Int) = getMangasPage(client.get("$baseUrl/atualizacoes?page=$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int) = getMangasPage(client.get("$baseUrl/atualizacoes?page=$page", Fetch.DOCUMENT).asJsoup())
 
     override suspend fun getSearchMangaList(
         page: Int,
@@ -52,7 +53,7 @@ abstract class MangaOnline : KeiSource() {
             url.addQueryParameter("genre", it)
         }
 
-        return getMangasPage(client.get(url.build()).asJsoup())
+        return getMangasPage(client.get(url.build(), Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun fetchMangaUpdate(
@@ -61,7 +62,7 @@ abstract class MangaOnline : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val manga = SManga.create().apply {
             title = document.selectFirst("h1")!!.text()
             description = document.selectFirst(".synopsis")?.text()
@@ -87,7 +88,7 @@ abstract class MangaOnline : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(".reader-content img").mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("src"))
         }

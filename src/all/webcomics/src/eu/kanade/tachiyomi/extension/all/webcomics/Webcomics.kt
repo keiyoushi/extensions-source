@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -25,7 +26,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -36,10 +36,6 @@ abstract class Webcomics : KeiSource() {
 
     private val apiSubDomain = "official-website-api"
     private val apiUrl = "https://$apiSubDomain.${baseUrl.substringAfterLast("/")}/api/web/v4/book"
-
-    override fun Headers.Builder.configureHeaders() = apply {
-        set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-    }
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor { chain ->
@@ -63,7 +59,7 @@ abstract class Webcomics : KeiSource() {
 
     private var userAgentList: UserAgentList? = null
 
-    private suspend fun getDesktopUA(): UserAgentList = userAgentList ?: network.client.get(UA_DB_URL).parseAs<UserAgentList>().also {
+    private suspend fun getDesktopUA(): UserAgentList = userAgentList ?: network.client.get(UA_DB_URL, Fetch.XHR).parseAs<UserAgentList>().also {
         userAgentList = it
     }
 
@@ -79,7 +75,7 @@ abstract class Webcomics : KeiSource() {
             addPathSegment(page.toString())
         }.build()
 
-        return parseMangasPage(client.get(url))
+        return parseMangasPage(client.get(url, Fetch.DOCUMENT))
     }
 
     private fun parseMangasPage(response: Response): MangasPage {
@@ -121,7 +117,7 @@ abstract class Webcomics : KeiSource() {
             addPathSegment(page.toString())
         }.build()
 
-        return parseMangasPage(client.get(url))
+        return parseMangasPage(client.get(url, Fetch.DOCUMENT))
     }
 
     // ========================== Search =====================================
@@ -130,7 +126,7 @@ abstract class Webcomics : KeiSource() {
         val url = "$baseUrl/$lang/search".toHttpUrl().newBuilder()
             .addQueryParameter("q", query)
             .build()
-        parseMangasPage(client.get(url))
+        parseMangasPage(client.get(url, Fetch.DOCUMENT))
     } else {
         val genre = filters.firstInstance<GenreFilter>().selected()
         val status = filters.firstInstance<StatusFilter>().selected()
@@ -144,7 +140,7 @@ abstract class Webcomics : KeiSource() {
             addPathSegment(sort.toPathSegment())
             addPathSegment(page.toString())
         }.build()
-        parseMangasPage(client.get(url))
+        parseMangasPage(client.get(url, Fetch.DOCUMENT))
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -202,7 +198,7 @@ abstract class Webcomics : KeiSource() {
             put("book_id", manga.url)
         }.toJsonRequestBody()
 
-        val dto = client.post("$apiUrl/info", body).parseAs<DataWrapper<BookDto>>().data
+        val dto = client.post("$apiUrl/info", Fetch.XHR, body).parseAs<DataWrapper<BookDto>>().data
         return SManga.create().apply {
             title = dto.name
             thumbnail_url = dto.cover
@@ -223,7 +219,7 @@ abstract class Webcomics : KeiSource() {
             put("sort", "desc")
         }.toJsonRequestBody()
 
-        val dto = client.post("$apiUrl/chapter/list", body).parseAs<DataWrapper<ChapterListDto>>().data
+        val dto = client.post("$apiUrl/chapter/list", Fetch.XHR, body).parseAs<DataWrapper<ChapterListDto>>().data
         return dto.list.map { chapter ->
             SChapter.create().apply {
                 name = if (chapter.is_pay) "🔒 ${chapter.name}" else chapter.name
@@ -249,7 +245,7 @@ abstract class Webcomics : KeiSource() {
             put("index", chapter.memo.getInt("index"))
         }.toJsonRequestBody()
 
-        val dto = client.post("$apiUrl/chapter/detail", body).parseAs<DataWrapper<ImageListDto>>().data
+        val dto = client.post("$apiUrl/chapter/detail", Fetch.XHR, body).parseAs<DataWrapper<ImageListDto>>().data
 
         return dto.images.mapIndexed { index, img ->
             Page(index, imageUrl = dto.base_url + img.url)

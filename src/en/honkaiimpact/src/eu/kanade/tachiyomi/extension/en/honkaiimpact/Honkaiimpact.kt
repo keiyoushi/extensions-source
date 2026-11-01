@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -18,7 +19,6 @@ import kotlin.time.Duration.Companion.minutes
 
 @Source
 abstract class Honkaiimpact : KeiSource() {
-
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = connectTimeout(1.minutes)
@@ -28,7 +28,7 @@ abstract class Honkaiimpact : KeiSource() {
 
     // Popular
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val mangas = client.get("$baseUrl/book").asJsoup().select("a[href*=book]").map { it.toSManga() }
+        val mangas = client.get("$baseUrl/book", Fetch.DOCUMENT).asJsoup().select("a[href*=book]").map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
@@ -37,7 +37,7 @@ abstract class Honkaiimpact : KeiSource() {
 
     // Search
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val mangas = client.get("$baseUrl/book").asJsoup()
+        val mangas = client.get("$baseUrl/book", Fetch.DOCUMENT).asJsoup()
             .select("a[href*=book]")
             .map { it.toSManga() }
             .filter { manga ->
@@ -59,7 +59,7 @@ abstract class Honkaiimpact : KeiSource() {
     }
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
         return SManga.create().apply {
             thumbnail_url = document.select("img.cover").attr("abs:src")
             description = document.select("div.detail_info1").text()
@@ -68,10 +68,10 @@ abstract class Honkaiimpact : KeiSource() {
     }
 
     // Chapter list
-    private suspend fun fetchChapterList(manga: SManga): List<SChapter> = client.get(baseUrl + manga.url + "/get_chapter").parseAs<List<Dto>>().map { it.toSChapter() }
+    private suspend fun fetchChapterList(manga: SManga): List<SChapter> = client.get(baseUrl + manga.url + "/get_chapter", Fetch.XHR).parseAs<List<Dto>>().map { it.toSChapter() }
 
     // Page list
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(baseUrl + chapter.url).asJsoup().select("img.lazy.comic_img").mapIndexed { i, el ->
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup().select("img.lazy.comic_img").mapIndexed { i, el ->
         Page(i, imageUrl = el.attr("data-original"))
     }
 

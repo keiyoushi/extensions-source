@@ -20,6 +20,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.lib.i18n.Intl.Companion.createDefaultMessageFileName
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -111,7 +112,7 @@ abstract class Manhuarm :
 
     private suspend fun archive(page: Int, sort: String): MangasPage {
         val path = if (page == 1) "/manga/" else "/manga/page/$page/"
-        val document = client.get("$baseUrl$path?sort=$sort").asJsoup()
+        val document = client.get("$baseUrl$path?sort=$sort", Fetch.DOCUMENT).asJsoup()
         return MangasPage(document.parseMangaList(), document.selectFirst("a.next") != null)
     }
 
@@ -124,7 +125,7 @@ abstract class Manhuarm :
             filters.filterIsInstance<UrlFilter>().forEach { it.addToUrl(this) }
             if (page > 1) addQueryParameter("pg", page.toString())
         }.build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return MangasPage(document.parseMangaList(), document.selectFirst("a.mrm-pager__btn[rel=next]") != null)
     }
 
@@ -134,7 +135,7 @@ abstract class Manhuarm :
         if (url.host != baseUrl.toHttpUrl().host) return null
         val slug = url.pathSegments.takeIf { it.size >= 2 && it[0] == "manga" }?.get(1)?.takeIf(String::isNotEmpty) ?: return null
         val manga = SManga.create().apply { this.url = "/manga/$slug/" }
-        return client.get(getMangaUrl(manga)).asJsoup().parseDetails().apply { this.url = manga.url }
+        return client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup().parseDetails().apply { this.url = manga.url }
     }
 
     private fun Document.parseMangaList(): List<SManga> = select(".mrm-results__grid .mrm-r-item").map { element ->
@@ -154,7 +155,7 @@ abstract class Manhuarm :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val details = document.parseDetails().apply { url = manga.url }
 
         val language = settings
@@ -229,7 +230,7 @@ abstract class Manhuarm :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
         // The OCR credentials embedded in the page are single-use
-        val document = client.get(chapterUrl, cacheControl = CacheControl.FORCE_NETWORK).asJsoup()
+        val document = client.get(chapterUrl, Fetch.DOCUMENT, cacheControl = CacheControl.FORCE_NETWORK).asJsoup()
         val images = document.select("div.page-break img, img.wp-manga-chapter-img")
             .mapNotNull { it.imageUrl() }
             .distinct()
@@ -265,7 +266,6 @@ abstract class Manhuarm :
 
         val ocrHeaders = headers.newBuilder()
             .set("Referer", chapterUrl)
-            .set("Accept", "*/*")
             .set("X-Requested-With", "XMLHttpRequest")
             .set("Cache-Control", "no-cache")
             .set("X-Gate-Token", vault[1])
@@ -275,7 +275,7 @@ abstract class Manhuarm :
 
         // Pages are still readable without the translation overlay
         return try {
-            client.post(vault[4], ocrHeaders, OcrRequestDto(vault[0], vault[5]).toJsonRequestBody())
+            client.post(vault[4], ocrHeaders, Fetch.XHR, OcrRequestDto(vault[0], vault[5]).toJsonRequestBody())
                 .parseAs<List<PageDto>>()
         } catch (_: Exception) {
             emptyList()

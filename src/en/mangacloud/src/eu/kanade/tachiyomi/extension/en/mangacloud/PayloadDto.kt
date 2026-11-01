@@ -17,3 +17,8 @@ class SearchPayload(
     private val excludes: List<String> = emptyList(),
     private val page: Int,
 )
+
+@Serializable
+class HandshakePayload(
+    private val token: String,
+)

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -82,7 +83,7 @@ abstract class HentaiClub : KeiSource() {
 
         if (!fetchDetails) return SMangaUpdate(manga, chapterList)
 
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         val encodedPath = response.request.url.encodedPath
         val document = response.asJsoup()
         val contentEl = document.selectFirst(".content")
@@ -114,7 +115,7 @@ abstract class HentaiClub : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("div.post-item[data-src]").mapIndexed { idx, el ->
             Page(idx, imageUrl = el.absUrl("data-src"))
         }
@@ -130,7 +131,7 @@ abstract class HentaiClub : KeiSource() {
     // ============================= Utilities =============================
 
     private suspend fun parseMangaList(url: String): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select("div.item").map { element ->
             SManga.create().apply {

@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -34,9 +35,9 @@ abstract class Photos18 :
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = followRedirects(false)
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrlWithLang/sort/views?page=$page").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrlWithLang/sort/views?page=$page", Fetch.DOCUMENT).asJsoup())
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrlWithLang/?page=$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrlWithLang/?page=$page", Fetch.DOCUMENT).asJsoup())
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrlWithLang.toHttpUrl().newBuilder()
@@ -47,7 +48,7 @@ abstract class Photos18 :
             if (filter is QueryFilter) filter.addQueryTo(url)
         }
 
-        return parseMangaList(client.get(url.build()).asJsoup())
+        return parseMangaList(client.get(url.build(), Fetch.DOCUMENT).asJsoup())
     }
 
     private fun parseMangaList(document: Document): MangasPage {
@@ -84,7 +85,7 @@ abstract class Photos18 :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val images = document.selectFirst(Evaluator.Id("content"))!!.select(Evaluator.Tag("img"))
         return images.mapIndexed { index, image ->
             Page(index, imageUrl = image.attr("src"))
@@ -94,7 +95,7 @@ abstract class Photos18 :
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrlWithLang/").asJsoup()
+        val document = client.get("$baseUrlWithLang/", Fetch.DOCUMENT).asJsoup()
         val items = document.selectFirst(Evaluator.Id("w2"))!!.children()
         return buildList(items.size + 1) {
             add(Pair("All", ""))

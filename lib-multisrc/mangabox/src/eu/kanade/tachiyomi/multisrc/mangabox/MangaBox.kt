@@ -5,12 +5,11 @@ import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
-import androidx.preference.CheckBoxPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.mangabox.imagesize.ImageSize
 import eu.kanade.tachiyomi.multisrc.mangabox.imagesize.WebpSizeGetter
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -19,7 +18,11 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
+import keiyoushi.network.call
+import keiyoushi.network.fetch
 import keiyoushi.network.get
+import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
@@ -27,10 +30,10 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -45,6 +48,7 @@ import okio.Buffer
 import okio.IOException
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
 abstract class MangaBox :
@@ -54,6 +58,7 @@ abstract class MangaBox :
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(::mergeImagesInterceptor)
         addInterceptor(::useAltCdnInterceptor)
+        rateLimit(10) { it.encodedPath.endsWith(".webp") }
     }
 
     private fun SharedPreferences.getMergeImagesPref(): Boolean = getBoolean(PREF_MERGE_IMAGES, false)
@@ -203,10 +208,6 @@ abstract class MangaBox :
         throw IOException("All CDN attempts failed.")
     }
 
-    // The origin header causes cache misses on Cloudflare,
-    // which significantly increases response time
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = removeAll("Origin")
-
     open val popularUrlPath = "manga-list/hot-manga?page="
 
     open val latestUrlPath = "manga-list/latest-manga?page="
@@ -226,7 +227,7 @@ abstract class MangaBox :
         return MangasPage(mangas, hasNextPage)
     }
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parsePopularManga(client.get("$baseUrl/$popularUrlPath$page"))
+    override suspend fun getPopularManga(page: Int): MangasPage = parsePopularManga(client.get("$baseUrl/$popularUrlPath$page", Fetch.DOCUMENT))
 
     open fun popularMangaFromElement(element: Element): SManga = mangaFromElement(element)
 
@@ -245,7 +246,7 @@ abstract class MangaBox :
         return MangasPage(mangas, hasNextPage)
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseLatestUpdates(client.get("$baseUrl/$latestUrlPath$page"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseLatestUpdates(client.get("$baseUrl/$latestUrlPath$page", Fetch.DOCUMENT))
 
     open fun latestUpdatesFromElement(element: Element): SManga = mangaFromElement(element)
 
@@ -260,7 +261,7 @@ abstract class MangaBox :
                 .addQueryParameter("page", page.toString())
                 .build()
 
-            client.get(url)
+            client.get(url, Fetch.DOCUMENT)
         } else {
             val url = "$baseUrl/genre".toHttpUrl().newBuilder()
             var sort: String? = null
@@ -284,7 +285,7 @@ abstract class MangaBox :
             id?.let { url.addQueryParameter("filter", it) }
             url.addQueryParameter("page", page.toString())
 
-            client.get(url.build())
+            client.get(url.build(), Fetch.DOCUMENT)
         }
 
         val document = response.asJsoup()
@@ -328,7 +329,7 @@ abstract class MangaBox :
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${getMangaSlug(manga)}"
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? = parseMangaDetails(
-        client.get(url).asJsoup(),
+        client.get(url, Fetch.DOCUMENT).asJsoup(),
     )
 
     private fun checkForRedirectMessage(document: Document) {
@@ -389,7 +390,7 @@ abstract class MangaBox :
 
     open suspend fun parseChapterList(manga: SManga): List<SChapter> {
         val slug = getMangaSlug(manga)
-        val response = client.get("${apiChapterListUrl.replace("__SLUG__", slug)}?limit=-1")
+        val response = client.get("${apiChapterListUrl.replace("__SLUG__", slug)}?limit=-1", Fetch.XHR.from(manga.url))
         val apiResult = runCatching {
             response.parseAs<ApiResponse>()
         }.getOrElse { return emptyList() }
@@ -429,7 +430,7 @@ abstract class MangaBox :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter))
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         val document = response.asJsoup()
         val content = document.select("script:containsData(cdns =)").joinToString("\n") { it.data() }
         val cdns = extractArray(content, cdnsRegex) + extractArray(content, backupImageRegex)
@@ -459,43 +460,79 @@ abstract class MangaBox :
                 val headers = headersBuilder().set("Range", WebpSizeGetter.RANGE).build()
                 val deferredSizes = imageUrls.map { url ->
                     async {
-                        try {
-                            val response = client.newCall(
-                                GET(url, headers)
-                                    .newBuilder()
-                                    .tag(MangaBoxFallBackTag::class.java, MangaBoxFallBackTag())
-                                    .build(),
-                            ).awaitSuccess()
-                            WebpSizeGetter(response.body.byteStream()).get()
-                        } catch (_: Exception) {
-                            null
+                        for (attempt in 0..IMAGE_SIZE_RETRIES) {
+                            if (attempt > 0) {
+                                delay((500 * (1 shl attempt)..<1000 * (1 shl attempt)).random().milliseconds)
+                            }
+                            try {
+                                val response = client.call(
+                                    GET(url, headers)
+                                        .newBuilder()
+                                        .tag(MangaBoxFallBackTag::class.java, MangaBoxFallBackTag())
+                                        .fetch(Fetch.IMAGE)
+                                        .build(),
+                                )
+                                WebpSizeGetter(response.body.byteStream()).get()?.let {
+                                    return@async it
+                                }
+                            } catch (_: Exception) {}
                         }
+                        null
                     }
                 }
 
+                var samplePage: MergeImage? = null
+
                 val imageList = mutableListOf<MergeImage>()
 
-                for ((url, deferredSize) in imageUrls.zip(deferredSizes)) {
+                val it = imageUrls.zip(deferredSizes).iterator()
+                while (it.hasNext()) {
+                    val (url, deferredSize) = it.next()
                     val size = deferredSize.await()
                     val prev = imageList.lastOrNull()
-                    val prevSize = prev?.size
-                    if (
+                    if (size != null) {
                         // size is known
-                        size != null &&
-
-                        // previous size is known
-                        prevSize != null &&
-
-                        // widths are equal
-                        size.w == prevSize.w &&
-
-                        // merged image is not too long
-                        3 * prevSize.w > 2 * prevSize.h + size.h
-                    ) {
-                        prev.urls.add(url)
-                        prevSize.h += size.h
+                        if (prev != null) {
+                            // previous page exists
+                            if (prev.size != null && size.w == prev.size.w && 3 * prev.size.w > 2 * prev.size.h + size.h) {
+                                // widths are equal and merged image is not too long, append to previous page
+                                prev.urls.add(url)
+                                prev.size.h += size.h
+                            } else {
+                                if (prev.size != null && imageList.size > 1) {
+                                    // save a sample page for when an image size is unknown
+                                    samplePage = prev
+                                }
+                                // new page
+                                imageList.add(MergeImage(mutableListOf(url), size))
+                            }
+                        } else {
+                            // first page
+                            imageList.add(MergeImage(mutableListOf(url), size))
+                        }
+                    } else if (prev?.size != null && samplePage != null) {
+                        // we have a sample page
+                        if (prev.urls.size < samplePage.urls.size) {
+                            // previous page doesn't have enough images
+                            prev.urls.add(url)
+                            while (prev.urls.size < samplePage.urls.size && it.hasNext()) {
+                                prev.urls.add(it.next().first)
+                            }
+                            prev.size.h = samplePage.size!!.h
+                        } else {
+                            // previous page has enough images
+                            val urls = mutableListOf(url)
+                            var width: Int? = null
+                            while (urls.size < samplePage.urls.size && it.hasNext()) {
+                                val (url, deferredSize) = it.next()
+                                width = width ?: deferredSize.await()?.w
+                                urls.add(url)
+                            }
+                            imageList.add(MergeImage(urls, ImageSize(width ?: samplePage.size!!.w, samplePage.size!!.h)))
+                        }
                     } else {
-                        imageList.add(MergeImage(mutableListOf(url), size))
+                        // no sample page
+                        imageList.add(MergeImage(mutableListOf(url), null))
                     }
                 }
 
@@ -518,7 +555,7 @@ abstract class MangaBox :
         }
     }
 
-    override fun imageRequest(page: Page): Request = GET(
+    override fun getImageRequest(page: Page): Request = GET(
         page.imageUrl!!,
         headers, // Headers are sometimes not added for image requests for some reason
     )
@@ -577,7 +614,7 @@ abstract class MangaBox :
     // ============================= Utilities =============================
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        CheckBoxPreference(screen.context).apply {
+        SwitchPreferenceCompat(screen.context).apply {
             key = PREF_MERGE_IMAGES
             title = "Merge Split Images"
             summary = "Images are sometimes split vertically. " +
@@ -590,11 +627,12 @@ abstract class MangaBox :
                 mergeImages = newValue as Boolean
                 true
             }
-        }.let(screen::addPreference)
+        }.also(screen::addPreference)
     }
 
     companion object {
         private const val PREF_MERGE_IMAGES = "pref_merge_images"
+        private const val IMAGE_SIZE_RETRIES = 3
         private const val URL_PREFIX = "https://"
 
         private val cdnsRegex = Regex("""cdns\s*=\s*\[([^]]+)]""")

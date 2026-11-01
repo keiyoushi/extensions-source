@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -13,6 +14,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 abstract class MonochromeCMS : KeiSource() {
+
     override val supportsLatest = false
 
     protected open val apiUrl: String
@@ -22,14 +24,14 @@ abstract class MonochromeCMS : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int) = throw UnsupportedOperationException()
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = client.get("$apiUrl/manga?limit=10&offset=${10 * (page - 1)}&title=$query")
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = client.get("$apiUrl/manga?limit=10&offset=${10 * (page - 1)}&title=$query", Fetch.XHR)
         .parseAs<Results>().let {
             MangasPage(it.map(::mangaFromAPI), it.hasNext)
         }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.size < 2) return null
-        return mangaFromAPI(client.get("$apiUrl/manga/${url.pathSegments[1]}").parseAs())
+        return mangaFromAPI(client.get("$apiUrl/manga/${url.pathSegments[1]}", Fetch.XHR).parseAs())
     }
 
     override suspend fun fetchMangaUpdate(
@@ -40,7 +42,7 @@ abstract class MonochromeCMS : KeiSource() {
     ): SMangaUpdate {
         if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
-        val chapterList = client.get("$apiUrl/manga/${manga.url}/chapters").parseAs<List<Chapter>>().map { ch ->
+        val chapterList = client.get("$apiUrl/manga/${manga.url}/chapters", Fetch.XHR).parseAs<List<Chapter>>().map { ch ->
             SChapter.create().apply {
                 name = ch.title
                 url = manga.url + ch.parts

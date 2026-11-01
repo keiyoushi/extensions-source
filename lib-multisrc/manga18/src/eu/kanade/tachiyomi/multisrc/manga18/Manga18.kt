@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -25,7 +26,7 @@ import java.util.Locale
 
 abstract class Manga18 : KeiSource() {
 
-    override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get("$baseUrl/list-manga/$page?order_by=views").asJsoup())
+    override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get("$baseUrl/list-manga/$page?order_by=views", Fetch.DOCUMENT).asJsoup())
 
     protected open fun popularMangaParse(document: Document): MangasPage {
         val entries = document.select(popularMangaSelector()).map(::popularMangaFromElement)
@@ -43,7 +44,7 @@ abstract class Manga18 : KeiSource() {
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
-    override suspend fun getLatestUpdates(page: Int) = popularMangaParse(client.get("$baseUrl/list-manga/$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int) = popularMangaParse(client.get("$baseUrl/list-manga/$page", Fetch.DOCUMENT).asJsoup())
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -62,13 +63,13 @@ abstract class Manga18 : KeiSource() {
             }
         }.build()
 
-        return popularMangaParse(client.get(url).asJsoup())
+        return popularMangaParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "manhwa") return null
 
-        return mangaDetailsParse(client.get(url).asJsoup()).apply { setUrlWithoutDomain(url.toString()) }
+        return mangaDetailsParse(client.get(url, Fetch.DOCUMENT).asJsoup()).apply { setUrlWithoutDomain(url.toString()) }
     }
 
     protected open val getAvailableTags = true
@@ -77,7 +78,7 @@ abstract class Manga18 : KeiSource() {
     override val supportsFilterFetching get() = getAvailableTags
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/list-manga/1").asJsoup()
+        val document = client.get("$baseUrl/list-manga/1", Fetch.DOCUMENT).asJsoup()
         val tags = document.select(tagsSelector).map {
             Pair(
                 it.text(),
@@ -107,7 +108,7 @@ abstract class Manga18 : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetailsParse(document), document.select(chapterListSelector()).map(::chapterFromElement))
     }
 
@@ -164,7 +165,7 @@ abstract class Manga18 : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val script = document.selectFirst("script:containsData(slides_p_path)")
             ?: throw Exception("Unable to find script with image data")
 

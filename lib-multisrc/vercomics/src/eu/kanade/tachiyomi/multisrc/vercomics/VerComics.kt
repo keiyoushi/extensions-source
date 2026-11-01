@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -26,7 +27,7 @@ abstract class VerComics : KeiSource() {
 
     // ============================== Popular ==============================
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$baseUrl/$urlSuffix/page/$page")
+        val response = client.get("$baseUrl/$urlSuffix/page/$page", Fetch.DOCUMENT)
         val document = response.asJsoup()
         val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
         val hasNextPage = document.selectFirst(popularMangaNextPageSelector()) != null
@@ -61,7 +62,7 @@ abstract class VerComics : KeiSource() {
             url.addPathSegments(page.toString())
             url.addQueryParameter("s", query)
 
-            val response = client.get(url.build())
+            val response = client.get(url.build(), Fetch.DOCUMENT)
             return searchMangaParse(response.asJsoup())
         }
 
@@ -80,7 +81,7 @@ abstract class VerComics : KeiSource() {
             }
         }
 
-        val response = client.get(url.build())
+        val response = client.get(url.build(), Fetch.DOCUMENT)
         return searchMangaParse(response.asJsoup())
     }
 
@@ -97,6 +98,10 @@ abstract class VerComics : KeiSource() {
     protected open fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
     // ============================== Details ==============================
+    protected open val detailsSelector = "div.tax_post"
+
+    protected open val genreSelector = "div.tax_box:has(div.title:contains(Etiquetas)) a[rel=tag]"
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -106,17 +111,17 @@ abstract class VerComics : KeiSource() {
         var sManga = manga
 
         if (fetchDetails) {
-            val response = client.get(baseUrl + manga.url)
+            val response = client.get(baseUrl + manga.url, Fetch.DOCUMENT)
             val document = response.asJsoup()
 
             sManga = SManga.create().apply {
                 url = manga.url
-                document.selectFirst("div.tax_post")?.let {
+                document.selectFirst(detailsSelector)?.let {
                     status = SManga.COMPLETED
                     update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-                    val genreList = document.select("div.tax_box:has(div.title:contains(Etiquetas)) a[rel=tag]")
+                    val genreList = document.select(genreSelector)
                     genre = genreList.joinToString { genre ->
-                        val text = genre.text().replaceFirstChar { it.uppercase() }
+                        val text = genre.text().removePrefix("#").replaceFirstChar { it.uppercase() }
                         val slug = genre.attr("href").substringAfter("$baseUrl/$genreSuffix/").removeSuffix("/")
                         val newPair = Pair(text, slug)
 
@@ -149,7 +154,7 @@ abstract class VerComics : KeiSource() {
             "div.post-imgs > img"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(baseUrl + chapter.url)
+        val response = client.get(baseUrl + chapter.url, Fetch.DOCUMENT)
         val document = response.asJsoup()
         return document.select(pageListSelector).mapIndexed { i, img ->
             Page(i, imageUrl = img.imgAttr() ?: img.attr("abs:src"))

@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -19,7 +20,7 @@ abstract class PizzaReader : KeiSource() {
     open val apiUrl get() = "$baseUrl$apiPath"
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val result = client.get("$apiUrl/comics")
+        val result = client.get("$apiUrl/comics", Fetch.XHR)
             .parseAs<PizzaResultsDto>()
         val comicList = result.comics.map(::popularMangaFromObject)
         return MangasPage(comicList, hasNextPage = false)
@@ -32,7 +33,7 @@ abstract class PizzaReader : KeiSource() {
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val result = client.get("$apiUrl/comics")
+        val result = client.get("$apiUrl/comics", Fetch.XHR)
             .parseAs<PizzaResultsDto>()
         val comicList = result.comics
             .filter { comic -> comic.lastChapter != null }
@@ -46,7 +47,7 @@ abstract class PizzaReader : KeiSource() {
         val searchUrl = "$apiUrl/search/".toHttpUrl().newBuilder()
             .addPathSegment(query)
             .toString()
-        val result = client.get(searchUrl)
+        val result = client.get(searchUrl, Fetch.XHR)
             .parseAs<PizzaResultsDto>()
         val comicList = result.comics.map(::popularMangaFromObject)
         return MangasPage(comicList, hasNextPage = false)
@@ -58,7 +59,7 @@ abstract class PizzaReader : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val result = client.get(apiUrl + manga.url)
+        val result = client.get(apiUrl + manga.url, Fetch.XHR)
             .parseAs<PizzaResultDto>()
 
         val comic = result.comic!!
@@ -88,7 +89,7 @@ abstract class PizzaReader : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val result = client.get(apiUrl + chapter.url)
+        val result = client.get(apiUrl + chapter.url, Fetch.XHR)
             .parseAs<PizzaReaderDto>()
         return result.chapter!!.pages.mapIndexed { i, page -> Page(i, "", page) }
     }

@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.toonz
 
+import android.webkit.CookieManager
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -8,7 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.network.addCookie
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -34,9 +35,22 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Toonz : KeiSource() {
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 2, period = 1.seconds)
-        .addCookie("reader_prefs" to "%7B%22rating%22%3A%22pornographic%22%7D")
+        .addNetworkInterceptor { chain ->
+            val request = chain.request()
+            val cookies = request.header("Cookie")?.split("; ")
+            if (cookies?.any { it.startsWith("reader_prefs=") } != true) return@addNetworkInterceptor chain.proceed(request)
+
+            CookieManager.getInstance().apply {
+                setCookie(baseUrl, "reader_prefs=; Max-Age=-1; Path=/")
+                setCookie(baseUrl, "reader_prefs=; Max-Age=-1; Domain=${request.url.host}; Path=/")
+            }
+            val remaining = cookies.filterNot { it.startsWith("reader_prefs=") }
+            val newRequest = request.newBuilder().apply {
+                if (remaining.isEmpty()) removeHeader("Cookie") else header("Cookie", remaining.joinToString("; "))
+            }.build()
+            chain.proceed(newRequest)
+        }
 
     private val isToonx get() = name == "Toonx"
 
@@ -105,7 +119,7 @@ abstract class Toonz : KeiSource() {
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
         val mangaUrl = getMangaUrl(manga)
-        val document = client.get(mangaUrl).asJsoup()
+        val document = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
         val comicId = manga.memo.getStringOrNull("comicId") ?: document.select("script").firstNotNullOfOrNull { script ->
             COMIC_ID_REGEX.find(script.data())?.groupValues?.get(1)
         } ?: throw Exception("Could not find comic ID for ${manga.title}")
@@ -128,7 +142,7 @@ abstract class Toonz : KeiSource() {
     }
 
     private suspend fun fetchChapters(manga: SManga, comicId: String): List<SChapter> {
-        val chaptersResponse = client.get("$baseUrl/api/comics/$comicId/chapters")
+        val chaptersResponse = client.get("$baseUrl/api/comics/$comicId/chapters", Fetch.XHR)
         val chapterListDto = chaptersResponse.parseAs<ChapterListDto>()
         return chapterListDto.chapters.map { it.toSChapter(manga.url) }
     }
@@ -142,7 +156,7 @@ abstract class Toonz : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
-        val images = client.get(chapterUrl, rscHeaders).extractNextJs<ChapterImagesDto>()?.images
+        val images = client.get(chapterUrl, rscHeaders, Fetch.XHR).extractNextJs<ChapterImagesDto>()?.images
             ?: return emptyList()
 
         return images.mapIndexed { index, image ->
@@ -153,7 +167,7 @@ abstract class Toonz : KeiSource() {
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/genres").parseAs()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/genres", Fetch.XHR).parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data?.parseAs<List<GenreDto>>()
@@ -179,7 +193,7 @@ abstract class Toonz : KeiSource() {
         .build()
 
     private suspend fun getMangaList(url: HttpUrl, page: Int): MangasPage {
-        val document = client.get(url).asDocument()
+        val document = client.get(url, Fetch.DOCUMENT).asDocument()
         val mangas = document.select("img[data-cover]").map { img ->
             SManga.create().apply {
                 val link = img.closest("a[href], :has(> a[href])")!!.selectFirst("a[href]")!!.absUrl("href").toHttpUrl()

@@ -2,6 +2,7 @@ package keiyoushi.lib.clipstudioreader
 
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
@@ -73,17 +74,18 @@ context(source: HttpSource)
 suspend fun OkHttpClient.fetchPages(viewerUrl: HttpUrl): List<Page> = fetchPages(viewerUrl, source.headers)
 
 private suspend fun OkHttpClient.fetchComicPages(cgi: HttpUrl, param: String, trial: String?, headers: Headers): List<Page> {
+    val viewerHeaders = headers.newBuilder().set("Referer", cgi.viewerReferer()).build()
     var viewMode = VIEW_MODE_HYBRID
-    var timeKey = fetchTimeKey(cgi, param, viewMode, headers)
+    var timeKey = fetchTimeKey(cgi, param, viewMode, viewerHeaders)
     // some webtoons only open in the vertical view mode
     if (timeKey.selectFirst("Code")?.text() == CODE_VIEW_MODE_ERROR) {
         viewMode = VIEW_MODE_VERTICAL
-        timeKey = fetchTimeKey(cgi, param, viewMode, headers)
+        timeKey = fetchTimeKey(cgi, param, viewMode, viewerHeaders)
     }
     if (timeKey.selectFirst("Code")?.text() != CODE_SUCCESS) throw Exception("Viewer error: ${timeKey.text()}")
     val key = timeKey.selectFirst("Content")!!.text()
 
-    val face = get(cgi.fileUrl(MODE_FACE_XML, "face.xml", viewMode, key), headers).asJsoup(Parser.xmlParser())
+    val face = get(cgi.fileUrl(MODE_FACE_XML, "face.xml", viewMode, key), viewerHeaders, Fetch.XHR).asJsoup(Parser.xmlParser())
     val totalPages = face.selectFirst("TotalPage")!!.text().toInt()
     val gridWidth = face.selectFirst("Scramble > Width")!!.text()
     val gridHeight = face.selectFirst("Scramble > Height")!!.text()
@@ -119,14 +121,14 @@ private suspend fun OkHttpClient.fetchTimeKey(cgi: HttpUrl, param: String, viewM
         .addQueryParameter("vm", viewMode)
         .addQueryParameter("param", param)
         .build()
-    return get(url, headers).asJsoup(Parser.xmlParser())
+    return get(url, headers, Fetch.XHR).asJsoup(Parser.xmlParser())
 }
 
 private suspend fun OkHttpClient.fetchEpubPages(viewerUrl: HttpUrl, headers: Headers): List<Page> = coroutineScope {
     val contentId = viewerUrl.queryParameter("c")!!
 
     val configUrl = viewerUrl.resolve("${viewerUrl.queryParameter("s") ?: "default"}.jsonc")!!
-    val apiUrl = viewerUrl.resolve(get(configUrl, headers).parseAs<ViewerConfig>().api)!!
+    val apiUrl = viewerUrl.resolve(get(configUrl, headers, Fetch.XHR).parseAs<ViewerConfig>().api)!!
 
     val tokenUrl = apiUrl.newBuilder()
         .addPathSegments("tokens/viewer")
@@ -134,19 +136,19 @@ private suspend fun OkHttpClient.fetchEpubPages(viewerUrl: HttpUrl, headers: Hea
         .build()
 
     val tokenHeaders = viewerUrl.queryParameter("t")?.let { headers.withBearer(it) } ?: headers
-    val token = get(tokenUrl, tokenHeaders).parseAs<TokenResponse>().token
+    val token = get(tokenUrl, tokenHeaders, Fetch.XHR).parseAs<TokenResponse>().token
     val apiHeaders = headers.withBearer(token)
 
     val metaUrl = apiUrl.newBuilder().addPathSegments("contents/$contentId/meta").build()
-    val contentUrl = get(metaUrl, apiHeaders).parseAs<MetaResponse>().content.baseUrl.toHttpUrl()
+    val contentUrl = get(metaUrl, apiHeaders, Fetch.XHR).parseAs<MetaResponse>().content.baseUrl.toHttpUrl()
 
     val preprocessUrl = contentUrl.newBuilder().addPathSegment("preprocess-settings.json").build()
-    val imageKey = async { get(preprocessUrl, apiHeaders).parseAs<PreprocessSettings>().imageKey }
+    val imageKey = async { get(preprocessUrl, apiHeaders, Fetch.XHR).parseAs<PreprocessSettings>().imageKey }
 
     val containerUrl = contentUrl.newBuilder().addPathSegments("META-INF/container.xml").build()
-    val container = get(containerUrl, apiHeaders).asJsoup(Parser.xmlParser())
+    val container = get(containerUrl, apiHeaders, Fetch.XHR).asJsoup(Parser.xmlParser())
     val opfUrl = contentUrl.newBuilder().addPathSegments(container.selectFirst("*|rootfile")!!.attr("full-path")).build()
-    val opf = get(opfUrl, apiHeaders).asJsoup(Parser.xmlParser())
+    val opf = get(opfUrl, apiHeaders, Fetch.XHR).asJsoup(Parser.xmlParser())
 
     val fragment = "$EPUB_FRAGMENT,${imageKey.await() ?: ""},$token"
     opf.select("*|item[media-type^=image/]").mapIndexed { i, item ->
@@ -164,6 +166,9 @@ private fun HttpUrl.fileUrl(mode: String, file: String, viewMode: String, key: S
     .addQueryParameter("file", file)
     .addQueryParameter("param", key)
     .build()
+
+// Some servers answer every request with view mode error unless the Referer is in the viewer's directory
+internal fun HttpUrl.viewerReferer(): String = resolve("./")!!.toString()
 
 private fun Headers.withBearer(token: String) = newBuilder().set("Authorization", "Bearer $token").build()
 

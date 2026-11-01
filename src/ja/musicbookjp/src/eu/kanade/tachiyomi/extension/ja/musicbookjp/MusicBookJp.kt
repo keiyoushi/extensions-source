@@ -11,11 +11,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.aesCbc
+import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonRequestBody
@@ -25,10 +29,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import java.io.IOException
-import java.security.MessageDigest
-import javax.crypto.Cipher
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class MusicBookJp :
@@ -58,7 +58,7 @@ abstract class MusicBookJp :
             .addQueryParameter("rankingType", "D")
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -66,7 +66,7 @@ abstract class MusicBookJp :
             .addQueryParameter("tab", "male")
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -74,7 +74,7 @@ abstract class MusicBookJp :
             .addQueryParameter("keyword", query)
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     private fun Response.toMangasPage(): MangasPage {
@@ -150,7 +150,7 @@ abstract class MusicBookJp :
             .addQueryParameter("tab", "book")
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(url).asJsoup()
+        return client.get(url, Fetch.DOCUMENT).asJsoup()
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/comic/store/seriesDetails?seriesId=${manga.url}"
@@ -159,7 +159,7 @@ abstract class MusicBookJp :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val a001 = (1..6).map { SCID_CHARS.random() }.joinToString("")
-        val viewer = client.post("$baseUrl/comic/eblieva/bvApi/pageList", ViewerRequestBody(a001, chapter.url).toJsonRequestBody()).parseAs<ViewerResponse>()
+        val viewer = client.post("$baseUrl/comic/eblieva/bvApi/pageList", Fetch.XHR, ViewerRequestBody(a001, chapter.url).toJsonRequestBody()).parseAs<ViewerResponse>()
         val display = viewer.data.parseAs<PageData> { it.decrypt(a001 + "bvhm" + viewer.sckb) }.displaySettingInfo.first()
         val params = display.config.paramList
         return List(params.last().lastPage) { index ->
@@ -169,10 +169,8 @@ abstract class MusicBookJp :
     }
 
     private fun String.decrypt(key: String): String {
-        val md5Key = MessageDigest.getInstance("MD5").digest(key.toByteArray())
-        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-        cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(md5Key, "AES"), IvParameterSpec(IV))
-        return cipher.doFinal(Base64.decode(this, Base64.DEFAULT)).decodeToString()
+        val md5Key = key.md5()
+        return Base64.decode(this, Base64.DEFAULT).aesDecrypt(aesCbc(md5Key, IV)).decodeToString()
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

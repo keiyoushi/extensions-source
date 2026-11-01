@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -15,7 +16,6 @@ import keiyoushi.utils.asJsoup
 abstract class GWTB : KeiSource() {
 
     override val supportsLatest = false
-
     override suspend fun getPopularManga(page: Int) = SManga.create().apply {
         title = name
         url = "/index.php"
@@ -32,7 +32,7 @@ abstract class GWTB : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val updatedChapters = if (fetchChapters) {
-            client.get(getMangaUrl(manga)).asJsoup().select(".fall > option:not(:first-child)").map {
+            client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup().select(".fall > option:not(:first-child)").map {
                 SChapter.create().apply {
                     name = it.ownText()
                     url = "/index.php?nro=${it.`val`()}"
@@ -46,7 +46,7 @@ abstract class GWTB : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val doc = client.get(getChapterUrl(chapter)).asJsoup()
+        val doc = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return listOf(Page(0, imageUrl = doc.selectFirst(".comic_title + img")!!.absUrl("src")))
     }
 

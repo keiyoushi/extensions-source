@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -72,7 +73,7 @@ abstract class RokuHentai :
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = if (page == 1) baseUrl else "$baseUrl/_search?p=${offset["popular"]}"
-        return parseMangasPage(client.get(url))
+        return parseMangasPage(client.get(url, if (page == 1) Fetch.DOCUMENT else Fetch.XHR))
     }
 
     private fun parseMangasPage(response: Response): MangasPage {
@@ -113,7 +114,7 @@ abstract class RokuHentai :
         if (page > 1) {
             url.addPathSegment("_search").addQueryParameter("p", offset["search:$query"])
         }
-        return parseMangasPage(client.get(url.build()))
+        return parseMangasPage(client.get(url.build(), if (page == 1) Fetch.DOCUMENT else Fetch.XHR))
     }
 
     // Manga Detail
@@ -125,7 +126,7 @@ abstract class RokuHentai :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         if (fetchDetails) {
-            val doc = client.get(getMangaUrl(manga)).asJsoup()
+            val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
             val img = doc.selectFirst(".site-manga-info .mdc-card__media")
             val titles = doc.select(".site-manga-info__info h6")
             manga.apply {

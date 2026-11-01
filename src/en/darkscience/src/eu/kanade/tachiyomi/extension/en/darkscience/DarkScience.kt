@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -17,6 +18,7 @@ import java.util.Locale
 
 @Source
 abstract class DarkScience : KeiSource() {
+
     override val supportsLatest = false
 
     private fun initTheManga(manga: SManga): SManga = manga.apply {
@@ -59,7 +61,7 @@ abstract class DarkScience : KeiSource() {
 
         val updatedChapters = mutableListOf<SChapter>()
 
-        var archivePage: Document? = client.get(baseUrl + updatedManga.url).asJsoup()
+        var archivePage: Document? = client.get(baseUrl + updatedManga.url, Fetch.DOCUMENT).asJsoup()
 
         var chLast = 0.0F
 
@@ -67,7 +69,7 @@ abstract class DarkScience : KeiSource() {
             val nextArchivePageUrl = archivePage.selectFirst("""#nav-below .nav-previous > a""")
                 ?.attr("href")
             val nextArchivePage = if (nextArchivePageUrl != null) {
-                client.get(nextArchivePageUrl).asJsoup()
+                client.get(nextArchivePageUrl, Fetch.DOCUMENT).asJsoup()
             } else {
                 null
             }
@@ -102,7 +104,7 @@ abstract class DarkScience : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> = listOf(
         Page(
             0,
-            imageUrl = client.get(getChapterUrl(chapter)).asJsoup()
+            imageUrl = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
                 .selectFirst("article.post img.aligncenter")!!
                 .attr("src"),
         ),

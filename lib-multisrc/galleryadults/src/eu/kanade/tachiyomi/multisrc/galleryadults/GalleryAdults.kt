@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -87,7 +88,7 @@ abstract class GalleryAdults :
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = popularMangaUrl.addPageUri(page)
-        return parsePopularManga(client.get(url).asJsoup())
+        return parsePopularManga(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     protected open fun parsePopularManga(document: Document): MangasPage {
@@ -116,7 +117,7 @@ abstract class GalleryAdults :
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = latestUpdatesUrl.addPageUri(page)
-        return parseLatestUpdates(client.get(url).asJsoup())
+        return parseLatestUpdates(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     protected open fun parseLatestUpdates(document: Document): MangasPage {
@@ -165,7 +166,7 @@ abstract class GalleryAdults :
     protected open val idPrefixUri = "gallery"
 
     protected open suspend fun getMangaById(id: String): SManga {
-        val response = client.get("$baseUrl/$idPrefixUri/$id")
+        val response = client.get("$baseUrl/$idPrefixUri/$id", Fetch.DOCUMENT)
         return parseMangaDetails(response.asJsoup()).apply {
             url = "/$idPrefixUri/$id/"
         }
@@ -183,7 +184,7 @@ abstract class GalleryAdults :
         if (query.toIntOrNull() != null) return MangasPage(listOf(getMangaById(query)), false)
 
         val randomEntryFilter = filters.firstInstanceOrNull<RandomEntryFilter>()
-        if (randomEntryFilter?.state == true) return randomEntryParse(client.get(randomEntryUrl))
+        if (randomEntryFilter?.state == true) return randomEntryParse(client.get(randomEntryUrl, Fetch.DOCUMENT))
 
         // Basic search
         val sortOrderFilter = filters.firstInstanceOrNull<SortOrderFilter>()
@@ -221,7 +222,7 @@ abstract class GalleryAdults :
             else -> popularMangaUrl
         }
 
-        return parseSearchManga(client.get(url.addPageUri(page)))
+        return parseSearchManga(client.get(url.addPageUri(page), Fetch.DOCUMENT))
     }
 
     /**
@@ -231,6 +232,7 @@ abstract class GalleryAdults :
         client.post(
             "$baseUrl/$favoritePath",
             xhrHeaders,
+            Fetch.XHR,
             FormBody.Builder()
                 .add("page", page.toString())
                 .build(),
@@ -456,7 +458,7 @@ abstract class GalleryAdults :
 
     protected open fun relatedMangaSelector() = popularMangaSelector()
 
-    override suspend fun fetchRelatedMangaList(manga: SManga) = client.get(getMangaUrl(manga)).asJsoup()
+    override suspend fun fetchRelatedMangaList(manga: SManga) = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         .select(relatedMangaSelector())
         .searchMangaFromElements(hasNextPage = false)
 
@@ -468,7 +470,7 @@ abstract class GalleryAdults :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         val doc = response.asJsoup()
 
         return SMangaUpdate(
@@ -612,7 +614,7 @@ abstract class GalleryAdults :
     protected open val pageUri = "g"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter))
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         return pageListParse(response.asJsoup())
     }
 
@@ -697,7 +699,7 @@ abstract class GalleryAdults :
             if (totalPages.isNotEmpty() && totalPages.toInt() > pages.size) {
                 val form = pageRequestForm(document, totalPages, pages.size)
 
-                val morePages = client.post("$baseUrl/$pagesRequest", xhrHeaders, form).use { it ->
+                val morePages = client.post("$baseUrl/$pagesRequest", xhrHeaders, Fetch.XHR, form).use { it ->
                     it.asJsoup()
                         .select("a")
                         .mapNotNull {
@@ -755,7 +757,7 @@ abstract class GalleryAdults :
         }
     }
 
-    override suspend fun getImageUrl(page: Page): String = imageUrlParse(client.get(page.url).asJsoup())
+    override suspend fun getImageUrl(page: Page): String = imageUrlParse(client.get(page.url, Fetch.DOCUMENT).asJsoup())
 
     protected open fun imageUrlParse(document: Document): String = document.selectFirst("img#gimg, img#fimg, img#readerImg")?.imgAttr() ?: ""
 
@@ -784,7 +786,7 @@ abstract class GalleryAdults :
             async {
                 runCatching {
                     val tagsUrl = "$baseUrl/$tagsPath".addPageUri(page)
-                    client.get(tagsUrl).asJsoup()
+                    client.get(tagsUrl, Fetch.DOCUMENT).asJsoup()
                 }.getOrNull()?.let { doc ->
                     genres.putAll(tagsParser(doc))
                 }

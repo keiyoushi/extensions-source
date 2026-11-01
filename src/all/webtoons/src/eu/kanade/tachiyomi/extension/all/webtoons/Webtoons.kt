@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
@@ -47,7 +48,6 @@ abstract class Webtoons :
     private val mobileHeaders: Headers
         get() = headersBuilder()
             .set("Referer", "$mobileUrl/")
-            .removeAll("Origin")
             .build()
 
     override val supportRelatedMangasBySearch = true
@@ -86,7 +86,7 @@ abstract class Webtoons :
             else -> throw Exception("page > 4 not available")
         }
 
-        val document = client.get("$baseUrl/$langCode/ranking/$ranking").asJsoup()
+        val document = client.get("$baseUrl/$langCode/ranking/$ranking", Fetch.DOCUMENT).asJsoup()
         val entries = document.select(".webtoon_list li a")
             .map(::mangaFromElement)
 
@@ -111,7 +111,7 @@ abstract class Webtoons :
             else -> throw Exception("Unknown day of week")
         }
 
-        val document = client.get("$baseUrl/$langCode/originals/$day?sortOrder=UPDATE").asJsoup()
+        val document = client.get("$baseUrl/$langCode/originals/$day?sortOrder=UPDATE", Fetch.DOCUMENT).asJsoup()
         val entries = document.select(".webtoon_list li a")
             .map(::mangaFromElement)
 
@@ -137,7 +137,7 @@ abstract class Webtoons :
             }
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val entries = document.select(".webtoon_list li a").map(::mangaFromElement)
         val hasNextPage = document.selectFirst("a.pagination[aria-current=true] + a") != null
 
@@ -180,7 +180,7 @@ abstract class Webtoons :
     }
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val detailElement = document.selectFirst(".detail_header .info")
         val infoElement = document.selectFirst("#_asideDetail")
 
@@ -264,7 +264,7 @@ abstract class Webtoons :
             }
         }.build()
 
-        val result = client.get(url, mobileHeaders).parseAs<EpisodeListResponse>()
+        val result = client.get(url, mobileHeaders, Fetch.XHR).parseAs<EpisodeListResponse>()
 
         var recognized = 0
         var unrecognized = 0
@@ -345,7 +345,7 @@ abstract class Webtoons :
     )
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val useMaxQuality = useMaxQualityPref()
 
         val pages = document.select("div#_imageList > img").mapIndexed { i, element ->
@@ -391,7 +391,7 @@ abstract class Webtoons :
 
         val docUrl = docUrlRegex.find(docString)!!.groupValues[1]
         val motionToonPath = motionToonPathRegex.find(docString)!!.groupValues[1]
-        val motionToonImages = client.get(docUrl).parseAs<MotionToonResponse>().assets.images
+        val motionToonImages = client.get(docUrl, Fetch.XHR).parseAs<MotionToonResponse>().assets.images
 
         return motionToonImages.entries
             .filter { it.key.contains("layer") }

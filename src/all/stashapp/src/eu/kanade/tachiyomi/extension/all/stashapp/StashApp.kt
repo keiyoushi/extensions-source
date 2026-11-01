@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
@@ -71,6 +72,7 @@ abstract class StashApp :
                 client.post(
                     url = "$baseUrl/graphql",
                     headers = graphQlHeaders,
+                    fetch = Fetch.XHR,
                     body = graphQLBody(
                         operationName = "MangaDetails",
                         query = MANGA_DETAILS_QUERY,
@@ -100,6 +102,7 @@ abstract class StashApp :
         val gallery = client.post(
             url = "$baseUrl/graphql",
             headers = graphQlHeaders,
+            fetch = Fetch.XHR,
             body = graphQLBody(
                 operationName = "ChapterList",
                 query = CHAPTER_LIST_QUERY,
@@ -126,6 +129,7 @@ abstract class StashApp :
         val images = client.post(
             url = "$baseUrl/graphql",
             headers = graphQlHeaders,
+            fetch = Fetch.XHR,
             body = graphQLBody(
                 operationName = "PageList",
                 query = PAGE_LIST_QUERY,
@@ -139,7 +143,7 @@ abstract class StashApp :
         return images.mapIndexedNotNull { index, image -> image.toPage(index, baseUrl) }
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("Accept", "image/*")
         .build()
 
@@ -166,6 +170,7 @@ abstract class StashApp :
         val galleries = client.post(
             url = "$baseUrl/graphql",
             headers = graphQlHeaders,
+            fetch = Fetch.XHR,
             body = graphQLBody(
                 operationName = "MangaBrief",
                 query = MANGA_BRIEF_QUERY,

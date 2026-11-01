@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -41,7 +42,6 @@ abstract class MCCMSWeb : KeiSource() {
 
     override fun Headers.Builder.configureHeaders() = set("User-Agent", System.getProperty("http.agent")!!)
         .removeAll("Referer")
-        .removeAll("Origin")
 
     open fun parseListing(document: Document): MangasPage {
         val mangas = document.select(simpleMangaSelector()).map(::simpleMangaFromElement)
@@ -64,9 +64,9 @@ abstract class MCCMSWeb : KeiSource() {
         thumbnail_url = element.selectFirst(Evaluator.Tag("img"))!!.attr("data-original")
     }
 
-    override suspend fun getPopularManga(page: Int) = parseListing(client.get("$baseUrl/category/order/hits/page/$page", pcHeaders).asJsoup())
+    override suspend fun getPopularManga(page: Int) = parseListing(client.get("$baseUrl/category/order/hits/page/$page", pcHeaders, Fetch.DOCUMENT).asJsoup())
 
-    override suspend fun getLatestUpdates(page: Int) = parseListing(client.get("$baseUrl/category/order/addtime/page/$page", pcHeaders).asJsoup())
+    override suspend fun getLatestUpdates(page: Int) = parseListing(client.get("$baseUrl/category/order/addtime/page/$page", pcHeaders, Fetch.DOCUMENT).asJsoup())
 
     protected open val searchHeaders: Headers get() = pcHeaders
 
@@ -87,7 +87,7 @@ abstract class MCCMSWeb : KeiSource() {
                 append("/page/").append(page)
             }
         }
-        return searchMangaParse(client.get(url, searchHeaders).asJsoup())
+        return searchMangaParse(client.get(url, searchHeaders, Fetch.DOCUMENT).asJsoup())
     }
 
     protected open fun searchMangaParse(document: Document): MangasPage {
@@ -121,7 +121,7 @@ abstract class MCCMSWeb : KeiSource() {
         return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document))
     }
 
-    protected open suspend fun fetchMangaPage(manga: SManga): Document = client.get(baseUrl + manga.url, pcHeaders).asJsoup()
+    protected open suspend fun fetchMangaPage(manga: SManga): Document = client.get(baseUrl + manga.url, pcHeaders, Fetch.DOCUMENT).asJsoup()
 
     protected open fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         val element = document.selectFirst(Evaluator.Class("de-info__box"))!!
@@ -148,18 +148,18 @@ abstract class MCCMSWeb : KeiSource() {
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl.mobileUrl() + chapter.url
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(baseUrl + chapter.url, if (config.useMobilePageList) headers else pcHeaders))
+    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(baseUrl + chapter.url, if (config.useMobilePageList) headers else pcHeaders, Fetch.DOCUMENT))
 
     protected open fun pageListParse(response: Response): List<Page> = config.pageListParse(response)
 
     // Don't send referer
-    override fun imageRequest(page: Page) = super.imageRequest(page).newBuilder().headers(pcHeaders).build()
+    override fun getImageRequest(page: Page) = super.getImageRequest(page).newBuilder().headers(pcHeaders).build()
 
     override val supportsFilterFetching get() = config.hasCategoryPage
 
     override suspend fun fetchFilterData(): JsonElement = parseGenres(fetchGenresPage()).toJsonElement()
 
-    protected open suspend fun fetchGenresPage(): Document = client.get("$baseUrl/category/", pcHeaders).asJsoup()
+    protected open suspend fun fetchGenresPage(): Document = client.get("$baseUrl/category/", pcHeaders, Fetch.DOCUMENT).asJsoup()
 
     override fun getFilterList(data: JsonElement?): FilterList = getWebFilters(data?.parseAs<List<Pair<String, String>>>())
 }

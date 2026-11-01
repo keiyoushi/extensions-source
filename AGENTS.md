@@ -7,9 +7,8 @@ extensions in general, since common patterns have changed.
 
 A few points that are easy to get wrong from stale training data:
 
-- **New sources must extend `KeiSource`** (`libVersion = "1.6"`), never `HttpSource` directly.
-  `HttpSource`/`libVersion = "1.4"` only exists in extensions/themes not yet migrated - see
-  [KeiSource](CONTRIBUTING.md#keisource).
+- **Sources must extend `KeiSource`** (`libVersion = "1.6"`), never `HttpSource` directly - the
+  build fails otherwise. See [KeiSource](CONTRIBUTING.md#keisource).
   - **Metadata is injected via KSP:** Do NOT manually declare or `override val name`, `lang`, `id`, or `baseUrl` in your `@Source` class. These are defined using `source {}` blocks in `build.gradle.kts` and injected automatically.
 - **`SourceFactory` is obsolete:** Do NOT implement `SourceFactory` to create multiple sources. Instead, add multiple `source {}` blocks in the extension's `build.gradle.kts`.
 - **Generated Preferences:** Do NOT write manual `SharedPreferences` logic for base URL mirrors or custom user URLs. Use `baseUrl { mirrors(...) }` or `baseUrl { custom(...) }` inside the `source {}` block in `build.gradle.kts`.

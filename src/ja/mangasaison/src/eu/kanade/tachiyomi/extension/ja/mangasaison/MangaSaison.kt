@@ -11,10 +11,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.GraphQLErrorInterceptor
+import keiyoushi.utils.aesCbc
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.graphQLBody
@@ -32,9 +34,6 @@ import okhttp3.OkHttpClient
 import okio.buffer
 import java.io.IOException
 import java.security.MessageDigest
-import javax.crypto.Cipher
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class MangaSaison :
@@ -66,6 +65,7 @@ abstract class MangaSaison :
         val limit = page * pageLimit
         val result = client.post(
             apiUrl,
+            Fetch.XHR,
             graphQLBody(
                 query = POPULAR_QUERY,
                 operationName = "storeLatestWeeklySalesRankings",
@@ -81,6 +81,7 @@ abstract class MangaSaison :
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val result = client.post(
             apiUrl,
+            Fetch.XHR,
             graphQLBody(
                 query = LATEST_QUERY,
                 operationName = "newArrivalContents",
@@ -111,7 +112,7 @@ abstract class MangaSaison :
                 "longDescription",
             ),
         ).toJsonRequestBody()
-        val result = client.post(algoliaUrl, algoliaHeaders, body).parseAs<SearchResponse>()
+        val result = client.post(algoliaUrl, algoliaHeaders, Fetch.XHR, body).parseAs<SearchResponse>()
         val mangas = result.hits.map(Hit::toSManga)
         val hasNextPage = result.hasNextPage()
         return MangasPage(mangas, hasNextPage)
@@ -128,6 +129,7 @@ abstract class MangaSaison :
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val result = client.post(
             apiUrl,
+            Fetch.XHR,
             graphQLBody(
                 query = DETAILS_QUERY,
                 operationName = "bookTitleDetail",
@@ -151,14 +153,14 @@ abstract class MangaSaison :
             .addQueryParameter("distributionId", distributionId)
             .build()
 
-        val content = client.get(contentUrl, cacheControl = FORCE_NETWORK).parseAs<ViewerResponse>()
+        val content = client.get(contentUrl, Fetch.XHR, cacheControl = FORCE_NETWORK).parseAs<ViewerResponse>()
         val accessUrl = "$viewerUrl/access-provider".toHttpUrl().newBuilder()
             .apply { if (content.contentType != "main") addPathSegment(content.contentType) }
             .addQueryParameter("contentId", content.contentId)
             .addQueryParameter("distributionId", distributionId)
             .build()
 
-        val access = client.get(accessUrl, cacheControl = FORCE_NETWORK).parseAs<AccessResponse>()
+        val access = client.get(accessUrl, Fetch.XHR, cacheControl = FORCE_NETWORK).parseAs<AccessResponse>()
         val zipUrl = access.url
         val entries = client.zipDirectory(zipUrl).entries.associateBy(Entry::name)
         val spine = client.readZipEntry(zipUrl, entries.getValue("META-INF/package.json")).buffer().parseAs<MdPackage>().spine
@@ -186,8 +188,7 @@ abstract class MangaSaison :
         }
 
         // unwrap with the master key (wasm func 89)
-        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-        cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(master, "AES"), IvParameterSpec(ByteArray(cipher.blockSize)))
+        val cipher = aesCbc(master, ByteArray(16))
         val unwrapped = cipher.doFinal(material, TIMESTAMP_HEADER_SIZE, material.size - TIMESTAMP_HEADER_SIZE)
         return ByteArray(AES_KEY_SIZE) { unwrapped[AES_KEY_SIZE + it].toInt().inv().toByte() }.toHexString()
     }

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -34,7 +35,7 @@ abstract class MuitoHentai : KeiSource() {
             .build()
 
         val pageStr = if (page != 1) page.toString() else ""
-        return client.get("$baseUrl/mangas/$pageStr", newHeaders).asJsoup()
+        return client.get("$baseUrl/mangas/$pageStr", newHeaders, Fetch.DOCUMENT).asJsoup()
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -68,7 +69,7 @@ abstract class MuitoHentai : KeiSource() {
             .addQueryParameter("q", query)
             .build()
 
-        val document = client.get(searchUrl).asJsoup()
+        val document = client.get(searchUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("#archive-content article.tvshows").map { popularMangaFromElement(it) }
         return MangasPage(mangas, false)
     }
@@ -79,7 +80,7 @@ abstract class MuitoHentai : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = SManga.create().apply {
             url = manga.url
@@ -109,7 +110,7 @@ abstract class MuitoHentai : KeiSource() {
             .set("Referer", "$baseUrl${chapter.url}".substringBeforeLast("/"))
             .build()
 
-        val document = client.get(baseUrl + chapter.url, newHeaders).asJsoup()
+        val document = client.get(baseUrl + chapter.url, newHeaders, Fetch.DOCUMENT).asJsoup()
         return document.selectFirst("script:containsData(numeroImgAtual)")
             ?.data()
             ?.substringAfter("var arr = ")
@@ -121,7 +122,7 @@ abstract class MuitoHentai : KeiSource() {
             .orEmpty()
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("Referer", page.url)
         .build()
 

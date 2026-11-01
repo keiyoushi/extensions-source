@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.goda.GoDa
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.parseAs
 import okhttp3.Interceptor
@@ -32,7 +33,7 @@ abstract class GoDaManhua : GoDa() {
     }
 
     override suspend fun fetchChapterList(mangaId: String): List<SChapter> {
-        val response = client.get("https://api-get-v3.mgsearcher.com/api/manga/get?mid=$mangaId&mode=all", headers)
+        val response = client.get("https://api-get-v3.mgsearcher.com/api/manga/get?mid=$mangaId&mode=all", headers, Fetch.XHR)
         return response.parseAs<ResponseDto<ChapterListDto>>().data.toChapterList()
     }
 

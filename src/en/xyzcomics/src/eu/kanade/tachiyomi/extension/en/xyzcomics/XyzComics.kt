@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -44,7 +45,7 @@ abstract class XyzComics : KeiSource() {
     }
 
     private suspend fun parseMangaList(url: String): MangasPage {
-        val doc = client.get(url).asJsoup()
+        val doc = client.get(url, Fetch.DOCUMENT).asJsoup()
         val items = doc.select("article.post").mapNotNull { popManga(it) }
         val hasNextPage = doc.selectFirst("a.nextp, .pagenav a.next, a.page-numbers.next, a[rel=next]") != null
         return MangasPage(items, hasNextPage)
@@ -70,7 +71,7 @@ abstract class XyzComics : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         if (fetchDetails) {
-            val doc = client.get(getMangaUrl(manga)).asJsoup()
+            val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
             manga.title = doc.selectFirst("h1.post-title a, h1.post-title")?.text()
                 ?: doc.selectFirst("title")!!.text()
             manga.thumbnail_url = doc.selectFirst(".pswp-gallery .pswp-gallery__item a[href]")
@@ -89,7 +90,7 @@ abstract class XyzComics : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val doc = client.get(getChapterUrl(chapter)).asJsoup()
+        val doc = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return doc.select(".pswp-gallery .pswp-gallery__item a[href]")
             .mapIndexed { i, link -> Page(i, imageUrl = link.attr("abs:href")) }
     }

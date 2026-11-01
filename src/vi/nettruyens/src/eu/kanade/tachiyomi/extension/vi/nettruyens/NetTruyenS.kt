@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -42,7 +43,7 @@ abstract class NetTruyenS : KeiSource() {
     }
 
     private suspend fun parseMangaList(url: HttpUrl): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div.items div.item").map(::mangaFromElement)
         return MangasPage(mangas, hasNextPage(document))
     }
@@ -115,7 +116,7 @@ abstract class NetTruyenS : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document))
     }
@@ -176,7 +177,7 @@ abstract class NetTruyenS : KeiSource() {
     // ============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter))
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         val chapterUrl = response.request.url.toString()
         val document = response.asJsoup()
 
@@ -199,6 +200,7 @@ abstract class NetTruyenS : KeiSource() {
         val html = client.post(
             "$baseUrl/ajax/image/list/chap/$chapterId?cache=0",
             ajaxHeaders,
+            Fetch.DOCUMENT,
             FormBody.Builder().build(),
         ).parseAs<AjaxImageListDto>().html
         val ajaxDoc = Jsoup.parseBodyFragment(html, baseUrl)

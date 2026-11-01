@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -16,7 +17,7 @@ import kotlinx.serialization.json.JsonElement
 @Source
 abstract class PlatinumLilyScan : KeiSource() {
 
-    private suspend fun fetchSeries(): List<SeriesDto> = client.get("$baseUrl/api/series").parseAs()
+    private suspend fun fetchSeries(): List<SeriesDto> = client.get("$baseUrl/api/series", Fetch.XHR).parseAs()
 
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -95,7 +96,7 @@ abstract class PlatinumLilyScan : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         // manga.url is just the slug, so we rebuild the API path here
-        val series = client.get("$baseUrl/api/series/${manga.url}").parseAs<SeriesDto>()
+        val series = client.get("$baseUrl/api/series/${manga.url}", Fetch.XHR).parseAs<SeriesDto>()
 
         // API already returns chapters in order; let the app sort if needed
         val chapterList = series.chapters?.filter { it.id.isNotEmpty() }?.map {
@@ -118,7 +119,7 @@ abstract class PlatinumLilyScan : KeiSource() {
         val seriesSlug = chapter.url.substringBefore("#")
         val chapterId = chapter.url.substringAfter("#")
 
-        val series = client.get("$baseUrl/api/series/$seriesSlug").parseAs<SeriesDto>()
+        val series = client.get("$baseUrl/api/series/$seriesSlug", Fetch.XHR).parseAs<SeriesDto>()
         val seriesChapter = series.chapters?.find { it.id == chapterId }
             ?: throw Exception("Capítulo no encontrado")
 

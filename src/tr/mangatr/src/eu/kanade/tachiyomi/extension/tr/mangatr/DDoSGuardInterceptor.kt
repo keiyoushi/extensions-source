@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.extension.tr.mangatr
 
 import eu.kanade.tachiyomi.network.GET
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -25,7 +27,7 @@ class DDoSGuardInterceptor(private val client: OkHttpClient) : Interceptor {
 
         response.close()
 
-        val wellKnown = client.newCall(GET(WELL_KNOWN_URL, originalRequest.headers))
+        val wellKnown = client.newCall(GET(WELL_KNOWN_URL, originalRequest.headers).newBuilder().fetch(Fetch.SCRIPT).build())
             .execute().use {
                 it.body.string()
                     .substringAfter("'", "")
@@ -38,7 +40,7 @@ class DDoSGuardInterceptor(private val client: OkHttpClient) : Interceptor {
 
             // By executing this call, OkHttp's internal CookieJar automatically
             // captures and saves the clearance Set-Cookie to the original host.
-            client.newCall(GET(checkUrl, originalRequest.headers)).execute().close()
+            client.newCall(GET(checkUrl, originalRequest.headers).newBuilder().fetch(Fetch.XHR).build()).execute().close()
         }
 
         // Re-execute the original request with the injected cookie applied natively.

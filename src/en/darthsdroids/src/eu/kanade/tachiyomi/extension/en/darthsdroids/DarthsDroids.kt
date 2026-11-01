@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -28,6 +29,7 @@ import kotlin.time.Duration.Companion.seconds
 // Shall problems arise, we’ll reduce the rate limit.
 @Source
 abstract class DarthsDroids : KeiSource() {
+
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
     override val supportsLatest = false
@@ -145,7 +147,7 @@ abstract class DarthsDroids : KeiSource() {
     // extension APIs for dealing with unique webcomic weirdnesses. ’cause
     // trust me, there’s worse.
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val mainArchive = client.get("$baseUrl/archive.html").asJsoup()
+        val mainArchive = client.get("$baseUrl/archive.html", Fetch.DOCUMENT).asJsoup()
         val archiveData = mainArchive.select("div.text > table.text > tbody > tr")
 
         val mangas = mutableListOf<SManga>()
@@ -206,7 +208,7 @@ abstract class DarthsDroids : KeiSource() {
     // All three are largely similar, there are just *some* (annoying) differences we have to
     // deal with.
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
-        val archivePages = client.get(baseUrl + manga.url).asJsoup()
+        val archivePages = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
 
         // For books where all pages released the same day, there is no page date column,
         // so instead we grab the release date of the archive page itself from its footer.
@@ -258,7 +260,7 @@ abstract class DarthsDroids : KeiSource() {
         //
         // For example, this episode was released during April’s Fools day.
         // https://www.darthsanddroids.net/episodes/0082.html
-        client.get(getChapterUrl(chapter))
+        client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
             .asJsoup()
             .select("""div.center img""")
             .mapIndexed { i, img ->

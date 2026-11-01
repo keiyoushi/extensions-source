@@ -18,20 +18,36 @@ class SortFilter :
         ),
     )
 
-class OriginalLanguage(name: String, val id: String = name) : Filter.CheckBox(name)
-class OriginalLanguageFilter(originalLanguage: List<OriginalLanguage>) : Filter.Group<OriginalLanguage>("Original language", originalLanguage)
-fun getOriginalLanguage() = listOf(
-    OriginalLanguage("Japanese (Manga)", "Manga"),
-    OriginalLanguage("Chinese (Manhua)", "Manhua"),
-    OriginalLanguage("Korean (Manhwa)", "Manhwa"),
-)
+class StatusFilter :
+    UriPartFilter(
+        "Status",
+        arrayOf(
+            Pair("All", ""),
+            Pair("Ongoing", "Ongoing"),
+            Pair("Completed", "Completed"),
+        ),
+    )
 
-class Format(name: String, val id: String = name) : Filter.CheckBox(name)
-class FormatFilter(formatList: List<Format>) : Filter.Group<Format>("Format", formatList)
-fun getFormat() = listOf(
-    Format("Black & White", "0"),
-    Format("Full Color", "1"),
-)
+class OriginalLanguageFilter :
+    UriPartFilter(
+        "Original language",
+        arrayOf(
+            Pair("All", ""),
+            Pair("Japanese (Manga)", "Manga"),
+            Pair("Chinese (Manhua)", "Manhua"),
+            Pair("Korean (Manhwa)", "Manhwa"),
+        ),
+    )
+
+class FormatFilter :
+    UriPartFilter(
+        "Format",
+        arrayOf(
+            Pair("All", ""),
+            Pair("Black & White", "bw"),
+            Pair("Full Color", "colorized"),
+        ),
+    )
 
 class Demographic(name: String, val id: String = name) : Filter.CheckBox(name)
 class DemographicFilter(demographicList: List<Demographic>) : Filter.Group<Demographic>("Publication Demographic", demographicList)
@@ -42,17 +58,11 @@ fun getDemographic() = listOf(
     Demographic("Shounen", "shounen"),
 )
 
-class Status(name: String, val id: String = name) : Filter.CheckBox(name)
-class StatusFilter(statusList: List<Status>) : Filter.Group<Status>("Status", statusList)
-fun getStatus() = listOf(
-    Status("Ongoing", "Ongoing"),
-    Status("Completed", "Completed"),
-)
-
 class ContentRating(name: String, val id: String = name) : Filter.CheckBox(name)
 class ContentRatingFilter(contentRating: List<ContentRating>) : Filter.Group<ContentRating>("Content Rating", contentRating)
 fun getContentRating() = listOf(
     ContentRating("Ecchi", "ecchi"),
+    ContentRating("Erotica", "erotica"),
     ContentRating("Gore", "gore"),
     ContentRating("Sexual Violence", "sexual-violence"),
     ContentRating("Smut", "smut"),
@@ -71,6 +81,7 @@ fun getTheme() = listOf(
     Theme("Gal", "gyaru"),
     Theme("Genderswap", "genderswap"),
     Theme("Ghost", "ghosts"),
+    Theme("Gore", "gore"),
     Theme("Harem", "harem"),
     Theme("Incest", "incest"),
     Theme("Loli", "loli"),
@@ -106,31 +117,58 @@ class Genre(name: String, val id: String = name) : Filter.CheckBox(name)
 class GenreFilter(genreList: List<Genre>) : Filter.Group<Genre>("Genre", genreList)
 fun getGenre() = listOf(
     Genre("Action", "action"),
+    Genre("Adult", "adult"),
     Genre("Adventure", "adventure"),
+    Genre("Arts", "arts"),
+    Genre("Boys' Love", "boys-love"),
     Genre("Comedy", "comedy"),
     Genre("Crime", "crime"),
+    Genre("Demons", "demons"),
     Genre("Drama", "drama"),
+    Genre("Drama Supernatural", "drama-supernatural"),
+    Genre("Ecchi", "ecchi"),
     Genre("Fantasy", "fantasy"),
-    Genre("Girls Love", "girls-love"),
+    Genre("Game", "game"),
+    Genre("Gender Bender", "gender-bender"),
+    Genre("Girls' Love", "girls-love"),
     Genre("Harem", "harem"),
     Genre("Historical", "historical"),
     Genre("Horror", "horror"),
     Genre("Isekai", "isekai"),
+    Genre("Josei", "josei"),
+    Genre("Life", "life"),
+    Genre("Magic", "magic"),
     Genre("Magical Girls", "magical-girls"),
+    Genre("Martial", "martial"),
+    Genre("Martial Arts", "martial-arts"),
+    Genre("Mature", "mature"),
     Genre("Mecha", "mecha"),
     Genre("Medical", "medical"),
+    Genre("Music", "music"),
+    Genre("Mystery", "mystery"),
     Genre("Philosophical", "philosophical"),
     Genre("Psychological", "psychological"),
+    Genre("Reincarnation", "reincarnation"),
     Genre("Romance", "romance"),
+    Genre("School", "school"),
+    Genre("School Life", "school-life"),
     Genre("Sci-Fi", "sci-fi"),
+    Genre("Seinen", "seinen"),
+    Genre("Shotacon", "shotacon"),
+    Genre("Shoujo", "shoujo"),
     Genre("Shoujo Ai", "shoujo-ai"),
+    Genre("Shounen", "shounen"),
     Genre("Shounen Ai", "shounen-ai"),
     Genre("Slice of Life", "slice-of-life"),
+    Genre("Smut", "smut"),
     Genre("Sports", "sports"),
     Genre("Superhero", "superhero"),
+    Genre("Supernatural", "supernatural"),
     Genre("Thriller", "thriller"),
+    Genre("Traged", "traged"),
     Genre("Tragedy", "tragedy"),
     Genre("Wuxia", "wuxia"),
+    Genre("Yaoi", "yaoi"),
     Genre("Yuri", "yuri"),
 )
 

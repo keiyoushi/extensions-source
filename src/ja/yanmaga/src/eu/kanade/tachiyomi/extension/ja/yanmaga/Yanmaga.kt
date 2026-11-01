@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
 import keiyoushi.lib.speedbinb.fetchPages
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -50,7 +51,7 @@ abstract class Yanmaga :
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         if (isGravure) {
-            val document = client.get("$baseUrl/gravures/series?page=$page").asJsoup()
+            val document = client.get("$baseUrl/gravures/series?page=$page", Fetch.DOCUMENT).asJsoup()
             val mangas = document.select("a.banner-link").map {
                 SManga.create().apply {
                     setUrlWithoutDomain(it.absUrl("href"))
@@ -62,7 +63,7 @@ abstract class Yanmaga :
             return MangasPage(mangas, hasNextPage)
         }
 
-        val mangas = client.get("$baseUrl/ranking?ranking-index=0").asJsoup()
+        val mangas = client.get("$baseUrl/ranking?ranking-index=0", Fetch.DOCUMENT).asJsoup()
             .selectFirst("[data-tab-name]")!!
             .select("a.mod-ranking-v2-link")
             .map {
@@ -80,7 +81,7 @@ abstract class Yanmaga :
             .addQueryParameter("offset", ((page - 1) * LATEST_UPDATES_PER_PAGE).toString())
             .build()
 
-        val mangas = client.get(url, xhrHeaders).parseInsertAdjacentHtml().select("a.banner-link").map {
+        val mangas = client.get(url, xhrHeaders, Fetch.XHR).parseInsertAdjacentHtml().select("a.banner-link").map {
             SManga.create().apply {
                 setUrlWithoutDomain(it.absUrl("href"))
                 title = it.selectFirst(".text-wrapper h2")!!.text()
@@ -106,7 +107,7 @@ abstract class Yanmaga :
             }
         }.build()
 
-        val response = client.get(url, ensureSuccess = false)
+        val response = client.get(url, Fetch.DOCUMENT, ensureSuccess = false)
         // No results are answered with a 404 error
         if (response.code == 404) {
             response.close()
@@ -148,7 +149,7 @@ abstract class Yanmaga :
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val details = async {
             if (!fetchDetails) return@async manga
-            val document = client.get(getMangaUrl(manga)).asJsoup()
+            val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
             SManga.create().apply {
                 if (isGravure) {
                     title = document.selectFirst(".detail-header-title")!!.text()
@@ -179,7 +180,7 @@ abstract class Yanmaga :
                         .addQueryParameter("offset", offset.toString())
                         .build()
 
-                    val episodes = client.get(pageUrl, xhrHeaders).parseInsertAdjacentHtml().select("li.mod-episode-item")
+                    val episodes = client.get(pageUrl, xhrHeaders, Fetch.XHR).parseInsertAdjacentHtml().select("li.mod-episode-item")
                     episodes.mapNotNullTo(this) {
                         val link = it.selectFirst("a.mod-episode-link") ?: return@mapNotNullTo null
                         val isLocked = it.hasClass("js-modal") || it.selectFirst(".mod-episode-price:not(:has(.mod-episode-point--free))") != null
@@ -211,7 +212,7 @@ abstract class Yanmaga :
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/$workPath/${chapter.memo["name"]!!.string}/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         if (document.selectFirst(".ga-rental-modal-sign-up") != null) {
             throw Exception("このストーリーを読むには WebView でログイン")

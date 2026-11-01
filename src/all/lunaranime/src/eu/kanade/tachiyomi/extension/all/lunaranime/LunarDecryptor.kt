@@ -2,8 +2,8 @@ package eu.kanade.tachiyomi.extension.all.lunaranime
 
 import android.util.Base64
 import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.sha256
 import org.jsoup.nodes.Document
-import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -44,7 +44,7 @@ class LunarDecryptor(private val serenity: LunarSerenity) {
     }
 
     private fun blend(axis: String, pitch: String): IntArray {
-        val digest = sha256(axis + SEPARATOR + pitch)
+        val digest = (axis + SEPARATOR + pitch).sha256()
         val size = maxOf(axis.length, pitch.length)
 
         return IntArray(size) { i ->
@@ -71,7 +71,7 @@ class LunarDecryptor(private val serenity: LunarSerenity) {
         for (material in listOf(base + THUMBPRINT_SEPARATOR + serenity.thumbprint, base)) {
             val plaintext = try {
                 Cipher.getInstance("AES/CBC/PKCS5Padding").run {
-                    init(Cipher.DECRYPT_MODE, SecretKeySpec(sha256(material), "AES"), IvParameterSpec(ByteArray(16)))
+                    init(Cipher.DECRYPT_MODE, SecretKeySpec(material.sha256(), "AES"), IvParameterSpec(ByteArray(16)))
                     String(doFinal(ciphertext), Charsets.UTF_8)
                 }
             } catch (_: Exception) {
@@ -84,8 +84,6 @@ class LunarDecryptor(private val serenity: LunarSerenity) {
     }
 
     // ============================ Utilities ============================
-
-    private fun sha256(text: String): ByteArray = MessageDigest.getInstance("SHA-256").digest(text.toByteArray())
 
     private fun randomString(length: Int) = String(CharArray(length) { ALPHABET[Random.nextInt(ALPHABET.length)] })
 

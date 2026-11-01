@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -26,7 +27,7 @@ abstract class TaimuMangas : KeiSource() {
 
     override fun Headers.Builder.configureHeaders() = set("Accept", "application/json")
 
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get(libraryUrl(page, sort = "rating"))
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get(libraryUrl(page, sort = "rating"), Fetch.XHR)
         .parseAs<LibraryResponse>()
         .toMangasPage()
 
@@ -37,11 +38,11 @@ abstract class TaimuMangas : KeiSource() {
             .addQueryParameter("adult_mode", "true")
             .build()
 
-        return client.get(url).parseAs<UpdatesResponse>().toMangasPage()
+        return client.get(url, Fetch.XHR).parseAs<UpdatesResponse>().toMangasPage()
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = client
-        .get(libraryUrl(page, query = query.takeIf(String::isNotBlank), filters = filters))
+        .get(libraryUrl(page, query = query.takeIf(String::isNotBlank), filters = filters), Fetch.XHR)
         .parseAs<LibraryResponse>()
         .toMangasPage()
 
@@ -49,7 +50,7 @@ abstract class TaimuMangas : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "series") return null
 
         val identifier = url.pathSegments.getOrNull(1)?.takeIf(String::isNotBlank) ?: return null
-        return client.get("$API_BASE_URL/series/$identifier").parseAs<SeriesDetail>().toSManga()
+        return client.get("$API_BASE_URL/series/$identifier", Fetch.XHR).parseAs<SeriesDetail>().toSManga()
     }
 
     override suspend fun fetchMangaUpdate(
@@ -67,19 +68,19 @@ abstract class TaimuMangas : KeiSource() {
         )
     }
 
-    private suspend fun getMangaDetails(manga: SManga): SManga = client.get("$API_BASE_URL/series/${extractIdentifier(manga.url)}")
+    private suspend fun getMangaDetails(manga: SManga): SManga = client.get("$API_BASE_URL/series/${extractIdentifier(manga.url)}", Fetch.XHR)
         .parseAs<SeriesDetail>()
         .toSManga()
 
     private suspend fun getChapterList(manga: SManga): List<SChapter> {
         val identifier = extractIdentifier(manga.url)
         val chapters = mutableListOf<ChapterSummary>()
-        var chapterPage = client.get(chapterListUrl(identifier, 1)).parseAs<ChapterListResponse>()
+        var chapterPage = client.get(chapterListUrl(identifier, 1), Fetch.XHR).parseAs<ChapterListResponse>()
 
         chapters += chapterPage.items
 
         while (chapterPage.hasMore) {
-            chapterPage = client.get(chapterListUrl(identifier, chapterPage.page + 1)).parseAs<ChapterListResponse>()
+            chapterPage = client.get(chapterListUrl(identifier, chapterPage.page + 1), Fetch.XHR).parseAs<ChapterListResponse>()
             chapters += chapterPage.items
         }
 
@@ -91,7 +92,7 @@ abstract class TaimuMangas : KeiSource() {
             .addQueryParameter("adult", "true")
             .build()
 
-        return client.get(url)
+        return client.get(url, Fetch.XHR)
             .parseAs<ChapterDetailResponse>()
             .pages
             .sortedBy { it.number }

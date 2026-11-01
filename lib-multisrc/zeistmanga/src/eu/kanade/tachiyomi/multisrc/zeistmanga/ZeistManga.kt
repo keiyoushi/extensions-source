@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -53,7 +54,7 @@ abstract class ZeistManga : KeiSource() {
     protected open val popularMangaSelectorUrl = "figcaption > a"
 
     override suspend fun getPopularManga(page: Int) = if (supportsLatest) {
-        parsePopularManga(client.get(popularMangaUrl(page)))
+        parsePopularManga(client.get(popularMangaUrl(page), Fetch.DOCUMENT))
     } else {
         getLatestUpdates(page)
     }
@@ -79,14 +80,14 @@ abstract class ZeistManga : KeiSource() {
             .build().toString()
     }
 
-    override suspend fun getLatestUpdates(page: Int) = parseSearchManga(client.get(latestUpdatesUrl(page)))
+    override suspend fun getLatestUpdates(page: Int) = parseSearchManga(client.get(latestUpdatesUrl(page), Fetch.XHR))
 
     open fun parseLastestUpdates(response: Response) = parseSearchManga(response)
 
     // Search
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.pathSegments.size < 3) return null
-        val doc = client.get(url).asJsoup()
+        val doc = client.get(url, Fetch.DOCUMENT).asJsoup()
         return mangaDetailsParse(doc).apply {
             if (title.isEmpty()) {
                 title = doc.selectFirst("meta[property='og:title']")!!.attr("content")
@@ -136,7 +137,7 @@ abstract class ZeistManga : KeiSource() {
             url
         }.build().toString().replaceLast("q=", "q=label:$mangaCategory+")
 
-        return parseSearchManga(client.get(searchUrl))
+        return parseSearchManga(client.get(searchUrl, Fetch.XHR))
     }
 
     protected open val excludedCategories: List<String> = listOf("Anime", "Novel", "Novela")
@@ -171,7 +172,7 @@ abstract class ZeistManga : KeiSource() {
             coroutineScope {
                 val mangaDeferred = async {
                     if (fetchDetails) {
-                        val doc = client.get(getMangaUrl(manga)).asJsoup()
+                        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
                         mangaDetailsParse(doc).apply { memo = manga.memo }
                     } else {
                         manga
@@ -181,7 +182,7 @@ abstract class ZeistManga : KeiSource() {
                 SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
             }
         } else {
-            val doc = client.get(getMangaUrl(manga)).asJsoup()
+            val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
             val url = getChapterFeedUrl(doc, manga.title)
 
             val updatedManga = mangaDetailsParse(doc).apply {
@@ -285,7 +286,7 @@ abstract class ZeistManga : KeiSource() {
             .setQueryParameter("start-index", startIndex.toString())
             .setQueryParameter("max-results", maxResults.toString()).build().toString()
 
-        val res = client.get(paginationUrl)
+        val res = client.get(paginationUrl, Fetch.XHR)
         return res.parseAs<ZeistMangaDto>()
     }
 
@@ -393,7 +394,7 @@ abstract class ZeistManga : KeiSource() {
     // Pages
     protected open val pageListSelector = "div.check-box div.separator"
 
-    override suspend fun getPageList(chapter: SChapter) = pageListParse(client.get(getChapterUrl(chapter)).asJsoup())
+    override suspend fun getPageList(chapter: SChapter) = pageListParse(client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup())
 
     open fun pageListParse(document: Document): List<Page> {
         val images = document.select(pageListSelector)

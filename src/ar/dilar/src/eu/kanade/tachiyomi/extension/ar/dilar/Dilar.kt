@@ -7,30 +7,28 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.JSON_MEDIA_TYPE
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
+import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import okhttp3.Headers
-import okhttp3.RequestBody.Companion.toRequestBody
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
 abstract class Dilar : KeiSource() {
-    private val ecies = Ecies()
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
-        add("X-DH-Pub", ecies.clientPubB64)
-        add("X-Crypto-Caps", "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15")
-    }
 
     // Popular
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$baseUrl/api/rankings")
+        val response = client.get("$baseUrl/api/rankings", Fetch.XHR)
         val data = response.parseAs<RankingsDto>()
         val entries = data.topSeries
             .filterNot { it.isNovel() }
@@ -41,7 +39,7 @@ abstract class Dilar : KeiSource() {
     // Latest
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val response = client.get("$baseUrl/api/series?page=$page")
+        val response = client.get("$baseUrl/api/series?page=$page", Fetch.XHR)
         val data = response.parseAs<SeriesListDto>()
         val entries = data.series
             .filterNot { it.isNovel() }
@@ -52,14 +50,46 @@ abstract class Dilar : KeiSource() {
     // Search
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val body = SearchRequestDto(query, page).toJsonRequestBody()
-        val response = client.post("$baseUrl/api/search/filter", body)
+        val type = filters.firstInstanceOrNull<TypeFilter>()
+        val categories = filters.filterIsInstance<CategoryFilter>()
+        val body = SearchRequestDto(
+            query = query,
+            page = page,
+            seriesType = IncludeExcludeDto(type?.included.orEmpty(), type?.excluded.orEmpty() + NOVEL_TYPE),
+            categories = IncludeExcludeDto(
+                categories.flatMap { it.included }.map(String::toInt),
+                categories.flatMap { it.excluded }.map(String::toInt),
+            ),
+            oneshot = filters.firstInstanceOrNull<OneshotFilter>()?.state ?: false,
+            storyStatus = IncludeExcludeDto(filters.firstInstanceOrNull<StoryStatusFilter>()?.checked.orEmpty(), emptyList()),
+            translationStatus = IncludeExcludeDto(filters.firstInstanceOrNull<TranslationStatusFilter>()?.checked.orEmpty(), emptyList()),
+            over17 = filters.firstInstanceOrNull<Over17Filter>()?.toValue(),
+        ).toJsonRequestBody()
+        val response = client.post("$baseUrl/api/search/filter", Fetch.XHR, body)
         val data = response.parseAs<SearchListDto>()
-        val entries = data.rows.filterNot { it.isNovel() }
-            .map { it.toSManga() }
 
-        return MangasPage(entries, data.hasNextPage)
+        return MangasPage(data.rows.map { it.toSManga() }, data.hasNextPage)
     }
+
+    // Filters
+
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData() = client.get("$baseUrl/api/categories", Fetch.XHR)
+        .parseAs<List<CategoryGroupDto>>()
+        .toJsonElement()
+
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        listOf(
+            TypeFilter(),
+            StoryStatusFilter(),
+            TranslationStatusFilter(),
+            OneshotFilter(),
+            Over17Filter(),
+        ) + data?.parseAs<List<CategoryGroupDto>>().orEmpty().map { group ->
+            CategoryFilter(group.name, group.categories.map { it.name to it.id })
+        },
+    )
 
     // Details & Chapters
 
@@ -73,17 +103,17 @@ abstract class Dilar : KeiSource() {
     ): SMangaUpdate = coroutineScope {
         val mangaDeferred = async {
             if (!fetchDetails) return@async manga
-            client.get("$baseUrl/api/series/${manga.getMangaId()}")
+            client.get("$baseUrl/api/series/${manga.getMangaId()}", Fetch.XHR)
                 .parseAs<SeriesDto>()
                 .toSManga()
         }
 
         val chaptersDeferred = async {
             if (!fetchChapters) return@async chapters
-            val response = client.get("$baseUrl/api/series/${manga.getMangaId()}/chapters")
+            val response = client.get("$baseUrl/api/series/${manga.getMangaId()}/chapters", Fetch.XHR)
             response.parseAs<ChapterListDto>().chapters.flatMap { chapter ->
                 chapter.releases.map { it.toSChapter(chapter, manga.url) }
-            }
+            }.sortedByDescending { it.chapter_number }
         }
 
         SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
@@ -91,21 +121,55 @@ abstract class Dilar : KeiSource() {
 
     // Pages
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/reader/${chapter.url.substringBeforeLast("#")}"
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl.toHttpUrl().newBuilder()
+        .addPathSegment("reader")
+        .addPathSegments(chapter.url.substringBeforeLast("#"))
+        .addQueryParameter("release", chapter.url.substringAfterLast("#"))
+        .build()
+        .toString()
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterUrl = "$baseUrl/api/chapters/${chapter.url.substringAfterLast("#")}"
-        val body = "{}".toRequestBody(JSON_MEDIA_TYPE)
-        val unlock = client.post("$chapterUrl/unlock/free", body).parseAs<UnlockDto>()
-        val chapterHeaders = headers.newBuilder().set("X-Unlock-Free-Chapter", unlock.token).build()
-        val encrypted = client.get(chapterUrl, chapterHeaders).parseAs<EncryptedResponseDto>()
+        val bridge = List(12) { ('a'..'z').random() }.joinToString("")
+        val releaseId = chapter.url.substringAfterLast("#")
 
-        val data = ecies.decrypt(encrypted).parseAs<PageListDto>()
+        val data = runWebView<String> {
+            domStorageEnabled = true
+            blockImages = true
+            userAgent = headers["User-Agent"]!!
+            webMessageBridge(bridge, setOf(baseUrl)) { resolve(it) }
+            injectAtDocumentStart(captureScript(bridge, releaseId), setOf(baseUrl))
+            loadUrl(getChapterUrl(chapter))
+        }.parseAs<PageListDto>()
+
         return data.pages.sortedBy { it.order }
             .mapIndexed { index, page ->
-                Page(index, imageUrl = "$baseUrl/uploads/releases/${data.storageKey}/hq/${page.url}")
+                val imageUrl = baseUrl.toHttpUrl().newBuilder()
+                    .addPathSegments("uploads/releases/${data.storageKey}/hq/${page.url}")
+                    .addQueryParameter("t", data.mediaToken)
+                    .build()
+                    .toString()
+                Page(index, imageUrl = imageUrl)
             }
     }
+
+    // The chapter response is encrypted with a scheme the server keeps rotating (and it ignores
+    // X-Crypto-Caps), so let the site's reader decrypt it and grab the result as it gets parsed.
+    private fun captureScript(bridge: String, releaseId: String) = """
+        (() => {
+            const parse = JSON.parse;
+            JSON.parse = function () {
+                const result = parse.apply(this, arguments);
+                if (result && String(result.id) === ${releaseId.toJsonString()} && result.storage_key && Array.isArray(result.pages)) {
+                    window.$bridge.postMessage(JSON.stringify({
+                        storage_key: result.storage_key,
+                        media_token: result.media_token,
+                        pages: result.pages,
+                    }));
+                }
+                return result;
+            };
+        })();
+    """.trimIndent()
 
     // common
 
@@ -115,5 +179,9 @@ abstract class Dilar : KeiSource() {
         val thumbnail = "large_${cover.substringBeforeLast(".")}.webp"
 
         return "$baseUrl/uploads/manga/cover/$mangaId/$thumbnail"
+    }
+
+    companion object {
+        private const val NOVEL_TYPE = "99"
     }
 }

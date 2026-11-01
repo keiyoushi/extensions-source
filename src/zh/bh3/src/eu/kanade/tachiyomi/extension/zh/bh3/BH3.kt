@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -27,7 +28,7 @@ abstract class BH3 : KeiSource() {
         .followRedirects(true)
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val mangas = client.get("$baseUrl/book").asJsoup().select("a[href*=book]").map { element ->
+        val mangas = client.get("$baseUrl/book", Fetch.DOCUMENT).asJsoup().select("a[href*=book]").map { element ->
             SManga.create().apply {
                 url = "/book/${element.selectFirst("div.container")?.attr("id").orEmpty()}"
                 title = element.selectFirst("div.container-title")?.text().orEmpty()
@@ -49,7 +50,7 @@ abstract class BH3 : KeiSource() {
     ): SMangaUpdate = coroutineScope {
         val details = async {
             if (!fetchDetails) return@async manga
-            val document = client.get(getMangaUrl(manga)).asJsoup()
+            val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
             manga.apply {
                 thumbnail_url = document.selectFirst("img.cover")?.attr("abs:src")
                 description = document.selectFirst("div.detail_info1")?.text()
@@ -58,12 +59,12 @@ abstract class BH3 : KeiSource() {
         }
         val chapterList = async {
             if (!fetchChapters) return@async chapters
-            client.get(baseUrl + manga.url + "/get_chapter").parseAs<List<Dto>>().map { it.toSChapter() }
+            client.get(baseUrl + manga.url + "/get_chapter", Fetch.XHR).parseAs<List<Dto>>().map { it.toSChapter() }
         }
         SMangaUpdate(details.await(), chapterList.await())
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup().select("img.lazy.comic_img").mapIndexed { i, el ->
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup().select("img.lazy.comic_img").mapIndexed { i, el ->
         Page(i, imageUrl = el.attr("data-original"))
     }
 }

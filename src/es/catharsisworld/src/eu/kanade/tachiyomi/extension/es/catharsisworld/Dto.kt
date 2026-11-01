@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import kotlin.time.Instant
 
 @Serializable
@@ -33,19 +34,20 @@ class MangaDto(
     }
 
     fun toSMangaDetails(baseUrl: String) = toSManga(baseUrl).apply {
-        genre = (listOfNotNull(tipo) + generos.map { it.genre.nombre }).joinToString()
+        genre = (listOfNotNull(tipo?.replaceFirstChar(Char::uppercase)) + generos.map { it.genre.nombre }).joinToString().takeIf { it.isNotEmpty() }
         description = buildString {
             descripcion?.let { append(it.trim()) }
             val altNames = listOfNotNull(nombreAlt1, nombreAlt2).filter(String::isNotBlank)
             if (altNames.isNotEmpty()) {
                 if (isNotEmpty()) append("\n\n")
-                append("Nombres alternativos:\n", altNames.joinToString("\n"))
+                append("**Nombres alternativos:**\n", altNames.joinToString("\n") { "- $it" })
             }
-        }
+        }.takeIf { it.isNotEmpty() }
         status = when (estado) {
             "curso" -> SManga.ONGOING
             "pausado" -> SManga.ON_HIATUS
             "terminado" -> SManga.COMPLETED
+            "abandonado" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
     }
@@ -82,4 +84,75 @@ class ChapterDto(
 }
 
 @Serializable
-class PagesDto(val paginas: List<String>)
+class PagesDto(
+    val paginas: List<JsonElement>,
+    val chapterSessionToken: String,
+)
+
+@Serializable
+class PageTicketRequest(
+    private val pageIndex: Int,
+    private val sessionToken: String,
+)
+
+@Serializable
+class PageTicketResponse(
+    val signedToken: String,
+    val scrambleKey: String? = null,
+    val xorByte: Int,
+)
+
+@Serializable
+class ChapterTokenPayload(
+    val cid: Int,
+    val exp: Long,
+)
+
+@Serializable
+class SystemDto(
+    @SerialName("cap_sitekey") val capSitekey: String,
+    @SerialName("cap_api_endpoint") val capApiEndpoint: String,
+)
+
+@Serializable
+class CapChallengeResponse(
+    val challenge: CapChallenge,
+    val token: String,
+)
+
+@Serializable
+class CapChallenge(
+    @SerialName("c") val count: Int,
+    @SerialName("s") val saltSize: Int,
+    @SerialName("d") val difficulty: Int,
+)
+
+@Serializable
+class CapRedeemRequest(
+    private val token: String,
+    private val solutions: List<Int>,
+)
+
+@Serializable
+class CapRedeemResponse(
+    val success: Boolean,
+    val token: String? = null,
+)
+
+@Serializable
+class ApiErrorDto(
+    val code: String? = null,
+    val retryAfterMs: Long? = null,
+)
+
+@Serializable
+class ReaderPassRequest(
+    private val token: String,
+    private val sitekey: String,
+)
+
+@Serializable
+class ReaderPassDto(
+    val pass: String,
+    val expiresAt: Long,
+)

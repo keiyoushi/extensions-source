@@ -4,7 +4,6 @@ import androidx.preference.EditTextPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -14,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -28,7 +28,6 @@ import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 
 @Source
 abstract class Atsumaru :
@@ -40,7 +39,6 @@ abstract class Atsumaru :
     }
 
     override fun Headers.Builder.configureHeaders() = apply {
-        add("Accept", "*/*")
         add("Content-Type", "application/json")
     }
 
@@ -53,6 +51,7 @@ abstract class Atsumaru :
         val data = client.get(
             "$baseUrl/api/home2/popular?offset=$offset&limit=$BROWSE_LIMIT" +
                 "&types=Manga,Manwha,Manhua,OEL&mediums=Comic&timeframe=daily${get18Mode()}${excludedGenresQuery()}",
+            Fetch.XHR,
         ).parseAs<BrowseMangaDto>()
 
         return MangasPage(data.items.map { it.toSManga(baseUrl) }, true)
@@ -65,6 +64,7 @@ abstract class Atsumaru :
         val data = client.get(
             "$baseUrl/api/home2/recentlyUpdated?offset=$offset&limit=$BROWSE_LIMIT" +
                 "&types=Manga,Manwha,Manhua,OEL&mediums=Comic${get18Mode()}${excludedGenresQuery()}",
+            Fetch.XHR,
         ).parseAs<BrowseMangaDto>()
 
         return MangasPage(data.items.map { it.toSManga(baseUrl) }, true)
@@ -212,7 +212,7 @@ abstract class Atsumaru :
             addQueryParameter("per_page", "40")
         }.build()
 
-        val body = client.get(url).body.string()
+        val body = client.get(url, Fetch.XHR).body.string()
 
         return if (body.contains("\"hits\"")) {
             val data = body.parseAs<SearchResultsDto>()
@@ -241,7 +241,7 @@ abstract class Atsumaru :
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val filters = client.get("$baseUrl/api/explore/availableFilters").parseAs<FilterData>()
+        val filters = client.get("$baseUrl/api/explore/availableFilters", Fetch.XHR).parseAs<FilterData>()
         return filters.toJsonElement()
     }
 
@@ -272,7 +272,7 @@ abstract class Atsumaru :
     ): SMangaUpdate = coroutineScope {
         val detailsDeferred = async {
             if (fetchDetails || fetchChapters) {
-                client.get("$baseUrl/api/manga/page?id=${manga.url}")
+                client.get("$baseUrl/api/manga/page?id=${manga.url}", Fetch.XHR)
                     .parseAs<MangaObjectDto>()
                     .mangaPage
             } else {
@@ -281,7 +281,7 @@ abstract class Atsumaru :
         }
         val chaptersDeferred = async {
             if (fetchChapters) {
-                client.get("$baseUrl/api/manga/allChapters?mangaId=${manga.url}")
+                client.get("$baseUrl/api/manga/allChapters?mangaId=${manga.url}", Fetch.XHR)
                     .parseAs<AllChaptersDto>()
             } else {
                 null
@@ -335,7 +335,7 @@ abstract class Atsumaru :
 
     override val supportsRelatedMangas = true
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get("$baseUrl/api/manga/page?id=${manga.url}")
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get("$baseUrl/api/manga/page?id=${manga.url}", Fetch.XHR)
         .parseAs<MangaObjectDto>()
         .mangaPage
         .recommendations(baseUrl)
@@ -356,7 +356,7 @@ abstract class Atsumaru :
             .addQueryParameter("chapterId", name)
             .build()
 
-        return client.get(url).parseAs<PageObjectDto>().readChapter.pages.mapIndexed { index, page ->
+        return client.get(url, Fetch.XHR).parseAs<PageObjectDto>().readChapter.pages.mapIndexed { index, page ->
             val imageUrl = when {
                 page.image.startsWith("http") -> page.image
                 page.image.startsWith("//") -> "https:${page.image}"
@@ -364,14 +364,6 @@ abstract class Atsumaru :
             }
             Page(index, imageUrl = imageUrl.replaceFirst(PROTOCOL_REGEX, "https://cdn."))
         }
-    }
-
-    override fun imageRequest(page: Page): Request {
-        val imgHeaders = headersBuilder().apply {
-            set("Accept", "image/avif,image/webp,*/*")
-        }.build()
-
-        return GET(page.imageUrl!!, imgHeaders)
     }
 
     private fun get18Mode(): String {

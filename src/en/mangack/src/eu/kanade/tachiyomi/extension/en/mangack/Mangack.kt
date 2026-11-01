@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -48,7 +49,7 @@ abstract class Mangack : KeiSource() {
     // chapter publication, so we scrape /updates/ for true latest-by-chapter.
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val path = if (page <= 1) "/updates/" else "/updates/page/$page/"
-        val document = client.get(baseUrl + path).asJsoup()
+        val document = client.get(baseUrl + path, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".latestmanga .Latest_chapter_update").mapNotNull { card ->
             val link = card.selectFirst("a[href*=/manga/]") ?: return@mapNotNull null
             SManga.create().apply {
@@ -79,7 +80,7 @@ abstract class Mangack : KeiSource() {
         .addQueryParameter("_embed", "wp:featuredmedia")
 
     private suspend fun mangaList(url: HttpUrl, page: Int): MangasPage {
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         val totalPages = response.header("X-WP-TotalPages")?.toIntOrNull() ?: 1
         val list = response.parseAs<List<MangaDto>>().map { dto ->
             SManga.create().apply {
@@ -99,7 +100,7 @@ abstract class Mangack : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetailsParse(doc, manga), chapterListParse(doc))
     }
 
@@ -186,7 +187,7 @@ abstract class Mangack : KeiSource() {
             .addQueryParameter("slug", slug)
             .addQueryParameter("_fields", "id,content")
             .build()
-        val dto = client.get(url).parseAs<List<ChapterContentDto>>().firstOrNull()
+        val dto = client.get(url, Fetch.XHR).parseAs<List<ChapterContentDto>>().firstOrNull()
             ?: return emptyList()
         return IMG_SRC_REGEX.findAll(dto.contentHtml())
             .map { it.groupValues[1] }
@@ -201,11 +202,11 @@ abstract class Mangack : KeiSource() {
 
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
         val genres = async {
-            client.get("$baseUrl/wp-json/wp/v2/Genres?per_page=100&hide_empty=true")
+            client.get("$baseUrl/wp-json/wp/v2/Genres?per_page=100&hide_empty=true", Fetch.XHR)
                 .parseAs<List<TermPayloadDto>>()
         }
         val years = async {
-            client.get("$baseUrl/wp-json/wp/v2/realised?per_page=100&hide_empty=true&orderby=name&order=desc")
+            client.get("$baseUrl/wp-json/wp/v2/realised?per_page=100&hide_empty=true&orderby=name&order=desc", Fetch.XHR)
                 .parseAs<List<TermPayloadDto>>()
         }
         FilterDataDto(genres.await(), years.await()).toJsonElement()

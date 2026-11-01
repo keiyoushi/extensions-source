@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -23,7 +24,6 @@ import java.util.Calendar
 
 @Source
 abstract class NineHentai : KeiSource() {
-
     // The API's image_server still points old galleries at the dead i.9hentai.com host
     private val imageBaseUrl: String
         get() = "https://i.${baseUrl.toHttpUrl().host}/images"
@@ -82,7 +82,7 @@ abstract class NineHentai : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         val path = response.request.url.encodedPath
         val document = response.asJsoup()
 
@@ -121,7 +121,7 @@ abstract class NineHentai : KeiSource() {
         val imageUrl = "$imageBaseUrl/$mangaId"
         var totalPages = fetchMangaById(mangaId).totalPage
 
-        client.get("$imageUrl/preview/${totalPages}t.jpg", ensureSuccess = false).use { response ->
+        client.get("$imageUrl/preview/${totalPages}t.jpg", Fetch.IMAGE, ensureSuccess = false).use { response ->
             if (response.code == 404) totalPages--
         }
 
@@ -183,14 +183,14 @@ abstract class NineHentai : KeiSource() {
             ),
         )
         val payload = SearchRequestPayload(search = searchRequest)
-        val searchResponse = client.post("$baseUrl$SEARCH_URL", payload.toJsonRequestBody())
+        val searchResponse = client.post("$baseUrl$SEARCH_URL", Fetch.XHR, payload.toJsonRequestBody())
             .parseAs<SearchResponse>()
         val mangas = searchResponse.results.map { it.toSManga(coverUrl(it.id)) }
 
         return MangasPage(mangas, searchResponse.totalCount > page)
     }
 
-    private suspend fun fetchMangaById(id: Int): Manga = client.post("$baseUrl$MANGA_URL", IdRequest(id).toJsonRequestBody())
+    private suspend fun fetchMangaById(id: Int): Manga = client.post("$baseUrl$MANGA_URL", Fetch.XHR, IdRequest(id).toJsonRequestBody())
         .parseAs<SingleMangaResponse>()
         .results
 
@@ -224,7 +224,7 @@ abstract class NineHentai : KeiSource() {
         .filter(String::isNotEmpty)
         .mapNotNull { query ->
             val request = TagRequest(query, type)
-            client.post("$baseUrl$TAG_URL", request.toJsonRequestBody())
+            client.post("$baseUrl$TAG_URL", Fetch.XHR, request.toJsonRequestBody())
                 .parseAs<TagResponse>()
                 .results
                 .firstOrNull()

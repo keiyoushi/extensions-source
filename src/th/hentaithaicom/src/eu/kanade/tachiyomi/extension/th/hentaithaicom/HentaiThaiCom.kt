@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -20,14 +21,14 @@ abstract class HentaiThaiCom : KeiSource() {
     private val itemsPerPage = 24
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/top-doujin/").asJsoup()
+        val document = client.get("$baseUrl/top-doujin/", Fetch.DOCUMENT).asJsoup()
         return MangasPage(document.select("a.doujin-item").map(::listingParse), false)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val startId = getStartId()
         val url = "$baseUrl/next-${startId - (page - 1) * itemsPerPage}"
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("a.doujin-item").map(::listingParse)
         return MangasPage(mangas, mangas.size >= itemsPerPage)
     }
@@ -36,7 +37,7 @@ abstract class HentaiThaiCom : KeiSource() {
 
     private suspend fun getStartId(): Int {
         startIdCache?.let { return it }
-        val html = client.get(baseUrl).asJsoup().html()
+        val html = client.get(baseUrl, Fetch.DOCUMENT).asJsoup().html()
         val id = Regex("""/next-(\d+)""").find(html)?.groupValues?.get(1)?.toIntOrNull() ?: 0
         startIdCache = id
         return id
@@ -60,7 +61,7 @@ abstract class HentaiThaiCom : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl/${manga.url}").asJsoup()
+        val document = client.get("$baseUrl/${manga.url}", Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = manga.apply {
             val rawTitle = document.selectFirst("title")?.text()?.trim().orEmpty()
@@ -82,7 +83,7 @@ abstract class HentaiThaiCom : KeiSource() {
         return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/${chapter.url}").asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/${chapter.url}", Fetch.DOCUMENT).asJsoup()
         .select("section#image-container figure.manga-page img")
         .map { it.attr("src") }
         .filter { it.contains("/thai/") }

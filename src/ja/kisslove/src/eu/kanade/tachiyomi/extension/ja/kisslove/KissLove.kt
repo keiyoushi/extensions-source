@@ -9,14 +9,15 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha256
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import java.security.MessageDigest
 import java.util.Locale
 
 @Source
@@ -35,7 +36,7 @@ abstract class KissLove : KeiSource() {
             .addPathSegments("api/manga/trending-daily")
             .build()
 
-        val response = client.get(url, sigAppend())
+        val response = client.get(url, sigAppend(), Fetch.XHR)
         val result = response.parseAs<List<Manga>>()
         val mangas = result.map { it.toSManga() }
 
@@ -51,7 +52,7 @@ abstract class KissLove : KeiSource() {
             .addQueryParameter("limit", "36")
             .build()
 
-        val response = client.get(url, sigAppend())
+        val response = client.get(url, sigAppend(), Fetch.XHR)
         val result = response.parseAs<PagedManga>()
         val mangas = result.items.map { it.toSManga() }
         val hasNextPage = result.currentPage < result.totalPages
@@ -80,7 +81,7 @@ abstract class KissLove : KeiSource() {
             }
         }.build()
 
-        val response = client.get(url, sigAppend())
+        val response = client.get(url, sigAppend(), Fetch.XHR)
         val result = response.parseAs<ListPagedManga>()
         val mangas = result.items.map { it.toSManga() }
         val hasNextPage = result.currentPage < result.totalPages
@@ -99,7 +100,7 @@ abstract class KissLove : KeiSource() {
             .addPathSegment(manga.url)
             .build()
 
-        val response = client.get(url, sigAppend())
+        val response = client.get(url, sigAppend(), Fetch.XHR)
         val result = response.parseAs<Manga>()
         val manga = result.toSManga()
         val chapters = result.chapters
@@ -122,7 +123,7 @@ abstract class KissLove : KeiSource() {
             .addPathSegment(id)
             .build()
 
-        val response = client.get(url, sigAppend())
+        val response = client.get(url, sigAppend(), Fetch.XHR)
         val result = response.parseAs<Chapter>()
 
         return result.content
@@ -142,11 +143,7 @@ abstract class KissLove : KeiSource() {
     private fun sigAppend(): Headers = headersBuilder().apply {
         val timestamp = (System.currentTimeMillis() / 1000).toString()
         val payload = "$timestamp.$CLIENT_ID"
-        val digest = MessageDigest.getInstance("SHA-256")
-        val hashBytes = digest.digest(payload.toByteArray(Charsets.UTF_8))
-        val signature = hashBytes.joinToString("") { byte ->
-            "%02x".format(byte)
-        }
+        val signature = payload.sha256().toHexString()
         add("X-Client-Sig", signature)
         add("X-Client-Ts", timestamp)
     }.build()
@@ -176,7 +173,7 @@ abstract class KissLove : KeiSource() {
             .addPathSegments("api/genres")
             .build()
 
-        val response = client.get(url, sigAppend())
+        val response = client.get(url, sigAppend(), Fetch.XHR)
         val genres = response.parseAs<List<Genre>>()
 
         return genres.toJsonElement()

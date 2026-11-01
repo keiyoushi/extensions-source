@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "4KHD"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     source {

@@ -7,8 +7,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.aesCbc
+import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -17,9 +20,6 @@ import okhttp3.Response
 import okio.ByteString.Companion.decodeBase64
 import java.io.IOException
 import java.util.Locale
-import javax.crypto.Cipher
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 @Source
 abstract class KomikNesia : KeiSource() {
@@ -45,9 +45,7 @@ abstract class KomikNesia : KeiSource() {
             if (raw.size < 16) throw IOException("Encrypted data too short")
             val iv = raw.copyOfRange(0, 16)
             val ciphertext = raw.copyOfRange(16, raw.size)
-            val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-            cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyStr.toByteArray(Charsets.UTF_8), "AES"), IvParameterSpec(iv))
-            return String(cipher.doFinal(ciphertext), Charsets.UTF_8)
+            return ciphertext.aesDecrypt(aesCbc(keyStr.encodeToByteArray(), iv)).decodeToString()
         } catch (e: Exception) {
             throw IOException("Failed to decrypt API response", e)
         }
@@ -99,7 +97,7 @@ abstract class KomikNesia : KeiSource() {
             }
         }.build()
 
-        val payload = client.get(url).parseAs<PayloadDto<List<MangaDto>>>()
+        val payload = client.get(url, Fetch.XHR).parseAs<PayloadDto<List<MangaDto>>>()
         val mangas = payload.data.map { it.toSManga() }
         val hasNextPage = payload.meta?.let { it.page < it.totalPages } ?: false
         return MangasPage(mangas, hasNextPage)
@@ -116,7 +114,7 @@ abstract class KomikNesia : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.url.removePrefix("/komik/").removePrefix("/")
-        val payload = client.get("$apiUrl/comic/$slug")
+        val payload = client.get("$apiUrl/comic/$slug", Fetch.XHR)
             .parseAs<PayloadDto<MangaDto>>()
         return SMangaUpdate(
             payload.data.toSManga().apply { initialized = true },
@@ -129,7 +127,7 @@ abstract class KomikNesia : KeiSource() {
         val pathSegments = url.pathSegments.filter { it.isNotEmpty() }
         if (pathSegments.firstOrNull() != "komik") return null
         val slug = pathSegments.getOrNull(1) ?: return null
-        val payload = client.get("$apiUrl/comic/$slug")
+        val payload = client.get("$apiUrl/comic/$slug", Fetch.XHR)
             .parseAs<PayloadDto<MangaDto>>()
         payload.data.toSManga().apply { initialized = true }
     }.getOrNull()
@@ -144,7 +142,7 @@ abstract class KomikNesia : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val slug = chapter.url.removePrefix("/view/").removePrefix("/")
-        val payload = client.get("$apiUrl/chapters/slug/$slug")
+        val payload = client.get("$apiUrl/chapters/slug/$slug", Fetch.XHR)
             .parseAs<PayloadDto<PageListDto>>()
         return payload.data.images.mapIndexed { idx, img ->
             Page(idx, imageUrl = img)
@@ -157,7 +155,7 @@ abstract class KomikNesia : KeiSource() {
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/contents/genres").parseAs()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/contents/genres", Fetch.XHR).parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data?.parseAs<PayloadDto<List<GenreDto>>>()?.data

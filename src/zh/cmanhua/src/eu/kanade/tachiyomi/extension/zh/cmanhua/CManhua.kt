@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -26,7 +27,6 @@ import java.util.Locale
 
 @Source
 abstract class CManhua : KeiSource() {
-
     // Listing pages are only reachable through ASP.NET postbacks from the previous page
     private var lastListing: Triple<HttpUrl, Int, Document>? = null
 
@@ -39,7 +39,7 @@ abstract class CManhua : KeiSource() {
             val url = "$baseUrl/Modules/Search/SearchHandler.ashx".toHttpUrl().newBuilder()
                 .addQueryParameter("q", query.trim())
                 .build()
-            val mangas = client.get(url).parseAs<List<SearchDto>>().map {
+            val mangas = client.get(url, Fetch.XHR).parseAs<List<SearchDto>>().map {
                 SManga.create().apply {
                     this.url = it.slug
                     title = it.title
@@ -62,7 +62,7 @@ abstract class CManhua : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val details = SManga.create().apply {
             title = document.selectFirst("#MainContent_lblTitle")!!.text()
@@ -105,7 +105,7 @@ abstract class CManhua : KeiSource() {
         return SMangaUpdate(details, chapterList)
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select("img.chapter-image")
         .mapIndexed { index, image ->
             Page(index, imageUrl = image.absUrl("data-src").ifEmpty { image.absUrl("src") })
@@ -129,7 +129,7 @@ abstract class CManhua : KeiSource() {
     private suspend fun fetchMangaList(url: HttpUrl, page: Int): MangasPage {
         val cached = lastListing?.takeIf { it.first == url && it.second <= page }
         var current = cached?.second ?: 1
-        var document = cached?.third ?: client.get(url).asJsoup()
+        var document = cached?.third ?: client.get(url, Fetch.DOCUMENT).asJsoup()
 
         while (current < page) {
             val target = document.nextPageTarget() ?: return MangasPage(emptyList(), false)
@@ -171,7 +171,7 @@ abstract class CManhua : KeiSource() {
             }
         }.build()
 
-        return client.post(form.absUrl("action"), headers, body).asJsoup()
+        return client.post(form.absUrl("action"), headers, Fetch.DOCUMENT, body).asJsoup()
     }
 
     @Serializable

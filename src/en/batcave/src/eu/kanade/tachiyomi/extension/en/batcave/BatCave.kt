@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -20,7 +21,6 @@ import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import okhttp3.FormBody
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -35,13 +35,6 @@ abstract class BatCave : KeiSource() {
     // Use client to sync cookies with WebView and intercept the DLE Guard redirect.
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(DleGuardResolver.interceptor(baseUrl))
-    }
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
-        set("Sec-Fetch-Dest", "document")
-        set("Sec-Fetch-Mode", "navigate")
-        set("Sec-Fetch-Site", "none")
-        set("Sec-Fetch-User", "?1")
     }
 
     // ============================== Popular ==============================
@@ -61,7 +54,7 @@ abstract class BatCave : KeiSource() {
             .add("set_direction_sort", "dle_direction_cat_1")
             .build()
 
-        return parseSearchMangas(client.post(url, body))
+        return parseSearchMangas(client.post(url, Fetch.DOCUMENT, body))
     }
 
     // ============================== Latest ===============================
@@ -73,7 +66,7 @@ abstract class BatCave : KeiSource() {
             }
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val entries = document.select("#content-load > .latest.grid-item").mapNotNull { element ->
             SManga.create().apply {
@@ -82,7 +75,7 @@ abstract class BatCave : KeiSource() {
                     setUrlWithoutDomain(absUrl("href"))
                     title = ownText()
                 }
-                thumbnail_url = element.selectFirst(".latest__img img")?.absUrl("src")
+                thumbnail_url = posterUrl(this.url)
             }
         }
 
@@ -103,7 +96,7 @@ abstract class BatCave : KeiSource() {
                 }
                 addPathSegment("")
             }.build()
-            return parseSearchMangas(client.get(url))
+            return parseSearchMangas(client.get(url, Fetch.DOCUMENT))
         }
 
         var filtersApplied = false
@@ -138,7 +131,7 @@ abstract class BatCave : KeiSource() {
             .add("set_direction_sort", "dle_direction_xfilter")
             .build()
 
-        return parseSearchMangas(client.post(url, body))
+        return parseSearchMangas(client.post(url, Fetch.DOCUMENT, body))
     }
 
     private fun parseSearchMangas(response: Response): MangasPage {
@@ -150,7 +143,7 @@ abstract class BatCave : KeiSource() {
                     setUrlWithoutDomain(absUrl("href"))
                     title = ownText()
                 }
-                thumbnail_url = element.selectFirst(".readed__img img")?.absUrl("data-src")
+                thumbnail_url = posterUrl(url)
             }
         }
         val hasNextPage = document.selectFirst("div.pagination__pages")
@@ -164,7 +157,7 @@ abstract class BatCave : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         url.pathSegments.firstOrNull() ?: return null
-        return parseMangaDetails(client.get(url).asJsoup())
+        return parseMangaDetails(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun fetchMangaUpdate(
@@ -173,7 +166,7 @@ abstract class BatCave : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(parseMangaDetails(doc), parseChapterList(doc))
     }
 
@@ -211,8 +204,7 @@ abstract class BatCave : KeiSource() {
                 val similar = anchor.mapNotNull {
                     val title = it.selectFirst(".poster__title")?.text()?.takeIf { str -> str.isNotBlank() }
                     val url = it.attr("href").takeIf { str -> str.isNotBlank() }
-                    val thumb = it.selectFirst("img")?.attr("data-src")
-                    if (title != null && url != null) RelatedComic(title, url, thumb) else null
+                    if (title != null && url != null) RelatedComic(title, url) else null
                 }
 
                 put("similarComics", similar.toJsonElement())
@@ -251,8 +243,8 @@ abstract class BatCave : KeiSource() {
         return related?.parseAs<List<RelatedComic>>()?.map {
             SManga.create().apply {
                 title = it.name
-                thumbnail_url = "$baseUrl${it.thumbnail}"
                 setUrlWithoutDomain(it.url)
+                thumbnail_url = posterUrl(url)
             }
         } ?: emptyList()
     }
@@ -266,7 +258,7 @@ abstract class BatCave : KeiSource() {
             chapterId = id,
         ).toJsonRequestBody()
 
-        val response = client.post("$baseUrl/engine/ajax/controller.php?mod=api&action=reader/getChapterData", body)
+        val response = client.post("$baseUrl/engine/ajax/controller.php?mod=api&action=reader/getChapterData", Fetch.XHR, body)
         val data = response.parseAs<ChapterApiResponse>().data
         return data.images.mapIndexed { idx, img ->
             val imageUrl = if (img.startsWith("http")) img.trim() else baseUrl + img.trim()
@@ -278,7 +270,7 @@ abstract class BatCave : KeiSource() {
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val doc = client.get("$baseUrl/comix/").asJsoup()
+        val doc = client.get("$baseUrl/comix/", Fetch.DOCUMENT).asJsoup()
         val script = doc.selectFirst("script:containsData(window.__XFILTER__)")?.data()
             ?: error("Filter data not found")
 
@@ -316,6 +308,9 @@ abstract class BatCave : KeiSource() {
         ?.selectFirst("> a")
         ?.text()
         ?.takeIf { it.isNotBlank() }
+
+    // List pages only have 64x96 to 142x212 previews; the full poster is keyed by the comic id.
+    private fun posterUrl(mangaUrl: String) = "$baseUrl/uploads/posts/hd/${mangaUrl.substringAfterLast('/').substringBefore('-')}.webp"
 
     companion object {
         private val intRegex = Regex("""^\d+""")

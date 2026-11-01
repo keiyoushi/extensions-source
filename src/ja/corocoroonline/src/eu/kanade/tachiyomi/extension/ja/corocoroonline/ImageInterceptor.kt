@@ -1,14 +1,10 @@
 package eu.kanade.tachiyomi.extension.ja.corocoroonline
 
+import keiyoushi.utils.aesCbc
+import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.decodeHex
 import okhttp3.Interceptor
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.asResponseBody
-import okio.buffer
-import okio.cipherSource
-import javax.crypto.Cipher
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 class ImageInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -19,14 +15,6 @@ class ImageInterceptor : Interceptor {
         if (fragment.isNullOrEmpty() || !fragment.contains(":") || !response.isSuccessful) return response
 
         val (key, iv) = fragment.split(":")
-        val secretKey = SecretKeySpec(key.decodeHex(), "AES")
-        val ivSpec = IvParameterSpec(iv.decodeHex())
-        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-        cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec)
-        val body = response.body.source().cipherSource(cipher).buffer().asResponseBody(response.body.contentType())
-
-        return response.newBuilder()
-            .body(body)
-            .build()
+        return response.aesDecrypt(aesCbc(key.decodeHex(), iv.decodeHex()))
     }
 }

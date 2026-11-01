@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -19,6 +20,7 @@ import java.net.URI
 abstract class ScanR : KeiSource() {
 
     val cdnUrl = "https://cdn.teamscanr.fr"
+    val imgProxyUrl = "https://img.teamscanr.fr"
     override val supportsLatest = false
     private val seriesDataCache = mutableMapOf<String, Serie>()
 
@@ -94,7 +96,12 @@ abstract class ScanR : KeiSource() {
         val serie = fetchSeriesData(fetchIndex()[slug] ?: "")
         val chapterDetails = serie.chapters[chapterId.replace("-", ".")]
         val cubariProxy = chapterDetails!!.groups.getValue(chapterDetails.groups.keys.first())
-        val images = client.get("https://cubari.moe$cubariProxy").parseAs<List<String>>()
+        val imageUrl = if (cubariProxy.startsWith(imgProxyUrl)) {
+            cubariProxy
+        } else {
+            "https://cubari.moe$cubariProxy"
+        }
+        val images = client.get(imageUrl, Fetch.XHR).parseAs<List<String>>()
         return images.mapIndexed { index, pageData ->
             Page(index, imageUrl = pageData)
         }
@@ -132,12 +139,12 @@ abstract class ScanR : KeiSource() {
     }
 
     // Series utils
-    private suspend fun fetchIndex(): Map<String, String> = client.get("$cdnUrl/index.json").parseAs()
+    private suspend fun fetchIndex(): Map<String, String> = client.get("$cdnUrl/index.json", Fetch.XHR).parseAs()
 
     private suspend fun fetchSeriesData(filename: String): Serie {
         seriesDataCache[filename]?.let { return it }
 
-        val seriesData = client.get("$cdnUrl/$filename").parseAs<Serie>()
+        val seriesData = client.get("$cdnUrl/$filename", Fetch.XHR).parseAs<Serie>()
 
         seriesDataCache[filename] = seriesData
         return seriesData

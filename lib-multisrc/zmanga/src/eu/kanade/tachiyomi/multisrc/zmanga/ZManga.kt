@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -44,7 +45,7 @@ abstract class ZManga : KeiSource() {
     // ============================== Popular ==============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/$searchPath/${pagePathSegment(page)}?order=popular").asJsoup()
+        val document = client.get("$baseUrl/$searchPath/${pagePathSegment(page)}?order=popular", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(popularMangaSelector()).map { element ->
             popularMangaFromElement(element)
         }
@@ -65,7 +66,7 @@ abstract class ZManga : KeiSource() {
     // ============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/$searchPath/${pagePathSegment(page)}?order=update").asJsoup()
+        val document = client.get("$baseUrl/$searchPath/${pagePathSegment(page)}?order=update", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(latestUpdatesSelector()).map { element ->
             latestUpdatesFromElement(element)
         }
@@ -85,7 +86,7 @@ abstract class ZManga : KeiSource() {
         val isProjectPage = filters.filterIsInstance<ProjectFilter>().any { it.toUriPart() == "project-filter-on" }
 
         val document = if (query.isBlank() && isProjectPage) {
-            client.get("$baseUrl$projectPageString/page/$page".toHttpUrl()).asJsoup()
+            client.get("$baseUrl$projectPageString/page/$page".toHttpUrl(), Fetch.DOCUMENT).asJsoup()
         } else {
             val url = "$baseUrl/$searchPath/${pagePathSegment(page)}".toHttpUrl().newBuilder()
             url.addQueryParameter("title", query)
@@ -119,7 +120,7 @@ abstract class ZManga : KeiSource() {
                     else -> {}
                 }
             }
-            client.get(url.build()).asJsoup()
+            client.get(url.build(), Fetch.DOCUMENT).asJsoup()
         }
         val mangas = document.select(searchMangaSelector()).map { element ->
             searchMangaFromElement(element)
@@ -144,7 +145,7 @@ abstract class ZManga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = mangaDetailsParse(document)
 
@@ -207,7 +208,7 @@ abstract class ZManga : KeiSource() {
 
     // =============================== Pages ===============================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(baseUrl + chapter.url).asJsoup())
+    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup())
 
     open fun pageListParse(document: Document): List<Page> = document.select("div.reader-area img:not(noscript img)").mapIndexed { i, img ->
         val urlStr = img.attr("data-lazy-src").ifBlank { img.attr("src") }.replace("\\", "")
@@ -221,7 +222,7 @@ abstract class ZManga : KeiSource() {
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/$searchPath/").asJsoup()
+        val document = client.get("$baseUrl/$searchPath/", Fetch.DOCUMENT).asJsoup()
         return buildJsonArray {
             document.select("div.custom-checkbox input[name=\"genre[]\"]").forEach { element ->
                 buildJsonObject {

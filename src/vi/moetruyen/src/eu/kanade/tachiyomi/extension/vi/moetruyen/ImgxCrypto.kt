@@ -12,17 +12,16 @@ import keiyoushi.lib.aessiv.AesSiv
 import keiyoushi.lib.ece.Ece
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.readIntBigEndian
+import keiyoushi.utils.sha256
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.KeyPairGenerator
-import java.security.MessageDigest
 import java.security.PrivateKey
 import java.security.SecureRandom
 import java.security.interfaces.ECPublicKey
 import java.security.spec.ECGenParameterSpec
 import javax.crypto.Cipher
 import javax.crypto.KeyAgreement
-import javax.crypto.Mac
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
@@ -38,11 +37,6 @@ internal object ImgxCrypto {
         val normalized = value.replace('-', '+').replace('_', '/')
         val padded = normalized + "=".repeat((4 - normalized.length % 4) % 4)
         return Base64.decode(padded, Base64.DEFAULT)
-    }
-
-    fun hmacSha256(key: ByteArray, data: ByteArray): ByteArray = Mac.getInstance("HmacSHA256").run {
-        init(SecretKeySpec(key, "HmacSHA256"))
-        doFinal(data)
     }
 
     fun aesGcmDecrypt(key: ByteArray, iv: ByteArray, aad: ByteArray, ciphertext: ByteArray): ByteArray = Cipher.getInstance("AES/GCM/NoPadding").run {
@@ -180,9 +174,7 @@ internal object ImgxCrypto {
         }
     }
 
-    fun publicKeyHash(publicKeyB64Url: String): String = MessageDigest.getInstance("SHA-256")
-        .digest(base64UrlDecode(publicKeyB64Url))
-        .joinToString("") { "%02x".format(it) }
+    fun publicKeyHash(publicKeyB64Url: String): String = base64UrlDecode(publicKeyB64Url).sha256().toHexString()
 
     fun unwrapGrantKey(grant: ImgxGrant, storageKey: String, fieldName: String): ByteArray {
         val wrappedField = when (fieldName) {

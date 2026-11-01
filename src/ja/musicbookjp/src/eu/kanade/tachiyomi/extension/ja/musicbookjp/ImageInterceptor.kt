@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -57,7 +58,7 @@ class ImageInterceptor(private val client: () -> OkHttpClient) : Interceptor {
         }
     }
 
-    private suspend fun fetchBitmap(url: String, headers: Headers): Bitmap? = client().get(url, headers, ensureSuccess = false).use {
+    private suspend fun fetchBitmap(url: String, headers: Headers): Bitmap? = client().get(url, headers, Fetch.IMAGE, ensureSuccess = false).use {
         if (it.isSuccessful) BitmapFactory.decodeStream(it.body.byteStream()) else null
     }
 

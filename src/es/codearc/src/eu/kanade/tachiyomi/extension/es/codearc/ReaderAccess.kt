@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.es.codearc
 
 import android.util.Base64
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
+import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
@@ -29,7 +31,6 @@ internal suspend fun fetchReaderPages(
     chapterUrl: String,
     pagesUrl: String,
     offset: Int? = null,
-    challengeToken: suspend (String) -> String = { fetchTurnstileToken(chapterUrl, it) },
 ): List<PageDto> {
     val endpoint = pagesUrl.toHttpUrl()
     val readerCookie = client.cookieJar.loadForRequest(endpoint)
@@ -37,17 +38,17 @@ internal suspend fun fetchReaderPages(
     val needsReaderAccess = readerCookie == null ||
         readerCookie.value.let(::tokenExpiry)?.let { it <= Clock.System.now() } == true
     if (needsReaderAccess) {
-        requestReaderAccess(client, headers, chapterUrl, challengeToken)
+        requestReaderAccess(client, headers, chapterUrl)
     }
     val batchSize = 100
     val firstOffset = offset ?: 0
     val url = endpoint.newBuilder().addQueryParameter("offset", firstOffset.toString()).build()
-    var response = client.get(url, headers, ensureSuccess = false)
+    var response = client.get(url, headers, Fetch.XHR, ensureSuccess = false)
     if (response.code == 403 && !needsReaderAccess) {
         val error = response.parseAs<ReaderPagesErrorDto>().error
         check(error == "READER_ACCESS_REQUIRED") { "Reader pages HTTP 403: $error" }
-        requestReaderAccess(client, headers, chapterUrl, challengeToken)
-        response = client.get(url, headers, ensureSuccess = false)
+        requestReaderAccess(client, headers, chapterUrl)
+        response = client.get(url, headers, Fetch.XHR, ensureSuccess = false)
     }
     check(response.isSuccessful) { "Reader pages HTTP ${response.code}" }
     val firstBatch = response.parseAs<ReaderPagesDto>()
@@ -59,7 +60,7 @@ internal suspend fun fetchReaderPages(
         val pendingBatches = remainingOffsets.map { batchOffset ->
             async {
                 val batchUrl = endpoint.newBuilder().addQueryParameter("offset", batchOffset.toString()).build()
-                client.get(batchUrl, headers).parseAs<ReaderPagesDto>()
+                client.get(batchUrl, headers, Fetch.XHR).parseAs<ReaderPagesDto>()
             }
         }
         val pages = firstBatch.items.toMutableList()
@@ -74,31 +75,17 @@ private suspend fun requestReaderAccess(
     client: OkHttpClient,
     headers: Headers,
     chapterUrl: String,
-    challengeToken: suspend (String) -> String,
 ) {
     val accessUrl = chapterUrl.toHttpUrl().newBuilder().encodedPath("/api/mangas/reader-access").query(null).build()
     val accessHeaders = headers.newBuilder().add("X-Codearc-Reader", "1").build()
-    val accessResponse = client.post(accessUrl, accessHeaders, ReaderAccessRequest().toJsonRequestBody(), ensureSuccess = false)
+    val accessResponse = client.post(accessUrl, accessHeaders, Fetch.XHR, ReaderAccessRequest().toJsonRequestBody(), ensureSuccess = false)
     val access = accessResponse.parseAs<ReaderAccessDto>()
     if (access.ok) {
         return
     }
     val sitekey = access.sitekey?.takeIf { access.challenge } ?: error("Reader access was not granted")
-    val token = try {
-        challengeToken(sitekey)
-    } catch (error: TurnstileInteractiveException) {
-        throw IllegalStateException("Turnstile interactivo no compatible", error)
-    } catch (error: TurnstileException) {
-        val message = when (error.message) {
-            "expired" -> "Verificación de Turnstile caducada"
-            "unsupported" -> "Turnstile no compatible con WebView"
-            "timeout" -> "Turnstile tardó demasiado"
-            "error" -> "No se pudo cargar Turnstile"
-            else -> "No se pudo verificar con Turnstile: ${error.message}"
-        }
-        throw IllegalStateException(message, error)
-    }
-    val verified = client.post(accessUrl, accessHeaders, ReaderAccessRequest(token).toJsonRequestBody())
+    val token = getTurnstileToken(chapterUrl, sitekey, action = "reader")
+    val verified = client.post(accessUrl, accessHeaders, Fetch.XHR, ReaderAccessRequest(token).toJsonRequestBody())
         .parseAs<ReaderAccessDto>()
     check(verified.ok) { "Reader verification failed" }
 }
@@ -172,11 +159,9 @@ internal class ReaderPageRefresh(
                     .addPathSegment("cascade")
                     .build()
                 val batchOffset = (page - 1) / 100 * 100
-                val fetchedPages = fetchReaderPages(client, headers, chapterUrl.toString(), readerPagesUrl(chapterUrl), offset = batchOffset) { sitekey ->
-                    fetchTurnstileToken(chapterUrl.toString(), sitekey, chain.call())
-                }.associate { it.orden to it.imagenUrl }.also {
-                    check(page in it) { "Reader page $chapterKey/$page missing from offset $batchOffset" }
-                }
+                val fetchedPages = fetchReaderPages(client, headers, chapterUrl.toString(), readerPagesUrl(chapterUrl), offset = batchOffset)
+                    .associate { it.orden to it.imagenUrl }
+                check(page in fetchedPages) { "Reader page $chapterKey/$page missing from offset $batchOffset" }
                 pages = pages.orEmpty() + fetchedPages
                 refreshedPages[chapterKey] = pages
                 if (refreshedPages.size > 4) refreshedPages.remove(refreshedPages.keys.first())

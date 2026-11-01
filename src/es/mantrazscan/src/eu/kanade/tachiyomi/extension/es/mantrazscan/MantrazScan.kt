@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -51,7 +52,7 @@ abstract class MantrazScan : KeiSource() {
             urlBuilder.addQueryParameter("genero", genre)
         }
 
-        return parseMangaPage(client.get(urlBuilder.build()).asJsoup(), page)
+        return parseMangaPage(client.get(urlBuilder.build(), Fetch.DOCUMENT).asJsoup(), page)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -59,7 +60,7 @@ abstract class MantrazScan : KeiSource() {
             return null
         }
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseMangaDetails(document).apply {
             setUrlWithoutDomain(url.toString())
         }
@@ -71,7 +72,7 @@ abstract class MantrazScan : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(
             manga = parseMangaDetails(document),
@@ -80,7 +81,7 @@ abstract class MantrazScan : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
 
         return IMAGE_REGEX.findAll(document.html())
             .map { it.value }
@@ -96,7 +97,7 @@ abstract class MantrazScan : KeiSource() {
 
     private fun exploreUrl(page: Int) = if (page == 1) "$baseUrl/explorar/" else "$baseUrl/explorar/page/$page/"
 
-    private suspend fun getMangaList(page: Int): MangasPage = parseMangaPage(client.get(exploreUrl(page)).asJsoup(), page)
+    private suspend fun getMangaList(page: Int): MangasPage = parseMangaPage(client.get(exploreUrl(page), Fetch.DOCUMENT).asJsoup(), page)
 
     private fun parseMangaPage(document: Document, page: Int): MangasPage {
         val mangas = document.select("div.s-card")

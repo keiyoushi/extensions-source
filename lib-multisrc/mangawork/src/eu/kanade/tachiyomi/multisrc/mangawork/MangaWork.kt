@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -189,7 +190,7 @@ abstract class MangaWork : KeiSource() {
             }
             .build()
 
-        return client.get(url).asJsoup()
+        return client.get(url, Fetch.DOCUMENT).asJsoup()
     }
 
     protected open fun buildSeriesUrl(page: Int): String = buildString {
@@ -215,7 +216,7 @@ abstract class MangaWork : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val mangaUrl = getMangaUrl(manga)
-        val document = client.get(mangaUrl).asJsoup()
+        val document = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             mangaDetailsParse(document),
             if (fetchChapters) chapterListParse(document, mangaUrl) else chapters,
@@ -326,10 +327,7 @@ abstract class MangaWork : KeiSource() {
 
         return client.post(
             url = buildAdminAjaxUrl(),
-            headers = headersBuilder()
-                .set("Referer", referer)
-                .add("Accept", "*/*")
-                .build(),
+            fetch = Fetch.XHR.from(referer),
             body = body,
         ).asJsoup()
     }
@@ -369,7 +367,7 @@ abstract class MangaWork : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val imageUrls = document.select(pageImageSelector)
             .mapNotNull { element -> element.toImageUrl() }
 

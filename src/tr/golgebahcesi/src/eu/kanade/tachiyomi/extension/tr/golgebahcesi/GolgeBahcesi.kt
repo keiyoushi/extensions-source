@@ -1,4 +1,7 @@
 package eu.kanade.tachiyomi.extension.tr.golgebahcesi
+
+import android.util.Base64
+import android.webkit.WebResourceResponse
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -6,16 +9,30 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.WebViewTimeoutException
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import java.io.ByteArrayInputStream
+import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 @Source
@@ -55,7 +72,7 @@ abstract class GolgeBahcesi : KeiSource() {
             }
         }.build()
 
-        val result = client.get(url).parseAs<SeriesListResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<SeriesListResponse>()
         val mangas = result.data.map { it.toSManga() }
         val hasNextPage = result.pagination?.let { it.currentPage < it.totalPages } ?: false
         return MangasPage(mangas, hasNextPage)
@@ -67,6 +84,7 @@ abstract class GolgeBahcesi : KeiSource() {
 
     override suspend fun fetchRelatedMangaList(manga: SManga) = client.get(
         "$apiBaseUrl/recommendations/series/${manga.url}/similar",
+        Fetch.XHR,
     ).parseAs<Recommended>().recommendations.map { it.toSManga() }
 
     override suspend fun fetchMangaUpdate(
@@ -77,14 +95,14 @@ abstract class GolgeBahcesi : KeiSource() {
     ): SMangaUpdate = coroutineScope {
         val updatedManga = async {
             if (fetchDetails) {
-                client.get("$apiBaseUrl/series/${manga.url}").parseAs<SeriesDto>().toSManga()
+                client.get("$apiBaseUrl/series/${manga.url}", Fetch.XHR).parseAs<SeriesDto>().toSManga()
             } else {
                 manga
             }
         }
         val updatedChapters = async {
             if (fetchChapters) {
-                client.get("$apiBaseUrl/series/${manga.url}/chapters").parseAs<List<ChapterDto>>().map { chapter ->
+                client.get("$apiBaseUrl/series/${manga.url}/chapters", Fetch.XHR).parseAs<List<ChapterDto>>().map { chapter ->
                     SChapter.create().apply {
                         url = "/${chapter.id}/${chapter.seriesSlug}/${chapter.slug}"
                         name = chapter.title
@@ -107,16 +125,92 @@ abstract class GolgeBahcesi : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = "$baseUrl${chapter.url}".toHttpUrl().pathSegments[0]
-        return client.get(
-            "$apiBaseUrl/chapters/$chapterId",
-        ).parseAs<ChapterDto>().pages?.map { page ->
-            Page(page.index, imageUrl = page.url)
-        } ?: emptyList()
+        val dto = client.get("$apiBaseUrl/chapters/$chapterId", Fetch.XHR).parseAs<ChapterDto>()
+        if (dto.isLocked) return emptyList()
+        if (dto.deliverySystem != "secure") {
+            return dto.pages.orEmpty().map { Page(it.index, imageUrl = it.url) }
+        }
+        return captureSecurePages(getChapterUrl(chapter)).mapIndexed { index, data ->
+            val imageUrl = HttpUrl.Builder().scheme("https").host(PAGE_HOST)
+                .addPathSegment(index.toString())
+                .fragment(data)
+                .build()
+            Page(index, imageUrl = imageUrl.toString())
+        }
     }
+
+    // Secure chapters decoded by the site's reader
+    private suspend fun captureSecurePages(chapterUrl: String): List<String> {
+        val bridge = randomName()
+        val channel = randomName()
+        val workerHook = "(${asset("worker_hook.js")})(${channel.toJsonString()});\n"
+        val bootstrap = "(${asset("reader_capture.js")})(window.$bridge, ${channel.toJsonString()}, ${workerHook.toJsonString()});"
+
+        val siteHost = baseUrl.toHttpUrl().host
+        val count = AtomicInteger()
+        val challengeSeen = AtomicBoolean()
+        return try {
+            runWebView(timeout = 2.minutes) {
+                domStorageEnabled = true
+                userAgent = headers["User-Agent"]!!
+
+                val pages = ConcurrentHashMap<Int, String>()
+
+                interceptRequest { request ->
+                    val host = request.url.host
+                    when {
+                        host == "challenges.cloudflare.com" -> {
+                            challengeSeen.set(true)
+                            null
+                        }
+                        host == null || host == siteHost || host.endsWith(".$siteHost") -> null
+                        else -> WebResourceResponse("text/plain", null, 403, "Blocked", null, ByteArrayInputStream(ByteArray(0)))
+                    }
+                }
+                webMessageBridge(bridge, setOf(baseUrl)) { message ->
+                    val data = message.substringAfter(':')
+                    when (message.substringBefore(':')) {
+                        "count" -> count.set(data.toInt())
+                        "page" -> {
+                            val index = data.substringBefore(',').toInt()
+                            require(index in 0 until count.get())
+                            pages[index] = data.substringAfter("base64,")
+                            if (pages.size == count.get()) resolve(List(pages.size) { pages.getValue(it) })
+                        }
+                        "error" -> reject(Exception(data))
+                    }
+                }
+                injectAtDocumentStart(bootstrap, setOf(baseUrl))
+
+                loadUrl(chapterUrl)
+            }
+        } catch (e: WebViewTimeoutException) {
+            if (challengeSeen.get() && count.get() == 0) throw Exception("Turnstile challenge not passed, open the chapter in WebView and try again")
+            throw e
+        }
+    }
+
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
+        val request = chain.request()
+        if (request.url.host != PAGE_HOST) return@addInterceptor chain.proceed(request)
+        val data = request.url.fragment ?: throw IOException("Page data missing, clear chapter cache and try again")
+        val image = Base64.decode(data, Base64.DEFAULT)
+        Response.Builder()
+            .request(request)
+            .protocol(Protocol.HTTP_1_1)
+            .code(200)
+            .message("OK")
+            .body(image.toResponseBody())
+            .build()
+    }
+
+    private fun asset(name: String) = javaClass.getResource("/assets/$name")!!.readText()
+
+    private fun randomName() = List(12) { ('a'..'z').random() }.joinToString("")
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData() = client.get("$apiBaseUrl/genres")
+    override suspend fun fetchFilterData() = client.get("$apiBaseUrl/genres", Fetch.XHR)
         .parseAs<List<Genre>>()
         .toJsonElement()
 
@@ -132,4 +226,8 @@ abstract class GolgeBahcesi : KeiSource() {
                 ?.let(::GenreFilter),
         ),
     )
+
+    companion object {
+        private const val PAGE_HOST = "golgebahcesi-pages.local"
+    }
 }

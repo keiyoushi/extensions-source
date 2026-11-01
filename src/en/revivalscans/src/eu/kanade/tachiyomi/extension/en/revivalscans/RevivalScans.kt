@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
@@ -30,7 +31,7 @@ abstract class RevivalScans :
     // ============================== Popular ==============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val dto = client.get("$baseUrl/series", apiHeaders).extractNextJs<SeriesResponseDto>()
+        val dto = client.get("$baseUrl/series", apiHeaders, Fetch.XHR).extractNextJs<SeriesResponseDto>()
             ?: throw Exception("Failed to extract popular manga")
 
         val mangas = dto.series.map { it.toSManga(baseUrl) }
@@ -58,7 +59,7 @@ abstract class RevivalScans :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val dto = client.get("$baseUrl/series/${manga.url}", apiHeaders).extractNextJs<ManhwaResponseDto>()
+        val dto = client.get("$baseUrl/series/${manga.url}", apiHeaders, Fetch.XHR).extractNextJs<ManhwaResponseDto>()
             ?: throw Exception("Failed to extract manga details")
 
         val showPremium = preferences.getBoolean(PREF_SHOW_PREMIUM, PREF_SHOW_PREMIUM_DEFAULT)
@@ -72,7 +73,7 @@ abstract class RevivalScans :
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val dto = client.get(baseUrl + chapter.url, apiHeaders).extractNextJs<PagesResponseDto>()
+        val dto = client.get(baseUrl + chapter.url, apiHeaders, Fetch.XHR).extractNextJs<PagesResponseDto>()
             ?: throw Exception("Failed to extract pages")
 
         return dto.pages.mapIndexed { index, pageDto ->

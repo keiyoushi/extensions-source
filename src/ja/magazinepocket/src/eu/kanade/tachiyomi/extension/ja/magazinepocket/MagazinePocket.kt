@@ -10,12 +10,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha256
+import keiyoushi.utils.sha512
 import keiyoushi.utils.string
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -27,7 +30,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.io.IOException
-import java.security.MessageDigest
 
 @Source
 abstract class MagazinePocket :
@@ -158,7 +160,7 @@ abstract class MagazinePocket :
                 .add("episode_id_list", episodeIdList)
                 .build()
 
-            client.post("$apiUrl/episode/list", hashedHeaders(mapOf("episode_id_list" to episodeIdList)), body)
+            client.post("$apiUrl/episode/list", hashedHeaders(mapOf("episode_id_list" to episodeIdList)), Fetch.XHR, body)
                 .parseAs<EpisodeListResponse>().episodeList
                 .filter { !hideLocked || !it.isLocked }
                 .map { it.toSChapter() }
@@ -190,19 +192,17 @@ abstract class MagazinePocket :
         }
 
         val joinedParams = paramStrings.joinToString(",")
-        val hash1 = joinedParams.hash("SHA-256")
+        val hash1 = joinedParams.sha256().toHexString()
         val cookieHash = getHashedParam(birthday, expires)
         val finalString = "$hash1$cookieHash"
-        return finalString.hash("SHA-512")
+        return finalString.sha512().toHexString()
     }
 
     private fun getHashedParam(key: String, value: String): String {
-        val keyHash = key.hash("SHA-256")
-        val valueHash = value.hash("SHA-512")
+        val keyHash = key.sha256().toHexString()
+        val valueHash = value.sha512().toHexString()
         return "${keyHash}_$valueHash"
     }
-
-    private fun String.hash(algorithm: String): String = MessageDigest.getInstance(algorithm).digest(this.toByteArray()).toHexString()
 
     private fun hashedHeaders(params: Map<String, String>): Headers = headersBuilder()
         .set("X-Manga-Hash", generateHash(params))
@@ -210,7 +210,7 @@ abstract class MagazinePocket :
 
     private suspend fun hashedGet(url: HttpUrl): Response {
         val queryParams = url.queryParameterNames.associateWith { url.queryParameter(it)!! }
-        return client.get(url, hashedHeaders(queryParams))
+        return client.get(url, hashedHeaders(queryParams), Fetch.XHR)
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

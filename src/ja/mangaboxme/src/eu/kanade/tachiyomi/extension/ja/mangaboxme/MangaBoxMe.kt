@@ -10,6 +10,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.XorInterceptor
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -37,7 +39,7 @@ abstract class MangaBoxMe :
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(GraphQLErrorInterceptor())
-        addInterceptor(ImageInterceptor())
+        addInterceptor(XorInterceptor { it.url.fragment?.let { f -> byteArrayOf(f.toByte()) } })
         addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
@@ -50,6 +52,7 @@ abstract class MangaBoxMe :
 
     override suspend fun getPopularManga(page: Int): MangasPage = client.post(
         apiUrl,
+        Fetch.XHR,
         graphQLBody(
             query = RANKING_QUERY,
             operationName = "Ranking",
@@ -58,6 +61,7 @@ abstract class MangaBoxMe :
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = client.post(
         apiUrl,
+        Fetch.XHR,
         graphQLBody(
             query = NEW_ARRIVALS_QUERY,
             operationName = "NewArrivals",
@@ -67,6 +71,7 @@ abstract class MangaBoxMe :
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val result = client.post(
             apiUrl,
+            Fetch.XHR,
             graphQLBody(
                 query = SEARCH_QUERY,
                 operationName = "Search",
@@ -97,6 +102,7 @@ abstract class MangaBoxMe :
     ): SMangaUpdate {
         val result = client.post(
             "$baseUrl/api/honshi/jsonrpc",
+            Fetch.XHR,
             RpcRequest(
                 jsonrpc = "2.0",
                 method = "get_all_episodes_by_manga_id",
@@ -119,7 +125,7 @@ abstract class MangaBoxMe :
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/reader/${chapter.memo["mangaId"]!!.string}/episodes/${chapter.url}/"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val result = client.get("$baseUrl/api/honshi/episode/${chapter.url}/images").parseAs<ImagesResponse>()
+        val result = client.get("$baseUrl/api/honshi/episode/${chapter.url}/images", Fetch.XHR).parseAs<ImagesResponse>()
         return result.imageUrls.mapIndexed { i, imageUrl ->
             val url = "$baseUrl/api/honshi/image".toHttpUrl().newBuilder()
                 .addQueryParameter("d", imageUrl)

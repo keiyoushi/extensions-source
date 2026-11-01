@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -23,7 +24,6 @@ import kotlinx.coroutines.coroutineScope
 import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import java.net.URLDecoder
 import java.time.Instant
 import java.time.ZoneId
@@ -54,7 +54,7 @@ abstract class PoseidonScans :
     // =============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val apiResponse = client.get("$baseUrl/api/manga/lastchapters?limit=16&page=$page").parseAs<LatestApiResponse>()
+        val apiResponse = client.get("$baseUrl/api/manga/lastchapters?limit=16&page=$page", Fetch.XHR).parseAs<LatestApiResponse>()
 
         val mangas = apiResponse.data.map { apiManga ->
             SManga.create().apply {
@@ -70,7 +70,7 @@ abstract class PoseidonScans :
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val mangaDtos = client.get(baseUrl, rscHeaders).extractNextJs<List<PopularMangaData>>() ?: throw Exception("Cant scape data from Next.js")
+        val mangaDtos = client.get(baseUrl, rscHeaders, Fetch.XHR).extractNextJs<List<PopularMangaData>>() ?: throw Exception("Cant scape data from Next.js")
 
         val mangas = mangaDtos.map { mangaDto ->
             SManga.create().apply {
@@ -97,7 +97,7 @@ abstract class PoseidonScans :
     }
 
     private suspend fun fetchDetails(manga: SManga): SManga {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val mangaDto = document.extractNextJs<MangaDetailsData>() ?: throw Exception("Cant scape data from Next.js")
 
         return SManga.create().apply {
@@ -130,13 +130,13 @@ abstract class PoseidonScans :
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val url = getMangaUrl(manga).toHttpUrl()
-        val rscBody = client.get(url, rscHeaders).use { it.body.string() }
+        val rscBody = client.get(url, rscHeaders, Fetch.XHR).use { it.body.string() }
         val chapters = chapterListRsc(rscBody)
         if (chapters.isNotEmpty()) return chapters
 
         // RSC data can be partial on first load; retry with cache-busting
         val retryUrl = url.newBuilder().addQueryParameter("_", System.currentTimeMillis().toString()).build()
-        val retryBody = client.get(retryUrl, rscHeaders, CacheControl.Builder().noCache().build(), ensureSuccess = false)
+        val retryBody = client.get(retryUrl, rscHeaders, Fetch.XHR, CacheControl.Builder().noCache().build(), ensureSuccess = false)
             .use { it.body.string() }
         return chapterListRsc(retryBody)
     }
@@ -149,12 +149,9 @@ abstract class PoseidonScans :
             SHOW_PREMIUM_DEFAULT,
         )
         return mangaPageDto.manga.chapters.mapNotNull { ch ->
-            val isLocked = ch.isPremium == true && mangaPageDto.isPremiumUser != true
+            val isLocked = ch.isLocked && mangaPageDto.isPremiumUser != true
 
-            if (isLocked && !showPremium) {
-                val premiumUntilDate = ch.premiumUntil?.toEpochMilliseconds() ?: 0L
-                if (System.currentTimeMillis() <= premiumUntilDate) return@mapNotNull null
-            }
+            if (isLocked && !showPremium) return@mapNotNull null
             SChapter.create().apply {
                 val chapterNumberString = ch.number.toString().removeSuffix(".0")
                 val isVolume = ch.isVolume == true || (ch.number % 1 == 0f && ch.title?.contains("volume", ignoreCase = true) == true)
@@ -202,8 +199,8 @@ abstract class PoseidonScans :
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val pageDataDto = client.get(getChapterUrl(chapter), rscHeaders).extractNextJs<PageData>() ?: throw Exception("Cant scape data from Next.js")
-        if (pageDataDto.currentChapter.isPremium) {
+        val pageDataDto = client.get(getChapterUrl(chapter), rscHeaders, Fetch.XHR).extractNextJs<PageData>() ?: throw Exception("Cant scape data from Next.js")
+        if (pageDataDto.currentChapter.isLocked) {
             if (pageDataDto.sessionStatus == "unauthenticated") {
                 throw Exception("This chapter is premium. Please connect via the WebView to view.")
             }
@@ -219,10 +216,6 @@ abstract class PoseidonScans :
         }.sortedBy { it.index }
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
-        .header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-        .build()
-
     // =============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -236,7 +229,7 @@ abstract class PoseidonScans :
             }
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select("div.grid a.block.group").map { element ->
             val url = element.attr("href")

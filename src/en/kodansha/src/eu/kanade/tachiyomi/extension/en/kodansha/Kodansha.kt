@@ -11,29 +11,40 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
+import keiyoushi.utils.xor
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Response
 import java.io.IOException
 
 @Source
 abstract class Kodansha :
     KeiSource(),
     ConfigurableSource {
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override fun OkHttpClient.Builder.configureClient() = addInterceptor(ImageInterceptor())
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::imageIntercept)
+
+    private fun imageIntercept(chain: Interceptor.Chain): Response {
+        val response = chain.proceed(chain.request())
+        if (!response.isSuccessful || chain.request().url.host != CONTENT_HOST) {
+            return response
+        }
+        return response.xor(XOR_KEY)
+    }
 
     override fun Headers.Builder.configureHeaders() = set("azuki-organization-key", ORGANIZATION_KEY)
 
@@ -64,7 +75,7 @@ abstract class Kodansha :
             addQueryParameter("count", PAGE_SIZE.toString())
             addQueryParameter("offset", ((page - 1) * PAGE_SIZE).toString())
         }.build()
-        val result = client.get(url).parseAs<SeriesListDto>()
+        val result = client.get(url, Fetch.XHR).parseAs<SeriesListDto>()
         return MangasPage(result.mangas.map { it.toSManga() }, page * PAGE_SIZE < result.totalCount.toInt())
     }
 
@@ -76,7 +87,7 @@ abstract class Kodansha :
             segments.size >= 3 && segments[0] == "reader" && segments[1] == "series" -> segments[2]
             else -> return null
         }
-        return client.get("$API_URL/manga/slug/$slug/v0").parseAs<SeriesDto>().toSMangaDetails()
+        return client.get("$API_URL/manga/slug/$slug/v0", Fetch.XHR).parseAs<SeriesDto>().toSMangaDetails()
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/series/${manga.memo["slug"]!!.stringOrNull}/"
@@ -95,7 +106,7 @@ abstract class Kodansha :
     ): SMangaUpdate = coroutineScope {
         val details = async {
             if (fetchDetails) {
-                client.get("$API_URL/manga/${manga.url}/v0").parseAs<SeriesDto>().toSMangaDetails()
+                client.get("$API_URL/manga/${manga.url}/v0", Fetch.XHR).parseAs<SeriesDto>().toSMangaDetails()
             } else {
                 manga
             }
@@ -109,14 +120,14 @@ abstract class Kodansha :
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> = coroutineScope {
         val slug = manga.memo["slug"]!!.stringOrNull!!
         val volumes = async {
-            client.get("$API_URL/mangas/${manga.url}/volumes/v0").parseAs<VolumeListDto>()
+            client.get("$API_URL/mangas/${manga.url}/volumes/v0", Fetch.XHR).parseAs<VolumeListDto>()
                 .volumes.associate { it.uuid to it.label }
         }
         val chapterUrl = "$API_URL/mangas/${manga.url}/chapters/v4".toHttpUrl().newBuilder()
             .addQueryParameter("order", "ascending")
             .addQueryParameter("count", "1000")
             .build()
-        val result = client.get(chapterUrl).parseAs<ChapterListDto>().chapters
+        val result = client.get(chapterUrl, Fetch.XHR).parseAs<ChapterListDto>().chapters
         val volumeLabels = volumes.await()
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         result
@@ -126,7 +137,7 @@ abstract class Kodansha :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$API_URL/chapters/${chapter.url}/pages/v1", ensureSuccess = false)
+        val response = client.get("$API_URL/chapters/${chapter.url}/pages/v1", Fetch.XHR, ensureSuccess = false)
         if (response.code == 401 || response.code == 403) {
             response.close()
             throw IOException("This chapter must be purchased on Kodansha to read")
@@ -155,5 +166,7 @@ abstract class Kodansha :
         private const val ORGANIZATION_KEY = "fff36c1f-9b3d-418e-b3a9-d2a537ddac06"
         private const val PAGE_SIZE = 24
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+        private const val CONTENT_HOST = "production.image-content.azuki.co"
+        private const val XOR_KEY = 174.toByte()
     }
 }

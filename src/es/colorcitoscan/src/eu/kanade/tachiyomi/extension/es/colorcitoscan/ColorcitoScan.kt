@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -119,7 +120,7 @@ abstract class ColorcitoScan : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrlOrNull()?.host) return null
         val slug = url.encodedPath.trimEnd('/').substringAfterLast('/')
-        val response = client.get("$baseUrl/api/showProject/$slug").parseAs<ProjectDetailsResponseDto>()
+        val response = client.get("$baseUrl/api/showProject/$slug", Fetch.XHR).parseAs<ProjectDetailsResponseDto>()
         return response.response.toSManga()
     }
 
@@ -130,13 +131,13 @@ abstract class ColorcitoScan : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.url.trimEnd('/').substringAfterLast('/')
-        val response = client.get("$baseUrl/api/showProject/$slug").parseAs<ProjectDetailsResponseDto>()
+        val response = client.get("$baseUrl/api/showProject/$slug", Fetch.XHR).parseAs<ProjectDetailsResponseDto>()
         val project = response.response
         return SMangaUpdate(project.toSManga(), project.toChapterList())
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val images = document.select("img[src*=/serie/], img[src*=%2Fserie%2F]")
             .map { extractDirectImageUrl(it.attr("src")) }
             .distinct()
@@ -146,7 +147,7 @@ abstract class ColorcitoScan : KeiSource() {
         }
     }
 
-    private suspend fun getComicsList(): List<ComicDataDto> = client.get("$baseUrl/api/comics").parseAs<ComicsResponseDto>().response
+    private suspend fun getComicsList(): List<ComicDataDto> = client.get("$baseUrl/api/comics", Fetch.XHR).parseAs<ComicsResponseDto>().response
 
     private fun extractDirectImageUrl(url: String): String = url.toHttpUrlOrNull()?.queryParameter("url") ?: url
 }

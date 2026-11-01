@@ -1,17 +1,16 @@
 package eu.kanade.tachiyomi.extension.vi.panomic
 
 import android.util.Base64
+import keiyoushi.utils.aesCbc
+import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.util.Locale
-import javax.crypto.Cipher
 import javax.crypto.SecretKeyFactory
-import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.PBEKeySpec
-import javax.crypto.spec.SecretKeySpec
 
 object ImageDecryptor {
     private const val PBKDF2_ITERATIONS = 999
@@ -88,12 +87,7 @@ object ImageDecryptor {
         val keyFactory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA512")
         val keyBytes = keyFactory.generateSecret(keySpec).encoded
 
-        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-        val secretKey = SecretKeySpec(keyBytes, "AES")
-        val ivSpec = IvParameterSpec(ivBytes)
-        cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec)
-
-        return String(cipher.doFinal(ciphertext), Charsets.UTF_8)
+        return ciphertext.aesDecrypt(aesCbc(keyBytes, ivBytes)).decodeToString()
     }
 
     private fun extractImagesFromDecryptedHtml(

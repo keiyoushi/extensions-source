@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "StellarSaber"
-    versionCode = 33
+    versionCode = 35
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 

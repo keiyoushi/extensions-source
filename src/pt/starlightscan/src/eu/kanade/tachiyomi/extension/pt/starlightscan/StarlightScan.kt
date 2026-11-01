@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
@@ -25,7 +26,7 @@ abstract class StarlightScan : MangaThemesia() {
     override val sendViewCount = false
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val mangaList = client.get(baseUrl).asJsoup()
+        val mangaList = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
             .select("div.mostRecentMangaCard__listContainer article.mostRecentMangaCard")
             .map { element ->
                 SManga.create().apply {

@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -42,7 +43,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class ScanManga :
     KeiSource(),
     ConfigurableSource {
-
     private val domain get() = baseUrl.toHttpUrl().topPrivateDomain()!!
     private val baseImageUrl get() = "https://static.$domain/img/manga"
     private val baseSearchUrl get() = "https://bqj.$domain/search/quick.json"
@@ -87,7 +87,7 @@ abstract class ScanManga :
 
     // Popular
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val mangas = client.get("$baseUrl/TOP-Manga-Webtoon-47.html").asJsoup().select("#carouselTOPContainer div.top").map { element ->
+        val mangas = client.get("$baseUrl/TOP-Manga-Webtoon-47.html", Fetch.DOCUMENT).asJsoup().select("#carouselTOPContainer div.top").map { element ->
             SManga.create().apply {
                 val titleElement = element.selectFirst("a.atop")!!
 
@@ -102,7 +102,7 @@ abstract class ScanManga :
 
     // Latest
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val mangas = client.get(baseUrl).asJsoup().select("#content_news .publi").map { element ->
+        val mangas = client.get(baseUrl, Fetch.DOCUMENT).asJsoup().select("#content_news .publi").map { element ->
             SManga.create().apply {
                 val mangaElement = element.selectFirst("a.l_manga")!!
 
@@ -120,7 +120,7 @@ abstract class ScanManga :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.topPrivateDomain() != domain || !MANGA_PATH_REGEX.matches(url.encodedPath)) return null
 
-        return mangaDetailsParse(client.get(baseUrl + url.encodedPath).asJsoup()).apply {
+        return mangaDetailsParse(client.get(baseUrl + url.encodedPath, Fetch.DOCUMENT).asJsoup()).apply {
             this.url = url.encodedPath
         }
     }
@@ -135,7 +135,7 @@ abstract class ScanManga :
             .build()
 
         // No results come back as `[]` instead of an object
-        val mangas = client.get(url, searchHeaders).parseAs<MangaSearchDto> { if (it == "[]") """{"title":null}""" else it }
+        val mangas = client.get(url, searchHeaders, Fetch.XHR).parseAs<MangaSearchDto> { if (it == "[]") """{"title":null}""" else it }
             .title?.map {
                 SManga.create().apply {
                     title = it.nomMatch
@@ -154,7 +154,7 @@ abstract class ScanManga :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         // chapterListParse throws for licensed series; don't let that break a details-only refresh
         return SMangaUpdate(
             mangaDetailsParse(document),
@@ -261,7 +261,7 @@ abstract class ScanManga :
         val chapterUrl = getChapterUrl(chapter)
 
         suspend fun fetch(): String? = try {
-            readerClient.get(chapterUrl, readerHeaders, ensureSuccess = false).use { resp ->
+            readerClient.get(chapterUrl, readerHeaders, Fetch.DOCUMENT, ensureSuccess = false).use { resp ->
                 resp.body.string().takeIf { CHAPTER_INFO_REGEX.containsMatchIn(it) }
             }
         } catch (_: Exception) {
@@ -358,6 +358,7 @@ abstract class ScanManga :
             .post(
                 "https://bqj.$domain/lel/$chapterId.json",
                 requestHeaders,
+                Fetch.XHR,
                 LelRequestDto(sme, sml, getFingerprint()).toJsonRequestBody(),
             )
             .use { dataAPI(it.body.string(), chapterId.toInt()) }
@@ -365,7 +366,7 @@ abstract class ScanManga :
         return lelResponse.generateImageUrls().map { Page(it.first, imageUrl = it.second) }
     }
 
-    override fun imageRequest(page: Page): Request = GET(page.imageUrl!!, readerHeaders)
+    override fun getImageRequest(page: Page): Request = GET(page.imageUrl!!, readerHeaders)
 
     private suspend fun getFingerprint(): String {
         var currentValue = preferences.getString("gpu_renderer", null)

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -22,7 +23,7 @@ abstract class Bakai : KeiSource() {
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select("[data-blockid^=app_tools_taMostViewedRecords] [id$=_week_panel] li.ipsData__item").map { element ->
             SManga.create().apply {
@@ -44,7 +45,7 @@ abstract class Bakai : KeiSource() {
         } else {
             "$baseUrl/home/page/$page/"
         }
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select("article.ipsCmsEntries__item").map { element ->
             val a = element.selectFirst(".ipsCmsEntries__header h2 > a")!!
@@ -70,7 +71,7 @@ abstract class Bakai : KeiSource() {
             .addQueryParameter("sortby", "relevancy")
             .build()
 
-        val response = client.get(url, ensureSuccess = false)
+        val response = client.get(url, Fetch.DOCUMENT, ensureSuccess = false)
         if (response.code == 429) {
             response.close()
             throw Exception("Wait 1 second before retrying or login to speed up")
@@ -102,7 +103,7 @@ abstract class Bakai : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         val finalUrl = response.request.url.toString()
         val document = response.asJsoup()
 
@@ -140,7 +141,7 @@ abstract class Bakai : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         // The reader image class has been renamed several times
         // (mangaReaderImage -> mangaReaderImaage -> mangaReaderV2Image),

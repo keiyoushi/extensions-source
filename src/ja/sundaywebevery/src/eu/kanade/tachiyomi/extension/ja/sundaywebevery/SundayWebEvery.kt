@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.ja.sundaywebevery
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 
@@ -23,7 +24,7 @@ abstract class SundayWebEvery : GigaViewer() {
     override suspend fun fetchCollection(ids: List<String>): List<SManga> {
         if (ids.isNotEmpty()) return super.fetchCollection(ids)
 
-        return client.get("$baseUrl/series/yoru-sunday").asJsoup().select("ul.webry-series-list li a.webry-series-item-link").map {
+        return client.get("$baseUrl/series/yoru-sunday", Fetch.DOCUMENT).asJsoup().select("ul.webry-series-list li a.webry-series-item-link").map {
             SManga.create().apply {
                 title = it.selectFirst("h4.series-title")!!.text()
                 thumbnail_url = it.selectFirst("div.thumb-wrapper img")?.absUrl("data-src")

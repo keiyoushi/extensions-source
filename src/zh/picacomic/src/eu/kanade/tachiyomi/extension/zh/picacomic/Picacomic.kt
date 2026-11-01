@@ -12,10 +12,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
@@ -84,9 +87,9 @@ abstract class Picacomic :
     )
 
     // Latest + Popular
-    override suspend fun getPopularManga(page: Int) = parseSearchManga(client.get("$apiUrl/comics?page=$page&s=dd"))
+    override suspend fun getPopularManga(page: Int) = parseSearchManga(client.get("$apiUrl/comics?page=$page&s=dd", Fetch.XHR))
 
-    override suspend fun getLatestUpdates(page: Int) = singlePageParse(client.get("$apiUrl/comics/random"), true)
+    override suspend fun getLatestUpdates(page: Int) = singlePageParse(client.get("$apiUrl/comics/random", Fetch.XHR), true)
 
     private fun singlePageParse(response: Response, isRandom: Boolean = false): MangasPage {
         val comics = response.parseAs<PicaResponse>().data.comics!!.parseAs<List<PicaSearchComic>>()
@@ -133,12 +136,12 @@ abstract class Picacomic :
                 .addQueryParameter("s", sort ?: "dd")
                 .build()
 
-            return parseSearchManga(client.get(url))
+            return parseSearchManga(client.get(url, Fetch.XHR))
         }
 
         // return comics from leaderboard
         if (!rankPath.isNullOrEmpty()) {
-            return singlePageParse(client.get("$apiUrl$rankPath"))
+            return singlePageParse(client.get("$apiUrl$rankPath", Fetch.XHR))
         }
 
         if (query.isEmpty()) {
@@ -150,7 +153,7 @@ abstract class Picacomic :
                 }
                 .build()
 
-            return parseSearchManga(client.get(url))
+            return parseSearchManga(client.get(url, Fetch.XHR))
         }
 
         // return comics from some search
@@ -158,7 +161,7 @@ abstract class Picacomic :
 
         val body = PicaSearchPayload(query, sort ?: "dd").toJsonString().toRequestBody()
 
-        return parseSearchManga(client.post(url, body))
+        return parseSearchManga(client.post(url, Fetch.XHR, body))
     }
 
     private fun parseSearchManga(response: Response): MangasPage {
@@ -211,7 +214,7 @@ abstract class Picacomic :
     }
 
     private suspend fun getMangaDetails(manga: SManga): SManga {
-        val response = client.get(manga.url)
+        val response = client.get(manga.url, Fetch.XHR)
         val comic = response.parseAs<PicaResponse>().data.comic!!
 
         return SManga.create().apply {
@@ -230,7 +233,7 @@ abstract class Picacomic :
     }
 
     private suspend fun getChapterList(manga: SManga): List<SChapter> {
-        val response = client.get("${manga.url}/eps?page=1")
+        val response = client.get("${manga.url}/eps?page=1", Fetch.XHR)
         val eps = response.parseAs<PicaResponse>().data.eps!!
 
         val comicId = manga.url.comicId()
@@ -238,7 +241,7 @@ abstract class Picacomic :
         return coroutineScope {
             val restPages = (2..eps.pages).map { page ->
                 async {
-                    client.get("${manga.url}/eps?page=$page").parseAs<PicaResponse>().data.eps!!.docs
+                    client.get("${manga.url}/eps?page=$page", Fetch.XHR).parseAs<PicaResponse>().data.eps!!.docs
                 }
             }
             listOf(eps.docs) + restPages.awaitAll()
@@ -256,14 +259,14 @@ abstract class Picacomic :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(chapter.url + "/pages?page=1")
+        val response = client.get(chapter.url + "/pages?page=1", Fetch.XHR)
         val firstPage = response.parseAs<PicaResponse>().data.pages!!
 
         return coroutineScope {
             val restPages = (2..firstPage.pages).map { page ->
                 async {
                     val nextUrl = chapter.url + "/pages?page=$page"
-                    client.get(nextUrl).parseAs<PicaResponse>().data.pages!!
+                    client.get(nextUrl, Fetch.XHR).parseAs<PicaResponse>().data.pages!!
                 }
             }
             listOf(firstPage) + restPages.awaitAll()
@@ -351,7 +354,7 @@ abstract class Picacomic :
         val apiKey = basicHeaders["api-key"]
         val path = url.substringAfter("$apiUrl/")
         val raw = "$path$time$nonce${method}$apiKey".lowercase(Locale.ROOT)
-        return hmacSHA256(hmacSha256Key, raw).convertToString()
+        return raw.hmacSha256(hmacSha256Key.encodeToByteArray()).toHexString()
     }
 
     private fun getToken() {
@@ -364,7 +367,7 @@ abstract class Picacomic :
         val body = PicaLoginPayload(username, password).toJsonString().toRequestBody()
 
         val response = client.newCall(
-            POST(url, picaHeaders(url, "POST"), body),
+            POST(url, picaHeaders(url, "POST"), body).newBuilder().fetch(Fetch.XHR).build(),
         ).execute()
         if (!response.isSuccessful) throw IOException("登录失败")
         return response.parseAs<PicaResponse>().data.token!!
@@ -384,9 +387,9 @@ abstract class Picacomic :
         }.toHeaders()
     }
 
-    private suspend fun OkHttpClient.get(url: String) = get(url, picaHeaders(url))
-    private suspend fun OkHttpClient.get(url: HttpUrl) = get(url, picaHeaders(url.toString()))
-    private suspend fun OkHttpClient.post(url: String, body: RequestBody) = post(url, picaHeaders(url, "POST"), body)
+    private suspend fun OkHttpClient.get(url: String) = get(url, picaHeaders(url), Fetch.XHR)
+    private suspend fun OkHttpClient.get(url: HttpUrl) = get(url, picaHeaders(url.toString()), Fetch.XHR)
+    private suspend fun OkHttpClient.post(url: String, body: RequestBody) = post(url, picaHeaders(url, "POST"), Fetch.XHR, body)
 
     private fun Request.applyToken() = newBuilder().header("Authorization", token).build()
 

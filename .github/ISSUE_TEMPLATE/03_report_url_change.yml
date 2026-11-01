@@ -10,7 +10,7 @@ body:
       description: |
         You can find the extension name and version in **Browse → Extensions**.
       placeholder: |
-        Example: "NotRealScans 1.4.1"
+        Example: "NotRealScans 1.6.1"
     validations:
       required: true
 

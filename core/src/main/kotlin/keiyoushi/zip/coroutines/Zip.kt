@@ -2,6 +2,7 @@ package keiyoushi.zip.coroutines
 
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.network.DEFAULT_CACHE_CONTROL
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.zip.Entry
 import keiyoushi.zip.MAX_EOCD_SEARCH
@@ -54,7 +55,7 @@ suspend fun OkHttpClient.zipDirectory(
     headers: Headers,
     cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
 ): ZipDirectory {
-    val response = get(url, headers.newBuilder().set("Range", "bytes=-$MAX_EOCD_SEARCH").build(), cacheControl)
+    val response = get(url, headers.newBuilder().set("Range", "bytes=-$MAX_EOCD_SEARCH").build(), Fetch.NONE, cacheControl)
     val total = response.header("Content-Range")?.substringAfterLast("/")?.toLongOrNull() ?: throw IOException("Missing or invalid Content-Range")
     val tail = response.use { it.body.bytes() }
     return readZipDirectory(tail, total) { rangeSource(url, headers, cacheControl, it) }
@@ -116,4 +117,4 @@ private suspend fun OkHttpClient.rangeSource(
     headers: Headers,
     cacheControl: CacheControl,
     range: LongRange,
-): BufferedSource = get(url, headers.newBuilder().set("Range", "bytes=${range.first}-${range.last}").build(), cacheControl).body.source()
+): BufferedSource = get(url, headers.newBuilder().set("Range", "bytes=${range.first}-${range.last}").build(), Fetch.NONE, cacheControl).body.source()

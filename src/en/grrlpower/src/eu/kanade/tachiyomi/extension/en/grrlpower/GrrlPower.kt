@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -74,7 +75,7 @@ abstract class GrrlPower :
         if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
         val chapterList = (startingYear..currentYear).flatMap { year ->
-            client.get("$baseUrl/archive/?archive_year=$year").asJsoup()
+            client.get("$baseUrl/archive/?archive_year=$year", Fetch.DOCUMENT).asJsoup()
                 .getElementsByClass("archive-date").map {
                     val dateStr = "${it.text()} $year"
                     val link = it.nextElementSibling()!!.child(0)
@@ -92,7 +93,7 @@ abstract class GrrlPower :
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val soup = client.get(getChapterUrl(chapter)).asJsoup()
+        val soup = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val pages = mutableListOf<Page>()
 
         val comicImg = soup.selectFirst("div#comic img")

@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -74,7 +75,7 @@ abstract class CoronaEx :
             }
             .build()
 
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.XHR).toMangasPage()
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -88,7 +89,7 @@ abstract class CoronaEx :
             }
             .build()
 
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.XHR).toMangasPage()
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -102,7 +103,7 @@ abstract class CoronaEx :
                 }
                 .build()
 
-            return client.get(url).toMangasPage()
+            return client.get(url, Fetch.XHR).toMangasPage()
         }
 
         val filter = filters.firstInstance<GenreFilter>()
@@ -116,7 +117,7 @@ abstract class CoronaEx :
             }
             .build()
 
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.XHR).toMangasPage()
     }
 
     private fun Response.toMangasPage(): MangasPage {
@@ -141,7 +142,7 @@ abstract class CoronaEx :
     ): SMangaUpdate = coroutineScope {
         val details = async {
             if (!fetchDetails) return@async manga
-            client.get("$apiUrl/comics/${manga.url}").parseAs<TitleDetails>().toSManga()
+            client.get("$apiUrl/comics/${manga.url}", Fetch.XHR).parseAs<TitleDetails>().toSManga()
         }
 
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
@@ -161,7 +162,7 @@ abstract class CoronaEx :
                         }
                         .build()
 
-                    val result = client.get(url).parseAs<ChapterDetails>()
+                    val result = client.get(url, Fetch.XHR).parseAs<ChapterDetails>()
                     result.resources
                         .filter { !hideLocked || !it.isLocked }
                         .mapTo(this) { it.toSChapter() }
@@ -179,7 +180,7 @@ abstract class CoronaEx :
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/episodes/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val result = client.get("$apiUrl/episodes/${chapter.url}/begin_reading", apiHeaders()).parseAs<ViewerResponse>()
+        val result = client.get("$apiUrl/episodes/${chapter.url}/begin_reading", apiHeaders(), Fetch.XHR).parseAs<ViewerResponse>()
         return result.pages.mapIndexed { index, page ->
             Page(index, imageUrl = page.pageImageUrl)
         }
@@ -220,7 +221,7 @@ abstract class CoronaEx :
             .build()
 
         return try {
-            client.post(url, LoginRequestBody(email, password, true).toJsonRequestBody()).parseAs<LoginResponse>()
+            client.post(url, Fetch.XHR, LoginRequestBody(email, password, true).toJsonRequestBody()).parseAs<LoginResponse>()
         } catch (_: HttpException) {
             loginFailed = true
             null
@@ -233,7 +234,7 @@ abstract class CoronaEx :
             .build()
 
         return try {
-            client.post(url, RefreshRequestBody("refresh_token", refreshToken).toJsonRequestBody()).parseAs<LoginResponse>()
+            client.post(url, Fetch.XHR, RefreshRequestBody("refresh_token", refreshToken).toJsonRequestBody()).parseAs<LoginResponse>()
         } catch (_: HttpException) {
             null
         }

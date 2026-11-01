@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
@@ -71,7 +72,7 @@ abstract class ReaderStore :
             addFilter("priceMax", filters.firstInstanceOrNull<PriceMaxFilter>())
         }.build()
 
-        val result = client.get(url).parseAs<SearchResponse>().response
+        val result = client.get(url, Fetch.XHR).parseAs<SearchResponse>().response
         val mangas = result.docs.map { it.toSManga() }
         return MangasPage(mangas, result.hasNextPage())
     }
@@ -111,7 +112,7 @@ abstract class ReaderStore :
             addQueryParameter("fields", "browserView")
         }.build()
 
-        val items = client.get(url).parseAs<List<MangaResponseItem>>()
+        val items = client.get(url, Fetch.XHR).parseAs<List<MangaResponseItem>>()
 
         return SMangaUpdate(
             items.last().toSManga(baseUrl),
@@ -127,7 +128,7 @@ abstract class ReaderStore :
             .addQueryParameter("redirectPathForReadEnd", "")
             .build()
 
-        return client.get(url).parseAs<TokenResponse>()
+        return client.get(url, Fetch.XHR).parseAs<TokenResponse>()
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -152,8 +153,8 @@ abstract class ReaderStore :
             .build()
 
         val base = "$VIEWER_URL/${token.browserContentsId}"
-        val metaData = async { client.get("$base/meta", viewerHeaders).parseAs<MetaResponse>().data }
-        val cipherKey = async { extractCipherKey(client.get("$base/decrypt", viewerHeaders).use { it.body.string() }) }
+        val metaData = async { client.get("$base/meta", viewerHeaders, Fetch.XHR).parseAs<MetaResponse>().data }
+        val cipherKey = async { extractCipherKey(client.get("$base/decrypt", viewerHeaders, Fetch.SCRIPT).use { it.body.string() }) }
 
         val meta = metaData.await()
         val maxIndex = meta.page.all?.minus(1) ?: throw Exception("Novels are not supported!")

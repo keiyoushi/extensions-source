@@ -11,7 +11,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -51,14 +53,14 @@ abstract class ToonBr :
 
     // ===== Popular =====
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val mangaList = client.get("$apiUrl/api/manga/popular?limit=$PAGE_LIMIT").parseAs<List<MangaDto>>()
+        val mangaList = client.get("$apiUrl/api/manga/popular?limit=$PAGE_LIMIT", Fetch.XHR).parseAs<List<MangaDto>>()
         val mangas = mangaList.map { it.toSManga(cdnUrl) }
         return MangasPage(mangas, false)
     }
 
     // ===== Latest =====
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val mangaList = client.get("$apiUrl/api/manga/latest?limit=$PAGE_LIMIT").parseAs<List<MangaDto>>()
+        val mangaList = client.get("$apiUrl/api/manga/latest?limit=$PAGE_LIMIT", Fetch.XHR).parseAs<List<MangaDto>>()
         val mangas = mangaList.map { it.toSManga(cdnUrl) }
         return MangasPage(mangas, false)
     }
@@ -74,7 +76,7 @@ abstract class ToonBr :
                 append("&categoryId=$categoryId")
             }
         }
-        val result = client.get(url).parseAs<MangaListResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<MangaListResponse>()
         val mangas = result.data.map { it.toSManga(cdnUrl) }
         return MangasPage(mangas, false)
     }
@@ -87,7 +89,7 @@ abstract class ToonBr :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.url.substringAfterLast("/")
-        val mangaDto = client.get("$apiUrl/api/manga/$slug").parseAs<MangaDto>()
+        val mangaDto = client.get("$apiUrl/api/manga/$slug", Fetch.XHR).parseAs<MangaDto>()
 
         val chapterList = mangaDto.chapters
             ?.map { it.toSChapter() }
@@ -100,7 +102,7 @@ abstract class ToonBr :
     // ===== Pages =====
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.url.substringAfterLast("/")
-        val chapterDto = client.get("$apiUrl/api/chapter/$chapterId").parseAs<ChapterDto>()
+        val chapterDto = client.get("$apiUrl/api/chapter/$chapterId", Fetch.XHR).parseAs<ChapterDto>()
         return chapterDto.pages
             ?.mapIndexedNotNull { index, page ->
                 page.imageUrl?.let { Page(index, imageUrl = "$cdnUrl$it") }
@@ -121,7 +123,7 @@ abstract class ToonBr :
     // runs while the client is being built, so it has to use the base client synchronously
     private fun login(email: String, password: String): String {
         val requestBody = LoginRequest(email, password).toJsonRequestBody()
-        val request = POST("$apiUrl/api/auth/login", headers, requestBody)
+        val request = POST("$apiUrl/api/auth/login", headers, requestBody).newBuilder().fetch(Fetch.XHR).build()
         val response = network.client.newCall(request).execute()
         if (!response.isSuccessful) {
             response.close()

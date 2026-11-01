@@ -31,6 +31,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.e4p.E4PInterceptor
 import keiyoushi.lib.e4p.E4PManifestReader
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
@@ -51,7 +52,7 @@ abstract class BookWalker :
     ConfigurableSource,
     BookWalkerPreferences {
 
-    // ID from before the BookWalker migration.
+// ID from before the BookWalker migration.
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(E4PInterceptor())
@@ -144,6 +145,7 @@ abstract class BookWalker :
 
     override suspend fun getPopularManga(page: Int): MangasPage = client.post(
         endpoint("CollectionService/SearchV2"),
+        Fetch.XHR,
         SearchRequestDto(
             limitOffset = LimitOffsetDto(PAGE_SIZE, PAGE_SIZE * (page - 1)),
             sort = SortDto.POPULAR,
@@ -171,6 +173,7 @@ abstract class BookWalker :
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = client.post(
         endpoint("CollectionService/SearchV2"),
+        Fetch.XHR,
         SearchRequestDto(
             limitOffset = LimitOffsetDto(PAGE_SIZE, PAGE_SIZE * (page - 1)),
             sort = SortDto.NEWEST,
@@ -186,6 +189,7 @@ abstract class BookWalker :
         filters: FilterList,
     ): MangasPage = client.post(
         endpoint("CollectionService/SearchV2"),
+        Fetch.XHR,
         SearchRequestDto(
             limitOffset = LimitOffsetDto(PAGE_SIZE, PAGE_SIZE * (page - 1)),
             query = query,
@@ -222,6 +226,7 @@ abstract class BookWalker :
             // Main details
             val details = client.post(
                 endpoint("ContentService/Details"),
+                Fetch.XHR,
                 MangaDetailsRequestDto(manga.url.toMangaId()).toProtoRequestBody(),
             ).parseAsProto<MangaDetailsResponseDto>()
 
@@ -290,6 +295,7 @@ abstract class BookWalker :
 
     private suspend fun chapterList(manga: SManga, chapterType: ChapterType) = client.post(
         endpoint("ContentService/Children"),
+        Fetch.XHR,
         ChaptersRequestDto(manga.url.toMangaId(), chapterType).toProtoRequestBody(),
     ).parseAsProto<ChaptersResponseDto>()
 
@@ -300,6 +306,7 @@ abstract class BookWalker :
         val chapterId = "$baseUrl${chapter.url}".toHttpUrl().pathSegments[1]
         val result = client.post(
             endpoint("ReadService/Open"),
+            Fetch.XHR,
             ViewerRequestBody("PRD_$chapterId").toProtoRequestBody(),
         ).parseAsProto<ViewerResponse>().details
 

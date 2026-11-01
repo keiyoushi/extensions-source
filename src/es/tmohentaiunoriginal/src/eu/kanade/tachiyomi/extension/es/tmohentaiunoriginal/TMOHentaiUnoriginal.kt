@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -27,15 +28,15 @@ abstract class TMOHentaiUnoriginal : KeiSource() {
         rateLimit(1) { it.host == baseUrl.toHttpUrl().host }
     }
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get(libraryUrl(page, order = "likes_count")))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get(libraryUrl(page, order = "likes_count"), Fetch.DOCUMENT))
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get(libraryUrl(page, order = "creation")))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get(libraryUrl(page, order = "creation"), Fetch.DOCUMENT))
 
     override suspend fun getSearchMangaList(
         page: Int,
         query: String,
         filters: FilterList,
-    ): MangasPage = parseMangaList(client.get(libraryUrl(page, search = query.trim())))
+    ): MangasPage = parseMangaList(client.get(libraryUrl(page, search = query.trim()), Fetch.DOCUMENT))
 
     private fun libraryUrl(
         page: Int,
@@ -80,7 +81,7 @@ abstract class TMOHentaiUnoriginal : KeiSource() {
             return null
         }
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseMangaDetails(document).apply {
             setUrlWithoutDomain(url.toString())
         }
@@ -92,7 +93,7 @@ abstract class TMOHentaiUnoriginal : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document),
             chapters = chaptersFromDocument(document),
@@ -136,7 +137,7 @@ abstract class TMOHentaiUnoriginal : KeiSource() {
         }.distinctBy { it.url }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url.substringBefore('#')).asJsoup()
+        val document = client.get(baseUrl + chapter.url.substringBefore('#'), Fetch.DOCUMENT).asJsoup()
 
         val pages = document
             .select("#reader-wrap .reader-img-wrap img")

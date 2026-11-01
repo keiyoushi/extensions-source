@@ -64,9 +64,9 @@ class KemonoPostDto(
     private val service: String,
     private val user: String,
     private val title: String,
-    private val added: String?,
+    private val added: String? = null,
     private val published: String?,
-    private val edited: String?,
+    private val edited: String? = null,
     private val file: KemonoFileDto,
     private val attachments: List<KemonoAttachmentDto>,
 ) {

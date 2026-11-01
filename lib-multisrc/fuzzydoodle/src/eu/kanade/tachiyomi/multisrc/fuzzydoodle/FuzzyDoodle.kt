@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -25,7 +26,7 @@ import java.util.Calendar
 abstract class FuzzyDoodle : KeiSource() {
 
     // Popular
-    override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get("$baseUrl/manga?page=$page").asJsoup())
+    override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get("$baseUrl/manga?page=$page", Fetch.DOCUMENT).asJsoup())
 
     open fun popularMangaSelector() = "div#card-real"
     open fun popularMangaNextPageSelector() = "ul.pagination > li:last-child:not(.pagination-disabled)"
@@ -49,7 +50,7 @@ abstract class FuzzyDoodle : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = if (latestFromHomePage) latestHomePageUrl(page) else latestPageUrl(page)
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val entries = document.select(latestUpdatesSelector())
             .map(::latestUpdatesFromElement)
         val hasNextPage = document.selectFirst(latestUpdatesNextPageSelector()) != null
@@ -83,7 +84,7 @@ abstract class FuzzyDoodle : KeiSource() {
             }
         }.build()
 
-        return popularMangaParse(client.get(url).asJsoup())
+        return popularMangaParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     open fun searchMangaSelector() = popularMangaSelector()
@@ -93,13 +94,13 @@ abstract class FuzzyDoodle : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "manga" || url.pathSegments.size < 2) return null
 
-        return mangaDetailsParse(client.get(url).asJsoup()).apply { setUrlWithoutDomain(url.toString()) }
+        return mangaDetailsParse(client.get(url, Fetch.DOCUMENT).asJsoup()).apply { setUrlWithoutDomain(url.toString()) }
     }
 
     // filters
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = parseFilters(client.get("$baseUrl/manga").asJsoup()).toJsonElement()
+    override suspend fun fetchFilterData(): JsonElement = parseFilters(client.get("$baseUrl/manga", Fetch.DOCUMENT).asJsoup()).toJsonElement()
 
     protected open fun parseFilters(document: Document) = FilterData(
         types = document.select("select[name=type] > option").map {
@@ -142,7 +143,7 @@ abstract class FuzzyDoodle : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetailsParse(document), fetchChapterList(document))
     }
 
@@ -205,7 +206,7 @@ abstract class FuzzyDoodle : KeiSource() {
                 addAll(doc.select(chapterListSelector()).map(::chapterFromElement))
                 if (doc.selectFirst(chapterListNextPageSelector()) == null) break
                 page++
-                doc = client.get("$originalUrl?page=$page").asJsoup()
+                doc = client.get("$originalUrl?page=$page", Fetch.DOCUMENT).asJsoup()
             }
         }
 
@@ -263,7 +264,7 @@ abstract class FuzzyDoodle : KeiSource() {
 
     // pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("div#chapter-container > img").mapIndexed { idx, img ->
             Page(idx, imageUrl = img.imgAttr())
         }

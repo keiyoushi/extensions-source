@@ -10,10 +10,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.XorInterceptor
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.boolean
+import keiyoushi.utils.decodeHex
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferencesLazy
@@ -52,7 +55,11 @@ abstract class Zebrack :
     private var secret: String? = null
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor(ImageInterceptor())
+        addInterceptor(
+            XorInterceptor { request ->
+                request.url.fragment?.let { if (it.contains("key=")) it.substringAfter("key=").decodeHex() else null }
+            },
+        )
         addInterceptor(::secretIntercept)
     }
 
@@ -95,7 +102,7 @@ abstract class Zebrack :
             .addQueryParameter("type", "ranking")
             .build()
 
-        val result = client.get(url).parseAsProto<RankingResponse>()
+        val result = client.get(url, Fetch.XHR).parseAsProto<RankingResponse>()
         val mangas = result.list.filter { it.type == "総合" }.flatMap { it.titles }.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
@@ -109,7 +116,7 @@ abstract class Zebrack :
                 .addQueryParameter("search_order", "related")
                 .addQueryParameter("keyword", query)
                 .build()
-            return client.get(url).toMangasPage()
+            return client.get(url, Fetch.DOCUMENT).toMangasPage()
         }
 
         val filter = filters.firstInstance<CategoryFilter>()
@@ -120,7 +127,7 @@ abstract class Zebrack :
                     .addQueryParameter("os", "browser")
                     .build()
 
-                val result = client.get(url).parseAsProto<MagazineFilterResponse>()
+                val result = client.get(url, Fetch.XHR).parseAsProto<MagazineFilterResponse>()
                 val mangas = with(result.magazines) {
                     (magazinesListAll + magazinesListMen + magazinesListWoman).map { it.toSManga() }
                 }
@@ -133,7 +140,7 @@ abstract class Zebrack :
                     .addQueryParameter("search_order", "popular")
                     .build()
 
-                client.get(url).toMangasPage()
+                client.get(url, Fetch.DOCUMENT).toMangasPage()
             }
         }
     }
@@ -144,7 +151,7 @@ abstract class Zebrack :
             .addQueryParameter("day", day)
             .build()
 
-        val mangas = client.get(url).parseAsProto<LatestResponse>().list.map { it.toSManga() }
+        val mangas = client.get(url, Fetch.XHR).parseAsProto<LatestResponse>().list.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
@@ -183,7 +190,7 @@ abstract class Zebrack :
             .addQueryParameter("tab", "detail")
             .build()
 
-        return client.get(url).parseAsProto<MangaDetailsResponse>().details.toSManga()
+        return client.get(url, Fetch.XHR).parseAsProto<MangaDetailsResponse>().details.toSManga()
     }
 
     private suspend fun getMagazineDetails(magazineId: String): SManga {
@@ -192,7 +199,7 @@ abstract class Zebrack :
             .addQueryParameter("magazine_id", magazineId)
             .build()
 
-        return client.get(url).parseAsProto<MagazineDetailsResponse>().details.toSManga()
+        return client.get(url, Fetch.XHR).parseAsProto<MagazineDetailsResponse>().details.toSManga()
     }
 
     private suspend fun getTitleChapters(titleId: String): List<SChapter> = coroutineScope {
@@ -205,7 +212,7 @@ abstract class Zebrack :
                 .apply { secretKey?.let { addQueryParameter("secret", it) } }
                 .build()
 
-            val result = client.get(url).parseAsProto<VolumeResponse>()
+            val result = client.get(url, Fetch.XHR).parseAsProto<VolumeResponse>()
             checkSessionExpired(result.volumeData?.volumeList?.firstNotNullOfOrNull { it.session?.message }, secretKey)
             result.volumeData?.volumeList.orEmpty()
                 .filter { !hideLocked || !it.isLockedVolume }
@@ -219,7 +226,7 @@ abstract class Zebrack :
                 .apply { secretKey?.let { addQueryParameter("secret", it) } }
                 .build()
 
-            val result = client.get(url).parseAsProto<ChapterResponse>()
+            val result = client.get(url, Fetch.XHR).parseAsProto<ChapterResponse>()
             val chapterList = result.chapterList.orEmpty().flatMap { it.chapters.orEmpty() }
             checkSessionExpired(chapterList.firstNotNullOfOrNull { it.session?.message }, secretKey)
             chapterList
@@ -243,7 +250,7 @@ abstract class Zebrack :
                 .apply { secretKey?.let { addQueryParameter("secret", it) } }
                 .build()
 
-            val issues = client.get(url).parseAsProto<MagazineResponse>().magazineData?.magazineList
+            val issues = client.get(url, Fetch.XHR).parseAsProto<MagazineResponse>().magazineData?.magazineList
             checkSessionExpired(issues?.firstNotNullOfOrNull { it.session?.message }, secretKey)
             if (issues.isNullOrEmpty()) break
 
@@ -267,7 +274,7 @@ abstract class Zebrack :
                     .apply { secretKey?.let { add("secret", it) } }
                     .build()
 
-                client.post("$apiUrl/v3/chapter_viewer", body).toPageList(secretKey)
+                client.post("$apiUrl/v3/chapter_viewer", Fetch.XHR, body).toPageList(secretKey)
             }
 
             TYPE_VOLUME -> {
@@ -279,7 +286,7 @@ abstract class Zebrack :
                     .addQueryParameter("is_trial", chapter.isTrial)
                     .build()
 
-                client.get(url).toPageList(secretKey)
+                client.get(url, Fetch.XHR).toPageList(secretKey)
             }
 
             else -> {
@@ -291,7 +298,7 @@ abstract class Zebrack :
                     .addQueryParameter("is_trial", chapter.isTrial)
                     .build()
 
-                val result = client.get(url).parseAsProto<MagazineViewerImages>()
+                val result = client.get(url, Fetch.XHR).parseAsProto<MagazineViewerImages>()
                 checkSessionExpired(result.session?.message, secretKey)
                 result.pages?.pagesList.orEmpty().mapIndexedNotNull { i, image ->
                     image.page?.let { Page(i, imageUrl = "$it#key=${image.key}") }

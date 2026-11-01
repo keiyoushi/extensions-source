@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -46,7 +47,7 @@ abstract class AlphaManga :
             .addQueryParameter("genre", genre)
             .addQueryParameter("page", page.toString())
             .build()
-        val result = client.get(url).parseAs<SearchResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<SearchResponse>()
         val mangas = result.data.map { it.toSManga() }
         return MangasPage(mangas, result.hasMore)
     }
@@ -60,7 +61,7 @@ abstract class AlphaManga :
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val mangas = async {
             if (!fetchDetails) return@async manga
-            val document = client.get(getMangaUrl(manga), desktopHeaders).asJsoup()
+            val document = client.get(getMangaUrl(manga), desktopHeaders, Fetch.DOCUMENT).asJsoup()
             SManga.create().apply {
                 title = document.selectFirst("h1.c-h1")!!.text()
                 author = document.select("h3.p-manga-detail__about-label")
@@ -83,7 +84,7 @@ abstract class AlphaManga :
 
         val chapterList = async {
             if (!fetchChapters) return@async chapters
-            client.get("$baseUrl/manga/${manga.url}/episodes.json").parseAs<ChapterResponse>().episodes
+            client.get("$baseUrl/manga/${manga.url}/episodes.json", Fetch.XHR).parseAs<ChapterResponse>().episodes
                 .filter { !hideLocked || !it.isLocked }
                 .map { it.toSChapter(manga.url) }
         }
@@ -105,7 +106,7 @@ abstract class AlphaManga :
         .build()
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter), mobileHeaders).asJsoup()
+        val document = client.get(getChapterUrl(chapter), mobileHeaders, Fetch.DOCUMENT).asJsoup()
         val viewer = document.selectFirst("viewer-manga-vertical") ?: throw Exception("Log in via WebView and rent or purchase this chapter to read.")
 
         val pages = viewer.attr("v-bind:pages").parseAs<List<String>>()

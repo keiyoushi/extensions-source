@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -79,11 +80,11 @@ abstract class YellowNote :
 
     // ============================== Popular ==============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/photos/sort-hot/$page.html"))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/photos/sort-hot/$page.html", Fetch.DOCUMENT))
 
     // ============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/photos/$page.html"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/photos/$page.html", Fetch.DOCUMENT))
 
     // ============================== Search ===============================
 
@@ -106,7 +107,7 @@ abstract class YellowNote :
             addPathSegment("$page.html")
         }.build()
 
-        return parseMangaList(client.get(httpUrl))
+        return parseMangaList(client.get(httpUrl, Fetch.DOCUMENT))
     }
 
     // ============================== Details ==============================
@@ -117,7 +118,7 @@ abstract class YellowNote :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         val basePageUrl = response.request.url.toString()
             .removeSuffix(".html")
         val document = response.asJsoup()
@@ -178,7 +179,7 @@ abstract class YellowNote :
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val quality = preferences.getString("XChina::IMAGE_QUALITY", "original") ?: "original"
 
         return document.select(imageSelector)

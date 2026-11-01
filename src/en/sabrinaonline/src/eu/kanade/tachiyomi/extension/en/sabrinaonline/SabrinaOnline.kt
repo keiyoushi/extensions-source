@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -40,7 +41,7 @@ abstract class SabrinaOnline : KeiSource() {
     ): SMangaUpdate {
         if (!fetchChapters) return SMangaUpdate(manga(), chapters)
 
-        val document = client.get("$baseUrl/archive.html").asJsoup()
+        val document = client.get("$baseUrl/archive.html", Fetch.DOCUMENT).asJsoup()
         val chapterList = mutableListOf<SChapter>()
 
         // turn cells into chapters, with the section name if present
@@ -84,7 +85,7 @@ abstract class SabrinaOnline : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
         val pages = document.select("center img").filter {
             it.hasAttr("src") && (
                 it.attr("src").contains("strips/") ||

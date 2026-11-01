@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SManga.Companion.COMPLETED
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -18,13 +19,12 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class Gensura : KeiSource() {
-
     private val advSearchURL get() = "$baseUrl/advanced-search"
 
     private var tagsList: Map<String, String> = emptyMap()
 
     // Popular
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$advSearchURL/?search=1&type=0&sort=1&page=$page").toMangasPage()
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$advSearchURL/?search=1&type=0&sort=1&page=$page", Fetch.XHR).toMangasPage()
 
     private fun Response.toMangasPage(): MangasPage {
         val doc = asJsoup()
@@ -43,13 +43,13 @@ abstract class Gensura : KeiSource() {
     }
 
     // Latest
-    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get("$advSearchURL/?search=1&type=0&sort=2&page=$page").toMangasPage()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get("$advSearchURL/?search=1&type=0&sort=2&page=$page", Fetch.XHR).toMangasPage()
 
     // Search
 
     private suspend fun tagsList(): Map<String, String> {
         if (tagsList.isEmpty()) {
-            tagsList = client.get("$advSearchURL/").asJsoup().select("li[onclick=updateTag(this)]")
+            tagsList = client.get("$advSearchURL/", Fetch.DOCUMENT).asJsoup().select("li[onclick=updateTag(this)]")
                 .associate { it.ownText().lowercase() to it.attr("data-value") }
         }
         return tagsList
@@ -97,7 +97,7 @@ abstract class Gensura : KeiSource() {
             if (page > 1) addQueryParameter("page", page.toString())
         }.build()
 
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.XHR).toMangasPage()
     }
 
     // Details
@@ -121,7 +121,7 @@ abstract class Gensura : KeiSource() {
     }
 
     private suspend fun mangaDetails(manga: SManga): SManga {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SManga.create().apply {
             val authors = document.select("a[href*=/circles/]").eachText().joinToString()
             val artists = document.select("a[href*=/authors/]").eachText().joinToString()
@@ -151,7 +151,7 @@ abstract class Gensura : KeiSource() {
     // Pages
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val images = client.get(getChapterUrl(chapter)).asJsoup().select("img[src*=images]:not(img[src*=thumbnail]).w-full, img[data-src*=images]")
+        val images = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup().select("img[src*=images]:not(img[src*=thumbnail]).w-full, img[data-src*=images]")
         return images.mapIndexed { index, img ->
             val image = img.absUrl("src").ifEmpty { img.absUrl("data-src") }
             Page(index, imageUrl = image.replace(Regex("-t(?=\\.)"), ""))

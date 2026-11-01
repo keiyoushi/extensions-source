@@ -5,73 +5,83 @@ import android.app.Dialog
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
+import android.os.Handler
+import android.os.Looper
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.WindowManager
 import android.webkit.WebView
-import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.ui.onDestroyed
 import keiyoushi.utils.ui.topActivity
 import keiyoushi.utils.ui.usable
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 
 /**
  * Solves Cloudflare Turnstile challenges and returns the token.
  *
- * Runs headless in the background first with normal mobile viewport metrics.
- * If user interaction is required, displays a full-screen dimmed overlay on the foreground
- * Activity while keeping the WebView at the exact device dimensions.
+ * Runs headless with normal mobile viewport metrics, so it works while the app is in the
+ * background. Only if user interaction is required does it display a full-screen dimmed overlay
+ * on the foreground Activity; if there is none at that point, it fails instead.
+ *
+ * By default the page sees the reduced Chrome user agent of the installed WebView's own version,
+ * so the claimed browser matches the engine. Turnstile tokens aren't tied to a user agent, so
+ * the token can still be sent with a source's own User-Agent. Pass [userAgent] to override.
  */
 suspend fun getTurnstileToken(
     url: String,
     siteKey: String,
-    userAgent: String,
+    userAgent: String? = null,
     action: String? = null,
     cData: String? = null,
     timeout: Duration = 2.minutes,
 ): String {
-    val activity = topActivity().takeIf { it.usable() }
-        ?: throw IllegalStateException("Activity unavailable for captcha")
-
-    val night = (activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+    // The app's own night mode lives in the Activity configuration; fall back to the system's.
+    val uiContext = foregroundActivity() ?: applicationContext
+    val night = (uiContext.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
         Configuration.UI_MODE_NIGHT_YES
     val theme = if (night) "dark" else "light"
+
+    // Turnstile's callbacks run in our page; keep iframes (including Cloudflare's) off the bridge.
+    val pageOrigin = url.toHttpUrl().let {
+        if (it.port == HttpUrl.defaultPort(it.scheme)) "${it.scheme}://${it.host}" else "${it.scheme}://${it.host}:${it.port}"
+    }
 
     var dialog: CaptchaOverlayDialog? = null
 
     return try {
-        runWebView(activity = activity, timeout = timeout) {
-            this.userAgent = userAgent
+        runWebView(timeout = timeout) {
+            (userAgent ?: reducedChromeUserAgent(this.userAgent))?.let { this.userAgent = it }
 
             val d = CaptchaOverlayDialog(
-                activity = activity,
                 webView = webView,
                 onCancel = { reject(Exception("Captcha cancelled")) },
+                onNoActivity = {
+                    reject(IllegalStateException("Captcha needs interaction, but the app isn't in the foreground"))
+                },
             )
             dialog = d
 
-            jsBridge("turnstileToken") { token ->
-                d.dismiss()
-                resolve(token)
-            }
-
-            jsBridge("turnstileError") { code ->
-                d.dismiss()
-                reject(Exception("Captcha Failed! ${turnstileErrorMessage(code)} (code: $code)"))
-            }
-
-            jsBridge("turnstileCancel") {
-                d.dismiss()
-                reject(Exception("Captcha cancelled"))
-            }
-
-            jsBridge("turnstileShow") {
-                d.show()
-            }
-
-            jsBridge("turnstileHide") {
-                d.dismiss()
+            webMessageBridge("turnstileBridge", setOf(pageOrigin)) { message ->
+                when {
+                    message.startsWith("token:") -> {
+                        d.dismiss()
+                        resolve(message.removePrefix("token:"))
+                    }
+                    message.startsWith("error:") -> {
+                        val code = message.removePrefix("error:")
+                        d.dismiss()
+                        reject(Exception("Captcha Failed! ${turnstileErrorMessage(code)} (code: $code)"))
+                    }
+                    message == "cancel" -> {
+                        d.dismiss()
+                        reject(Exception("Captcha cancelled"))
+                    }
+                    message == "show" -> d.show()
+                    message == "hide" -> d.dismiss()
+                }
             }
 
             val html = """
@@ -79,6 +89,7 @@ suspend fun getTurnstileToken(
             <html>
             <head>
                 <meta name="viewport" content="width=device-width, initial-scale=1">
+                <link rel="icon" href="data:,">
                 <style>
                     html, body {
                         margin: 0;
@@ -106,22 +117,22 @@ suspend fun getTurnstileToken(
                             theme: '$theme',
                             appearance: 'interaction-only',
                             callback: function (token) {
-                                window.turnstileToken.post(token);
+                                window.turnstileBridge.postMessage('token:' + token);
                             },
                             'before-interactive-callback': function () {
-                                window.turnstileShow.post('show');
+                                window.turnstileBridge.postMessage('show');
                             },
                             'after-interactive-callback': function () {
-                                window.turnstileHide.post('hide');
+                                window.turnstileBridge.postMessage('hide');
                             },
                             'error-callback': function (e) {
-                                window.turnstileError.post(String(e || 'unknown'));
+                                window.turnstileBridge.postMessage('error:' + String(e || 'unknown'));
                             },
                             'expired-callback': function () {
-                                window.turnstileError.post('expired');
+                                window.turnstileBridge.postMessage('error:expired');
                             },
                             'timeout-callback': function () {
-                                window.turnstileError.post('timeout');
+                                window.turnstileBridge.postMessage('error:timeout');
                             },
                         };
 
@@ -136,12 +147,12 @@ suspend fun getTurnstileToken(
 
                     document.body.addEventListener('click', function (e) {
                         if (e.target === document.body || e.target === document.documentElement) {
-                            window.turnstileCancel.post('cancelled');
+                            window.turnstileBridge.postMessage('cancel');
                         }
                     });
                 </script>
                 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&amp;onload=onTurnstileLoad"
-                        onerror="window.turnstileError.post('script_load_failed')"></script>
+                        onerror="window.turnstileBridge.postMessage('error:script_load_failed')"></script>
             </body>
             </html>
             """.trimIndent()
@@ -153,32 +164,30 @@ suspend fun getTurnstileToken(
     }
 }
 
-context(source: HttpSource)
-suspend fun getTurnstileToken(
-    url: String,
-    siteKey: String,
-    action: String? = null,
-    cData: String? = null,
-    timeout: Duration = 2.minutes,
-): String = getTurnstileToken(
-    url = url,
-    siteKey = siteKey,
-    userAgent = source.headers["User-Agent"]!!,
-    action = action,
-    cData = cData,
-    timeout = timeout,
-)
+// The WebView's default UA carries "; wv" and "Version/4.0"; real Chrome sends this reduced form.
+private fun reducedChromeUserAgent(webViewUserAgent: String): String? {
+    val major = Regex("""Chrome/(\d+)""").find(webViewUserAgent)?.groupValues?.get(1) ?: return null
+    return "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$major.0.0.0 Mobile Safari/537.36"
+}
+
+private fun foregroundActivity(): Activity? = runCatching { topActivity() }.getOrNull()?.takeIf { it.usable() }
 
 private class CaptchaOverlayDialog(
-    private val activity: Activity,
     private val webView: WebView,
     private val onCancel: () -> Unit,
+    private val onNoActivity: () -> Unit,
 ) {
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var dialog: Dialog? = null
     private var unhook: (() -> Unit)? = null
 
-    fun show() = activity.runOnUiThread {
-        if (dialog != null || activity.isFinishing || activity.isDestroyed) return@runOnUiThread
+    private fun runOnMain(block: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) block() else mainHandler.post(block)
+    }
+
+    fun show() = runOnMain {
+        if (dialog != null) return@runOnMain
+        val activity = foregroundActivity() ?: return@runOnMain onNoActivity()
 
         try {
             (webView.parent as? ViewGroup)?.removeView(webView)
@@ -206,8 +215,8 @@ private class CaptchaOverlayDialog(
         }
     }
 
-    fun dismiss() = activity.runOnUiThread {
-        val d = dialog ?: return@runOnUiThread
+    fun dismiss() = runOnMain {
+        val d = dialog ?: return@runOnMain
         dialog = null
         unhook?.invoke()
         unhook = null

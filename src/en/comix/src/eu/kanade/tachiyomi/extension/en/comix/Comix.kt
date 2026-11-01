@@ -1,7 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.comix
 
+import android.app.Application
 import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
 import android.webkit.WebResourceResponse
+import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
@@ -16,22 +20,37 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.asJsoup
+import keiyoushi.utils.NativeWebViewApi
 import keiyoushi.utils.booleanOrNull
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.int
+import keiyoushi.utils.long
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import keiyoushi.utils.string
+import keiyoushi.utils.toJsonString
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -41,12 +60,16 @@ import okhttp3.Request
 import okhttp3.Response
 import okio.Buffer
 import org.json.JSONObject
-import org.jsoup.nodes.Document
-import java.io.IOException
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.random.Random
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -54,8 +77,31 @@ abstract class Comix :
     KeiSource(),
     ConfigurableSource {
 
-    private val apiUrl get() = "$baseUrl/api/v1"
     private val preferences: SharedPreferences by getPreferencesLazy()
+
+    // A full chapter walk pages through the whole list at a paced rate, so warn once per session
+    private val chapterListHintShown = AtomicBoolean(false)
+
+    private fun showChapterListHint() {
+        if (!chapterListHintShown.compareAndSet(false, true)) return
+        Handler(Looper.getMainLooper()).post {
+            runCatching {
+                Toast.makeText(
+                    Injekt.get<Application>(),
+                    "Chapter List loading takes time for first time",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+    }
+
+    // Reader captures by chapter url, LRU; only finished ones are dropped
+    private val captureScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val captures = LinkedHashMap<String, ChapterCapture>(MAX_CAPTURES + 1, 0.75f, true)
+
+    // Walk start times per chapter, for the walk limit
+    private val walkStarts = HashMap<String, MutableList<Long>>()
+    private val walkSlots = Semaphore(MAX_RUNNING_WALKS)
 
     private val tagIdCache = object : LinkedHashMap<String, List<String>>(
         TAG_ID_CACHE_SIZE,
@@ -66,10 +112,10 @@ abstract class Comix :
     }
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(Descrambler.interceptor)
-        .addInterceptor(::altHostFallback)
         .addInterceptor { chain ->
             val request = chain.request()
-            if (request.url.fragment?.startsWith(ALT_HOSTS_FRAGMENT) == true || request.url.host == baseUrlHost) {
+            // The reader already retries failing pages on other hosts
+            if (request.url.host == baseUrlHost || request.url.isPageImage()) {
                 return@addInterceptor chain.proceed(request)
             }
 
@@ -91,47 +137,30 @@ abstract class Comix :
             response
         }
         .rateLimit(2) { it.host == baseUrlHost }
+        .rateLimit(2) { it.isPageImage() }
         .rateLimit(5)
 
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
-    // Retry failed images on alt hosts, like the site's reader
-    private fun altHostFallback(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val altHosts = request.url.altHosts()
-        if (altHosts.isEmpty()) return chain.proceed(request)
-
-        val urls = listOf(request.url) + altHosts.mapIndexed { i, host ->
-            request.url.newBuilder()
-                .host(host)
-                .setQueryParameter("r", (i + 1).toString())
-                .build()
-        }
-        var failed: Response? = null
-        var error: IOException? = null
-        for (url in urls) {
-            if (failed != null) {
-                failed.close()
-                failed = null
-                runCatching { Thread.sleep(2000) }
-            }
-            try {
-                val response = chain.proceed(request.newBuilder().url(url).build())
-                if (response.isSuccessful) return response
-                failed = response
-            } catch (e: IOException) {
-                if (chain.call().isCanceled()) throw e
-                error = e
-            }
-        }
-        return failed ?: throw error!!
+    private fun HttpUrl.isPageImage(): Boolean {
+        val url = toString()
+        return synchronized(captures) { captures.values.any { url in it.pages.values } }
     }
 
-    private fun HttpUrl.altHosts(): List<String> = fragment
-        ?.takeIf { it.startsWith(ALT_HOSTS_FRAGMENT) }
-        ?.removePrefix(ALT_HOSTS_FRAGMENT)
-        ?.split(',')
-        .orEmpty()
+    // Comix blocks chapter-list paging that is too fast or evenly spaced
+    private class RequestPacer(private val minGapMs: Long, private val maxGapMs: Long) {
+        private var nextNanos = 0L
+
+        fun waitForSlot() {
+            val waitNanos = synchronized(this) {
+                val now = System.nanoTime()
+                val start = maxOf(now, nextNanos)
+                nextNanos = start + Random.nextLong(minGapMs, maxGapMs) * 1_000_000
+                start - now
+            }
+            if (waitNanos > 0) Thread.sleep(waitNanos / 1_000_000)
+        }
+    }
 
     private fun proceedWithRetry(chain: Interceptor.Chain, request: Request): Response {
         var response = chain.proceed(request)
@@ -154,8 +183,6 @@ abstract class Comix :
         return response
     }
 
-    override fun Headers.Builder.configureHeaders() = add("Accept", "*/*")
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("browse")
@@ -167,132 +194,36 @@ abstract class Comix :
     }
 
     private suspend fun getMangaListFromBrowse(url: HttpUrl): MangasPage {
-        val document = client.get(url).asJsoup()
-        val contentRating = url.queryParameter("content_rating")
-            ?: preferences.contentRating()
-        val effectiveContentRating = contentRating
-            .split(',')
-            .lastOrNull { it.isNotBlank() }
-            .orEmpty()
-            .ifEmpty { "pornographic" }
-        val expectedKeyword = JSONObject.quote(
-            url.queryParameter("q") ?: url.queryParameter("keyword").orEmpty(),
-        )
-        val searchResponse = document.extractBrowseResponse() ?: runInWebView(
-            document = document,
-            pageScript = { _, _ ->
-                """
-                (function () {
-                    const key = 'settings_v2';
-                    let settings = {};
-                    try {
-                        settings = JSON.parse(localStorage.getItem(key) || '{}');
-                    } catch (e) {}
-                    settings.state = {
-                        ...(settings.state || {}),
-                        contentFilter: '$effectiveContentRating'
-                    };
-                    if (settings.version === undefined) settings.version = 0;
-                    localStorage.setItem(key, JSON.stringify(settings));
-                })();
-                """.trimIndent()
-            },
+        val searchResponse = runInWebView(
+            url = url.toString(),
             buildScript = { passPayloadName ->
                 """
-                    (function () {
-                        const payloadKey = '__comixBrowsePayload';
-                        const expectedKeyword = $expectedKeyword;
-                        const capture = (parsed, allowEmpty = false) => {
+                (function () {
+                    const payloadKey = '__comixA1BrowsePayload';
+                    if (window[payloadKey]) return window[payloadKey];
+                    if (!window.__comixA1BrowseStarted) {
+                        window.__comixA1BrowseStarted = true;
+                        window.__comixHarvestOptions = { timeoutMs: 60000, settleMs: 4000 };
+                        ${asset("harvest_browse.js")}
+                        window.__comixHarvestPromise.then(result => {
                             try {
-                                if (parsed && Array.isArray(parsed.items)) {
-                                    parsed = { result: parsed };
-                                }
-                                if (
-                                    parsed &&
-                                    parsed.result &&
-                                    Array.isArray(parsed.result.items) &&
-                                    (allowEmpty || parsed.result.items.length > 0)
-                                ) {
-                                    window[payloadKey] = JSON.stringify(parsed);
-                                    window.$passPayloadName(window[payloadKey]);
-                                    return true;
-                                }
+                                const items = (result.items || []).map(item => ({
+                                    hid: item.hid,
+                                    title: item.title || '',
+                                    url: item.url,
+                                    poster: item.cover ? { small: item.cover, medium: item.cover, large: item.cover } : null,
+                                }));
+                                const page = (result.listParams && result.listParams.page) || 1;
+                                const perPage = result.perPage || (result.listParams && result.listParams.limit) || 28;
+                                const hasNext = items.length > 0 && items.length >= perPage;
+                                const payload = { result: { items: items, meta: { page: page, lastPage: hasNext ? page + 1 : page, hasNext: hasNext } } };
+                                window[payloadKey] = JSON.stringify(payload);
+                                window.$passPayloadName(window[payloadKey]);
                             } catch (e) {}
-                            return false;
-                        };
-
-                        if (window[payloadKey]) return window[payloadKey];
-
-                        try {
-                            const raw = document.querySelector('script#initial-data')?.textContent;
-                            const queries = raw && JSON.parse(raw).queries;
-                            if (queries) Object.values(queries).some(capture);
-                        } catch (e) {}
-
-                        if (window[payloadKey]) return window[payloadKey];
-                        if (window.__comixBrowseCaptureInstalled) return null;
-                        window.__comixBrowseCaptureInstalled = true;
-
-                        const captureText = text => {
-                            try {
-                                if (text) capture(JSON.parse(text), true);
-                            } catch (e) {}
-                        };
-
-                        const shouldCaptureUrl = rawUrl => {
-                            try {
-                                const url = new URL(rawUrl || '', window.location.origin);
-                                if (!url.pathname.includes('/api/v1/manga')) return false;
-                                if (!expectedKeyword) return true;
-                                return url.searchParams.get('keyword') === expectedKeyword;
-                            } catch (e) {
-                                return false;
-                            }
-                        };
-
-                        const originalFetch = window.fetch;
-                        if (typeof originalFetch === 'function') {
-                            window.fetch = function () {
-                                return originalFetch.apply(this, arguments).then(response => {
-                                    try {
-                                        const url = response && response.url || '';
-                                        if (shouldCaptureUrl(url)) {
-                                            response.clone().text().then(captureText).catch(() => {});
-                                        }
-                                    } catch (e) {}
-                                    return response;
-                                });
-                            };
-                        }
-
-                        const originalOpen = XMLHttpRequest.prototype.open;
-                        const originalSend = XMLHttpRequest.prototype.send;
-                        XMLHttpRequest.prototype.open = function (method, url) {
-                            this.__comixBrowseUrl = String(url || '');
-                            return originalOpen.apply(this, arguments);
-                        };
-                        XMLHttpRequest.prototype.send = function () {
-                            this.addEventListener('load', function () {
-                                try {
-                                    if (shouldCaptureUrl(this.__comixBrowseUrl)) {
-                                        captureText(this.responseText);
-                                    }
-                                } catch (e) {}
-                            });
-                            return originalSend.apply(this, arguments);
-                        };
-
-                        const originalParse = JSON.parse;
-                        const proxiedParse = new Proxy(originalParse, {
-                            apply(target, thisArg, args) {
-                                const parsed = Reflect.apply(target, thisArg, args);
-                                if (!expectedKeyword) capture(parsed);
-                                return parsed;
-                            }
-                        });
-                        JSON.parse = proxiedParse;
-                        return window[payloadKey] || null;
-                    })();
+                        }).catch(() => {});
+                    }
+                    return window[payloadKey] || null;
+                })();
                 """.trimIndent()
             },
         ).parseAs<SearchResponse>()
@@ -301,23 +232,6 @@ abstract class Comix :
             it.toBasicSManga(preferences.posterQuality())
         }
         return MangasPage(mangaList, searchResponse.result.hasNextPage())
-    }
-
-    private fun Document.extractBrowseResponse(): SearchResponse? {
-        val queries = runCatching { extractInitialQueries() }.getOrNull() ?: return null
-
-        return queries.values.firstNotNullOfOrNull { value ->
-            runCatching { value.parseAs<SearchResponse>() }
-                .getOrNull()
-                ?.takeIf { it.result.items.isNotEmpty() }
-        }
-    }
-
-    private fun Document.extractInitialQueries(): JsonObject {
-        val initialData = selectFirst("script#initial-data")?.data()
-            ?: throw Exception("Could not find initial data in page")
-        return initialData.parseAs<JsonObject>()["queries"] as? JsonObject
-            ?: throw Exception("Could not find queries in initial data")
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -408,16 +322,16 @@ abstract class Comix :
         val cacheKey = "$type\u0000${name.lowercase()}"
         synchronized(tagIdCache) { tagIdCache[cacheKey] }?.let { return it }
 
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("tags")
-            .addPathSegment("search")
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments("api/v1/tags/search")
             .addQueryParameter("type", type)
             .addQueryParameter("q", name)
+            .addQueryParameter("limit", "20")
             .build()
-
-        val ids = runCatching {
-            client.get(url).parseAs<TagSearchResponse>().result.map { it.id.toString() }
-        }.getOrNull() ?: return emptyList()
+        val hits = client.get(url, Fetch.XHR).parseAs<TagSearchResponse>().result
+        if (hits.isEmpty()) throw Exception("No $type named \"$name\"")
+        // Exact names when the site's fuzzy search has them
+        val ids = hits.filter { it.label.equals(name, ignoreCase = true) }.ifEmpty { hits }.map { it.id.toString() }
         synchronized(tagIdCache) { tagIdCache[cacheKey] = ids }
         return ids
     }
@@ -428,10 +342,10 @@ abstract class Comix :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        var cachedDocument: Document? = null
-        suspend fun getDocument(): Document {
-            cachedDocument?.let { return it }
-            return client.get(getMangaUrl(manga)).asJsoup().also { cachedDocument = it }
+        var cachedQueries: JsonObject? = null
+        suspend fun getQueries(): JsonObject {
+            cachedQueries?.let { return it }
+            return navigateForQueries(getMangaUrl(manga)).also { cachedQueries = it }
         }
 
         val deduplicateChapters = preferences.deduplicateChapters()
@@ -442,52 +356,123 @@ abstract class Comix :
         val fetchUntilKnown = fetchChapters &&
             preferences.fetchChaptersUntilKnown() &&
             listMemo[CHAPTER_LIST_DEDUPLICATED_MEMO]?.booleanOrNull == deduplicateChapters &&
-            listMemo[CHAPTER_LIST_BLACKLIST_MEMO]?.string == blacklistSignature
-        val latestChapterId = chapters.firstOrNull()
-            ?.takeIf { fetchUntilKnown }
-            ?.chapterId()
+            listMemo[CHAPTER_LIST_BLACKLIST_MEMO]?.string == blacklistSignature &&
+            listMemo[CHAPTER_DATA_VERSION_MEMO]?.int == CHAPTER_DATA_VERSION &&
+            listMemo[CHAPTER_LIST_COMPLETE_MEMO]?.booleanOrNull != false
+        val knownIds = if (fetchUntilKnown) chapters.mapNotNull { it.chapterId() } else emptyList()
 
-        val updatedManga = if (fetchDetails) parseMangaDetails(getDocument()) else manga
-        val updatedChapters = if (fetchChapters) {
-            val fetched = getWebViewChapterList(manga, getDocument(), latestChapterId)
-            val candidates = if (fetchUntilKnown) fetched + chapters else fetched
+        // Only the unchanged-list skip needs the detail before the walk; otherwise the walk's own page carries it
+        val detailBeforeChapters = if (fetchUntilKnown) getQueries().mangaDetail() else null
+        // Skip the chapter list when the site's last chapter upload is older than the last full read of it
+        val unchanged = fetchUntilKnown && run {
+            val fetchedAt = listMemo[CHAPTER_LIST_FETCHED_AT_MEMO]?.long ?: return@run false
+            val uploadedBy = detailBeforeChapters?.chapterUpdatedAtFormatted?.let { parseRelativeDate(it, latest = true) } ?: 0L
+            uploadedBy in 1..fetchedAt
+        }
+        var walkedQueries: JsonObject? = null
+        val updatedChapters = if (fetchChapters && !unchanged) {
+            // Site dates are relative ("2w ago"), so keep the date a chapter was first stored with
+            val knownDates = chapters.mapNotNull { chapter ->
+                chapter.chapterId()?.let { it to chapter.date_upload }?.takeIf { it.second > 0 }
+            }.toMap()
+            val mangaSlug = manga.url.removePrefix("/")
+            val fetchStartedAt = System.currentTimeMillis()
+            val chapterList = getWebViewChapterList(manga, knownIds)
+            // The chapter page carried the detail too, so the manga comes from this same navigation
+            walkedQueries = chapterList.queries?.also {
+                cachedQueries = it
+                rememberQueries(getMangaUrl(manga), it)
+            }
+            if (!chapterList.complete && chapters.isEmpty()) {
+                throw Exception(chapterList.error ?: "Chapter list is incomplete")
+            }
+            val fetched = chapterList.chapters.map { it.toSChapter(mangaSlug) }.onEach { chapter ->
+                chapter.chapterId()?.let(knownDates::get)?.let { chapter.date_upload = it }
+            }
+            // An incomplete list keeps the stored chapters, and the next refresh walks the whole list again
+            val candidates = if (fetchUntilKnown || !chapterList.complete) fetched + chapters else fetched
             selectChapters(candidates, deduplicateChapters, scanlatorBlacklist).also { selected ->
                 selected.firstOrNull()?.apply {
                     memo = buildJsonObject {
-                        memo.forEach { (key, value) -> put(key, value) }
+                        memo.forEach { (key, value) -> if (key != CHAPTER_LIST_FETCHED_AT_MEMO) put(key, value) }
                         put(CHAPTER_LIST_DEDUPLICATED_MEMO, deduplicateChapters)
                         put(CHAPTER_LIST_BLACKLIST_MEMO, blacklistSignature)
+                        put(CHAPTER_DATA_VERSION_MEMO, CHAPTER_DATA_VERSION)
+                        put(CHAPTER_LIST_COMPLETE_MEMO, chapterList.complete)
+                        if (chapterList.complete) put(CHAPTER_LIST_FETCHED_AT_MEMO, fetchStartedAt)
                     }
                 }
             }
         } else {
             chapters
         }
+        val walked = walkedQueries
+        val detail = when {
+            detailBeforeChapters != null -> detailBeforeChapters
+            !fetchDetails -> null
+            walked != null -> walked.mangaDetail()
+            else -> getQueries().mangaDetail()
+        }
+        val updatedManga = detail?.takeIf { fetchDetails }?.let(::parseMangaDetails) ?: manga
         return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    private fun parseMangaDetails(document: Document): SManga {
-        val detail = document.extractInitialQueries()
-            .entries.firstOrNull { (key, _) -> key.contains("\"detail\"") }
-            ?.value
-            ?: throw Exception("Could not find manga detail in queries")
+    private fun JsonObject.mangaDetail(): Manga = entries
+        .firstOrNull { (key, _) -> key.contains("\"detail\"") }
+        ?.value
+        ?.parseAs<Manga>()
+        ?: throw Exception("Could not find manga detail in queries")
 
-        return detail.parseAs<Manga>().toSManga(
-            preferences.posterQuality(),
-            preferences.alternativeNamesInDescription(),
-            preferences.scorePosition(),
-            preferences.showExtraInfo(),
-            preferences.showTagsInGenres(),
+    // The title route refuses the app's OkHttp client, so read the page's initial data from a WebView navigation
+    private suspend fun navigateForQueries(url: String): JsonObject {
+        val payload = runInWebView(
+            url = url,
+            buildScript = { passPayloadName ->
+                """
+                (function () {
+                    // script#initial-data is partial while the document is still parsing
+                    if (document.readyState === 'loading') return;
+                    const raw = document.querySelector('script#initial-data')?.textContent;
+                    if (raw) window.$passPayloadName(raw);
+                })();
+                """.trimIndent()
+            },
         )
+        return (
+            payload.parseAs<JsonObject>()["queries"] as? JsonObject
+                ?: throw Exception("Could not find queries in initial data")
+            )
+            .also { rememberQueries(url, it) }
     }
+
+    // The detail page's data, reused briefly so opening a title and its related list is one navigation
+    private var lastQueries: CachedQueries? = null
+
+    private class CachedQueries(val url: String, val atNanos: Long, val queries: JsonObject)
+
+    private fun recentQueries(url: String): JsonObject? = synchronized(this) {
+        lastQueries?.takeIf { it.url == url && System.nanoTime() - it.atNanos < RECENT_QUERIES_TTL_NANOS }?.queries
+    }
+
+    private fun rememberQueries(url: String, queries: JsonObject) = synchronized(this) {
+        lastQueries = CachedQueries(url, System.nanoTime(), queries)
+    }
+
+    private fun parseMangaDetails(detail: Manga): SManga = detail.toSManga(
+        preferences.posterQuality(),
+        preferences.alternativeNamesInDescription(),
+        preferences.scorePosition(),
+        preferences.showExtraInfo(),
+        preferences.showTagsInGenres(),
+    )
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/title${manga.url}"
 
     override val supportsRelatedMangas = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
-        val related = document.extractInitialQueries()
+        val url = getMangaUrl(manga)
+        val related = (recentQueries(url) ?: navigateForQueries(url))
             .entries.firstOrNull { (key, _) -> key.contains("\"recommended\"") }
             ?.value
             ?: return emptyList()
@@ -508,18 +493,59 @@ abstract class Comix :
 
     private suspend fun getWebViewChapterList(
         manga: SManga,
-        document: Document,
-        latestChapterId: Int?,
-    ): List<SChapter> {
-        val mangaSlug = manga.url.removePrefix("/")
-        val chapterPath = JSONObject.quote("/title/${mangaSlug.substringBefore('-')}-")
-        val payload = runInWebView(document, { it.isChapterListRequest() }) { passPayloadName, rejectName ->
-            "(${asset("capture_items.js")})((${asset("chapter_list.js")})(" +
-                "${latestChapterId ?: "null"}, $chapterPath, $MAX_CHAPTER_PAGES, $CHAPTER_PAGE_DELAY_MS, " +
-                "window.$passPayloadName, window.$rejectName));"
+        knownIds: List<Int>,
+    ): ChapterList {
+        if (knownIds.isEmpty()) showChapterListHint()
+        val mangaId = manga.url.removePrefix("/").substringBefore('-')
+        val payload = runInWebView(getMangaUrl(manga), { it.isChapterListRequest() }) { passPayloadName, _, touchName ->
+            """
+            (function () {
+                // Only on the requested title's page
+                const titlePath = ${JSONObject.quote("/title/$mangaId")};
+                if (location.pathname !== titlePath && !location.pathname.startsWith(titlePath + '-')) return;
+                if (window.__comixA1ChaptersStarted) return;
+                window.__comixA1ChaptersStarted = true;
+                window.__comixHarvestOptions = {
+                    timeoutMs: 60000,
+                    settleMs: 6000,
+                    maxRounds: 1000,
+                    stopAtIds: ${knownIds.joinToString(",", "[", "]")}
+                };
+                window.__comixNativeTap = function (x, y) { try { window.$touchName([x, y]); } catch (e) {} };
+                ${asset("harvest_chapters.js")}
+                const wrap = (result, queries) => ({
+                    chapters: (result.chapters || []).map(ch => ({
+                        id: ch.id,
+                        url: ch.url,
+                        number: ch.number,
+                        name: ch.name,
+                        votes: ch.votes,
+                        createdAtFormatted: dateOf(ch.text),
+                        group: ch.group,
+                        isOfficial: false
+                    })),
+                    complete: !!result.complete,
+                    error: result.error || null,
+                    queries: queries
+                });
+                const dateOf = text => {
+                    const m = /(\d+)\s*(s|m|h|d|w|mo|mos|y|yr|yrs|min|mins|sec|secs|hr|hrs|day|days|week|weeks|month|months|year|years)\s+ago/i.exec(text || '');
+                    return m ? m[1] + ' ' + m[2] + ' ago' : '';
+                };
+                window.__comixHarvestPromise.then(result => {
+                    let queries = null;
+                    try {
+                        const raw = document.querySelector('script#initial-data')?.textContent;
+                        if (raw) queries = JSON.parse(raw).queries || null;
+                    } catch (e) {}
+                    window.$passPayloadName(JSON.stringify(wrap(result, queries)));
+                }).catch(e => {
+                    window.$passPayloadName(JSON.stringify({ chapters: [], complete: false, error: String(e), queries: null }));
+                });
+            })();
+            """.trimIndent()
         }
-
-        return payload.parseAs<List<Chapter>>().map { it.toSChapter(mangaSlug) }
+        return payload.parseAs<ChapterList>()
     }
 
     private fun selectChapters(
@@ -586,67 +612,204 @@ abstract class Comix :
     private fun SChapter.groupId(): Int? = memo[CHAPTER_GROUP_ID_MEMO]?.int
 
     // Comix image domains block any image requests with Referer/Origin
-    override fun imageRequest(page: Page): Request {
-        val imageUrl = page.imageUrl ?: return super.imageRequest(page)
+    override fun getImageRequest(page: Page): Request {
+        // The reader may have moved the page to another host
+        val imageUrl = synchronized(captures) { captures[page.url]?.pages?.get(page.index) }
+            ?: page.imageUrl
+            ?: return super.getImageRequest(page)
         val requestHeaders = headersBuilder()
-            .removeAll("Origin")
             .removeAll("Referer")
             .build()
         return GET(imageUrl, requestHeaders)
     }
 
+    // The page count; getImageUrl waits for each url from a background reader walk
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
-        val payload = runInWebView(document, { it.isChapterPagesRequest() }) { passPayloadName, _ ->
-            "(${asset("capture_items.js")})((${asset("chapter_pages.js")})(window.$passPayloadName));"
+        val chapterUrl = getChapterUrl(chapter)
+        val capture = capture(chapterUrl)
+        val total = try {
+            withTimeout(READER_FIRST_PAGE_SECONDS.seconds) { capture.total.await() }
+        } catch (_: TimeoutCancellationException) {
+            throw Exception("The reader didn't load any pages")
         }
-
-        return buildPages(payload.parseAs())
+        return List(total) { Page(it, url = chapterUrl) }
     }
 
-    private fun buildPages(pages: ChapterPages): List<Page> {
-        val base = pages.baseUrl.trimEnd('/')
-        return pages.items.mapIndexed { index, img ->
-            val full = (if (img.url.startsWith("http")) img.url else "$base/${img.url.trimStart('/')}").toHttpUrl()
-            // V3 pages need the query flag so the server returns grid-scramble headers.
-            val isV3 = img.s == 1 || "v3" in full.queryParameterNames
-            val url = full.newBuilder().apply {
-                if (isV3 && "v3" !in full.queryParameterNames) {
-                    addQueryParameter("v3", null)
-                }
-                val altHosts = pages.altHosts(full.host, index)
-                if (altHosts.isNotEmpty()) fragment(ALT_HOSTS_FRAGMENT + altHosts.joinToString(","))
-            }.build().toString()
-            Page(index, imageUrl = url)
+    override suspend fun getImageUrl(page: Page): String {
+        var capture = capture(page.url)
+        // Asking again retries a missed page
+        capture.seek.set(page.index)
+        if (capture.missed.remove(page.index)) capture.retries.incrementAndGet()
+        val deadline = System.nanoTime() + READER_PAGE_SECONDS.seconds.inWholeNanoseconds
+        while (true) {
+            capture.lastUsedNanos = System.nanoTime()
+            capture.seek.set(page.index)
+            capture.pages[page.index]?.let { return it }
+            capture.error?.let { throw it }
+            if (page.index in capture.missed) throw pageError(page, capture)
+            if (capture.done) {
+                capture = capture(page.url)
+                if (capture.done) throw pageError(page, capture)
+            }
+            if (System.nanoTime() > deadline) throw Exception("Timed out loading page ${page.index + 1}")
+            delay(READER_POLL_MS)
         }
+    }
+
+    private fun pageError(page: Page, capture: ChapterCapture) = Exception(capture.walkError?.message ?: "Page ${page.index + 1} didn't load in the reader")
+
+    // Starts a walk if there is none, or walks again for missing pages
+    private fun capture(chapterUrl: String): ChapterCapture = synchronized(captures) {
+        var capture = captures[chapterUrl] ?: ChapterCapture()
+        // A capture without a page count restarts, after the retry delay if it failed
+        val failed = capture.error != null && System.nanoTime() - capture.endedAtNanos < CAPTURE_ERROR_RETRY_NANOS
+        if (capture.done && capture.pageCount == null && !failed) capture = ChapterCapture()
+        captures[chapterUrl] = capture
+        if (captures.size > MAX_CAPTURES) {
+            captures.entries.firstOrNull { it.key != chapterUrl && it.value.done }?.let { captures.remove(it.key) }
+        }
+
+        val pageCount = capture.pageCount
+        val missing = pageCount == null || (0 until pageCount).any { !capture.pages.containsKey(it) }
+        val canWalk = capture.job == null || (capture.done && capture.error == null && missing)
+        if (canWalk && (capture.paused || takeWalk(chapterUrl))) {
+            capture.done = false
+            capture.paused = false
+            capture.lastUsedNanos = System.nanoTime()
+            capture.job = captureScope.launch { walkSlots.withPermit { runCaptureWalk(chapterUrl, capture) } }
+        }
+        capture
+    }
+
+    private fun takeWalk(chapterUrl: String): Boolean {
+        val now = System.nanoTime()
+        walkStarts.values.forEach { starts -> starts.removeAll { now - it > CHAPTER_WALK_WINDOW_NANOS } }
+        walkStarts.values.removeAll { it.isEmpty() }
+        val starts = walkStarts.getOrPut(chapterUrl) { mutableListOf() }
+        if (starts.size >= MAX_CHAPTER_WALKS) return false
+        starts += now
+        return true
+    }
+
+    private suspend fun runCaptureWalk(chapterUrl: String, capture: ChapterCapture) = coroutineScope {
+        val seekName = randomName()
+        val walk = launch {
+            try {
+                runInWebView(
+                    chapterUrl,
+                    loadImages = true,
+                    timeoutSeconds = READER_TIMEOUT_SECONDS,
+                    onPayload = { payload, done -> onCaptureMessage(payload, capture, done) },
+                    pollScript = { "window.$seekName = [${capture.seek.get()}, ${capture.retries.get()}];" },
+                ) { passPayloadName, rejectName, _ ->
+                    "(${asset("chapter_pages.js")})(window.$passPayloadName, window.$rejectName, \"$seekName\", " +
+                        "${capture.pages.keys.toList().toJsonString()});"
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // After the page count, a failure only leaves pages to walk again
+                if (capture.total.isCompleted) capture.walkError = e else capture.error = e
+            } finally {
+                capture.endedAtNanos = System.nanoTime()
+                capture.total.completeExceptionally(capture.error ?: Exception("The reader didn't load any pages"))
+                capture.done = true
+            }
+        }
+        // Pause when no page has been asked for in a while
+        while (walk.isActive) {
+            delay(CAPTURE_IDLE_CHECK_MS)
+            if (capture.pageCount != null && System.nanoTime() - capture.lastUsedNanos > CAPTURE_IDLE_NANOS) {
+                capture.paused = true
+                walk.cancel()
+            }
+        }
+    }
+
+    private fun onCaptureMessage(payload: String, capture: ChapterCapture, done: () -> Unit) {
+        val message = payload.parseAs<CaptureMessage>()
+        when (message.type) {
+            "total" -> {
+                capture.pageCount = message.total!!
+                capture.total.complete(message.total)
+            }
+            "page" -> {
+                capture.pages[message.index!!] = message.url!!
+                capture.missed.remove(message.index)
+            }
+            "miss" -> capture.missed.add(message.index!!)
+            "done" -> done()
+        }
+    }
+
+    private class ChapterCapture {
+        val total = CompletableDeferred<Int>()
+        val pages = ConcurrentHashMap<Int, String>()
+        val missed: MutableSet<Int> = ConcurrentHashMap.newKeySet()
+
+        @Volatile
+        var pageCount: Int? = null
+
+        // Page to load first, and how often a missed page was asked for again
+        val seek = AtomicInteger(-1)
+        val retries = AtomicInteger()
+
+        @Volatile
+        var lastUsedNanos = System.nanoTime()
+
+        @Volatile
+        var endedAtNanos = 0L
+
+        // Failed before the page count
+        @Volatile
+        var error: Throwable? = null
+
+        // Failed after it; shown for missing pages
+        @Volatile
+        var walkError: Throwable? = null
+
+        @Volatile
+        var done = false
+
+        // Idle stop; resuming doesn't count against the limit
+        @Volatile
+        var paused = false
+
+        @Volatile
+        var job: Job? = null
     }
 
     override fun getFilterList(data: JsonElement?) = sourceFilters().getFilterList()
 
+    @OptIn(NativeWebViewApi::class)
     private suspend fun runInWebView(
-        document: Document,
+        url: String,
         isDataRequest: ((HttpUrl) -> Boolean)? = null,
         buildScript: ((passPayloadName: String) -> String)? = null,
-        pageScript: (passPayloadName: String, rejectName: String) -> String,
+        // The reader run: images on, offscreen display
+        loadImages: Boolean = false,
+        timeoutSeconds: Long = if (isDataRequest != null) DATA_REQUEST_WAIT_SECONDS else WEBVIEW_TIMEOUT_SECONDS,
+        // Gets every payload; the run ends on done()
+        onPayload: ((payload: String, done: () -> Unit) -> Unit)? = null,
+        pollScript: (() -> String)? = null,
+        pageScript: (passPayloadName: String, rejectName: String, touchName: String) -> String = { _, _, _ -> "" },
     ): String {
-        val waitSeconds = if (isDataRequest != null) DATA_REQUEST_WAIT_SECONDS else WEBVIEW_TIMEOUT_SECONDS
-        val timeoutDeadline = AtomicLong(System.nanoTime() + waitSeconds.seconds.inWholeNanoseconds)
+        val timeoutDeadline = AtomicLong(System.nanoTime() + timeoutSeconds.seconds.inWholeNanoseconds)
         val dataRequests = AtomicInteger()
-        val (bridgeName, errorBridgeName, passPayloadName, rejectName) = List(4) {
-            (1..(10..20).random())
-                .map { (('a'..'z') + ('A'..'Z')).random() }
-                .joinToString("")
-        }
+        val (bridgeName, errorBridgeName, passPayloadName, rejectName) = List(4) { randomName() }
+        val (touchBridgeName, touchName) = List(2) { randomName() }
         return runWebView(timeout = Duration.INFINITE) {
             userAgent = headers["User-Agent"].orEmpty()
-            blockImages = true
+            blockImages = !loadImages
 
             val emptyResponse = WebResourceResponse("text/plain", "utf-8", Buffer().inputStream())
             interceptRequest { request ->
                 val requestUrl = request.url?.toString()?.toHttpUrlOrNull()
                     ?: return@interceptRequest emptyResponse
                 if (UNUSED_SITE_PATHS.any(requestUrl.encodedPath::startsWith)) return@interceptRequest emptyResponse
-                if (requestUrl.encodedPath == WAF_CHALLENGE_PATH) {
+                // The solver's own request for this path reads the site's page
+                val isFrameLoad = request.requestHeaders["Accept"].orEmpty().contains("text/html")
+                if (requestUrl.encodedPath == WAF_CHALLENGE_PATH && isFrameLoad) {
                     if (!preferences.solveCaptchas()) {
                         reject(Exception("Open in WebView to solve the captcha, or turn on \"Solve captchas\" in extension settings"))
                         return@interceptRequest emptyResponse
@@ -656,8 +819,9 @@ abstract class Comix :
                 }
                 val isData = isDataRequest?.invoke(requestUrl) == true
                 if (isData) dataRequests.incrementAndGet()
+                if (requestUrl.isChapterListRequest()) chapterListPacer.waitForSlot()
                 if (isData || requestUrl.encodedPath.startsWith(WAF_PATH)) {
-                    timeoutDeadline.set(System.nanoTime() + waitSeconds.seconds.inWholeNanoseconds)
+                    timeoutDeadline.set(System.nanoTime() + timeoutSeconds.seconds.inWholeNanoseconds)
                 }
                 val allowed = requestUrl.host == baseUrlHost ||
                     requestUrl.host.endsWith(".$baseUrlHost") ||
@@ -666,11 +830,29 @@ abstract class Comix :
                     requestUrl.host == "comix.ws" ||
                     requestUrl.host.endsWith(".comix.ws") ||
                     requestUrl.host == "challenges.cloudflare.com"
-                if (allowed) null else emptyResponse
+                // Page images are off-site
+                if (allowed || loadImages) null else emptyResponse
             }
 
-            jsBridge(bridgeName) { resolve(it) }
-            jsBridge(errorBridgeName) { reject(Exception(it)) }
+            val siteOrigin = url.toHttpUrl().run { "$scheme://$host" }
+            webMessageBridge(bridgeName, setOf(siteOrigin)) { payload ->
+                val sink = onPayload
+                if (sink != null) sink(payload) { resolve(payload) } else resolve(payload)
+            }
+            webMessageBridge(errorBridgeName, setOf(siteOrigin)) { reject(Exception(it)) }
+            webMessageBridge(touchBridgeName, setOf(siteOrigin)) { message ->
+                val points = message.split(',').mapNotNull { it.toFloatOrNull() }
+                when (points.size) {
+                    2 -> tap(points[0], points[1])
+                    4 -> swipe(points[0], points[1], points[2], points[3])
+                    else -> throw Exception("Bad touch from the page: $message")
+                }
+            }
+            // Refuse the site's first-tap ad window
+            withNativeWebView {
+                if (loadImages) BackgroundSurface.host(it)
+                it.settings.setSupportMultipleWindows(true)
+            }
 
             val captureScript = buildScript?.invoke(passPayloadName)
             if (captureScript != null) {
@@ -685,29 +867,37 @@ abstract class Comix :
                         else -> "Nothing read from ${dataRequests.get()} site requests"
                     }
                     reject(Exception(message))
-                } else if (captureScript != null) {
-                    evaluateJs(captureScript)
+                    return@poll
                 }
+                if (captureScript != null) evaluateJs(captureScript)
+                pollScript?.let { evaluateJs(it()) }
             }
 
+            // The site's current build flags foreign inline head scripts, so inject with no element left behind
+            // The bootstrap also marks the site's ad overlay as already shown (the __pu1 localStorage flag below) so it never covers the page
+            val startFlagName = "window.${randomName()}"
             val bootstrapScript = """
-                window.$passPayloadName = payload => window.$bridgeName.post(payload);
-                window.$rejectName = message => window.$errorBridgeName.post(message);
-                ${pageScript(passPayloadName, rejectName)}
+                (() => {
+                if (window.top !== window || $startFlagName) return;
+                $startFlagName = true;
+                try { localStorage.setItem("__pu1", "[" + Date.now() + "]"); } catch (e) {}
+                window.$passPayloadName = payload => window.$bridgeName.postMessage(payload);
+                window.$rejectName = message => window.$errorBridgeName.postMessage(message);
+                window.$touchName = points => window.$touchBridgeName.postMessage(points.join(","));
+                ${pageScript(passPayloadName, rejectName, touchName)}
+                })();
             """.trimIndent()
-            val html = document.clone().apply {
-                head().prependElement("script").append(bootstrapScript)
-            }.outerHtml()
-            loadData(document.location(), html)
+            injectAtDocumentStart(bootstrapScript, setOf(siteOrigin))
+            // The reader route refuses an app package here
+            if (loadImages) loadUrl(url, mapOf("X-Requested-With" to "com.android.chrome")) else loadUrl(url)
         }
     }
 
-    private fun asset(name: String) = javaClass.getResource("/assets/$name")!!.readText()
+    private fun randomName() = (1..(10..20).random())
+        .map { (('a'..'z') + ('A'..'Z')).random() }
+        .joinToString("")
 
-    private fun HttpUrl.isChapterPagesRequest(): Boolean = pathSegments.size == 4 &&
-        pathSegments[0] == "api" &&
-        pathSegments[1] == "v1" &&
-        pathSegments[2] == "chapters"
+    private fun asset(name: String) = javaClass.getResource("/assets/$name")!!.readText()
 
     private fun HttpUrl.isChapterListRequest(): Boolean = pathSegments.size == 5 &&
         pathSegments[0] == "api" &&
@@ -765,7 +955,7 @@ abstract class Comix :
         MultiSelectListPreference(screen.context).apply {
             key = PREF_DEFAULT_DEMOGRAPHICS
             title = "Default demographics"
-            summary = "Demographics to include in popular, latest, and search " +
+            summary = "Unticked demographics are hidden from popular, latest, and search " +
                 "results. The Demographic filter in search overrides this."
             entries = Filters.getDemographics().map { it.first }.toTypedArray()
             entryValues = Filters.getDemographics().map { it.second }.toTypedArray()
@@ -862,7 +1052,7 @@ abstract class Comix :
 
     private fun SharedPreferences.defaultDemographics(): Set<String> {
         val all = Filters.getDemographics().map { it.second }.toSet()
-        return getStringSet(PREF_DEFAULT_DEMOGRAPHICS, all) ?: all
+        return getStringSet(PREF_DEFAULT_DEMOGRAPHICS, all)?.ifEmpty { all } ?: all
     }
 
     private fun SharedPreferences.blockedGenres(): Set<String> = getStringSet(PREF_BLOCKED_GENRES, emptySet()) ?: emptySet()
@@ -898,14 +1088,26 @@ abstract class Comix :
         private const val DEFAULT_CONTENT_RATING = "suggestive"
         private const val WEBVIEW_TIMEOUT_SECONDS = 120L
         private const val DATA_REQUEST_WAIT_SECONDS = 30L
+        private val RECENT_QUERIES_TTL_NANOS = 120.seconds.inWholeNanoseconds
         private const val SCRIPT_RETRY_INTERVAL_MS = 100L
         private const val MAX_CHAPTER_PAGES = 1000
-        private const val CHAPTER_PAGE_DELAY_MS = 500
+        private val chapterListPacer = RequestPacer(minGapMs = 2500, maxGapMs = 5000)
         private const val OFFICIAL_GROUP_ID = 10702
+        private const val CHAPTER_DATA_VERSION = 1
         private const val TAG_ID_CACHE_SIZE = 50
+        private const val READER_TIMEOUT_SECONDS = 240L
+        private const val READER_FIRST_PAGE_SECONDS = 45L
+        private const val READER_PAGE_SECONDS = 120L
+        private const val READER_POLL_MS = 250L
+        private const val MAX_CAPTURES = 8
+        private const val MAX_RUNNING_WALKS = 3
+        private const val MAX_CHAPTER_WALKS = 3
+        private val CHAPTER_WALK_WINDOW_NANOS = 10.minutes.inWholeNanoseconds
+        private const val CAPTURE_IDLE_CHECK_MS = 5000L
+        private val CAPTURE_IDLE_NANOS = 45.seconds.inWholeNanoseconds
+        private val CAPTURE_ERROR_RETRY_NANOS = 10.seconds.inWholeNanoseconds
         private val SCRAMBLE_PATH_FALLBACK_REGEX = Regex("/(?:i5|s?i+)/")
         private val SERVER_ERROR_CODES = setOf(502, 503, 522, 523)
-        private const val ALT_HOSTS_FRAGMENT = "alt="
 
         // Site requests in the WebView that the extension has no use for: error reports, comments, upload images
         private val UNUSED_SITE_PATHS = listOf("/api/v1/client-errors", "/api/v1/threads/", "/assets/uploads/")

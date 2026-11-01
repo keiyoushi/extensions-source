@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -32,13 +33,13 @@ abstract class Manhwaz : KeiSource() {
         if (page > 1) {
             return MangasPage(emptyList(), false)
         }
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("article.popular-card").map(::cardToManga)
         return MangasPage(mangas, false)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/?page=$page").asJsoup()
+        val document = client.get("$baseUrl/?page=$page", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("article.latest-card").map(::cardToManga)
         return MangasPage(mangas, document.hasNextPage())
     }
@@ -59,7 +60,7 @@ abstract class Manhwaz : KeiSource() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val selector = if (query.isBlank() && genreId.isEmpty()) {
             "article.latest-card"
         } else {
@@ -87,7 +88,7 @@ abstract class Manhwaz : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val firstDocument = client.get(getMangaUrl(manga)).asJsoup()
+        val firstDocument = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val details = parseMangaDetails(firstDocument)
 
         val chapterList = mutableListOf<SChapter>()
@@ -98,7 +99,7 @@ abstract class Manhwaz : KeiSource() {
                 chapterList += document.select("a.release-row").map(::releaseRowToChapter)
                 val nextUrl = document.selectFirst("nav.pagination a[aria-label=\"Next page\"]")?.attr("abs:href")
                     ?: break
-                document = client.get(nextUrl).asJsoup()
+                document = client.get(nextUrl, Fetch.DOCUMENT).asJsoup()
             }
         }
 
@@ -132,7 +133,7 @@ abstract class Manhwaz : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("div.reader-pages figure.reader-page-image img").mapIndexed { index, img ->
             val url = img.attr("abs:src").ifEmpty { img.attr("abs:data-src") }
             Page(index, imageUrl = url)
@@ -142,7 +143,7 @@ abstract class Manhwaz : KeiSource() {
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val genres = client.get("$baseUrl/genre").asJsoup()
+        val genres = client.get("$baseUrl/genre", Fetch.DOCUMENT).asJsoup()
             .select(".genre-directory a")
             .map { GenreOption(it.text().trim(), it.attr("href").removePrefix("/")) }
         return genres.toJsonElement()

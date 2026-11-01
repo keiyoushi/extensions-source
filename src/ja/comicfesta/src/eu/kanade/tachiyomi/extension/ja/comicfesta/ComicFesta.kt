@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.clipstudioreader.ClipStudioReaderInterceptor
 import keiyoushi.lib.clipstudioreader.fetchPages
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
@@ -27,7 +28,6 @@ import org.jsoup.nodes.Document
 abstract class ComicFesta :
     KeiSource(),
     ConfigurableSource {
-
     private val preferences by getPreferencesLazy()
     private val rscHeaders get() = headersBuilder()
         .add("rsc", "1")
@@ -42,7 +42,7 @@ abstract class ComicFesta :
         val url = "$baseUrl/sales_rankings/monthly_general".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
-        val result = client.get(url, rscHeaders).extractNextJs<RankingResponse>()
+        val result = client.get(url, rscHeaders, Fetch.XHR).extractNextJs<RankingResponse>()
         val mangas = result?.titles.orEmpty().map { it.toSManga() }
         return MangasPage(mangas, hasNextPage = page != 2)
     }
@@ -53,7 +53,7 @@ abstract class ComicFesta :
             .addQueryParameter("sort", "release")
             .addQueryParameter("search_form[other_item][]", "new")
             .build()
-        return parseTitleList(client.get(url).asJsoup())
+        return parseTitleList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -63,7 +63,7 @@ abstract class ComicFesta :
             .addQueryParameter("search", query)
             .addQueryParameter("commit", "search")
             .build()
-        return parseTitleList(client.get(url).asJsoup())
+        return parseTitleList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private fun parseTitleList(document: Document): MangasPage {
@@ -82,7 +82,7 @@ abstract class ComicFesta :
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "titles") return null
         val id = url.pathSegments.getOrNull(1) ?: return null
 
-        return parseDetails(client.get("$baseUrl/titles/$id").asJsoup()).apply { this.url = id }
+        return parseDetails(client.get("$baseUrl/titles/$id", Fetch.DOCUMENT).asJsoup()).apply { this.url = id }
     }
 
     override suspend fun fetchMangaUpdate(
@@ -92,7 +92,7 @@ abstract class ComicFesta :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         // no redirect for r18 content with rsc, so details and chapters are read from the same page
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val chapterList = document.extractNextJs<ChapterListResponse>()
@@ -118,7 +118,7 @@ abstract class ComicFesta :
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/volumes/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter), ensureSuccess = false)
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT, ensureSuccess = false)
         val landingPath = response.request.url.pathSegments.first()
         if (landingPath == "entry" || landingPath == "error") {
             response.close()

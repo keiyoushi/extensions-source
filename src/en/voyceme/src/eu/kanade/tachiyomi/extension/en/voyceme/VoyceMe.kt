@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.voyceme
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,11 +8,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.graphQLPost
+import keiyoushi.utils.graphQLBody
 import keiyoushi.utils.parseGraphQLAs
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -31,22 +31,19 @@ abstract class VoyceMe : KeiSource() {
         rateLimit(2, 1.seconds) { it.host == staticurlHost }
     }
 
-    override fun Headers.Builder.configureHeaders() = apply {
-        add("Accept", ACCEPT_ALL)
-    }
-
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.newCall(
-            graphQLPost(
-                GRAPHQL_URL,
-                headers,
+        val response = client.post(
+            GRAPHQL_URL,
+            headers,
+            Fetch.XHR,
+            graphQLBody(
                 query = POPULAR_QUERY,
                 variables = PopularQueryVariables(
                     offset = (page - 1) * POPULAR_PER_PAGE,
                     limit = POPULAR_PER_PAGE,
                 ),
             ),
-        ).awaitSuccess()
+        )
 
         return parseMangaList(response)
     }
@@ -58,26 +55,28 @@ abstract class VoyceMe : KeiSource() {
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val response = client.newCall(
-            graphQLPost(
-                GRAPHQL_URL,
-                headers,
+        val response = client.post(
+            GRAPHQL_URL,
+            headers,
+            Fetch.XHR,
+            graphQLBody(
                 query = LATEST_QUERY,
                 variables = LatestQueryVariables(
                     offset = (page - 1) * POPULAR_PER_PAGE,
                     limit = POPULAR_PER_PAGE,
                 ),
             ),
-        ).awaitSuccess()
+        )
 
         return parseMangaList(response)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val response = client.newCall(
-            graphQLPost(
-                GRAPHQL_URL,
-                headers,
+        val response = client.post(
+            GRAPHQL_URL,
+            headers,
+            Fetch.XHR,
+            graphQLBody(
                 query = SEARCH_QUERY,
                 variables = SearchQueryVariables(
                     searchTerm = "%$query%",
@@ -85,7 +84,7 @@ abstract class VoyceMe : KeiSource() {
                     limit = POPULAR_PER_PAGE,
                 ),
             ),
-        ).awaitSuccess()
+        )
 
         return parseMangaList(response)
     }
@@ -113,14 +112,15 @@ abstract class VoyceMe : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val comicSlug = manga.url.substringAfter("/series/").substringBefore("/")
-        val response = client.newCall(
-            graphQLPost(
-                GRAPHQL_URL,
-                headersBuilder().set("Referer", baseUrl + manga.url).build(),
+        val response = client.post(
+            GRAPHQL_URL,
+            headers,
+            Fetch.XHR.from(manga.url),
+            graphQLBody(
                 query = UPDATES_QUERY,
                 variables = ChaptersQueryVariables(slug = comicSlug),
             ),
-        ).awaitSuccess()
+        )
 
         val comic = response.parseGraphQLAs<VoyceMeSeriesCollection>().series.first()
         return SMangaUpdate(
@@ -133,22 +133,22 @@ abstract class VoyceMe : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.url.substringAfterLast("/").substringBefore("#").toInt()
-        val response = client.newCall(
-            graphQLPost(
-                GRAPHQL_URL,
-                headers,
+        val response = client.post(
+            GRAPHQL_URL,
+            headers,
+            Fetch.XHR,
+            graphQLBody(
                 query = PAGES_QUERY,
                 variables = PagesQueryVariables(chapterId = chapterId),
             ),
-        ).awaitSuccess()
+        )
 
         return response.parseGraphQLAs<VoyceChapterImagesCollection>().images
             .mapIndexed { i, page -> Page(i, baseUrl, STATIC_URL + page.image) }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
-            .add("Accept", ACCEPT_IMAGE)
             .set("Referer", page.url)
             .build()
 
@@ -156,11 +156,8 @@ abstract class VoyceMe : KeiSource() {
     }
 
     companion object {
-        private const val ACCEPT_ALL = "*/*"
-        private const val ACCEPT_IMAGE = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
-
         const val STATIC_URL = "https://dlkfxmdtxtzpb.cloudfront.net/"
-        private const val GRAPHQL_URL = "https://graphql.voyce.me/v1/graphql"
+        private const val GRAPHQL_URL = "https://hasura.voyce.me/v1/graphql"
 
         private const val POPULAR_PER_PAGE = 10
     }

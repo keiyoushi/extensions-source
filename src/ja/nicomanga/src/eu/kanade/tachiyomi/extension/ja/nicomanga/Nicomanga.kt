@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -104,7 +105,7 @@ abstract class Nicomanga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val payload = decodePayload(client.get(baseUrl + manga.url).body.string())
+        val payload = decodePayload(client.get(baseUrl + manga.url, Fetch.DOCUMENT).body.string())
         val mangaDto = payload.manga!!
 
         val details = SManga.create().apply {
@@ -145,7 +146,7 @@ abstract class Nicomanga : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val images = decodePayload(client.get(baseUrl + chapter.url).body.string()).images.orEmpty()
+        val images = decodePayload(client.get(baseUrl + chapter.url, Fetch.DOCUMENT).body.string()).images.orEmpty()
 
         return images.mapIndexed { i, url ->
             Page(i, imageUrl = url)
@@ -158,7 +159,7 @@ abstract class Nicomanga : KeiSource() {
      * Popular, latest, and search all render into the same manga list grid.
      */
     private suspend fun fetchMangaListPage(url: String): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select(".manga-grid .manga-card").map { element ->
             val titleElement = element.selectFirst(".manga-title")!!
@@ -293,7 +294,7 @@ abstract class Nicomanga : KeiSource() {
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement = GenresPayload(
-        client.get("$baseUrl/manga-list.html").asJsoup()
+        client.get("$baseUrl/manga-list.html", Fetch.DOCUMENT).asJsoup()
             .select("a.genre-tag")
             .mapNotNull { element ->
                 val id = element.attr("abs:href").toHttpUrlOrNull()?.queryParameter("g")

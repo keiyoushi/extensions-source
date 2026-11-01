@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -31,25 +32,23 @@ abstract class FlameComics : KeiSource() {
         .rateLimit(2, 2.seconds) { it.fragment != THUMBNAIL_FRAGMENT }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val series = fetchBrowseSeries().sortedByDescending { it.views }
+        val series = fetchBrowseSeries().sortedBy { it.popularityRank ?: Int.MAX_VALUE }
         return MangasPage(series.mapNotNull { it.toSManga() }, false)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val series = client.get(dataUrl { addPathSegment("index.json") })
-            .parseAs<NextDataDto<LatestDto>>().pageProps.series
+        val series = client.get(dataUrl { addPathSegment("latest.json") }, Fetch.XHR)
+            .parseAs<NextDataDto<LatestDto>>().pageProps.allSeries
         return MangasPage(series.mapNotNull { it.toSManga() }, false)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val normalizedQuery = query.normalizeTitle()
-        val series = fetchBrowseSeries().filter { series ->
-            (listOf(series.title) + series.altTitles.orEmpty()).any { normalizedQuery in it.normalizeTitle() }
-        }
+        val series = fetchBrowseSeries().filter { normalizedQuery in it.title.normalizeTitle() }
         return MangasPage(series.mapNotNull { it.toSManga() }, false)
     }
 
-    private suspend fun fetchBrowseSeries(): List<SeriesDto> = client.get(dataUrl { addPathSegment("browse.json") })
+    private suspend fun fetchBrowseSeries(): List<SeriesDto> = client.get(dataUrl { addPathSegment("browse.json") }, Fetch.XHR)
         .parseAs<NextDataDto<BrowseDto>>().pageProps.series
 
     private fun String.normalizeTitle() = SPECIAL_CHARS_REGEX.replace(lowercase(), "")
@@ -74,6 +73,7 @@ abstract class FlameComics : KeiSource() {
                 addPathSegment("$seriesId.json")
                 addQueryParameter("id", seriesId)
             },
+            Fetch.XHR,
         ).parseAs<NextDataDto<SeriesPageDto>>().pageProps
 
         return SMangaUpdate(
@@ -92,6 +92,7 @@ abstract class FlameComics : KeiSource() {
                 addQueryParameter("id", seriesId)
                 addQueryParameter("token", token)
             },
+            Fetch.XHR,
         ).parseAs<NextDataDto<ChapterPageDto>>().pageProps.chapter.toPages()
     }
 
@@ -101,7 +102,7 @@ abstract class FlameComics : KeiSource() {
 
     private suspend fun dataUrl(path: HttpUrl.Builder.() -> Unit): HttpUrl {
         val id = buildId
-            ?: client.get(baseUrl).asJsoup().extractNextJs<BuildIdDto>()?.buildId?.also { buildId = it }
+            ?: client.get(baseUrl, Fetch.DOCUMENT).asJsoup().extractNextJs<BuildIdDto>()?.buildId?.also { buildId = it }
             ?: throw Exception("Failed to find buildId")
 
         return baseUrl.toHttpUrl().newBuilder()

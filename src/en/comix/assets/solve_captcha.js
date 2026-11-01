@@ -1,4 +1,5 @@
 // Answers the site's rotate or click-the-shapes captcha, then posts the solved message the site's own captcha page sends
+// Shows the site's own captcha page when it is a Cloudflare Turnstile check
 // Rotation search ported from https://github.com/nekomangaorg/Neko (ComixWafSolver)
 // Shapes: go-captcha's stock set (https://github.com/wenlng/go-captcha-assets, Apache-2.0) as 60x60 bitmaps
 (reject) => {
@@ -26,6 +27,8 @@
     const CONFIDENT_MARGIN = 2.2;
     const CHALLENGES_PER_ROUND = 5;
     const ROUNDS = 3;
+    const TURNSTILE_SCRIPT = "challenges.cloudflare.com/turnstile";
+    const TURNSTILE_WAIT_MS = 20000;
 
     const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
     const masterPalette = MASTER_PALETTE.map(rgb);
@@ -401,7 +404,22 @@
         return (await json(response)).success === true;
     };
 
+    // Site's own page in place of this one; it posts the solved message itself
+    const showSitePage = (page) => {
+        const timer = setTimeout(() => reject("Couldn't pass the site's Cloudflare check, open in WebView to pass it"), TURNSTILE_WAIT_MS);
+        parent.addEventListener("message", (event) => {
+            if (event.data?.type === "waf-captcha-solved") clearTimeout(timer);
+        });
+        document.open();
+        document.write(page);
+        document.close();
+    };
+
     (async () => {
+        const response = await fetch(location.pathname);
+        if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+        const page = await response.text();
+        if (page.includes(TURNSTILE_SCRIPT)) return showSitePage(page);
         for (let i = 0; i < ROUNDS; i++) {
             if (await round()) {
                 parent.postMessage({ type: "waf-captcha-solved" }, location.origin);
