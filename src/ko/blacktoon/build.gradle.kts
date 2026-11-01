@@ -14,7 +14,7 @@ keiyoushi {
         name = "블랙툰"
         lang = "ko"
         baseUrl {
-            mirrors("https://blacktoon.me")
+            custom("https://blacktoon426.com")
         }
     }
 }

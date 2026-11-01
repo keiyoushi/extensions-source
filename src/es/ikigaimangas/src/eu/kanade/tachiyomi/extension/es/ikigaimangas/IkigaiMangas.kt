@@ -315,7 +315,7 @@ abstract class IkigaiMangas : KeiSource() {
         val scriptUrl = document.selectFirst("button[on:click]:containsOwn(Ir al sitio)")!!.attr("on:click")
         val script = client.get("$DOMAIN_URL/build/$scriptUrl", Fetch.SCRIPT).body.string()
         val domain = script.substringAfter("i(\"").substringBefore("\"")
-        return listOf(client.get(domain, Fetch.DOCUMENT, ensureSuccess = false).use { it.request.url.toString() })
+        return listOf(client.get(domain, Fetch.DOCUMENT).use { it.request.url.toString() })
     }
 
     companion object {

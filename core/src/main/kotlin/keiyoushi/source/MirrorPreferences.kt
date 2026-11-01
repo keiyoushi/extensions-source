@@ -23,8 +23,7 @@ class MirrorPreferences(
         get() = mirrors[index].second
 
     override fun update(urls: List<String>) {
-        val current = baseUrl
-        val newIndex = if (index == 0) 0 else urls.indexOf(current).coerceAtLeast(0)
+        val newIndex = if (index == 0) 0 else urls.indexOf(baseUrl).coerceAtLeast(0)
         preferences.edit()
             .putString(fetchedKey, urls.joinToString(","))
             .putString(prefKey, newIndex.toString())

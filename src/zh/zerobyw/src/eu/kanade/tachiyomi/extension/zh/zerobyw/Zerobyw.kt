@@ -48,7 +48,7 @@ abstract class Zerobyw : KeiSource() {
     private fun parseMangaFromCard(element: Element): SManga = SManga.create().apply {
         title = getTitle(element.selectFirst("h3")!!.text())
         setUrlWithoutDomain(element.absUrl("href"))
-        thumbnail_url = element.selectFirst("img")!!.absUrl("src")
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
     // Latest
@@ -86,9 +86,9 @@ abstract class Zerobyw : KeiSource() {
             .eachText()
         val details = SManga.create().apply {
             title = getTitle(document.selectFirst("main h1")!!.text())
-            thumbnail_url = document.selectFirst("main img.object-contain")!!.absUrl("src")
+            thumbnail_url = document.selectFirst("main img.object-contain")?.absUrl("src")
             author = labs.firstOrNull()?.removePrefix("作者: ")
-            genre = labs.joinToString(", ")
+            genre = labs.joinToString()
             description = document.selectFirst("p[x-ref=summaryText]")?.html()?.replace("<br>", "")
             status = when {
                 labs.any { it == "连载中" } -> SManga.ONGOING

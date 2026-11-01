@@ -22,6 +22,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerializationException
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Instant
 
 @Source
 abstract class OlympusScanlation : KeiSource() {
@@ -30,19 +33,19 @@ abstract class OlympusScanlation : KeiSource() {
 
     override suspend fun fetchBaseUrls(): List<String> {
         val domain = client.get(DOMAIN_URL, Fetch.DOCUMENT).asJsoup().selectFirst("meta[property=og:url]")!!.attr("content")
-        return listOf(client.get(domain, Fetch.DOCUMENT, ensureSuccess = false).use { it.request.url.toString() })
+        return listOf(client.get(domain, Fetch.DOCUMENT).use { it.request.url.toString() })
     }
 
     private var seriesList: List<MangaDto> = emptyList()
 
-    private var lastFetchTime: Long = 0L
+    private var lastFetchTime = Instant.DISTANT_PAST
 
     private val seriesListMutex = Mutex()
 
     private suspend fun fetchSeriesList() = seriesListMutex.withLock {
-        val now = System.currentTimeMillis()
+        val now = Clock.System.now()
 
-        if (seriesList.isNotEmpty() && (now - lastFetchTime) < CACHE_DURATION_MS) {
+        if (seriesList.isNotEmpty() && (now - lastFetchTime) < CACHE_DURATION) {
             return@withLock
         }
 
@@ -183,6 +186,6 @@ abstract class OlympusScanlation : KeiSource() {
 
         private const val SLUG_MAP = "slugMap"
 
-        private const val CACHE_DURATION_MS = 60 * 60 * 1000L // 1 hour
+        private val CACHE_DURATION = 1.hours
     }
 }

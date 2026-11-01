@@ -66,8 +66,8 @@ abstract class Kagane :
     override val imageFetch = Fetch.XHR
 
     override suspend fun fetchBaseUrls(): List<String> = client.get(HUB_URL, Fetch.DOCUMENT)
+        // Mirror cards sit at the top of a 1.2 MB page
         .use { Jsoup.parse(it.peekBody(HUB_BYTES).string(), HUB_URL) }
-        // Mirror cards
         .select("li:has(p[aria-live]) a[href^=https://]")
         .map { it.absUrl("href") }
 
