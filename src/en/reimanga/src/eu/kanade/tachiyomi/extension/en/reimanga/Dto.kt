@@ -152,13 +152,43 @@ class ChapterList(
 
 @Serializable
 class Images(
-    val images: List<Image>,
+    private val images: List<Image>,
+    private val pack: Pack? = null,
 ) {
+    fun imageUrls() = pack?.imageUrls() ?: images.map { it.url }
+
     @Serializable
     class Image(
         @SerialName("image_url")
         val url: String,
     )
+
+    /** One file per segment holding its pages as consecutive WebPs. */
+    @Serializable
+    class Pack(
+        private val index: Index,
+        private val urls: List<String>,
+    ) {
+        fun imageUrls(): List<String> {
+            val pages = index.pages.iterator()
+
+            return index.segments.flatMapIndexed { segment, pageCount ->
+                var start = 0L
+                List(pageCount) {
+                    val end = start + pages.next().first()
+                    "${urls[segment]}#$start-${end - 1}".also { start = end }
+                }
+            }
+        }
+
+        @Serializable
+        class Index(
+            @SerialName("p")
+            val pages: List<List<Long>>,
+            @SerialName("s")
+            val segments: List<Int>,
+        )
+    }
 }
 
 @Serializable

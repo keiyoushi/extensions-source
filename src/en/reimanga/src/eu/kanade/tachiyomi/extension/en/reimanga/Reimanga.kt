@@ -30,6 +30,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
+import okhttp3.Request
 import okio.IOException
 import kotlin.time.Instant
 
@@ -192,9 +193,18 @@ abstract class Reimanga :
         val data = client.get(getChapterUrl(chapter), rscHeaders, Fetch.XHR).extractNextJs<Images>()
             ?: return emptyList()
 
-        return data.images.mapIndexed { index, image ->
-            Page(index, imageUrl = image.url)
+        return data.imageUrls().mapIndexed { index, imageUrl ->
+            Page(index, imageUrl = imageUrl)
         }
+    }
+
+    override fun getImageRequest(page: Page): Request {
+        val request = super.getImageRequest(page)
+        val range = request.url.fragment ?: return request
+
+        return request.newBuilder()
+            .header("Range", "bytes=$range")
+            .build()
     }
 
     override val supportsFilterFetching = true
