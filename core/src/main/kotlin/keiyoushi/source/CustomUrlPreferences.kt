@@ -37,6 +37,7 @@ class CustomUrlPreferences(
 
     override fun update(urls: List<String>) {
         val url = urls.first()
+        // A typed url stays until the site moves
         if (url == preferences.getString(prefFetchedKey, null)) return
         preferences.edit()
             .putString(prefBaseKey, url)

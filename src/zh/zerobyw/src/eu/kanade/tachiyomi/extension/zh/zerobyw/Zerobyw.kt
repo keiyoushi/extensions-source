@@ -22,7 +22,7 @@ abstract class Zerobyw : KeiSource() {
 
     override val supportsLatest = false
 
-    override suspend fun fetchBaseUrls() = listOf(client.get(LATEST_DOMAIN_URL, Fetch.DOCUMENT).body.string())
+    override suspend fun fetchBaseUrls(): List<String> = listOf(client.get(LATEST_DOMAIN_URL, Fetch.DOCUMENT).body.string())
 
     override fun Headers.Builder.configureHeaders() = set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0")
 

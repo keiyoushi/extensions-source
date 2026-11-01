@@ -344,6 +344,7 @@ abstract class Kagane :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        // Mirrors differ only by TLD
         if (url.host.substringBeforeLast('.') != baseUrl.toHttpUrl().host.substringBeforeLast('.')) return null
         val segments = url.pathSegments
         if (segments.size < 2 || segments[0] != "series") return null

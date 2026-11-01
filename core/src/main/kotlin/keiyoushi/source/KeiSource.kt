@@ -138,6 +138,7 @@ abstract class KeiSource : HttpSource() {
                 }
             }
         }.build().also {
+            // Here and not in init: subclass members aren't ready there
             fetchBaseUrlsInBackground()
         }
     }
@@ -151,7 +152,7 @@ abstract class KeiSource : HttpSource() {
     /**
      * Fetches the site's current base urls, in the site's order: one url, or every mirror it lists.
      *
-     * Needs a `mirrors(...)` or `custom(...)` baseUrl. Called on a background coroutine once per app launch: the urls
+     * Needs a `mirrors(...)` or `custom(...)` baseUrl. Called on a background coroutine once per source per app launch: the urls
      * replace the mirror list, or the first one becomes the custom url and its default.
      */
     protected open suspend fun fetchBaseUrls(): List<String> = emptyList()
