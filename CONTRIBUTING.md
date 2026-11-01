@@ -483,7 +483,7 @@ override suspend fun fetchBaseUrls(): List<String> =
         .map { it.absUrl("href") }
 ```
 
-The lookup runs in the background once per app launch, and a failed one keeps the current URLs. With `mirrors`, the URLs replace the mirror list; the picker is hidden when only one is left. With `custom`, the first URL replaces the custom URL and becomes its default.
+The lookup runs in the background once per app launch, the first time the source is browsed, searched or updated, and a failed one keeps the current URLs. With `mirrors`, the URLs replace the mirror list; the picker is hidden when only one is left. With `custom`, the first URL replaces the custom URL and becomes its default.
 
 > [!IMPORTANT]
 > When using `mirrors(...)` or `custom(...)`, **do not** implement mirror/URL selection manually in your class using `SharedPreferences` or a `ListPreference` - the generated code handles it. Doing both will create duplicate preferences.

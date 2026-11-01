@@ -137,10 +137,7 @@ abstract class KeiSource : HttpSource() {
                     add(rateLimiter)
                 }
             }
-        }.build().also {
-            // Here and not in init: subclass members aren't ready there
-            fetchBaseUrlsInBackground()
-        }
+        }.build()
     }
 
     /**
@@ -152,14 +149,19 @@ abstract class KeiSource : HttpSource() {
     /**
      * Fetches the site's current base urls, in the site's order: one url, or every mirror it lists.
      *
-     * Needs a `mirrors(...)` or `custom(...)` baseUrl. Called on a background coroutine once per source per app launch: the urls
-     * replace the mirror list, or the first one becomes the custom url and its default.
+     * Needs a `mirrors(...)` or `custom(...)` baseUrl. Called on a background coroutine once per source per app launch,
+     * the first time the source is browsed, searched or updated: the urls replace the mirror list, or the first one
+     * becomes the custom url and its default.
      */
     protected open suspend fun fetchBaseUrls(): List<String> = emptyList()
 
+    private val baseUrlFetchStarted = AtomicBoolean(false)
+
     @OptIn(DelicateCoroutinesApi::class)
-    private fun fetchBaseUrlsInBackground() {
+    private fun triggerBackgroundBaseUrlFetch() {
         val preferences = fetchableBaseUrl ?: return
+        if (!baseUrlFetchStarted.compareAndSet(false, true)) return
+
         GlobalScope.launch(Dispatchers.IO) {
             try {
                 val urls = fetchBaseUrls()
@@ -291,6 +293,8 @@ abstract class KeiSource : HttpSource() {
     protected open fun getFilterList(data: JsonElement?): FilterList = FilterList()
 
     final override fun getFilterList(): FilterList {
+        triggerBackgroundBaseUrlFetch()
+
         if (!supportsFilterFetching) return getFilterList(data = null)
 
         val (cached, isFresh) = readFilterCacheState()
@@ -408,6 +412,8 @@ abstract class KeiSource : HttpSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
+        triggerBackgroundBaseUrlFetch()
+
         check(fetchDetails || fetchChapters) { "getMangaUpdate called with nothing to fetch (fetchDetails=false, fetchChapters=false)" }
 
         val key = manga.url

@@ -68,7 +68,6 @@ abstract class Kagane :
     // The image host 404s without the site's Origin
     override val imageFetch = Fetch.XHR
 
-
     override suspend fun fetchBaseUrls(): List<String> = client.get(HUB_URL, Fetch.DOCUMENT)
         // Mirror cards sit at the top of a 1.2 MB page
         .use { Jsoup.parse(it.peekBody(HUB_BYTES).string(), HUB_URL) }
