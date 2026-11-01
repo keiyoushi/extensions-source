@@ -12,13 +12,8 @@ keiyoushi {
 
     source {
         lang = "id"
-        baseUrl {
-            mirrors(
-                "https://mirrorkomik.info",
-                "https://mirrorinkomik.my.id",
-                "https://mirrorkomik.click",
-            )
-        }
+        // mirrorinkomik.my.id and mirrorkomik.click run on the same backend with a different frontend
+        baseUrl = "https://mirrorkomik.info"
     }
 
     deeplink {
