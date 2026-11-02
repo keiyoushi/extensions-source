@@ -98,15 +98,23 @@ def get_referenced_assets() -> set[str]:
 
 def delete(endpoint: str) -> None:
     started = time.monotonic()
-    run_gh("api", "--method", "DELETE", endpoint)
+    run_gh("api", "--method", "DELETE", endpoint, success_errors=("http 404",))
     time.sleep(max(0.0, DELETE_INTERVAL - (time.monotonic() - started)))
 
 
 def try_delete_release(release: dict) -> bool:
+    endpoint = f"repos/{REPO_NAME}/releases/{release['id']}"
     try:
-        delete(f"repos/{REPO_NAME}/releases/{release['id']}")
+        delete(endpoint)
     except RuntimeError as e:
         print(f"Could not delete release {release['tag_name']}: {e}")
+        # A 502 doesn't always mean the delete was rolled back; sometimes it
+        # still completes server-side.
+        try:
+            run_gh("api", endpoint)
+        except RuntimeError as e:
+            if "http 404" in str(e).lower():
+                return True
         return False
     return True
 
