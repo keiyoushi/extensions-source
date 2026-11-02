@@ -11,8 +11,11 @@ keiyoushi {
     libVersion = "1.6"
 
     source {
-        baseUrl = "https://crunchyscan.st"
         lang = "fr"
+        // The site keeps moving to new domains (.fr, then .st).
+        baseUrl {
+            custom("https://crunchyscan.st")
+        }
     }
 
     deeplink {
