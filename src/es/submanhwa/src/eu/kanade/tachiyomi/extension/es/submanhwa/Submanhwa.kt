@@ -14,10 +14,14 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -122,7 +126,7 @@ abstract class Submanhwa : KeiSource() {
                 append("\n\n${document.selectFirst(".sr-summary > p")?.text()}")
 
                 info?.selectFirst(".sr-alt")?.text()?.split(ALT_DELIMITER)?.let {
-                    append("\n\nAlternative names\n")
+                    append("\n\nNombres alternativos:\n")
                     it.forEach { name -> append("- ${name.trim()}\n") }
                 }
             }
@@ -138,18 +142,33 @@ abstract class Submanhwa : KeiSource() {
             genre = info?.select(".sr-badge.type, .sr-cat, .sr-tag")?.joinToString { it.text() }
         }
 
-        val chapterList = document.select(".chapters-grid [class^=chapter-card]").map { element ->
-            SChapter.create().apply {
-                val a = element.selectFirst("a.chapter-link")!!
-                name = a.text()
-                setUrlWithoutDomain(a.absUrl("href"))
+        if (!fetchChapters) return SMangaUpdate(details, chapters)
 
-                val date = element.selectFirst(".ch-date")?.text()
-                date_upload = dateFormat.tryParseDate(date?.removePrefix("🕒 "))
-            }
-        }
+        val mangaId = document.selectFirst("#item-rating")?.attr("data-item")
+            ?: throw Exception("No se pudo encontrar el ID del manga")
+
+        val chapterList = mutableListOf<SChapter>()
+        var page = 1
+        do {
+            val url = "$baseUrl/lista-capitulos/serie/$mangaId?orden=desc&offset=${(page - 1) * CHAPTERS_PER_PAGE}&limit=$CHAPTERS_PER_PAGE"
+            val chapterListDto = client.get(url, Fetch.XHR).parseAs<ChapterListDto>()
+            val chapters = parseChapterList(Jsoup.parseBodyFragment(chapterListDto.html, baseUrl))
+            if (chapters.isEmpty()) break
+            chapterList.addAll(chapters)
+            page++
+        } while (chapterListDto.hasNext)
 
         return SMangaUpdate(details, chapterList)
+    }
+
+    private fun parseChapterList(html: Document): List<SChapter> = html.select("[id^=chapter-card]").map { element ->
+        SChapter.create().apply {
+            val a = element.selectFirst("a.lc-t")!!
+            name = a.text()
+            setUrlWithoutDomain(a.absUrl("href"))
+            val date = element.selectFirst(".lc-d")?.ownText()
+            date_upload = dateFormat.tryParseDate(date?.removePrefix("🕒 "))
+        }
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -186,7 +205,14 @@ abstract class Submanhwa : KeiSource() {
         hasAttr("data-src") -> attr("abs:data-src")
         else -> attr("abs:src")
     }
+
+    @Serializable
+    class ChapterListDto(
+        val html: String,
+        @SerialName("mas") val hasNext: Boolean,
+    )
     companion object {
         private val ALT_DELIMITER = Regex("""[|/•,;]""")
+        private const val CHAPTERS_PER_PAGE = 50
     }
 }
