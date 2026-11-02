@@ -11,7 +11,11 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import java.net.InetAddress
+import java.net.ServerSocket
 import java.util.Locale
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 
 class WebKitBrowserHeadersTest {
     private val mobile = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"
@@ -70,7 +74,7 @@ class WebKitBrowserHeadersTest {
     }
 
     @Test
-    fun webKitPreservesHeaderOrderWithoutSkippingOtherWireRules() {
+    fun webKitOrdersHeadersWithoutSkippingOtherWireRules() {
         for (fetch in listOf(Fetch.DOCUMENT, Fetch.XHR)) {
             val req = Request.Builder().url("https://a.test/").fetch(fetch)
                 .header("X-First", "first")
@@ -81,9 +85,57 @@ class WebKitBrowserHeadersTest {
                 .post("{}".toRequestBody("application/json; charset=utf-8".toMediaType()))
                 .build()
             val sent = req.inWireOrder(true)
-            assertEquals(listOf("X-First", "User-Agent", "Content-Type", "X-Last"), sent.headers.map { it.first })
+            assertEquals(listOf("User-Agent", "X-First", "X-Last", "Content-Type"), sent.headers.map { it.first })
             assertEquals("application/json", sent.header("Content-Type"))
             assertNull(sent.header("Cache-Control"))
+        }
+    }
+
+    @Test
+    fun androidOkHttpSendsLanguageAndSafariGetOrderOnTheWire() = withVmName("Dalvik") {
+        ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { server ->
+            server.soTimeout = 5000
+            val base = "http://localhost:${server.localPort}"
+            val client = OkHttpClient.Builder()
+                .protocols(listOf(Protocol.HTTP_1_1))
+                .callTimeout(5, TimeUnit.SECONDS)
+                .addInterceptor(BrowserCallInterceptor({ base }, { Fetch.IMAGE }))
+                .addNetworkInterceptor(BrowserHeadersInterceptor)
+                .build()
+            for (fetch in listOf(Fetch.DOCUMENT, Fetch.XHR, Fetch.IMAGE, Fetch.SCRIPT)) {
+                val received = CompletableFuture.supplyAsync {
+                    server.accept().use { socket ->
+                        socket.soTimeout = 5000
+                        val reader = socket.getInputStream().bufferedReader()
+                        reader.readLine()
+                        val headers = generateSequence { reader.readLine() }.takeWhile { it.isNotEmpty() }
+                            .map { it.substringBefore(":") to it.substringAfter(":").trim() }.toList()
+                        socket.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
+                        headers
+                    }
+                }
+                val req = request(safari26, fetch).url("$base/").header("Referer", "$base/").build()
+                client.newCall(req).execute().close()
+                val headers = received.get(5, TimeUnit.SECONDS)
+                val expected = buildList {
+                    addAll(listOf("Host", "Sec-Fetch-Dest", "User-Agent"))
+                    if (fetch == Fetch.DOCUMENT) add("Upgrade-Insecure-Requests")
+                    addAll(
+                        listOf(
+                            "Accept",
+                            "Referer",
+                            "Sec-Fetch-Site",
+                            "Sec-Fetch-Mode",
+                            "Accept-Language",
+                            "Priority",
+                            "Accept-Encoding",
+                            "Connection",
+                        ),
+                    )
+                }
+                assertEquals(expected, headers.map { it.first })
+                assertEquals(acceptLanguage(listOf(Locale.getDefault())), headers.first { it.first == "Accept-Language" }.second)
+            }
         }
     }
 

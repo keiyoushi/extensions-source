@@ -343,8 +343,12 @@ internal sealed class Browser {
         override val sendsAcceptLanguage get() = System.getProperty("java.vm.name") == "Dalvik"
         override val priorityOnHttp1 = true
 
-        // Empty orders give all headers the same rank, preserving their insertion order.
-        override val documentOrder = emptyList<String>()
+        // Safari's GET order over HTTP/1.1 and HTTP/2; native transports may reorder it again.
+        override val documentOrder = listOf(
+            "Host", "Sec-Fetch-Dest", "User-Agent", "Upgrade-Insecure-Requests", "Accept", SITE, "Origin",
+            "Content-Type", "Content-Length", "Referer", "Sec-Fetch-Site", "Sec-Fetch-Mode", "Accept-Language",
+            "Priority", "Accept-Encoding", "Connection", "Cookie",
+        )
         override val subresourceOrder = documentOrder
     }
 
