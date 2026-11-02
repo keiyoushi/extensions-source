@@ -53,6 +53,7 @@ import okhttp3.RequestBody
 import okhttp3.Response
 import java.io.IOException
 import java.time.LocalDate
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -284,7 +285,7 @@ abstract class Jinmantiantang :
         .aesDecrypt(aesEcb(secret.md5().toHexString().encodeToByteArray()))
         .decodeToString()
 
-    private fun timestamp() = (System.currentTimeMillis() / 1000).toString()
+    private fun timestamp() = Clock.System.now().epochSeconds.toString()
 
     private val loginMutex = Mutex()
 
