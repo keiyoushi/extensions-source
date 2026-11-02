@@ -24,6 +24,7 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.NativeWebViewApi
 import keiyoushi.utils.booleanOrNull
 import keiyoushi.utils.firstInstanceOrNull
@@ -460,9 +461,7 @@ abstract class Comix :
 
     private fun parseMangaDetails(detail: Manga): SManga = detail.toSManga(
         preferences.posterQuality(),
-        preferences.alternativeNamesInDescription(),
-        preferences.scorePosition(),
-        preferences.showExtraInfo(),
+        preferences,
         preferences.showTagsInGenres(),
     )
 
@@ -990,20 +989,6 @@ abstract class Comix :
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
-            key = ALTERNATIVE_NAMES_IN_DESCRIPTION
-            title = "Show Alternative Names in Description"
-            setDefaultValue(false)
-        }.let(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
-            key = PREF_SHOW_EXTRA_INFO
-            title = "Show extra info in description"
-            summary = "Append publication year, language, content rating, rank, " +
-                "ratings count, follower count, and tracker links to the manga description."
-            setDefaultValue(true)
-        }.let(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
             key = PREF_SHOW_TAGS_IN_GENRES
             title = "Show tags in genre chips"
             summary = "Include the site's narrative tag list (e.g. Demons, " +
@@ -1013,14 +998,7 @@ abstract class Comix :
             setDefaultValue(false)
         }.let(screen::addPreference)
 
-        ListPreference(screen.context).apply {
-            key = PREF_SCORE_POSITION
-            title = "Score display position"
-            summary = "%s"
-            entries = arrayOf("Top of description", "Bottom of description", "Don't show")
-            entryValues = arrayOf("top", "bottom", "none")
-            setDefaultValue("top")
-        }.let(screen::addPreference)
+        MarkdownDescription.addPreference(screen)
     }
 
     private fun SharedPreferences.posterQuality() = getString(PREF_POSTER_QUALITY, "large")
@@ -1036,12 +1014,6 @@ abstract class Comix :
         ?.toSet() ?: emptySet()
 
     private fun SharedPreferences.solveCaptchas() = getBoolean(PREF_SOLVE_CAPTCHA, false)
-
-    private fun SharedPreferences.alternativeNamesInDescription() = getBoolean(ALTERNATIVE_NAMES_IN_DESCRIPTION, false)
-
-    private fun SharedPreferences.scorePosition() = getString(PREF_SCORE_POSITION, "top") ?: "top"
-
-    private fun SharedPreferences.showExtraInfo() = getBoolean(PREF_SHOW_EXTRA_INFO, true)
 
     private fun SharedPreferences.showTagsInGenres() = getBoolean(PREF_SHOW_TAGS_IN_GENRES, false)
 
@@ -1079,10 +1051,7 @@ abstract class Comix :
         private const val DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
         private const val PREF_FETCH_CHAPTERS_UNTIL_KNOWN = "pref_fetch_chapters_until_known"
         private const val PREF_SCANLATOR_BLACKLIST = "pref_scanlator_blacklist"
-        private const val ALTERNATIVE_NAMES_IN_DESCRIPTION = "pref_alt_names_in_description"
-        private const val PREF_SHOW_EXTRA_INFO = "pref_show_extra_info"
         private const val PREF_SHOW_TAGS_IN_GENRES = "pref_show_tags_in_genres"
-        private const val PREF_SCORE_POSITION = "pref_score_position"
         private const val PREF_SOLVE_CAPTCHA = "pref_solve_captcha"
 
         private const val DEFAULT_CONTENT_RATING = "suggestive"

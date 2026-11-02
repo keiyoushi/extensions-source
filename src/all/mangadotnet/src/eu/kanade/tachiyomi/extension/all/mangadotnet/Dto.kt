@@ -1,9 +1,9 @@
 package eu.kanade.tachiyomi.extension.all.mangadotnet
 
+import android.content.SharedPreferences
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.markdownList
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.ratingStars
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
@@ -196,7 +196,7 @@ class Manga(
         private val listRegex = Regex("\n\n(-|•|\\d+\\.)")
     }
 
-    fun toSManga(baseUrl: String, showTags: Boolean = true, extraVolumeCount: Int? = null) = SManga.create().apply {
+    fun toSManga(baseUrl: String, showTags: Boolean = true, extraVolumeCount: Int? = null, preferences: SharedPreferences? = null) = SManga.create().apply {
         url = id.toString()
         title = this@Manga.title
         thumbnail_url = photo?.let {
@@ -238,57 +238,34 @@ class Manga(
                 else -> SManga.UNKNOWN
             }
         }
-        description = buildString {
-            val rating = this@Manga.rating
-            if (rating != null) {
-                append("${ratingStars(rating.toDouble())} $rating\n\n")
-            }
-
-            val metaInfo = buildList {
-                year?.let { add("**Year:** $it") }
-                chapterCount?.let { add("**Chapters:** $it") }
-                extraVolumeCount?.let { add("**Volumes:** $it") }
-                trackedCount?.let { add("**Tracked:** $it") }
-                contentRating?.let {
-                    add("**Content Rating:** ${it.replaceFirstChar { c -> c.uppercase() }}")
-                }
-                ratingCount?.takeIf { it > 0 }?.let { add("$it ratings") }
-            }
-            if (metaInfo.isNotEmpty()) {
-                append(metaInfo.joinToString(" · "), "\n\n")
-            }
-
-            if (isNotEmpty()) {
-                append("---\n\n")
-            }
-
-            this@Manga.description?.let {
-                append(
-                    it.replace("\r\n", "\n")
-                        .replace(multipleNewlinesRegex, "\n\n")
-                        .replace(listRegex, "\n$1")
-                        .trim(),
-                    "\n\n",
-                )
-            }
-
-            listOfNotNull(
-                anilistID?.let { "[AniList](https://anilist.co/manga/$it)" },
-                mangaupdatesID?.let { "[MangaUpdates](https://www.mangaupdates.com/series/$it)" },
-                mangabakaID?.let { "[MangaBaka](https://mangabaka.org/$it)" },
-                malID?.let { "[MyAnimeList](https://myanimelist.net/manga/$it)" },
-                kitsuID?.let { "[Kitsu](https://kitsu.app/manga/$it)" },
-                animePlanetId?.let { "[AnimePlanet](https://www.anime-planet.com/manga/$it)" },
-                shikimoriId?.let { "[Shikimori](https://shikimori.io/mangas/$it)" },
-                animeNewsNetworkId?.let { "[AnimeNewsNetwork](https://www.animenewsnetwork.com/encyclopedia/manga.php?id=$it)" },
-                mangadexID?.let { "[MangaDex](https://mangadex.org/title/$it)" },
-                sourceUrl?.let { "[Source]($it)" },
-            ).let { links ->
-                markdownList("Links", links, escape = false)?.let { append("\n", it, "\n") }
-            }
-
-            markdownList("Alternative Names", altTitles)?.let { append("\n", it, "\n") }
-        }.trim()
+        description = MarkdownDescription.Builder(preferences).apply {
+            rating(this@Manga.rating, votes = ratingCount?.takeIf { it > 0 })
+            field("Year", year?.toString())
+            field("Chapters", chapterCount?.toString())
+            field("Volumes", extraVolumeCount?.takeIf { it > 0 }?.toString())
+            field("Tracked", trackedCount?.toString())
+            field("Content Rating", contentRating?.replaceFirstChar { it.uppercase() })
+            markdown(
+                this@Manga.description?.replace("\r\n", "\n")
+                    ?.replace(multipleNewlinesRegex, "\n\n")
+                    ?.replace(listRegex, "\n$1"),
+            )
+            links(
+                listOf(
+                    "AniList" to anilistID?.let { "https://anilist.co/manga/$it" },
+                    "MangaUpdates" to mangaupdatesID?.let { "https://www.mangaupdates.com/series/$it" },
+                    "MangaBaka" to mangabakaID?.let { "https://mangabaka.org/$it" },
+                    "MyAnimeList" to malID?.let { "https://myanimelist.net/manga/$it" },
+                    "Kitsu" to kitsuID?.let { "https://kitsu.app/manga/$it" },
+                    "AnimePlanet" to animePlanetId?.let { "https://www.anime-planet.com/manga/$it" },
+                    "Shikimori" to shikimoriId?.let { "https://shikimori.io/mangas/$it" },
+                    "AnimeNewsNetwork" to animeNewsNetworkId?.let { "https://www.animenewsnetwork.com/encyclopedia/manga.php?id=$it" },
+                    "MangaDex" to mangadexID?.let { "https://mangadex.org/title/$it" },
+                    "Source" to sourceUrl,
+                ),
+            )
+            altTitles(altTitles)
+        }.build()
         initialized = true
     }
 }

@@ -16,17 +16,14 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.markdownLink
-import keiyoushi.utils.markdownList
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.ratingStars
 import keiyoushi.utils.runWebView
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonString
-import keiyoushi.utils.toMarkdown
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -152,22 +149,15 @@ abstract class Webnex :
                 "dropped" -> SManga.CANCELLED
                 else -> SManga.UNKNOWN
             }
-            val rating = document.selectFirst(".series-numbers a.series-number-link")?.let { link ->
-                val score = link.text().toDoubleOrNull() ?: return@let null
-                "${ratingStars(score)} ${link.text()}"
-            }
             // Year, original language and content rating; type and demographic are in genres
             val facts = document.select(".series-facts > :not(.fact-status, a[href*=kind=], a[href*=demographic=])").map { it.text() }
-            val altTitles = document.select("details.series-more li").map { it.text() }.distinct() - title
-            val links = document.select(".tracker-row a").map { markdownLink(it.attr("title"), it.absUrl("href")) }
-            description = listOfNotNull(
-                (listOfNotNull(rating) + facts).joinToString(" · ").ifEmpty { null },
-                document.select(".series-desc p").joinToString("\n\n") { it.toMarkdown() }.ifEmpty { null },
-                listOfNotNull(
-                    markdownList("Alternative Names", altTitles),
-                    markdownList("Links", links, escape = false),
-                ).joinToString("\n\n").ifEmpty { null },
-            ).joinToString("\n\n").ifEmpty { null }
+            description = MarkdownDescription.Builder(preferences).apply {
+                rating(document.selectFirst(".series-numbers a.series-number-link")?.text()?.toDoubleOrNull())
+                info(*facts.toTypedArray())
+                document.select(".series-desc p").forEach { description(it) }
+                altTitles(document.select("details.series-more li").map { it.text() }.filter { it != title })
+                links(document.select(".tracker-row a").map { it.attr("title") to it.absUrl("href") })
+            }.build()
         }
         if (!fetchChapters) return SMangaUpdate(details, chapters)
 
@@ -354,6 +344,8 @@ abstract class Webnex :
             dialogTitle = "Hidden groups"
             setDefaultValue("")
         }.let(screen::addPreference)
+
+        MarkdownDescription.addPreference(screen)
     }
 
     private fun commaList(key: String, default: String) = preferences.getString(key, default).orEmpty().split(',').map(String::trim).filter(String::isNotEmpty)

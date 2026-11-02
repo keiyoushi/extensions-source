@@ -19,6 +19,7 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
@@ -368,7 +369,7 @@ abstract class Kagane :
         val sourceName = details.sourceId?.let { sourceId ->
             sources[sourceId]
         }
-        return details.toSManga(apiUrl, sourceName, baseUrl, showEdition, showSource, showDetails, cleanTitle)
+        return details.toSManga(apiUrl, sourceName, baseUrl, showEdition, showSource, cleanTitle, prefs)
     }
 
     override fun getMangaUrl(manga: SManga): String {
@@ -563,9 +564,6 @@ abstract class Kagane :
     private val showSource: Boolean
         get() = !cleanTitle && prefs.getBoolean(SHOW_SOURCE, SHOW_SOURCE_DEFAULT)
 
-    private val showDetails: Boolean
-        get() = prefs.getBoolean(SHOW_DETAILS, SHOW_DETAILS_DEFAULT)
-
     private val dataSaver
         get() = prefs.getBoolean(DATA_SAVER, false)
 
@@ -682,12 +680,7 @@ abstract class Kagane :
             }
         }.let(screen::addPreference)
 
-        SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_DETAILS
-            title = "Show details in description"
-            summary = "Rating, content rating, format, languages, year, volumes, views and links"
-            setDefaultValue(SHOW_DETAILS_DEFAULT)
-        }.let(screen::addPreference)
+        MarkdownDescription.addPreference(screen)
 
         SwitchPreferenceCompat(screen.context).apply {
             key = DATA_SAVER
@@ -743,9 +736,6 @@ abstract class Kagane :
 
         private const val SHOW_EDITION = "pref_show_edition"
         private const val SHOW_EDITION_DEFAULT = false
-
-        private const val SHOW_DETAILS = "pref_show_details"
-        private const val SHOW_DETAILS_DEFAULT = true
 
         private const val DATA_SAVER = "data_saver_default"
 

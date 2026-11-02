@@ -52,7 +52,7 @@ or fix them directly by submitting a Pull Request.
         - [JsonElement accessor helpers](#jsonelement-accessor-helpers)
         - [ZIP streaming - `zipDirectoryAsync` / `readZipEntry`](#zip-streaming---zipdirectoryasync--readzipentry)
         - [Jsoup helpers - `asJsoup` / `attrOrNull` / `textOrNull`](#jsoup-helpers---asjsoup--attrornull--textornull)
-        - [Description helpers - `toMarkdown` / `markdownList` / `markdownLink` / `escapeMarkdown` / `ratingStars`](#description-helpers---tomarkdown--markdownlist--markdownlink--escapemarkdown--ratingstars)
+        - [Description builder - `MarkdownDescription` / `toMarkdown` / `escapeMarkdown` / `ratingStars`](#description-builder---markdowndescription--tomarkdown--escapemarkdown--ratingstars)
         - [Cryptography - `decodeHex` / `rc4` / AES helpers](#cryptography---decodehex--rc4--aes-helpers)
         - [Binary endian helpers](#binary-endian-helpers)
         - [Decompression - `Inflater.inflate`](#decompression---inflaterinflate)
@@ -1186,23 +1186,27 @@ val title = element.textOrNull()
 val directText = element.ownTextOrNull() // excludes text of nested child elements
 ```
 
-##### Description helpers - `toMarkdown` / `markdownList` / `markdownLink` / `escapeMarkdown` / `ratingStars`
+##### Description builder - `MarkdownDescription` / `toMarkdown` / `escapeMarkdown` / `ratingStars`
 
-`SManga.description` is Markdown. These helpers escape site text so it isn't mistaken for it:
+`SManga.description` is Markdown. `MarkdownDescription.Builder` adds sections in call order, escapes site text and skips empty input:
 
 ```kotlin
-import keiyoushi.utils.escapeMarkdown
-import keiyoushi.utils.markdownLink
-import keiyoushi.utils.markdownList
-import keiyoushi.utils.ratingStars
-import keiyoushi.utils.toMarkdown
+import keiyoushi.utils.MarkdownDescription
 
-val synopsis = document.selectFirst(".synopsis")?.toMarkdown() // keepNewlines = true for plain newlines
-val names = markdownList("Alternative Names", altTitles) // null when empty
-val links = markdownList("Links", stores.map { markdownLink(it.name, it.url) }, escape = false)
-val credit = "**Publisher:** ${publisher.escapeMarkdown()}"
-val stars = ratingStars(rating) // out of 10, or set `max`
+description = MarkdownDescription.Builder(preferences)
+    .rating(score) // out of 10, or set `max`; optional `votes`
+    .info(year, type) // a run of rating, info and fields shares one line
+    .description(document.selectFirst(".synopsis")) // HTML or plain text; `markdown()` for site Markdown
+    .field("Publisher", publisher)
+    .altTitles(altTitles)
+    .links(mapOf("AniList" to anilistUrl, "MyAnimeList" to malUrl))
+    .build() // null when empty
+
+// in setupPreferenceScreen, lets users hide the rating, details, alternative names or links
+MarkdownDescription.addPreference(screen)
 ```
+
+Outside the builder, `Element.toMarkdown()`, `String.escapeMarkdown()` and `ratingStars()` do the same for one piece.
 
 ##### Cryptography - `decodeHex` / `rc4` / `xor` / AES helpers
 

@@ -19,6 +19,7 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.aesCtr
 import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.getPreferencesLazy
@@ -171,7 +172,7 @@ abstract class Toonkotsu :
         val covers = if (fetchDetails && englishCovers) async { fetchCovers(hid) } else null
         val data = client.get("$baseUrl/cdn/v1/series/$hid", Fetch.XHR).parseAs<SeriesResponse>()
         // Without details the description stays null, which the app keeps as stored
-        val details = mangabaka?.let { data.series.toSMangaDetails(baseUrl, showSpoilerTags, showAdult, it.await()) }
+        val details = mangabaka?.let { data.series.toSMangaDetails(baseUrl, showSpoilerTags, showAdult, it.await(), preferences) }
             ?: data.series.toSManga(baseUrl, showSpoilerTags)
         // Null keeps the stored cover on a chapters-only refresh
         if (englishCovers && !data.series.isEnglishOriginal) {
@@ -422,6 +423,8 @@ abstract class Toonkotsu :
             summary = "Include tags the site marks as spoilers in the genres"
             setDefaultValue(false)
         }.let(screen::addPreference)
+
+        MarkdownDescription.addPreference(screen)
     }
 
     companion object {

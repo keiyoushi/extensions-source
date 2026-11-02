@@ -1,11 +1,13 @@
 package keiyoushi.utils
 
+import android.content.SharedPreferences
 import org.jsoup.Jsoup
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import java.lang.reflect.Proxy
 
-class DescriptionTest {
+class MarkdownTest {
     @Test
     fun `plain text is unchanged`() {
         listOf(
@@ -96,13 +98,6 @@ class DescriptionTest {
     }
 
     @Test
-    fun `markdownList escapes its items`() {
-        assertEquals("**Names:**\n- \\# a\n- b", markdownList("Names", listOf("# a", "b")))
-        assertNull(markdownList("Names", emptyList()))
-        assertEquals("**Links:**\n- [a](b)", markdownList("Links", listOf("[a](b)"), escape = false))
-    }
-
-    @Test
     fun `ratingStars matches half stars`() {
         assertEquals("★★★★★", ratingStars(10.0))
         assertEquals("★★★★★", ratingStars(9.6))
@@ -114,15 +109,90 @@ class DescriptionTest {
     }
 
     @Test
-    fun `markdownLink escapes its text and encodes its url`() {
-        assertEquals("""[a\_b](https://x.test/c%28d%29)""", markdownLink("a_b", "https://x.test/c(d)"))
-    }
-
-    @Test
     fun `newlines in text are kept on request`() {
         val html = "One\ntwo <b>three\nfour</b>\n<a\nhref=\"/x\">five</a>"
         val body = Jsoup.parseBodyFragment(html, "https://site.test/").body()
         assertEquals("One two **three four** [five](https://site.test/x)", body.toMarkdown())
         assertEquals("One\ntwo three\nfour\n[five](https://site.test/x)", body.toMarkdown(keepNewlines = true))
+    }
+
+    @Test
+    fun `description sections in order`() {
+        val description = MarkdownDescription.Builder()
+            .rating(8.25, votes = 12)
+            .info("2019", null, " ", "Manhwa")
+            .description("# Intro\nSecond line")
+            .field("Publisher", "A_B")
+            .field("Year", null)
+            .field("Parodies", listOf("x", " ", "y"))
+            .altTitles(listOf("One", " ", "One", "*Two*"))
+            .links(listOf("AniList" to "https://anilist.co/manga/1", "MAL" to null, "My (List)" to "https://x.test/a b", "AniList" to "https://anilist.co/manga/2"))
+            .build()
+        assertEquals(
+            """
+            ★★★★☆ 8.25 (12) · 2019 · Manhwa
+
+            \# Intro
+            Second line
+
+            **Publisher:** A\_B · **Parodies:** x, y
+
+            **Alternative Names:**
+            - One
+            - \*Two\*
+
+            **Links:**
+            - [AniList](https://anilist.co/manga/1)
+            - [My (List)](https://x.test/a%20b)
+            - [AniList](https://anilist.co/manga/2)
+            """.trimIndent(),
+            description,
+        )
+    }
+
+    @Test
+    fun `description builder skips empty input`() {
+        assertNull(
+            MarkdownDescription.Builder()
+                .rating(null)
+                .info(null, "")
+                .description(null as String?)
+                .description(Jsoup.parseBodyFragment("<img src=a>").body())
+                .markdown(" ")
+                .field("A", " ")
+                .altTitles(emptyList())
+                .links(listOf("C" to ""))
+                .rating(Double.NaN)
+                .build(),
+        )
+    }
+
+    @Test
+    fun `description builder takes html and markdown`() {
+        val description = MarkdownDescription.Builder()
+            .field("A", "1")
+            .description(Jsoup.parseBodyFragment("<p>a <b>b</b></p>").body())
+            .field("B", "2")
+            .markdown("**kept**")
+            .rating(85, max = 100)
+            .build()
+        assertEquals("**A:** 1\n\na **b**\n\n**B:** 2\n\n**kept**\n\n★★★★☆ 85", description)
+    }
+
+    @Test
+    fun `description builder leaves out hidden sections`() {
+        val hidden = setOf("RATING", "DETAILS", "LINKS")
+        val preferences = Proxy.newProxyInstance(javaClass.classLoader, arrayOf(SharedPreferences::class.java)) { _, method, args ->
+            if (method.name == "getStringSet" && args[0] == "description_hidden_sections") hidden else args?.getOrNull(1)
+        } as SharedPreferences
+        val description = MarkdownDescription.Builder(preferences)
+            .rating(8)
+            .info("2019")
+            .description("Synopsis")
+            .field("A", "1")
+            .altTitles(listOf("Other"))
+            .links(listOf("C" to "https://c.test"))
+            .build()
+        assertEquals("Synopsis\n\n**Alternative Names:**\n- Other", description)
     }
 }
