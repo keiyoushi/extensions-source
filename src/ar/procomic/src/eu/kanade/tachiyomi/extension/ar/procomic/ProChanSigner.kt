@@ -11,6 +11,7 @@ import java.security.SecureRandom
 import java.security.Signature
 import java.security.spec.ECGenParameterSpec
 import java.security.spec.PKCS8EncodedKeySpec
+import java.security.spec.X509EncodedKeySpec
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlin.time.Clock
@@ -21,9 +22,9 @@ import kotlin.time.Clock
 object ProChanSigner {
     const val READ_UA = "ProChanAndroid/2.1"
 
-    private const val REGISTER_UA = "ProChanAndroid/2.0"
+    private const val DEVICE_UA = "ProChanAndroid/2.0"
     private const val CLIENT = "android-app"
-    private const val VERSION = "91"
+    private const val VERSION = "93"
     private const val DEVICE_INFO = "Google Pixel 7; Android 14; sdk 34"
     private const val PACKAGE = "com.prochan.android"
     private const val OBFUSCATION = "prochan-hmac-obf-static-v2"
@@ -58,6 +59,9 @@ object ProChanSigner {
     fun decodePrivateKey(encoded: String): PrivateKey = KeyFactory.getInstance("EC")
         .generatePrivate(PKCS8EncodedKeySpec(Base64.decode(encoded, Base64.NO_WRAP)))
 
+    fun decodePublicKey(encoded: String): PublicKey = KeyFactory.getInstance("EC")
+        .generatePublic(X509EncodedKeySpec(Base64.decode(encoded, Base64.NO_WRAP)))
+
     // Registration (no device id yet): HMAC the public key into the server.
     fun registerHeaders(url: HttpUrl, body: ByteArray): Map<String, String> {
         val timestamp = now()
@@ -66,21 +70,26 @@ object ProChanSigner {
             .apply { init(SecretKeySpec(hmacKey, "HmacSHA256")) }
             .doFinal(canonical("POST", url, body, timestamp, nonce, deviceId = "").toByteArray())
             .toHex()
-        return signatureHeaders(REGISTER_UA, deviceId = null, signature, timestamp, nonce)
+        return signatureHeaders(DEVICE_UA, deviceId = null, signature, timestamp, nonce)
     }
 
     // Every read: ECDSA with the registered device key.
-    fun readHeaders(method: String, url: HttpUrl, deviceId: String, key: PrivateKey): Map<String, String> {
+    fun readHeaders(method: String, url: HttpUrl, deviceId: String, key: PrivateKey): Map<String, String> = signedHeaders(READ_UA, method, url, body = null, deviceId, key)
+
+    // Device calls after registration (attestation): ECDSA over the body, with the registration UA.
+    fun deviceHeaders(url: HttpUrl, body: ByteArray, deviceId: String, key: PrivateKey): Map<String, String> = signedHeaders(DEVICE_UA, "POST", url, body, deviceId, key)
+
+    private fun signedHeaders(userAgent: String, method: String, url: HttpUrl, body: ByteArray?, deviceId: String, key: PrivateKey): Map<String, String> {
         val timestamp = now()
         val nonce = newNonce()
         val signature = Signature.getInstance("SHA256withECDSA")
             .apply {
                 initSign(key)
-                update(canonical(method, url, body = null, timestamp, nonce, deviceId).toByteArray())
+                update(canonical(method, url, body, timestamp, nonce, deviceId).toByteArray())
             }
             .sign()
             .toHex()
-        return signatureHeaders(READ_UA, deviceId, signature, timestamp, nonce)
+        return signatureHeaders(userAgent, deviceId, signature, timestamp, nonce)
     }
 
     private fun signatureHeaders(userAgent: String, deviceId: String?, signature: String, timestamp: String, nonce: String) = buildMap {
