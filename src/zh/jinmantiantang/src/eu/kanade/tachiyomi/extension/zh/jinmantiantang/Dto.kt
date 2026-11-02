@@ -101,14 +101,13 @@ class AlbumDto(
                 },
             )
         }
-        return series.asReversed().mapIndexed { index, chapter ->
+        return series.mapIndexed { index, chapter ->
             SChapter.create().apply {
                 url = chapterPath(chapter.id)
-                name = chapter.displayName()
-                chapter.number?.let { chapter_number = it }
-                if (index == 0) date_upload = updated
+                name = chapter.displayName(index + 1)
+                if (index == series.lastIndex) date_upload = updated
             }
-        }
+        }.asReversed()
     }
 }
 
@@ -116,16 +115,13 @@ class AlbumDto(
 class SeriesDto(
     val id: String,
     private val name: String,
-    private val sort: String,
 ) {
-    val number get() = sort.toFloatOrNull()
-
-    // The app labels chapters 第{sort}话 {name}; some names already carry that prefix
-    fun displayName(): String {
-        val prefix = "第${sort}话"
+    // The website labels chapters 第{position}話 {name} (话 in Simplified); some names already carry that prefix
+    fun displayName(position: Int): String {
+        val prefix = "第${position}话"
         return when {
             name.isBlank() -> prefix
-            name.startsWith("第") -> name
+            name.startsWith(prefix) -> name
             else -> "$prefix $name"
         }
     }
