@@ -21,6 +21,7 @@ import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -151,7 +152,7 @@ abstract class Submanhwa : KeiSource() {
         do {
             val url = "$baseUrl/lista-capitulos/serie/$mangaId?orden=desc&offset=${(page - 1) * CHAPTERS_PER_PAGE}&limit=$CHAPTERS_PER_PAGE"
             val chapterListDto = client.get(url, Fetch.XHR).parseAs<ChapterListDto>()
-            val chapters = parseChapterList(Jsoup.parseBodyFragment(chapterListDto.html, baseUrl).body())
+            val chapters = parseChapterList(Jsoup.parseBodyFragment(chapterListDto.html, baseUrl))
             if (chapters.isEmpty()) break
             chapterList.addAll(chapters)
             page++
@@ -160,7 +161,7 @@ abstract class Submanhwa : KeiSource() {
         return SMangaUpdate(details, chapterList)
     }
 
-    private fun parseChapterList(html: Element): List<SChapter> = html.select("[id^=chapter-card]").map { element ->
+    private fun parseChapterList(html: Document): List<SChapter> = html.select("[id^=chapter-card]").map { element ->
         SChapter.create().apply {
             val a = element.selectFirst("a.lc-t")!!
             name = a.text()
