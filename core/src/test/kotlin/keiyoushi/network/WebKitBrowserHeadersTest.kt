@@ -59,7 +59,7 @@ class WebKitBrowserHeadersTest {
     }
 
     @Test
-    fun webKitLanguageIsFilledOnlyOnAndroid() {
+    fun webKitLanguageWithoutConnectionIsFilledOnlyOnAndroid() {
         for (vmName in listOf("Dalvik", "OpenJDK 64-Bit Server VM")) {
             withVmName(vmName) {
                 for (ua in agents) {
@@ -92,7 +92,7 @@ class WebKitBrowserHeadersTest {
     }
 
     @Test
-    fun androidOkHttpSendsLanguageAndSafariGetOrderOnTheWire() = withVmName("Dalvik") {
+    fun okHttpSendsLanguageAndSafariGetOrderOnTheWire() {
         ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { server ->
             server.soTimeout = 5000
             val base = "http://localhost:${server.localPort}"
