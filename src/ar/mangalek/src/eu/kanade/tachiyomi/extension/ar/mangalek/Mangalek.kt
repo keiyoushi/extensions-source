@@ -8,6 +8,7 @@ import java.util.Locale
 
 @Source
 abstract class Mangalek : Madara() {
+        override fun getHomeUrl() = "$baseUrl/"
 
     override val filterNonMangaItems get() = false
 
