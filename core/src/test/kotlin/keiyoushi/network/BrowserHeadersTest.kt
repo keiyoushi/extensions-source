@@ -260,6 +260,13 @@ class BrowserHeadersTest {
     }
 
     @Test
+    fun jxlOnlyFromFirefox158() {
+        val image = { ua: String -> intercept(builder("https://a.test/1.jpg", ua = ua).fetch(Fetch.IMAGE).build()).header("Accept") }
+        assertEquals("image/avif,image/jxl,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5", image(firefoxUa))
+        assertEquals("image/avif,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5", image(firefoxUa.replace("158", "157")))
+    }
+
+    @Test
     fun ipv6Origin() {
         val sent = intercept(builder("http://[::1]:8080/api", referer = "http://[::1]:8080/").fetch(Fetch.XHR).post(json()).build())
         assertEquals("http://[::1]:8080", sent.header("Origin"))

@@ -266,10 +266,14 @@ internal sealed class Browser {
 
     // Firefox 158
     data object Firefox : Browser() {
-        override fun accept(kind: Fetch.Kind, userAgent: String) = when (kind) {
-            Fetch.Kind.DOCUMENT -> "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-            Fetch.Kind.IMAGE -> "image/avif,image/jxl,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5"
-            else -> "*/*"
+        // image/jxl from Firefox 158
+        override fun accept(kind: Fetch.Kind, userAgent: String): String {
+            val jxl = if (firefoxVersion(userAgent)!! >= 158) "image/jxl," else ""
+            return when (kind) {
+                Fetch.Kind.DOCUMENT -> "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                Fetch.Kind.IMAGE -> "image/avif,${jxl}image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5"
+                else -> "*/*"
+            }
         }
 
         // XHR as fetch() sends it (Firefox's XMLHttpRequest sends none); scripts from the page's head
@@ -297,7 +301,7 @@ internal sealed class Browser {
     companion object {
         fun of(userAgent: String): Browser? = when {
             chromeVersion(userAgent) != null -> Chrome
-            FIREFOX_VERSION_REGEX.containsMatchIn(userAgent) -> Firefox
+            firefoxVersion(userAgent) != null -> Firefox
             else -> null
         }
     }
@@ -315,6 +319,8 @@ internal fun chromeBrands(version: Int, brand: String = "Google Chrome", brandVe
 }
 
 internal fun chromeVersion(userAgent: String): Int? = CHROME_VERSION_REGEX.find(userAgent)?.groupValues?.get(1)?.toIntOrNull()
+
+private fun firefoxVersion(userAgent: String): Int? = FIREFOX_VERSION_REGEX.find(userAgent)?.groupValues?.get(1)?.toIntOrNull()
 
 private fun platform(userAgent: String) = when {
     "Android" in userAgent -> "Android"
@@ -375,7 +381,7 @@ private const val SITE = "*"
 
 private val CHROMIUM_FORKS = listOf("OPR/", "SamsungBrowser/", "YaBrowser/")
 private val EDGE_VERSION_REGEX = Regex("""EdgA?/(\d+)""")
-private val FIREFOX_VERSION_REGEX = Regex("""Firefox/\d+""")
+private val FIREFOX_VERSION_REGEX = Regex("""Firefox/(\d+)""")
 
 private val GREASE_CHARS = listOf(" ", "(", ":", "-", ".", "/", ")", ";", "=", "?", "_")
 private val GREASE_VERSIONS = listOf("8", "99", "24")
