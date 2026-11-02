@@ -21,7 +21,7 @@ import java.io.IOException
  * @return the parsed [ZipDirectory]
  * @throws IllegalStateException if [tail] holds no valid EOCD record
  */
-suspend fun readZipDirectory(
+private suspend fun readZipDirectory(
     tail: ByteArray,
     totalSize: Long,
     fetch: suspend (LongRange) -> BufferedSource,

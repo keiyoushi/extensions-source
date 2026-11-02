@@ -117,8 +117,6 @@ abstract class Madokami :
         return Credentials.basic(username, password)
     }
 
-    private fun getAuthHeaders() = headers.newBuilder().set("Authorization", getAuthCredential()).build()
-
     private val customMetadataRegex: Regex?
         get() {
             val raw = preferences.getString(PREF_METADATA_WORDS_KEY, "") ?: ""
@@ -499,7 +497,7 @@ abstract class Madokami :
     private suspend fun getZipPageList(chapter: SChapter): List<Page> {
         val url = baseUrl + chapter.url
         val directory = try {
-            client.zipDirectory(url, getAuthHeaders())
+            client.zipDirectory(url)
         } catch (e: IOException) {
             if (e.message?.contains("Content-Range") == true) {
                 throw IOException("Refresh episode list and try again", e)

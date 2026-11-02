@@ -53,7 +53,7 @@ class Eocd(
  * @property name the entry path as stored in the archive
  * @property method the compression method (STORED or DEFLATE)
  * @property compressedSize the on-disk size of the entry's data, in bytes
- * @property localHeaderOffset offset of the entry's local file header; ZIP-relative from [parseCentralDirectory], absolute from [readZipDirectory]
+ * @property localHeaderOffset offset of the entry's local file header; ZIP-relative from [parseCentralDirectory], absolute from [zipDirectory]
  */
 class Entry(
     val name: String,
@@ -64,7 +64,7 @@ class Entry(
 
 /**
  * Byte range to range-fetch to read an entry: its data plus [MAX_LOCAL_FILE_HEADER] bytes of headroom
- * for the local file header. The offset must be absolute, as resolved by [readZipDirectory]. Useful
+ * for the local file header. The offset must be absolute, as resolved by [zipDirectory]. Useful
  * when only the raw offset and size are on hand rather than an [Entry].
  *
  * @param localHeaderOffset absolute offset of the entry's local file header
@@ -73,7 +73,7 @@ class Entry(
  */
 fun dataRange(localHeaderOffset: Long, compressedSize: Long): LongRange = localHeaderOffset..localHeaderOffset + MAX_LOCAL_FILE_HEADER + compressedSize
 
-/** Byte range to range-fetch to read this entry, via [dataRange]; assumes an absolute offset, as from [readZipDirectory]. */
+/** Byte range to range-fetch to read this entry, via [dataRange]; assumes an absolute offset, as from [zipDirectory]. */
 val Entry.dataRange: LongRange
     get() = dataRange(localHeaderOffset, compressedSize)
 
