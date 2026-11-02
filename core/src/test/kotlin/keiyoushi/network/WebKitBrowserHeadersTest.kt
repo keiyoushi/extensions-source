@@ -11,6 +11,7 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import java.util.Locale
 
 class WebKitBrowserHeadersTest {
     private val mobile = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"
@@ -54,10 +55,18 @@ class WebKitBrowserHeadersTest {
     }
 
     @Test
-    fun languageAndEncodingDefaultsAreLeftToTheTransport() {
-        val sent = send(request().build())
-        assertNull(sent.header("Accept-Language"))
-        assertNull(sent.header("Accept-Encoding"))
+    fun webKitLanguageIsFilledOnlyOnAndroid() {
+        for (vmName in listOf("Dalvik", "OpenJDK 64-Bit Server VM")) {
+            withVmName(vmName) {
+                for (ua in agents) {
+                    val sent = send(request(ua).build())
+                    val expected = if (vmName == "Dalvik") acceptLanguage(listOf(Locale.getDefault())) else null
+                    assertEquals(expected, sent.header("Accept-Language"))
+                    assertNull(sent.header("Accept-Encoding"))
+                    assertEquals("ja", send(request(ua).header("Accept-Language", "ja").build()).header("Accept-Language"))
+                }
+            }
+        }
     }
 
     @Test
@@ -156,6 +165,15 @@ class WebKitBrowserHeadersTest {
 
     private fun request(ua: String = mobile, fetch: Fetch = Fetch.DOCUMENT) = Request.Builder().url("https://a.test/")
         .header("User-Agent", ua).header("Referer", "https://a.test/").fetch(fetch)
+
+    private fun withVmName(name: String, block: () -> Unit) {
+        val previous = System.setProperty("java.vm.name", name)
+        try {
+            block()
+        } finally {
+            if (previous == null) System.clearProperty("java.vm.name") else System.setProperty("java.vm.name", previous)
+        }
+    }
 
     private fun send(request: Request): Request {
         var sent: Request? = null

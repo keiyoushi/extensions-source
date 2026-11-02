@@ -338,7 +338,9 @@ internal sealed class Browser {
         override fun sendsUpgradeInsecureRequests(url: HttpUrl) = !url.isHttps
 
         override val sendsFetchUser = false
-        override val sendsAcceptLanguage = false
+
+        // iOS's native transport supplies its languages; a compatibility JVM's locales need not match them.
+        override val sendsAcceptLanguage get() = System.getProperty("java.vm.name") == "Dalvik"
         override val priorityOnHttp1 = true
 
         // Empty orders give all headers the same rank, preserving their insertion order.
