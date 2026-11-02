@@ -1,28 +1,29 @@
 package eu.kanade.tachiyomi.extension.zh.picacomic
 
+import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
 @Serializable
-data class PicaLoginPayload(
+class PicaLoginPayload(
     val email: String,
     val password: String,
 )
 
 @Serializable
-data class PicaSearchPayload(
+class PicaSearchPayload(
     val keyword: String,
     val sort: String,
-    val categories: List<String>? = null,
 )
 
 @Serializable
-data class PicaResponse(
+class PicaResponse(
     val data: PicaData,
 )
 
 @Serializable
-data class PicaData(
+class PicaData(
     // /comics/advanced-search: PicaSearchComics
     // /comics/random: List<PicaSearchComic>
     val comics: JsonElement? = null,
@@ -38,7 +39,7 @@ data class PicaData(
 
 // /comics
 @Serializable
-data class PicaSearchComics(
+class PicaSearchComics(
     val page: Int,
     val pages: Int,
     val docs: List<PicaSearchComic>,
@@ -46,37 +47,47 @@ data class PicaSearchComics(
 
 // /comics/advanced-search, /comics/random, /comics/leaderboard
 @Serializable
-data class PicaSearchComic(
+class PicaSearchComic(
     val title: String,
-    val _id: String,
+    @SerialName("_id") val id: String,
     val thumb: PicaImage,
     val finished: Boolean,
     val categories: List<String>,
-    val update_at: String? = null,
     val author: String? = null,
     val artist: String? = null,
     val description: String? = null,
-    val chineseTeam: String? = null,
     val tags: List<String>? = null,
-)
+) {
+    val genres get() = (tags ?: categories).map(String::trim)
+
+    fun toSManga(apiUrl: String) = SManga.create().apply {
+        title = this@PicaSearchComic.title
+        author = this@PicaSearchComic.author
+        artist = this@PicaSearchComic.artist
+        description = this@PicaSearchComic.description
+        genre = genres.distinct().takeIf { it.isNotEmpty() }?.joinToString()
+        thumbnail_url = thumb.url
+        url = "$apiUrl/comics/$id"
+        status = if (finished) SManga.COMPLETED else SManga.ONGOING
+    }
+}
 
 @Serializable
-data class PicaChapters(
+class PicaChapters(
     val docs: List<PicaChapter>,
     val page: Int,
     val pages: Int,
 )
 
 @Serializable
-data class PicaChapter(
-    val _id: String,
+class PicaChapter(
     val order: Int,
     val title: String,
-    val updated_at: String,
+    @SerialName("updated_at") val updatedAt: String,
 )
 
 @Serializable
-data class PicaPages(
+class PicaPages(
     val docs: List<PicaPage>,
     val page: Int,
     val pages: Int,
@@ -84,18 +95,20 @@ data class PicaPages(
 )
 
 @Serializable
-data class PicaPage(
+class PicaPage(
     val media: PicaImage,
 )
 
 @Serializable
-data class PicaImage(
+class PicaImage(
     val path: String,
     val fileServer: String,
-)
+) {
+    val url get() = "$fileServer/static/$path"
+}
 
 @Serializable
-data class PicaChannel(
+class PicaChannel(
     val status: String,
     val addresses: List<String>,
 )

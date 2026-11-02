@@ -19,7 +19,7 @@ class ChannelDns(
 
     private val defaultInitUrl = "http://68.183.234.72/init"
 
-    private var channel = listOf<String>()
+    private var channelHost: String? = null
 
     override fun lookup(hostname: String): List<InetAddress> {
         if (!hostname.endsWith(baseHost)) {
@@ -27,16 +27,13 @@ class ChannelDns(
         }
         val ch = preferences.getString(APP_CHANNEL, "2")!!
         return when (ch) {
-            "2" -> listOf(InetAddress.getByName(getChannelHost(0)))
-            "3" -> listOf(InetAddress.getByName(getChannelHost(1)))
+            "2" -> listOf(InetAddress.getByName(getChannelHost()))
             else -> Dns.SYSTEM.lookup(hostname)
         }
     }
 
-    private fun getChannelHost(index: Int): String {
-        if (channel.size > index) {
-            return channel[index]
-        }
+    private fun getChannelHost(): String {
+        channelHost?.let { return it }
 
         val chUrl =
             preferences.getString(APP_CHANNEL_URL, defaultInitUrl)?.takeIf { it.isNotBlank() }
@@ -53,23 +50,19 @@ class ChannelDns(
         ).newBuilder().fetch(Fetch.XHR).build()
 
         try {
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) {
-                throw Exception("Unexpected ${request.url} code ${response.code}")
+            val ch = client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw Exception("Unexpected ${request.url} code ${response.code}")
+                }
+                response.parseAs<PicaChannel>()
             }
-
-            val responseBody = response.body.string()
-
-            val ch = responseBody.parseAs<PicaChannel>()
             if (ch.status != "ok") {
                 throw Exception("Unexpected ${request.url} status ${ch.status}")
             }
 
-            channel = ch.addresses
-            if (channel.size <= index) {
-                throw Exception("Unexpected ${request.url} unable to obtain the target channel address")
-            }
-            return channel[index]
+            return ch.addresses.firstOrNull()
+                ?.also { channelHost = it }
+                ?: throw Exception("Unexpected ${request.url} unable to obtain the target channel address")
         } catch (e: Exception) {
             throw IOException(e.message)
         }
