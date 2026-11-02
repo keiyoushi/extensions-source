@@ -131,6 +131,10 @@ internal fun BrowserCall.hop(request: Request): Request {
                 Fetch.Kind.NONE -> error("Not sent with browser headers")
             },
         )
+        // Credentialed cross-site requests, of which images are the only kind here
+        if (kind == Fetch.Kind.IMAGE && (request.header("Sec-Fetch-Site") ?: fetchSite) == "cross-site") {
+            fill("Sec-Fetch-Storage-Access", browser.storageAccess(userAgent))
+        }
     }
     if (kind == Fetch.Kind.DOCUMENT) fill("Upgrade-Insecure-Requests", "1")
     fill("Priority", browser.priority(kind))
@@ -201,6 +205,7 @@ internal sealed class Browser {
     abstract fun accept(kind: Fetch.Kind, userAgent: String): String
     abstract fun priority(kind: Fetch.Kind): String
     open fun clientHints(userAgent: String): Map<String, String> = emptyMap()
+    open fun storageAccess(userAgent: String): String? = null
 
     // The orders measured over HTTP/2, [SITE] marking where a page's own headers go. Over HTTP/1.1 browsers also
     // move Connection and Cookie and change name case; matching that too would take a lot more rules for little gain
@@ -222,6 +227,13 @@ internal sealed class Browser {
                 Fetch.Kind.IMAGE -> "${jxl}image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
                 else -> "*/*"
             }
+        }
+
+        // "none" from Chrome 133, "active" from 142
+        override fun storageAccess(userAgent: String) = when (chromeVersion(userAgent)!!) {
+            in 142..Int.MAX_VALUE -> "active"
+            in 133..141 -> "none"
+            else -> null
         }
 
         // Scripts as loaded from the page's head
@@ -257,8 +269,8 @@ internal sealed class Browser {
         )
         override val subresourceOrder = listOf(
             "Host", "Connection", "Content-Length", "Sec-CH-UA-Platform", "User-Agent", "Sec-CH-UA", "Content-Type",
-            "Sec-CH-UA-Mobile", SITE, "Accept", "Origin", "Sec-Fetch-Site", "Sec-Fetch-Mode", "Sec-Fetch-Dest", "Referer",
-            "Accept-Encoding", "Accept-Language", "Priority", "Cookie",
+            "Sec-CH-UA-Mobile", SITE, "Accept", "Origin", "Sec-Fetch-Site", "Sec-Fetch-Mode", "Sec-Fetch-Dest",
+            "Sec-Fetch-Storage-Access", "Referer", "Accept-Encoding", "Accept-Language", "Priority", "Cookie",
         )
 
         override val formSubmitCacheControl = "max-age=0"
@@ -276,6 +288,9 @@ internal sealed class Browser {
             }
         }
 
+        // "none" from Firefox 147
+        override fun storageAccess(userAgent: String) = if (firefoxVersion(userAgent)!! >= 147) "none" else null
+
         // XHR as fetch() sends it (Firefox's XMLHttpRequest sends none); scripts from the page's head
         override fun priority(kind: Fetch.Kind) = when (kind) {
             Fetch.Kind.DOCUMENT -> "u=0, i"
@@ -290,9 +305,9 @@ internal sealed class Browser {
             "Sec-Fetch-User", "Priority", "TE", "Cookie",
         )
         override val subresourceOrder = listOf(
-            "Host", "User-Agent", "Accept", "Accept-Language", "Accept-Encoding", "Connection", "Referer", SITE,
-            "Content-Type", "Content-Length", "Origin", "Sec-Fetch-Dest", "Sec-Fetch-Mode", "Sec-Fetch-Site", "Priority",
-            "TE", "Cookie",
+            "Host", "User-Agent", "Accept", "Accept-Language", "Accept-Encoding", "Sec-Fetch-Storage-Access", "Connection",
+            "Referer", SITE, "Content-Type", "Content-Length", "Origin", "Sec-Fetch-Dest", "Sec-Fetch-Mode", "Sec-Fetch-Site",
+            "Priority", "TE", "Cookie",
         )
         override val priorityOnHttp1 = true
         override val sendsTeTrailers = true

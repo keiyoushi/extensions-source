@@ -267,6 +267,32 @@ class BrowserHeadersTest {
     }
 
     @Test
+    fun storageAccessOnCrossSiteImages() {
+        val image = { url: String, ua: String -> intercept(builder(url, referer = "https://a.test/series/1", ua = ua).fetch(Fetch.IMAGE).build()).header("Sec-Fetch-Storage-Access") }
+        assertEquals("active", image("https://cdn.b.test/1.jpg", chromeUa))
+        assertEquals("none", image("https://cdn.b.test/1.jpg", chromeUa.replace("Chrome/155", "Chrome/141")))
+        assertNull(image("https://cdn.b.test/1.jpg", chromeUa.replace("Chrome/155", "Chrome/132")))
+        assertEquals("none", image("https://cdn.b.test/1.jpg", firefoxUa))
+        assertNull(image("https://cdn.b.test/1.jpg", firefoxUa.replace("158", "146")))
+        assertNull(image("https://media.a.test/1.jpg", chromeUa))
+        assertNull(intercept(builder("https://api.b.test/list", referer = "https://a.test/series/1").fetch(Fetch.XHR).build()).header("Sec-Fetch-Storage-Access"))
+    }
+
+    @Test
+    fun storageAccessOrder() {
+        val names = { ua: String ->
+            val request = builder("https://cdn.b.test/1.jpg", referer = "https://a.test/series/1", ua = ua).fetch(Fetch.IMAGE).build()
+            intercept(request, wireOrder = true, compression = true).headers.map { it.first }
+        }
+        val chrome = names(chromeUa)
+        assertEquals(chrome.indexOf("Sec-Fetch-Dest") + 1, chrome.indexOf("Sec-Fetch-Storage-Access"))
+        assertEquals(chrome.indexOf("Referer") - 1, chrome.indexOf("Sec-Fetch-Storage-Access"))
+        val firefox = names(firefoxUa)
+        assertEquals(firefox.indexOf("Accept-Encoding") + 1, firefox.indexOf("Sec-Fetch-Storage-Access"))
+        assertEquals(firefox.indexOf("Referer") - 1, firefox.indexOf("Sec-Fetch-Storage-Access"))
+    }
+
+    @Test
     fun ipv6Origin() {
         val sent = intercept(builder("http://[::1]:8080/api", referer = "http://[::1]:8080/").fetch(Fetch.XHR).post(json()).build())
         assertEquals("http://[::1]:8080", sent.header("Origin"))
