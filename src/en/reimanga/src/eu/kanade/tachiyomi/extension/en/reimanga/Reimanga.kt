@@ -30,6 +30,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
+import okhttp3.Request
 import okio.IOException
 import kotlin.time.Instant
 
@@ -116,12 +117,12 @@ abstract class Reimanga :
         if (url.pathSegments.firstOrNull() != "manga") return null
         val slug = url.pathSegments.getOrNull(1) ?: return null
 
-        return fetchMangaUpdate(
+        return getMangaUpdate(
             SManga.create().apply { this.url = slug },
             emptyList(),
             fetchDetails = true,
             fetchChapters = false,
-        ).manga.apply { initialized = true }
+        ).manga
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
@@ -192,9 +193,18 @@ abstract class Reimanga :
         val data = client.get(getChapterUrl(chapter), rscHeaders, Fetch.XHR).extractNextJs<Images>()
             ?: return emptyList()
 
-        return data.images.mapIndexed { index, image ->
-            Page(index, imageUrl = image.url)
+        return data.imageUrls().mapIndexed { index, imageUrl ->
+            Page(index, imageUrl = imageUrl)
         }
+    }
+
+    override fun getImageRequest(page: Page): Request {
+        val request = super.getImageRequest(page)
+        val range = request.url.fragment ?: return request
+
+        return request.newBuilder()
+            .header("Range", "bytes=$range")
+            .build()
     }
 
     override val supportsFilterFetching = true
@@ -264,7 +274,6 @@ abstract class Reimanga :
             updateSummary(this, preferences.getStringSet(EXCLUDE_TAG_PREF, emptySet()))
 
             setOnPreferenceChangeListener { pref, newValue ->
-                @Suppress("UNCHECKED_CAST")
                 val updated = pref as MultiSelectListPreference
 
                 @Suppress("UNCHECKED_CAST")

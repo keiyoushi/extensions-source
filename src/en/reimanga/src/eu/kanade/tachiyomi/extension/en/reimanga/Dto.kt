@@ -87,24 +87,23 @@ class MangaPage(
                     append("\n\n")
                 }
                 altTitle?.takeIf { it.isNotBlank() }?.also {
-                    append("Alternative Titles:\n")
-                    it.split(",", ";").forEach { title ->
+                    append("**Alternative Titles:**\n")
+                    it.split(",", ";", " / ").forEach { title ->
                         append("- ")
                         append(title.trim())
                         append("\n")
                     }
-                    append("\n")
                 }
-            }
+            }.trim().ifEmpty { null }
             status = if (completed == 1) SManga.COMPLETED else SManga.ONGOING
-            author = authors.joinToString { it.name.trim().removeSuffix(",").trim() }
+            author = authors.joinToString { it.name.trim().removeSuffix(",").trim() }.ifEmpty { null }
             genre = buildList {
                 if (isAdult == 1) {
                     add("Adult")
                 }
                 genres.mapTo(this) { it.name.trim() }
                 tags.mapTo(this) { it.name.trim() }
-            }.joinToString()
+            }.joinToString().ifEmpty { null }
             memo = buildJsonObject { put("mangaId", id) }
         }
 
@@ -152,13 +151,44 @@ class ChapterList(
 
 @Serializable
 class Images(
-    val images: List<Image>,
+    private val images: List<Image>,
+    private val pack: Pack? = null,
 ) {
+    fun imageUrls() = pack?.imageUrls() ?: images.map { it.url }
+
     @Serializable
     class Image(
         @SerialName("image_url")
         val url: String,
     )
+
+    /** One file per segment holding its pages as consecutive WebPs. */
+    @Serializable
+    class Pack(
+        private val index: Index,
+        private val urls: List<String>,
+    ) {
+        fun imageUrls(): List<String> {
+            val sizes = index.pages.map { (size) -> size }.iterator()
+
+            return index.segments.flatMapIndexed { segment, pageCount ->
+                var start = 0L
+                List(pageCount) {
+                    val end = start + sizes.next()
+                    "${urls[segment]}#$start-${end - 1}".also { start = end }
+                }
+            }
+        }
+
+        @Serializable
+        class Index(
+            /** Size, width and height of each page. */
+            @SerialName("p")
+            val pages: List<List<Long>>,
+            @SerialName("s")
+            val segments: List<Int>,
+        )
+    }
 }
 
 @Serializable
