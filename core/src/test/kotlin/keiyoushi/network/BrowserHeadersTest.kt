@@ -131,8 +131,7 @@ class BrowserHeadersTest {
 
     @Test
     fun otherClientsGoOutAsBuilt() {
-        val safari = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
-        val request = builder("https://a.test/series/1", ua = safari).fetch(Fetch.DOCUMENT).build()
+        val request = builder("https://a.test/series/1", ua = "ExampleApiClient/1.0").fetch(Fetch.DOCUMENT).build()
         assertEquals(request.headers, intercept(request).headers)
     }
 
@@ -340,7 +339,7 @@ class BrowserHeadersTest {
         .header("User-Agent", ua)
         .apply { referer?.let { header("Referer", it) } }
 
-    // The request as sent: with the wire order pass it's HTTP/1.1, as a unit test has no connection; without, the
+    // The request as sent: with the wire order pass it uses the HTTP/1.1 rules; without, the
     // headers as added. With compression, KeiSource's Accept-Encoding
     private fun intercept(request: Request, wireOrder: Boolean = false, compression: Boolean = false, site: String = "https://a.test", imageFetch: Fetch = Fetch.IMAGE): Request {
         var sent: Request? = null
