@@ -114,7 +114,8 @@ abstract class Bakai : KeiSource() {
             title = document.selectFirst("h1")?.text() ?: title
             thumbnail_url = document.selectFirst(".mangaInfoBox__cover img")?.attr("abs:src")
             author = info("Artista").joinToString().ifEmpty { null }
-            genre = (info("Tipo") + info("Cor") + info("Parody") + document.select(".mangaGenres__item a").map { it.text() })
+            // Some tags are hidden from guests and show a login prompt in place of the tag name
+            genre = (info("Tipo") + info("Cor") + info("Parody") + document.select(".mangaGenres__item:not(:has(a[href*=/login/])) a").map { it.text() })
                 .distinct()
                 .joinToString()
             description = document.selectFirst("article:not(.ipsEntry) div[data-role=commentContent]")?.text()?.takeIf { it != "-" }
