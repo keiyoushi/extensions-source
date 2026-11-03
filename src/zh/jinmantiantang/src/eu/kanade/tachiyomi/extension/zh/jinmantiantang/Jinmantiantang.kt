@@ -53,6 +53,7 @@ import okhttp3.RequestBody
 import okhttp3.Response
 import java.io.IOException
 import java.time.LocalDate
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -134,7 +135,7 @@ abstract class Jinmantiantang :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) return null
+        if (url.host !in MIRROR_HOSTS) return null
         if (url.pathSegments.firstOrNull() !in listOf("album", "photo")) return null
         return fetchAlbum(url.pathSegments.getOrNull(1) ?: return null)
     }
@@ -284,7 +285,7 @@ abstract class Jinmantiantang :
         .aesDecrypt(aesEcb(secret.md5().toHexString().encodeToByteArray()))
         .decodeToString()
 
-    private fun timestamp() = (System.currentTimeMillis() / 1000).toString()
+    private fun timestamp() = Clock.System.now().epochSeconds.toString()
 
     private val loginMutex = Mutex()
 
@@ -409,6 +410,9 @@ abstract class Jinmantiantang :
         private const val PREFIX_ID_SEARCH = "JM"
         private const val PAGE_SIZE = 80
         private const val FAVORITES_PAGE_SIZE = 20
+
+        // The mirrors in build.gradle.kts, all deep linked
+        private val MIRROR_HOSTS = setOf("18comic.vip", "18comic.ink", "jmcomic-zzz.one", "jmcomic-zzz.org")
 
         private const val APP_VERSION = "2.1.12"
         private const val TOKEN_SECRET = "185Hcomic3PAPP7R"
