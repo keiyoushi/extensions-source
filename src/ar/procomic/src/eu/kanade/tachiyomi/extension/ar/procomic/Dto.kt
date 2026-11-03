@@ -161,28 +161,20 @@ class ChapterRefDto(
     @SerialName("content_id") val contentId: Int,
 )
 
+// One page slot of the reader, see slot.js.
 @Serializable
-class ReaderStateDto(
+class SlotDto(
     val error: Boolean = false,
-    // -1 until the first page is laid out.
-    val laidOut: Int = -1,
+    val count: Int? = null,
     val origin: String? = null,
-    val pages: List<ReaderPageDto>? = null,
-)
-
-@Serializable
-class ReaderPageDto(
     val url: String? = null,
     val pieces: List<PieceDto>? = null,
 )
 
-// A stitched page: the chapter and index it was read at, to read it again once its pieces expire.
 @Serializable
-class PieceRefDto(
+class PageRefDto(
     val chapter: String,
     val index: Int,
-    val origin: String,
-    val pieces: List<PieceDto>,
 )
 
 // Position and size in fractions of the page.

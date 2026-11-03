@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
 import android.util.LruCache
+import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
@@ -20,6 +21,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.lib.imagedecoder.ImageDecoder
 import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -30,35 +32,47 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
-import keiyoushi.utils.runWebViewBlocking
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonString
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Call
+import okhttp3.Headers.Companion.toHeaders
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
+import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
 import java.io.ByteArrayInputStream
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 import kotlin.reflect.KMutableProperty0
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 @Source
 abstract class Procomic :
@@ -79,7 +93,7 @@ abstract class Procomic :
         .addCookie("safe_browsing" to "off")
         .addCookie({ MIRROR_HOST }, "safe_browsing" to "off")
         .addInterceptor(::retryStalls)
-        .addInterceptor(::stitchInterceptor)
+        .addInterceptor(::pageInterceptor)
 
     @Volatile private var listToken: String? = null
     private val listTokenMutex = Mutex()
@@ -252,82 +266,160 @@ abstract class Procomic :
         .build()
         .toString()
 
-    // The reader only hands out pages to its own client, so the chapter is opened in a WebView and each page is
-    // read off the page it renders: a plain image, or the image pieces it lays out over a grid.
+    // The site's reader hands out pages only to a browser running it, so each chapter is opened in the reader in a
+    // WebView and read like a person would: every page scrolls the reader to it, and the images the reader loads
+    // are shared with the app.
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
-        val reader = runWebView(READER_TIMEOUT) { readPages(chapterUrl) }
-        readers.put(chapterUrl, reader)
-        return reader.pages!!.mapIndexed { index, page ->
-            val url = page.url ?: HttpUrl.Builder()
+        return List(session(chapterUrl).pageCount()) { index ->
+            val url = HttpUrl.Builder()
                 .scheme("http")
-                .host(PIECE_HOST)
-                .fragment(PieceRefDto(chapterUrl, index, reader.origin!!, page.pieces!!).toJsonString())
+                .host(PAGE_HOST)
+                .fragment(PageRefDto(chapterUrl, index).toJsonString())
                 .build()
-                .toString()
-            Page(index, imageUrl = url)
+            Page(index, imageUrl = url.toString())
         }
     }
 
-    private fun WebViewScope<ReaderStateDto>.readPages(chapterUrl: String) {
-        var reloads = 0
-        var laidOut = -1
-        var idlePolls = 0
-        injectAtDocumentStart(RETRY_SCRIPT, setOf(baseUrl, "https://$MIRROR_HOST"))
-        // The images themselves are fetched by the app; the reader only needs their urls. Ads and trackers
-        // aren't loaded at all.
-        interceptRequest { request ->
-            val host = request.url.host ?: return@interceptRequest null
-            val path = request.url.path.orEmpty()
-            val site = listOf(siteHost, MIRROR_HOST).any { host == it || host.endsWith(".$it") }
-            when {
-                host.endsWith(IMAGE_DOMAIN) && (path.startsWith("/i/") || path.startsWith("/chapters/")) ->
-                    WebResourceResponse("image/gif", null, ByteArrayInputStream(BLANK_GIF))
-                site || host.endsWith(IMAGE_DOMAIN) || host == TURNSTILE_HOST -> null
-                else -> WebResourceResponse("text/plain", null, ByteArrayInputStream(ByteArray(0)))
-            }
+    private val sessionScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    private val sessions = object : LruCache<String, ReaderSession>(MAX_SESSIONS) {
+        override fun entryRemoved(evicted: Boolean, key: String, oldValue: ReaderSession, newValue: ReaderSession?) {
+            oldValue.close()
         }
-        poll(POLL_INTERVAL) {
-            evaluateJs(READER_SCRIPT) { result ->
-                // Null while the page is navigating.
-                val state = result.parseAs<ReaderStateDto?>() ?: return@evaluateJs
-                if (state.pages != null) return@evaluateJs resolve(state)
-                if (state.laidOut != laidOut) {
-                    laidOut = state.laidOut
-                    idlePolls = 0
-                } else {
-                    idlePolls++
-                }
-                // Reload when the site errors, or stops laying out pages before the last one.
-                val stuck = state.error || (laidOut >= 0 && idlePolls > STALL_POLLS)
-                when {
-                    stuck && reloads < MAX_RELOADS -> {
-                        reloads++
-                        laidOut = -1
-                        idlePolls = 0
-                        evaluateJs("location.reload()")
-                    }
-                    stuck -> reject(IOException("The site is not responding, try again later"))
-                    idlePolls > STALL_POLLS -> reject(IOException("No pages found, open the chapter in WebView"))
-                }
-            }
-        }
-        loadUrl(chapterUrl)
     }
 
-    // The latest pages read for each chapter; the piece urls in them expire after a while.
-    private val readers = LruCache<String, ReaderStateDto>(4)
-
-    // Reads the chapter again, unless another page already did since `stale` was read.
     @Synchronized
-    private fun rereadPages(chapterUrl: String, stale: ReaderStateDto?, call: Call): ReaderStateDto {
-        readers[chapterUrl]?.takeIf { it !== stale }?.let { return it }
-        return runWebViewBlocking(call, READER_TIMEOUT) { readPages(chapterUrl) }
-            .also { readers.put(chapterUrl, it) }
+    private fun session(chapterUrl: String): ReaderSession = sessions[chapterUrl]?.takeUnless { it.closed }
+        ?: ReaderSession(chapterUrl).also { sessions.put(chapterUrl, it) }
+
+    // A chapter open in the site's reader, closed after a while without page requests.
+    private inner class ReaderSession(private val chapterUrl: String) {
+        private val webView = CompletableDeferred<WebViewScope<Unit>>()
+        private val images = ConcurrentHashMap<String, CompletableDeferred<ByteArray>>()
+
+        @Volatile
+        private var reloads = 0
+
+        @Volatile
+        private var lastUsed = TimeSource.Monotonic.markNow()
+
+        @Volatile
+        var closed = false
+            private set
+
+        private val job = sessionScope.launch {
+            try {
+                runWebView<Unit>(SESSION_TIMEOUT) { open() }
+            } catch (e: Throwable) {
+                webView.completeExceptionally(e)
+            } finally {
+                closed = true
+            }
+        }
+
+        fun close() {
+            closed = true
+            job.cancel()
+        }
+
+        private fun WebViewScope<Unit>.open() {
+            interceptRequest(::share)
+            poll(IDLE_TIMEOUT / 4) {
+                if (lastUsed.elapsedNow() > IDLE_TIMEOUT) resolve(Unit)
+            }
+            loadUrl(chapterUrl)
+            webView.complete(this)
+        }
+
+        // Fetches the reader's page images for it, keeping the bytes for the app.
+        private fun share(request: WebResourceRequest): WebResourceResponse? {
+            val url = request.url
+            val path = url.path.orEmpty()
+            if (request.method != "GET" || url.host?.endsWith(IMAGE_DOMAIN) != true) return null
+            if (!path.startsWith("/i/") && !path.startsWith("/chapters/")) return null
+            val image = images.getOrPut(url.toString()) { CompletableDeferred() }
+            // Without the WebView's cache validators: its cache doesn't see the response, so a 304 would leave it empty.
+            val headers = request.requestHeaders.filterKeys { !it.equals("If-None-Match", true) && !it.equals("If-Modified-Since", true) }
+            val call = Request.Builder().url(url.toString()).headers(headers.toHeaders()).fetch(Fetch.NONE).build()
+            return try {
+                client.newCall(call).execute().use {
+                    val bytes = it.body.bytes()
+                    if (!it.isSuccessful) throw HttpException(it.code)
+                    image.complete(bytes)
+                    val responseHeaders = it.headers.names()
+                        .filter { name -> !name.equals("Content-Encoding", true) && !name.equals("Content-Length", true) }
+                        .associateWith { name -> it.header(name)!! }
+                    WebResourceResponse(
+                        it.body.contentType()?.let { type -> "${type.type}/${type.subtype}" },
+                        null,
+                        it.code,
+                        // HTTP/2 has no reason phrase, which WebResourceResponse requires.
+                        it.message.ifEmpty { "OK" },
+                        responseHeaders,
+                        ByteArrayInputStream(bytes),
+                    )
+                }
+            } catch (e: Exception) {
+                images.remove(url.toString(), image)
+                image.completeExceptionally(e)
+                val code = (e as? HttpException)?.code ?: 504
+                WebResourceResponse(null, null, code, "Error", emptyMap(), ByteArrayInputStream(ByteArray(0)))
+            }
+        }
+
+        suspend fun pageCount(): Int = waitFor(null) { slot(0).count }
+
+        suspend fun page(index: Int, call: Call): Buffer {
+            val slot = waitFor(call) { slot(index).takeIf { it.url != null || it.pieces != null } }
+            val urls = listOfNotNull(slot.url) + slot.pieces.orEmpty().map { it.url }
+            if (slot.origin!!.toHttpUrl().host !in setOf(siteHost, MIRROR_HOST) || urls.any { !it.toHttpUrl().host.endsWith(IMAGE_DOMAIN) }) {
+                throw IOException("Unexpected page, open the chapter in WebView")
+            }
+            val page = slot.url?.let { Buffer().write(image(it, slot.origin)) }
+                ?: stitch(slot.pieces!!) { image(it, slot.origin) }
+            urls.forEach(images::remove)
+            return page
+        }
+
+        private suspend fun slot(index: Int): SlotDto {
+            lastUsed = TimeSource.Monotonic.markNow()
+            if (closed) throw IOException("The reader was closed, open the chapter again")
+            val scope = webView.await()
+            val script = "(${javaClass.getResource("/assets/slot.js")!!.readText()})($index)"
+            // No answer once the WebView is gone; null while the page is navigating.
+            val result = withTimeoutOrNull(SCRIPT_TIMEOUT) {
+                suspendCancellableCoroutine { continuation -> scope.evaluateJs(script) { continuation.resume(it) } }
+            }
+            val slot = result?.parseAs<SlotDto?>() ?: return SlotDto()
+            if (slot.error) {
+                if (reloads++ == MAX_RELOADS) throw IOException("The site is not responding, try again later")
+                scope.evaluateJs("location.reload()")
+                return SlotDto()
+            }
+            return slot
+        }
+
+        private suspend fun <T : Any> waitFor(call: Call?, block: suspend () -> T?): T = withTimeoutOrNull(PAGE_TIMEOUT) {
+            var result = block()
+            while (result == null) {
+                if (call?.isCanceled() == true) throw IOException("Canceled")
+                delay(POLL_INTERVAL)
+                result = block()
+            }
+            result
+        } ?: throw IOException("No pages found, open the chapter in WebView")
+
+        // The copy of an image the reader loaded, or the image itself when the reader's load failed or came from its
+        // own cache.
+        private suspend fun image(url: String, origin: String): ByteArray {
+            val bytes = images[url]?.let { shared -> runCatching { withTimeoutOrNull(IMAGE_TIMEOUT) { shared.await() } }.getOrNull() }
+            return bytes ?: client.get(url, Fetch.IMAGE.from("$origin/")).use { it.body.bytes() }
+        }
     }
 
     // The site often stops sending an API response just before its end. Read API bodies in full here, so a
-    // stalled one times out quickly and is asked for again. The reader's own calls get the same in retry.js.
+    // stalled one times out quickly and is asked for again.
     private fun retryStalls(chain: Interceptor.Chain): Response {
         val request = chain.request()
         if (!request.url.encodedPath.startsWith("/api/")) return chain.proceed(request)
@@ -345,11 +437,12 @@ abstract class Procomic :
         }
     }
 
-    private fun stitchInterceptor(chain: Interceptor.Chain): Response {
+    private fun pageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        if (request.url.host != PIECE_HOST) return chain.proceed(request)
+        if (request.url.host != PAGE_HOST) return chain.proceed(request)
+        val ref = request.url.fragment!!.parseAs<PageRefDto>()
         val buffer = try {
-            stitchPage(request.url.fragment!!.parseAs<PieceRefDto>(), chain.call())
+            runBlocking { session(ref.chapter).page(ref.index, chain.call()) }
         } catch (e: IOException) {
             throw e
         } catch (e: Exception) {
@@ -361,40 +454,21 @@ abstract class Procomic :
             .protocol(Protocol.HTTP_1_1)
             .code(200)
             .message("OK")
-            .body(buffer.asResponseBody(JPEG_MEDIA_TYPE, buffer.size))
+            .body(buffer.asResponseBody(null, buffer.size))
             .build()
     }
 
-    private fun stitchPage(ref: PieceRefDto, call: Call): Buffer {
-        val current = readers[ref.chapter]
-        val (origin, pieces) = current?.pages?.getOrNull(ref.index)?.pieces?.let { current.origin!! to it }
-            ?: (ref.origin to ref.pieces)
-        stitch(origin, pieces, call)?.let { return it }
-        val fresh = rereadPages(ref.chapter, current, call)
-        val freshPieces = fresh.pages!!.getOrNull(ref.index)?.pieces ?: throw IOException("Page not found")
-        return stitch(fresh.origin!!, freshPieces, call) ?: throw IOException("Page expired")
-    }
-
-    // Null when the piece urls have expired.
-    private fun stitch(origin: String, pieces: List<PieceDto>, call: Call): Buffer? {
+    private suspend fun stitch(pieces: List<PieceDto>, image: suspend (String) -> ByteArray): Buffer {
         var bitmap: Bitmap? = null
         try {
             lateinit var canvas: Canvas
             for (piece in pieces) {
-                // The reader cancels pages it scrolled past; stop fetching their pieces.
-                if (call.isCanceled()) throw IOException("Canceled")
-                val response = runBlocking { client.get(piece.url, Fetch.IMAGE.from("$origin/"), ensureSuccess = false) }
-                val bytes = response.use {
-                    if (it.code in EXPIRED_CODES) return null
-                    if (!it.isSuccessful) throw IOException("HTTP ${it.code}")
-                    it.body.bytes()
-                }
-                val image = ImageDecoder.decode(bytes)
+                val decoded = ImageDecoder.decode(image(piece.url))
                 if (bitmap == null) {
                     // The page's size, from the first piece's size and its share of the page.
                     bitmap = Bitmap.createBitmap(
-                        (image.width / piece.width).roundToInt(),
-                        (image.height / piece.height).roundToInt(),
+                        (decoded.width / piece.width).roundToInt(),
+                        (decoded.height / piece.height).roundToInt(),
                         Bitmap.Config.ARGB_8888,
                     )
                     bitmap.eraseColor(Color.WHITE)
@@ -406,8 +480,8 @@ abstract class Procomic :
                     ((piece.left + piece.width) * canvas.width).roundToInt(),
                     ((piece.top + piece.height) * canvas.height).roundToInt(),
                 )
-                canvas.drawBitmap(image, null, destination, null)
-                image.recycle()
+                canvas.drawBitmap(decoded, null, destination, null)
+                decoded.recycle()
             }
             return Buffer().apply { bitmap!!.compress(Bitmap.CompressFormat.JPEG, 90, outputStream()) }
         } finally {
@@ -449,26 +523,20 @@ abstract class Procomic :
         private const val MIRROR_HOST = "procomic.net"
         private val LOCALES = setOf("ar", "en")
         private const val IMAGE_DOMAIN = ".procomic.im"
-        private const val PIECE_HOST = "procomic.pieces"
-        private val READER_TIMEOUT = 4.minutes
-        private val EXPIRED_CODES = setOf(403, 404, 410)
-        private const val TURNSTILE_HOST = "challenges.cloudflare.com"
+
+        // Kept from the versions that stitched pieces here, so page lists cached by the app still load.
+        private const val PAGE_HOST = "procomic.pieces"
         private const val TURNSTILE_SITE_KEY = "0x4AAAAAACk1d7qWJi_of2qU"
         private val POLL_INTERVAL = 750.milliseconds
-        private const val STALL_POLLS = 60
         private const val MAX_RELOADS = 2
+        private const val MAX_SESSIONS = 2
+        private val SESSION_TIMEOUT = 2.hours
+        private val IDLE_TIMEOUT = 5.minutes
+        private val PAGE_TIMEOUT = 2.minutes
+        private val IMAGE_TIMEOUT = 5.seconds
+        private val SCRIPT_TIMEOUT = 10.seconds
         private const val STALL_TIMEOUT_SECONDS = 5
         private const val STALL_ATTEMPTS = 4
         private const val SHOW_LOCKED_KEY = "showLockedChapters"
-        private val READER_SCRIPT by lazy { Procomic::class.java.getResource("/assets/reader.js")!!.readText() }
-        private val RETRY_SCRIPT by lazy { Procomic::class.java.getResource("/assets/retry.js")!!.readText() }
-        private val JPEG_MEDIA_TYPE = "image/jpeg".toMediaType()
-
-        // 1x1 transparent GIF.
-        private val BLANK_GIF = byteArrayOf(
-            0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80.toByte(), 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x21, 0xF9.toByte(), 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0x2C, 0x00, 0x00, 0x00, 0x00,
-            0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02, 0x44, 0x01, 0x00, 0x3B,
-        )
     }
 }
