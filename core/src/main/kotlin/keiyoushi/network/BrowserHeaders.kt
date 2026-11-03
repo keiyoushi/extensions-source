@@ -356,7 +356,7 @@ internal sealed class Browser {
         fun of(userAgent: String): Browser? = when {
             chromeVersion(userAgent) != null -> Chrome
             firefoxVersion(userAgent) != null -> Firefox
-            APPLE_PLATFORM_REGEX.containsMatchIn(userAgent) -> WebKit
+            APPLE_PLATFORM_REGEX.containsMatchIn(userAgent) && "AppleWebKit/" in userAgent -> WebKit
             else -> null
         }
     }

@@ -167,13 +167,26 @@ class WebKitBrowserHeadersTest {
             mobile.replace("iPhone; CPU iPhone OS", "iPad; CPU OS"),
             mobile.replace("iPhone;", "iPod;"),
             mobile.replace("AppleWebKit/605.1.15", "AppleWebKit/999.1"),
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X)",
             mobile.replace("Mobile/", "CriOS/155.0 Mobile/"),
         )
         for (ua in platformAgents) assertEquals(ua, Browser.WebKit, Browser.of(ua))
         assertEquals(Browser.Chrome, Browser.of("$desktop Chrome/155.0.0.0 Safari/537.36"))
         assertEquals(Browser.Firefox, Browser.of("Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:158.0) Gecko/20100101 Firefox/158.0"))
         assertNull(Browser.of("Mozilla/5.0 (Linux; Android 15) AppleWebKit/605.1.15"))
+    }
+
+    @Test
+    fun appleApiClientsWithoutWebKitGoOutAsBuilt() {
+        val agents = listOf(
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X)",
+            "ExampleApiClient/1.0 (iPad; CPU OS 27_0 like Mac OS X)",
+            "ExampleApiClient/1.0 (Macintosh; Intel Mac OS X 10_15_7)",
+        )
+        for (ua in agents) {
+            assertNull(Browser.of(ua))
+            val req = request(ua).build()
+            assertEquals(req.headers, send(req).headers)
+        }
     }
 
     @Test
