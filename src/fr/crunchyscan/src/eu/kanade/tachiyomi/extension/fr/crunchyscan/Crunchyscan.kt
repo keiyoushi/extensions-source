@@ -150,10 +150,10 @@ abstract class Crunchyscan : KeiSource() {
      * of the image: the user is then asked to pass it, the same check the site's reader shows.
      */
     private suspend fun fetchReaderPage(pageUrl: String): Document {
+        val requestedAt = System.currentTimeMillis()
         val document = getReaderDocument(pageUrl)
         val siteKey = document.turnstileSiteKey() ?: return document
 
-        val requestedAt = System.currentTimeMillis()
         verificationLock.withLock {
             // The reader loads many pages at once: verify once, for all of them.
             if (verifiedAt < requestedAt) verifySession(pageUrl, siteKey)
@@ -168,19 +168,7 @@ abstract class Crunchyscan : KeiSource() {
     private fun Document.turnstileSiteKey() = selectFirst(".cf-turnstile")?.attr("data-sitekey")
 
     private suspend fun verifySession(pageUrl: String, siteKey: String) {
-        val token = try {
-            getTurnstileToken(pageUrl, siteKey)
-        } catch (e: Exception) {
-            val message = e.message.orEmpty()
-            throw Exception(
-                when {
-                    "cancelled" in message -> VERIFICATION_CANCELLED
-                    "foreground" in message -> VERIFICATION_IN_BACKGROUND
-                    else -> VERIFICATION_FAILED.format(message)
-                },
-                e,
-            )
-        }
+        val token = getTurnstileToken(pageUrl, siteKey)
         val verified = client.post("$baseUrl/api/verify-turnstile", headers, Fetch.XHR.from(pageUrl), VerifyRequestDto(token).toJsonRequestBody())
             .parseAs<VerifyResponseDto>().ok
         if (!verified) throw Exception(VERIFICATION_REFUSED)
@@ -214,16 +202,7 @@ abstract class Crunchyscan : KeiSource() {
     )
 
     private companion object {
-        // The site's anti-adblock wall only runs in a browser, and also shows when its ads are merely slow
-        // or refused (VPN, emulator): it can cover the check in the WebView.
-        private const val WEBVIEW_HELP = "Si ça persiste, ouvrez le chapitre dans la WebView et cochez la case. " +
-            "Si la WebView affiche « Un bloqueur de publicités a été détecté », appuyez sur « rafraîchir » : " +
-            "le site l'affiche aussi quand ses pubs chargent mal (VPN, connexion lente), même sans bloqueur."
-        const val VERIFICATION_CANCELLED = "Vérification annulée : rouvrez le chapitre et cochez « Vérifiez que vous êtes humain » pour le lire."
-        const val VERIFICATION_IN_BACKGROUND = "Vérification humaine requise : ouvrez un chapitre de CrunchyScan dans le lecteur " +
-            "pour cocher la case, puis relancez le téléchargement."
-        const val VERIFICATION_FAILED = "La vérification Cloudflare a échoué (%s). Réessayez. $WEBVIEW_HELP"
-        const val VERIFICATION_REFUSED = "Le site a refusé la vérification. Réessayez dans un instant. $WEBVIEW_HELP"
+        const val VERIFICATION_REFUSED = "Vérification refusée, réessayez"
         const val EXPIRY_MARGIN_SECONDS = 30
 
         val ZONE: ZoneId = ZoneId.of("Europe/Paris")

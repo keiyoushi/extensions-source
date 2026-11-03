@@ -28,7 +28,6 @@ class LdNodeDto(
         }
 }
 
-/** Inline `#reader-history` JSON of the reader page. */
 @Serializable
 class ReaderHistoryDto(val pages: Int)
 
