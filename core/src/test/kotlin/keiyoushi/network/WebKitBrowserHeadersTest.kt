@@ -59,17 +59,12 @@ class WebKitBrowserHeadersTest {
     }
 
     @Test
-    fun webKitLanguageWithoutConnectionIsFilledOnlyOnAndroid() {
-        for (vmName in listOf("Dalvik", "OpenJDK 64-Bit Server VM")) {
-            withVmName(vmName) {
-                for (ua in agents) {
-                    val sent = send(request(ua).build())
-                    val expected = if (vmName == "Dalvik") acceptLanguage(listOf(Locale.getDefault())) else null
-                    assertEquals(expected, sent.header("Accept-Language"))
-                    assertNull(sent.header("Accept-Encoding"))
-                    assertEquals("ja", send(request(ua).header("Accept-Language", "ja").build()).header("Accept-Language"))
-                }
-            }
+    fun webKitFillsLanguageWithoutConnection() {
+        for (ua in agents) {
+            val sent = send(request(ua).build())
+            assertEquals(acceptLanguage(listOf(Locale.getDefault())), sent.header("Accept-Language"))
+            assertNull(sent.header("Accept-Encoding"))
+            assertEquals("ja", send(request(ua).header("Accept-Language", "ja").build()).header("Accept-Language"))
         }
     }
 
@@ -230,15 +225,6 @@ class WebKitBrowserHeadersTest {
 
     private fun request(ua: String = mobile, fetch: Fetch = Fetch.DOCUMENT) = Request.Builder().url("https://a.test/")
         .header("User-Agent", ua).header("Referer", "https://a.test/").fetch(fetch)
-
-    private fun withVmName(name: String, block: () -> Unit) {
-        val previous = System.setProperty("java.vm.name", name)
-        try {
-            block()
-        } finally {
-            if (previous == null) System.clearProperty("java.vm.name") else System.setProperty("java.vm.name", previous)
-        }
-    }
 
     private fun send(request: Request): Request {
         var sent: Request? = null

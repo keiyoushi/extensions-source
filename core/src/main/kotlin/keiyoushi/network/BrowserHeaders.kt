@@ -72,7 +72,7 @@ internal object BrowserHeadersInterceptor : Interceptor {
         val original = chain.request()
         val call = original.tag(BrowserCall::class.java) ?: return chain.proceed(original)
         val http2 = chain.connection()?.protocol() == Protocol.HTTP_2
-        val response = chain.proceed(call.hop(original, chain).inWireOrder(http2))
+        val response = chain.proceed(call.hop(original).inWireOrder(http2))
         return response.newBuilder()
             // The cache keeps the request as the source built it
             .request(original)
@@ -83,7 +83,7 @@ internal object BrowserHeadersInterceptor : Interceptor {
 }
 
 /** The request with the headers the browser sends on this hop of the call. */
-internal fun BrowserCall.hop(request: Request, chain: Interceptor.Chain? = null): Request {
+internal fun BrowserCall.hop(request: Request): Request {
     val url = request.url
     val builder = request.newBuilder()
     if (page != null) {
@@ -105,7 +105,7 @@ internal fun BrowserCall.hop(request: Request, chain: Interceptor.Chain? = null)
     // Browsers send fetch metadata and client hints to secure origins only
     val secure = url.isSecure()
     if (secure) browser.clientHints(userAgent).forEach { (name, value) -> fill(name, value) }
-    if (browser.sendsAcceptLanguage(chain)) fill("Accept-Language", acceptLanguage(deviceLocales()).ifEmpty { null })
+    fill("Accept-Language", acceptLanguage(deviceLocales()).ifEmpty { null })
     fill("Accept", browser.accept(kind, userAgent))
     if (secure) {
         if (request.header("Sec-Fetch-Site") == null) {
@@ -208,7 +208,6 @@ internal sealed class Browser {
     open fun storageAccess(userAgent: String): String? = null
     open fun sendsUpgradeInsecureRequests(url: HttpUrl) = true
     open val sendsFetchUser = true
-    open fun sendsAcceptLanguage(chain: Interceptor.Chain?) = true
 
     // The orders measured over HTTP/2, [SITE] marking where a page's own headers go. Over HTTP/1.1 browsers also
     // move Connection and Cookie and change name case; matching that too would take a lot more rules for little gain
@@ -339,8 +338,6 @@ internal sealed class Browser {
 
         override val sendsFetchUser = false
 
-        // iOS's native transport supplies its own Accept-Language.
-        override fun sendsAcceptLanguage(chain: Interceptor.Chain?) = chain?.connection() != null || System.getProperty("java.vm.name") == "Dalvik"
         override val priorityOnHttp1 = true
 
         // Safari's GET order over HTTP/1.1 and HTTP/2; native transports may reorder it again.
