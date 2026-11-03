@@ -1,9 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.jestful
 
 import android.util.Base64
-import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -16,37 +13,18 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.math.BigDecimal
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class Jestful :
-    KeiSource(),
-    ConfigurableSource {
-
-    private val preferences by getPreferencesLazy()
-
-    private val showDetails: Boolean
-        get() = preferences.getBoolean(SHOW_DETAILS, SHOW_DETAILS_DEFAULT)
-
-    // ============================== Preferences ==============================
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_DETAILS
-            title = "Show details in description"
-            summary = "Rating, magazine, views, followers and year"
-            setDefaultValue(SHOW_DETAILS_DEFAULT)
-        }.let(screen::addPreference)
-    }
+abstract class Jestful : KeiSource() {
 
     // ================================= Browse ================================
     private fun listUrl(page: Int, sort: String) = "$baseUrl/manga-list.html?page=$page&sort=$sort&sort_type=DESC"
@@ -152,13 +130,11 @@ abstract class Jestful :
         description = MarkdownDescription.Builder()
             .description(document.selectFirst("#synopsis-content")?.text())
             .apply {
-                if (showDetails) {
-                    field("Followers", metaValue(document, "Followers"))
-                    field("Magazine", metaValue(document, "Magazine"))
-                    field("Rating", ratingText(document))
-                    field("Views", metaValue(document, "Views"))
-                    field("Year", metaValue(document, "Released"))
-                }
+                ratingParts(document)?.let { (score, votes) -> rating(score, max = 5, votes = votes) }
+                field("Followers", metaValue(document, "Followers"))
+                field("Magazine", metaValue(document, "Magazine"))
+                field("Views", metaValue(document, "Views"))
+                field("Year", metaValue(document, "Released"))
             }
             .altTitles(altTitles(document), label = "Associated Name(s)")
             .build()
@@ -197,16 +173,13 @@ abstract class Jestful :
 
     private fun altTitles(document: Document): List<String> = document.selectFirst(".manga-detail-alt")?.ownText()?.split(',', '、')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
 
-    private fun ratingText(document: Document): String? {
+    private fun ratingParts(document: Document): Pair<Double, Long?>? {
         val score = document.selectFirst(".h0rating")?.attr("data-score")?.toDoubleOrNull() ?: return null
-        val formatted = BigDecimal(score.toString()).stripTrailingZeros().toPlainString()
         val votes = document.selectFirst(".rating-reviews-text")?.text()?.let { VOTES_REGEX.find(it)?.value?.replace(",", "")?.toLongOrNull() }
-        return if (votes != null) "$formatted/5 ($votes)" else "$formatted/5"
+        return score to votes
     }
 
     companion object {
-        private const val SHOW_DETAILS = "pref_show_details"
-        private const val SHOW_DETAILS_DEFAULT = true
         private val PAGE_REGEX = Regex("""Page (\d+) of (\d+)""")
         private val VOTES_REGEX = Regex("""\d[\d,]*""")
         private val CHAPTER_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
