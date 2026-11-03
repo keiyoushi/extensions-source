@@ -14,8 +14,12 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.string
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -211,15 +215,28 @@ abstract class BacaKomik : KeiSource() {
         return GET(page.imageUrl!!, newHeaders)
     }
 
+    override val supportsFilterFetching: Boolean get() = true
+
+    override suspend fun fetchFilterData(): JsonElement = buildJsonObject {
+        client.get("$baseUrl/daftar-komik/", Fetch.DOCUMENT).asJsoup()
+            .select("input[name=\"genre[]\"]")
+            .forEach { input ->
+                val id = input.attr("value")
+                put(id, input.nextElementSibling()?.text() ?: id)
+            }
+    }
+
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
-        Filter.Header("NOTE: Ignored if using text search!"),
-        Filter.Separator(),
-        AuthorFilter(),
-        YearFilter(),
-        StatusFilter(),
-        TypeFilter(),
-        SortByFilter(),
-        GenreListFilter(getGenreList()),
+        listOfNotNull(
+            Filter.Header("NOTE: Ignored if using text search!"),
+            Filter.Separator(),
+            AuthorFilter(),
+            YearFilter(),
+            StatusFilter(),
+            TypeFilter(),
+            SortByFilter(),
+            data?.jsonObject?.map { (id, name) -> Genre(name.string, id) }?.let { GenreListFilter(it) },
+        ),
     )
 
     // ============================= Utilities ==============================
