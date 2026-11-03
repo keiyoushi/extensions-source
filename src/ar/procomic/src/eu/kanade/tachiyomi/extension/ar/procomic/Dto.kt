@@ -12,65 +12,21 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonTransformingSerializer
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl
 import kotlin.time.Instant
 
 @Serializable
-class FeedDto(
+class ContentPageDto(
     val data: List<ContentDto>,
     val meta: MetaDto,
 ) {
-    val hasNextPage get() = meta.page * meta.limit < meta.total
+    val hasNextPage get() = meta.page < meta.pages
 }
 
 @Serializable
 class MetaDto(
     val page: Int,
-    val limit: Int,
-    val total: Int,
-)
-
-@Serializable
-class TopFeedDto(
-    val data: List<ContentDto>,
-    val meta: HomeMetaDto,
-)
-
-@Serializable
-class LatestFeedDto(
-    val data: List<LatestDto>,
-    val meta: HomeMetaDto,
-)
-
-@Serializable
-class HomeMetaDto(
-    val hasMore: Boolean,
-)
-
-@Serializable
-class LatestDto(
-    private val mangaId: Int,
-    private val mangaSlug: String,
-    private val mangaTitle: String,
-    private val type: String,
-    private val coverImage: String? = null,
-    private val isBlockedSeries: Boolean = false,
-) {
-    val isReadable get() = type != "novel" && !isBlockedSeries
-
-    fun toSManga() = SManga.create().apply {
-        url = mangaId.toString()
-        title = mangaTitle
-        thumbnail_url = coverImage
-        memo = buildJsonObject {
-            put("slug", mangaSlug)
-        }
-    }
-}
-
-@Serializable
-class ContentWrapperDto(
-    val data: ContentDto,
+    val pages: Int,
 )
 
 @Serializable
@@ -82,61 +38,59 @@ class ContentDto(
     private val description: String? = null,
     private val progress: String? = null,
     private val thumbnail: String? = null,
-    @SerialName("cdn_path") private val cdnPath: String? = null,
-    private val rating: Double? = null,
-    private val genres: List<GenreDto>? = null,
+    private val coverImage: String? = null,
+    @SerialName("cdn_path") private val cdnPath: String,
     private val metadata: MetadataDto? = null,
     private val isBlockedSeries: Boolean = false,
 ) {
     // Novels are text-only; blocked series need a login.
     val isReadable get() = type != "novel" && !isBlockedSeries
 
-    private fun cover(apiHost: String): String? {
-        // The reader's own cover host (app.procomic.im) is served to the app; metadata.coverImage's host 403s.
-        val raw = thumbnail ?: metadata?.coverImage ?: return null
-        return when {
-            raw.startsWith("http") -> raw
-            cdnPath != null -> "https://$cdnPath.$apiHost".toHttpUrl().newBuilder()
-                .addPathSegments(raw.trimStart('/'))
-                .build()
-                .toString()
-            else -> null
-        }
+    // The site filters genres on the page of results it gets back, by English name.
+    fun hasGenres(included: List<String>, excluded: List<String>): Boolean {
+        val genres = metadata?.genres.orEmpty()
+        return genres.containsAll(included) && genres.none { it in excluded }
     }
 
-    fun toSManga(apiHost: String) = SManga.create().apply {
+    private fun toSManga(siteHost: String) = SManga.create().apply {
         url = id.toString()
         title = this@ContentDto.title
-        thumbnail_url = cover(apiHost)
+        thumbnail_url = (coverImage ?: metadata?.coverImage ?: thumbnail)?.let { cover ->
+            if (cover.startsWith("/")) {
+                HttpUrl.Builder().scheme("https").host("$cdnPath.$siteHost").encodedPath(cover).build().toString()
+            } else {
+                cover
+            }
+        }
         memo = buildJsonObject {
             put("slug", slug)
+            put("type", type)
         }
     }
 
-    fun toDetails(apiHost: String) = toSManga(apiHost).apply {
+    fun toDetails(siteHost: String) = toSManga(siteHost).apply {
         author = metadata?.author
         artist = metadata?.artist
         description = buildString {
             this@ContentDto.description?.let { append(it.trim(), "\n\n") }
-            rating?.let { append("★ ", it, "\n") }
-            val altTitles = listOfNotNull(metadata?.originalTitle) + metadata?.altTitles.orEmpty()
-            altTitles.takeIf { it.isNotEmpty() }?.let { titles ->
+            listOfNotNull(metadata?.originalTitle).plus(metadata?.altTitles.orEmpty()).distinct().takeIf { it.isNotEmpty() }?.let {
                 append("عناوين بديلة\n")
-                titles.forEach { append("- ", it, "\n") }
+                it.forEach { append("- ", it, "\n") }
             }
         }.trim().takeIf { it.isNotEmpty() }
         genre = buildList {
             add(type.replaceFirstChar(Char::titlecase))
-            metadata?.origin?.let { add(it.replaceFirstChar(Char::titlecase)) }
-            metadata?.year?.let { add(it) }
-            // The Arabic genre names from the top-level list; metadata.genres is English only.
-            genres?.let { addAll(it.map(GenreDto::displayName)) } ?: metadata?.genres?.let { addAll(it) }
-            metadata?.tags?.let { addAll(it) }
+            metadata?.let { meta ->
+                meta.origin?.let { add(it.replaceFirstChar(Char::titlecase)) }
+                meta.year?.let { add(it) }
+                meta.genres?.let { addAll(it) }
+                meta.tags?.let { addAll(it) }
+            }
         }.joinToString()
         status = when (progress?.trim()) {
             "مستمر" -> SManga.ONGOING
             "مكتمل" -> SManga.COMPLETED
-            "متوقف" -> SManga.ON_HIATUS
+            "متوقف", "متوقف من الراو" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
         initialized = true
@@ -149,17 +103,23 @@ class MetadataDto(
     @Serializable(with = StringOrListSerializer::class) val artist: String? = null,
     val origin: String? = null,
     val year: String? = null,
-    val originalTitle: String? = null,
     val genres: List<String>? = null,
     val tags: List<String>? = null,
     val altTitles: List<String>? = null,
+    val originalTitle: String? = null,
     val coverImage: String? = null,
 )
 
 @Serializable
-class ChapterListDto(
+class GenreDto(
+    val en: String,
+    val ar: String? = null,
+)
+
+@Serializable
+class ChapterPageDto(
     val data: List<ChapterDto>,
-    val meta: MetaDto,
+    val total: Int,
 )
 
 @Serializable
@@ -190,6 +150,7 @@ class ChapterDto(
             append("الفصل ", number)
             title?.takeIf { it.isNotBlank() && it != number }?.let { append(" \u200F- ", it) }
         }
+        chapter_number = number.toFloatOrNull() ?: -1f
         scanlator = translator
         date_upload = Instant.tryParse(publishedAt)
     }
@@ -201,74 +162,37 @@ class ChapterRefDto(
 )
 
 @Serializable
-class ReaderWrapperDto(
-    val data: ReaderDto,
+class ReaderStateDto(
+    val error: Boolean = false,
+    // -1 until the first page is laid out.
+    val laidOut: Int = -1,
+    val origin: String? = null,
+    val pages: List<ReaderPageDto>? = null,
 )
 
 @Serializable
-class ReaderDto(
-    val images: List<String> = emptyList(),
-    val maps: List<MapEntryDto> = emptyList(),
-    val readerSession: SessionDto? = null,
-    val deferredMedia: SessionDto? = null,
+class ReaderPageDto(
+    val url: String? = null,
+    val pieces: List<PieceDto>? = null,
 )
 
+// A stitched page: the chapter and index it was read at, to read it again once its pieces expire.
 @Serializable
-class SessionDto(
-    val token: String,
+class PieceRefDto(
+    val chapter: String,
+    val index: Int,
+    val origin: String,
+    val pieces: List<PieceDto>,
 )
 
+// Position and size in fractions of the page.
 @Serializable
-class MapEntryDto(
-    val dim: List<Int>,
-    val mode: String,
-    val pieces: List<String>,
-    val order: List<Int>,
-)
-
-@Serializable
-class GenresWrapperDto(
-    val data: List<GenreDto>,
-)
-
-@Serializable
-class GenreDto(
-    val id: Int,
-    val ar: String = "",
-    val en: String = "",
-) {
-    val displayName get() = ar.ifBlank { en }
-}
-
-@Serializable
-class RegisterRequestDto(
-    val publicKeyDer: String,
-)
-
-@Serializable
-class RegisterResponseDto(
-    val deviceId: String,
-)
-
-@Serializable
-class ErrorDto(
-    private val errorCode: String? = null,
-    private val code: String? = null,
-) {
-    val value get() = errorCode?.takeIf { it.isNotBlank() } ?: code
-}
-
-@Serializable
-class AttestChallengeDto(
-    val nonce: String,
-)
-
-@Serializable
-class AttestRequestDto(
-    val publicKeyDer: String,
-    val nonce: String,
-    val chain: List<String>,
-    val clientError: String,
+class PieceDto(
+    val url: String,
+    val left: Float,
+    val top: Float,
+    val width: Float,
+    val height: Float,
 )
 
 object StringOrListSerializer : JsonTransformingSerializer<String>(String.serializer()) {
