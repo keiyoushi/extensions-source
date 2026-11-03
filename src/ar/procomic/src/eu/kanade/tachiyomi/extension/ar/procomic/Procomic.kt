@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
+import android.util.Base64
 import android.util.LruCache
 import android.webkit.WebResourceResponse
 import androidx.preference.PreferenceScreen
@@ -282,7 +283,7 @@ abstract class Procomic :
             val site = listOf(siteHost, MIRROR_HOST).any { host == it || host.endsWith(".$it") }
             when {
                 host.endsWith(IMAGE_DOMAIN) && (path.startsWith("/i/") || path.startsWith("/chapters/")) ->
-                    WebResourceResponse("image/gif", null, ByteArrayInputStream(BLANK_GIF))
+                    WebResourceResponse("image/png", null, ByteArrayInputStream(BLANK_IMAGE))
                 site || host.endsWith(IMAGE_DOMAIN) || host == TURNSTILE_HOST -> null
                 else -> WebResourceResponse("text/plain", null, ByteArrayInputStream(ByteArray(0)))
             }
@@ -464,11 +465,7 @@ abstract class Procomic :
         private val RETRY_SCRIPT by lazy { Procomic::class.java.getResource("/assets/retry.js")!!.readText() }
         private val JPEG_MEDIA_TYPE = "image/jpeg".toMediaType()
 
-        // 1x1 transparent GIF.
-        private val BLANK_GIF = byteArrayOf(
-            0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80.toByte(), 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x21, 0xF9.toByte(), 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0x2C, 0x00, 0x00, 0x00, 0x00,
-            0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02, 0x44, 0x01, 0x00, 0x3B,
-        )
+        // 2x2 transparent PNG; the reader treats loaded 1x1 images as blocked.
+        private val BLANK_IMAGE = Base64.decode("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAC0lEQVR42mNgQAcAABIAAeRVjecAAAAASUVORK5CYII=", Base64.DEFAULT)
     }
 }
