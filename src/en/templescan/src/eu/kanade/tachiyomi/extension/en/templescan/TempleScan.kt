@@ -10,33 +10,25 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.network.Fetch
-import keiyoushi.network.get
-import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.textOrNull
-import keiyoushi.utils.toJsonRequestBody
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.json.JsonArray
+import keiyoushi.utils.toJsonString
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import okhttp3.CacheControl
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import java.io.IOException
+import kotlin.time.Instant
 
 @Source
 abstract class TempleScan :
@@ -51,49 +43,51 @@ abstract class TempleScan :
         rateLimit(1)
     }
 
-    private val challengeMutex = Mutex()
-
-    private var challengePassedAt = 0L
-
-    private var challengeFailedAt = 0L
+    private val sitePages by lazy { SitePages(baseUrl) { headers["User-Agent"]!! } }
 
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", OrderFilter.POPULAR)
 
     override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", OrderFilter.LATEST)
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val catalog = fetchCatalog()
-        return parseDirectory(catalog, query, filters)
+        val order = filters.firstInstanceOrNull<OrderFilter>()
+        // The site search ignores the filters; the cards of every status give its results their covers
+        val args = CatalogArgs(
+            statuses = if (query.isNotBlank()) STATUSES else filters.firstInstanceOrNull<StatusFilter>()?.selected ?: STATUSES.take(1),
+            order = order?.selected,
+            direction = order?.direction,
+            query = query.trim().ifEmpty { null },
+        )
+        val catalog = sitePages.read("$baseUrl/comics", "catalog.js", args.toJsonString()).parseAs<CatalogPage>()
+
+        val cards = catalog.cards.flatMap { it.asJsoup(baseUrl).select("a[href^=/comic/]:has(h2)") }
+            .map(::cardToManga)
+            .distinctBy { it.url }
+        val mangas = catalog.results?.let { results ->
+            val covers = cards.associate { it.url to it.thumbnail_url }
+            results.asJsoup(baseUrl).select("[role=option][href^=/comic/]").map { option ->
+                // Title, alternative names, then the status and type tags
+                val info = option.selectFirst("> span:last-child")!!
+                val tags = info.select("> span:last-child > span")
+                SManga.create().apply {
+                    url = "/comic/${option.absUrl("href").toHttpUrl().pathSegments[1]}"
+                    title = info.selectFirst("> span")!!.textOrNull()!!
+                    thumbnail_url = covers[url]
+                    status = parseStatus(tags.getOrNull(0)?.text())
+                    genre = tags.getOrNull(1)?.text()?.withoutRating()
+                }
+            }
+        } ?: cards
+
+        return MangasPage(mangas, hasNextPage = false)
     }
 
-    private fun parseDirectory(series: List<BrowseSeries>, query: String, filters: FilterList): MangasPage {
-        val status = filters.firstInstanceOrNull<StatusFilter>()?.selected
-        val mangaList = series.filter { series ->
-
-            val queryFilter = query.isBlank() ||
-                series.title.contains(query, ignoreCase = true) ||
-                series.fields.alternativeNames?.contains(query, ignoreCase = true) == true
-
-            val statusFilter = status == null || series.fields.status == status
-
-            queryFilter && statusFilter
-        }.let {
-            val order = filters.firstInstanceOrNull<OrderFilter>()
-
-            val sorted = when (order?.selected) {
-                "updated" -> it.sortedByDescending { series -> series.updated }
-                "created" -> it.sortedByDescending { series -> series.created }
-                "views" -> it.sortedByDescending { series -> series.fields.views }
-                "title" -> it.sortedByDescending { series -> series.title.trim().lowercase() }
-                else -> it
-            }
-            if (order?.ascending == true) sorted.reversed() else sorted
-        }
-
-        return MangasPage(
-            mangas = mangaList.map { it.toSManga() },
-            hasNextPage = false,
-        )
+    private fun cardToManga(link: Element) = SManga.create().apply {
+        val card = link.parent()!!
+        url = "/comic/${link.absUrl("href").toHttpUrl().pathSegments[1]}"
+        title = link.textOrNull()!!
+        thumbnail_url = card.selectFirst("img")?.absUrl("src")
+        genre = card.selectFirst("> span")?.text()?.withoutRating()
     }
 
     override fun getFilterList(data: JsonElement?) = getFilters()
@@ -117,76 +111,65 @@ abstract class TempleScan :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val slug = manga.url.substringAfterLast('/')
-        val document = fetchDocument(getMangaUrl(manga))
-        val details = if (fetchDetails) parseDetails(document, slug) else manga
-        return SMangaUpdate(details, parseChapters(document, slug))
+        val document = sitePages.read(getMangaUrl(manga), "series.js")
+            .parseAs<HtmlPage>().html
+            .asJsoup(baseUrl)
+        val details = if (fetchDetails) parseDetails(document, manga.url) else manga
+        return SMangaUpdate(details, parseChapters(document))
     }
 
-    private suspend fun parseDetails(document: Document, slug: String): SManga {
+    private fun parseDetails(document: Document, url: String): SManga {
         val series = document.jsonLd<ComicSeriesLd> { it.isSeries }
-        // The status and type only live in the browse catalog.
-        val catalogEntry = fetchCatalog().firstOrNull { it.slug == slug }
-
         val genres = series?.genre.orEmpty()
-        val badge = catalogEntry?.fields?.badge
-        val adult = genres.any { it.equals("+18", ignoreCase = true) } || badge?.contains("+18") == true
+        val stats = document.select("ul[aria-label=\"Series stats\"] li")
 
         return SManga.create().apply {
-            url = "/comic/$slug"
-            title = series?.name ?: catalogEntry!!.title
-            thumbnail_url = series?.image ?: catalogEntry?.fields?.thumbnail
-            author = document.info("Author") ?: series?.author?.name
-            status = parseStatus(catalogEntry?.fields?.status)
+            this.url = url
+            title = document.selectFirst("#series-title")!!.text()
+            thumbnail_url = series?.image
+            author = (document.info("Author") ?: series?.author?.name)
+                ?.split('|')?.map(String::trim)?.filter(String::isNotEmpty)?.joinToString()?.ifEmpty { null }
+            status = stats.map { parseStatus(it.text()) }.firstOrNull { it != SManga.UNKNOWN } ?: SManga.UNKNOWN
             genre = buildList {
-                badge?.withoutRating()?.let { add(it) }
-                if (adult) add("Adult")
+                if (genres.any { it.equals("+18", ignoreCase = true) }) add("Adult")
                 addAll(genres.filterNot { it.equals("+18", ignoreCase = true) })
             }.joinToString().ifEmpty { null }
-            description = buildString {
-                append(document.synopsis() ?: series?.description.orEmpty())
-                val info = listOfNotNull(
-                    document.info("Studio")?.let { "Studio $it" },
-                    document.info("Released")?.let { "Released $it" },
-                )
-                if (info.isNotEmpty()) append("\n\n").append(info.joinToString(" · "))
-                // Commas also appear inside names; only `|` always separates them
-                val altNames = (series?.alternateName ?: document.info("Also known as"))
-                    ?.split('|')?.map(String::trim)?.filter(String::isNotEmpty)?.distinct().orEmpty()
-                if (altNames.isNotEmpty()) {
-                    append("\n\n**Alternative names:**")
-                    altNames.forEach { append("\n- ").append(it) }
-                }
-            }.trim().ifEmpty { null }
+            description = MarkdownDescription.Builder().apply {
+                description(document.selectFirst("#series-synopsis-text"))
+                field("Views", stats.selectFirst("span[title$= views]")?.attrOrNull("title")?.removeSuffix(" views"))
+                field("Studio", document.info("Studio"))
+                field("Released", document.info("Released"))
+                // Commas also appear inside names; only `|` always separates them, in author names too
+                altTitles((series?.alternateName ?: document.info("Also known as"))?.split('|').orEmpty())
+            }.build()
         }
     }
 
-    private fun parseChapters(document: Document, slug: String): List<SChapter> {
+    private fun parseChapters(document: Document): List<SChapter> {
         val hideLocked = preferences.getBoolean(PREF_HIDE_LOCKED_CHAPTERS, true)
-        val seriesPage = document.extractNextJs<SeriesPage> { it is JsonObject && "seriesData" in it }!!
-        return seriesPage.chapters
-            .filter { !hideLocked || !it.premium }
-            .map { chapter ->
-                SChapter.create().apply {
-                    url = "/comic/$slug/${chapter.slug}"
-                    name = buildString {
-                        if (chapter.premium) append(LOCK)
-                        append(chapter.name)
-                        if (!chapter.title.isNullOrBlank()) {
-                            append(": ", chapter.title)
-                        }
-                    }
-                    date_upload = chapter.createdAt
+        return document.select("a[id^=chapter-link-]").mapNotNull { row ->
+            val premium = row.selectFirst("span:matchesOwn(^Premium$)") != null
+            if (hideLocked && premium) return@mapNotNull null
+
+            // The chapter name, then its title if it has one
+            val spans = row.select("div:has(> span > time) > span:not(:has(time))")
+            SChapter.create().apply {
+                url = row.absUrl("href").toHttpUrl().encodedPath
+                name = buildString {
+                    if (premium) append(LOCK)
+                    append(spans.first()!!.textOrNull()!!)
+                    spans.getOrNull(1)?.textOrNull()?.let { append(": ", it) }
                 }
+                date_upload = Instant.tryParse(row.selectFirst("time")?.attr("datetime"))
             }
+        }
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val images = fetchDocument(getChapterUrl(chapter)).extractNextJs<List<String>> { element ->
-            element is JsonArray && (element.firstOrNull() as? JsonPrimitive)?.stringOrNull?.contains("/uploads/") == true
-        }
-        return images.orEmpty().mapIndexed { idx, url ->
-            Page(idx, imageUrl = url)
+        val imageHost = ".${baseUrl.toHttpUrl().host}"
+        return sitePages.read(getChapterUrl(chapter), "pages.js").parseAs<ReaderPage>().pages.mapIndexed { index, url ->
+            if (!url.toHttpUrl().host.endsWith(imageHost)) throw IOException("Unexpected page url from the site's reader")
+            Page(index, imageUrl = url)
         }
     }
 
@@ -199,47 +182,6 @@ abstract class TempleScan :
         }.also(screen::addPreference)
     }
 
-    // The site's WAF blocks the default `Cache-Control: max-age=600`
-    private suspend fun getPage(url: String) = client.get(url, Fetch.DOCUMENT, cacheControl = CacheControl.Builder().build()).asJsoup()
-
-    private suspend fun fetchDocument(url: String): Document {
-        val startedAt = System.currentTimeMillis()
-        val document = getPage(url)
-        if (!document.isChallenge) return document
-
-        passChallenge(document, startedAt)
-        return getPage(url).also { if (it.isChallenge) throw IOException(SOLVE_MANUALLY) }
-    }
-
-    private val Document.isChallenge get() = location().toHttpUrl().encodedPath == "/challenge"
-
-    /** Solves the site's Turnstile and posts the token for its `tt-challenge` cookie. */
-    private suspend fun passChallenge(challengePage: Document, startedAt: Long) = challengeMutex.withLock {
-        // Another request may have passed it while this one waited
-        if (challengePassedAt > startedAt) return@withLock
-        // A challenge that just failed to solve would fail again; leave it to the user.
-        if (System.currentTimeMillis() - challengeFailedAt < CHALLENGE_BACKOFF) throw IOException(SOLVE_MANUALLY)
-
-        try {
-            val chunk = challengePage.selectFirst("script[src*=/app/challenge/page-]")!!.absUrl("src")
-            val siteKey = TURNSTILE_KEY.find(client.get(chunk, Fetch.SCRIPT).body.string())!!.value
-            val token = getTurnstileToken("$baseUrl/challenge", siteKey)
-            client.post("$baseUrl/api/turnstile/verify", Fetch.XHR.from("/challenge"), TurnstileToken(token).toJsonRequestBody()).close()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            challengeFailedAt = System.currentTimeMillis()
-            throw IOException(SOLVE_MANUALLY, e)
-        }
-        challengePassedAt = System.currentTimeMillis()
-    }
-
-    private suspend fun fetchCatalog(): List<BrowseSeries> = fetchDocument("$baseUrl/comics")
-        .extractNextJs<List<JsonObject>> { element ->
-            element is JsonArray && (element.firstOrNull() as? JsonObject)?.containsKey("total_views") == true
-        }!!
-        .map(::BrowseSeries)
-
     private fun Document.info(label: String) = select("dl dt").firstOrNull { it.text() == label }
         ?.nextElementSibling()?.textOrNull()
 
@@ -247,16 +189,8 @@ abstract class TempleScan :
         .mapNotNull { runCatching { it.data().parseAs<T>() }.getOrNull() }
         .firstOrNull(predicate)
 
-    private fun Document.synopsis(): String? = selectFirst("#series-synopsis-text")?.let { element ->
-        element.select("p").takeIf { it.isNotEmpty() }?.joinToString("\n\n") { it.text() }
-            ?: element.text()
-    }?.takeIf { it.isNotBlank() }
-
     companion object {
         private const val PREF_HIDE_LOCKED_CHAPTERS = "pref_hide_locked_chapters"
         private const val LOCK = "\uD83D\uDD12 "
-        private const val SOLVE_MANUALLY = "Open in WebView to pass the site's verification"
-        private const val CHALLENGE_BACKOFF = 5 * 60 * 1000L
-        private val TURNSTILE_KEY = Regex("0x4[A-Za-z0-9_-]{20,}")
     }
 }
