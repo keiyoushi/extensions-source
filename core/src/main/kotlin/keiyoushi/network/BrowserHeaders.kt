@@ -12,7 +12,7 @@ import java.util.Locale
 
 /**
  * Starts a call's [BrowserCall], which [BrowserHeadersInterceptor] works from on each hop: for a request with a
- * [Fetch.from] page, or one of a [Fetch.Kind] with a `User-Agent` naming Chrome or Firefox. The covers the apps load
+ * [Fetch.from] page, or one of a [Fetch.Kind] with a `User-Agent` naming Chrome, Firefox or WebKit. The covers the apps load
  * go out with [imageFetch].
  */
 internal class BrowserCallInterceptor(
@@ -59,7 +59,7 @@ internal class BrowserCall(val page: HttpUrl?, val site: HttpUrl?) {
 }
 
 /**
- * Adds the headers Chrome or Firefox, as named in a request's `User-Agent`, sends for its [Fetch.Kind] and puts them in
+ * Adds the headers Chrome, Firefox or WebKit, as named in a request's `User-Agent`, sends for its [Fetch.Kind] and puts them in
  * that browser's order: client hints, `Accept-Language`, fetch metadata, `Accept` and `Priority`, and `Origin`
  * where browsers send one. Any other request goes out as built, apart from the `Referer` of
  * [Fetch.from].
@@ -120,7 +120,7 @@ internal fun BrowserCall.hop(request: Request): Request {
                 else -> "no-cors"
             },
         )
-        if (kind == Fetch.Kind.DOCUMENT) fill("Sec-Fetch-User", "?1")
+        if (kind == Fetch.Kind.DOCUMENT && browser.sendsFetchUser) fill("Sec-Fetch-User", "?1")
         fill(
             "Sec-Fetch-Dest",
             when (kind) {
@@ -136,7 +136,7 @@ internal fun BrowserCall.hop(request: Request): Request {
             fill("Sec-Fetch-Storage-Access", browser.storageAccess(userAgent))
         }
     }
-    if (kind == Fetch.Kind.DOCUMENT) fill("Upgrade-Insecure-Requests", "1")
+    if (kind == Fetch.Kind.DOCUMENT && browser.sendsUpgradeInsecureRequests(url)) fill("Upgrade-Insecure-Requests", "1")
     fill("Priority", browser.priority(kind))
     // Browsers send Origin on methods other than GET and HEAD and on cross-origin XHRs; one the source set itself stays
     if (request.header("Origin") == null) {
@@ -206,6 +206,8 @@ internal sealed class Browser {
     abstract fun priority(kind: Fetch.Kind): String
     open fun clientHints(userAgent: String): Map<String, String> = emptyMap()
     open fun storageAccess(userAgent: String): String? = null
+    open fun sendsUpgradeInsecureRequests(url: HttpUrl) = true
+    open val sendsFetchUser = true
 
     // The orders measured over HTTP/2, [SITE] marking where a page's own headers go. Over HTTP/1.1 browsers also
     // move Connection and Cookie and change name case; matching that too would take a lot more rules for little gain
@@ -313,10 +315,45 @@ internal sealed class Browser {
         override val sendsTeTrailers = true
     }
 
+    // iOS 26/27 on iPhone 17, mobile and desktop modes; WKWebView and Safari use the same values.
+    data object WebKit : Browser() {
+        override fun accept(kind: Fetch.Kind, userAgent: String) = when (kind) {
+            Fetch.Kind.DOCUMENT -> "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+            Fetch.Kind.IMAGE ->
+                "image/webp,image/avif,image/jxl,image/heic,image/heic-sequence,video/*;q=0.8," +
+                    "image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5"
+            else -> "*/*"
+        }
+
+        override fun priority(kind: Fetch.Kind) = when (kind) {
+            Fetch.Kind.DOCUMENT -> "u=0, i"
+            Fetch.Kind.SCRIPT -> "u=1, i"
+            Fetch.Kind.XHR -> "u=3, i"
+            else -> "u=5, i"
+        }
+
+        // Match WebKit's navigation rule: advertise upgrade support on HTTP, but omit the header on HTTPS.
+        // https://github.com/WebKit/WebKit/blob/main/Source/WebCore/loader/cache/CachedResourceLoader.cpp
+        override fun sendsUpgradeInsecureRequests(url: HttpUrl) = !url.isHttps
+
+        override val sendsFetchUser = false
+
+        override val priorityOnHttp1 = true
+
+        // Safari's GET order over HTTP/1.1 and HTTP/2; native transports may reorder it again.
+        override val documentOrder = listOf(
+            "Host", "Sec-Fetch-Dest", "User-Agent", "Upgrade-Insecure-Requests", "Accept", SITE, "Origin",
+            "Content-Type", "Content-Length", "Referer", "Sec-Fetch-Site", "Sec-Fetch-Mode", "Accept-Language",
+            "Priority", "Accept-Encoding", "Connection", "Cookie",
+        )
+        override val subresourceOrder = documentOrder
+    }
+
     companion object {
         fun of(userAgent: String): Browser? = when {
             chromeVersion(userAgent) != null -> Chrome
             firefoxVersion(userAgent) != null -> Firefox
+            APPLE_PLATFORM_REGEX.containsMatchIn(userAgent) && "AppleWebKit/" in userAgent -> WebKit
             else -> null
         }
     }
@@ -397,6 +434,7 @@ private const val SITE = "*"
 private val CHROMIUM_FORKS = listOf("OPR/", "SamsungBrowser/", "YaBrowser/")
 private val EDGE_VERSION_REGEX = Regex("""EdgA?/(\d+)""")
 private val FIREFOX_VERSION_REGEX = Regex("""Firefox/(\d+)""")
+private val APPLE_PLATFORM_REGEX = Regex("""\((?:iPhone|iPad|iPod|Macintosh);""")
 
 private val GREASE_CHARS = listOf(" ", "(", ":", "-", ".", "/", ")", ";", "=", "?", "_")
 private val GREASE_VERSIONS = listOf("8", "99", "24")

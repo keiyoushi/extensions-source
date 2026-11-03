@@ -823,7 +823,7 @@ val response = client.post("$baseUrl/api/search", apiHeaders, Fetch.XHR, body)
   browsers send it: in full to the same origin, as the origin elsewhere, and not at all from https to http.
 - Always wrap the returned `Response` in `response.use { ... }` or consume it with `parseAs`/`asJsoup`, which close it
   for you.
-- With a `User-Agent` that names neither Chrome nor Firefox (an app's own API client) no browser headers are added,
+- With a `User-Agent` that identifies none of Chrome, Firefox, Safari or WKWebView (an app's own API client) no browser headers are added,
   so a `Fetch` is fine there too.
 - `get` and `post` always take a `Fetch`; pass `Fetch.NONE` for a request that has to go out as built. `put` and
   `head` send it as built.
@@ -1407,7 +1407,7 @@ Behavior `KeiSource` gives you for free:
 - **Headers:** `headersBuilder()` already sets `Referer` to `"$baseUrl/"` (with trailing slash) and `Origin` to
   `baseUrl`; override `Headers.Builder.configureHeaders()` instead of `headersBuilder()` to add more.
 - <a id="browser-headers"></a>**Browser headers:** a request with a `Fetch` other than `Fetch.NONE` (see
-  [HTTP requests](#http-requests---okhttpclientget--post--put--head)), with a `User-Agent` naming Chrome or Firefox, gets the headers
+  [HTTP requests](#http-requests---okhttpclientget--post--put--head)), with a `User-Agent` identifying Chrome, Firefox, Safari or WKWebView, gets the headers
   that browser sends for that kind of request: client hints, `Accept-Language`, fetch metadata, `Accept`, `Priority`,
   and the default `Origin` only where browsers send one. Any other request goes out as built, apart from the `Referer`
   of `Fetch.from`.
