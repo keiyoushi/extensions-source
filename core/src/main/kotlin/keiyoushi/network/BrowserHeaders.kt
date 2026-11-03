@@ -60,7 +60,7 @@ internal class BrowserCall(val page: HttpUrl?, val site: HttpUrl?) {
 
 /**
  * Adds the headers Chrome, Firefox or WebKit, as named in a request's `User-Agent`, sends for its [Fetch.Kind] and puts them in
- * that browser's order, when provided: client hints, `Accept-Language`, fetch metadata, `Accept` and `Priority`, and `Origin`
+ * that browser's order: client hints, `Accept-Language`, fetch metadata, `Accept` and `Priority`, and `Origin`
  * where browsers send one. Any other request goes out as built, apart from the `Referer` of
  * [Fetch.from].
  *
@@ -147,7 +147,7 @@ internal fun BrowserCall.hop(request: Request, chain: Interceptor.Chain? = null)
 }
 
 /**
- * The request in the order the browser in its `User-Agent` sends headers, if specified. It also drops what that browser doesn't send
+ * The request in the order the browser in its `User-Agent` sends headers. It also drops what that browser doesn't send
  * (`Priority` over HTTP/1.1 in Chrome, the OkHttp cache's own `Cache-Control` directives) and adds Chrome's
  * `Cache-Control` on a form submit.
  */
