@@ -30,8 +30,8 @@ import keiyoushi.utils.string
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
 import keiyoushi.zip.Entry
-import keiyoushi.zip.coroutines.readZipEntry
-import keiyoushi.zip.coroutines.zipDirectory
+import keiyoushi.zip.readZipEntry
+import keiyoushi.zip.zipDirectory
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import okhttp3.CacheControl.Companion.FORCE_NETWORK

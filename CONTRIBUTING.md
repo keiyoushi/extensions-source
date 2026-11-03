@@ -50,7 +50,7 @@ or fix them directly by submitting a Pull Request.
         - [GraphQL Requests - `graphQLBody` / `parseGraphQLAs`](#graphql-requests---graphqlbody--parsegraphqlas)
         - [GraphQL GET requests - `graphQLGet`](#graphql-get-requests---graphqlget)
         - [JsonElement accessor helpers](#jsonelement-accessor-helpers)
-        - [ZIP streaming - `zipDirectoryAsync` / `readZipEntry`](#zip-streaming---zipdirectoryasync--readzipentry)
+        - [ZIP streaming - `zipDirectory` / `readZipEntry`](#zip-streaming---zipdirectory--readzipentry)
         - [Jsoup helpers - `asJsoup` / `attrOrNull` / `textOrNull`](#jsoup-helpers---asjsoup--attrornull--textornull)
         - [Description builder - `MarkdownDescription` / `toMarkdown` / `escapeMarkdown` / `ratingStars`](#description-builder---markdowndescription--tomarkdown--escapemarkdown--ratingstars)
         - [Cryptography - `decodeHex` / `rc4` / AES helpers](#cryptography---decodehex--rc4--aes-helpers)
@@ -1044,31 +1044,14 @@ val data = client.post(
 
 ##### GraphQL GET requests - `graphQLGet`
 
-For sources that send GraphQL over HTTP GET instead of POST, use `graphQLGet`:
+For sources that send GraphQL over HTTP GET instead of POST, use the suspend `OkHttpClient.graphQLGet`.
+It sends the request and returns the `Response`, taking the source's own `headers` when none are
+passed. `ensureSuccess` behaves as in [HTTP requests](#http-requests---okhttpclientget--post--put--head),
+and it additionally takes a `cacheControl`, defaulting to a 10-minute max-age, and a required `fetch`, passed by name.
 
 ```kotlin
 import keiyoushi.utils.graphQLGet
 
-val request = graphQLGet(
-    url = "$baseUrl/graphql",
-    headers = headers,
-    query = $$"""
-    query SearchManga($page: Int!) {
-      mangas(page: $page) {
-        id
-      }
-    }
-    """,
-    variables = variables
-)
-```
-
-Inside a `KeiSource`, use the suspend `OkHttpClient` overload instead: it sends the request and
-returns the `Response`, taking the source's own `headers` when none are passed. `ensureSuccess`
-behaves as in [HTTP requests](#http-requests---okhttpclientget--post--put--head), and it
-additionally takes a `cacheControl`, defaulting to a 10-minute max-age, and a required `fetch`, passed by name.
-
-```kotlin
 val data = client.graphQLGet(
     url = "$baseUrl/graphql",
     operationName = "SearchManga",
@@ -1146,24 +1129,26 @@ val meta = root["data"]!!.obj.getObject("metadata")    // or getObjectOrNull
 
 Prefer these over writing `element.jsonObject["key"]?.jsonPrimitive?.content` manually.
 
-##### ZIP streaming - `zipDirectoryAsync` / `readZipEntry`
+##### ZIP streaming - `zipDirectory` / `readZipEntry`
 
-For sources that serve manga pages as remote ZIP archives, the `keiyoushi.zip` package lets you read the central directory and individual entries using HTTP Range requests - no need to download the entire file. Import from `keiyoushi.zip`:
+For sources that serve manga pages as remote ZIP archives, the `keiyoushi.zip` package reads the central directory and individual entries with HTTP Range requests, without downloading the whole file:
 
 ```kotlin
 import keiyoushi.zip.readZipEntry
-import keiyoushi.zip.zipDirectoryAsync
+import keiyoushi.zip.zipDirectory
 import okio.buffer
 
-// 1. Fetch the ZIP central directory asynchronously:
-val directory = client.zipDirectoryAsync(zipUrl, headers)
+// 1. Fetch and parse the ZIP central directory:
+val directory = client.zipDirectory(zipUrl)
 
 // 2. Find an entry by name and read its decompressed bytes:
 val entry = directory.entries.first { it.name == "001.jpg" }
-val imageBytes = client.readZipEntry(zipUrl, entry, headers).buffer().readByteArray()
+val imageBytes = client.readZipEntry(zipUrl, entry).buffer().readByteArray()
 ```
 
-`client.zipDirectoryAsync(...)` is the public `OkHttpClient` extension method that performs HTTP range requests to fetch and parse the ZIP central directory without downloading the entire file. It automatically resolves total archive size from the `Content-Range` header and handles ZIP64 archives. `readZipDirectory` is a low-level internal helper that can be used directly when the raw bytes or size have already been obtained. `client.readZipEntry` streams and decompresses only the bytes required for that one entry. Use this instead of downloading the full ZIP into a `ZipInputStream`, which forces the entire archive into memory.
+Both are suspend `OkHttpClient` extensions that take the source's own `headers` unless you pass some. `client.zipDirectory` gets the archive size from `Content-Range` and handles ZIP64; `client.readZipEntry` streams and decompresses only that one entry. Use them instead of downloading the full ZIP into a `ZipInputStream`, which forces the entire archive into memory.
+
+To serve entries as pages from an image interceptor, which can't suspend, put the entry's fields in the page URL and read it with the blocking building blocks: `chain.proceed(request.newBuilder().range(entry.dataRange).build())`, then `readEntry(response.body.source(), entry.compressedSize, entry.method)`.
 
 ##### Jsoup helpers - `asJsoup` / `attrOrNull` / `textOrNull`
 

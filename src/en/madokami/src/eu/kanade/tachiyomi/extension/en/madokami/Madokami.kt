@@ -20,8 +20,10 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
-import keiyoushi.zip.coroutines.zipDirectory
-import keiyoushi.zip.readZipEntry
+import keiyoushi.zip.dataRange
+import keiyoushi.zip.range
+import keiyoushi.zip.readEntry
+import keiyoushi.zip.zipDirectory
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonArray
@@ -32,7 +34,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.buffer
@@ -78,23 +79,27 @@ abstract class Madokami :
         if (fragment != null && (url.encodedPath.endsWith(".zip", true) || url.encodedPath.endsWith(".cbz", true))) {
             val parts = fragment.split("|")
             if (parts.size == 4) {
-                val zipUrl = url.newBuilder().fragment(null).build().toString()
                 val entry = keiyoushi.zip.Entry(
                     name = parts[0],
                     method = parts[1].toInt(),
                     compressedSize = parts[2].toLong(),
                     localHeaderOffset = parts[3].toLong(),
                 )
+                val rangeRequest = request.newBuilder()
+                    .url(url.newBuilder().fragment(null).build())
+                    .range(entry.dataRange)
+                    .build()
 
-                val source = client.readZipEntry(zipUrl, entry, request.headers)
-                val mediaType = getMediaType(entry.name)
+                val response = chain.proceed(rangeRequest)
+                if (!response.isSuccessful) return response
+                val source = readEntry(response.body.source(), entry.compressedSize, entry.method)
 
-                return Response.Builder()
-                    .request(request)
-                    .protocol(Protocol.HTTP_1_1)
+                return response.newBuilder()
+                    .removeHeader("Content-Range")
+                    .removeHeader("Content-Length")
                     .code(200)
                     .message("OK")
-                    .body(source.buffer().asResponseBody(mediaType))
+                    .body(source.buffer().asResponseBody(getMediaType(entry.name)))
                     .build()
             }
         }
@@ -111,8 +116,6 @@ abstract class Madokami :
 
         return Credentials.basic(username, password)
     }
-
-    private fun getAuthHeaders() = headers.newBuilder().set("Authorization", getAuthCredential()).build()
 
     private val customMetadataRegex: Regex?
         get() {
@@ -494,7 +497,7 @@ abstract class Madokami :
     private suspend fun getZipPageList(chapter: SChapter): List<Page> {
         val url = baseUrl + chapter.url
         val directory = try {
-            client.zipDirectory(url, getAuthHeaders())
+            client.zipDirectory(url)
         } catch (e: IOException) {
             if (e.message?.contains("Content-Range") == true) {
                 throw IOException("Refresh episode list and try again", e)

@@ -1,15 +1,9 @@
-package keiyoushi.zip.coroutines
+package keiyoushi.zip
 
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.network.DEFAULT_CACHE_CONTROL
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
-import keiyoushi.zip.Entry
-import keiyoushi.zip.MAX_EOCD_SEARCH
-import keiyoushi.zip.ZipDirectory
-import keiyoushi.zip.dataRange
-import keiyoushi.zip.locateCentralDirectory
-import keiyoushi.zip.readEntry
 import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.OkHttpClient
@@ -18,10 +12,8 @@ import okio.Source
 import java.io.IOException
 
 /**
- * Suspend equivalent of [keiyoushi.zip.readZipDirectory].
- *
- * Parses the central directory from an already-fetched [tail], calling [fetch] only when the
- * directory falls outside it.
+ * Parses the central directory from an already-fetched [tail], the final bytes of the archive
+ * ending exactly at its end, calling [fetch] only when the directory falls outside it.
  *
  * @param tail the final bytes of the archive
  * @param totalSize the resource's total size
@@ -29,7 +21,7 @@ import java.io.IOException
  * @return the parsed [ZipDirectory]
  * @throws IllegalStateException if [tail] holds no valid EOCD record
  */
-suspend fun readZipDirectory(
+private suspend fun readZipDirectory(
     tail: ByteArray,
     totalSize: Long,
     fetch: suspend (LongRange) -> BufferedSource,
@@ -40,8 +32,10 @@ suspend fun readZipDirectory(
 }
 
 /**
- * Suspend equivalent of [keiyoushi.zip.zipDirectory]. Fetches and parses a remote ZIP's central
- * directory over HTTP range requests.
+ * Fetches and parses a remote ZIP's central directory over HTTP range requests.
+ *
+ * A single `bytes=-N` suffix request yields both the total size from Content-Range and the trailing
+ * bytes, so the directory is read in one request unless it lies outside that tail.
  *
  * @param url the archive URL
  * @param headers headers to send with every request
@@ -62,7 +56,7 @@ suspend fun OkHttpClient.zipDirectory(
 }
 
 /**
- * Suspend equivalent of [keiyoushi.zip.readZipEntry]. Range-fetches one [entry] from [url].
+ * Range-fetches one [entry] from [url].
  * The result is lazy and closing it closes the underlying response.
  *
  * @param url the archive URL
