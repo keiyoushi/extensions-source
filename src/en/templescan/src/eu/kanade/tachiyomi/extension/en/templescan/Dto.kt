@@ -27,7 +27,10 @@ private val RATING = Regex("""\s*\+18\s*""")
 
 private val SLUG = Regex("[a-z0-9._-]+")
 
-private fun List<String>.slug() = last(SLUG::matches)
+// Some uploads have uppercase in their chapter slugs
+private val MIXED_CASE_SLUG = Regex("[A-Za-z0-9._-]+")
+
+private fun List<String>.slug() = lastOrNull(SLUG::matches) ?: last(MIXED_CASE_SLUG::matches)
 
 private val CATALOG_KEYS = setOf("thumbnail", "badge", "status", "created_at", "alternative_names", "update_chapter")
 

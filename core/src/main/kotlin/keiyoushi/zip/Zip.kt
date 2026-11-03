@@ -1,11 +1,8 @@
 package keiyoushi.zip
 
-import eu.kanade.tachiyomi.network.GET
 import keiyoushi.utils.readLongLittleEndian
 import keiyoushi.utils.readUIntLittleEndian
 import keiyoushi.utils.readUShortLittleEndian
-import okhttp3.Headers
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okio.Buffer
 import okio.BufferedSource
@@ -14,7 +11,6 @@ import okio.InflaterSource
 import okio.Source
 import okio.buffer
 import java.io.EOFException
-import java.io.IOException
 import java.util.zip.Inflater
 
 private const val EOCD_SIG = 0x06054b50L
@@ -57,7 +53,7 @@ class Eocd(
  * @property name the entry path as stored in the archive
  * @property method the compression method (STORED or DEFLATE)
  * @property compressedSize the on-disk size of the entry's data, in bytes
- * @property localHeaderOffset offset of the entry's local file header; ZIP-relative from [parseCentralDirectory], absolute from [readZipDirectory]
+ * @property localHeaderOffset offset of the entry's local file header; ZIP-relative from [parseCentralDirectory], absolute from [zipDirectory]
  */
 class Entry(
     val name: String,
@@ -68,7 +64,7 @@ class Entry(
 
 /**
  * Byte range to range-fetch to read an entry: its data plus [MAX_LOCAL_FILE_HEADER] bytes of headroom
- * for the local file header. The offset must be absolute, as resolved by [readZipDirectory]. Useful
+ * for the local file header. The offset must be absolute, as resolved by [zipDirectory]. Useful
  * when only the raw offset and size are on hand rather than an [Entry].
  *
  * @param localHeaderOffset absolute offset of the entry's local file header
@@ -77,7 +73,7 @@ class Entry(
  */
 fun dataRange(localHeaderOffset: Long, compressedSize: Long): LongRange = localHeaderOffset..localHeaderOffset + MAX_LOCAL_FILE_HEADER + compressedSize
 
-/** Byte range to range-fetch to read this entry, via [dataRange]; assumes an absolute offset, as from [readZipDirectory]. */
+/** Byte range to range-fetch to read this entry, via [dataRange]; assumes an absolute offset, as from [zipDirectory]. */
 val Entry.dataRange: LongRange
     get() = dataRange(localHeaderOffset, compressedSize)
 
@@ -181,42 +177,6 @@ private fun zip64ExtraOffset(cd: ByteArray, extraStart: Int, extraLen: Int): Int
 }
 
 /**
- * Fetches and parses an archive's central directory, resolving every entry offset to an absolute file position.
- *
- * Reads the tail with a plain `bytes=start-end` request derived from [totalSize]. Use this when the size is
- * known up front and the host does not serve `bytes=-N` suffix ranges.
- *
- * See also [zipDirectory], which gets the size and tail in a single request.
- *
- * @param totalSize the total size of the resource, in bytes
- * @param fetch returns the bytes of a given inclusive byte range; read fully and closed by this function
- * @return the parsed [ZipDirectory]
- * @throws IllegalStateException if the archive has no valid EOCD record
- */
-fun readZipDirectory(totalSize: Long, fetch: (LongRange) -> BufferedSource): ZipDirectory {
-    val tailStart = maxOf(0L, totalSize - MAX_EOCD_SEARCH)
-    val tail = fetch(tailStart..<totalSize).use { it.readByteArray() }
-    return readZipDirectory(tail, totalSize, fetch)
-}
-
-/**
- * Parses the central directory from an already-fetched [tail], the final bytes of the archive ending
- * exactly at its end. Useful with a `bytes=-N` suffix range, which returns the size and tail together
- * in one request; [fetch] is then called only when the directory falls outside [tail].
- *
- * @param tail the final bytes of the archive
- * @param totalSize the resource's total size
- * @param fetch returns the bytes of an inclusive byte range; read fully and closed by this function
- * @return the parsed [ZipDirectory]
- * @throws IllegalStateException if [tail] holds no valid EOCD record
- */
-fun readZipDirectory(tail: ByteArray, totalSize: Long, fetch: (LongRange) -> BufferedSource): ZipDirectory {
-    val location = locateCentralDirectory(tail, totalSize)
-    val cd = location.bytes ?: fetch(location.range).use { it.readByteArray() }
-    return location.parse(cd)
-}
-
-/**
  * Where an archive's central directory lives, resolved from its tail by [locateCentralDirectory].
  *
  * @property bytes the directory bytes when the tail already contained them, else null
@@ -278,21 +238,6 @@ fun readEntry(
     return if (method == METHOD_DEFLATE) InflaterSource(payload, Inflater(true)) else payload
 }
 
-/**
- * Range-fetches and reads an [entry] already in hand; a convenience over [readEntry].
- * The result is lazy and closing it closes the fetched source.
- *
- * @param entry the entry to read, with an absolute offset
- * @param decode transform applied to the raw payload before inflation; defaults to identity
- * @param fetch returns the bytes of the entry's [Entry.dataRange]
- * @return a [Source] yielding the entry's decompressed bytes
- */
-fun readZipEntry(
-    entry: Entry,
-    decode: (BufferedSource) -> Source = { it },
-    fetch: (LongRange) -> BufferedSource,
-): Source = readEntry(fetch(entry.dataRange), entry.compressedSize, entry.method, decode)
-
 private fun skipLocalHeader(source: BufferedSource) {
     val header = source.readByteArray(LFH_MIN_LEN.toLong())
     require(header.readUIntLittleEndian(0) == LFH_SIG) { "Not a local file header" }
@@ -323,40 +268,3 @@ private class FixedLengthSource(
 
 /** Sets the `Range` header to the inclusive byte [range]. */
 fun Request.Builder.range(range: LongRange): Request.Builder = header("Range", "bytes=${range.first}-${range.last}")
-
-/**
- * Fetches and parses a remote ZIP's central directory over HTTP range requests.
- *
- * A single `bytes=-N` suffix request yields both the total size from Content-Range and the trailing
- * bytes, so the directory is read in one request unless it lies outside that tail.
- *
- * @param url the archive URL
- * @param headers headers to send with every request
- * @return the parsed [ZipDirectory], with absolute offsets
- * @throws IOException if the total size cannot be read from the Content-Range
- * @throws IllegalStateException if the archive has no valid EOCD record
- */
-fun OkHttpClient.zipDirectory(url: String, headers: Headers): ZipDirectory {
-    val response = newCall(GET(url, headers).newBuilder().header("Range", "bytes=-$MAX_EOCD_SEARCH").build()).execute()
-    val total = response.header("Content-Range")?.substringAfterLast("/")?.toLongOrNull() ?: throw IOException("Missing or invalid Content-Range")
-    return readZipDirectory(response.body.bytes(), total) { rangeSource(url, headers, it) }
-}
-
-/**
- * Reads one [entry] from [url] over a range request.
- * The result is lazy and closing it closes the underlying response.
- *
- * @param url the archive URL
- * @param entry the entry to read, from [zipDirectory]
- * @param headers headers to send
- * @param decode transform applied to the raw payload before inflation; identity by default
- * @return a [Source] yielding the entry's decompressed bytes
- */
-fun OkHttpClient.readZipEntry(
-    url: String,
-    entry: Entry,
-    headers: Headers,
-    decode: (BufferedSource) -> Source = { it },
-): Source = readZipEntry(entry, decode) { rangeSource(url, headers, it) }
-
-private fun OkHttpClient.rangeSource(url: String, headers: Headers, range: LongRange): BufferedSource = newCall(GET(url, headers).newBuilder().range(range).build()).execute().body.source()

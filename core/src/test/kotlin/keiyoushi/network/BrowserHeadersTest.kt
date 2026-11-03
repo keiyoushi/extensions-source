@@ -131,8 +131,7 @@ class BrowserHeadersTest {
 
     @Test
     fun otherClientsGoOutAsBuilt() {
-        val safari = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
-        val request = builder("https://a.test/series/1", ua = safari).fetch(Fetch.DOCUMENT).build()
+        val request = builder("https://a.test/series/1", ua = "ExampleApiClient/1.0").fetch(Fetch.DOCUMENT).build()
         assertEquals(request.headers, intercept(request).headers)
     }
 
@@ -260,6 +259,39 @@ class BrowserHeadersTest {
     }
 
     @Test
+    fun jxlOnlyFromFirefox158() {
+        val image = { ua: String -> intercept(builder("https://a.test/1.jpg", ua = ua).fetch(Fetch.IMAGE).build()).header("Accept") }
+        assertEquals("image/avif,image/jxl,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5", image(firefoxUa))
+        assertEquals("image/avif,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5", image(firefoxUa.replace("158", "157")))
+    }
+
+    @Test
+    fun storageAccessOnCrossSiteImages() {
+        val image = { url: String, ua: String -> intercept(builder(url, referer = "https://a.test/series/1", ua = ua).fetch(Fetch.IMAGE).build()).header("Sec-Fetch-Storage-Access") }
+        assertEquals("active", image("https://cdn.b.test/1.jpg", chromeUa))
+        assertEquals("none", image("https://cdn.b.test/1.jpg", chromeUa.replace("Chrome/155", "Chrome/141")))
+        assertNull(image("https://cdn.b.test/1.jpg", chromeUa.replace("Chrome/155", "Chrome/132")))
+        assertEquals("none", image("https://cdn.b.test/1.jpg", firefoxUa))
+        assertNull(image("https://cdn.b.test/1.jpg", firefoxUa.replace("158", "146")))
+        assertNull(image("https://media.a.test/1.jpg", chromeUa))
+        assertNull(intercept(builder("https://api.b.test/list", referer = "https://a.test/series/1").fetch(Fetch.XHR).build()).header("Sec-Fetch-Storage-Access"))
+    }
+
+    @Test
+    fun storageAccessOrder() {
+        val names = { ua: String ->
+            val request = builder("https://cdn.b.test/1.jpg", referer = "https://a.test/series/1", ua = ua).fetch(Fetch.IMAGE).build()
+            intercept(request, wireOrder = true, compression = true).headers.map { it.first }
+        }
+        val chrome = names(chromeUa)
+        assertEquals(chrome.indexOf("Sec-Fetch-Dest") + 1, chrome.indexOf("Sec-Fetch-Storage-Access"))
+        assertEquals(chrome.indexOf("Referer") - 1, chrome.indexOf("Sec-Fetch-Storage-Access"))
+        val firefox = names(firefoxUa)
+        assertEquals(firefox.indexOf("Accept-Encoding") + 1, firefox.indexOf("Sec-Fetch-Storage-Access"))
+        assertEquals(firefox.indexOf("Referer") - 1, firefox.indexOf("Sec-Fetch-Storage-Access"))
+    }
+
+    @Test
     fun ipv6Origin() {
         val sent = intercept(builder("http://[::1]:8080/api", referer = "http://[::1]:8080/").fetch(Fetch.XHR).post(json()).build())
         assertEquals("http://[::1]:8080", sent.header("Origin"))
@@ -307,7 +339,7 @@ class BrowserHeadersTest {
         .header("User-Agent", ua)
         .apply { referer?.let { header("Referer", it) } }
 
-    // The request as sent: with the wire order pass it's HTTP/1.1, as a unit test has no connection; without, the
+    // The request as sent: with the wire order pass it uses the HTTP/1.1 rules; without, the
     // headers as added. With compression, KeiSource's Accept-Encoding
     private fun intercept(request: Request, wireOrder: Boolean = false, compression: Boolean = false, site: String = "https://a.test", imageFetch: Fetch = Fetch.IMAGE): Request {
         var sent: Request? = null

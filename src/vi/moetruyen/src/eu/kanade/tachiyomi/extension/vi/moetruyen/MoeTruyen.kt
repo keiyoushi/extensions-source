@@ -20,6 +20,7 @@ import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParseDate
 import keiyoushi.utils.ui.askInput
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -49,6 +50,10 @@ abstract class MoeTruyen : KeiSource() {
         addInterceptor(imgxInterceptor())
         rateLimit(3)
     }
+
+    // Server withholds the reader token when Accept-Encoding is set (OkHttp transparent
+    // gzip injects "gzip"), so force identity to look like a real navigation.
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("Accept-Encoding", "identity")
 
     // ============================== Popular ===============================
 

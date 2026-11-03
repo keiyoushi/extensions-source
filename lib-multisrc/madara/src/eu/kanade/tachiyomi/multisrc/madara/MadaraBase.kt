@@ -382,10 +382,14 @@ abstract class MadaraBase : KeiSource() {
         if (data["enable_manga_view"]?.jsonPrimitive?.content != "1") return
         val mangaId = data["manga_id"]?.jsonPrimitive?.content?.takeIf(String::isNotBlank) ?: return
         val chapterSlug = data["chapter_slug"]?.jsonPrimitive?.contentOrNull
+        val nonce = data["nonce"]?.jsonPrimitive?.contentOrNull?.takeIf(String::isNotBlank)
         val body = FormBody.Builder()
             .add("action", "manga_views")
             .add("manga", mangaId)
-            .apply { chapterSlug?.let { add("chapter", it) } }
+            .apply {
+                chapterSlug?.let { add("chapter", it) }
+                nonce?.let { add("nonce", it) }
+            }
             .build()
         val request = Request.Builder()
             .url("$baseUrl/wp-admin/admin-ajax.php")

@@ -28,7 +28,12 @@ import java.net.URLDecoder
 abstract class Yabai : KeiSource() {
     override val supportsLatest = false
 
-    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::tokenInterceptor)
+    private val ddosGuardIntercept = DDosGuardInterceptor(network.client)
+
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(ddosGuardIntercept)
+        addInterceptor(::tokenInterceptor)
+    }
 
     private val inertiaHeaders get() = headers.newBuilder()
         .add("Inertia-Req", "true")

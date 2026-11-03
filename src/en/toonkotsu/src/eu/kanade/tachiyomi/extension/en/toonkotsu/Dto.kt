@@ -2,13 +2,13 @@ package eu.kanade.tachiyomi.extension.en.toonkotsu
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.roundToInt
 
 @Serializable
 class BrowseDto(
@@ -79,51 +79,50 @@ class SeriesDto(
     }
 
     fun toSMangaDetails(baseUrl: String, showSpoilerTags: Boolean, showAdult: Boolean, mangabaka: MangabakaDto) = toSManga(baseUrl, showSpoilerTags).apply {
-        val info = listOfNotNull(
-            score?.let { (it / 20.0).roundToInt().let { stars -> "★".repeat(stars) + "☆".repeat(5 - stars) } + " ${it / 10.0}" },
-            (year ?: mangabaka.year)?.toString(),
-            (mangabaka.finalVolume ?: muStatus?.let { VOLUMES_REGEX.find(it)?.groupValues?.get(1) })?.let { "$it volumes" },
-            // The site counts chapters only once a series has ended
-            mangabaka.totalChapters?.takeIf { mangabaka.status == "completed" || mangabaka.status == "cancelled" }?.let { "$it chapters" },
-            // Adaptations with `via` belong to a related series
-            adaptation?.takeIf { it.via == null }?.let {
-                val about = listOfNotNull(it.format?.replace('_', ' '), it.year).joinToString().ifEmpty { null }
-                listOfNotNull("[Anime](https://anilist.co/anime/${it.id})", about?.let { "($it)" }).joinToString(" ")
-            },
-        )
         val sources = mangabaka.sources
-        // In the order of the site's External Links
-        val links = listOfNotNull(
-            (externalIds?.anilist ?: sources?.anilist?.id)?.let { "[AniList](https://anilist.co/manga/$it)" },
-            (externalIds?.myanimelist ?: sources?.myAnimeList?.id)?.let { "[MyAnimeList](https://myanimelist.net/manga/$it)" },
-            mangadex?.let { "[MangaDex](https://mangadex.org/title/$it)" },
-            (externalIds?.mangaupdates ?: sources?.mangaUpdates?.id)?.let {
-                // The site links numeric (old) MangaUpdates ids to the old page
-                val page = if (it.all(Char::isDigit)) "series.html?id=$it" else "series/$it"
-                "[MangaUpdates](https://www.mangaupdates.com/$page)"
-            },
-            sources?.kitsu?.id?.let { "[Kitsu](https://kitsu.app/manga/$it)" },
-            externalIds?.mangabaka?.let { "[MangaBaka](https://mangabaka.org/$it)" },
-            sources?.animePlanet?.id?.let { "[Anime-Planet](https://www.anime-planet.com/manga/$it)" },
-            sources?.shikimori?.id?.let { "[Shikimori](https://shikimori.io/mangas/$it)" },
-            sources?.animeNewsNetwork?.id?.let { "[Anime News Network](https://www.animenewsnetwork.com/encyclopedia/manga.php?id=$it)" },
-        )
-        val altTitles = (
-            listOfNotNull(titles?.native, mangabaka.nativeTitle, titles?.romaji, titles?.english) +
-                alt + mangabaka.titles.map { it.title }
-            ).distinct() - title
-        val extra = listOfNotNull(
-            magazines.joinToString(" · ") { it.name }.ifEmpty { null }?.let { "**Magazines:** $it" },
-            altTitles.joinToString(" · ").ifEmpty { null }?.let { "**Alt titles:** $it" },
-            editionOf?.let { "**Edition of:** ${it.toLink(baseUrl)}" },
-            editions.filter { showAdult || !it.adult }.joinToString(" · ") { it.toLink(baseUrl) }.ifEmpty { null }?.let { "**Editions:** $it" },
-            links.joinToString(" · ").ifEmpty { null }?.let { "**Links:** $it" },
-        )
-        description = listOfNotNull(
-            info.joinToString(" · ").ifEmpty { null },
-            this@SeriesDto.description?.takeIf { it.isNotBlank() } ?: mangabaka.description,
-            extra.joinToString("\n").ifEmpty { null },
-        ).joinToString("\n\n").ifEmpty { null }
+        description = MarkdownDescription.Builder().apply {
+            rating(score?.div(10.0))
+            info(
+                (year ?: mangabaka.year)?.toString(),
+                (mangabaka.finalVolume ?: muStatus?.let { VOLUMES_REGEX.find(it)?.groupValues?.get(1) })?.let { "$it volumes" },
+                // The site counts chapters only once a series has ended
+                mangabaka.totalChapters?.takeIf { mangabaka.status == "completed" || mangabaka.status == "cancelled" }?.let { "$it chapters" },
+            )
+            markdown(this@SeriesDto.description?.takeIf { it.isNotBlank() } ?: mangabaka.description)
+            field("Magazines", magazines.map { it.name })
+            links(listOfNotNull(editionOf).map { it.toLink(baseUrl) }, label = "Edition of")
+            links(editions.filter { showAdult || !it.adult }.map { it.toLink(baseUrl) }, label = "Editions")
+            // In the order of the site's External Links
+            links(
+                listOf(
+                    "AniList" to (externalIds?.anilist ?: sources?.anilist?.id)?.let { "https://anilist.co/manga/$it" },
+                    "MyAnimeList" to (externalIds?.myanimelist ?: sources?.myAnimeList?.id)?.let { "https://myanimelist.net/manga/$it" },
+                    "MangaDex" to mangadex?.let { "https://mangadex.org/title/$it" },
+                    "MangaUpdates" to (externalIds?.mangaupdates ?: sources?.mangaUpdates?.id)?.let {
+                        // The site links numeric (old) MangaUpdates ids to the old page
+                        val page = if (it.all(Char::isDigit)) "series.html?id=$it" else "series/$it"
+                        "https://www.mangaupdates.com/$page"
+                    },
+                    "Kitsu" to sources?.kitsu?.id?.let { "https://kitsu.app/manga/$it" },
+                    "MangaBaka" to externalIds?.mangabaka?.let { "https://mangabaka.org/$it" },
+                    "Anime-Planet" to sources?.animePlanet?.id?.let { "https://www.anime-planet.com/manga/$it" },
+                    "Shikimori" to sources?.shikimori?.id?.let { "https://shikimori.io/mangas/$it" },
+                    "Anime News Network" to sources?.animeNewsNetwork?.id?.let { "https://www.animenewsnetwork.com/encyclopedia/manga.php?id=$it" },
+                ) + listOfNotNull(
+                    // Adaptations with `via` belong to a related series
+                    adaptation?.takeIf { it.via == null }?.let {
+                        val about = listOfNotNull(it.format?.replace('_', ' '), it.year).joinToString().ifEmpty { null }
+                        listOfNotNull("Anime", about?.let { "($it)" }).joinToString(" ") to "https://anilist.co/anime/${it.id}"
+                    },
+                ),
+            )
+            altTitles(
+                (
+                    listOfNotNull(titles?.native, mangabaka.nativeTitle, titles?.romaji, titles?.english) +
+                        alt + mangabaka.titles.map { it.title }
+                    ).filter { it.trim() != title },
+            )
+        }.build()
     }
 }
 
@@ -142,7 +141,7 @@ class AdaptationDto(val id: Long, val format: String? = null, val year: Int? = n
 
 @Serializable
 class EditionDto(private val hid: String, private val title: String, val adult: Boolean = false) {
-    fun toLink(baseUrl: String) = "[${title.replace("[", "\\[").replace("]", "\\]")}]($baseUrl/title/$hid)"
+    fun toLink(baseUrl: String) = title to "$baseUrl/title/$hid"
 }
 
 @Serializable
