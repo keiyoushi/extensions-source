@@ -7,15 +7,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.lib.randomua.UserAgentType
-import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.tryParseDateTime
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -31,8 +28,6 @@ abstract class Xiutaku : KeiSource() {
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(10, 1.seconds) { it.host == baseUrlHost }
-
-    override fun Headers.Builder.configureHeaders() = setRandomUserAgent(UserAgentType.MOBILE)
 
     // ========================= Popular =========================
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangasPage(client.get("$baseUrl/hot?start=${20 * (page - 1)}", Fetch.DOCUMENT).asJsoup())

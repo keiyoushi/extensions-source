@@ -23,7 +23,3 @@ keiyoushi {
         path("/reader/..*")
     }
 }
-
-dependencies {
-    implementation(project(":lib:randomua"))
-}

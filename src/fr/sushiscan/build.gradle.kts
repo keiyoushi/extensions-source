@@ -16,8 +16,3 @@ keiyoushi {
         baseUrl = "https://sushiscan.net"
     }
 }
-
-dependencies {
-
-    implementation(project(":lib:randomua"))
-}
