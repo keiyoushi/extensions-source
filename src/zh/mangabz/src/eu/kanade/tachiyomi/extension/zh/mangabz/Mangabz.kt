@@ -109,6 +109,8 @@ abstract class Mangabz :
         return SMangaUpdate(manga, parseChapterList(document))
     }
 
+    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.toMirror()
+
     override fun parseDescription(element: Element, title: String, details: Elements): String {
         val text = element.ownText()
         val start = text.removePrefix("${title}漫画 ，").removePrefix("${title}漫畫 ，")
