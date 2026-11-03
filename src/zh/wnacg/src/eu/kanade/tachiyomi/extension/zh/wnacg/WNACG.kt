@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
@@ -33,6 +34,7 @@ import org.jsoup.nodes.Element
 import java.io.IOException
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlin.time.Duration.Companion.minutes
 
 @Source
 abstract class WNACG :
@@ -46,6 +48,8 @@ abstract class WNACG :
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(updateUrlInterceptor)
+        // Cloudflare answers 429 past 60 page requests a minute
+        rateLimit(50, 1.minutes) { mirrorHostRegex.containsMatchIn(it.host) }
     }
 
     // Mobile user agents get a mobile layout
@@ -335,7 +339,7 @@ abstract class WNACG :
 
         // Gallery page, reader and chapter links; a chapter's sid is its collection
         private val mangaUrlRegex = Regex("""/photos-(?:index|slide|list|gallery)(?:-page-\d+)?-aid-(\d+)(?:-sid-(\d+))?(?:-page-\d+)?\.html""")
-        private val mirrorHostRegex = Regex("""^(?:www\.)?wn(?:acg|\d+)\.""")
+        private val mirrorHostRegex = Regex("""^(?:www\.)?wn(?:acg\w*|\d+)\.""")
         private val mangaAidRegex = Regex("""photos-index-aid-(\d+)""")
         private val chapterListPageRegex = Regex("""photos-index-aid-\d+-page-(\d+)\.html""")
         private val chapterDateRegex = Regex("""\d{4}-\d{2}-\d{2}""")
