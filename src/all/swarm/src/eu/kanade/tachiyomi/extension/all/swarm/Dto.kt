@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.swarm
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -104,27 +105,14 @@ class ComicDto(
             "cancelled", "discontinued" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
-        description = buildDescription()
-    }
-
-    private fun buildDescription(): String? {
-        val sections = mutableListOf<String>()
-        description?.takeIf { it.isNotBlank() }?.let { sections += it.trim() }
-        val facts = listOfNotNull(
-            year?.takeIf { it > 0 }?.let { "Year: $it" },
-            publishers?.takeIf { it.isNotEmpty() }?.let { "Publishers: ${it.joinToString()}" },
-            anime?.let { listOfNotNull(it.start, it.end).joinToString(" to ").ifEmpty { null } }?.let { "Anime: $it" },
-        )
-        if (facts.isNotEmpty()) sections += facts.joinToString("\n")
-        val alternatives = altTitles.orEmpty().map(String::trim).filter { it.isNotEmpty() && it != title }.distinct()
-        if (alternatives.isNotEmpty()) {
-            sections += "**Alternative titles:**\n" + alternatives.joinToString("\n") { "- ${it.escapeBrackets()}" }
-        }
-        val links = urls.orEmpty().mapNotNull(::parseLink).distinctBy { it.second }
-        if (links.isNotEmpty()) {
-            sections += "**Links:**\n" + links.joinToString("\n") { (name, link) -> "- [${name.escapeBrackets()}]($link)" }
-        }
-        return sections.joinToString("\n\n").ifEmpty { null }
+        description = MarkdownDescription.Builder()
+            .description(this@ComicDto.description)
+            .field("Year", year?.takeIf { it > 0 }?.toString())
+            .field("Publishers", publishers.orEmpty())
+            .field("Anime", anime?.let { listOfNotNull(it.start, it.end).joinToString(" to ") })
+            .altTitles(altTitles.orEmpty().filter { it.trim() != title })
+            .links(urls.orEmpty().mapNotNull(::parseLink).distinctBy { it.second })
+            .build()
     }
 }
 
@@ -156,8 +144,6 @@ private fun coverUrl(baseUrl: String, cover: String?): String? {
         baseUrl.toHttpUrl().newBuilder().addPathSegments("api/image-proxy").addQueryParameter("url", cover).build().toString()
     }
 }
-
-private fun String.escapeBrackets() = replace("[", "\\[").replace("]", "\\]")
 
 @Serializable
 class ChapterDto(
