@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.all.mangadotnet
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.ratingStars
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
@@ -15,8 +14,6 @@ import kotlinx.serialization.json.JsonTransformingSerializer
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.serializer
-import java.math.BigDecimal
-import java.math.RoundingMode
 
 @Serializable
 class Data<T>(
@@ -242,10 +239,7 @@ class Manga(
         }
         description = MarkdownDescription.Builder().apply {
             if (showMetadata) {
-                val ratingStr = rating?.toDouble()?.takeIf { it.isFinite() }?.let { value ->
-                    val number = BigDecimal(value.toString()).setScale(2, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
-                    "${ratingStars(value, 10)} $number" + (ratingCount?.takeIf { it > 0 }?.let { " ($it)" } ?: "")
-                }
+                rating(this@Manga.rating, votes = ratingCount?.takeIf { it > 0 })
                 val metadata = buildList {
                     year?.let { add("**Year:** $it") }
                     chapterCount?.let { add("**Chapters:** $it") }
@@ -253,16 +247,10 @@ class Manga(
                     trackedCount?.let { add("**Tracked:** $it") }
                     contentRating?.let { add("**Content Rating:** ${it.replaceFirstChar { c -> c.uppercase() }}") }
                 }.joinToString(" · ")
-
-                val topBlock = buildList {
-                    ratingStr?.let { add(it) }
-                    if (metadata.isNotBlank()) add(metadata)
-                }.joinToString("\n")
-
-                if (topBlock.isNotBlank()) {
-                    markdown(topBlock)
-                    markdown("---")
+                if (metadata.isNotBlank()) {
+                    markdown(metadata)
                 }
+                markdown("---")
             }
             markdown(
                 this@Manga.description?.replace("\r\n", "\n")
