@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.onfmangas
 
 import android.content.SharedPreferences
+import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import app.cash.quickjs.QuickJs
@@ -13,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -171,15 +173,16 @@ abstract class OnfMangas :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        val json = document.decodeHexVariable("_hexP") ?: return emptyList()
+        val pages = document.selectFirst("#viewerContainer")!!.attr("data-reader-pages")
 
-        return json.parseAs<List<PageDto>>()
-            .mapIndexed { index, dto -> dto.toPage(index) }
+        return Base64.decode(pages, Base64.DEFAULT).decodeToString()
+            .parseAs<List<PageDto>>()
+            .mapIndexed { index, dto -> dto.toPage(index, document.location()) }
     }
 
-    // uploads.mangadex.org serves a placeholder image with either header
+    // The site's MangaDex proxy answers 403 without the chapter page as Referer
     override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
-        .removeHeader("Referer")
+        .fetch(imageFetch.from(page.url))
         .build()
 
     override suspend fun fetchFilterData(): JsonElement {

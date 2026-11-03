@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.parser.Parser
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -63,11 +64,10 @@ class GenreDto(
 @Serializable
 class PageDto(
     private val src: String,
-    private val fallback: String? = null,
 ) {
-    fun toPage(index: Int) = Page(
+    fun toPage(index: Int, chapterUrl: String) = Page(
         index = index,
-        // The MangaDex node in src answers 404, fallback is the MangaDex origin
-        imageUrl = fallback?.ifEmpty { null } ?: src,
+        url = chapterUrl,
+        imageUrl = chapterUrl.toHttpUrl().resolve(src)!!.toString(),
     )
 }
