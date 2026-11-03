@@ -172,7 +172,7 @@ abstract class HeavenManga : KeiSource() {
         val chapterBaseUrl = mangaUrl.toString().removeSuffix("/")
 
         return result.data
-            .sortedByDescending { it.slug.toFloatOrNull() ?: 0f }
+            .sortedByDescending { CHAPTER_NUMBER_REGEX.find(it.slug)?.value?.toFloat() ?: 0f }
             .map {
                 SChapter.create().apply {
                     name = "Capítulo: ${it.slug}"
@@ -186,7 +186,7 @@ abstract class HeavenManga : KeiSource() {
         val chapterId = chapter.url.substringAfterLast("#")
         if (chapterId.isBlank()) throw Exception("Error al obtener el id del capítulo. Actualice la lista")
 
-        val document = client.get("$baseUrl/manga/leer/$chapterId", Fetch.DOCUMENT).asJsoup()
+        val document = client.get("$baseUrl/manga/ver/$chapterId", Fetch.DOCUMENT).asJsoup()
         val data = document.selectFirst("script:containsData(pUrl)")?.data()
             ?: throw Exception("Script pages no encontrado")
         val jsonString = PAGES_REGEX.find(data)?.groupValues?.get(1)?.removeTrailingComma()
@@ -211,6 +211,7 @@ abstract class HeavenManga : KeiSource() {
         private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
         val PAGES_REGEX = """pUrl\s*=\s*(\[[\s\S]*?\])\s*;""".toRegex()
         val TRAILING_COMMA_REGEX = """,\s*(\}|\])""".toRegex()
+        private val CHAPTER_NUMBER_REGEX = """^\d+(?:\.\d+)?""".toRegex()
         private const val CHAPTER_LIST_LIMIT = 10000
     }
 }
