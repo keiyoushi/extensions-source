@@ -193,9 +193,10 @@ abstract class HentaiZone : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.url.trim('/')
+        // The post page is only needed for the chapter list.
         val (found, page) = coroutineScope {
             val post = async { fetchPost(slug, details = true) }
-            val page = async { client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup() }
+            val page = async { if (fetchChapters) client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup() else null }
             post.await() to page.await()
         }
         val post = found ?: throw IOException("Titolo non trovato su Hentai Zone.")
@@ -203,24 +204,27 @@ abstract class HentaiZone : KeiSource() {
             throw IOException("Questo titolo è escluso dall'estensione.")
         }
         val premium = "category-$PREMIUM_CATEGORY_SLUG" in post.classList
-        val series = seriesChapters(page, post)
 
-        manga.apply {
-            title = post.plainTitle
-            post.thumbnail?.let { thumbnail_url = it }
-            genre = post.terms
-                .filter { it.slug !in HIDDEN_GENRES }
-                .joinToString { it.plainName }
-            description = listOfNotNull(
-                post.contentText.takeIf { it.length >= MIN_DESCRIPTION },
-                PREMIUM_DESCRIPTION.takeIf { premium },
-            ).joinToString("\n\n").ifEmpty { null }
-            status = SManga.COMPLETED
-            // A series gets new chapters; a one-shot never changes.
-            update_strategy = if (series.isEmpty()) UpdateStrategy.ONLY_FETCH_ONCE else UpdateStrategy.ALWAYS_UPDATE
+        if (fetchDetails) {
+            manga.apply {
+                title = post.plainTitle
+                post.thumbnail?.let { thumbnail_url = it }
+                genre = post.terms
+                    .filter { it.slug !in HIDDEN_GENRES }
+                    .joinToString { it.plainName }
+                description = listOfNotNull(
+                    post.contentText.takeIf { it.length >= MIN_DESCRIPTION },
+                    PREMIUM_DESCRIPTION.takeIf { premium },
+                ).joinToString("\n\n").ifEmpty { null }
+                status = SManga.COMPLETED
+            }
         }
+        if (page == null) return SMangaUpdate(manga, chapters)
 
-        val chapters = series.ifEmpty {
+        val series = seriesChapters(page, post)
+        // A series gets new chapters; a one-shot never changes.
+        manga.update_strategy = if (series.isEmpty()) UpdateStrategy.ONLY_FETCH_ONCE else UpdateStrategy.ALWAYS_UPDATE
+        val newChapters = series.ifEmpty {
             listOf(
                 SChapter.create().apply {
                     url = "/${post.slug}/"
@@ -230,7 +234,7 @@ abstract class HentaiZone : KeiSource() {
                 },
             )
         }
-        return SMangaUpdate(manga, chapters)
+        return SMangaUpdate(manga, newChapters)
     }
 
     private fun galleryImages(doc: Document): List<String> = doc.select("div.gff-gallery[data-images]")

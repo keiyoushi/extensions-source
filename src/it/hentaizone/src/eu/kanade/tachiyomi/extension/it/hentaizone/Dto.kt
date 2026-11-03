@@ -1,12 +1,13 @@
 package eu.kanade.tachiyomi.extension.it.hentaizone
 
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.getObjectOrNull
+import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import org.jsoup.Jsoup
 import org.jsoup.parser.Parser
 import java.time.ZoneOffset
@@ -26,7 +27,14 @@ class PostDto(
     val plainTitle: String get() = Parser.unescapeEntities(title.rendered, false)
 
     // The post text around the gallery: a synopsis on some posts.
-    val contentText: String get() = content?.rendered?.let { Jsoup.parseBodyFragment(it).text() }.orEmpty()
+    val contentText: String
+        get() = content?.rendered
+            ?.let { Jsoup.parseBodyFragment(it).wholeText() }
+            ?.lines()
+            ?.joinToString("\n") { it.trim() }
+            ?.replace(BLANK_LINES, "\n\n")
+            ?.trim()
+            .orEmpty()
 
     val terms: List<TermDto> get() = embedded?.terms.orEmpty().flatten()
 
@@ -34,9 +42,9 @@ class PostDto(
     val thumbnail: String?
         get() {
             val media = embedded?.media?.firstOrNull() ?: return null
-            val sizes = (media.details as? JsonObject)?.get("sizes") as? JsonObject
+            val sizes = (media.details as? JsonObject)?.getObjectOrNull("sizes")
             val preferred = listOf("medium_large", "large", "medium").firstNotNullOfOrNull { size ->
-                ((sizes?.get(size) as? JsonObject)?.get("source_url") as? JsonPrimitive)?.content
+                sizes?.getObjectOrNull(size)?.getStringOrNull("source_url")
             }
             return preferred ?: media.sourceUrl
         }
@@ -82,3 +90,5 @@ class FilterDataDto(
 
 @Serializable
 class GalleryImageDto(val src: String)
+
+private val BLANK_LINES = Regex("""\n{3,}""")
