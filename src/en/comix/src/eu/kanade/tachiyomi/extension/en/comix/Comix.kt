@@ -136,7 +136,8 @@ abstract class Comix :
             }
             response
         }
-        .rateLimit(2) { it.host == baseUrlHost }
+        // Covers are cached static files
+        .rateLimit(2) { it.host == baseUrlHost && !it.encodedPath.startsWith("/images/covers/") }
         .rateLimit(2) { it.isPageImage() }
         .rateLimit(5)
 
@@ -229,7 +230,7 @@ abstract class Comix :
         ).parseAs<SearchResponse>()
 
         val mangaList = searchResponse.result.items.map {
-            it.toBasicSManga(preferences.posterQuality())
+            it.toBasicSManga(baseUrl.toHttpUrl(), preferences.posterQuality())
         }
         return MangasPage(mangaList, searchResponse.result.hasNextPage())
     }
@@ -459,6 +460,7 @@ abstract class Comix :
     }
 
     private fun parseMangaDetails(detail: Manga): SManga = detail.toSManga(
+        baseUrl.toHttpUrl(),
         preferences.posterQuality(),
         preferences.alternativeNamesInDescription(),
         preferences.scorePosition(),
@@ -478,7 +480,7 @@ abstract class Comix :
             ?: return emptyList()
 
         return related.parseAs<SearchResponse.Items>().items.map {
-            it.toBasicSManga(preferences.posterQuality())
+            it.toBasicSManga(baseUrl.toHttpUrl(), preferences.posterQuality())
         }
     }
 
