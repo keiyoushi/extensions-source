@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Komiku.com"
-    versionCode = 37
+    versionCode = 38
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
