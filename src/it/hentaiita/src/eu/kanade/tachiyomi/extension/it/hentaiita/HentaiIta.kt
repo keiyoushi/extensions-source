@@ -218,11 +218,16 @@ abstract class HentaiIta : KeiSource() {
     // lines: keep what comes before the first promotional line.
     private fun synopsis(text: String): String? {
         val cleaned = text
-            .replace(SPACES, " ")
             .replace(SHORTCODE, " ")
             .replace(LONG_TOKEN, " ")
         val end = PROMO_START.find(cleaned)?.range?.first ?: cleaned.length
-        return cleaned.substring(0, end).replace(SPACES, " ").trim().takeIf { it.length >= MIN_DESCRIPTION }
+        return cleaned.substring(0, end)
+            .lines()
+            .map { it.replace(SPACES, " ").trim() }
+            .joinToString("\n")
+            .replace(BLANK_LINES, "\n\n")
+            .trim()
+            .takeIf { it.length >= MIN_DESCRIPTION }
     }
 
     private fun isAllowed(classes: Collection<String>, title: String): Boolean = classes.none { it in BLOCKED_CLASSES } && !BLOCKED_TEXT.containsMatchIn(title)
@@ -248,7 +253,8 @@ abstract class HentaiIta : KeiSource() {
 
         private val SHORTCODE = Regex("""\[/?[a-z_]+[^\]]*]""")
         private val LONG_TOKEN = Regex("""\S{30,}""")
-        private val SPACES = Regex("""[\s\u00A0]+""")
+        private val SPACES = Regex("""[ \t\u00A0]+""")
+        private val BLANK_LINES = Regex("""\n{3,}""")
         private val PROMO_START = Regex(
             """hentai (ita )?premium|nella nostra nuova area premium|volume completo|capitoli (successivi|precedenti)|i fumetti e i videogiochi della no safe zone""",
             RegexOption.IGNORE_CASE,

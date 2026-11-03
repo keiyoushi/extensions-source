@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.extension.it.hentaiita
 
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.getObjectOrNull
+import keiyoushi.utils.getStringOrNull
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
@@ -25,7 +27,7 @@ class PostDto(
     val plainTitle: String get() = Parser.unescapeEntities(title.rendered, false)
 
     // The post text around the gallery: a synopsis on some posts.
-    val contentText: String get() = content?.rendered?.let { Jsoup.parseBodyFragment(it).text() }.orEmpty()
+    val contentText: String get() = content?.rendered?.let { Jsoup.parseBodyFragment(it).wholeText() }.orEmpty()
 
     val classList: List<String>
         get() = when (val classes = classListJson) {
@@ -43,9 +45,9 @@ class PostDto(
     val thumbnail: String?
         get() {
             val media = embedded?.media?.firstOrNull() ?: return null
-            val sizes = (media.details as? JsonObject)?.get("sizes") as? JsonObject
+            val sizes = (media.details as? JsonObject)?.getObjectOrNull("sizes")
             val preferred = listOf("medium_large", "large", "medium").firstNotNullOfOrNull { size ->
-                ((sizes?.get(size) as? JsonObject)?.get("source_url") as? JsonPrimitive)?.content
+                sizes?.getObjectOrNull(size)?.getStringOrNull("source_url")
             }
             return preferred ?: media.sourceUrl
         }
