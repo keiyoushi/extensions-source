@@ -5,35 +5,14 @@ import android.content.SharedPreferences
 import android.text.InputType
 import android.widget.Toast
 import androidx.preference.EditTextPreference
-import androidx.preference.ListPreference
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Interceptor
-import okhttp3.Response
-import java.io.IOException
-import kotlin.random.Random
-
-private const val DEFAULT_LIST = "https://www.wn07.cfd,https://www.wn07.shop,https://www.wn06.cfd,https://www.wn06.shop"
 
 fun getPreferencesInternal(
     context: Context,
     preferences: SharedPreferences,
-    isUrlUpdated: Boolean,
 ) = arrayOf(
-    ListPreference(context).apply {
-        key = URL_INDEX_PREF
-        title = "网址"
-        summary = if (isUrlUpdated) "%s\n网址已自动更新，请重启应用。" else "%s\n正常情况下会自动更新。重启生效。"
-
-        val options = preferences.urlList
-        val count = options.size
-        entries = options.toTypedArray()
-        entryValues = Array(count, Int::toString)
-    },
-
     EditTextPreference(context).apply {
         key = TITLE_BLACKLIST_PREF
         title = "标题屏蔽关键词"
@@ -75,18 +54,6 @@ fun getPreferencesInternal(
     },
 )
 
-val SharedPreferences.baseUrl: String
-    get() {
-        val list = urlList
-        return list.getOrNull(urlIndex) ?: list[0]
-    }
-
-val SharedPreferences.urlIndex get() = getString(URL_INDEX_PREF, "-1")!!.toInt()
-val SharedPreferences.urlList get() = getString(URL_LIST_PREF, DEFAULT_LIST)
-    .orEmpty()
-    .toValidUrlList()
-    .ifEmpty { DEFAULT_LIST.toValidUrlList() }
-
 var SharedPreferences.extraCategories: List<Pair<String, String>>
     get() = getString(EXTRA_CATEGORIES_PREF, null)?.parseAs<List<Pair<String, String>>>().orEmpty()
     set(value) = edit().putString(EXTRA_CATEGORIES_PREF, value.toJsonString()).apply()
@@ -113,89 +80,14 @@ private fun titleBlacklistSummary(value: String?) = value?.takeIf(String::isNotB
 private fun maxScanPagesSummary(value: Int) = "当前值：$value\n$BLACKLIST_MAX_SCAN_PAGES_SUMMARY"
 
 fun SharedPreferences.preferenceMigration() {
-    if (getString(DEFAULT_LIST_PREF, "")!! != DEFAULT_LIST) {
-        val selectedUrl = urlList.getOrNull(urlIndex)
+    if (contains(URL_LIST_PREF)) {
         edit()
-            .remove("overrideBaseUrl")
-            .putString(DEFAULT_LIST_PREF, DEFAULT_LIST)
-            .setUrlList(DEFAULT_LIST, selectedUrl)
+            .remove(DEFAULT_LIST_PREF)
+            .remove(URL_LIST_PREF)
+            .remove(URL_INDEX_PREF)
             .apply()
     }
 }
-
-fun SharedPreferences.Editor.setUrlList(urlList: String, selectedUrl: String?): SharedPreferences.Editor {
-    val validUrlList = urlList.toValidUrlList()
-    require(validUrlList.isNotEmpty())
-
-    putString(URL_LIST_PREF, validUrlList.joinToString(","))
-    val selectedIndex = validUrlList.indexOf(selectedUrl)
-    val newIndex = selectedIndex.takeIf { it >= 0 } ?: Random.nextInt(validUrlList.size)
-    return putString(URL_INDEX_PREF, newIndex.toString())
-}
-
-class UpdateUrlInterceptor(private val preferences: SharedPreferences) : Interceptor {
-    private val baseUrl = preferences.baseUrl
-    var isUpdated = false
-
-    override fun intercept(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        if (!request.url.toString().startsWith(baseUrl)) return chain.proceed(request)
-
-        val failedResponse = try {
-            val response = chain.proceed(request)
-            if (response.isSuccessful && response.header("Server") != "Parking/1.0") return response
-            response
-        } catch (e: IOException) {
-            if (chain.call().isCanceled()) throw e
-            if (isUpdated || updateUrl(chain)) {
-                throw IOException("网址已自动更新，请重启应用", e)
-            }
-            throw e
-        }
-
-        val statusCode = failedResponse.code
-        failedResponse.close()
-        // A guest 404 isn't a dead mirror
-        if (statusCode == 404 && isLoginOnlyPath(request.url.encodedPath)) {
-            throw IOException(LOGIN_HINT)
-        }
-        if (isUpdated || updateUrl(chain)) {
-            throw IOException("网址已自动更新，请重启应用")
-        }
-        throw IOException("请求失败：HTTP $statusCode")
-    }
-
-    @Synchronized
-    private fun updateUrl(chain: Interceptor.Chain): Boolean {
-        if (isUpdated) return true
-        return try {
-            chain.proceed(GET("https://stevenyomi.github.io/source-domains/wnacg.txt")).use {
-                if (!it.isSuccessful) return false
-                val newList = it.body.string().toValidUrlList()
-                if (newList.isEmpty() || newList == preferences.urlList) return false
-
-                val selectedUrl = preferences.urlList.getOrNull(preferences.urlIndex)
-                preferences.edit()
-                    .setUrlList(newList.joinToString(","), selectedUrl)
-                    .apply()
-                isUpdated = true
-                true
-            }
-        } catch (e: IOException) {
-            if (chain.call().isCanceled()) throw e
-            false
-        }
-    }
-}
-
-private fun String.toValidUrlList(): List<String> = split(',')
-    .map(String::trim)
-    .filter { it.toHttpUrlOrNull() != null }
-
-// Guests get 404 on some galleries and on login-only categories
-private fun isLoginOnlyPath(path: String) = path.startsWith("/photos-") || unlistedCategoryId(path) != null
-
-const val LOGIN_HINT = "内容不存在或需要登录，请在 WebView 中登录后重试"
 
 private const val DEFAULT_LIST_PREF = "defaultBaseUrl"
 private const val URL_LIST_PREF = "baseUrlList"
