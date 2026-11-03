@@ -16,7 +16,7 @@ class ComicListResponse(
 
 @Serializable
 class ComicDto(
-    private val id: Int,
+    val id: Int,
     private val slug: String,
     private val title: String,
     private val genres: List<String>? = null,

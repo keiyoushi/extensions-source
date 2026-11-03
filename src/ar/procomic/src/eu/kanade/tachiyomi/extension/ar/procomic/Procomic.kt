@@ -27,6 +27,7 @@ import keiyoushi.utils.WebViewScope
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import keiyoushi.utils.runWebViewBlocking
@@ -36,6 +37,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Call
 import okhttp3.HttpUrl
@@ -55,6 +58,7 @@ import kotlin.math.roundToInt
 import kotlin.reflect.KMutableProperty0
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Procomic :
@@ -68,12 +72,17 @@ abstract class Procomic :
     private val siteHost get() = baseUrl.toHttpUrl().host
 
     override fun OkHttpClient.Builder.configureClient() = this
+        // The listing API 403s requests closer than about 5 s apart.
+        .rateLimit(1, 5.seconds) { it.encodedPath == "/api/public/content" }
         .rateLimit(3) { it.host == siteHost || it.host == MIRROR_HOST }
         // Sensitive series render the reader only with the site's safe browsing switched off.
         .addCookie("safe_browsing" to "off")
         .addCookie({ MIRROR_HOST }, "safe_browsing" to "off")
         .addInterceptor(::retryStalls)
         .addInterceptor(::stitchInterceptor)
+
+    @Volatile private var listToken: String? = null
+    private val listTokenMutex = Mutex()
 
     private var popularPage = 1
     private var latestPage = 1
@@ -91,7 +100,9 @@ abstract class Procomic :
         val genres = filters.firstInstanceOrNull<GenreFilter>()
         val included = genres?.included.orEmpty()
         val excluded = genres?.excluded.orEmpty()
-        return listing(page, ::searchPage, { it.hasGenres(included, excluded) }) {
+        // Genres are matched here, so take the API's largest pages.
+        val limit = if (included.isEmpty() && excluded.isEmpty()) LIST_LIMIT else GENRE_LIST_LIMIT
+        return listing(page, ::searchPage, limit, { it.hasGenres(included, excluded) }) {
             searchQuery(query, filters)
         }
     }
@@ -109,6 +120,7 @@ abstract class Procomic :
     private suspend fun listing(
         page: Int,
         cursor: KMutableProperty0<Int>,
+        limit: Int = LIST_LIMIT,
         keep: (ContentDto) -> Boolean = { true },
         query: HttpUrl.Builder.() -> Unit,
     ): MangasPage {
@@ -117,15 +129,36 @@ abstract class Procomic :
             val url = baseUrl.toHttpUrl().newBuilder()
                 .addPathSegments("api/public/content")
                 .apply(query)
-                .addQueryParameter("limit", LIST_LIMIT.toString())
+                .addQueryParameter("limit", limit.toString())
                 .addQueryParameter("page", cursor.get().toString())
                 .build()
-            val data = client.get(url, Fetch.XHR).parseAs<ContentPageDto>()
+            val data = listingPage(url).parseAs<ContentPageDto>()
             cursor.set(cursor.get() + 1)
             val mangas = data.data.filter { it.isReadable && keep(it) }.map { it.toDetails(siteHost) }
             if (mangas.isNotEmpty() || !data.hasNextPage) return MangasPage(mangas, data.hasNextPage)
         }
     }
+
+    // Later pages and filters want a Turnstile token from the site's series page; tokens last about 5 min.
+    private suspend fun listingPage(url: HttpUrl): Response {
+        val token = listToken
+        return try {
+            client.get(url, listHeaders(token), Fetch.XHR.from(seriesUrl))
+        } catch (e: HttpException) {
+            if (e.code != 403) throw e
+            client.get(url, listHeaders(newListToken(token)), Fetch.XHR.from(seriesUrl))
+        }
+    }
+
+    // Reuses a token another request minted meanwhile.
+    private suspend fun newListToken(stale: String?): String = listTokenMutex.withLock {
+        listToken?.takeIf { it != stale }
+            ?: getTurnstileToken(seriesUrl, TURNSTILE_SITE_KEY).also { listToken = it }
+    }
+
+    private val seriesUrl get() = "$baseUrl/$lang/series"
+
+    private fun listHeaders(token: String?) = token?.let { headers.newBuilder().set("x-turnstile-token", it).build() } ?: headers
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != siteHost && url.host != MIRROR_HOST) return null
@@ -410,7 +443,8 @@ abstract class Procomic :
     }
 
     companion object {
-        private const val LIST_LIMIT = 20
+        private const val LIST_LIMIT = 12
+        private const val GENRE_LIST_LIMIT = 50
         private const val CHAPTER_LIMIT = 100
         private const val MIRROR_HOST = "procomic.net"
         private val LOCALES = setOf("ar", "en")
@@ -419,6 +453,7 @@ abstract class Procomic :
         private val READER_TIMEOUT = 4.minutes
         private val EXPIRED_CODES = setOf(403, 404, 410)
         private const val TURNSTILE_HOST = "challenges.cloudflare.com"
+        private const val TURNSTILE_SITE_KEY = "0x4AAAAAACk1d7qWJi_of2qU"
         private val POLL_INTERVAL = 750.milliseconds
         private const val STALL_POLLS = 60
         private const val MAX_RELOADS = 2

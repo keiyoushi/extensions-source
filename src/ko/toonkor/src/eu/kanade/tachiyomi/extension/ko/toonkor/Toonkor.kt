@@ -9,8 +9,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.lib.randomua.UserAgentType
-import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
@@ -30,7 +28,10 @@ import java.util.Locale
 @Source
 abstract class Toonkor : KeiSource() {
     // The site serves a reduced 30-item listing to Android user agents.
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = setRandomUserAgent(UserAgentType.DESKTOP)
+    override fun Headers.Builder.configureHeaders(): Headers.Builder {
+        val chromeVersion = CHROME_VERSION_REGEX.find(get("User-Agent").orEmpty())?.groupValues?.get(1) ?: "156"
+        return set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$chromeVersion.0.0.0 Safari/537.36")
+    }
 
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl$WEBTOONS_PATH$ALL_STATUS_PATH$SORT_POPULAR", Fetch.DOCUMENT))
 
@@ -142,5 +143,6 @@ abstract class Toonkor : KeiSource() {
         private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
         private val toonImgRegex = Regex("""toon_img\s*=\s*'([^']+)'""")
         private val pageListRegex = Regex("""src="([^"]*)"""")
+        private val CHROME_VERSION_REGEX = Regex("""Chrome/(\d+)""")
     }
 }

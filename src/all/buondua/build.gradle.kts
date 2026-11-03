@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Buon Dua"
-    versionCode = 12
+    versionCode = 13
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
@@ -14,9 +14,4 @@ keiyoushi {
         lang = "all"
         baseUrl = "https://buondua.com"
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:randomua"))
 }
