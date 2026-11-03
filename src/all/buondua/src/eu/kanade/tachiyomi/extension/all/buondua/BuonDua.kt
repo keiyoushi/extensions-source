@@ -12,8 +12,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.lib.randomua.UserAgentType
-import keiyoushi.lib.randomua.setRandomUserAgent
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
@@ -27,7 +25,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -45,8 +42,6 @@ abstract class BuonDua :
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(10, 1.seconds) { it.host == baseUrlHost }
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = setRandomUserAgent(UserAgentType.MOBILE)
 
     private val preferences by getPreferencesLazy()
 
