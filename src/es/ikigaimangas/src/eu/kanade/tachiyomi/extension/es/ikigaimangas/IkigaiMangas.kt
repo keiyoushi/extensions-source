@@ -1,9 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.ikigaimangas
 
-import android.content.SharedPreferences
-import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -20,7 +16,6 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
-import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import keiyoushi.utils.tryParseDate
@@ -43,21 +38,15 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class IkigaiMangas :
-    KeiSource(),
-    ConfigurableSource {
+abstract class IkigaiMangas : KeiSource() {
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addCookie("is-adult-enabled" to "true")
         .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
 
     private val imageCdnUrl: String = "https://image2.ikigaimangas.cloud"
 
-    private val preferences = getPreferences()
-
     private val dateFormat = DateTimeFormatter.ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'Z", Locale.ENGLISH)
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        fetchDomainUrl()
-
         val document = client.get("$baseUrl/clasificacion/", Fetch.DOCUMENT).asJsoup()
 
         val mangaList = document.select("div.grid > div.card").map { element ->
@@ -71,8 +60,6 @@ abstract class IkigaiMangas :
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        fetchDomainUrl()
-
         val latestUrl = baseUrl.toHttpUrl().newBuilder()
             .addQueryParameter("pagina", page.toString())
             .build()
@@ -90,8 +77,6 @@ abstract class IkigaiMangas :
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        fetchDomainUrl()
-
         if (query.isNotEmpty()) {
             return qwikDataParse(query, filters.firstInstance<ContentFilter>(), getQuerySeriesList(), page)
         }
@@ -146,7 +131,9 @@ abstract class IkigaiMangas :
     }
 
     private suspend fun fetchQuerySeriesList(): List<QwikSeriesDto> {
-        val url = getQfuncUrlFromWebView(baseUrl, headers)
+        // The WebView skips the client's base url lookup
+        val homeUrl = client.get(baseUrl, Fetch.DOCUMENT).use { it.request.url.toString() }
+        val url = getQfuncUrlFromWebView(homeUrl, headers)
         val qfunc = url.queryParameter("qfunc")!!
         val payload = """{"_entry":"1","_objs":["\u0002_#s_$qfunc",["0"]]}"""
         val body = payload.toRequestBody()
@@ -184,8 +171,6 @@ abstract class IkigaiMangas :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        fetchDomainUrl()
-
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val mainContent = document.selectFirst("main")!!
         val updatedManga = SManga.create().apply {
@@ -254,8 +239,6 @@ abstract class IkigaiMangas :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        fetchDomainUrl()
-
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("section div > img").mapIndexed { i, element ->
             Page(i, imageUrl = element.attr("abs:src"))
@@ -270,17 +253,6 @@ abstract class IkigaiMangas :
         StatusFilter("Estados", getStatusFilters()),
         GenreFilter("Géneros", getGenreFilters()),
     )
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = FETCH_DOMAIN_PREF
-            title = "Buscar dominio automáticamente"
-            summary = "Intenta buscar el dominio automáticamente al abrir la fuente."
-            setDefaultValue(true)
-        }.also { screen.addPreference(it) }
-    }
-
-    private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, true)
 
     private suspend fun getQfuncUrlFromWebView(
         url: String,
@@ -340,32 +312,16 @@ abstract class IkigaiMangas :
         loadUrl(url)
     }
 
-    private val domainMutex = Mutex()
-    private var domainFetched = false
-
-    private suspend fun fetchDomainUrl() {
-        if (domainFetched || !preferences.fetchDomainPref()) return
-        domainMutex.withLock {
-            if (domainFetched || !preferences.fetchDomainPref()) return
-
-            try {
-                val initClient = network.client
-                val headers = super.headersBuilder().build()
-                val document = initClient.get("https://ikigaimangas.com", headers, Fetch.DOCUMENT).asJsoup()
-                val scriptUrl = document.selectFirst("button[on:click]:containsOwn(Ir al sitio)")?.attr("on:click")
-                    ?: return
-                val script = initClient.get("https://ikigaimangas.com/build/$scriptUrl", headers, Fetch.SCRIPT).body.string()
-                val domain = script.substringAfter("i(\"").substringBefore("\"")
-                val host = initClient.get(domain, headers, Fetch.DOCUMENT, ensureSuccess = false).use { it.request.url.host }
-                preferences.edit().putString(BASE_URL_PREF, "https://$host").apply()
-                domainFetched = true
-            } catch (_: Exception) {}
-        }
+    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> {
+        val document = client.get(DOMAIN_URL, Fetch.DOCUMENT).asJsoup()
+        val scriptUrl = document.selectFirst("button[on:click]:containsOwn(Ir al sitio)")!!.attr("on:click")
+        val script = client.get("$DOMAIN_URL/build/$scriptUrl", Fetch.SCRIPT).body.string()
+        val domain = script.substringAfter("i(\"").substringBefore("\"")
+        return listOf(client.get(domain, Fetch.DOCUMENT).use { it.request.url.toString() })
     }
 
     companion object {
-        private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val FETCH_DOMAIN_PREF = "fetchDomain"
+        private const val DOMAIN_URL = "https://ikigaimangas.com"
         private const val PAGE_SIZE = 20
         private val DIACRITICS_REGEX = Regex("""\p{Mn}+""")
     }

@@ -44,6 +44,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okio.IOException
+import org.jsoup.Jsoup
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
@@ -55,8 +56,7 @@ abstract class Kagane :
     private val kaganeLangs: List<String>
         get() = listOf(lang)
 
-    private val domain get() = baseUrl.removePrefix("https://")
-    private val apiUrl get() = "https://$domain/api/v2"
+    private val apiUrl get() = "$baseUrl/api/v2"
 
     private val prefs = getPreferences()
 
@@ -67,6 +67,12 @@ abstract class Kagane :
 
     // The image host 404s without the site's Origin
     override val imageFetch = Fetch.XHR
+
+    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = client.get(HUB_URL, Fetch.DOCUMENT)
+        // Mirror cards sit at the top of a 1.2 MB page
+        .use { Jsoup.parse(it.peekBody(HUB_BYTES).string(), HUB_URL) }
+        .select("li:has(p[aria-live]) a[href^=https://]")
+        .map { it.absUrl("href") }
 
     private fun refreshTokenInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -356,7 +362,7 @@ abstract class Kagane :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host !in LINK_HOSTS) return null
         val segments = url.pathSegments
-        if (segments.size < 2) return null
+        if (segments.size < 2 || segments[0] != "series") return null
         val seriesId = segments[1].takeLast(36)
         return parseMangaDetails(getMangaById(seriesId)).apply {
             this.url = seriesId
@@ -708,6 +714,9 @@ abstract class Kagane :
     // ============================= Utilities ==============================
 
     companion object {
+        private const val HUB_URL = "https://kagane.org/"
+        private const val HUB_BYTES = 128 * 1024L
+
         private val TOKEN_REFRESH_INTERVAL = 1.minutes
         private val LINK_HOSTS = setOf("kagane.cx", "kagane.moe", "kagane.net")
         private const val MAX_SOURCE_FILTER = 50
