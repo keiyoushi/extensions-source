@@ -13,6 +13,11 @@ keiyoushi {
     source {
         name = "紳士漫畫"
         lang = "zh"
-        baseUrl = "https://www.wn07.cfd"
+        baseUrl {
+            mirrors(
+                "https://www.wnacg.buzz",
+                "https://www.wnacg.site",
+            )
+        }
     }
 }
