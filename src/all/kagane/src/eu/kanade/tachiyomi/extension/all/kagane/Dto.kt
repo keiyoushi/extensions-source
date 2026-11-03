@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.kagane
 
-import android.content.SharedPreferences
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.MarkdownDescription
@@ -221,7 +220,7 @@ class DetailsDto(
         val kind: String? = null,
     )
 
-    fun toSManga(apiUrl: String, sourceName: String? = null, baseUrl: String = "", showEdition: Boolean = false, showSource: Boolean = false, cleanTitle: Boolean, preferences: SharedPreferences? = null): SManga = SManga.create().apply {
+    fun toSManga(apiUrl: String, sourceName: String? = null, baseUrl: String = "", showEdition: Boolean = false, showSource: Boolean = false, showDetails: Boolean = false, cleanTitle: Boolean): SManga = SManga.create().apply {
         val base = this@DetailsDto.title.trim()
         val withEdition = if (showEdition && !this@DetailsDto.editionInfo.isNullOrBlank()) "$base (${this@DetailsDto.editionInfo})" else base
         title = if (showSource && sourceName != null) "$withEdition [$sourceName]" else withEdition.clean(cleanTitle)
@@ -230,19 +229,21 @@ class DetailsDto(
         val byAuthorRoles = seriesStaff.filter { it.roleIs(BOOK_CREATOR_ROLES) }
         val byArtistRoles = seriesStaff.filter { it.roleIs(ARTIST_ROLES) }
 
-        description = MarkdownDescription.Builder(preferences).apply {
+        description = MarkdownDescription.Builder().apply {
             markdown(this@DetailsDto.description?.let { Jsoup.parse(it.trim().replace("\n", "<br>")).wholeText() })
 
-            val originalName = originalLanguage?.let { LANGUAGE_NAMES[it] }
-            rating(averageRating?.div(10), votes = totalRatings)
-            field("Content Rating", ageRating?.toContentRating(isPornographic, isDisturbing))
-            field("Followers", subscriberCount?.takeIf { it > 0 }?.toLong()?.toCompactCount())
-            field("Format", format)
-            field("Original Language", originalName)
-            field("Translated Language", translatedLanguage?.let { LANGUAGE_NAMES[it] }?.takeIf { it != originalName })
-            field("Views", totalViews?.takeIf { it > 0 }?.toCompactCount())
-            field("Volumes", currentVolumes?.takeIf { it > 0 }?.toString())
-            field("Year", startYear?.takeIf { it > 0 }?.let { start -> endYear?.takeIf { it > start }?.let { "$start–$it" } ?: "$start" })
+            if (showDetails) {
+                val originalName = originalLanguage?.let { LANGUAGE_NAMES[it] }
+                rating(averageRating?.div(10), votes = totalRatings)
+                field("Content Rating", ageRating?.toContentRating(isPornographic, isDisturbing))
+                field("Followers", subscriberCount?.takeIf { it > 0 }?.toLong()?.toCompactCount())
+                field("Format", format)
+                field("Original Language", originalName)
+                field("Translated Language", translatedLanguage?.let { LANGUAGE_NAMES[it] }?.takeIf { it != originalName })
+                field("Views", totalViews?.takeIf { it > 0 }?.toCompactCount())
+                field("Volumes", currentVolumes?.takeIf { it > 0 }?.toString())
+                field("Year", startYear?.takeIf { it > 0 }?.let { start -> endYear?.takeIf { it > start }?.let { "$start–$it" } ?: "$start" })
+            }
 
             seriesStaff
                 .filter { !it.roleIs(BOOK_CREATOR_ROLES) && !it.roleIs(ARTIST_ROLES) }
@@ -252,10 +253,12 @@ class DetailsDto(
 
             if (sourceName != null && sourceId != null) links(listOf(sourceName to "$baseUrl/sources/$sourceId"), label = "Source")
 
-            fun Collection<SeriesLink>.byLabel() = map { (it.label ?: it.url) to it.url }
-            links(seriesLinks.filter { it.kind == "Official" }.byLabel(), label = "Official Link(s)")
-            links(seriesLinks.filter { it.kind == "Tracker" }.byLabel(), label = "Tracker(s)")
-            links(seriesLinks.filter { it.kind != null && it.kind != "Official" && it.kind != "Tracker" }.byLabel(), label = "Other(s)")
+            if (showDetails) {
+                fun Collection<SeriesLink>.byLabel() = map { (it.label ?: it.url) to it.url }
+                links(seriesLinks.filter { it.kind == "Official" }.byLabel(), label = "Official Link(s)")
+                links(seriesLinks.filter { it.kind == "Tracker" }.byLabel(), label = "Tracker(s)")
+                links(seriesLinks.filter { it.kind != null && it.kind != "Official" && it.kind != "Tracker" }.byLabel(), label = "Other(s)")
+            }
 
             altTitles(seriesAlternateTitles.map { it.title }, label = "Associated Name(s)")
         }.build()

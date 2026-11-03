@@ -1,8 +1,5 @@
 package keiyoushi.utils
 
-import android.content.SharedPreferences
-import androidx.preference.MultiSelectListPreference
-import androidx.preference.PreferenceScreen
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Node
 import org.jsoup.nodes.TextNode
@@ -57,33 +54,20 @@ private fun String.escapeMarkdownBackticks() = replace(MARKDOWN_BACKTICK) { "\\$
  *     .links(listOf("AniList" to anilistUrl, "MyAnimeList" to malUrl))
  *     .build()
  * ```
- *
- * Pass the source's preferences to leave out what the user hid with [addPreference].
  */
 object MarkdownDescription {
-    private const val PREF_HIDDEN_SECTIONS = "description_hidden_sections"
-
-    // Sections a user can hide; the description itself is always shown.
-    private enum class Section(val title: String) {
-        RATING("Rating"),
-        DETAILS("Details"),
-        ALT_TITLES("Alternative names"),
-        LINKS("Links"),
-    }
-
-    class Builder(preferences: SharedPreferences? = null) {
-        private val hidden = preferences?.getStringSet(PREF_HIDDEN_SECTIONS, null).orEmpty()
+    class Builder {
         private val sections = mutableListOf<String>()
         private var lastIsInline = false
 
-        private fun add(section: String?, kind: Section? = null) = apply {
-            if (section.isNullOrBlank() || kind?.name in hidden) return@apply
+        private fun add(section: String?) = apply {
+            if (section.isNullOrBlank()) return@apply
             sections += section
             lastIsInline = false
         }
 
-        private fun addInline(text: String?, kind: Section) = apply {
-            if (text.isNullOrBlank() || kind.name in hidden) return@apply
+        private fun addInline(text: String?) = apply {
+            if (text.isNullOrBlank()) return@apply
             if (lastIsInline) sections[sections.lastIndex] += " · $text" else sections += text
             lastIsInline = true
         }
@@ -94,11 +78,10 @@ object MarkdownDescription {
                 val number = BigDecimal(value.toString()).setScale(2, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
                 "${ratingStars(value, max)} $number" + (votes?.let { count -> " ($count)" } ?: "")
             },
-            Section.RATING,
         )
 
         /** Adds [facts], separated by dots. */
-        fun info(vararg facts: String?) = addInline(facts.filterNot { it.isNullOrBlank() }.joinToString(" · ") { it!!.trim().escapeMarkdown() }, Section.DETAILS)
+        fun info(vararg facts: String?) = addInline(facts.filterNot { it.isNullOrBlank() }.joinToString(" · ") { it!!.trim().escapeMarkdown() })
 
         /** Adds plain [text]. */
         fun description(text: String?) = add(text?.trim()?.escapeMarkdown())
@@ -112,7 +95,6 @@ object MarkdownDescription {
         /** Adds [value] after a bold [label]. */
         fun field(label: String, value: String?) = addInline(
             value?.trim()?.takeIf { it.isNotEmpty() }?.let { "**${label.escapeMarkdown()}:** ${it.escapeMarkdown()}" },
-            Section.DETAILS,
         )
 
         /** Adds [values], separated by commas, after a bold [label]. */
@@ -121,7 +103,6 @@ object MarkdownDescription {
         /** Adds [titles] as a list, without blanks and repeats. */
         fun altTitles(titles: Collection<String>, label: String = "Alternative Names") = add(
             markdownList(label, titles.map { it.trim() }.filter { it.isNotEmpty() }.distinct().map { it.escapeMarkdown() }),
-            Section.ALT_TITLES,
         )
 
         /** Adds [links], pairs of link text and URL, as a list. */
@@ -130,23 +111,10 @@ object MarkdownDescription {
                 label,
                 links.mapNotNull { (text, url) -> url?.takeIf { it.isNotBlank() }?.let { "[${text.escapeMarkdown()}](${it.encodeMarkdownUrl()})" } },
             ),
-            Section.LINKS,
         )
 
         /** Returns the description, or null when nothing was added. */
         fun build(): String? = sections.joinToString("\n\n").ifEmpty { null }
-    }
-
-    /** Adds a setting to hide the rating, details, alternative names or links from descriptions built with the source's preferences. */
-    fun addPreference(screen: PreferenceScreen) {
-        MultiSelectListPreference(screen.context).apply {
-            key = PREF_HIDDEN_SECTIONS
-            title = "Hide from description"
-            summary = "Applies when an entry is refreshed"
-            entries = Section.entries.map { it.title }.toTypedArray()
-            entryValues = Section.entries.map { it.name }.toTypedArray()
-            setDefaultValue(emptySet<String>())
-        }.also(screen::addPreference)
     }
 }
 

@@ -1193,17 +1193,14 @@ val directText = element.ownTextOrNull() // excludes text of nested child elemen
 ```kotlin
 import keiyoushi.utils.MarkdownDescription
 
-description = MarkdownDescription.Builder(preferences)
+description = MarkdownDescription.Builder()
     .rating(score) // out of 10, or set `max`; optional `votes`
     .info(year, type) // a run of rating, info and fields shares one line
     .description(document.selectFirst(".synopsis")) // HTML or plain text; `markdown()` for site Markdown
     .field("Publisher", publisher)
     .altTitles(altTitles)
-    .links(mapOf("AniList" to anilistUrl, "MyAnimeList" to malUrl))
+    .links(listOf("AniList" to anilistUrl, "MyAnimeList" to malUrl))
     .build() // null when empty
-
-// in setupPreferenceScreen, lets users hide the rating, details, alternative names or links
-MarkdownDescription.addPreference(screen)
 ```
 
 Outside the builder, `Element.toMarkdown()`, `String.escapeMarkdown()` and `ratingStars()` do the same for one piece.

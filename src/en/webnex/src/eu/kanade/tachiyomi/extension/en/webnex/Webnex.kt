@@ -151,7 +151,7 @@ abstract class Webnex :
             }
             // Year, original language and content rating; type and demographic are in genres
             val facts = document.select(".series-facts > :not(.fact-status, a[href*=kind=], a[href*=demographic=])").map { it.text() }
-            description = MarkdownDescription.Builder(preferences).apply {
+            description = MarkdownDescription.Builder().apply {
                 rating(document.selectFirst(".series-numbers a.series-number-link")?.text()?.toDoubleOrNull())
                 info(*facts.toTypedArray())
                 document.select(".series-desc p").forEach { description(it) }
@@ -344,8 +344,6 @@ abstract class Webnex :
             dialogTitle = "Hidden groups"
             setDefaultValue("")
         }.let(screen::addPreference)
-
-        MarkdownDescription.addPreference(screen)
     }
 
     private fun commaList(key: String, default: String) = preferences.getString(key, default).orEmpty().split(',').map(String::trim).filter(String::isNotEmpty)

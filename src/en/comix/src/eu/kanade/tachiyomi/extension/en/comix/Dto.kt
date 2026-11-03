@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.comix
 
-import android.content.SharedPreferences
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.MarkdownDescription
@@ -82,7 +81,9 @@ class Manga(
 
     fun toSManga(
         posterQuality: String?,
-        preferences: SharedPreferences,
+        altTitlesInDesc: Boolean = false,
+        scorePosition: String,
+        showExtraInfo: Boolean = true,
         showTags: Boolean = false,
     ) = SManga.create().apply {
         url = this@Manga.url?.substringAfter("/title") ?: "/$hid"
@@ -94,17 +95,22 @@ class Manga(
 
         author = actualAuthors?.joinToString { it.title }
         artist = actualArtists?.joinToString { it.title }
-        description = MarkdownDescription.Builder(preferences)
-            .rating(ratedAvg.takeIf { it > 0 }, votes = ratedCount.takeIf { it > 0 })
-            .field("Year", year?.takeIf { it > 0 }?.toString())
-            .field("Language", originalLanguage?.uppercase())
-            .field("Content rating", contentRating.replaceFirstChar(Char::uppercase))
-            .field("Rank", rank.takeIf { it > 0 }?.let { "#$it" })
-            .field("Followed by", followsTotal.takeIf { it > 0 }?.toString())
-            .markdown(synopsis)
-            .altTitles(altTitles.ifEmpty { altTitlesOld })
-            .links(getTrackerLinks(), label = "Trackers")
-            .build()
+        description = MarkdownDescription.Builder().apply {
+            val score = ratedAvg.takeIf { it > 0 }
+            if (scorePosition == "top") rating(score)
+            markdown(synopsis)
+            if (altTitlesInDesc) altTitles(altTitles.ifEmpty { altTitlesOld })
+            if (showExtraInfo) {
+                field("Year", year?.takeIf { it > 0 }?.toString())
+                field("Language", originalLanguage?.uppercase())
+                field("Content rating", contentRating.replaceFirstChar(Char::uppercase))
+                field("Rank", rank.takeIf { it > 0 }?.let { "#$it" })
+                field("Rated by", ratedCount.takeIf { it > 0 }?.toString())
+                field("Followed by", followsTotal.takeIf { it > 0 }?.toString())
+                links(getTrackerLinks(), label = "Trackers")
+            }
+            if (scorePosition == "bottom") rating(score)
+        }.build()
         initialized = true
         status = when (this@Manga.status) {
             "releasing" -> SManga.ONGOING

@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.mangadotnet
 
-import android.content.SharedPreferences
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.parseAs
@@ -196,7 +195,7 @@ class Manga(
         private val listRegex = Regex("\n\n(-|•|\\d+\\.)")
     }
 
-    fun toSManga(baseUrl: String, showTags: Boolean = true, extraVolumeCount: Int? = null, preferences: SharedPreferences? = null) = SManga.create().apply {
+    fun toSManga(baseUrl: String, showTags: Boolean = true, extraVolumeCount: Int? = null) = SManga.create().apply {
         url = id.toString()
         title = this@Manga.title
         thumbnail_url = photo?.let {
@@ -238,7 +237,7 @@ class Manga(
                 else -> SManga.UNKNOWN
             }
         }
-        description = MarkdownDescription.Builder(preferences).apply {
+        description = MarkdownDescription.Builder().apply {
             rating(this@Manga.rating, votes = ratingCount?.takeIf { it > 0 })
             field("Year", year?.toString())
             field("Chapters", chapterCount?.toString())

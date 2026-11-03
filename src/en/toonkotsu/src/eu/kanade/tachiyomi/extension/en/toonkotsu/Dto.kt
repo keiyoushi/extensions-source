@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.toonkotsu
 
-import android.content.SharedPreferences
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.MarkdownDescription
@@ -79,9 +78,9 @@ class SeriesDto(
         }
     }
 
-    fun toSMangaDetails(baseUrl: String, showSpoilerTags: Boolean, showAdult: Boolean, mangabaka: MangabakaDto, preferences: SharedPreferences) = toSManga(baseUrl, showSpoilerTags).apply {
+    fun toSMangaDetails(baseUrl: String, showSpoilerTags: Boolean, showAdult: Boolean, mangabaka: MangabakaDto) = toSManga(baseUrl, showSpoilerTags).apply {
         val sources = mangabaka.sources
-        description = MarkdownDescription.Builder(preferences).apply {
+        description = MarkdownDescription.Builder().apply {
             rating(score?.div(10.0))
             info(
                 (year ?: mangabaka.year)?.toString(),

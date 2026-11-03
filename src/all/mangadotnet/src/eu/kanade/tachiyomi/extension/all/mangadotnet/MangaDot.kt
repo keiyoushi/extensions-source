@@ -22,7 +22,6 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
@@ -484,7 +483,7 @@ abstract class MangaDot :
             if (fetchDetails) {
                 val url = "$baseUrl/manga/${manga.url}.data?_routes=pages/MangaDetailPage".toHttpUrl()
                 val data = client.get(url, Fetch.XHR).use { it.decodeRscAs<Data<MangaData>>().data }
-                data.mangaData.manga.toSManga(baseUrl, showTagsPref(), data.mangaData.volumeCount, preferences)
+                data.mangaData.manga.toSManga(baseUrl, showTagsPref(), data.mangaData.volumeCount)
             } else {
                 manga
             }
@@ -924,8 +923,6 @@ abstract class MangaDot :
             adultGenrePref.setEnabled(genres.isNotEmpty() && (newMode == "1" || newMode == "both"))
             true
         }
-
-        MarkdownDescription.addPreference(screen)
     }
 
     // ============================ RSC Decoder ============================
