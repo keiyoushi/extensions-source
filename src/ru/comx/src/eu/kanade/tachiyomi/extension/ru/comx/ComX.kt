@@ -22,6 +22,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.ratingStars
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
@@ -200,19 +201,6 @@ abstract class ComX :
 
         val ratingValue = (doc.selectFirst(".page__activity-votes")?.ownText()?.trim()?.toFloatOrNull() ?: 0f) * 2
         val ratingVotes = doc.selectFirst(".page__activity-votes span > span")?.text()?.trim() ?: "0"
-        val ratingStar = when {
-            ratingValue > 9.5 -> "★★★★★"
-            ratingValue > 8.5 -> "★★★★✬"
-            ratingValue > 7.5 -> "★★★★☆"
-            ratingValue > 6.5 -> "★★★✬☆"
-            ratingValue > 5.5 -> "★★★☆☆"
-            ratingValue > 4.5 -> "★★✬☆☆"
-            ratingValue > 3.5 -> "★★☆☆☆"
-            ratingValue > 2.5 -> "★✬☆☆☆"
-            ratingValue > 1.5 -> "★☆☆☆☆"
-            ratingValue > 0.5 -> "✬☆☆☆☆"
-            else -> "☆☆☆☆☆"
-        }
 
         description = buildString {
             doc.selectFirst(".page__title-original")?.text()?.takeIf { it.isNotBlank() }?.let {
@@ -223,7 +211,7 @@ abstract class ComX :
                 append("Cобытие в комиксах - ХРОНОЛОГИЯ")
                 appendLine()
             }
-            append(ratingStar).append(" ").append(ratingValue).append(" (голосов: ").append(ratingVotes).append(")\n")
+            append(ratingStars(ratingValue.toDouble())).append(" ").append(ratingValue).append(" (голосов: ").append(ratingVotes).append(")\n")
             appendLine()
             append(doc.selectFirst("div.page__text")?.text())
         }

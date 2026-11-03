@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.mangafire
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.toMarkdown
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
 
@@ -61,7 +62,7 @@ class MangaDetailsDto(
         thumbnail_url = poster?.large ?: poster?.medium ?: poster?.small
         author = authors?.joinToString { it.title }
         artist = artists?.joinToString { it.title }
-        description = synopsisHtml?.let { Jsoup.parseBodyFragment(it).text() }
+        description = synopsisHtml?.let { Jsoup.parseBodyFragment(it).body().toMarkdown() }
         genre = buildList {
             type?.replaceFirstChar { it.uppercase() }?.let { add(it) }
             genres?.forEach { add(it.title) }

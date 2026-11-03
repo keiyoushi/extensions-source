@@ -17,6 +17,7 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.ratingStars
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
@@ -26,7 +27,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import kotlin.math.roundToInt
 
 @Source
 abstract class Mangabay : KeiSource() {
@@ -187,9 +187,9 @@ abstract class Mangabay : KeiSource() {
         val score = document.selectFirst(".page__score-display .page__score-val")?.text()
         val votes = document.selectFirst(".page__score-display [data-vote-num-id]")?.text()?.toIntOrNull()
         description = buildString {
-            val stars = score?.toFloatOrNull()?.roundToInt()?.coerceIn(0, 5)
-            if (stars != null && votes != null && votes > 0) {
-                append("${"★".repeat(stars)}${"☆".repeat(5 - stars)} $score · $votes ratings")
+            val rating = score?.toDoubleOrNull()
+            if (rating != null && votes != null && votes > 0) {
+                append("${ratingStars(rating, max = 5)} $score · $votes ratings")
             }
             if (pageText != null) {
                 if (isNotEmpty()) append("\n\n")

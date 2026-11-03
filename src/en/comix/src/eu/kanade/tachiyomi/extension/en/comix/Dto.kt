@@ -2,13 +2,12 @@ package eu.kanade.tachiyomi.extension.en.comix
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import java.math.BigDecimal
-import java.math.RoundingMode
 import java.util.Calendar
 
 const val MANGA_ID_MEMO = "mangaId"
@@ -80,27 +79,6 @@ class Manga(
         }
     }
 
-    private val fancyScore: String
-        get() {
-            if (ratedAvg == 0.0) return ""
-
-            val score = ratedAvg.toBigDecimal()
-            val stars = score.div(BigDecimal(2))
-                .setScale(0, RoundingMode.HALF_UP).toInt()
-
-            val scoreString = if (score.scale() == 0) {
-                score.toPlainString()
-            } else {
-                score.stripTrailingZeros().toPlainString()
-            }
-
-            return buildString {
-                append("★".repeat(stars))
-                if (stars < 5) append("☆".repeat(5 - stars))
-                append(" $scoreString")
-            }
-        }
-
     fun toSManga(
         posterQuality: String?,
         altTitlesInDesc: Boolean = false,
@@ -117,45 +95,22 @@ class Manga(
 
         author = actualAuthors?.joinToString { it.title }
         artist = actualArtists?.joinToString { it.title }
-        description = buildString {
-            if (scorePosition == "top") {
-                fancyScore.takeIf { it.isNotEmpty() }?.let {
-                    append(it)
-                    append("\n\n")
-                }
-            }
-
-            synopsis?.takeUnless { it.isEmpty() }?.let { append(it) }
-
-            val actualAltTitles = altTitles.ifEmpty { altTitlesOld }
-            if (altTitlesInDesc && actualAltTitles.isNotEmpty()) {
-                append("\n\n")
-                append("**Alternative Names**:\n")
-                append(actualAltTitles.joinToString("\n") { "- $it" })
-            }
-
+        description = MarkdownDescription.Builder().apply {
+            val score = ratedAvg.takeIf { it > 0 }
+            if (scorePosition == "top") rating(score)
+            markdown(synopsis)
+            if (altTitlesInDesc) altTitles(altTitles.ifEmpty { altTitlesOld })
             if (showExtraInfo) {
-                val extras = buildExtraInfo()
-                if (extras.isNotEmpty()) {
-                    if (isNotEmpty()) append("\n\n")
-                    append(extras.joinToString("\n"))
-                }
-
-                val trackerLinks = getTrackerLinks()
-                if (trackerLinks.isNotEmpty()) {
-                    if (isNotEmpty()) append("\n\n")
-                    append("**Trackers**:\n")
-                    append(trackerLinks.joinToString("\n") { "- $it" })
-                }
+                field("Year", year?.takeIf { it > 0 }?.toString())
+                field("Language", originalLanguage?.uppercase())
+                field("Content rating", contentRating.replaceFirstChar(Char::uppercase))
+                field("Rank", rank.takeIf { it > 0 }?.let { "#$it" })
+                field("Rated by", ratedCount.takeIf { it > 0 }?.toString())
+                field("Followed by", followsTotal.takeIf { it > 0 }?.toString())
+                links(getTrackerLinks(), label = "Trackers")
             }
-
-            if (scorePosition == "bottom") {
-                fancyScore.takeIf { it.isNotEmpty() }?.let {
-                    if (isNotEmpty()) append("\n\n")
-                    append(it)
-                }
-            }
-        }
+            if (scorePosition == "bottom") rating(score)
+        }.build()
         initialized = true
         status = when (this@Manga.status) {
             "releasing" -> SManga.ONGOING
@@ -175,36 +130,19 @@ class Manga(
         thumbnail_url = this@Manga.poster?.from(posterQuality)
     }
 
-    private fun buildExtraInfo(): List<String> = buildList {
-        year?.takeIf { it > 0 }?.let { add("**Year**: $it") }
-        originalLanguage?.takeIf { it.isNotBlank() }?.let { add("**Language**: ${it.uppercase()}") }
-        contentRating.takeIf { it.isNotBlank() }?.let {
-            add("**Content rating**: ${it.replaceFirstChar(Char::uppercase)}")
-        }
-        rank.takeIf { it > 0 }?.let { add("**Rank**: #$it") }
-        ratedCount.takeIf { it > 0 }?.let { add("**Rated by**: $it") }
-        followsTotal.takeIf { it > 0 }?.let { add("**Followed by**: $it") }
-    }
-
-    private fun getTrackerLinks(): List<String> {
+    private fun getTrackerLinks(): List<Pair<String, String?>> {
         val linkMap = links ?: return emptyList()
-        val siteNames = listOf(
+        val siteNames = mapOf(
             "al" to "AniList",
             "mal" to "MyAnimeList",
             "mu" to "MangaUpdates",
             "md" to "MangaDex",
             "mb" to "MangaBaka",
         )
-        val knownLinks = siteNames.mapNotNull { (key, name) ->
-            val url = linkMap[key]?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            "[$name]($url)"
-        }
-        val unknownLinks = linkMap.filterKeys { k -> siteNames.none { it.first == k } }
-            .mapNotNull { (key, url) ->
-                val validUrl = url?.takeIf { it.startsWith("http") } ?: return@mapNotNull null
-                "[${key.uppercase()}]($validUrl)"
-            }
-        return knownLinks + unknownLinks
+        val known = siteNames.map { (key, name) -> name to linkMap[key] }
+        val unknown = linkMap.filterKeys { it !in siteNames }
+            .map { (key, url) -> key.uppercase() to url?.takeIf { it.startsWith("http") } }
+        return known + unknown
     }
 
     // Tags are separate from the curated genres in the site's detail UI.

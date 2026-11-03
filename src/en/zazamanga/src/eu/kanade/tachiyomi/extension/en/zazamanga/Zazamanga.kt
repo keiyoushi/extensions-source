@@ -12,6 +12,7 @@ import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.ratingStars
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -20,7 +21,6 @@ import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.TextNode
-import kotlin.math.roundToInt
 
 @Source
 abstract class Zazamanga : MadaraNoAjax() {
@@ -69,8 +69,7 @@ abstract class Zazamanga : MadaraNoAjax() {
         }
         val ratingCount = document.selectFirst("#countrate")?.text()?.toIntOrNull()?.takeIf { it > 0 }
         val ratingLine = document.selectFirst("#averagerate")?.text()?.toDoubleOrNull()?.takeIf { ratingCount != null }?.let { rating ->
-            val stars = rating.roundToInt().coerceIn(0, 5)
-            "${"★".repeat(stars)}${"☆".repeat(5 - stars)} $rating ($ratingCount ratings)"
+            "${ratingStars(rating, max = 5)} $rating ($ratingCount ratings)"
         }
         val altNames = document.selectFirst(altNameSelector)?.ownText()?.takeIf { it.isNotEmpty() && !isUpdating(it) }
         description = listOfNotNull(

@@ -20,6 +20,7 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.int
 import keiyoushi.utils.intOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.ratingStars
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
@@ -31,7 +32,6 @@ import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
-import kotlin.math.roundToInt
 
 @Source
 abstract class WebtoonClub :
@@ -135,10 +135,7 @@ abstract class WebtoonClub :
         // The page's rating widget; JSON-LD only carries ratings with more votes
         val rating = document.extractNextJs<RatingDto> { it is JsonObject && "ratingAvg" in it && "ratingCount" in it }
             ?.takeIf { it.ratingCount > 0 }
-            ?.let {
-                val stars = it.ratingAvg.roundToInt()
-                "★".repeat(stars) + "☆".repeat(5 - stars) + " ${it.ratingAvg} (${it.ratingCount})"
-            }
+            ?.let { "${ratingStars(it.ratingAvg.toDouble(), max = 5)} ${it.ratingAvg} (${it.ratingCount})" }
         // "None" is a placeholder in the site's alt title data
         val altTitles = book.alternateName.filterNot { it == "None" || it == title }.distinct()
         description = listOfNotNull(

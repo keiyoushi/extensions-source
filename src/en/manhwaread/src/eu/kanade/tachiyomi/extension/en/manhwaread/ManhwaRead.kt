@@ -13,6 +13,7 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.ratingStars
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -215,22 +216,9 @@ abstract class ManhwaRead : KeiSource() {
 
     private fun getRatingString(rate: String, rateCount: Int): String {
         val ratingValue = rate.toDoubleOrNull() ?: 0.0
-        val ratingStar = when {
-            ratingValue >= 4.75 -> "★★★★★"
-            ratingValue >= 4.25 -> "★★★★✬"
-            ratingValue >= 3.75 -> "★★★★☆"
-            ratingValue >= 3.25 -> "★★★✬☆"
-            ratingValue >= 2.75 -> "★★★☆☆"
-            ratingValue >= 2.25 -> "★★✬☆☆"
-            ratingValue >= 1.75 -> "★★☆☆☆"
-            ratingValue >= 1.25 -> "★✬☆☆☆"
-            ratingValue >= 0.75 -> "★☆☆☆☆"
-            ratingValue >= 0.25 -> "✬☆☆☆☆"
-            else -> "☆☆☆☆☆"
-        }
         return if (ratingValue > 0.0) {
             buildString {
-                append(ratingStar, " ", rate)
+                append(ratingStars(ratingValue, max = 5), " ", rate)
                 if (rateCount > 0) {
                     append(" (", rateCount, ")")
                 }

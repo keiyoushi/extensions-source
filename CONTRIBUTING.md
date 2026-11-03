@@ -52,6 +52,7 @@ or fix them directly by submitting a Pull Request.
         - [JsonElement accessor helpers](#jsonelement-accessor-helpers)
         - [ZIP streaming - `zipDirectoryAsync` / `readZipEntry`](#zip-streaming---zipdirectoryasync--readzipentry)
         - [Jsoup helpers - `asJsoup` / `attrOrNull` / `textOrNull`](#jsoup-helpers---asjsoup--attrornull--textornull)
+        - [Description builder - `MarkdownDescription` / `toMarkdown` / `escapeMarkdown` / `ratingStars`](#description-builder---markdowndescription--tomarkdown--escapemarkdown--ratingstars)
         - [Cryptography - `decodeHex` / `rc4` / AES helpers](#cryptography---decodehex--rc4--aes-helpers)
         - [Binary endian helpers](#binary-endian-helpers)
         - [Decompression - `Inflater.inflate`](#decompression---inflaterinflate)
@@ -1195,6 +1196,25 @@ val lastChapterElement = document.selectLast(".chapter-item")
 val title = element.textOrNull()
 val directText = element.ownTextOrNull() // excludes text of nested child elements
 ```
+
+##### Description builder - `MarkdownDescription` / `toMarkdown` / `escapeMarkdown` / `ratingStars`
+
+`SManga.description` is Markdown. `MarkdownDescription.Builder` adds sections in call order, escapes site text and skips empty input:
+
+```kotlin
+import keiyoushi.utils.MarkdownDescription
+
+description = MarkdownDescription.Builder()
+    .rating(score) // out of 10, or set `max`; optional `votes`
+    .info(year, type) // a run of rating, info and fields shares one line
+    .description(document.selectFirst(".synopsis")) // HTML or plain text; `markdown()` for site Markdown
+    .field("Publisher", publisher)
+    .altTitles(altTitles)
+    .links(listOf("AniList" to anilistUrl, "MyAnimeList" to malUrl))
+    .build() // null when empty
+```
+
+Outside the builder, `Element.toMarkdown()`, `String.escapeMarkdown()` and `ratingStars()` do the same for one piece.
 
 ##### Cryptography - `decodeHex` / `rc4` / `xor` / AES helpers
 

@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.kagane
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
@@ -228,83 +229,39 @@ class DetailsDto(
         val byAuthorRoles = seriesStaff.filter { it.roleIs(BOOK_CREATOR_ROLES) }
         val byArtistRoles = seriesStaff.filter { it.roleIs(ARTIST_ROLES) }
 
-        description = buildString {
-            this@DetailsDto.description?.takeIf { it.isNotBlank() }?.let {
-                append(Jsoup.parse(it.trim().replace("\n", "<br>")).wholeText())
-                append("\n")
-            }
+        description = MarkdownDescription.Builder().apply {
+            markdown(this@DetailsDto.description?.let { Jsoup.parse(it.trim().replace("\n", "<br>")).wholeText() })
 
             if (showDetails) {
-                buildList {
-                    averageRating?.let { rating ->
-                        add(
-                            "**Rating**: ${"%.1f".format(Locale.US, rating / 10)}/10" +
-                                (totalRatings?.let { count -> " ($count ratings)" } ?: ""),
-                        )
-                    }
-                    format?.takeIf { it.isNotBlank() }?.let { add("**Format**: $it") }
-                    ageRating?.let { add("**Content Rating**: ${it.toContentRating(isPornographic, isDisturbing)}") }
-                    val originalName = originalLanguage?.let { LANGUAGE_NAMES[it] }
-                    originalName?.let { add("**Original Language**: $it") }
-                    translatedLanguage?.let { LANGUAGE_NAMES[it] }?.takeIf { it != originalName }?.let { add("**Translated Language**: $it") }
-                    currentVolumes?.takeIf { it > 0 }?.let { add("**Volumes**: $it") }
-                    startYear?.takeIf { it > 0 }?.let { start ->
-                        endYear?.takeIf { end -> end > start }
-                            ?.let { end -> add("**Year**: $start–$end") }
-                            ?: add("**Year**: $start")
-                    }
-                    totalViews?.takeIf { it > 0 }?.let { add("**Views**: ${it.toCompactCount()}") }
-                    subscriberCount?.takeIf { it > 0 }?.let { add("**Followers**: ${it.toLong().toCompactCount()}") }
-                }
-                    .sortedBy { it }
-                    .forEach { append("$it\n") }
-            }
-
-            if (sourceName != null && sourceId != null) {
-                if (isNotEmpty()) append("\n")
-                append("**Source**: [$sourceName]($baseUrl/sources/$sourceId)\n")
+                val originalName = originalLanguage?.let { LANGUAGE_NAMES[it] }
+                rating(averageRating?.div(10), votes = totalRatings)
+                field("Content Rating", ageRating?.toContentRating(isPornographic, isDisturbing))
+                field("Followers", subscriberCount?.takeIf { it > 0 }?.toLong()?.toCompactCount())
+                field("Format", format)
+                field("Original Language", originalName)
+                field("Translated Language", translatedLanguage?.let { LANGUAGE_NAMES[it] }?.takeIf { it != originalName })
+                field("Views", totalViews?.takeIf { it > 0 }?.toCompactCount())
+                field("Volumes", currentVolumes?.takeIf { it > 0 }?.toString())
+                field("Year", startYear?.takeIf { it > 0 }?.let { start -> endYear?.takeIf { it > start }?.let { "$start–$it" } ?: "$start" })
             }
 
             seriesStaff
                 .filter { !it.roleIs(BOOK_CREATOR_ROLES) && !it.roleIs(ARTIST_ROLES) }
                 .sortedBy { it.priority }
                 .groupBy { it.role }
-                .forEach { (role, members) ->
-                    append("**$role**: ${members.joinToString { it.name.displayWithNative(it.nativeName) }}\n")
-                }
+                .forEach { (role, members) -> field(role, members.map { it.name.displayWithNative(it.nativeName) }) }
+
+            if (sourceName != null && sourceId != null) links(listOf(sourceName to "$baseUrl/sources/$sourceId"), label = "Source")
 
             if (showDetails) {
-                val official = seriesLinks.filter { it.kind == "Official" }
-                val trackers = seriesLinks.filter { it.kind == "Tracker" }
-                val others = seriesLinks.filter { it.kind != null && it.kind != "Official" && it.kind != "Tracker" }
-                val linkSections = buildString {
-                    listOf(
-                        "**Official Link(s)**:" to official,
-                        "**Tracker(s)**:" to trackers,
-                        "**Other(s)**:" to others,
-                    )
-                        .filter { it.second.isNotEmpty() }
-                        .forEachIndexed { index, (header, links) ->
-                            if (index > 0) append("\n")
-                            append("$header\n")
-                            links.forEach { link ->
-                                append("- [${link.label ?: link.url}](${link.url})\n")
-                            }
-                        }
-                }
-                if (linkSections.isNotEmpty()) {
-                    if (isNotEmpty()) append("\n")
-                    append(linkSections)
-                }
+                fun Collection<SeriesLink>.byLabel() = map { (it.label ?: it.url) to it.url }
+                links(seriesLinks.filter { it.kind == "Official" }.byLabel(), label = "Official Link(s)")
+                links(seriesLinks.filter { it.kind == "Tracker" }.byLabel(), label = "Tracker(s)")
+                links(seriesLinks.filter { it.kind != null && it.kind != "Official" && it.kind != "Tracker" }.byLabel(), label = "Other(s)")
             }
 
-            if (seriesAlternateTitles.isNotEmpty()) {
-                append("\n**Associated Name(s):**\n")
-                seriesAlternateTitles.forEach { alt ->
-                    append("- ${alt.title}\n")
-                }
-            }
-        }.trim()
+            altTitles(seriesAlternateTitles.map { it.title }, label = "Associated Name(s)")
+        }.build()
 
         author = byAuthorRoles.sortedBy { it.priority }.distinctBy { it.staffId }.joinToString { it.name }
         artist = byArtistRoles.sortedBy { it.priority }.distinctBy { it.staffId }.joinToString { it.name }
