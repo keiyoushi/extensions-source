@@ -26,6 +26,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -51,9 +52,16 @@ abstract class InkStory :
         }
     }
 
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
+        // User Agent required by source. Don't change
+        set("User-Agent", "Tachiyomi (+https://github.com/keiyoushi/extensions-source)")
+    }
+
+    // Fetch adds no fetch metadata for the UA above, and server functions refuse requests without it
     private val serverFnHeaders get() = headers.newBuilder()
         .set("Accept", "application/json")
         .set("x-tsr-serverFn", "true")
+        .set("Sec-Fetch-Site", "same-origin")
         .build()
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
