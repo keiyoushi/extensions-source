@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.lib.cronet.cronet
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.MarkdownDescription
@@ -39,11 +40,16 @@ abstract class TempleScan :
         edit().remove("pref_rsc_keys").remove("pref_rsc_key_table").apply()
     }
 
+    private val siteHost get() = baseUrl.toHttpUrl().host
+
     override fun OkHttpClient.Builder.configureClient() = apply {
-        rateLimit(1)
+        // The site's pages and API, apart from the bundles; images on its media host
+        rateLimit(2) { it.host == siteHost && !it.encodedPath.startsWith("/_next/static/") }
+        rateLimit(1) { it.host != siteHost }
+        cronet()
     }
 
-    private val sitePages by lazy { SitePages(baseUrl) { headers["User-Agent"]!! } }
+    private val sitePages by lazy { SitePages(baseUrl, client) { headers["User-Agent"]!! } }
 
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", OrderFilter.POPULAR)
 
@@ -93,7 +99,7 @@ abstract class TempleScan :
     override fun getFilterList(data: JsonElement?) = getFilters()
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments[0] != "comic") {
+        if (url.host != siteHost || url.pathSegments[0] != "comic") {
             return null
         }
 
@@ -166,7 +172,7 @@ abstract class TempleScan :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val imageHost = ".${baseUrl.toHttpUrl().host}"
+        val imageHost = ".$siteHost"
         return sitePages.read(getChapterUrl(chapter), "pages.js").parseAs<ReaderPage>().pages.mapIndexed { index, url ->
             if (!url.toHttpUrl().host.endsWith(imageHost)) throw IOException("Unexpected page url from the site's reader")
             Page(index, imageUrl = url)
