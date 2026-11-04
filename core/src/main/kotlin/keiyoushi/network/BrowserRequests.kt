@@ -1,6 +1,7 @@
 package keiyoushi.network
 
 import okhttp3.HttpUrl
+import okhttp3.Protocol
 import okhttp3.Request
 
 /**
@@ -56,3 +57,9 @@ internal fun Request.Builder.kind(kind: Fetch.Kind): Request.Builder = tag(Fetch
 internal class FromPage(val page: String)
 
 internal val Request.kind: Fetch.Kind? get() = tag(Fetch.Kind::class.java)
+
+/**
+ * The protocol a transport that replaces OkHttp's network call speaks, such as lib:cronet's, set as a request tag.
+ * Requests on such a transport have no OkHttp connection to read it from.
+ */
+class TransportProtocol(val protocol: Protocol)
