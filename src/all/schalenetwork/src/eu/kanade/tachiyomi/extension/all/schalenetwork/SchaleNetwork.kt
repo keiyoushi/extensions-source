@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -27,6 +28,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
 import okhttp3.RequestBody
 
 @Source
@@ -220,10 +222,15 @@ abstract class SchaleNetwork :
             ).parseAs<ImagesInfo>()
 
             images.entries.mapIndexed { index, image ->
-                Page(index, imageUrl = "${images.base}/${image.path}?w=${selected.quality}")
+                Page(index, imageUrl = images.base + image.path)
             }
         }
     }
+
+    // the image cdn answers 400 unless the site's Origin is sent, like the reader's XHR does
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
+        .fetch(Fetch.XHR)
+        .build()
 
     private suspend fun <T> withClearance(block: suspend (crt: String) -> T): T {
         var crt = getClearance()
