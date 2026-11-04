@@ -39,6 +39,7 @@ import okhttp3.Request
 import okhttp3.Response
 import java.io.ByteArrayInputStream
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.atomic.AtomicBoolean
@@ -111,6 +112,9 @@ class WebViewScope<T> internal constructor(
 ) {
     internal val pageStartedHooks = CopyOnWriteArrayList<(String) -> Unit>()
     internal val pageFinishedHooks = CopyOnWriteArrayList<(String) -> Unit>()
+
+    // Pages proxyRequest answered with a refresh to a redirect's target; the page hooks skip them
+    internal val refreshPages: MutableSet<String> = ConcurrentHashMap.newKeySet()
     internal val receivedErrorHooks = CopyOnWriteArrayList<(WebResourceRequest, WebResourceError) -> Unit>()
     private val bridgeNames = CopyOnWriteArraySet<String>()
 
@@ -222,19 +226,22 @@ class WebViewScope<T> internal constructor(
 
     /**
      * Sends one of the WebView's GETs through [client] instead and hands the response to the WebView; call it from
-     * [interceptRequest]. The request carries the headers WebView passes to [interceptRequest], which WebView's own
-     * `X-Requested-With` isn't one of, after [edit]. [client], a KeiSource client, adds the browser headers WebView
-     * would (`Sec-Fetch-*`, `Accept-Language`, `Priority`) and shares WebView's cookies.
+     * [interceptRequest]. The request has the headers WebView passes to [interceptRequest] (WebView adds its own
+     * `X-Requested-With` later, so it isn't among them) and the [Fetch] of what it loads, both open to change in
+     * [edit], e.g. `.fetch(Fetch.SCRIPT)` for a script without a `.js` name. [client], a KeiSource client, adds the
+     * browser headers WebView would (`Sec-Fetch-*`, `Accept-Language`, `Priority`) and shares WebView's cookies.
      *
      * Returns null for what it leaves to the WebView: other methods, frames other than the page, stylesheets and
-     * fonts. A redirected page is loaded at its new address through a page that refreshes to it (the page hooks see
-     * that one too), and a page that fails to load fails the run.
+     * fonts. A redirected page is loaded at its new address. The page fails the run when it can't be loaded or comes
+     * back with a status WebView refuses; error pages (4xx, 5xx) go to the WebView like any other.
      */
     fun proxyRequest(
         request: WebResourceRequest,
         client: OkHttpClient,
         edit: Request.Builder.() -> Unit = {},
     ): WebResourceResponse? {
+        // The run is over: nothing more to send
+        if (destroyed || deferred.isCompleted) return WebResourceResponse(null, null, null)
         val call = request.toOkHttpRequest()?.apply(edit)?.build() ?: return null
 
         // A page that fails fails the run; anything else the WebView sees as a failed load
@@ -254,7 +261,9 @@ class WebViewScope<T> internal constructor(
             response.close()
             target ?: return failed(IOException("HTTP ${response.code} without a location"))
             // A page that moves on to the new address, sending no Referer, as after a redirect
-            val html = "<meta name=\"referrer\" content=\"no-referrer\"><meta http-equiv=\"refresh\" content=\"0;url=${target.toString().replace("\"", "%22")}\">"
+            val url = target.toString().replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+            val html = "<meta name=\"referrer\" content=\"no-referrer\"><meta http-equiv=\"refresh\" content=\"0;url=$url\">"
+            refreshPages += request.url.toString()
             return WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(html.toByteArray()))
         }
         return response.toWebResourceResponse() ?: run {
@@ -271,19 +280,8 @@ class WebViewScope<T> internal constructor(
      * Returns null for what core has no [Fetch] for: other methods, frames other than the page, stylesheets and fonts.
      */
     private fun WebResourceRequest.toOkHttpRequest(): Request.Builder? {
-        val path = url.path.orEmpty().lowercase()
         val headers = requestHeaders.toHeaders()
-        val accept = headers["Accept"].orEmpty()
-        // Chromium's Accept for a navigation, not a script's text/html fetch
-        val frame = !isForMainFrame && accept.startsWith("text/html,application/xhtml+xml")
-        if (method != "GET" || frame || accept.startsWith("text/css") || FONT_EXTENSIONS.any(path::endsWith)) return null
-
-        val fetch = when {
-            isForMainFrame -> Fetch.DOCUMENT
-            SCRIPT_EXTENSIONS.any(path::endsWith) -> Fetch.SCRIPT
-            accept.startsWith("image/") -> Fetch.IMAGE
-            else -> Fetch.XHR
-        }
+        val fetch = proxyFetch(method, url.path.orEmpty(), headers["Accept"].orEmpty(), isForMainFrame) ?: return null
         return Request.Builder()
             .url(url.toString())
             .headers(
@@ -596,12 +594,12 @@ private class ScopeWebViewClient(
 ) : WebViewClient() {
 
     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-        if (scope.destroyed) return
+        if (scope.destroyed || url in scope.refreshPages) return
         scope.pageStartedHooks.forEach { it(url.orEmpty()) }
     }
 
     override fun onPageFinished(view: WebView?, url: String?) {
-        if (scope.destroyed) return
+        if (scope.destroyed || scope.refreshPages.remove(url)) return
         scope.pageFinishedHooks.forEach { it(url.orEmpty()) }
     }
 
@@ -672,6 +670,20 @@ private fun setupWebView(webView: WebView) {
             View.MeasureSpec.makeMeasureSpec(metrics.heightPixels, View.MeasureSpec.EXACTLY),
         )
         webView.layout(0, 0, metrics.widthPixels, metrics.heightPixels)
+    }
+}
+
+/** The [Fetch] a proxied WebView request goes out as, or null for one proxyRequest leaves to the WebView. */
+internal fun proxyFetch(method: String, path: String, accept: String, isForMainFrame: Boolean): Fetch? {
+    val name = path.lowercase()
+    // Chromium's Accept for a navigation, not a script's text/html fetch
+    val frame = !isForMainFrame && accept.startsWith("text/html,application/xhtml+xml")
+    if (method != "GET" || frame || accept.startsWith("text/css") || FONT_EXTENSIONS.any(name::endsWith)) return null
+    return when {
+        isForMainFrame -> Fetch.DOCUMENT
+        SCRIPT_EXTENSIONS.any(name::endsWith) -> Fetch.SCRIPT
+        accept.startsWith("image/") -> Fetch.IMAGE
+        else -> Fetch.XHR
     }
 }
 
