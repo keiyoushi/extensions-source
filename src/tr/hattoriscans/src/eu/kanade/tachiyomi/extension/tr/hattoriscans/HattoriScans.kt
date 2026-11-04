@@ -37,6 +37,8 @@ import kotlin.time.Instant
 @Source
 abstract class HattoriScans : KeiSource() {
 
+    override val supportsFilterFetching = true
+
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(2)
         addInterceptor(::resignExpiredPage)
@@ -180,12 +182,18 @@ abstract class HattoriScans : KeiSource() {
 
     private class ResignedPages(val chapterUrl: String, val fetchedAt: Instant, val urls: List<HttpUrl>)
 
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/genres", Fetch.XHR).parseAs()
+
     override fun getFilterList(data: JsonElement?) = FilterList(
-        SortFilter(),
-        TypeFilter(),
-        StatusFilter(),
-        GenreModeFilter(),
-        GenreFilter(),
+        buildList {
+            add(SortFilter())
+            add(TypeFilter())
+            add(StatusFilter())
+            data?.parseAs<List<GenreDto>>()?.let { genres ->
+                add(GenreModeFilter())
+                add(GenreFilter(genres.map { it.name }))
+            }
+        },
     )
 
     companion object {
