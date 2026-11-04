@@ -221,34 +221,106 @@ class WebViewScope<T> internal constructor(
     }
 
     /**
-     * Sends a GET of the page through [client] and hands the response to the WebView, for sites that refuse
-     * WebView's `X-Requested-With`; call it from [interceptRequest]. See [toOkHttpRequest] for what goes out and what
-     * [client] has to be. Returns null for what [toOkHttpRequest] leaves to the WebView. A redirected page is loaded at
-     * its new address through a page that refreshes to it (the page hooks see that one too), and a page that fails to
-     * load fails the run.
+     * Sends one of the WebView's GETs through [client] and hands the response to the WebView, for sites that refuse
+     * WebView's `X-Requested-With`; call it from [interceptRequest]. The request goes out without that header, and
+     * [client], a KeiSource client, adds the browser headers WebView would (`Sec-Fetch-*`, `Accept-Language`,
+     * `Priority`) and shares WebView's cookies.
+     *
+     * Returns null for what it leaves to the WebView: other methods, frames other than the page, stylesheets and
+     * fonts. A redirected page is loaded at its new address through a page that refreshes to it (the page hooks see
+     * that one too), and a page that fails to load fails the run.
      */
-    fun replay(request: WebResourceRequest, client: OkHttpClient): WebResourceResponse? {
+    fun proxyRequest(request: WebResourceRequest, client: OkHttpClient): WebResourceResponse? {
         val call = request.toOkHttpRequest() ?: return null
+
+        // A page that fails fails the run; anything else the WebView sees as a failed load
+        fun failed(error: IOException): WebResourceResponse {
+            if (request.isForMainFrame) reject(error)
+            return WebResourceResponse(null, null, null)
+        }
+
         val response = try {
             // The WebView doesn't follow a redirect it is handed
             (if (request.isForMainFrame) client.newBuilder().followRedirects(false).build() else client).newCall(call).execute()
         } catch (e: IOException) {
-            if (request.isForMainFrame) throw e
-            return WebResourceResponse(null, null, null)
+            return failed(e)
         }
         if (request.isForMainFrame && response.isRedirect) {
             val target = response.header("Location")?.let { response.request.url.resolve(it) }
             response.close()
-            target ?: throw IOException("HTTP ${response.code} without a location")
+            target ?: return failed(IOException("HTTP ${response.code} without a location"))
             // A page that moves on to the new address, sending no Referer, as after a redirect
-            val html = "<meta name=\"referrer\" content=\"no-referrer\"><meta http-equiv=\"refresh\" content=\"0;url=$target\">"
+            val html = "<meta name=\"referrer\" content=\"no-referrer\"><meta http-equiv=\"refresh\" content=\"0;url=${target.toString().replace("\"", "%22")}\">"
             return WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(html.toByteArray()))
         }
         return response.toWebResourceResponse() ?: run {
             response.close()
-            if (request.isForMainFrame) throw IOException("HTTP ${response.code}")
-            WebResourceResponse(null, null, null)
+            failed(IOException("HTTP ${response.code}"))
         }
+    }
+
+    /**
+     * The OkHttp request for a WebView GET, to send through a source's own client: WebView's headers without
+     * `X-Requested-With` (WebView's own value and [setWebViewOriginHeader]'s can't be told apart from a page's, so all
+     * go), and the [Fetch] of what it loads, so a KeiSource
+     * client adds the browser headers WebView would (`Sec-Fetch-*`, `Accept-Language`, `Priority`). WebView's
+     * revalidation headers are left out; the client's own cache revalidates.
+     *
+     * Returns null for what core has no [Fetch] for: other methods, frames other than the page, stylesheets and fonts.
+     */
+    private fun WebResourceRequest.toOkHttpRequest(): Request? {
+        val path = url.path.orEmpty().lowercase()
+        val headers = requestHeaders.toHeaders()
+        val accept = headers["Accept"].orEmpty()
+        // Chromium's Accept for a navigation, not a script's text/html fetch
+        val frame = !isForMainFrame && accept.startsWith("text/html,application/xhtml+xml")
+        if (method != "GET" || frame || accept.startsWith("text/css") || FONT_EXTENSIONS.any(path::endsWith)) return null
+
+        val fetch = when {
+            isForMainFrame -> Fetch.DOCUMENT
+            SCRIPT_EXTENSIONS.any(path::endsWith) -> Fetch.SCRIPT
+            accept.startsWith("image/") -> Fetch.IMAGE
+            else -> Fetch.XHR
+        }
+        return Request.Builder()
+            .url(url.toString())
+            .headers(
+                headers.newBuilder()
+                    .removeAll("X-Requested-With")
+                    .removeAll("If-None-Match")
+                    .removeAll("If-Modified-Since")
+                    // A page the WebView was sent to, not one a page linked to
+                    .apply { if (isForMainFrame && get("Referer") == null) add("Sec-Fetch-Site", "none") }
+                    .build(),
+            )
+            .fetch(fetch)
+            .build()
+    }
+
+    /**
+     * The response for WebView to load, from a request the client sent for it. Drops the headers that no longer apply:
+     * the body comes decoded, and a KeiSource client's cookie jar is WebView's own. Returns null for the codes WebView
+     * refuses, redirects and 304 among them.
+     */
+    private fun Response.toWebResourceResponse(): WebResourceResponse? {
+        if (code !in 100..299 && code !in 400..599) return null
+        val type = body.contentType()
+        val kept = headers.newBuilder()
+            .removeAll("Content-Encoding")
+            .removeAll("Content-Length")
+            .removeAll("Set-Cookie")
+            .build()
+            .toMultimap()
+            .mapValues { (_, values) -> values.joinToString() }
+        return WebResourceResponse(
+            type?.let { "${it.type}/${it.subtype}" },
+            type?.charset()?.name(),
+            code,
+            // WebView refuses an empty reason phrase, which HTTP/2 responses have
+            message.ifEmpty { if (isSuccessful) "OK" else "Error" },
+            kept,
+            body.byteStream(),
+        )
     }
 
     /**
@@ -615,71 +687,9 @@ suspend fun setWebViewOriginHeader(name: String, value: String, allowedOriginRul
     WebViewGlueBridge.setOriginMatchedHeader(name, value, allowedOriginRules)
 }
 
-/**
- * The OkHttp request for a WebView GET, to send through a source's own client: WebView's headers without
- * `X-Requested-With` (WebView's own value and [setWebViewOriginHeader]'s can't be told apart from a page's, so all
- * go), and the [Fetch] of what it loads, so a KeiSource
- * client adds the browser headers WebView would (`Sec-Fetch-*`, `Accept-Language`, `Priority`). WebView's
- * revalidation headers are left out; the client's own cache revalidates.
- *
- * Returns null for what core has no [Fetch] for: other methods, frames other than the page, stylesheets and fonts.
- */
-fun WebResourceRequest.toOkHttpRequest(): Request? {
-    val path = url.path.orEmpty().lowercase()
-    val headers = requestHeaders.toHeaders()
-    val accept = headers["Accept"].orEmpty()
-    // Chromium's Accept for a navigation, not a script's text/html fetch
-    val frame = !isForMainFrame && accept.startsWith("text/html,application/xhtml+xml")
-    if (method != "GET" || frame || accept.startsWith("text/css") || FONT_EXTENSIONS.any(path::endsWith)) return null
-
-    val fetch = when {
-        isForMainFrame -> Fetch.DOCUMENT
-        SCRIPT_EXTENSIONS.any(path::endsWith) -> Fetch.SCRIPT
-        accept.startsWith("image/") -> Fetch.IMAGE
-        else -> Fetch.XHR
-    }
-    return Request.Builder()
-        .url(url.toString())
-        .headers(
-            headers.newBuilder()
-                .removeAll("X-Requested-With")
-                .removeAll("If-None-Match")
-                .removeAll("If-Modified-Since")
-                // A page the WebView was sent to, not one a page linked to
-                .apply { if (isForMainFrame && get("Referer") == null) add("Sec-Fetch-Site", "none") }
-                .build(),
-        )
-        .fetch(fetch)
-        .build()
-}
-
-/**
- * The response for WebView to load, from a request the client sent for it. Drops the headers that no longer apply:
- * the body comes decoded, and a KeiSource client's cookie jar is WebView's own. Returns null for the codes WebView
- * refuses, redirects and 304 among them.
- */
-fun Response.toWebResourceResponse(): WebResourceResponse? {
-    if (code !in 100..299 && code !in 400..599) return null
-    val type = body.contentType()
-    val kept = headers.names()
-        .filterNot { name -> REPLAY_DROPPED_HEADERS.any { it.equals(name, ignoreCase = true) } }
-        .associateWith { headers.values(it).joinToString() }
-    return WebResourceResponse(
-        type?.let { "${it.type}/${it.subtype}" },
-        type?.charset()?.name(),
-        code,
-        // WebView refuses an empty reason phrase, which HTTP/2 responses have
-        message.ifEmpty { if (isSuccessful) "OK" else "Error" },
-        kept,
-        body.byteStream(),
-    )
-}
-
 private val SCRIPT_EXTENSIONS = listOf(".js", ".mjs")
 
 private val FONT_EXTENSIONS = listOf(".woff2", ".woff", ".ttf", ".otf")
-
-private val REPLAY_DROPPED_HEADERS = listOf("Content-Encoding", "Content-Length", "Set-Cookie")
 
 /**
  * Runs a WebView with [configure], suspending until it calls `resolve`/`reject` or [timeout]

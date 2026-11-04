@@ -341,6 +341,14 @@ class BrowserHeadersTest {
 
     // The request as sent: with the wire order pass it uses the HTTP/1.1 rules; without, the
     // headers as added. With compression, KeiSource's Accept-Encoding
+    @Test
+    fun transportTagKeepsHttp2Headers() {
+        val page = Request.Builder().url("https://a.test/").header("User-Agent", chromeUa).fetch(Fetch.DOCUMENT)
+        assertNull(intercept(page.build(), wireOrder = true).header("Priority"))
+        val tagged = page.tag(TransportProtocol::class.java, TransportProtocol(Protocol.HTTP_2)).build()
+        assertEquals("u=0, i", intercept(tagged, wireOrder = true).header("Priority"))
+    }
+
     private fun intercept(request: Request, wireOrder: Boolean = false, compression: Boolean = false, site: String = "https://a.test", imageFetch: Fetch = Fetch.IMAGE): Request {
         var sent: Request? = null
         val client = OkHttpClient.Builder()

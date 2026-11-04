@@ -127,32 +127,28 @@ internal object WebViewGlueBridge {
 
     /** Sets [headerName] on every request from the default profile's WebViews to an origin matching [originRules]. */
     @Synchronized
-    fun setOriginMatchedHeader(headerName: String, headerValue: String, originRules: Set<String>): Boolean = try {
-        // WebView's profiles exist once its engine has started
-        WebSettings.getDefaultUserAgent(applicationContext)
-        ensureFactory()
+    fun setOriginMatchedHeader(headerName: String, headerValue: String, originRules: Set<String>): Boolean {
         if (!isFeatureSupported("MULTI_PROFILE") || !isFeatureSupported("EXTRA_HEADER_FOR_ORIGINS")) return false
-        val profileStore = Proxy.newProxyInstance(
-            WebViewGlueBridge::class.java.classLoader,
-            arrayOf(ProfileStoreBoundaryInterface::class.java),
-            factory.profileStore,
-        ) as ProfileStoreBoundaryInterface
-        val profile = Proxy.newProxyInstance(
-            WebViewGlueBridge::class.java.classLoader,
-            arrayOf(ProfileBoundaryInterface::class.java),
-            profileStore.getProfile(DEFAULT_PROFILE),
-        ) as ProfileBoundaryInterface
+        val profile = try {
+            // WebView's profiles exist once its engine has started
+            WebSettings.getDefaultUserAgent(applicationContext)
+            val profileStore = Proxy.newProxyInstance(
+                WebViewGlueBridge::class.java.classLoader,
+                arrayOf(ProfileStoreBoundaryInterface::class.java),
+                factory.profileStore!!,
+            ) as ProfileStoreBoundaryInterface
+            Proxy.newProxyInstance(
+                WebViewGlueBridge::class.java.classLoader,
+                arrayOf(ProfileBoundaryInterface::class.java),
+                profileStore.getProfile("Default"),
+            ) as ProfileBoundaryInterface
+        } catch (e: Throwable) {
+            Log.e("WebViewGlueBridge", "setOriginMatchedHeader", e)
+            return false
+        }
         profile.setOriginMatchedHeader(headerName, headerValue, originRules)
-        true
-    } catch (e: IllegalArgumentException) {
-        // An invalid name, value or origin rule, not a missing feature
-        throw e
-    } catch (e: Throwable) {
-        Log.e("WebViewGlueBridge", "setOriginMatchedHeader", e)
-        false
+        return true
     }
-
-    private const val DEFAULT_PROFILE = "Default"
 
     // The add* functions below return null/false only when the feature is unavailable, so callers
     // can fall back. Errors from WebView itself (e.g. IllegalArgumentException for an invalid

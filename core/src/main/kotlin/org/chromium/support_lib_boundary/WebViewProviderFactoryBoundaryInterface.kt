@@ -8,6 +8,6 @@ import java.lang.reflect.InvocationHandler
 internal interface WebViewProviderFactoryBoundaryInterface {
     val webkitToCompatConverter: InvocationHandler
     val supportedFeatures: Array<String>
-    val profileStore: InvocationHandler
+    val profileStore: InvocationHandler?
     fun createWebView(webView: WebView): InvocationHandler
 }

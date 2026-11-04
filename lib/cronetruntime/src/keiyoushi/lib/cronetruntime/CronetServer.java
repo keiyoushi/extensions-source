@@ -307,6 +307,7 @@ final class CronetServer implements Interceptor {
         try {
           urgency = Integer.parseInt(trimmed.substring(2));
         } catch (NumberFormatException ignored) {
+          // Not a number: the default urgency
         }
       }
     }

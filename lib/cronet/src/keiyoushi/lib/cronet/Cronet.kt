@@ -69,7 +69,7 @@ private object CronetInterceptor : Interceptor {
             logOnce("OkHttp's interceptors not found, staying on OkHttp", it)
             return chain.proceed(chain.request())
         }
-        // Cronet speaks HTTP/2 wherever the site offers it
+        // Browser headers keep their HTTP/2 form, Priority included, for Cronet to send
         val request = chain.request().newBuilder().tag(TransportProtocol::class.java, TransportProtocol(Protocol.HTTP_2)).build()
         return CronetChain(chain, interceptors, 0, request).proceed(request)
     }
