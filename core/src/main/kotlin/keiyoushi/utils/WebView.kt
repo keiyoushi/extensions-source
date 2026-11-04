@@ -221,17 +221,21 @@ class WebViewScope<T> internal constructor(
     }
 
     /**
-     * Sends one of the WebView's GETs through [client] and hands the response to the WebView, for sites that refuse
-     * WebView's `X-Requested-With`; call it from [interceptRequest]. The request goes out without that header, and
-     * [client], a KeiSource client, adds the browser headers WebView would (`Sec-Fetch-*`, `Accept-Language`,
-     * `Priority`) and shares WebView's cookies.
+     * Sends one of the WebView's GETs through [client] instead and hands the response to the WebView; call it from
+     * [interceptRequest]. The request carries the headers WebView passes to [interceptRequest], which WebView's own
+     * `X-Requested-With` isn't one of, after [edit]. [client], a KeiSource client, adds the browser headers WebView
+     * would (`Sec-Fetch-*`, `Accept-Language`, `Priority`) and shares WebView's cookies.
      *
      * Returns null for what it leaves to the WebView: other methods, frames other than the page, stylesheets and
      * fonts. A redirected page is loaded at its new address through a page that refreshes to it (the page hooks see
      * that one too), and a page that fails to load fails the run.
      */
-    fun proxyRequest(request: WebResourceRequest, client: OkHttpClient): WebResourceResponse? {
-        val call = request.toOkHttpRequest() ?: return null
+    fun proxyRequest(
+        request: WebResourceRequest,
+        client: OkHttpClient,
+        edit: Request.Builder.() -> Unit = {},
+    ): WebResourceResponse? {
+        val call = request.toOkHttpRequest()?.apply(edit)?.build() ?: return null
 
         // A page that fails fails the run; anything else the WebView sees as a failed load
         fun failed(error: IOException): WebResourceResponse {
@@ -260,14 +264,13 @@ class WebViewScope<T> internal constructor(
     }
 
     /**
-     * The OkHttp request for a WebView GET, to send through a source's own client: WebView's headers without
-     * `X-Requested-With` (WebView's own value can't be told apart from a page's, so both go), and the [Fetch] of
-     * what it loads, so a KeiSource client adds the browser headers WebView would (`Sec-Fetch-*`, `Accept-Language`,
+     * The OkHttp request for a WebView GET, to send through a source's own client: WebView's headers and the [Fetch]
+     * of what it loads, so a KeiSource client adds the browser headers WebView would (`Sec-Fetch-*`, `Accept-Language`,
      * `Priority`). WebView's revalidation headers are left out; the client's own cache revalidates.
      *
      * Returns null for what core has no [Fetch] for: other methods, frames other than the page, stylesheets and fonts.
      */
-    private fun WebResourceRequest.toOkHttpRequest(): Request? {
+    private fun WebResourceRequest.toOkHttpRequest(): Request.Builder? {
         val path = url.path.orEmpty().lowercase()
         val headers = requestHeaders.toHeaders()
         val accept = headers["Accept"].orEmpty()
@@ -285,7 +288,6 @@ class WebViewScope<T> internal constructor(
             .url(url.toString())
             .headers(
                 headers.newBuilder()
-                    .removeAll("X-Requested-With")
                     .removeAll("If-None-Match")
                     .removeAll("If-Modified-Since")
                     // A page the WebView was sent to, not one a page linked to
@@ -293,7 +295,6 @@ class WebViewScope<T> internal constructor(
                     .build(),
             )
             .fetch(fetch)
-            .build()
     }
 
     /**
