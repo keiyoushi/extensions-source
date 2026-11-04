@@ -8,6 +8,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.HttpUrl
 import java.util.Calendar
 
 const val MANGA_ID_MEMO = "mangaId"
@@ -72,14 +73,15 @@ class Manga(
         private val medium: String? = null,
         private val large: String? = null,
     ) {
-        fun from(quality: String?) = when (quality) {
-            "large" -> large ?: medium ?: small ?: ""
-            "small" -> small ?: medium ?: large ?: ""
-            else -> medium ?: large ?: small ?: ""
-        }
+        fun from(baseUrl: HttpUrl, quality: String?) = when (quality) {
+            "large" -> large ?: medium ?: small
+            "small" -> small ?: medium ?: large
+            else -> medium ?: large ?: small
+        }?.let { baseUrl.resolve(it)?.toString() }
     }
 
     fun toSManga(
+        baseUrl: HttpUrl,
         posterQuality: String?,
         altTitlesInDesc: Boolean = false,
         scorePosition: String,
@@ -119,15 +121,15 @@ class Manga(
             "discontinued" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
-        thumbnail_url = this@Manga.poster?.from(posterQuality)
+        thumbnail_url = this@Manga.poster?.from(baseUrl, posterQuality)
         genre = getGenres(showTags)
     }
 
-    fun toBasicSManga(posterQuality: String?) = SManga.create().apply {
+    fun toBasicSManga(baseUrl: HttpUrl, posterQuality: String?) = SManga.create().apply {
         url = this@Manga.url?.substringAfter("/title") ?: "/$hid"
         memo = buildJsonObject { put(MANGA_ID_MEMO, hid) }
         title = this@Manga.title
-        thumbnail_url = this@Manga.poster?.from(posterQuality)
+        thumbnail_url = this@Manga.poster?.from(baseUrl, posterQuality)
     }
 
     private fun getTrackerLinks(): List<Pair<String, String?>> {
