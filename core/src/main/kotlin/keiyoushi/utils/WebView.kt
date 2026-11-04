@@ -261,10 +261,9 @@ class WebViewScope<T> internal constructor(
 
     /**
      * The OkHttp request for a WebView GET, to send through a source's own client: WebView's headers without
-     * `X-Requested-With` (WebView's own value and [setWebViewOriginHeader]'s can't be told apart from a page's, so all
-     * go), and the [Fetch] of what it loads, so a KeiSource
-     * client adds the browser headers WebView would (`Sec-Fetch-*`, `Accept-Language`, `Priority`). WebView's
-     * revalidation headers are left out; the client's own cache revalidates.
+     * `X-Requested-With` (WebView's own value can't be told apart from a page's, so both go), and the [Fetch] of
+     * what it loads, so a KeiSource client adds the browser headers WebView would (`Sec-Fetch-*`, `Accept-Language`,
+     * `Priority`). WebView's revalidation headers are left out; the client's own cache revalidates.
      *
      * Returns null for what core has no [Fetch] for: other methods, frames other than the page, stylesheets and fonts.
      */
@@ -673,18 +672,6 @@ private fun setupWebView(webView: WebView) {
         )
         webView.layout(0, 0, metrics.widthPixels, metrics.heightPixels)
     }
-}
-
-/**
- * Sends [name] with [value] on every WebView request to an origin matching [allowedOriginRules], such as
- * `https://example.com`, in place of any value WebView sets itself. WebView can replace a header this way, not
- * remove it.
- *
- * Applies app-wide until the app is closed: every [runWebView] and the app's own WebView screen.
- * Requires **Chromium 139+** (`EXTRA_HEADER_FOR_ORIGINS`). Returns false if unsupported.
- */
-suspend fun setWebViewOriginHeader(name: String, value: String, allowedOriginRules: Set<String>): Boolean = withContext(Dispatchers.Main) {
-    WebViewGlueBridge.setOriginMatchedHeader(name, value, allowedOriginRules)
 }
 
 private val SCRIPT_EXTENSIONS = listOf(".js", ".mjs")

@@ -7,10 +7,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import keiyoushi.utils.ScriptHandle
 import keiyoushi.utils.WebMessageReplyProxy
-import keiyoushi.utils.applicationContext
 import org.chromium.support_lib_boundary.JsReplyProxyBoundaryInterface
-import org.chromium.support_lib_boundary.ProfileBoundaryInterface
-import org.chromium.support_lib_boundary.ProfileStoreBoundaryInterface
 import org.chromium.support_lib_boundary.ScriptHandlerBoundaryInterface
 import org.chromium.support_lib_boundary.WebMessageBoundaryInterface
 import org.chromium.support_lib_boundary.WebMessagePayloadBoundaryInterface
@@ -123,31 +120,6 @@ internal object WebViewGlueBridge {
             Log.e("WebViewGlueBridge", "setIncludeCookiesOnIntercept", e)
             false
         }
-    }
-
-    /** Sets [headerName] on every request from the default profile's WebViews to an origin matching [originRules]. */
-    @Synchronized
-    fun setOriginMatchedHeader(headerName: String, headerValue: String, originRules: Set<String>): Boolean {
-        if (!isFeatureSupported("MULTI_PROFILE") || !isFeatureSupported("EXTRA_HEADER_FOR_ORIGINS")) return false
-        val profile = try {
-            // WebView's profiles exist once its engine has started
-            WebSettings.getDefaultUserAgent(applicationContext)
-            val profileStore = Proxy.newProxyInstance(
-                WebViewGlueBridge::class.java.classLoader,
-                arrayOf(ProfileStoreBoundaryInterface::class.java),
-                factory.profileStore!!,
-            ) as ProfileStoreBoundaryInterface
-            Proxy.newProxyInstance(
-                WebViewGlueBridge::class.java.classLoader,
-                arrayOf(ProfileBoundaryInterface::class.java),
-                profileStore.getProfile("Default"),
-            ) as ProfileBoundaryInterface
-        } catch (e: Throwable) {
-            Log.e("WebViewGlueBridge", "setOriginMatchedHeader", e)
-            return false
-        }
-        profile.setOriginMatchedHeader(headerName, headerValue, originRules)
-        return true
     }
 
     // The add* functions below return null/false only when the feature is unavailable, so callers

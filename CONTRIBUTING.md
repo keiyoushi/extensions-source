@@ -914,7 +914,6 @@ val html = runWebView<String> {
 ```
 
 - `runWebView(timeout, configure)` suspends until `resolve`/`reject` is called inside `configure`, or `timeout` (default 30s) elapses; it always runs on the main thread internally.
-- `setWebViewOriginHeader(name, value, allowedOriginRules)` sets a header on every WebView request to the matching origins, replacing any value WebView sets itself (WebView can't remove a header). It applies app-wide, the app's own WebView screen included, until the app is closed. Requires Chromium 139+; returns false if unsupported.
 - The `WebViewScope` DSL exposes:
   - **Settings:** `javaScriptEnabled`, `domStorageEnabled`, `blockImages`, `useWideViewPort`, `loadWithOverviewMode`, `userAgent` (spoofs matching `Sec-CH-UA` client hints on Chromium 119+), and `includeCookiesOnIntercept` (Chromium 138+; includes the `Cookie` header in requests passed to `interceptRequest`, and accepts `Set-Cookie` from responses it returns). Audio is always muted automatically across all `runWebView` instances (Chromium 122+).
   - **Navigation hooks:** `onPageStarted`, `onPageFinished`, `onReceivedError`.
