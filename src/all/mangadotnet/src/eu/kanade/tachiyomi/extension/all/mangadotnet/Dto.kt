@@ -239,18 +239,16 @@ class Manga(
         }
         description = MarkdownDescription.Builder().apply {
             if (showMetadata) {
-                rating(this@Manga.rating, votes = ratingCount?.takeIf { it > 0 })
-                val metadata = buildList {
-                    year?.let { add("**Year:** $it") }
-                    chapterCount?.let { add("**Chapters:** $it") }
-                    extraVolumeCount?.takeIf { it > 0 }?.let { add("**Volumes:** $it") }
-                    trackedCount?.let { add("**Tracked:** $it") }
-                    contentRating?.let { add("**Content Rating:** ${it.replaceFirstChar { c -> c.uppercase() }}") }
-                }.joinToString(" · ")
-                if (metadata.isNotBlank()) {
-                    markdown(metadata)
-                }
-                markdown("---")
+                metadata(
+                    this@Manga.rating,
+                    votes = ratingCount?.takeIf { it > 0 },
+                    year?.toString()?.let { "**Year:** $it" },
+                    chapterCount?.toString()?.let { "**Chapters:** $it" },
+                    extraVolumeCount?.takeIf { it > 0 }?.let { "**Volumes:** $it" },
+                    trackedCount?.toString()?.let { "**Tracked:** $it" },
+                    contentRating?.replaceFirstChar { c -> c.uppercase() }?.let { "**Content Rating:** $it" },
+                )
+                separator()
             }
             markdown(
                 this@Manga.description?.replace("\r\n", "\n")

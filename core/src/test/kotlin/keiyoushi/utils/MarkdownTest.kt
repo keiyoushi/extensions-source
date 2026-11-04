@@ -176,4 +176,24 @@ class MarkdownTest {
             .build()
         assertEquals("**A:** 1\n\na **b**\n\n**B:** 2\n\n**kept**\n\n★★★★☆ 85", description)
     }
+
+    @Test
+    fun `description builder with metadata and separator`() {
+        val description = MarkdownDescription.Builder()
+            .metadata(8.5, votes = 100, "**Year:** 2021", "**Chapters:** 231")
+            .separator()
+            .description("Manga description.")
+            .build()
+        assertEquals(
+            """
+            ★★★★☆ 8.5 (100)
+            **Year:** 2021 · **Chapters:** 231
+
+            ---
+
+            Manga description.
+            """.trimIndent(),
+            description,
+        )
+    }
 }
