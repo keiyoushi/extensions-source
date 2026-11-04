@@ -143,45 +143,11 @@ abstract class Wurmz : KeiSource() {
     }
 
     private fun extractComicSeriesJson(body: String): MangaDetailsDto? {
-        val marker = """{"@context":"https://schema.org","@type":"ComicSeries""""
-        val start = body.indexOf(marker)
-        if (start == -1) return null
-        val json = extractBalancedJson(body, start) ?: return null
+        val json = comicSeriesRegex.find(body)?.value ?: return null
         return runCatching { json.parseAs<MangaDetailsDto>() }.getOrNull()
     }
 
-    private fun extractBalancedJson(body: String, start: Int): String? {
-        var depth = 0
-        var inString = false
-        var escape = false
-        for (i in start until body.length) {
-            val c = body[i]
-            if (escape) {
-                escape = false
-                continue
-            }
-            if (c == '\\') {
-                escape = true
-                continue
-            }
-            if (c == '"') {
-                inString = !inString
-                continue
-            }
-            if (!inString) {
-                when (c) {
-                    '{' -> depth++
-                    '}' -> {
-                        depth--
-                        if (depth == 0) {
-                            return body.substring(start, i + 1)
-                        }
-                    }
-                }
-            }
-        }
-        return null
-    }
+    private val comicSeriesRegex = Regex("""\{"@context":"https://schema\.org","@type":"ComicSeries".*?\}(?=[0-9a-f]+:|[\r\n]|$)""")
 
     private val statusBadgeRegex = Regex(""""className":"status-badge","children":"([^"]+)"""")
 
@@ -210,14 +176,13 @@ abstract class Wurmz : KeiSource() {
         return chapters
     }
 
-    private fun parseDate(dateStr: String?): Long {
-        if (dateStr.isNullOrBlank()) return 0L
-        val normalized = dateStr.trim().lowercase()
+    private fun parseDate(dateStr: String): Long {
+        val normalized = dateStr.lowercase()
         if (normalized == "baru saja" || normalized == "just now") {
             return System.currentTimeMillis()
         }
 
-        val amount = Regex("""\d+""").find(normalized)?.value?.toIntOrNull()
+        val amount = numberRegex.find(normalized)?.value?.toIntOrNull()
         if (amount != null) {
             val calendar = Calendar.getInstance()
             when {
@@ -228,14 +193,15 @@ abstract class Wurmz : KeiSource() {
                 "minggu" in normalized || "week" in normalized -> calendar.add(Calendar.WEEK_OF_YEAR, -amount)
                 "bulan" in normalized || "month" in normalized -> calendar.add(Calendar.MONTH, -amount)
                 "tahun" in normalized || "year" in normalized -> calendar.add(Calendar.YEAR, -amount)
-                else -> return DATE_FORMAT.tryParseDate(dateStr, JAKARTA_ZONE)
+                else -> return DATE_FORMAT.tryParseDate(dateStr)
             }
             return calendar.timeInMillis
         }
 
-        return DATE_FORMAT.tryParseDate(dateStr, JAKARTA_ZONE)
+        return DATE_FORMAT.tryParseDate(dateStr)
     }
 
+    private val numberRegex = Regex("""\d+""")
     private val updatedDateRegex = Regex(""""Diperbarui\s*",\s*"([^"]+)"""")
 
     // ======================== Pages ==========================
@@ -259,5 +225,4 @@ abstract class Wurmz : KeiSource() {
     )
 }
 
-private val DATE_FORMAT = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.forLanguageTag("id"))
-private val JAKARTA_ZONE = ZoneId.of("Asia/Jakarta")
+private val DATE_FORMAT = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.forLanguageTag("id")).withZone(ZoneId.of("Asia/Jakarta"))
