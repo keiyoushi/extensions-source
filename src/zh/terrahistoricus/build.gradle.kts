@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Terra Historicus"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
@@ -15,4 +15,21 @@ keiyoushi {
         lang = "zh"
         baseUrl = "https://comic.hypergryph.com"
     }
+}
+
+android {
+    sourceSets.named("test") {
+        java.directories.clear()
+        java.directories.add("test")
+        kotlin.directories.clear()
+        kotlin.directories.add("test")
+        resources.directories.clear()
+        resources.directories.add("test-resources")
+    }
+}
+
+dependencies {
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlin.json)
+    testImplementation(libs.tachiyomi.lib.v16)
 }
