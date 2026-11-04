@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.tuitruyen
 
-import android.util.Base64
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,16 +9,14 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
-import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.sha256
 import keiyoushi.utils.toJsonElement
-import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -28,8 +25,6 @@ import okhttp3.OkHttpClient
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.net.URLDecoder
-import java.security.SecureRandom
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -49,22 +44,19 @@ abstract class TuiTruyen : KeiSource() {
         rateLimit(3)
     }
 
+    // Server withholds the reader-instance token when Accept-Encoding is set (OkHttp transparent
+    // gzip injects "gzip"), so force identity to look like a real navigation.
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("Accept-Encoding", "identity")
+
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val mangas = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
-            .select("ol.homepage-ranking-list[data-ranking-period=total] a.homepage-ranking-item__link")
-            .map(::popularMangaFromElement)
+        val url = "$baseUrl/manga".toHttpUrl().newBuilder()
+            .addQueryParameter("sort", "views_desc")
+            .addQueryParameter("page", page.toString())
+            .build()
 
-        return MangasPage(mangas, false)
-    }
-
-    private fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.absUrl("href"))
-        val titleElement = element.selectFirst(".homepage-ranking-item__title")!!
-        val titleAttr = titleElement.attr("title")
-        title = titleAttr.ifEmpty { titleElement.text() }
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // ============================== Latest ================================
@@ -77,7 +69,7 @@ abstract class TuiTruyen : KeiSource() {
         return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
-    private fun latestMangaFromElement(element: Element): SManga = SManga.create().apply {
+    private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
         val linkElement = element.selectFirst("a[href^=/manga/]")!!
         setUrlWithoutDomain(linkElement.absUrl("href"))
         title = getFullListTitle(element)
@@ -101,7 +93,7 @@ abstract class TuiTruyen : KeiSource() {
 
     private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select("article.manga-card--list")
-            .map(::latestMangaFromElement)
+            .map(::mangaFromElement)
         val hasNextPage = document
             .selectFirst("nav[aria-label='Phân trang truyện'] a[aria-label='Trang sau']:not(.is-disabled)")
             ?.attr("href")
@@ -114,12 +106,15 @@ abstract class TuiTruyen : KeiSource() {
     // ============================== Search ================================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val status = filters.firstInstanceOrNull<StatusFilter>()?.toUriPart()
-        val includedGenres = filters.firstInstanceOrNull<GenreFilter>()
-            ?.state
-            ?.filter { it.state }
-            .orEmpty()
-        val hasFilter = status != null || includedGenres.isNotEmpty()
+        val status = filters.firstInstanceOrNull<StatusFilter>()?.toUriPart()?.ifEmpty { null }
+        val sort = filters.firstInstanceOrNull<SortFilter>()?.toUriPart()?.ifEmpty { null }
+        val genres = filters.firstInstanceOrNull<GenreFilter>()?.state.orEmpty()
+        val includedGenres = genres.filter { it.isIncluded() }
+        val excludedGenres = genres.filter { it.isExcluded() }
+        val hasFilter = status != null ||
+            (sort != null && sort != "updated_desc") ||
+            includedGenres.isNotEmpty() ||
+            excludedGenres.isNotEmpty()
 
         if (query.isBlank() && !hasFilter) return getLatestUpdates(page)
 
@@ -128,7 +123,9 @@ abstract class TuiTruyen : KeiSource() {
             .apply {
                 if (query.isNotBlank()) addQueryParameter("q", query)
                 status?.let { addQueryParameter("status", it) }
+                sort?.let { addQueryParameter("sort", it) }
                 includedGenres.forEach { addQueryParameter("include", it.id) }
+                excludedGenres.forEach { addQueryParameter("exclude", it.id) }
             }
             .build()
 
@@ -265,141 +262,92 @@ abstract class TuiTruyen : KeiSource() {
     // ============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
-        val readerElement = document.selectFirst("[data-reader-imgx-initial-pages]")
-        val accessUrl = readerElement?.attr("data-reader-imgx-access-url")?.ifBlank { null }
+        val chapterUrl = "$baseUrl${chapter.url}"
+        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
 
-        if (accessUrl != null) {
-            val fullAccessUrl = if (accessUrl.startsWith("http")) accessUrl else "$baseUrl$accessUrl"
-            val proofToken = readerElement.attr("data-reader-imgx-proof-token").ifBlank { null }
-            val totalPages = readerElement.attr("data-reader-total-pages").toIntOrNull()
-                ?: document.select("img.page-media").count { element ->
-                    !element.parents().any { it.tagName().equals("noscript", ignoreCase = true) }
+        val readerPages = document.selectFirst("[data-reader-lazy-pages]")
+        val encryptedMedia = ImgxAccessClient.encryptedMedia(document)
+        val totalPages = readerPages?.attr("data-reader-total-pages")?.toIntOrNull() ?: 0
+        val accessUrl = readerPages?.attr("data-reader-imgx-access-url").orEmpty()
+        val isImgx = accessUrl.isNotBlank()
+        val plainUrls = plainPageUrls(document)
+        val hasRealPlain = plainUrls.any { isRealPageUrl(it) }
+        val shouldTryImgx = isImgx && (
+            encryptedMedia.any { isRealPageUrl(it.storageKey) || isRealPageUrl(it.downloadUrl) } ||
+                (!hasRealPlain && totalPages > 0)
+            )
+
+        if (shouldTryImgx) {
+            try {
+                val access = ImgxAccessClient(client, baseUrl, chapterUrl, document)
+                val pages = access.fetchPages(encryptedMedia, totalPages)
+                    .filter { isRealPageUrl(it.storageKey) && isRealPageUrl(it.downloadUrl) }
+                if (pages.isNotEmpty()) {
+                    pages.forEach { page ->
+                        val grant = page.grant
+                            ?: throw IllegalStateException("IMGX grant missing page=${page.pageIndex + 1}")
+                        imgxGrants[page.downloadUrl] = grant to page.storageKey
+                    }
+                    return pages
+                        .sortedBy { it.pageIndex }
+                        .mapIndexed { index, page -> Page(index, imageUrl = page.downloadUrl) }
                 }
-
-            return fetchPagesWithGrants(fullAccessUrl, totalPages, proofToken, readerElement)
+            } catch (e: Exception) {
+                if (!hasRealPlain) throw e
+            }
         }
 
-        return document.select("img.page-media")
-            .asSequence()
-            .filterNot { element ->
-                element.parents().any { parent -> parent.tagName().equals("noscript", ignoreCase = true) }
-            }
-            .map { element -> element.absUrl("data-src").ifEmpty { element.absUrl("src") } }
-            .filter { imageUrl -> imageUrl.isNotBlank() && !imageUrl.startsWith("data:") }
+        return plainUrls
+            .filter { isRealPageUrl(it) }
             .distinct()
-            .toList()
             .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
 
-    private suspend fun fetchPagesWithGrants(
-        accessUrl: String,
-        totalPages: Int,
-        proofToken: String?,
-        readerElement: Element,
-    ): List<Page> {
-        val initialPagesJson = readerElement.attr("data-reader-imgx-initial-pages").ifBlank { null }
-        val initialEntries = initialPagesJson?.let { encoded ->
-            runCatching {
-                URLDecoder.decode(encoded, Charsets.UTF_8.name()).parseAs<List<PageAccessEntry>>()
-            }.getOrDefault(emptyList())
-        }.orEmpty()
+    private fun isRealPageUrl(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+        if (url.startsWith("data:")) return false
+        val path = url.substringBefore('?')
+        return !path.endsWith("/0.js") && !path.endsWith("/0.js/")
+    }
 
-        initialEntries.forEach { entry ->
-            if (entry.downloadUrl.isNotBlank() && entry.grant != null) {
-                imgxGrants[entry.downloadUrl] = entry
-            }
+    private fun plainPageUrls(document: Document): List<String> = document.select("img.page-media")
+        .filterNot { element ->
+            element.parents().any { parent -> parent.tagName().equals("noscript", ignoreCase = true) }
         }
-
-        val pages = initialEntries.map { entry ->
-            Page(entry.pageIndex, imageUrl = entry.downloadUrl)
-        }.toMutableList()
-        val initialIndices = initialEntries.mapTo(mutableSetOf()) { it.pageIndex }
-        val remainingIndices = (0 until totalPages).filterNot { it in initialIndices }
-        val batchSize = 5
-
-        for (start in remainingIndices.indices step batchSize) {
-            val indices = remainingIndices.subList(start, minOf(start + batchSize, remainingIndices.size))
-            val proof = proofToken?.let { createPageAccessProof(accessUrl, indices, it) }
-            val body = PageAccessRequest(pageIndexes = indices, pageAccessProof = proof).toJsonRequestBody()
-            val accessHeaders = headers.newBuilder()
-                .set("Accept", "application/json")
-                .apply {
-                    proof?.let {
-                        set("X-IMGX-Reader-Proof", it.proof)
-                        set("X-IMGX-Reader-Proof-Version", it.version)
-                    }
-                }
-                .build()
-            val pageAccess = client.post(accessUrl, accessHeaders, Fetch.XHR, body).parseAs<PageAccessResponse>()
-
-            pageAccess.pages.forEach { entry ->
-                if (entry.downloadUrl.isNotBlank() && entry.grant != null) {
-                    imgxGrants[entry.downloadUrl] = entry
-                    pages += Page(entry.pageIndex, imageUrl = entry.downloadUrl)
-                }
-            }
-        }
-
-        return pages.sortedBy { it.index }
-    }
-
-    private fun createPageAccessProof(accessUrl: String, pageIndexes: List<Int>, token: String): PageAccessProof {
-        val version = "imgx-page-access-proof-v1"
-        val issuedAt = System.currentTimeMillis()
-        val nonce = randomHex(16)
-        val accessPath = accessUrl.toHttpUrl().encodedPath
-        val pageIndexPart = pageIndexes.joinToString(",")
-        val proofInput = listOf(
-            version,
-            token,
-            accessPath,
-            "",
-            pageIndexPart,
-            issuedAt.toString(),
-            nonce.lowercase(Locale.ROOT),
-        ).joinToString("\n")
-        val proof = proofInput.sha256().base64UrlNoPadding()
-
-        return PageAccessProof(version, token, issuedAt, nonce, proof)
-    }
-
-    private fun randomHex(size: Int): String {
-        val bytes = ByteArray(size)
-        SecureRandom().nextBytes(bytes)
-        return bytes.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
-    }
-
-    private fun ByteArray.base64UrlNoPadding(): String = Base64.encodeToString(this, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+        .map { element -> element.absUrl("data-src").ifEmpty { element.absUrl("src") } }
+        .filter { it.isNotBlank() && !it.startsWith("data:") }
 
     private fun imgxInterceptor() = Interceptor { chain ->
         val request = chain.request()
-        val entry = imgxGrants.remove(request.url.toString())
+        val grantEntry = imgxGrants.remove(request.url.toString())
             ?: return@Interceptor chain.proceed(request)
-        val grant = entry.grant ?: return@Interceptor chain.proceed(request)
+        val (grant, storageKey) = grantEntry
         val response = chain.proceed(request)
-        val source = response.body.source()
-
-        if (!source.request(14) ||
-            source.buffer[0] != 0x49.toByte() || source.buffer[1] != 0x4D.toByte() ||
-            source.buffer[2] != 0x47.toByte() || source.buffer[3] != 0x58.toByte()
-        ) {
-            return@Interceptor response
-        }
-
-        val webp = response.body.use {
+        val encrypted = response.body.use { body ->
+            val source = body.source()
             source.request(Long.MAX_VALUE)
-            ImageDecryptor.decrypt(source.buffer.readByteArray(), grant, entry.storageKey)
+            source.buffer.readByteArray()
         }
+        if (
+            encrypted.size <= 13 ||
+            encrypted[0] != 0x49.toByte() ||
+            encrypted[1] != 0x4D.toByte() ||
+            encrypted[2] != 0x47.toByte() ||
+            encrypted[3] != 0x58.toByte()
+        ) {
+            return@Interceptor response.newBuilder()
+                .body(encrypted.toResponseBody(response.body.contentType()))
+                .build()
+        }
+        val webp = ImgxCrypto.decodeProtectedPage(encrypted, grant, storageKey)
         response.newBuilder()
             .body(webp.toResponseBody("image/webp".toMediaType()))
             .build()
     }
 
-    private val imgxGrantCacheSize = 500
     private val imgxGrants = Collections.synchronizedMap(
-        object : LinkedHashMap<String, PageAccessEntry>(imgxGrantCacheSize, 0.75f, true) {
-            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PageAccessEntry>?): Boolean = size > imgxGrantCacheSize
+        object : LinkedHashMap<String, Pair<ImgxGrant, String>>(100, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<ImgxGrant, String>>?): Boolean = size > 100
         },
     )
 
