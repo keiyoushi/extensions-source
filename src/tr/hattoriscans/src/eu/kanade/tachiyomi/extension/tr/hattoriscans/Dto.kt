@@ -112,5 +112,5 @@ class ChapterDto(
 
 @Serializable
 class ChapterPagesDto(
-    val pages: List<String>,
+    val chapterImages: List<String>,
 )
