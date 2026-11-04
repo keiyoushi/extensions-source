@@ -14,6 +14,7 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -22,6 +23,10 @@ import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Calendar
+import java.util.Locale
 
 @Source
 abstract class Wurmz : KeiSource() {
@@ -91,8 +96,9 @@ abstract class Wurmz : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val bodyString = client.get(getMangaUrl(manga), rscHeaders, Fetch.XHR).body.string()
-        val details = mangaDetailsParse(bodyString).apply { url = manga.url }
+        val url = getMangaUrl(manga).toHttpUrl().newBuilder().addQueryParameter("_rsc", "").build()
+        val bodyString = client.get(url, rscHeaders, Fetch.XHR).body.string()
+        val details = mangaDetailsParse(bodyString).apply { this.url = manga.url }
         val chapterList = chapterListParse(bodyString, manga.url)
 
         return SMangaUpdate(details, chapterList)
@@ -121,17 +127,63 @@ abstract class Wurmz : KeiSource() {
         } ?: bodyString.extractNextJsRsc<JsonObject> {
             it is JsonObject && it.containsKey("dangerouslySetInnerHTML") &&
                 it.jsonObject["dangerouslySetInnerHTML"]?.jsonObject?.get("__html")?.jsonPrimitive?.content?.contains("ComicSeries") == true
-        }?.get("dangerouslySetInnerHTML")?.jsonObject?.get("__html")?.jsonPrimitive?.content?.parseAs<MangaDetailsDto>()
+        }?.get("dangerouslySetInnerHTML")?.jsonObject?.get("__html")?.jsonPrimitive?.content?.let { html ->
+            runCatching { html.parseAs<MangaDetailsDto>() }.getOrNull()
+        } ?: extractComicSeriesJson(bodyString)
             ?: throw Exception("Gagal memproses detail komik")
 
         val statusText = bodyString.extractNextJsRsc<JsonObject> {
             it is JsonObject && it.containsKey("className") && it["className"]?.jsonPrimitive?.content == "status-badge"
         }?.get("children")?.jsonPrimitive?.content
+            ?: statusBadgeRegex.find(bodyString)?.groupValues?.get(1)
 
         return details.toSManga().apply {
             status = parseStatus(statusText.orEmpty())
         }
     }
+
+    private fun extractComicSeriesJson(body: String): MangaDetailsDto? {
+        val marker = """{"@context":"https://schema.org","@type":"ComicSeries""""
+        val start = body.indexOf(marker)
+        if (start == -1) return null
+        val json = extractBalancedJson(body, start) ?: return null
+        return runCatching { json.parseAs<MangaDetailsDto>() }.getOrNull()
+    }
+
+    private fun extractBalancedJson(body: String, start: Int): String? {
+        var depth = 0
+        var inString = false
+        var escape = false
+        for (i in start until body.length) {
+            val c = body[i]
+            if (escape) {
+                escape = false
+                continue
+            }
+            if (c == '\\') {
+                escape = true
+                continue
+            }
+            if (c == '"') {
+                inString = !inString
+                continue
+            }
+            if (!inString) {
+                when (c) {
+                    '{' -> depth++
+                    '}' -> {
+                        depth--
+                        if (depth == 0) {
+                            return body.substring(start, i + 1)
+                        }
+                    }
+                }
+            }
+        }
+        return null
+    }
+
+    private val statusBadgeRegex = Regex(""""className":"status-badge","children":"([^"]+)"""")
 
     private fun parseStatus(status: String) = when (status.lowercase()) {
         "ongoing" -> SManga.ONGOING
@@ -150,8 +202,41 @@ abstract class Wurmz : KeiSource() {
         val slug = chapterList.sourceSlug
             ?: mangaUrl.removePrefix("/detail/").substringBefore("/chapter")
 
-        return chapterList.chapters.map { it.toSChapter(slug) }
+        val chapters = chapterList.chapters.map { it.toSChapter(slug) }
+        val updatedDate = updatedDateRegex.find(bodyString)?.groupValues?.get(1)
+        if (updatedDate != null) {
+            chapters.firstOrNull()?.date_upload = parseDate(updatedDate)
+        }
+        return chapters
     }
+
+    private fun parseDate(dateStr: String?): Long {
+        if (dateStr.isNullOrBlank()) return 0L
+        val normalized = dateStr.trim().lowercase()
+        if (normalized == "baru saja" || normalized == "just now") {
+            return System.currentTimeMillis()
+        }
+
+        val amount = Regex("""\d+""").find(normalized)?.value?.toIntOrNull()
+        if (amount != null) {
+            val calendar = Calendar.getInstance()
+            when {
+                "detik" in normalized || "second" in normalized -> calendar.add(Calendar.SECOND, -amount)
+                "menit" in normalized || "minute" in normalized -> calendar.add(Calendar.MINUTE, -amount)
+                "jam" in normalized || "hour" in normalized -> calendar.add(Calendar.HOUR_OF_DAY, -amount)
+                "hari" in normalized || "day" in normalized -> calendar.add(Calendar.DAY_OF_YEAR, -amount)
+                "minggu" in normalized || "week" in normalized -> calendar.add(Calendar.WEEK_OF_YEAR, -amount)
+                "bulan" in normalized || "month" in normalized -> calendar.add(Calendar.MONTH, -amount)
+                "tahun" in normalized || "year" in normalized -> calendar.add(Calendar.YEAR, -amount)
+                else -> return DATE_FORMAT.tryParseDate(dateStr, JAKARTA_ZONE)
+            }
+            return calendar.timeInMillis
+        }
+
+        return DATE_FORMAT.tryParseDate(dateStr, JAKARTA_ZONE)
+    }
+
+    private val updatedDateRegex = Regex(""""Diperbarui\s*",\s*"([^"]+)"""")
 
     // ======================== Pages ==========================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -173,3 +258,6 @@ abstract class Wurmz : KeiSource() {
         GenreFilter(),
     )
 }
+
+private val DATE_FORMAT = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.forLanguageTag("id"))
+private val JAKARTA_ZONE = ZoneId.of("Asia/Jakarta")
