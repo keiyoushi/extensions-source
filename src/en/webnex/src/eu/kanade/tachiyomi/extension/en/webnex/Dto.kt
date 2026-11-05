@@ -20,7 +20,7 @@ class ReaderPropsDto(
 
 @Serializable
 class SeriesRefDto(
-    val id: String,
+    val href: String,
 )
 
 @Serializable
