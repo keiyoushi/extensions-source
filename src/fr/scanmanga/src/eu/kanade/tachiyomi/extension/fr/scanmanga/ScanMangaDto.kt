@@ -30,10 +30,10 @@ class UrlPayload(
 }
 
 @Serializable
-class LelRequestDto(
-    private val a: String, // sme
-    private val b: String, // sml
-    private val c: String, // fingerprint
+class LelCall(
+    val url: String,
+    val headers: Map<String, String>,
+    val body: String,
 )
 
 @Serializable
