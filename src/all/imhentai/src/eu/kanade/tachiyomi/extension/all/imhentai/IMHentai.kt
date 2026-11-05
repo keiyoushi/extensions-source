@@ -6,6 +6,7 @@ import keiyoushi.annotation.Source
 import okhttp3.OkHttpClient
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Element
+import org.jsoup.parser.Parser
 import java.io.IOException
 
 @Source
@@ -55,6 +56,9 @@ abstract class IMHentai : GalleryAdults() {
                 .build()
         }
     }
+
+    // Listing titles are encoded twice ("&amp;#039;")
+    override fun Element.mangaFullTitle(selector: String) = selectFirst(selector)?.text()?.let { Parser.unescapeEntities(it, false) }
 
     override fun getInfoSelector(tag: String) = "li:has(.tags_text:contains($tag:)) a.tag"
 

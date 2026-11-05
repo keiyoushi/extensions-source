@@ -104,10 +104,11 @@ abstract class OrtegaScans :
             ?: return emptyList()
 
         return section.select("a[href^=\"/serie/\"]").mapNotNull { element ->
+            val slug = element.absUrl("href").toHttpUrl().pathSegments[1]
             SManga.create().apply {
-                url = element.absUrl("href").toHttpUrl().pathSegments[1]
+                url = slug
                 title = element.selectFirst("h3")?.text() ?: return@mapNotNull null
-                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+                thumbnail_url = "$baseUrl/api/covers/$slug.webp"
             }
         }
     }

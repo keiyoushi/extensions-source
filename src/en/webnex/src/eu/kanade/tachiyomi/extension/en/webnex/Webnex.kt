@@ -4,7 +4,6 @@ import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -21,31 +20,25 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.runWebView
 import keiyoushi.utils.textOrNull
-import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import okhttp3.Cookie
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import java.io.IOException
-import kotlin.random.Random
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 @Source
@@ -54,9 +47,19 @@ abstract class Webnex :
     ConfigurableSource {
     private val preferences by getPreferencesLazy()
 
-    // The site rejects the app's default Cache-Control (max-age=600)
-    override fun OkHttpClient.Builder.configureClient() = addNetworkInterceptor { chain ->
-        chain.proceed(chain.request().newBuilder().removeHeader("Cache-Control").build())
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::seriesCookieInterceptor)
+
+    // "Opening series" page: sets wnx_series from a script, then reloads
+    private fun seriesCookieInterceptor(chain: Interceptor.Chain): Response {
+        val response = chain.proceed(chain.request())
+        val url = response.request.url
+        if (url.pathSegments[0] != "manga") return response
+        val cookie = SERIES_COOKIE_REGEX.find(response.peekBody(4096).string())?.groupValues?.get(1)
+            ?.let { Cookie.parse(url, it) }
+            ?: return response
+        response.close()
+        client.cookieJar.saveFromResponse(url, listOf(cookie))
+        return chain.proceed(chain.request())
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchManga(page, "", FilterList(SortFilter("coverage"), RatingFilter(preferences.rating)))
@@ -111,7 +114,7 @@ abstract class Webnex :
             "manga" -> url.pathSegments.getOrNull(1) ?: return null
             "read" -> client.get(url.newBuilder().query(null).build(), Fetch.DOCUMENT).extractNextJs<ReaderPropsDto> {
                 it is JsonObject && "chapter" in it && "series" in it
-            }?.series?.id ?: return null
+            }?.series?.href?.let { baseUrl.toHttpUrl().resolve(it)!!.pathSegments[1] } ?: return null
             else -> return null
         }
 
@@ -135,14 +138,14 @@ abstract class Webnex :
         val details = SManga.create().apply {
             url = manga.url
             title = document.selectFirst("h1.series-title")!!.text()
-            thumbnail_url = document.selectFirst(".series-cover img")?.absUrl("src")
+            thumbnail_url = document.selectFirst(".series-top-cover img")?.absUrl("src")
             author = document.select(".series-credits a[href*=author=]").joinToString { it.text() }.ifEmpty { null }
             artist = document.select(".series-credits a[href*=artist=]").joinToString { it.text() }.ifEmpty { null }
             // Every genre and tag, including those behind the tag cloud's "+N more"
             val tags = document.extractNextJs<TagsDto> { it is JsonObject && "genres" in it && "tags" in it }!!
-            genre = (document.select(".series-facts a[href*=kind=], .series-facts a[href*=demographic=]").map { it.text() } + tags.genres + tags.tags)
+            genre = (document.select(".series-badges a[href*=kind=], .series-badges a[href*=demographic=]").map { it.text() } + tags.genres + tags.tags)
                 .distinct().joinToString().ifEmpty { null }
-            status = when (document.selectFirst(".fact-status")?.text()?.lowercase()) {
+            status = when (document.selectFirst(".series-badges li:has(.dot)")?.text()?.lowercase()) {
                 "ongoing" -> SManga.ONGOING
                 "completed" -> SManga.COMPLETED
                 "hiatus" -> SManga.ON_HIATUS
@@ -150,12 +153,12 @@ abstract class Webnex :
                 else -> SManga.UNKNOWN
             }
             // Year, original language and content rating; type and demographic are in genres
-            val facts = document.select(".series-facts > :not(.fact-status, a[href*=kind=], a[href*=demographic=])").map { it.text() }
+            val facts = document.select(".series-badges > li:not(:has(.dot, a[href*=kind=], a[href*=demographic=]))").map { it.text() }
             description = MarkdownDescription.Builder().apply {
-                rating(document.selectFirst(".series-numbers a.series-number-link")?.text()?.toDoubleOrNull())
+                rating(document.selectFirst(".cover-score strong")?.text()?.toDoubleOrNull())
                 info(*facts.toTypedArray())
                 document.select(".series-desc p").forEach { description(it) }
-                altTitles(document.select("details.series-more li").map { it.text() }.filter { it != title })
+                altTitles(document.select(".series-alt-name").map { it.text() }.filter { it != title }.distinct())
                 links(document.select(".tracker-row a").map { it.attr("title") to it.absUrl("href") })
             }.build()
         }
@@ -183,11 +186,9 @@ abstract class Webnex :
         // Hidden rows are decoys the site's own page never shows
         return document.select("li.ch-row:not([aria-hidden=true]):not([style*=display:none])").flatMap { element ->
             val link = element.selectFirst("a.ch-link")!!
-            val number = link.selectFirst(".ch-num")!!
-            val title = link.selectFirst(".ch-title")!!
-            // A plain title is the full display name, e.g. "Chapter 48" or an unnumbered extra.
-            val chapterName = if (title.hasClass("is-plain")) title.text() else listOfNotNull(number.textOrNull(), title.text()).joinToString(": ")
-            val chapterNumber = number.ownText().toFloatOrNull()
+            val number = link.selectFirst(".ch-num")!!.ownText()
+            val chapterName = link.selectFirst(".ch-title")?.let { "Chapter $number: ${it.text()}" } ?: "Chapter $number"
+            val chapterNumber = number.toFloatOrNull()
 
             val picked = Upload(
                 SChapter.create().apply {
@@ -248,37 +249,13 @@ abstract class Webnex :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter).toHttpUrl()
-        val reader = readerFetch(chapterUrl).parseAs<ReaderDto>()
+        // The page list needs the cookie the reader page sets, on its final url after redirects
+        val readerUrl = client.get(chapterUrl, Fetch.DOCUMENT).use { it.request.url }
+        val reader = client.get(readerUrl.newBuilder().addPathSegment("pages").build(), Fetch.XHR.from(readerUrl)).parseAs<ReaderDto>()
 
         // Relative /api/image/ paths or absolute CDN urls
         return reader.pages.mapIndexed { index, url ->
             Page(index, imageUrl = chapterUrl.resolve(url)!!.toString())
-        }
-    }
-
-    private val readerMutex = Mutex()
-
-    // The page list refuses non-browser clients, and WebView navigations (X-Requested-With): fetch from a blank page
-    private suspend fun readerFetch(chapterUrl: HttpUrl): String = readerMutex.withLock {
-        val script = javaClass.getResource("/assets/reader_fetch.js")!!.readText()
-        val bridge = "wnx" + Random.nextLong().toULong().toString(36)
-        val result = try {
-            runWebView<String>(timeout = 20.seconds) {
-                blockImages = true
-                userAgent = headers["User-Agent"]!!
-                webMessageBridge(bridge, setOf(baseUrl)) { resolve(it) }
-                loadData("$baseUrl/", "<script>($script)(${chapterUrl.encodedPath.toJsonString()}, ${bridge.toJsonString()})</script>")
-            }.parseAs<WebFetchDto>()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            throw IOException(e.message, e)
-        }
-
-        when (result.status) {
-            200 -> result.body
-            0 -> throw IOException("Failed to load the page list")
-            else -> throw HttpException(result.status)
         }
     }
 
@@ -374,6 +351,8 @@ abstract class Webnex :
 
         // Groups the site marks as official translations
         private const val DEFAULT_PREFERRED_GROUPS = "Webtoon, Tapas, Tappytoon"
+
+        private val SERIES_COOKIE_REGEX = Regex("""<title>Opening series</title>.*?document\.cookie\s*=\s*"([^"]+)"""", RegexOption.DOT_MATCHES_ALL)
 
         private val TIME_AGO_REGEX = Regex("""(\d+)(mo|y|w|d|h|m) ago""")
 

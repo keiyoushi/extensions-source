@@ -54,55 +54,6 @@ class GenreModeFilter :
 
 class Genre(name: String) : Filter.CheckBox(name)
 
-class GenreFilter :
-    Filter.Group<Genre>(
-        "Kategoriler",
-        listOf(
-            "Fantastik",
-            "Aksiyon",
-            "Macera",
-            "Komedi",
-            "Drama",
-            "Gizem",
-            "Korku",
-            "Gerilim",
-            "Bilim Kurgu",
-            "Tarihi",
-            "Psikolojik",
-            "Doğaüstü",
-            "İsekai",
-            "Reenkarnasyon",
-            "Zamanda Geri Dönüş",
-            "Ruh Göçü",
-            "Güçlenme",
-            "Murim",
-            "İntikam",
-            "Kötü Karakter",
-            "Okul",
-            "Kıyamet",
-            "Kıyamet Sonrası",
-            "Askeri",
-            "Büyü",
-            "Şeytan",
-            "Mafya",
-            "Yetişkin",
-            "Olgun İçerik",
-            "Seinen",
-            "Trajedi",
-            "Karanlık",
-            "Suç",
-            "Suçlu Gençler",
-            "Dövüş",
-            "Çete",
-            "Kahramanlar",
-            "Suikastçi",
-            "Dövüş Sanatları",
-            "Ortaçağ",
-            "Öğretmen",
-            "Şiddet",
-            "Savaş",
-            "Zayıftan Güçlüye",
-        ).map(::Genre),
-    ) {
+class GenreFilter(genres: List<String>) : Filter.Group<Genre>("Kategoriler", genres.map(::Genre)) {
     val selected get() = state.filter { it.state }.map { it.name }
 }

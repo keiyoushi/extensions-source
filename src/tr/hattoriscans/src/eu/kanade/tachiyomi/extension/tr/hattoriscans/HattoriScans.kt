@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.tr.hattoriscans
 
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -8,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -22,15 +24,24 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Response
+import java.io.IOException
 import java.text.Collator
 import java.util.Locale
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Instant
 
 @Source
 abstract class HattoriScans : KeiSource() {
 
+    override val supportsFilterFetching = true
+
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(2)
+        addInterceptor(::resignExpiredPage)
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList())
@@ -49,8 +60,8 @@ abstract class HattoriScans : KeiSource() {
         return MangasPage(mangas, false)
     }
 
-    // The site's list API has no filtering or paging and the catalog is small,
-    // so the whole list is fetched once and filtered locally.
+    // The site's list API has no filtering or paging; one request at its limit of 50
+    // holds the whole catalogue, filtered locally.
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = coroutineScope {
         val listDeferred = async { client.get("$baseUrl/api/manga?limit=$LIST_LIMIT", Fetch.XHR).parseAs<List<MangaListItemDto>>() }
         val matchedIds = query.trim().takeIf { it.isNotBlank() }?.let { q ->
@@ -122,24 +133,72 @@ abstract class HattoriScans : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
-        val pages = response.extractNextJs<ChapterPagesDto> { it is JsonObject && "pages" in it }
-            ?: throw Exception("Sayfa listesi bulunamadı")
-        return pages.pages.mapIndexed { index, path ->
-            Page(index, imageUrl = baseUrl + path)
+        val chapterUrl = getChapterUrl(chapter)
+        return client.get(chapterUrl, Fetch.DOCUMENT).chapterImages().mapIndexed { index, url ->
+            Page(index, imageUrl = url.newBuilder().fragment(chapterUrl).build().toString())
         }
     }
 
+    private fun Response.chapterImages(): List<HttpUrl> {
+        val images = extractNextJs<ChapterPagesDto> { it is JsonObject && "chapterImages" in it }
+            ?: throw Exception("Page list not found")
+        return images.chapterImages.map { baseUrl.toHttpUrl().resolve(it)!! }
+    }
+
+    // Page links are signed for a few hours; the fragment holds the chapter url
+    private fun resignExpiredPage(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val chapterUrl = request.url.fragment ?: return chain.proceed(request)
+        val response = chain.proceed(request)
+        if (response.code != 403) return response
+        response.close()
+
+        val path = request.url.encodedPath
+        val url = resignedPages(chapterUrl).firstOrNull { it.encodedPath == path }
+            ?: throw IOException("Page not found in $chapterUrl")
+        return chain.proceed(request.newBuilder().url(url).build())
+    }
+
+    // Last re-signed chapter, so its other expired pages need no further request
+    private var resigned: ResignedPages? = null
+
+    @Synchronized
+    private fun resignedPages(chapterUrl: String): List<HttpUrl> {
+        val now = Clock.System.now()
+        resigned?.let { if (it.chapterUrl == chapterUrl && now - it.fetchedAt < RESIGNED_TTL) return it.urls }
+        val urls = try {
+            val response = client.newCall(GET(chapterUrl, headers).newBuilder().fetch(Fetch.DOCUMENT).build()).execute()
+            if (!response.isSuccessful) {
+                response.close()
+                throw IOException("HTTP error ${response.code}")
+            }
+            response.chapterImages()
+        } catch (e: Exception) {
+            throw e as? IOException ?: IOException(e)
+        }
+        resigned = ResignedPages(chapterUrl, now, urls)
+        return urls
+    }
+
+    private class ResignedPages(val chapterUrl: String, val fetchedAt: Instant, val urls: List<HttpUrl>)
+
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/genres", Fetch.XHR).parseAs()
+
     override fun getFilterList(data: JsonElement?) = FilterList(
-        SortFilter(),
-        TypeFilter(),
-        StatusFilter(),
-        GenreModeFilter(),
-        GenreFilter(),
+        buildList {
+            add(SortFilter())
+            add(TypeFilter())
+            add(StatusFilter())
+            data?.parseAs<List<GenreDto>>()?.let { genres ->
+                add(GenreModeFilter())
+                add(GenreFilter(genres.map { it.name }))
+            }
+        },
     )
 
     companion object {
-        private const val LIST_LIMIT = 1000
+        private const val LIST_LIMIT = 50
+        private val RESIGNED_TTL = 1.hours
         private val TURKISH_COLLATOR = Collator.getInstance(Locale("tr"))
         private val COVER_URL_REGEX = Regex("""url\(["']?([^"')]+)""")
     }

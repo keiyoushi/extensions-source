@@ -6,6 +6,7 @@ import java.lang.reflect.InvocationHandler
 
 internal interface WebViewProviderBoundaryInterface {
     fun setAudioMuted(mute: Boolean)
+    fun getProfile(): InvocationHandler
     fun addDocumentStartJavaScript(script: String, allowedOriginRules: Array<String>): InvocationHandler
     fun getJavaScriptWorld(worldName: String): Int
     fun addJavaScriptOnEvent(script: String, allowedOriginRules: Array<String>, event: Int, worldName: String): InvocationHandler
