@@ -37,11 +37,11 @@ internal class SitePages(baseUrl: String, private val client: OkHttpClient, priv
         val call = "(${asset("run.js")})(${asset(scriptName)}, $args, \"$stateName\")"
         var challengeSeenAt: TimeMark? = null
 
-        // The site refuses WebView's X-Requested-With, which the requests left to the WebView carry
-        val requestedWithReplaced = setWebViewOriginHeader("X-Requested-With", "XMLHttpRequest", setOf("https://$host"))
         val result = try {
             runWebView<String>(timeout = TIMEOUT) {
                 userAgent = this@SitePages.userAgent()
+                // The site refuses WebView's X-Requested-With, which the requests left to the WebView carry
+                val requestedWithReplaced = setOriginMatchedHeader("X-Requested-With", "XMLHttpRequest", setOf("https://$host"))
                 interceptRequest { request ->
                     val requestHost = request.url.host
                     val path = request.url.path.orEmpty()
