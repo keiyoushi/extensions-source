@@ -8,12 +8,6 @@ class ReaderDto(
 )
 
 @Serializable
-class WebFetchDto(
-    val status: Int,
-    val body: String,
-)
-
-@Serializable
 class ReaderPropsDto(
     val series: SeriesRefDto,
 )
