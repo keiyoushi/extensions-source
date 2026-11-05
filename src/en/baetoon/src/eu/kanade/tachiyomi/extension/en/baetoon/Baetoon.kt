@@ -15,7 +15,6 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
@@ -31,6 +30,8 @@ abstract class Baetoon :
     ConfigurableSource {
 
     private val preferences by getPreferencesLazy()
+
+    private val rscHeaders get() = headersBuilder().set("rsc", "1").build()
 
     override val supportsFilterFetching = true
 
@@ -88,7 +89,7 @@ abstract class Baetoon :
 
     override suspend fun fetchRelatedMangaList(manga: SManga) = fetchDetail(getMangaUrl(manga)).recommendations.map { it.toSManga() }
 
-    private suspend fun fetchDetail(url: String): DetailDto = client.get(url, Fetch.DOCUMENT).asJsoup().extractNextJs<DetailDto>()
+    private suspend fun fetchDetail(url: String): DetailDto = fetchRsc<DetailDto>(url)
         ?: throw Exception("Title not found")
 
     private fun ChapterDto.toSChapters(mode: String?, preferred: List<String>, blocked: List<String>): List<SChapter> {
@@ -114,11 +115,10 @@ abstract class Baetoon :
         Page(index, imageUrl = url)
     }
 
-    private suspend fun fetchReader(url: String): ReaderDto = client.get(url, Fetch.DOCUMENT).asJsoup().extractNextJs<ReaderDto>()
+    private suspend fun fetchReader(url: String): ReaderDto = fetchRsc<ReaderDto>(url)
         ?: throw Exception("Chapter not found")
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/advanced-search", Fetch.DOCUMENT).asJsoup()
-        .extractNextJs<GenresDto>()!!.initialGenres.toJsonElement()
+    override suspend fun fetchFilterData(): JsonElement = fetchRsc<GenresDto>("$baseUrl/advanced-search")!!.initialGenres.toJsonElement()
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         listOfNotNull(
@@ -163,6 +163,13 @@ abstract class Baetoon :
             setDefaultValue("")
         }.let(screen::addPreference)
     }
+
+    // Without the bare `_rsc` param the site answers an RSC fetch with a 307 to it
+    private suspend inline fun <reified T> fetchRsc(url: String): T? = client.get(
+        url.toHttpUrl().newBuilder().addQueryParameter("_rsc", null).build(),
+        rscHeaders,
+        Fetch.XHR,
+    ).extractNextJs<T>()
 
     private fun SharedPreferences.groups(key: String) = getString(key, "")!!
         .split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
