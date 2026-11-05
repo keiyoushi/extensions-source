@@ -1,10 +1,21 @@
 package eu.kanade.tachiyomi.extension.ar.procomic
 
+import android.app.Activity
+import android.app.Application
+import android.app.Dialog
+import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
+import android.graphics.drawable.ColorDrawable
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.LruCache
+import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import androidx.preference.PreferenceScreen
@@ -25,6 +36,7 @@ import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.NativeWebViewApi
 import keiyoushi.utils.WebMessageReplyProxy
 import keiyoushi.utils.WebViewScope
 import keiyoushi.utils.WebViewTimeoutException
@@ -36,6 +48,8 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonString
+import keiyoushi.utils.ui.topActivity
+import keiyoushi.utils.ui.usable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -73,6 +87,7 @@ import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
 @Source
@@ -329,6 +344,15 @@ abstract class Procomic :
 
         private val triedHosts = mutableListOf<String>()
 
+        private lateinit var scope: WebViewScope<Unit>
+
+        @Volatile
+        private var checkSince: TimeMark? = null
+
+        // Main thread only.
+        private var check: Dialog? = null
+        private var unhookCheck: (() -> Unit)? = null
+
         private val job = sessionScope.launch {
             try {
                 runWebView<Unit>(SESSION_TIMEOUT) { open() }
@@ -337,6 +361,7 @@ abstract class Procomic :
                 started.completeExceptionally(e)
             } finally {
                 closed = true
+                Handler(Looper.getMainLooper()).post { dismissCheck() }
             }
         }
 
@@ -346,6 +371,7 @@ abstract class Procomic :
         }
 
         private fun WebViewScope<Unit>.open() {
+            scope = this
             val origins = hosts.map { "https://$it" }.toSet()
             webMessageBridge(BRIDGE, origins, WORLD) { message, proxy ->
                 if (message == READY && proxy.isMainFrame == true) reader = proxy
@@ -353,7 +379,11 @@ abstract class Procomic :
             addJavaScriptOnEvent("$BRIDGE.postMessage('$READY')", worldName = WORLD, allowedOriginRules = origins)
             interceptRequest { request ->
                 val url = request.url
-                if (url.host in hosts && url.path.orEmpty().startsWith(DEFERRED_MEDIA_PATH)) learnedReaderHost = url.host
+                if (url.host in hosts && url.path.orEmpty().startsWith(DEFERRED_MEDIA_PATH)) {
+                    learnedReaderHost = url.host
+                    checkSince = null
+                    closeCheck()
+                }
                 share(request)
             }
             poll(IDLE_TIMEOUT / 4) {
@@ -378,6 +408,66 @@ abstract class Procomic :
             val next = hosts.firstOrNull { it !in triedHosts }
                 ?: return reject(IOException("The site did not open the chapter, open it in WebView"))
             evaluateJs("location.replace(${tryHost(next).toJsonString()})")
+        }
+
+        // The check passes by itself on most connections; others get a checkbox, which only a visible page can take.
+        private fun awaitCheck() {
+            val since = checkSince ?: TimeSource.Monotonic.markNow().also { checkSince = it }
+            if (since.elapsedNow() >= CHECK_GRACE) scope.showCheck()
+        }
+
+        @OptIn(NativeWebViewApi::class)
+        private fun WebViewScope<Unit>.showCheck() = withNativeWebView { view ->
+            if (check != null) return@withNativeWebView
+            val activity = runCatching { topActivity() }.getOrNull()?.takeIf { it.usable() }
+                ?: return@withNativeWebView reject(IOException("Open the chapter in the reader to pass the site's security check"))
+            val dialog = Dialog(activity, android.R.style.Theme_Translucent_NoTitleBar).apply {
+                window?.apply {
+                    setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+                    addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                    setDimAmount(0.6f)
+                }
+                setContentView(view)
+                setOnDismissListener {
+                    hideCheck(view)
+                    reject(IOException("Complete the site's security check to read this chapter"))
+                }
+            }
+            // A new screen (rotation, another chapter) shows it again on the next poll.
+            val callbacks = object : Application.ActivityLifecycleCallbacks {
+                override fun onActivityDestroyed(destroyed: Activity) {
+                    if (destroyed === activity) hideCheck(view)
+                }
+                override fun onActivityCreated(activity: Activity, state: Bundle?) = Unit
+                override fun onActivityStarted(activity: Activity) = Unit
+                override fun onActivityResumed(activity: Activity) = Unit
+                override fun onActivityPaused(activity: Activity) = Unit
+                override fun onActivityStopped(activity: Activity) = Unit
+                override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) = Unit
+            }
+            activity.application.registerActivityLifecycleCallbacks(callbacks)
+            unhookCheck = { activity.application.unregisterActivityLifecycleCallbacks(callbacks) }
+            check = dialog
+            dialog.show()
+        }
+
+        @OptIn(NativeWebViewApi::class)
+        private fun closeCheck() = scope.withNativeWebView { view -> if (check != null) hideCheck(view) }
+
+        private fun hideCheck(view: View) {
+            dismissCheck()
+            runCatching { (view.parent as? ViewGroup)?.removeView(view) }
+            layOutHidden(view)
+        }
+
+        private fun dismissCheck() {
+            unhookCheck?.invoke()
+            unhookCheck = null
+            val dialog = check ?: return
+            check = null
+            dialog.setOnDismissListener(null)
+            runCatching { if (dialog.isShowing) dialog.dismiss() }
         }
 
         // Sends the reader's page images through the source's client, which keeps a copy for the app.
@@ -413,6 +503,10 @@ abstract class Procomic :
                 suspendCancellableCoroutine { continuation -> reader.evaluateJs(script) { continuation.resume(it) } }
             }
             val slot = result?.parseAs<SlotDto?>() ?: return SlotDto()
+            if (slot.check) {
+                awaitCheck()
+                return SlotDto()
+            }
             val failed = slot.error ?: return slot
             synchronized(this) {
                 // Every poller sees the same failed page until the reload lands.
@@ -585,10 +679,25 @@ abstract class Procomic :
         private val PAGE_TIMEOUT = 2.minutes
         private val IMAGE_TIMEOUT = 5.seconds
         private val SCRIPT_TIMEOUT = 10.seconds
+
+        // How long the security check may take to pass on its own.
+        private val CHECK_GRACE = 15.seconds
+
         private const val STALL_TIMEOUT_SECONDS = 5
         private const val STALL_ATTEMPTS = 4
         private const val SHOW_LOCKED_KEY = "showLockedChapters"
     }
+}
+
+// The size core gives the reader's WebView off-window, restored after the check dialog.
+private fun layOutHidden(view: View) {
+    val metrics = Resources.getSystem().displayMetrics
+    view.layoutParams = ViewGroup.LayoutParams(metrics.widthPixels, metrics.heightPixels)
+    view.measure(
+        View.MeasureSpec.makeMeasureSpec(metrics.widthPixels, View.MeasureSpec.EXACTLY),
+        View.MeasureSpec.makeMeasureSpec(metrics.heightPixels, View.MeasureSpec.EXACTLY),
+    )
+    view.layout(0, 0, metrics.widthPixels, metrics.heightPixels)
 }
 
 // A page image the reader loads, kept for the app.
