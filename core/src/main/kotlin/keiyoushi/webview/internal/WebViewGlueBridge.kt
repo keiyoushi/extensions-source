@@ -183,20 +183,20 @@ internal object WebViewGlueBridge {
         }
     }
 
-    /** A [WebMessageReplyProxy] that can also reach the frame that sent the message. */
+    /** The [WebMessageReplyProxy] of a message received through [addWebMessageListener]. */
     internal class ReplyProxy(
         private val proxy: JsReplyProxyBoundaryInterface,
         override val sourceOrigin: String?,
         override val isMainFrame: Boolean?,
         private val onError: (Throwable) -> Unit,
     ) : WebMessageReplyProxy {
-        fun postMessage(message: String) {
+        override fun postMessage(message: String) {
             runCatching { proxy.postMessage(message) }
         }
 
-        fun evaluateJs(script: String, callback: ((String?) -> Unit)? = null) {
+        override fun evaluateJs(script: String, callback: ((String?) -> Unit)?) {
             if (!isFeatureSupported("JS_INJECTION_IN_FRAME_AND_WORLD")) {
-                onError(UnsupportedOperationException("ReplyProxy.evaluateJs requires JS_INJECTION_IN_FRAME_AND_WORLD (Chromium 146+)"))
+                onError(UnsupportedOperationException("WebMessageReplyProxy.evaluateJs requires JS_INJECTION_IN_FRAME_AND_WORLD (Chromium 146+)"))
                 return
             }
             val callbackHandler = InvocationHandler { _, method, args ->

@@ -79,7 +79,7 @@ fun interface ScriptHandle {
     fun remove()
 }
 
-/** The frame that sent a web message. */
+/** The frame that sent a web message: where it came from, and how to reply to it. */
 interface WebMessageReplyProxy {
     /**
      * Origin of the sending frame (e.g. `https://example.com`), or null on the pre-Chromium 116
@@ -89,6 +89,12 @@ interface WebMessageReplyProxy {
 
     /** Whether the message came from the main frame, or null on the pre-Chromium 116 fallback. */
     val isMainFrame: Boolean?
+
+    /** Posts [message] back to the frame that originated the message. */
+    fun postMessage(message: String)
+
+    /** Executes [script] specifically inside the frame that sent the message. */
+    fun evaluateJs(script: String, callback: ((String?) -> Unit)? = null)
 }
 
 /**
@@ -342,8 +348,9 @@ class WebViewScope<T> internal constructor(
     }
 
     /**
-     * Injects `window.$name` exposing modern, asynchronous, origin-scoped messaging.
+     * Injects `window.$name` exposing modern, asynchronous, origin-scoped 2-way messaging.
      * JavaScript sends: `window.$name.postMessage(message)`.
+     * JavaScript receives: `window.$name.onmessage = (event) => ...`.
      * Must be called before [loadUrl]/[loadData]; the object is only injected on later navigations.
      * [allowedOriginRules] entries need a scheme (e.g. `https://example.com`); WebView rejects
      * invalid rules with [IllegalArgumentException], failing the run.
@@ -356,10 +363,13 @@ class WebViewScope<T> internal constructor(
      * Requires **Chromium 116+** (`WEB_MESSAGE_ARRAY_BUFFER`) for native origin-scoped messaging.
      * On older engines (< Chromium 116), transparently falls back to an `addJavascriptInterface`
      * bridge exposing `window.$name.postMessage(message)` with debug logging under tag `"KeiyoushiWebView"`.
+     * Replying via [WebMessageReplyProxy] is unsupported on the fallback path and will [reject] the execution.
      * The fallback ignores [allowedOriginRules] (every frame can post) and reports a null
      * sender origin.
      *
      * [handler] runs on the main thread (on a background thread on the fallback path).
+     * [WebMessageReplyProxy.evaluateJs] additionally requires **Chromium 146+**
+     * (`JS_INJECTION_IN_FRAME_AND_WORLD`) and [reject]s otherwise.
      */
     fun webMessageBridge(
         name: String,
@@ -387,6 +397,14 @@ class WebViewScope<T> internal constructor(
         val fallbackReplyProxy = object : WebMessageReplyProxy {
             override val sourceOrigin: String? = null
             override val isMainFrame: Boolean? = null
+
+            override fun postMessage(message: String) {
+                reject(UnsupportedOperationException("WebMessageReplyProxy.postMessage is not supported on this WebView (requires Chromium 116+)"))
+            }
+
+            override fun evaluateJs(script: String, callback: ((String?) -> Unit)?) {
+                reject(UnsupportedOperationException("WebMessageReplyProxy.evaluateJs is not supported on this WebView (requires Chromium 116+)"))
+            }
         }
 
         webView.addJavascriptInterface(
