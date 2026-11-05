@@ -57,10 +57,6 @@ abstract class Webnex :
     private val preferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(::seriesCookieInterceptor)
-        // The site rejects the app's default Cache-Control (max-age=600)
-        .addNetworkInterceptor { chain ->
-            chain.proceed(chain.request().newBuilder().removeHeader("Cache-Control").build())
-        }
 
     // "Opening series" page: sets wnx_series from a script, then reloads
     private fun seriesCookieInterceptor(chain: Interceptor.Chain): Response {
