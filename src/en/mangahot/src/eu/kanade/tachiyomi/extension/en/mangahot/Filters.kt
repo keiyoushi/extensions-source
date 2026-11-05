@@ -9,13 +9,9 @@ class GenreDto(
     val slug: String,
 )
 
-open class UriPartFilter(name: String, private val options: List<Pair<String, String>>) : Filter.Select<String>(name, options.map { it.first }.toTypedArray()) {
+class UriPartFilter(name: String, val param: String, private val options: List<Pair<String, String>>) : Filter.Select<String>(name, options.map { it.first }.toTypedArray()) {
     fun key() = options[state].second
 }
-
-class SortFilter(name: String, options: List<Pair<String, String>>) : UriPartFilter(name, options)
-
-class ContentRatingFilter(name: String, options: List<Pair<String, String>>) : UriPartFilter(name, options)
 
 class TextFilter(name: String, val param: String) : Filter.Text(name)
 
