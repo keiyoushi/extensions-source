@@ -11,4 +11,5 @@ internal interface WebViewProviderBoundaryInterface {
     fun getJavaScriptWorld(worldName: String): Int
     fun addJavaScriptOnEvent(script: String, allowedOriginRules: Array<String>, event: Int, worldName: String): InvocationHandler
     fun addWebMessageListener(jsObjectName: String, allowedOriginRules: Array<String>, listener: InvocationHandler)
+    fun addWebMessageListener(jsObjectName: String, allowedOriginRules: Array<String>, listener: InvocationHandler, worldName: String)
 }
