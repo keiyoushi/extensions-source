@@ -56,7 +56,8 @@ abstract class Hwalumi : KeiSource() {
     }
 
     private fun parseMangaList(document: Document, page: Int): MangasPage {
-        val mangas = document.select("a[href^=\"/comic/\"]:has(img:not([src*=\"flagcdn\"]))").mapNotNull { element ->
+        // skip the hidden honeypot entry the site injects into every listing
+        val mangas = document.select("a[href^=\"/comic/\"]:has(img:not([src*=\"flagcdn\"])):not([aria-hidden=true] a)").mapNotNull { element ->
             val img = element.selectFirst("img") ?: return@mapNotNull null
             val title = img.attr("alt").takeIf { it.isNotBlank() } ?: element.text().trim()
             if (title.isBlank()) return@mapNotNull null
