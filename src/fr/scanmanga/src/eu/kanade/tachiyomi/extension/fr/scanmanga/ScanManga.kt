@@ -3,10 +3,6 @@ package eu.kanade.tachiyomi.extension.fr.scanmanga
 import android.content.ComponentName
 import android.content.Intent
 import android.util.Base64
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -18,36 +14,32 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.JSON_MEDIA_TYPE
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.inflate
 import keiyoushi.utils.ownTextOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
-import keiyoushi.utils.toJsonRequestBody
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.CookieJar
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
-import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.jsoup.nodes.Document
-import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 @Source
-abstract class ScanManga :
-    KeiSource(),
-    ConfigurableSource {
+abstract class ScanManga : KeiSource() {
     private val domain get() = baseUrl.toHttpUrl().topPrivateDomain()!!
     private val baseImageUrl get() = "https://static.$domain/img/manga"
     private val baseSearchUrl get() = "https://bqj.$domain/search/quick.json"
-
-    private val preferences by getPreferencesLazy()
 
     private val stripEmptyXRequestedWith = Interceptor { chain ->
         val request = chain.request()
@@ -61,29 +53,17 @@ abstract class ScanManga :
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addNetworkInterceptor(stripEmptyXRequestedWith)
 
-    // Reader-page fetches reuse the app client (cache, gzip, DoH, cookie jar, etc.) but strip
-    // the host's CloudflareInterceptor — that interceptor wastes ~30 s per call trying its own
-    // headless solve before throwing, blowing up our polling.
-    private val readerClient: OkHttpClient by lazy {
+    // The site's reader calls this API without cookies. A refusal fails right away instead of starting the host's
+    // CloudflareInterceptor, whose solve can't use a clearance this client doesn't send.
+    private val lelClient: OkHttpClient by lazy {
         client.newBuilder()
             .apply { interceptors().removeAll { it.javaClass.simpleName == "CloudflareInterceptor" } }
+            .cookieJar(CookieJar.NO_COOKIES)
             .build()
     }
 
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = add("upgrade-insecure-requests", "1")
-        .add("sec-fetch-site", "none")
-        .add("accept-language", "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7")
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = add("accept-language", "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7")
         .add("X-Requested-With", "")
-
-    // Browse/search pages get a Cloudflare 403 with a browser-like `accept`, but the reader
-    // (chapter page, lel API, images) answers 503 without it.
-    private val readerHeaders: Headers
-        get() = headersBuilder()
-            .add(
-                "accept",
-                "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-            )
-            .build()
 
     // Popular
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -210,35 +190,6 @@ abstract class ScanManga :
     }
 
     // Pages
-    private fun decodeHunter(obfuscatedJs: String): String {
-        val (encoded, mask, intervalStr, optionStr) = HUNTER_OBFUSCATION_REGEX.find(obfuscatedJs)?.destructured
-            ?: error("Failed to match obfuscation pattern")
-
-        val interval = intervalStr.toInt()
-        val option = optionStr.toInt()
-        val delimiter = mask[option]
-        val tokens = encoded.split(delimiter).filter { it.isNotEmpty() }
-        val reversedMap = mask.withIndex().associate { it.value to it.index }
-
-        return buildString {
-            for (token in tokens) {
-                // Reverse the hashIt() operation: convert masked characters back to digits
-                val digitString = token.map { c ->
-                    reversedMap[c]?.toString() ?: error("Invalid masked character: $c")
-                }.joinToString("")
-
-                // Convert from base `option` to decimal
-                val number = digitString.toIntOrNull(option)
-                    ?: error("Failed to parse token: $digitString as base $option")
-
-                // Reverse the shift done during encodeIt()
-                val originalCharCode = number - interval
-
-                append(originalCharCode.toChar())
-            }
-        }
-    }
-
     private val multipleSpaces = Regex("""\s+""")
 
     private fun dataAPI(data: String, idc: Int): UrlPayload {
@@ -255,186 +206,101 @@ abstract class ScanManga :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        // Must run before the first suspension point, otherwise the caller's frames are gone
-        val isReader = Exception().stackTrace.any { it.className.contains("reader") }
-        val context = applicationContext
         val chapterUrl = getChapterUrl(chapter)
+        val chapterId = chapterUrl.substringAfterLast('_').substringBefore('.').toInt()
+        val lelCall = captureLelCall(chapterUrl, chapterId)
+            ?: throw Exception("Challenge Cloudflare. Résolvez-le dans la WebView, fermez-la et réessayez.")
 
-        suspend fun fetch(): String? = try {
-            readerClient.get(chapterUrl, readerHeaders, Fetch.DOCUMENT, ensureSuccess = false).use { resp ->
-                resp.body.string().takeIf { CHAPTER_INFO_REGEX.containsMatchIn(it) }
-            }
-        } catch (_: Exception) {
-            null
-        }
-
-        var body = fetch()
-        if (body == null) {
-            // Cold-session path: CF refuses to issue cf_clearance to a session that's
-            // never touched the host. Warm up by loading the homepage in a hidden WV,
-            // then re-probe — usually clears it without ever needing WebViewActivity.
-            warmupWebViewSession()
-            body = fetch()
-        }
-        if (body == null) {
-            try {
-                val intent = Intent().apply {
-                    component = ComponentName(context, "eu.kanade.tachiyomi.ui.webview.WebViewActivity")
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    putExtra("url_key", chapterUrl)
-                    putExtra("source_key", id)
-                    putExtra("title_key", "Résolvez le challenge Cloudflare, fermez la WebView et réouvrez le chapitre.")
-                }
-                context.startActivity(intent)
-            } catch (_: Exception) {
-                throw Exception("Résolvez le challenge Cloudflare depuis la WebView puis réouvrez le chapitre.")
-            }
-
-            for (attempt in 1..CF_MAX_POLLS) {
-                delay(CF_POLL_INTERVAL)
-                body = fetch()
-                if (body != null) {
-                    val closeIntent = Intent().apply {
-                        val target = if (isReader) {
-                            "eu.kanade.tachiyomi.ui.reader.ReaderActivity"
-                        } else {
-                            "eu.kanade.tachiyomi.ui.main.MainActivity"
-                        }
-                        component = ComponentName(context, target)
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                    }
-                    context.startActivity(closeIntent)
-                    break
-                }
-            }
-            if (body == null) {
-                // WV flow exhausted itself; the warmup we did wasn't enough either.
-                // Clear the gate so the next attempt warms again from scratch.
-                sessionWarmedUp.set(false)
-                throw Exception("Résolvez le challenge Cloudflare, fermez la WebView et réouvrez le chapitre.")
-            }
-        }
-
-        return parsePageList(body.asJsoup(chapterUrl))
-    }
-
-    private val sessionWarmedUp = AtomicBoolean(false)
-
-    private suspend fun warmupWebViewSession() {
-        if (!sessionWarmedUp.compareAndSet(false, true)) return
-
-        try {
-            runWebView<Unit>(WARMUP_TIMEOUT) {
-                // The settle window lets CF's Turnstile beacon commit cf_clearance.
-                onPageFinished { poll(WARMUP_SETTLE) { resolve(Unit) } }
-                loadUrl("$baseUrl/")
-            }
-        } catch (_: Exception) {
-            sessionWarmedUp.set(false)
-        }
-    }
-
-    private suspend fun parsePageList(document: Document): List<Page> {
-        val packedScript = document.selectFirst(PACKED_SCRIPT_SELECTOR)!!.data()
-        val unpackedScript = decodeHunter(packedScript)
-
-        val (sml) = SML_PARAM_REGEX.find(unpackedScript)?.destructured
-            ?: error("Failed to extract sml parameter.")
-
-        val (sme) = SME_PARAM_REGEX.find(unpackedScript)?.destructured
-            ?: error("Failed to extract sme parameter.")
-
-        val (chapterId) = CHAPTER_INFO_REGEX.find(packedScript)?.destructured
-            ?: error("Failed to extract chapter ID.")
-
-        val documentUrl = document.baseUri().toHttpUrl()
-        val requestHeaders = readerHeaders.newBuilder()
-            .set("Origin", "${documentUrl.scheme}://${documentUrl.host}")
-            .set("Referer", documentUrl.toString())
-            .add("Token", LEL_TOKEN)
+        // Sent from the app: from the chapter page this call needs a CORS preflight, which fails in a WebView
+        val lelHeaders = headers.newBuilder()
+            .apply { lelCall.headers.forEach { (name, value) -> set(name, value) } }
             .build()
 
-        val lelResponse = client.newBuilder().cookieJar(CookieJar.NO_COOKIES).build()
-            .post(
-                "https://bqj.$domain/lel/$chapterId.json",
-                requestHeaders,
-                Fetch.XHR,
-                LelRequestDto(sme, sml, getFingerprint()).toJsonRequestBody(),
-            )
-            .use { dataAPI(it.body.string(), chapterId.toInt()) }
-
-        return lelResponse.generateImageUrls().map { Page(it.first, imageUrl = it.second) }
+        return lelClient.post(lelCall.url, lelHeaders, Fetch.XHR.from(chapterUrl), lelCall.body.toRequestBody(JSON_MEDIA_TYPE))
+            .use { dataAPI(it.body.string(), chapterId) }
+            .generateImageUrls()
+            .map { Page(it.first, imageUrl = it.second) }
     }
 
-    override fun getImageRequest(page: Page): Request = GET(page.imageUrl!!, readerHeaders)
+    private val webViewMutex = Mutex()
 
-    private suspend fun getFingerprint(): String {
-        var currentValue = preferences.getString("gpu_renderer", null)
+    // A download queue fails its chapters within moments, which would otherwise load and show the challenge for each
+    private var challengeRetryAt = TimeSource.Monotonic.markNow()
 
-        if (currentValue.isNullOrEmpty()) {
-            val returnValue = try {
-                runWebView<String>(5.seconds) {
-                    onPageFinished {
-                        evaluateJs(FINGERPRINT_SCRIPT) { resolve(it.removeSurrounding("\"")) }
-                    }
-                    loadUrl("about:blank")
-                }
-            } catch (_: Exception) {
-                "SUMK"
-            }
+    /** Null while the user has to solve a challenge. */
+    private suspend fun captureLelCall(chapterUrl: String, chapterId: Int): LelCall? = webViewMutex.withLock {
+        if (challengeRetryAt.hasNotPassedNow()) return@withLock null
 
-            val decodedValue = String(Base64.decode(returnValue, Base64.DEFAULT))
-
-            preferences.edit().putString("gpu_renderer", decodedValue).apply()
-            currentValue = decodedValue
+        val lelCall = readLelCall(chapterUrl, chapterId)
+        if (lelCall == null) {
+            challengeRetryAt = TimeSource.Monotonic.markNow() + 3.seconds
+            openChallengeWebView(chapterUrl)
         }
-
-        return Base64.encodeToString(
-            """{"gpu":"$currentValue","connection":"cellular"}""".toByteArray(),
-            Base64.NO_WRAP,
-        )
+        lelCall
     }
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = "gpu_renderer"
-            title = "Unmasked GPU renderer"
-            summary =
-                "Set and cache your GPU renderer string here to bypass fingerprint-based blocking. You can find your GPU renderer by visiting a site like https://www.browserleaks.com/webgl. Make sure to enter the exact string as shown on the site, without any extra spaces or characters and use Google Chrome on Android."
-            setDefaultValue(null)
-            dialogTitle = "GPU Renderer"
-            dialogMessage =
-                "Enter your GPU renderer string here. This is used to bypass blocking based on WebGL fingerprinting. You can find your GPU renderer by visiting a site like https://www.browserleaks.com/webgl using Google Chrome on Android. Make sure to enter the exact string as shown on the site, without any extra spaces or characters."
-        }.also { screen.addPreference(it) }
+    /**
+     * Cloudflare only accepts the reader's cf_clearance from a WebView, so the site's own reader runs in a hidden one
+     * and the lel call it makes is captured. Null as soon as a challenge shows up.
+     */
+    private suspend fun readLelCall(chapterUrl: String, chapterId: Int): LelCall? {
+        val bridge = List(16) { ('a'..'z').random() }.joinToString("")
+        val origins = setOf("https://*.$domain")
+
+        return runWebView<LelCall?>(45.seconds) {
+            userAgent = headers["User-Agent"]!!
+            blockImages = true
+            // The site answers app WebViews with a fake 404 on every request carrying their default value
+            if (!setOriginMatchedHeader("X-Requested-With", "", origins)) return@runWebView reject(Exception("Mettez à jour Android System WebView pour lire cette source."))
+            webMessageBridge(bridge, origins) { message ->
+                val lelCall = message.parseAs<LelCall>()
+                // Third-party scripts share this page and can call the hook too
+                if (lelCall.url.toHttpUrlOrNull()?.topPrivateDomain() == domain) resolve(lelCall)
+            }
+            injectAtDocumentStart(lelHook(bridge, chapterId), origins)
+            onReceivedError { request, error ->
+                if (request.isForMainFrame) reject(Exception(error.description.toString()))
+            }
+            poll {
+                // On mature titles the reader only starts once this warning is accepted
+                evaluateJs("""[...document.querySelectorAll(".oui-avertissement-btn")].find((button) => button.offsetParent)?.click()""")
+                // "challenge", or the page's HTTP status once it has loaded: a challenge page is a 403 too
+                evaluateJs("""window._cf_chl_opt ? "challenge" : document.readyState == "complete" && performance.getEntriesByType("navigation")[0].responseStatus""") {
+                    if (it == "\"challenge\"") resolve(null)
+                    if ((it.toIntOrNull() ?: 0) >= 400) reject(Exception("Le site a répondu HTTP $it pour ce chapitre."))
+                }
+            }
+            loadUrl(chapterUrl)
+        }
     }
+
+    private fun lelHook(bridge: String, chapterId: Int) = """
+        (function () {
+            const original = window.fetch;
+            window.fetch = function (input, init) {
+                if (!String(input.url || input).includes("/lel/$chapterId.json")) return original.call(this, input, init);
+                const request = new Request(input, init);
+                request.text().then((body) => window.$bridge.postMessage(JSON.stringify({ url: request.url, headers: Object.fromEntries(request.headers), body })));
+                return new Promise(() => {});
+            };
+        })();
+    """.trimIndent()
+
+    private fun openChallengeWebView(chapterUrl: String) {
+        val intent = Intent().apply {
+            component = ComponentName(applicationContext, "eu.kanade.tachiyomi.ui.webview.WebViewActivity")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            putExtra("url_key", chapterUrl)
+            putExtra("source_key", id)
+        }
+        // Apps without this activity (Suwayomi etc.) still get the error message
+        runCatching { applicationContext.startActivity(intent) }
+    }
+
+    // The reader downloads pages with fetch(); the image host blocks requests sent as images
+    override val imageFetch get() = Fetch.XHR
 
     companion object {
-        private const val PACKED_SCRIPT_SELECTOR = "script:containsData(eval\\(function \\()"
-        private val HUNTER_OBFUSCATION_REGEX =
-            Regex("""eval\s*\(\s*function\s*\(\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*,\s*\w\s*(?:,\s*[^)]+)?\)\s*\{\s*.*?\s*\}\s*\(\s*"([^"]+)"\s*,\s*\d+\s*,\s*"([^"]+)"\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*\d+\s*\)\s*\)""")
-        private val SML_PARAM_REGEX = Regex("""sml\s*=\s*'([^']+)'""")
-        private val SME_PARAM_REGEX = Regex("""sme\s*=\s*'([^']+)'""")
-        private val CHAPTER_INFO_REGEX = Regex("""const idc = (\d+)""")
         private val MANGA_PATH_REGEX = Regex("""/\d+(?:-\d+)?/[^/]+\.html""")
-        private const val LEL_TOKEN = "yf"
-        private val CF_POLL_INTERVAL = 5.seconds
-        private const val CF_MAX_POLLS = 15
-        private val WARMUP_SETTLE = 200.milliseconds
-        private val WARMUP_TIMEOUT = 8.seconds
-
-        private val FINGERPRINT_SCRIPT = """
-            (function() {
-                try {
-                    const canvas = document.createElement("canvas");
-                    const gl = canvas.getContext("webgl");
-                    const debugInfo = gl ? gl.getExtension("WEBGL_debug_renderer_info") : null;
-                    const gpu = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : "IC";
-
-                    return btoa(gpu);
-                } catch (e) {
-                    return btoa("IC");
-                }
-            })();
-        """.trimIndent()
     }
 }
