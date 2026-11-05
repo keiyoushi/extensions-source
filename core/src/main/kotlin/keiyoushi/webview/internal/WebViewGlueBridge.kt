@@ -91,6 +91,8 @@ internal object WebViewGlueBridge {
             return false
         }
         // An invalid name, value or origin rule throws, like the add* functions below
+        // Replaces this header's earlier entry instead of adding another
+        profile.clearOriginMatchedHeader(headerName, headerValue)
         profile.addOriginMatchedHeader(headerName, headerValue, originRules)
         return true
     }

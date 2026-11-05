@@ -162,8 +162,8 @@ class WebViewScope<T> internal constructor(
     /**
      * Sends [name] with [value] on every request to an origin matching [allowedOriginRules], such as
      * `https://example.com`, in place of any value WebView sets itself. WebView can replace a header this way, not
-     * remove it. Calling this again with the same [value] adds to the rules; with another value for a matching origin,
-     * WebView sends both, comma-separated.
+     * remove it. Calling this again with the same [value] replaces its rules; with another value for a matching
+     * origin, WebView sends both, comma-separated.
      *
      * The header is set on the WebView's profile, so it stays for every WebView of the app until the app is closed.
      * Requires **Chromium 142+** (`CUSTOM_REQUEST_HEADERS`). Returns false if unsupported.
