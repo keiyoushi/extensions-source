@@ -138,17 +138,34 @@ class ReaderInput(
     val entry: String,
     val reader: JsonElement,
     val chapterId: Int,
-    val seriesSlug: String,
-    var token: String? = null,
 )
 
 @Serializable
 class ReaderResult(
-    val pages: List<PageDto>? = null,
+    val reader: OpenedReader? = null,
     val error: String? = null,
-    val sitekey: String? = null,
+)
+
+@Serializable
+class OpenedReader(
+    val ep: String,
+    val p: List<String>,
+    val v: Int,
+    val k: String,
+    val q: String,
+)
+
+@Serializable
+class ManifestChallengeDto(
+    val sitekey: String,
     val action: String? = null,
     val cdata: String? = null,
+)
+
+@Serializable
+class ManifestDto(
+    val c: Int,
+    val d: String,
 )
 
 @Serializable
