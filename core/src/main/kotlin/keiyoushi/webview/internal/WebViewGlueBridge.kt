@@ -125,7 +125,7 @@ internal object WebViewGlueBridge {
 
     @Synchronized
     fun setOriginMatchedHeader(webView: WebView, headerName: String, headerValue: String, originRules: Set<String>): Boolean {
-        if (!isFeatureSupported("MULTI_PROFILE") || !isFeatureSupported("EXTRA_HEADER_FOR_ORIGINS")) return false
+        if (!isFeatureSupported("MULTI_PROFILE") || !isFeatureSupported("CUSTOM_REQUEST_HEADERS")) return false
         val profile = try {
             Proxy.newProxyInstance(
                 WebViewGlueBridge::class.java.classLoader,
@@ -137,7 +137,9 @@ internal object WebViewGlueBridge {
             return false
         }
         // An invalid name, value or origin rule throws, like the add* functions below
-        profile.setOriginMatchedHeader(headerName, headerValue, originRules)
+        // Replaces this header's earlier entry instead of adding another
+        profile.clearOriginMatchedHeader(headerName, headerValue)
+        profile.addOriginMatchedHeader(headerName, headerValue, originRules)
         return true
     }
 

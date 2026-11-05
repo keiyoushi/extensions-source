@@ -3,5 +3,6 @@
 package org.chromium.support_lib_boundary
 
 internal interface ProfileBoundaryInterface {
-    fun setOriginMatchedHeader(headerName: String, headerValue: String, originRules: Set<String>)
+    fun addOriginMatchedHeader(headerName: String, headerValue: String, originRules: Set<String>)
+    fun clearOriginMatchedHeader(headerName: String, headerValue: String)
 }

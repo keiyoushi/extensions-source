@@ -178,7 +178,7 @@ class WebViewScope<T> internal constructor(
      * remove it.
      *
      * The header is set on the WebView's profile, so it stays for every WebView of the app until the app is closed.
-     * Requires **Chromium 139+** (`EXTRA_HEADER_FOR_ORIGINS`). Returns false if unsupported.
+     * Requires **Chromium 142+** (`CUSTOM_REQUEST_HEADERS`). Returns false if unsupported.
      */
     fun setOriginMatchedHeader(name: String, value: String, allowedOriginRules: Set<String>): Boolean = WebViewGlueBridge.setOriginMatchedHeader(webView, name, value, allowedOriginRules)
 
