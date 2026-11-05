@@ -9,9 +9,17 @@ import java.util.concurrent.Executor;
 
 public abstract class UrlRequest {
   public abstract static class Builder {
+    public static final int REQUEST_PRIORITY_IDLE = 0;
+    public static final int REQUEST_PRIORITY_LOWEST = 1;
+    public static final int REQUEST_PRIORITY_LOW = 2;
+    public static final int REQUEST_PRIORITY_MEDIUM = 3;
+    public static final int REQUEST_PRIORITY_HIGHEST = 4;
+
     public abstract Builder setHttpMethod(String method);
 
     public abstract Builder addHeader(String header, String value);
+
+    public abstract Builder setPriority(int priority);
 
     public abstract Builder setUploadDataProvider(
         UploadDataProvider uploadDataProvider, Executor executor);

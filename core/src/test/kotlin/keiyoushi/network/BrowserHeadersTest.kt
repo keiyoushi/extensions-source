@@ -26,6 +26,14 @@ class BrowserHeadersTest {
     private val firefoxUa = "Mozilla/5.0 (Android 14; Mobile; rv:158.0) Gecko/158.0 Firefox/158.0"
 
     @Test
+    fun transportTagKeepsHttp2Headers() {
+        val page = Request.Builder().url("https://a.test/").header("User-Agent", chromeUa).fetch(Fetch.DOCUMENT)
+        assertNull(intercept(page.build(), wireOrder = true).header("Priority"))
+        val tagged = page.tag(TransportProtocol::class.java, TransportProtocol(Protocol.HTTP_2)).build()
+        assertEquals("u=0, i", intercept(tagged, wireOrder = true).header("Priority"))
+    }
+
+    @Test
     fun brandsMatchChrome() {
         assertEquals("\"Google Chrome\";v=\"155\", \"Chromium\";v=\"155\", \"Not(A:Brand\";v=\"24\"", chromeBrands(155))
         assertEquals("\"Not_A Brand\";v=\"8\", \"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\"", chromeBrands(120))

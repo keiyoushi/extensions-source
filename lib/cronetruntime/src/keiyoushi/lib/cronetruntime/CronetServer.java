@@ -62,6 +62,7 @@ final class CronetServer implements Interceptor {
               "host",
               "keep-alive",
               "proxy-connection",
+              "priority",
               "transfer-encoding",
               "te",
               "upgrade"));
@@ -141,6 +142,8 @@ final class CronetServer implements Interceptor {
           engine
               .newUrlRequestBuilder(request.url().toString(), callback, EXECUTOR)
               .setHttpMethod(request.method());
+      String priority = request.header("Priority");
+      if (priority != null) builder.setPriority(priority(priority));
       Headers headers = request.headers();
       for (int i = 0; i < headers.size(); i++) {
         if (!CRONET_HEADERS.contains(headers.name(i).toLowerCase(Locale.ROOT))) {
@@ -290,6 +293,36 @@ final class CronetServer implements Interceptor {
         .handshake(request.isHttps() ? HANDSHAKE : null)
         .sentRequestAtMillis(sentAt)
         .receivedResponseAtMillis(receivedAt);
+  }
+
+  /**
+   * Cronet's request priority with the urgency of a Priority header (RFC 9218); Cronet sets the
+   * incremental flag itself
+   */
+  private static int priority(String header) {
+    int urgency = 3;
+    for (String item : header.split(",")) {
+      String trimmed = item.trim();
+      if (trimmed.startsWith("u=")) {
+        try {
+          urgency = Integer.parseInt(trimmed.substring(2));
+        } catch (NumberFormatException ignored) {
+          // Not a number: the default urgency
+        }
+      }
+    }
+    switch (urgency) {
+      case 0:
+        return UrlRequest.Builder.REQUEST_PRIORITY_HIGHEST;
+      case 1:
+        return UrlRequest.Builder.REQUEST_PRIORITY_MEDIUM;
+      case 2:
+        return UrlRequest.Builder.REQUEST_PRIORITY_LOW;
+      case 3:
+        return UrlRequest.Builder.REQUEST_PRIORITY_LOWEST;
+      default:
+        return UrlRequest.Builder.REQUEST_PRIORITY_IDLE;
+    }
   }
 
   /** Every encoding in the list, stacked ones included, is one Cronet decodes */

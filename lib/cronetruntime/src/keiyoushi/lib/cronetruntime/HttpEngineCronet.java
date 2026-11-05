@@ -67,6 +67,13 @@ final class HttpEngineCronet extends CronetEngine {
         return this;
       }
 
+      // HttpEngine's priorities have the same values
+      @Override
+      public UrlRequest.Builder setPriority(int priority) {
+        builder.setPriority(priority);
+        return this;
+      }
+
       @Override
       public UrlRequest.Builder setUploadDataProvider(
           UploadDataProvider provider, Executor executor) {

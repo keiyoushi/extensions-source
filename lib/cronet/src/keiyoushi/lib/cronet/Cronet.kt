@@ -3,10 +3,12 @@ package keiyoushi.lib.cronet
 import android.content.Context
 import android.util.Log
 import eu.kanade.tachiyomi.network.NetworkHelper
+import keiyoushi.network.TransportProtocol
 import keiyoushi.utils.applicationContext
 import okhttp3.Authenticator
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.internal.connection.RealCall
 import uy.kohesive.injekt.injectLazy
@@ -67,7 +69,9 @@ private object CronetInterceptor : Interceptor {
             logOnce("OkHttp's interceptors not found, staying on OkHttp", it)
             return chain.proceed(chain.request())
         }
-        return CronetChain(chain, interceptors, 0, chain.request()).proceed(chain.request())
+        // Browser headers keep their HTTP/2 form, Priority included, for Cronet to send
+        val request = chain.request().newBuilder().tag(TransportProtocol::class.java, TransportProtocol(Protocol.HTTP_2)).build()
+        return CronetChain(chain, interceptors, 0, request).proceed(request)
     }
 
     /** A setting Cronet can't take; DNS is Cronet's own, DoH included */
