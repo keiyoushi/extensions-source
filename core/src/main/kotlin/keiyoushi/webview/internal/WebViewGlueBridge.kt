@@ -170,10 +170,11 @@ internal object WebViewGlueBridge {
         webView: WebView,
         jsObjectName: String,
         allowedOriginRules: Set<String>,
+        worldName: String = "",
         onError: (Throwable) -> Unit = {},
-        listener: (message: String, replyProxy: WebMessageReplyProxy) -> Unit,
+        listener: (message: String, replyProxy: ReplyProxy) -> Unit,
     ): Boolean {
-        if (!isFeatureSupported("WEB_MESSAGE_LISTENER")) return false
+        if (!isFeatureSupported(if (worldName.isEmpty()) "WEB_MESSAGE_LISTENER" else "JS_INJECTION_IN_FRAME_AND_WORLD")) return false
         val provider = getProvider(webView) ?: return false
         val handler = InvocationHandler { proxy, method, args ->
             when (method.name) {
@@ -202,7 +203,13 @@ internal object WebViewGlueBridge {
                 else -> null
             }
         }
-        provider.addWebMessageListener(jsObjectName, allowedOriginRules.toTypedArray(), handler)
+        if (worldName.isEmpty()) {
+            provider.addWebMessageListener(jsObjectName, allowedOriginRules.toTypedArray(), handler)
+        } else {
+            // Registers the world; addWebMessageListener throws for unregistered world names.
+            provider.getJavaScriptWorld(worldName)
+            provider.addWebMessageListener(jsObjectName, allowedOriginRules.toTypedArray(), handler, worldName)
+        }
         return true
     }
 
@@ -233,56 +240,60 @@ internal object WebViewGlueBridge {
         sourceOrigin: String,
         isMainFrame: Boolean,
         onError: (Throwable) -> Unit,
-    ): WebMessageReplyProxy {
+    ): ReplyProxy {
         val proxy = Proxy.newProxyInstance(
             WebViewGlueBridge::class.java.classLoader,
             arrayOf(JsReplyProxyBoundaryInterface::class.java),
             replyHandler,
         ) as JsReplyProxyBoundaryInterface
+        return ReplyProxy(proxy, sourceOrigin, isMainFrame, onError)
+    }
 
-        return object : WebMessageReplyProxy {
-            override val sourceOrigin: String? = sourceOrigin
-            override val isMainFrame: Boolean? = isMainFrame
+    /** A [WebMessageReplyProxy] that also tells why a script it ran failed. */
+    internal class ReplyProxy(
+        private val proxy: JsReplyProxyBoundaryInterface,
+        override val sourceOrigin: String?,
+        override val isMainFrame: Boolean?,
+        private val onError: (Throwable) -> Unit,
+    ) : WebMessageReplyProxy {
+        override fun postMessage(message: String) {
+            runCatching { proxy.postMessage(message) }
+        }
 
-            override fun postMessage(message: String) {
-                runCatching { proxy.postMessage(message) }
+        override fun evaluateJs(script: String, callback: ((String?) -> Unit)?) {
+            execute(script, { callback?.invoke(it) }, { _, _ -> callback?.invoke(null) })
+        }
+
+        /**
+         * Runs [script] in the sender's frame and world. [onFailure] gets whether the frame's document is gone
+         * (`FRAME_DESTROYED`) or the script failed, with the WebView's message.
+         */
+        fun execute(script: String, onSuccess: (String?) -> Unit, onFailure: (frameGone: Boolean, message: String?) -> Unit) {
+            if (!isFeatureSupported("JS_INJECTION_IN_FRAME_AND_WORLD")) {
+                onError(UnsupportedOperationException("WebMessageReplyProxy.evaluateJs requires JS_INJECTION_IN_FRAME_AND_WORLD (Chromium 146+)"))
+                return
             }
-
-            override fun evaluateJs(script: String, callback: ((String?) -> Unit)?) {
-                if (!isFeatureSupported("JS_INJECTION_IN_FRAME_AND_WORLD")) {
-                    onError(UnsupportedOperationException("WebMessageReplyProxy.evaluateJs requires JS_INJECTION_IN_FRAME_AND_WORLD (Chromium 146+)"))
-                    return
-                }
-                val callbackHandler = InvocationHandler { _, method, args ->
-                    when (method.name) {
-                        "onSuccess" -> {
-                            val result = args?.getOrNull(0) as? String
-                            try {
-                                callback?.invoke(result)
-                            } catch (t: Throwable) {
-                                onError(t)
-                            }
-                            null
-                        }
-                        "onFailure" -> {
-                            try {
-                                callback?.invoke(null)
-                            } catch (t: Throwable) {
-                                onError(t)
-                            }
-                            null
-                        }
-                        else -> null
-                    }
-                }
+            val callbackHandler = InvocationHandler { _, method, args ->
                 try {
-                    proxy.executeJavaScript(script, callbackHandler)
+                    when (method.name) {
+                        "onSuccess" -> onSuccess(args?.getOrNull(0) as? String)
+                        "onFailure" -> onFailure(args?.getOrNull(0) == FRAME_DESTROYED, args?.getOrNull(1) as? String)
+                    }
                 } catch (t: Throwable) {
                     onError(t)
                 }
+                null
+            }
+            try {
+                proxy.executeJavaScript(script, callbackHandler)
+            } catch (t: Throwable) {
+                onError(t)
             }
         }
     }
+
+    // ExecuteJavaScriptCallbackBoundaryInterface.ExecuteJavaScriptExceptionTypeBoundaryInterface
+    private const val FRAME_DESTROYED = 1
 
     /** Spoofs the Sec-CH-UA client hints.  */
     @Synchronized

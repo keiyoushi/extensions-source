@@ -118,6 +118,11 @@ class WebViewScope<T> internal constructor(
     internal val receivedErrorHooks = CopyOnWriteArrayList<(WebResourceRequest, WebResourceError) -> Unit>()
     private val bridgeNames = CopyOnWriteArraySet<String>()
 
+    private var hasContentScripts = false
+
+    // Run once the run is over, after the WebView is marked destroyed
+    internal val endHooks = CopyOnWriteArrayList<() -> Unit>()
+
     @Volatile
     internal var interceptHook: ((WebResourceRequest) -> WebResourceResponse?)? = null
 
@@ -487,6 +492,19 @@ class WebViewScope<T> internal constructor(
         return ScriptHandle { }
     }
 
+    /**
+     * Content scripts for the run's pages: scripts that share the page's DOM but not its JavaScript, so the page can't
+     * see or tamper with them; see [ContentScripts]. Call before [loadUrl]/[loadData]; scripts only reach later pages.
+     * [allowedOriginRules] entries need a scheme (e.g. `https://example.com`). Requires **Chromium 146+**: throws
+     * [UnsupportedOperationException] on older engines, failing the run. Once per run.
+     */
+    fun contentScripts(allowedOriginRules: Set<String> = setOf("*")): ContentScripts {
+        check(!loaded.get()) { "contentScripts must be called before loadUrl/loadData" }
+        check(!hasContentScripts) { "contentScripts has already been called on this WebView" }
+        hasContentScripts = true
+        return ContentScripts(this, allowedOriginRules)
+    }
+
     /** Loads [url]. Can only be called once per scope. */
     fun loadUrl(url: String, headers: Map<String, String> = emptyMap()) {
         markLoaded()
@@ -569,7 +587,7 @@ class WebViewScope<T> internal constructor(
         check(loaded.compareAndSet(false, true)) { "load already called on this WebViewScope" }
     }
 
-    private fun runOnMain(block: () -> Unit) {
+    internal fun runOnMain(block: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             block()
         } else {
@@ -720,6 +738,7 @@ suspend fun <T> runWebView(
         }
     } finally {
         scope.destroyed = true
+        scope.endHooks.forEach { runCatching { it() } }
         runCatching { (webView.parent as? ViewGroup)?.removeView(webView) }
         webView.stopLoading()
         webView.destroy()
