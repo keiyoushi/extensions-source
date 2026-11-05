@@ -136,10 +136,12 @@ internal object WebViewGlueBridge {
         webView: WebView,
         jsObjectName: String,
         allowedOriginRules: Set<String>,
+        worldName: String = "",
         onError: (Throwable) -> Unit = {},
         listener: (message: String, replyProxy: ReplyProxy) -> Unit,
     ): Boolean {
         if (!isFeatureSupported("WEB_MESSAGE_LISTENER") || !isFeatureSupported("WEB_MESSAGE_ARRAY_BUFFER")) return false
+        if (worldName.isNotEmpty() && !isFeatureSupported("JS_INJECTION_IN_FRAME_AND_WORLD")) return false
         val provider = getProvider(webView) ?: return false
         val handler = InvocationHandler { proxy, method, args ->
             when (method.name) {
@@ -168,7 +170,13 @@ internal object WebViewGlueBridge {
                 else -> null
             }
         }
-        provider.addWebMessageListener(jsObjectName, allowedOriginRules.toTypedArray(), handler)
+        if (worldName.isEmpty()) {
+            provider.addWebMessageListener(jsObjectName, allowedOriginRules.toTypedArray(), handler)
+        } else {
+            // Registers the world; addWebMessageListener throws for unregistered world names.
+            provider.getJavaScriptWorld(worldName)
+            provider.addWebMessageListener(jsObjectName, allowedOriginRules.toTypedArray(), handler, worldName)
+        }
         return true
     }
 

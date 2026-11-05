@@ -370,10 +370,16 @@ class WebViewScope<T> internal constructor(
      * [handler] runs on the main thread (on a background thread on the fallback path).
      * [WebMessageReplyProxy.evaluateJs] additionally requires **Chromium 146+**
      * (`JS_INJECTION_IN_FRAME_AND_WORLD`) and [reject]s otherwise.
+     *
+     * With a [worldName], the object exists only in that isolated world, not in the page's JavaScript, so the page can't
+     * see it or post through it. Scripts reach it by being injected into the same world with [addJavaScriptOnEvent]; they
+     * share the page's DOM but none of its JavaScript. Requires **Chromium 146+** (`JS_INJECTION_IN_FRAME_AND_WORLD`),
+     * with **no fallback**: it [reject]s if unsupported, as the fallback would expose the object to the page.
      */
     fun webMessageBridge(
         name: String,
         allowedOriginRules: Set<String> = setOf("*"),
+        worldName: String = "",
         handler: (message: String, replyProxy: WebMessageReplyProxy) -> Unit,
     ) {
         check(bridgeNames.add(name)) { "Bridge '$name' has already been registered on this WebView" }
@@ -381,6 +387,7 @@ class WebViewScope<T> internal constructor(
             webView = webView,
             jsObjectName = name,
             allowedOriginRules = allowedOriginRules,
+            worldName = worldName,
             onError = { reject(it) },
         ) { message, replyProxy ->
             if (destroyed) return@addWebMessageListener
@@ -391,6 +398,10 @@ class WebViewScope<T> internal constructor(
             }
         }
         if (added) return
+        if (worldName.isNotEmpty()) {
+            reject(UnsupportedOperationException("webMessageBridge in a world requires JS_INJECTION_IN_FRAME_AND_WORLD (Chromium 146+)"))
+            return
+        }
 
         Log.d("KeiyoushiWebView", "Native web messaging not supported; falling back to addJavascriptInterface for '$name'")
 
@@ -429,8 +440,9 @@ class WebViewScope<T> internal constructor(
     fun webMessageBridge(
         name: String,
         allowedOriginRules: Set<String> = setOf("*"),
+        worldName: String = "",
         handler: (message: String) -> Unit,
-    ) = webMessageBridge(name, allowedOriginRules) { message, _ -> handler(message) }
+    ) = webMessageBridge(name, allowedOriginRules, worldName) { message, _ -> handler(message) }
 
     /**
      * Injects [script] into matching origins before any document or inline script executes.
