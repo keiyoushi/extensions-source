@@ -8,6 +8,7 @@ import android.webkit.WebView
 import keiyoushi.utils.ScriptHandle
 import keiyoushi.utils.WebMessageReplyProxy
 import org.chromium.support_lib_boundary.JsReplyProxyBoundaryInterface
+import org.chromium.support_lib_boundary.ProfileBoundaryInterface
 import org.chromium.support_lib_boundary.ScriptHandlerBoundaryInterface
 import org.chromium.support_lib_boundary.WebMessageBoundaryInterface
 import org.chromium.support_lib_boundary.WebMessagePayloadBoundaryInterface
@@ -120,6 +121,24 @@ internal object WebViewGlueBridge {
             Log.e("WebViewGlueBridge", "setIncludeCookiesOnIntercept", e)
             false
         }
+    }
+
+    @Synchronized
+    fun setOriginMatchedHeader(webView: WebView, headerName: String, headerValue: String, originRules: Set<String>): Boolean {
+        if (!isFeatureSupported("MULTI_PROFILE") || !isFeatureSupported("EXTRA_HEADER_FOR_ORIGINS")) return false
+        val profile = try {
+            Proxy.newProxyInstance(
+                WebViewGlueBridge::class.java.classLoader,
+                arrayOf(ProfileBoundaryInterface::class.java),
+                getProvider(webView)!!.getProfile(),
+            ) as ProfileBoundaryInterface
+        } catch (e: Throwable) {
+            Log.e("WebViewGlueBridge", "setOriginMatchedHeader", e)
+            return false
+        }
+        // An invalid name, value or origin rule throws, like the add* functions below
+        profile.setOriginMatchedHeader(headerName, headerValue, originRules)
+        return true
     }
 
     // The add* functions below return null/false only when the feature is unavailable, so callers

@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Temple Scan"
-    versionCode = 66
+    versionCode = 67
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
@@ -19,4 +19,8 @@ keiyoushi {
     deeplink {
         path("/comic/..*")
     }
+}
+
+dependencies {
+    implementation(project(":lib:cronet"))
 }
