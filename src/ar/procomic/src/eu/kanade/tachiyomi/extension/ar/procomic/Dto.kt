@@ -164,7 +164,8 @@ class ChapterRefDto(
 // One page slot of the reader, see slot.js.
 @Serializable
 class SlotDto(
-    val error: Boolean = false,
+    // The failed page, by its performance.timeOrigin.
+    val error: Double? = null,
     val count: Int? = null,
     val origin: String? = null,
     val url: String? = null,
