@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Nuvia Toon"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
     source {
         lang = "en"
-        baseUrl = "https://nuviatoon.net"
+        baseUrl = "https://nuviatoon.org"
     }
 
     deeplink {
