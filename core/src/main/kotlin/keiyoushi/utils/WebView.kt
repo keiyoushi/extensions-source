@@ -120,9 +120,6 @@ class WebViewScope<T> internal constructor(
 
     private var hasContentScripts = false
 
-    // Run once the run is over, after the WebView is marked destroyed
-    internal val endHooks = CopyOnWriteArrayList<() -> Unit>()
-
     @Volatile
     internal var interceptHook: ((WebResourceRequest) -> WebResourceResponse?)? = null
 
@@ -748,7 +745,6 @@ suspend fun <T> runWebView(
         }
     } finally {
         scope.destroyed = true
-        scope.endHooks.forEach { runCatching { it() } }
         runCatching { (webView.parent as? ViewGroup)?.removeView(webView) }
         webView.stopLoading()
         webView.destroy()

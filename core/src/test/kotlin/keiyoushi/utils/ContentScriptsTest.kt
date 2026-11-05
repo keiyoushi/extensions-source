@@ -30,4 +30,25 @@ class ContentScriptsTest {
         assertNull(decodeContentScriptMessage("""{"d":1}"""))
         assertNull(decodeContentScriptMessage("""{"c":{"x":1}}"""))
     }
+
+    @Test
+    fun finishedScriptsGiveTheirValue() {
+        val outcome = decodeEvaluation("""{"ok":true,"value":{"count":3}}""")!!
+        assertEquals("""{"count":3}""", outcome.value)
+        assertNull(outcome.error)
+        assertEquals("null", decodeEvaluation("""{"ok":true}""")!!.value)
+    }
+
+    @Test
+    fun thrownErrorsAreReported() {
+        assertEquals("TypeError: x is undefined", decodeEvaluation("""{"error":"TypeError: x is undefined"}""")!!.error)
+    }
+
+    @Test
+    fun noAnswerMeansThePageWentAway() {
+        assertNull(decodeEvaluation(null))
+        assertNull(decodeEvaluation("null"))
+        assertNull(decodeEvaluation("{}"))
+        assertNull(decodeEvaluation(""))
+    }
 }

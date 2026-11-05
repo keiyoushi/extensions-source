@@ -280,14 +280,11 @@ internal object WebViewGlueBridge {
         }
 
         override fun evaluateJs(script: String, callback: ((String?) -> Unit)?) {
-            execute(script, { callback?.invoke(it) }, { _, _ -> callback?.invoke(null) })
+            execute(script, { callback?.invoke(it) }, { callback?.invoke(null) })
         }
 
-        /**
-         * Runs [script] in the sender's frame and world. [onFailure] gets whether the frame's document is gone
-         * (`FRAME_DESTROYED`) or the script failed, with the WebView's message.
-         */
-        fun execute(script: String, onSuccess: (String?) -> Unit, onFailure: (frameGone: Boolean, message: String?) -> Unit) {
+        /** Runs [script] in the sender's frame and world; [onFailure] when the frame's document is gone. */
+        fun execute(script: String, onSuccess: (String?) -> Unit, onFailure: () -> Unit) {
             if (!isFeatureSupported("JS_INJECTION_IN_FRAME_AND_WORLD")) {
                 onError(UnsupportedOperationException("WebMessageReplyProxy.evaluateJs requires JS_INJECTION_IN_FRAME_AND_WORLD (Chromium 146+)"))
                 return
@@ -296,7 +293,7 @@ internal object WebViewGlueBridge {
                 try {
                     when (method.name) {
                         "onSuccess" -> onSuccess(args?.getOrNull(0) as? String)
-                        "onFailure" -> onFailure(args?.getOrNull(0) == FRAME_DESTROYED, args?.getOrNull(1) as? String)
+                        "onFailure" -> onFailure()
                     }
                 } catch (t: Throwable) {
                     onError(t)
@@ -310,9 +307,6 @@ internal object WebViewGlueBridge {
             }
         }
     }
-
-    // ExecuteJavaScriptCallbackBoundaryInterface.ExecuteJavaScriptExceptionTypeBoundaryInterface
-    private const val FRAME_DESTROYED = 1
 
     /** Spoofs the Sec-CH-UA client hints.  */
     @Synchronized

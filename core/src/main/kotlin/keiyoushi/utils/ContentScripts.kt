@@ -1,38 +1,31 @@
 package keiyoushi.utils
 
 import keiyoushi.webview.internal.WebViewGlueBridge
-import kotlinx.coroutines.CancellableContinuation
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CopyOnWriteArrayList
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 /**
  * Scripts that run on a [runWebView] run's pages the way a browser extension's content scripts do: they share the
  * page's DOM, but have JavaScript objects of their own. The page's scripts can't see them, call them or wrap the
  * functions they use (`querySelector`, `fetch`, `performance`, ...). Create them with [WebViewScope.contentScripts].
  *
- * Main frame only. Inside, scripts have a `keiyoushi` object: `keiyoushi.send(channel, data)` reaches the
- * [onMessage] handlers for that channel, and `keiyoushi.on(channel, (data) => ...)` receives [send]. Data is anything
+ * In the main frame, scripts have a `keiyoushi` object: `keiyoushi.send(channel, data)` reaches the [onMessage]
+ * handlers for that channel, and `keiyoushi.on(channel, (data) => ...)` receives [send]. Data is anything
  * `JSON.stringify` takes; Kotlin gets and sends it as JSON text.
+ * ```
+ * runWebView<String> {
+ *     val scripts = contentScripts(setOf("https://example.com"))
+ *     onPageFinished { scripts.evaluate("document.title") { resolve(it.parseAs<String>()) } }
+ *     loadUrl(url)
+ * }
+ * ```
  *
- * [evaluate] suspends, so call it from a coroutine of the source's while the run lives, with the object handed out of
- * the configure block:
- * ```
- * val scripts = CompletableDeferred<ContentScripts>()
- * launch { runWebView<Unit> { scripts.complete(contentScripts(setOf("https://example.com"))); loadUrl(url) } }
- * val title = scripts.await().evaluate("document.title")
- * ```
+ * [add] and [onMessage] belong in the configure block; [evaluate] and [send] can be called from any thread. Their
+ * callbacks and the [onMessage] handlers run on the main thread, and what they throw fails the run.
  *
  * Requires **Chromium 146+** (`JS_INJECTION_IN_FRAME_AND_WORLD`), with no fallback: on older engines creating them
  * throws [UnsupportedOperationException], failing the run. Check [isSupported] to choose another way first.
@@ -41,13 +34,18 @@ class ContentScripts internal constructor(
     private val scope: WebViewScope<*>,
     private val allowedOriginRules: Set<String>,
 ) {
-    private val handlers = ConcurrentHashMap<String, CopyOnWriteArrayList<(String) -> Unit>>()
+    // Main thread only, like everything else below
+    private val handlers = HashMap<String, MutableList<(String) -> Unit>>()
 
-    // Main thread only: the current page's scripts once they're ready, and the evaluate calls waiting on a page or a script
+    // The main frame's scripts, once they've said they're ready
     private var page: WebViewGlueBridge.ReplyProxy? = null
-    private val pageWaiters = mutableListOf<CancellableContinuation<WebViewGlueBridge.ReplyProxy>>()
-    private val running = mutableSetOf<CancellableContinuation<String?>>()
-    private var ended = false
+
+    // Evaluate calls not answered yet; each runs again on the next page if its page goes away first
+    private val pending = mutableListOf<Evaluation>()
+
+    private class Evaluation(val script: String, val callback: (String) -> Unit) {
+        var page: WebViewGlueBridge.ReplyProxy? = null
+    }
 
     init {
         val added = WebViewGlueBridge.addWebMessageListener(
@@ -65,17 +63,21 @@ class ContentScripts internal constructor(
                 scope.reject(t)
             }
         }
-        if (!added || add(PRELUDE) == null) throw UnsupportedOperationException("Content scripts need Android System WebView 146 or newer")
-        scope.endHooks += ::end
+        if (!added) throw UnsupportedOperationException(UNSUPPORTED)
+        add(PRELUDE)
     }
 
-    /** Runs [script] on every later page at [event], after the scripts added before it. Null if unsupported. */
-    fun add(script: String, event: InjectionEvent = InjectionEvent.DOCUMENT_START): ScriptHandle? = WebViewGlueBridge.addJavaScriptOnEvent(scope.webView, script, event.value, WORLD, allowedOriginRules)
+    /**
+     * Runs [script] on every later page at [event], after the scripts added before it. It runs in every frame matching
+     * the origin rules; `keiyoushi` exists only in the main frame.
+     */
+    fun add(script: String, event: InjectionEvent = InjectionEvent.DOCUMENT_START): ScriptHandle = WebViewGlueBridge.addJavaScriptOnEvent(scope.webView, script, event.value, WORLD, allowedOriginRules)
+        ?: throw UnsupportedOperationException(UNSUPPORTED)
 
-    /** Runs [handler] on the main thread with the data of every `keiyoushi.send(channel, data)`. */
+    /** Runs [handler] with the data of every `keiyoushi.send(channel, data)`. */
     fun onMessage(channel: String, handler: (data: String) -> Unit) {
         require(channel != READY) { "channel must not be empty" }
-        handlers.getOrPut(channel) { CopyOnWriteArrayList() } += handler
+        handlers.getOrPut(channel) { mutableListOf() } += handler
     }
 
     /**
@@ -89,55 +91,48 @@ class ContentScripts internal constructor(
     }
 
     /**
-     * Runs [script] in the current page's content scripts and returns its result as JSON text (`null` for no value).
-     * Waits until a page's scripts are ready, and runs [script] again on the next page if this one goes away first, so
-     * a script that navigates belongs in [send]. Throws a [ContentScriptException] when [script] throws, and an
-     * [IllegalStateException] once the run has ended.
+     * Runs the expression [script] in the main frame's content scripts and passes its value to [callback] as JSON text
+     * (`null` for no value). Waits until a page's scripts are ready, and runs [script] again on the next page if this
+     * one goes away first, so a script that navigates belongs in [send]. A promise isn't awaited; have the script
+     * `keiyoushi.send` its result instead. If [script] throws, the run fails with a [ContentScriptException].
      */
-    suspend fun evaluate(script: String): String = withContext(Dispatchers.Main) {
-        while (true) {
-            check(!ended) { RUN_ENDED }
-            val proxy = page ?: suspendCancellableCoroutine { continuation ->
-                pageWaiters += continuation
-                continuation.invokeOnCancellation { scope.runOnMain { pageWaiters -= continuation } }
-            }
-            val result = suspendCancellableCoroutine { continuation ->
-                running += continuation
-                continuation.invokeOnCancellation { scope.runOnMain { running -= continuation } }
-                proxy.execute(
-                    script,
-                    onSuccess = {
-                        running -= continuation
-                        continuation.resume(it ?: "null")
-                    },
-                    onFailure = { pageGone, message ->
-                        running -= continuation
-                        // Null: the page went away before answering
-                        if (pageGone) continuation.resume(null) else continuation.resumeWithException(ContentScriptException(message))
-                    },
-                )
-            }
-            if (result != null) return@withContext result
-            if (page === proxy) page = null
+    fun evaluate(script: String, callback: (String) -> Unit) {
+        val evaluation = Evaluation(WRAPPER.replace(SCRIPT, script), callback)
+        scope.runOnMain {
+            pending += evaluation
+            page?.let { run(evaluation, it) }
         }
-        @Suppress("UNREACHABLE_CODE")
-        error("unreachable")
+    }
+
+    private fun run(evaluation: Evaluation, proxy: WebViewGlueBridge.ReplyProxy) {
+        evaluation.page = proxy
+        proxy.execute(
+            evaluation.script,
+            onSuccess = { result -> finish(evaluation, proxy, decodeEvaluation(result)) },
+            onFailure = { finish(evaluation, proxy, null) },
+        )
+    }
+
+    // A null outcome means the page went away before the script finished
+    private fun finish(evaluation: Evaluation, proxy: WebViewGlueBridge.ReplyProxy, outcome: EvaluationOutcome?) {
+        if (evaluation.page !== proxy || evaluation !in pending) return
+        if (outcome == null) {
+            if (page === proxy) page = null
+            return
+        }
+        pending -= evaluation
+        try {
+            outcome.error?.let { throw ContentScriptException(it) }
+            evaluation.callback(outcome.value)
+        } catch (t: Throwable) {
+            scope.reject(t)
+        }
     }
 
     private fun pageReady(proxy: WebViewGlueBridge.ReplyProxy) {
         page = proxy
-        pageWaiters.toList().forEach { it.resume(proxy) }
-        pageWaiters.clear()
-    }
-
-    // Cancelled calls ignore their script's late callback
-    private fun end() {
-        ended = true
-        page = null
-        val error = IllegalStateException(RUN_ENDED)
-        (pageWaiters + running).forEach { it.cancel(error) }
-        pageWaiters.clear()
-        running.clear()
+        // A call still waiting on the old page never hears back from it
+        pending.toList().forEach { run(it, proxy) }
     }
 
     companion object {
@@ -146,14 +141,27 @@ class ContentScripts internal constructor(
 
         private const val WORLD = "keiyoushi-content-scripts"
         private const val BRIDGE = "keiyoushiContentScripts"
-        private const val RUN_ENDED = "The WebView run has ended"
+        private const val UNSUPPORTED = "Content scripts need Android System WebView 146 or newer"
 
         // Channel of the prelude's message that the page's scripts are ready
         private const val READY = ""
 
-        // Removes the bridge's global, so only the prelude can post through it
-        private val PRELUDE = """
+        private const val SCRIPT = "{{script}}"
+
+        // An answer only a finished script gives, telling a thrown error apart from a page that went away
+        private val WRAPPER = """
             (() => {
+                try {
+                    return { ok: true, value: ($SCRIPT) };
+                } catch (e) {
+                    return { error: String((e && e.stack) || e) };
+                }
+            })()
+        """.trimIndent()
+
+        // In the main frame: keeps the bridge to itself, gives scripts `keiyoushi`, says the page's scripts are ready
+        private val PRELUDE = """
+            if (window === window.top) {
                 const bridge = globalThis.$BRIDGE;
                 delete globalThis.$BRIDGE;
                 const handlers = new Map();
@@ -166,20 +174,30 @@ class ContentScripts internal constructor(
                     on: (channel, handler) => handlers.set(String(channel), [...(handlers.get(String(channel)) || []), handler]),
                 });
                 bridge.postMessage(JSON.stringify({ c: '$READY' }));
-            })();
+            }
         """.trimIndent()
     }
 }
 
-/** A content script's [ContentScripts.evaluate] script threw; [message] is the WebView's. */
-class ContentScriptException internal constructor(message: String?) : Exception(message)
+/** A [ContentScripts.evaluate] script threw; [message] is its error's stack, or the error itself. */
+class ContentScriptException internal constructor(message: String) : Exception(message)
+
+internal class EvaluationOutcome(val value: String, val error: String?)
+
+// The wrapper's answer, or null when there is none: the page went away before the script finished
+internal fun decodeEvaluation(result: String?): EvaluationOutcome? {
+    val answer = result?.let { runCatching { Json.parseToJsonElement(it) as? JsonObject }.getOrNull() } ?: return null
+    (answer["error"] as? JsonPrimitive)?.contentOrNull?.let { return EvaluationOutcome("null", it) }
+    if ((answer["ok"] as? JsonPrimitive)?.contentOrNull != "true") return null
+    return EvaluationOutcome((answer["value"] ?: JsonNull).toString(), null)
+}
 
 internal fun encodeContentScriptMessage(channel: String, data: String): String = JsonObject(
     mapOf("c" to JsonPrimitive(channel), "d" to Json.parseToJsonElement(data)),
 ).toString()
 
 internal fun decodeContentScriptMessage(message: String): Pair<String, String>? {
-    val envelope = runCatching { Json.parseToJsonElement(message).jsonObject }.getOrNull() ?: return null
+    val envelope = runCatching { Json.parseToJsonElement(message) as? JsonObject }.getOrNull() ?: return null
     val channel = (envelope["c"] as? JsonPrimitive)?.contentOrNull ?: return null
     val data: JsonElement = envelope["d"] ?: JsonNull
     return channel to data.toString()
