@@ -5,16 +5,16 @@ plugins {
 }
 
 keiyoushi {
-    name = "APKOMIK"
-    versionCode = 6
-    contentWarning = ContentWarning.SAFE
+    name = "Komik AV"
+    // Was 6 on the MangaThemesia theme (published 1.6.7), so it must stay above 7.
+    versionCode = 8
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
-    theme = "mangathemesia"
 
     source {
         lang = "id"
-        baseUrl = "https://01.apkomik.com"
-        // Formerly "Komik AV (WP Manga Stream)"
+        baseUrl = "https://komikav.net"
+        // Kept from "Komik AV (WP Manga Stream)", later renamed "APKOMIK"
         id = 7875815514004535629L
     }
 }
