@@ -79,7 +79,11 @@ fun interface ScriptHandle {
     fun remove()
 }
 
-/** The frame that sent a web message: where it came from, and how to reply to it. */
+/**
+ * The frame that sent a web message: where it came from, and how to reply to it. Its methods can be called from any
+ * thread. It belongs to the page that sent the message: when the frame navigates, calls may be dropped without an
+ * answer, so don't wait on a callback without a timeout. Have the new page send a message to get its proxy.
+ */
 interface WebMessageReplyProxy {
     /**
      * Origin of the sending frame (e.g. `https://example.com`), or null on the pre-Chromium 116
@@ -93,7 +97,10 @@ interface WebMessageReplyProxy {
     /** Posts [message] back to the frame that originated the message. */
     fun postMessage(message: String)
 
-    /** Executes [script] specifically inside the frame that sent the message. */
+    /**
+     * Executes [script] specifically inside the frame that sent the message, and passes its value to [callback] as
+     * JSON text. A failed script or a page that went away gives null, or the text `null`. Promises aren't awaited.
+     */
     fun evaluateJs(script: String, callback: ((String?) -> Unit)? = null)
 }
 
@@ -478,6 +485,9 @@ class WebViewScope<T> internal constructor(
      * optionally targeting an isolated [worldName]. Must be called before [loadUrl]/[loadData];
      * it only applies to later navigations. Invalid [allowedOriginRules] entries (e.g. missing
      * scheme) are rejected with [IllegalArgumentException], failing the run.
+     *
+     * With the default `*` rule, [script] also runs in every frame on the page, including third-party iframes such as
+     * ads, and those can use a bridge in the same world. Restrict [allowedOriginRules] to the expected origin.
      *
      * Requires **Chromium 146+** (`JS_INJECTION_IN_FRAME_AND_WORLD`).
      * This method has **no fallback** on older WebView versions and immediately fails ([reject]s)

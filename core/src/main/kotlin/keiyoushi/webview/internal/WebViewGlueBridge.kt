@@ -2,6 +2,8 @@ package keiyoushi.webview.internal
 
 import android.annotation.SuppressLint
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -42,6 +44,8 @@ internal object WebViewGlueBridge {
     }
 
     private val supportedFeatures: Set<String> by lazy { factory.supportedFeatures.toHashSet() }
+
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
 
     private inline fun <reified T> InvocationHandler.asBoundary(): T = Proxy.newProxyInstance(
         WebViewGlueBridge::class.java.classLoader,
@@ -200,14 +204,14 @@ internal object WebViewGlueBridge {
         override val isMainFrame: Boolean?,
         private val onError: (Throwable) -> Unit,
     ) : WebMessageReplyProxy {
-        override fun postMessage(message: String) {
+        override fun postMessage(message: String) = runOnMain {
             runCatching { proxy.postMessage(message) }
         }
 
-        override fun evaluateJs(script: String, callback: ((String?) -> Unit)?) {
+        override fun evaluateJs(script: String, callback: ((String?) -> Unit)?) = runOnMain {
             if (!isFeatureSupported("JS_INJECTION_IN_FRAME_AND_WORLD")) {
                 onError(UnsupportedOperationException("WebMessageReplyProxy.evaluateJs requires JS_INJECTION_IN_FRAME_AND_WORLD (Chromium 146+)"))
-                return
+                return@runOnMain
             }
             val callbackHandler = InvocationHandler { _, method, args ->
                 try {
@@ -225,6 +229,10 @@ internal object WebViewGlueBridge {
             } catch (t: Throwable) {
                 onError(t)
             }
+        }
+
+        private fun runOnMain(block: () -> Unit) {
+            if (Looper.myLooper() == Looper.getMainLooper()) block() else mainHandler.post(block)
         }
     }
 
