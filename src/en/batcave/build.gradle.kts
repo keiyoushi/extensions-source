@@ -19,3 +19,7 @@ keiyoushi {
         path("/..*")
     }
 }
+
+dependencies {
+    implementation(project(":lib:webview"))
+}

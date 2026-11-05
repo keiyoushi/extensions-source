@@ -16,3 +16,7 @@ keiyoushi {
         id = 11L
     }
 }
+
+dependencies {
+    implementation(project(":lib:webview"))
+}

@@ -15,3 +15,7 @@ keiyoushi {
         baseUrl = "https://softkomik.app"
     }
 }
+
+dependencies {
+    implementation(project(":lib:webview"))
+}

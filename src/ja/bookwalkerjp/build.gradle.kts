@@ -18,4 +18,5 @@ keiyoushi {
 
 dependencies {
     implementation(project(":lib:publus"))
+    implementation(project(":lib:webview"))
 }

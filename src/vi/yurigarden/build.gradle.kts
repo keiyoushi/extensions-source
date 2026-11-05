@@ -19,3 +19,7 @@ keiyoushi {
         path("/comic/..*")
     }
 }
+
+dependencies {
+    implementation(project(":lib:webview"))
+}

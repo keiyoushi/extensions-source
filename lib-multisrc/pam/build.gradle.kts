@@ -6,6 +6,7 @@ dependencies {
     api(project(":lib:secretstream"))
     api(project(":lib:i18n"))
     implementation(project(":lib:ece"))
+    implementation(project(":lib:webview"))
 }
 
 keiyoushi {

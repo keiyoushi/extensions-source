@@ -15,3 +15,7 @@ keiyoushi {
         baseUrl = "https://www.ono.live"
     }
 }
+
+dependencies {
+    implementation(project(":lib:webview"))
+}

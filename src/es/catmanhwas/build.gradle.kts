@@ -19,3 +19,7 @@ keiyoushi {
         path("/series/..*")
     }
 }
+
+dependencies {
+    implementation(project(":lib:webview"))
+}

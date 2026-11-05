@@ -4,6 +4,7 @@ plugins {
 
 dependencies {
     api(project(":lib:i18n"))
+    implementation(project(":lib:webview"))
 }
 
 keiyoushi {

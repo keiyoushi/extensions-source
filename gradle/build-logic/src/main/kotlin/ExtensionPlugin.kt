@@ -109,6 +109,7 @@ class ExtensionPlugin : Plugin<Project> {
 
             packaging {
                 resources.excludes.add("kotlin-tooling-metadata.json")
+                resources.excludes.add("META-INF/androidx.webkit_webkit.version")
             }
         }
 

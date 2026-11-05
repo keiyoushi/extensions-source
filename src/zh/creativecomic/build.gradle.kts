@@ -16,3 +16,7 @@ keiyoushi {
         baseUrl = "https://www.creative-comic.tw"
     }
 }
+
+dependencies {
+    implementation(project(":lib:webview"))
+}

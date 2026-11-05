@@ -16,3 +16,7 @@ keiyoushi {
         baseUrl = "https://3xyaoi.com"
     }
 }
+
+dependencies {
+    implementation(project(":lib:webview"))
+}

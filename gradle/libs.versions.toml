@@ -28,6 +28,7 @@ coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-androi
 coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 injekt-core = { module = "com.github.null2264.injekt:injekt-core", version = "4135455a2a" }
 jsoup = { module = "org.jsoup:jsoup", version = "1.22.2" }
+androidx-webkit = { module = "androidx.webkit:webkit", version = "1.18.0" }
 kotlin-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 kotlin-protobuf = { module = "org.jetbrains.kotlinx:kotlinx-serialization-protobuf", version.ref = "serialization" }
 kotlin-json-okio = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json-okio", version.ref = "serialization" }

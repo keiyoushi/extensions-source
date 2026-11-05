@@ -23,4 +23,5 @@ keiyoushi {
 
 dependencies {
     implementation(project(":lib:cronet"))
+    implementation(project(":lib:webview"))
 }

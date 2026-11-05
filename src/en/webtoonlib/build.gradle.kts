@@ -22,4 +22,5 @@ keiyoushi {
 
 dependencies {
     implementation(project(":lib:imagedecoder"))
+    implementation(project(":lib:webview"))
 }

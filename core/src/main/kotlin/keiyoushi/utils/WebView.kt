@@ -1,3 +1,6 @@
+// Feature checks go through isFeatureSupported, which lint doesn't know
+@file:SuppressLint("RequiresFeature")
+
 package keiyoushi.utils
 
 import android.annotation.SuppressLint
@@ -18,9 +21,18 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.webkit.CustomHeader
+import androidx.webkit.JavaScriptExecutionException
+import androidx.webkit.JavaScriptReplyProxy
+import androidx.webkit.ScriptHandler
+import androidx.webkit.WebMessageCompat
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
+import androidx.webkit.WebViewOutcomeReceiver
 import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
-import keiyoushi.webview.internal.WebViewGlueBridge
+import keiyoushi.webview.internal.isFeatureSupported
+import keiyoushi.webview.internal.setClientHints
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -68,10 +80,10 @@ class WebViewTimeoutException internal constructor(
 /** Lifecycle event timing for [WebViewScope.addJavaScriptOnEvent]. */
 enum class InjectionEvent(internal val value: Int) {
     /** Execute before any script in the document executes. */
-    DOCUMENT_START(0),
+    DOCUMENT_START(WebViewCompat.INJECTION_EVENT_DOCUMENT_START),
 
     /** Execute after the document has finished parsing. */
-    DOCUMENT_END(1),
+    DOCUMENT_END(WebViewCompat.INJECTION_EVENT_DOCUMENT_END),
 }
 
 /** Handle for removing an injected document script. */
@@ -86,12 +98,12 @@ fun interface ScriptHandle {
  */
 interface WebMessageReplyProxy {
     /**
-     * Origin of the sending frame (e.g. `https://example.com`), or null on the pre-Chromium 116
+     * Origin of the sending frame (e.g. `https://example.com`), or null on the pre-Chromium 82
      * fallback, which can't tell senders apart.
      */
     val sourceOrigin: String?
 
-    /** Whether the message came from the main frame, or null on the pre-Chromium 116 fallback. */
+    /** Whether the message came from the main frame, or null on the pre-Chromium 82 fallback. */
     val isMainFrame: Boolean?
 
     /** Posts [message] back to the frame that originated the message. */
@@ -108,7 +120,7 @@ interface WebMessageReplyProxy {
  * DSL for configuring and driving a single [runWebView] run.
  *
  * Threading: page/navigation hooks, [poll] and [webMessageBridge] handlers run on the main
- * thread; [interceptRequest] handlers (and [webMessageBridge] handlers on the pre-Chromium 116
+ * thread; [interceptRequest] handlers (and [webMessageBridge] handlers on the pre-Chromium 82
  * fallback) run on WebView background threads. An exception thrown from any
  * callback fails the run via [reject].
  */
@@ -163,7 +175,7 @@ class WebViewScope<T> internal constructor(
         get() = webView.settings.userAgentString
         set(value) {
             webView.settings.userAgentString = value
-            WebViewGlueBridge.setClientHintsFromUserAgent(webView.settings, value)
+            setClientHints(webView.settings, value)
         }
 
     /**
@@ -175,7 +187,16 @@ class WebViewScope<T> internal constructor(
      * The header is set on the WebView's profile, so it stays for every WebView of the app until the app is closed.
      * Requires **Chromium 142+** (`CUSTOM_REQUEST_HEADERS`). Returns false if unsupported.
      */
-    fun setOriginMatchedHeader(name: String, value: String, allowedOriginRules: Set<String>): Boolean = WebViewGlueBridge.setOriginMatchedHeader(webView, name, value, allowedOriginRules)
+    fun setOriginMatchedHeader(name: String, value: String, allowedOriginRules: Set<String>): Boolean {
+        if (!isFeatureSupported(WebViewFeature.MULTI_PROFILE) || !isFeatureSupported(WebViewFeature.CUSTOM_REQUEST_HEADERS)) return false
+        // An invalid name, value or origin rule throws
+        WebViewCompat.getProfile(webView).apply {
+            // Replaces this header's earlier entry instead of adding another
+            clearCustomHeader(name, value)
+            addCustomHeader(CustomHeader(name, value, allowedOriginRules))
+        }
+        return true
+    }
 
     /** Runs [block] on every navigation start. */
     fun onPageStarted(block: (url: String) -> Unit) {
@@ -339,9 +360,10 @@ class WebViewScope<T> internal constructor(
      * [WebMessageReplyProxy.sourceOrigin]/[WebMessageReplyProxy.isMainFrame] if a message can
      * complete the run.
      *
-     * Requires **Chromium 116+** (`WEB_MESSAGE_ARRAY_BUFFER`) for native origin-scoped messaging.
-     * On older engines (< Chromium 116), transparently falls back to an `addJavascriptInterface`
-     * bridge exposing `window.$name.postMessage(message)` with debug logging under tag `"KeiyoushiWebView"`.
+     * Requires **Chromium 82+** (`WEB_MESSAGE_LISTENER`) for native origin-scoped messaging.
+     * On older engines (< Chromium 82) or a WebView without the support library (e.g. Suwayomi), transparently falls
+     * back to an `addJavascriptInterface` bridge exposing `window.$name.postMessage(message)` with debug logging under
+     * tag `"KeiyoushiWebView"`.
      * Replying via [WebMessageReplyProxy] is unsupported on the fallback path and will [reject] the execution.
      * The fallback ignores [allowedOriginRules] (every frame can post) and reports a null
      * sender origin.
@@ -362,23 +384,24 @@ class WebViewScope<T> internal constructor(
         handler: (message: String, replyProxy: WebMessageReplyProxy) -> Unit,
     ) {
         check(bridgeNames.add(name)) { "Bridge '$name' has already been registered on this WebView" }
-        val added = WebViewGlueBridge.addWebMessageListener(
-            webView = webView,
-            jsObjectName = name,
-            allowedOriginRules = allowedOriginRules,
-            worldName = worldName,
-            onError = { reject(it) },
-        ) { message, replyProxy ->
-            if (destroyed) return@addWebMessageListener
+        val listener = WebViewCompat.WebMessageListener { _, message, sourceOrigin, isMainFrame, replyProxy ->
+            if (destroyed) return@WebMessageListener
             try {
-                handler(message, replyProxy)
+                handler(message.text(), CompatReplyProxy(replyProxy, sourceOrigin.toString(), isMainFrame))
             } catch (t: Throwable) {
                 reject(t)
             }
         }
-        if (added) return
         if (worldName.isNotEmpty()) {
-            reject(UnsupportedOperationException("webMessageBridge in a world requires JS_INJECTION_IN_FRAME_AND_WORLD (Chromium 146+)"))
+            if (!isFeatureSupported(WebViewFeature.JS_INJECTION_IN_FRAME_AND_WORLD)) {
+                reject(UnsupportedOperationException("webMessageBridge in a world requires JS_INJECTION_IN_FRAME_AND_WORLD (Chromium 146+)"))
+                return
+            }
+            WebViewCompat.addWebMessageListener(webView, name, allowedOriginRules, WebViewCompat.getExecutionWorld(webView, worldName), listener)
+            return
+        }
+        if (isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            WebViewCompat.addWebMessageListener(webView, name, allowedOriginRules, listener)
             return
         }
 
@@ -389,11 +412,11 @@ class WebViewScope<T> internal constructor(
             override val isMainFrame: Boolean? = null
 
             override fun postMessage(message: String) {
-                reject(UnsupportedOperationException("WebMessageReplyProxy.postMessage is not supported on this WebView (requires Chromium 116+)"))
+                reject(UnsupportedOperationException("WebMessageReplyProxy.postMessage is not supported on this WebView (requires Chromium 82+)"))
             }
 
             override fun evaluateJs(script: String, callback: ((String?) -> Unit)?) {
-                reject(UnsupportedOperationException("WebMessageReplyProxy.evaluateJs is not supported on this WebView (requires Chromium 116+)"))
+                reject(UnsupportedOperationException("WebMessageReplyProxy.evaluateJs is not supported on this WebView (requires Chromium 82+)"))
             }
         }
 
@@ -430,17 +453,16 @@ class WebViewScope<T> internal constructor(
      * entries (e.g. missing scheme) are rejected with [IllegalArgumentException], failing the run.
      *
      * Requires **Chromium 91+** (`DOCUMENT_START_SCRIPT`) for native pre-execution injection.
-     * On older engines (< Chromium 91), falls back to [onPageStarted] evaluation with debug
-     * logging under tag `"KeiyoushiWebView"`. The fallback only reaches the main frame and
-     * runs asynchronously, so page scripts (including inline ones) may already have run.
+     * On older engines (< Chromium 91) or a WebView without the support library (e.g. Suwayomi), falls back to
+     * [onPageStarted] evaluation with debug logging under tag `"KeiyoushiWebView"`. The fallback only reaches the main
+     * frame and runs asynchronously, so page scripts (including inline ones) may already have run.
      */
     fun injectAtDocumentStart(
         script: String,
         allowedOriginRules: Set<String> = setOf("*"),
     ): ScriptHandle {
-        val handle = WebViewGlueBridge.addDocumentStartJavaScript(webView, script, allowedOriginRules)
-        if (handle != null) {
-            return handle
+        if (isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            return WebViewCompat.addDocumentStartJavaScript(webView, script, allowedOriginRules).toScriptHandle()
         }
         Log.d("KeiyoushiWebView", "DOCUMENT_START_SCRIPT not supported; falling back to onPageStarted injection")
         var cancelled = false
@@ -471,9 +493,9 @@ class WebViewScope<T> internal constructor(
         worldName: String = "",
         allowedOriginRules: Set<String> = setOf("*"),
     ): ScriptHandle {
-        val handle = WebViewGlueBridge.addJavaScriptOnEvent(webView, script, event.value, worldName, allowedOriginRules)
-        if (handle != null) {
-            return handle
+        if (isFeatureSupported(WebViewFeature.JS_INJECTION_IN_FRAME_AND_WORLD)) {
+            val world = WebViewCompat.getExecutionWorld(webView, worldName)
+            return WebViewCompat.addJavaScriptOnEvent(webView, script, event.value, allowedOriginRules, world).toScriptHandle()
         }
         reject(UnsupportedOperationException("JS_INJECTION_IN_FRAME_AND_WORLD is not supported on this WebView (requires Chromium 146+)"))
         return ScriptHandle { }
@@ -555,6 +577,48 @@ class WebViewScope<T> internal constructor(
             }
         }
         runOnMain { mainHandler.postDelayed(runnable, interval.inWholeMilliseconds) }
+    }
+
+    private fun ScriptHandler.toScriptHandle() = ScriptHandle { runCatching { remove() } }
+
+    // The message's text; array buffers are sent as UTF-8
+    private fun WebMessageCompat.text(): String = if (type == WebMessageCompat.TYPE_ARRAY_BUFFER) String(arrayBuffer, Charsets.UTF_8) else data.orEmpty()
+
+    private inner class CompatReplyProxy(
+        private val proxy: JavaScriptReplyProxy,
+        override val sourceOrigin: String?,
+        override val isMainFrame: Boolean?,
+    ) : WebMessageReplyProxy {
+        override fun postMessage(message: String) = runOnMain {
+            runCatching { proxy.postMessage(message) }
+        }
+
+        override fun evaluateJs(script: String, callback: ((String?) -> Unit)?) = runOnMain {
+            if (!isFeatureSupported(WebViewFeature.JS_INJECTION_IN_FRAME_AND_WORLD)) {
+                reject(UnsupportedOperationException("WebMessageReplyProxy.evaluateJs requires JS_INJECTION_IN_FRAME_AND_WORLD (Chromium 146+)"))
+                return@runOnMain
+            }
+            try {
+                proxy.executeJavaScript(
+                    script,
+                    object : WebViewOutcomeReceiver<String?, JavaScriptExecutionException> {
+                        override fun onResult(result: String?) = deliver(result)
+
+                        override fun onError(error: JavaScriptExecutionException) = deliver(null)
+
+                        private fun deliver(result: String?) {
+                            try {
+                                callback?.invoke(result)
+                            } catch (t: Throwable) {
+                                reject(t)
+                            }
+                        }
+                    },
+                )
+            } catch (t: Throwable) {
+                reject(t)
+            }
+        }
     }
 
     private fun markLoaded() {
@@ -652,7 +716,9 @@ private fun setupWebView(webView: WebView) {
         loadWithOverviewMode = false
     }
 
-    WebViewGlueBridge.setAudioMuted(webView, true)
+    if (isFeatureSupported(WebViewFeature.MUTE_AUDIO)) {
+        runCatching { WebViewCompat.setAudioMuted(webView, true) }
+    }
 
     runCatching {
         val metrics = Resources.getSystem().displayMetrics

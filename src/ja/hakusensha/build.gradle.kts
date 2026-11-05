@@ -18,4 +18,5 @@ keiyoushi {
 
 dependencies {
     implementation(project(":lib:clipstudioreader"))
+    implementation(project(":lib:webview"))
 }

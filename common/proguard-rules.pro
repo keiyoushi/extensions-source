@@ -54,5 +54,5 @@
 -if @kotlinx.serialization.Serializable class **
 -keep,allowshrinking,allowoptimization,allowobfuscation class <1>
 
-# dont obfuscate chromium boundry interfaces, needed for reflections; used by runWebView
--keepnames interface org.chromium.support_lib_boundary.** { *; }
+# androidx.webkit's annotations, which lib:webview doesn't bundle
+-dontwarn androidx.annotation.**

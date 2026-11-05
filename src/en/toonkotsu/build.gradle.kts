@@ -23,3 +23,7 @@ keiyoushi {
         path("/group/..*")
     }
 }
+
+dependencies {
+    implementation(project(":lib:webview"))
+}

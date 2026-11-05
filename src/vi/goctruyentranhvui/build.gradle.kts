@@ -21,3 +21,7 @@ keiyoushi {
         path("/truyen/..*")
     }
 }
+
+dependencies {
+    implementation(project(":lib:webview"))
+}

@@ -21,3 +21,7 @@ keiyoushi {
         path("/..*/..*\\.html")
     }
 }
+
+dependencies {
+    implementation(project(":lib:webview"))
+}
