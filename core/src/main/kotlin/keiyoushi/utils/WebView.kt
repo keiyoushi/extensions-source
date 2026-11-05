@@ -79,21 +79,28 @@ fun interface ScriptHandle {
     fun remove()
 }
 
-/** The frame that sent a web message: where it came from, and how to reply to it. */
+/**
+ * The frame that sent a web message: where it came from, and how to reply to it. Its methods can be called from any
+ * thread. It belongs to the page that sent the message: when the frame navigates, calls may be dropped without an
+ * answer, so don't wait on a callback without a timeout. Have the new page send a message to get its proxy.
+ */
 interface WebMessageReplyProxy {
     /**
-     * Origin of the sending frame (e.g. `https://example.com`), or null on the pre-Chromium 82
+     * Origin of the sending frame (e.g. `https://example.com`), or null on the pre-Chromium 116
      * fallback, which can't tell senders apart.
      */
     val sourceOrigin: String?
 
-    /** Whether the message came from the main frame, or null on the pre-Chromium 82 fallback. */
+    /** Whether the message came from the main frame, or null on the pre-Chromium 116 fallback. */
     val isMainFrame: Boolean?
 
     /** Posts [message] back to the frame that originated the message. */
     fun postMessage(message: String)
 
-    /** Executes [script] specifically inside the frame that sent the message. */
+    /**
+     * Executes [script] specifically inside the frame that sent the message, and passes its value to [callback] as
+     * JSON text. A failed script or a page that went away gives null, or the text `null`. Promises aren't awaited.
+     */
     fun evaluateJs(script: String, callback: ((String?) -> Unit)? = null)
 }
 
@@ -102,7 +109,7 @@ interface WebMessageReplyProxy {
  *
  * Threading: page/navigation hooks, [poll] and [webMessageBridge] handlers run on the main
  * thread; [interceptRequest] and [jsBridge] handlers (and [webMessageBridge] handlers on the
- * pre-Chromium 82 fallback) run on WebView background threads. An exception thrown from any
+ * pre-Chromium 116 fallback) run on WebView background threads. An exception thrown from any
  * callback fails the run via [reject].
  */
 @SuppressLint("SetJavaScriptEnabled")
@@ -147,19 +154,6 @@ class WebViewScope<T> internal constructor(
     var loadWithOverviewMode: Boolean by setting({ loadWithOverviewMode }, { loadWithOverviewMode = it })
 
     /**
-     * Includes the `Cookie` header in requests passed to [interceptRequest], and makes WebView
-     * accept `Set-Cookie` headers from responses returned by it.
-     *
-     * Requires **Chromium 138+** (`COOKIE_INTERCEPT`). Silently ignored if unsupported; the
-     * getter returns the requested value either way.
-     */
-    var includeCookiesOnIntercept: Boolean = false
-        set(value) {
-            field = value
-            WebViewGlueBridge.setIncludeCookiesOnIntercept(webView.settings, value)
-        }
-
-    /**
      * Sets the user agent string and spoofs matching `Sec-CH-UA` client hints.
      *
      * Spoofing client hints requires **Chromium 119+** (`USER_AGENT_METADATA`). On older engines,
@@ -175,7 +169,8 @@ class WebViewScope<T> internal constructor(
     /**
      * Sends [name] with [value] on every request to an origin matching [allowedOriginRules], such as
      * `https://example.com`, in place of any value WebView sets itself. WebView can replace a header this way, not
-     * remove it.
+     * remove it. Calling this again with the same [value] replaces its rules; with another value for a matching
+     * origin, WebView sends both, comma-separated.
      *
      * The header is set on the WebView's profile, so it stays for every WebView of the app until the app is closed.
      * Requires **Chromium 142+** (`CUSTOM_REQUEST_HEADERS`). Returns false if unsupported.
@@ -372,8 +367,8 @@ class WebViewScope<T> internal constructor(
      * [WebMessageReplyProxy.sourceOrigin]/[WebMessageReplyProxy.isMainFrame] if a message can
      * complete the run.
      *
-     * Requires **Chromium 82+** (`WEB_MESSAGE_LISTENER`) for native origin-scoped boundary messaging.
-     * On older engines (< Chromium 82), transparently falls back to an `addJavascriptInterface`
+     * Requires **Chromium 116+** (`WEB_MESSAGE_ARRAY_BUFFER`) for native origin-scoped messaging.
+     * On older engines (< Chromium 116), transparently falls back to an `addJavascriptInterface`
      * bridge exposing `window.$name.postMessage(message)` with debug logging under tag `"KeiyoushiWebView"`.
      * Replying via [WebMessageReplyProxy] is unsupported on the fallback path and will [reject] the execution.
      * The fallback ignores [allowedOriginRules] (every frame can post) and reports a null
@@ -382,10 +377,16 @@ class WebViewScope<T> internal constructor(
      * [handler] runs on the main thread (on a background thread on the fallback path).
      * [WebMessageReplyProxy.evaluateJs] additionally requires **Chromium 146+**
      * (`JS_INJECTION_IN_FRAME_AND_WORLD`) and [reject]s otherwise.
+     *
+     * With a [worldName], the object exists only in that isolated world, not in the page's JavaScript, so the page can't
+     * see it or post through it. Scripts reach it by being injected into the same world with [addJavaScriptOnEvent]; they
+     * share the page's DOM but none of its JavaScript. Requires **Chromium 146+** (`JS_INJECTION_IN_FRAME_AND_WORLD`),
+     * with **no fallback**: it [reject]s if unsupported, as the fallback would expose the object to the page.
      */
     fun webMessageBridge(
         name: String,
         allowedOriginRules: Set<String> = setOf("*"),
+        worldName: String = "",
         handler: (message: String, replyProxy: WebMessageReplyProxy) -> Unit,
     ) {
         check(bridgeNames.add(name)) { "Bridge '$name' has already been registered on this WebView" }
@@ -393,6 +394,7 @@ class WebViewScope<T> internal constructor(
             webView = webView,
             jsObjectName = name,
             allowedOriginRules = allowedOriginRules,
+            worldName = worldName,
             onError = { reject(it) },
         ) { message, replyProxy ->
             if (destroyed) return@addWebMessageListener
@@ -403,19 +405,23 @@ class WebViewScope<T> internal constructor(
             }
         }
         if (added) return
+        if (worldName.isNotEmpty()) {
+            reject(UnsupportedOperationException("webMessageBridge in a world requires JS_INJECTION_IN_FRAME_AND_WORLD (Chromium 146+)"))
+            return
+        }
 
-        Log.d("KeiyoushiWebView", "WEB_MESSAGE_LISTENER not supported; falling back to addJavascriptInterface for '$name'")
+        Log.d("KeiyoushiWebView", "Native web messaging not supported; falling back to addJavascriptInterface for '$name'")
 
         val fallbackReplyProxy = object : WebMessageReplyProxy {
             override val sourceOrigin: String? = null
             override val isMainFrame: Boolean? = null
 
             override fun postMessage(message: String) {
-                reject(UnsupportedOperationException("WebMessageReplyProxy.postMessage is not supported on this WebView (requires Chromium 82+)"))
+                reject(UnsupportedOperationException("WebMessageReplyProxy.postMessage is not supported on this WebView (requires Chromium 116+)"))
             }
 
             override fun evaluateJs(script: String, callback: ((String?) -> Unit)?) {
-                reject(UnsupportedOperationException("WebMessageReplyProxy.evaluateJs is not supported on this WebView (requires Chromium 82+)"))
+                reject(UnsupportedOperationException("WebMessageReplyProxy.evaluateJs is not supported on this WebView (requires Chromium 116+)"))
             }
         }
 
@@ -441,8 +447,9 @@ class WebViewScope<T> internal constructor(
     fun webMessageBridge(
         name: String,
         allowedOriginRules: Set<String> = setOf("*"),
+        worldName: String = "",
         handler: (message: String) -> Unit,
-    ) = webMessageBridge(name, allowedOriginRules) { message, _ -> handler(message) }
+    ) = webMessageBridge(name, allowedOriginRules, worldName) { message, _ -> handler(message) }
 
     /**
      * Injects [script] into matching origins before any document or inline script executes.
@@ -478,6 +485,9 @@ class WebViewScope<T> internal constructor(
      * optionally targeting an isolated [worldName]. Must be called before [loadUrl]/[loadData];
      * it only applies to later navigations. Invalid [allowedOriginRules] entries (e.g. missing
      * scheme) are rejected with [IllegalArgumentException], failing the run.
+     *
+     * With the default `*` rule, [script] also runs in every frame on the page, including third-party iframes such as
+     * ads, and those can use a bridge in the same world. Restrict [allowedOriginRules] to the expected origin.
      *
      * Requires **Chromium 146+** (`JS_INJECTION_IN_FRAME_AND_WORLD`).
      * This method has **no fallback** on older WebView versions and immediately fails ([reject]s)
