@@ -205,7 +205,6 @@ abstract class HentaiNexus :
             """
             Separate items with commas (,)
             Prepend with dash (-) to exclude
-            For items with multiple words, surround them with double quotes (")
             """.trimIndent(),
         ),
         TagFilter(),
