@@ -12,6 +12,7 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -116,12 +117,11 @@ abstract class PeachBL : KeiSource() {
             "stopped" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
-        description = buildString {
-            document.selectFirst(".wt-synopsis-body")?.text()?.let(::append)
-            document.selectFirst(".wt-alt[data-full]")?.attr("data-full")?.takeIf(String::isNotBlank)?.let {
-                append("\n\nأسماء أخرى: $it")
-            }
-        }.trim()
+        // The site joins the alternative names with spaces, so they can't be split into a list
+        description = MarkdownDescription.Builder()
+            .description(document.selectFirst(".wt-synopsis-body"))
+            .field("أسماء أخرى", document.selectFirst(".wt-alt[data-full]")?.attr("data-full"))
+            .build()
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
