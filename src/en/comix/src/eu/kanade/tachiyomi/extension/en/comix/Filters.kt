@@ -135,7 +135,8 @@ class Filters(
         Filter.Separator(),
         DemographicFilter(getDemographics(), selectedDemographics),
         StatusFilter(),
-        MinChapterFilter(),
+        ChapterLengthFilter("Minimum Chapter Length", "min_chap"),
+        ChapterLengthFilter("Maximum Chapter Length", "max_chap"),
         Filter.Separator(),
         Filter.Header("Release Year"),
         YearFromFilter(),
@@ -322,16 +323,16 @@ class Filters(
         }
     }
 
-    private class MinChapterFilter :
-        Filter.Text("Minimum Chapter Length"),
+    private class ChapterLengthFilter(name: String, private val param: String) :
+        Filter.Text(name),
         UriFilter {
         override fun addToUri(builder: HttpUrl.Builder) {
             if (state.isNotEmpty()) {
                 val value = state.toIntOrNull()?.takeIf { it > 0 }
                     ?: throw IllegalArgumentException(
-                        "Minimum chapter length must be a positive integer greater than 0",
+                        "$name must be a positive integer greater than 0",
                     )
-                builder.addQueryParameter("min_chap", value.toString())
+                builder.addQueryParameter(param, value.toString())
             }
         }
     }
