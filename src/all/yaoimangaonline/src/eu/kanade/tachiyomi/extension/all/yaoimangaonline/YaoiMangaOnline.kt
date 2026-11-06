@@ -11,6 +11,7 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstance
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
@@ -22,7 +23,16 @@ abstract class YaoiMangaOnline : KeiSource() {
 
     // =================== Popular ===================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangasPage(client.get("$baseUrl/page/$page/", Fetch.DOCUMENT).asJsoup())
+    private val languageTag get() = LANGUAGE_TAGS[lang]
+
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            languageTag?.let { addPathSegments("tag/$it/") }
+            if (page > 1) addPathSegments("page/$page/")
+        }.build()
+
+        return parseMangasPage(client.get(url, Fetch.DOCUMENT).asJsoup())
+    }
 
     private fun parseMangasPage(document: Document): MangasPage {
         val mangas = document.select(".post:not(.sticky):not(.category-gay-movies):not(.category-yaoi-anime) > div > a")
@@ -44,20 +54,17 @@ abstract class YaoiMangaOnline : KeiSource() {
     // =================== Search ===================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val tags = buildList {
+            languageTag?.let(::add)
+            filters.firstInstance<TagFilter>().takeIf { it.state != 0 }?.let { add(it.toString()) }
+        }
         val url = baseUrl.toHttpUrl().newBuilder().apply {
-            filters.forEach {
-                when (it) {
-                    is CategoryFilter -> if (it.state != 0) {
-                        addQueryParameter("cat", it.toString())
-                    }
-                    is TagFilter -> if (it.state != 0) {
-                        addEncodedPathSegments("tag/$it")
-                    }
-                    else -> {}
-                }
-            }
-            addEncodedPathSegments("page/$page")
+            addPathSegments("page/$page/")
             addQueryParameter("s", query)
+            filters.firstInstance<CategoryFilter>().takeIf { it.state != 0 }?.let {
+                addQueryParameter("cat", it.toString())
+            }
+            if (tags.isNotEmpty()) addQueryParameter("tag", tags.joinToString("+"))
         }.build()
 
         return parseMangasPage(client.get(url, Fetch.DOCUMENT).asJsoup())
@@ -115,4 +122,14 @@ abstract class YaoiMangaOnline : KeiSource() {
         .mapIndexed { idx, img -> Page(idx, imageUrl = img.attr("src")) }
 
     override fun getFilterList(data: JsonElement?) = FilterList(CategoryFilter(), TagFilter())
+
+    companion object {
+        private val LANGUAGE_TAGS = mapOf(
+            "en" to "english-yaoi",
+            "ja" to "japanese-yaoi",
+            "zh" to "chinese-yaoi",
+            "ko" to "korean",
+            "es" to "spanish",
+        )
+    }
 }
