@@ -64,7 +64,8 @@ abstract class LunarAnime : KeiSource() {
         return key
     }
 
-    private suspend fun solveTurnstile(): String = getTurnstileToken(url = baseUrl, siteKey = siteKey())
+    // Turnstile token bound to the chapter token's nonce, as in the site's reader
+    private suspend fun solveTurnstile(nonce: String): String = getTurnstileToken(url = baseUrl, siteKey = siteKey(), action = "read", cData = nonce)
 
     override fun OkHttpClient.Builder.configureClient() = this
         .addInterceptor(serenity.interceptor())
@@ -219,14 +220,8 @@ abstract class LunarAnime : KeiSource() {
     // =============================== Pages ================================
 
     private suspend fun viewChapter(slug: String, number: String, lang: String) {
-        val ratingUrl = "$API_URL/api/manga/rating/status/$slug/$number"
-        val ratingResp = client.get(ratingUrl, Fetch.XHR, ensureSuccess = false)
-        ratingResp.close()
-
         val body = ViewRequestBody(slug, number, lang).toJsonRequestBody()
-        val viewUrl = "$API_URL/api/manga/chapter/view"
-        val viewResp = client.post(viewUrl, Fetch.XHR, body, ensureSuccess = false)
-        viewResp.close()
+        client.post("$API_URL/api/manga/chapter/view", Fetch.XHR, body, ensureSuccess = false).close()
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -236,16 +231,15 @@ abstract class LunarAnime : KeiSource() {
 
         val seeds = crypto.extractSeeds(client.get(chapterUrl, Fetch.DOCUMENT).asJsoup())
 
-        // Required requests or fake images are returned
-        viewChapter(slug, chapterNumber, language)
+        // Without this call first the page list is decoys
+        client.get("$API_URL/api/manga/chapter-lock/$slug", Fetch.XHR).close()
 
-        val token = if (hasClearance(slug)) null else solveTurnstile()
-        var result = fetchChapter(seeds, slug, chapterNumber, language, token)
+        var result = fetchChapter(seeds, slug, chapterNumber, language, withTurnstile = !hasClearance(slug))
 
         if (result.needsRevalidation()) {
             clearances.remove(slug)
             serenity.reset()
-            result = fetchChapter(seeds, slug, chapterNumber, language, solveTurnstile())
+            result = fetchChapter(seeds, slug, chapterNumber, language, withTurnstile = true)
         }
 
         if (result.needsRevalidation()) {
@@ -253,6 +247,7 @@ abstract class LunarAnime : KeiSource() {
         }
 
         markCleared(slug, result.cacheTtl)
+        viewChapter(slug, chapterNumber, language)
 
         return result.data.images.mapIndexed { index, imageUrl ->
             Page(index, chapter.url, imageUrl)
@@ -264,9 +259,10 @@ abstract class LunarAnime : KeiSource() {
         slug: String,
         chapterNumber: String,
         language: String,
-        turnstileToken: String?,
+        withTurnstile: Boolean,
     ): LunarPageListDecrypted {
         val minted = crypto.mint(seeds, slug, chapterNumber)
+        val turnstileToken = if (withTurnstile) solveTurnstile(minted.nonce) else null
 
         val url = API_URL.toHttpUrl().newBuilder()
             .addPathSegments("api/manga/r")
