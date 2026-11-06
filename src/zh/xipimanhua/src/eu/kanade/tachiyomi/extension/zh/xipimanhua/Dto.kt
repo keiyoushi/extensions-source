@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import kotlin.time.Instant
 
 @Serializable
@@ -101,7 +102,7 @@ class ChapterDto(
 
 @Serializable
 class ChapterPagesDto(
-    val images: String,
+    val images: JsonElement,
     @SerialName("order_id") val orderId: Long,
     val sid: Long,
     val line: Int,
