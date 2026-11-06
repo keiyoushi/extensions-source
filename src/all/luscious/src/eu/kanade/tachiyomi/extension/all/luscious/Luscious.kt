@@ -37,7 +37,7 @@ abstract class Luscious :
     KeiSource(),
     ConfigurableSource {
 
-    val lusLang: String get() = toLusLang(lang)
+    private val lusLang: String get() = toLusLang(lang)
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -227,8 +227,7 @@ abstract class Luscious :
                     chapters.add(chapter)
                 }
 
-                // API natively caps `total_items` tracking to 1000 so we override that by
-                // directly tracking standard math iteration against the true `numberOfPictures`
+                // total_items stops at 1000
                 if (page * 50 >= totalPictures || data.data.picture.list.items.isEmpty()) {
                     hasMore = false
                 } else {
@@ -240,24 +239,22 @@ abstract class Luscious :
     }
 
     private fun getMergedChapters(manga: SManga, album: FullAlbum): List<SChapter> {
-        val chapters = mutableListOf<SChapter>()
         val chunkCount = ceil(album.numberOfPictures / 1000.0).toInt().coerceAtLeast(1)
 
-        for (i in 1..chunkCount) {
-            val chapter = SChapter.create()
-            chapter.url = "${manga.url}?chunk=$i"
-            chapter.name = if (chunkCount == 1) "Merged Chapter" else "Merged Chapter (Part $i)"
-            chapter.chapter_number = i.toFloat()
-            chapter.date_upload = (album.created?.toLong() ?: 0L) * 1000L
-            chapters.add(chapter)
+        return (chunkCount downTo 1).map { i ->
+            SChapter.create().apply {
+                url = "${manga.url}?chunk=$i"
+                name = if (chunkCount == 1) "Merged Chapter" else "Merged Chapter (Part $i)"
+                chapter_number = i.toFloat()
+                date_upload = (album.created?.toLong() ?: 0L) * 1000L
+            }
         }
-        return chapters.reversed()
     }
 
     // signed original links expire, so they are only used for pages fetched on read
     private fun getPictureUrl(picture: Picture, withOriginals: Boolean): HttpUrl = when {
         getResolutionPref() != "-1" -> {
-            picture.thumbnails[getResolutionPref()?.toInt()!!].url.resolved()
+            picture.thumbnails[getResolutionPref().toInt()].url.resolved()
         }
 
         // the gif of a video, unsigned on the image host
@@ -365,9 +362,8 @@ abstract class Luscious :
         manga.url = data.url
         manga.title = data.title
         manga.thumbnail_url = data.cover.url
-        manga.status = 0
         manga.description = "${data.description}\n\nPictures: ${data.numberOfPictures}\nAnimated Pictures: ${data.numberOfAnimatedPictures}"
-        val genreList = mutableListOf(data.language?.title)
+        val genreList = listOfNotNull(data.language?.title).toMutableList()
         genreList += data.labels
         genreList += data.genres.map { it.title }
         genreList += data.audiences.map { it.title }
@@ -378,7 +374,7 @@ abstract class Luscious :
             manga.author = manga.artist
         }
         genreList += data.content.title
-        manga.genre = genreList.joinToString(", ")
+        manga.genre = genreList.joinToString()
 
         return manga
     }
@@ -441,13 +437,6 @@ abstract class Luscious :
             entryValues = RESOLUTION_PREF_ENTRY_VALUES
             setDefaultValue(RESOLUTION_PREF_DEFAULT_VALUE)
             summary = "%s"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString("${RESOLUTION_PREF_KEY}_$lang", entry).commit()
-            }
         }
         val sortPref = ListPreference(screen.context).apply {
             key = "${SORT_PREF_KEY}_$lang"
@@ -456,34 +445,22 @@ abstract class Luscious :
             entryValues = SORT_PREF_ENTRY_VALUES
             setDefaultValue(SORT_PREF_DEFAULT_VALUE)
             summary = "%s"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString("${SORT_PREF_KEY}_$lang", entry).commit()
-            }
         }
         val mergeChapterPref = CheckBoxPreference(screen.context).apply {
             key = "${MERGE_CHAPTER_PREF_KEY}_$lang"
             title = MERGE_CHAPTER_PREF_TITLE
             summary = MERGE_CHAPTER_PREF_SUMMARY
             setDefaultValue(MERGE_CHAPTER_PREF_DEFAULT_VALUE)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-                preferences.edit().putBoolean("${MERGE_CHAPTER_PREF_KEY}_$lang", checkValue).commit()
-            }
         }
         screen.addPreference(resolutionPref)
         screen.addPreference(sortPref)
         screen.addPreference(mergeChapterPref)
     }
 
-    fun getMergeChapterPref(): Boolean = preferences.getBoolean("${MERGE_CHAPTER_PREF_KEY}_$lang", MERGE_CHAPTER_PREF_DEFAULT_VALUE)
-    fun getResolutionPref(): String? = preferences.getString("${RESOLUTION_PREF_KEY}_$lang", RESOLUTION_PREF_DEFAULT_VALUE)
+    private fun getMergeChapterPref(): Boolean = preferences.getBoolean("${MERGE_CHAPTER_PREF_KEY}_$lang", MERGE_CHAPTER_PREF_DEFAULT_VALUE)
+    private fun getResolutionPref(): String = preferences.getString("${RESOLUTION_PREF_KEY}_$lang", RESOLUTION_PREF_DEFAULT_VALUE)!!
 
     // older versions stored "position", which the API no longer accepts (HTTP 400)
-    fun getSortPref(): String = preferences.getString("${SORT_PREF_KEY}_$lang", SORT_PREF_DEFAULT_VALUE)
+    private fun getSortPref(): String = preferences.getString("${SORT_PREF_KEY}_$lang", SORT_PREF_DEFAULT_VALUE)
         .takeIf { it in SORT_PREF_ENTRY_VALUES } ?: SORT_PREF_DEFAULT_VALUE
 }
