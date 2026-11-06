@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.lunaranime
 
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -71,7 +70,7 @@ abstract class LunarAnime : KeiSource() {
 
     // ============================== Popular ===============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList())
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", SortFilter.POPULAR)
 
     // =============================== Latest ===============================
 
@@ -88,7 +87,7 @@ abstract class LunarAnime : KeiSource() {
 
         val result = client.get(url, Fetch.XHR).parseAs<LunarRecentResponse>()
         return MangasPage(
-            mangas = result.mangas.map { it.toSManga() },
+            mangas = result.mangas.filter { it.slug.isNotEmpty() }.map { it.toSManga() },
             hasNextPage = (result.page * result.limit) < result.totalCount,
         )
     }
@@ -110,30 +109,29 @@ abstract class LunarAnime : KeiSource() {
 
             filters.forEach { filter ->
                 when (filter) {
-                    is StatusFilter -> filter.toValue()?.let { addQueryParameter("status", it) }
-                    is TypeFilter -> filter.toValue()?.let { addQueryParameter("country", it) }
-                    is LanguageFilter -> filter.toValue()?.let { addQueryParameter("language", it) }
-                    is YearFilter -> {
-                        val year = filter.state
-                        if (year.isNotBlank() && year.toIntOrNull() != null) {
-                            addQueryParameter("year", year)
-                        }
+                    is SortFilter -> {
+                        addQueryParameter("sort", filter.toUriPart())
+                        addQueryParameter("order", if (filter.state?.ascending == true) "asc" else "desc")
                     }
+                    is StatusFilter -> filter.toUriPart()?.let { addQueryParameter("status", it) }
+                    is TypeFilter -> filter.toUriPart()?.let { addQueryParameter("country", it) }
+                    is FormatFilter -> filter.toUriPart()?.let { addQueryParameter("format", it) }
+                    is ContentFilter -> filter.toUriPart()?.let { addQueryParameter("content", it) }
+                    is LanguageFilter -> filter.toUriPart()?.let { addQueryParameter("language", it) }
+                    is YearFilter -> filter.state.toIntOrNull()?.let { addQueryParameter("year", it.toString()) }
                     is GenreFilter -> {
-                        val genres = filter.toGenres()
-                        if (genres.isNotEmpty()) {
-                            addQueryParameter("genres", genres.joinToString(","))
-                        }
+                        filter.included.takeIf { it.isNotEmpty() }?.let { addQueryParameter("genres", it.joinToString(",")) }
+                        filter.excluded.takeIf { it.isNotEmpty() }?.let { addQueryParameter("exclude_genres", it.joinToString(",")) }
                     }
                     else -> {}
                 }
             }
-            addQueryParameter("sort", "relevance")
         }.build()
 
         val result = client.get(url, Fetch.XHR).parseAs<LunarSearchResponse>()
         return MangasPage(
-            mangas = result.manga.map { it.toSManga() },
+            // The site lists blank placeholder rows
+            mangas = result.manga.filter { it.slug.isNotEmpty() }.map { it.toSManga() },
             hasNextPage = result.page < result.totalPages,
         )
     }
@@ -173,6 +171,18 @@ abstract class LunarAnime : KeiSource() {
         return client.get(url, Fetch.XHR).parseAs<LunarMangaResponse>().manga.toSManga()
     }
 
+    override val supportsRelatedMangas = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val url = API_URL.toHttpUrl().newBuilder()
+            .addPathSegments("api/manga")
+            .addPathSegment(manga.url.substringAfterLast("/"))
+            .addPathSegment("similar")
+            .addQueryParameter("limit", "18")
+            .build()
+        return client.get(url, Fetch.XHR).parseAs<LunarSimilarResponse>().data.map { it.toSManga() }
+    }
+
     // ============================== Chapters ==============================
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -202,7 +212,7 @@ abstract class LunarAnime : KeiSource() {
                 passwordInfo.chapterPasswords.any {
                     it.chapterNumber == chapter.chapter && (it.language == null || it.language == chapter.language)
                 }
-            chapter.toSChapter(slug, isLocked)
+            chapter.toSChapter(slug, isLocked, showLanguage = lang == "all")
         }.reversed()
     }
 
@@ -282,25 +292,25 @@ abstract class LunarAnime : KeiSource() {
 
     // ============================== Filters ===============================
 
-    override fun getFilterList(data: JsonElement?): FilterList {
-        val filters = mutableListOf<Filter<*>>(
-            StatusFilter(),
-            TypeFilter(),
-        )
+    override val supportsFilterFetching = true
 
-        if (lang == "all") {
-            filters.add(LanguageFilter())
-        }
-
-        filters.addAll(
-            listOf(
-                YearFilter(),
-                GenreFilter(),
-            ),
-        )
-
-        return FilterList(filters)
+    override suspend fun fetchFilterData(): JsonElement {
+        val url = API_URL.toHttpUrl().newBuilder().addPathSegments("api/manga/search/facets").build()
+        return client.get(url, Fetch.XHR).parseAs<JsonElement>()
     }
+
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
+        buildList {
+            add(SortFilter())
+            add(StatusFilter())
+            add(TypeFilter())
+            add(FormatFilter())
+            add(ContentFilter())
+            if (lang == "all") add(LanguageFilter())
+            add(YearFilter())
+            data?.parseAs<LunarFacetsDto>()?.tags?.takeIf { it.isNotEmpty() }?.let { tags -> add(GenreFilter(tags.map { it.name })) }
+        },
+    )
 
     companion object {
         private const val API_HOST = "api.lunarx.to"

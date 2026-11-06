@@ -17,6 +17,11 @@ keiyoushi {
         "ja",
     )
 
+    deeplink {
+        host("lunarx.to")
+        path("/manga/..*")
+    }
+
     languages.forEach { language ->
         source {
             baseUrl = "https://lunarx.to"

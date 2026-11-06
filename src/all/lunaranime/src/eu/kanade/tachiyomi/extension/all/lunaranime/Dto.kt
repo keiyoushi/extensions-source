@@ -46,6 +46,10 @@ class LunarMangaDto(
     @SerialName("alternative_titles") val alternativeTitles: String? = null,
     val demographic: String? = null,
     val themes: String? = null,
+    private val rating: String? = null,
+    @SerialName("publication_year") private val publicationYear: Int? = null,
+    private val publisher: String? = null,
+    private val serialization: String? = null,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         title = this@LunarMangaDto.title
@@ -55,6 +59,7 @@ class LunarMangaDto(
         artist = this@LunarMangaDto.artist?.trim()
 
         description = MarkdownDescription.Builder()
+            .info(rating, publicationYear?.toString(), publisher, serialization.takeIf { it != publisher })
             .description(this@LunarMangaDto.description)
             .altTitles(alternativeTitles?.parseAs<List<String>>().orEmpty())
             .build()
@@ -62,7 +67,6 @@ class LunarMangaDto(
         status = when (publicationStatus?.lowercase(Locale.ROOT)) {
             "ongoing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
-            "upcoming" -> SManga.ONGOING
             "hiatus" -> SManga.ON_HIATUS
             "cancelled" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
@@ -88,12 +92,12 @@ class LunarChapterListResponse(
 class LunarChapterDto(
     val chapter: String,
     @SerialName("chapter_number") val chapterNumber: Float? = null,
-    @SerialName("chapter_subnumber") val chapterSubnumber: Float? = null,
     @SerialName("chapter_title") val chapterTitle: String? = null,
     val language: String,
     @SerialName("uploaded_at") val uploadedAt: String? = null,
+    @SerialName("uploader_profile") val uploaderProfile: LunarUploaderDto? = null,
 ) {
-    fun toSChapter(mangaSlug: String, isLocked: Boolean): SChapter = SChapter.create().apply {
+    fun toSChapter(mangaSlug: String, isLocked: Boolean, showLanguage: Boolean): SChapter = SChapter.create().apply {
         url = "/manga/$mangaSlug/$chapter?lang=$language"
         val prefix = if (isLocked) "🔒 " else ""
         val chapterName = chapter.removeSuffix(".00").removeSuffix(".0")
@@ -109,9 +113,15 @@ class LunarChapterDto(
         } else {
             "$chapterNum: $chapterTitle"
         }
-        chapter_number = chapter.toFloatOrNull() ?: this@LunarChapterDto.chapterNumber ?: -1f
+        (chapter.toFloatOrNull() ?: this@LunarChapterDto.chapterNumber)?.let { chapter_number = it }
         date_upload = Instant.tryParse(uploadedAt)
-        scanlator = language.uppercase(Locale.ROOT)
+        val languageCode = language.uppercase(Locale.ROOT)
+        val uploader = uploaderProfile?.username?.takeIf { it.isNotBlank() }
+        scanlator = when {
+            uploader == null -> languageCode
+            showLanguage -> "$uploader ($languageCode)"
+            else -> uploader
+        }
     }
 }
 
@@ -329,3 +339,36 @@ class ViewRequestBody(
     val chapter: String,
     val language: String,
 )
+
+@Serializable
+class LunarFacetsDto(
+    val tags: List<LunarFacetDto>,
+)
+
+@Serializable
+class LunarFacetDto(
+    val name: String,
+)
+
+@Serializable
+class LunarUploaderDto(
+    val username: String? = null,
+)
+
+@Serializable
+class LunarSimilarResponse(
+    val data: List<LunarSimilarDto>,
+)
+
+@Serializable
+class LunarSimilarDto(
+    private val slug: String,
+    private val title: String,
+    @SerialName("cover_url") private val coverUrl: String? = null,
+) {
+    fun toSManga(): SManga = SManga.create().apply {
+        url = "/manga/$slug"
+        title = this@LunarSimilarDto.title
+        thumbnail_url = coverUrl
+    }
+}
