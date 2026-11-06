@@ -250,8 +250,11 @@ abstract class ScanManga : KeiSource() {
         return runWebView<LelCall?>(45.seconds) {
             userAgent = headers["User-Agent"]!!
             blockImages = true
-            // The site answers app WebViews with a fake 404 on every request carrying their default value
-            if (!setOriginMatchedHeader("X-Requested-With", "", origins)) return@runWebView reject(Exception("Mettez à jour Android System WebView pour lire cette source."))
+            // The site answers app WebViews with a fake 404 on every request carrying their default value, which only
+            // Android System WebView sends
+            if (!setOriginMatchedHeader("X-Requested-With", "", origins) && System.getProperty("java.vm.name") == "Dalvik") {
+                return@runWebView reject(Exception("Mettez à jour Android System WebView pour lire cette source."))
+            }
             webMessageBridge(bridge, origins) { message ->
                 val lelCall = message.parseAs<LelCall>()
                 // Third-party scripts share this page and can call the hook too
