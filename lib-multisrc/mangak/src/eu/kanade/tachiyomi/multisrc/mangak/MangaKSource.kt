@@ -18,15 +18,16 @@ import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.stringOrNull
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import kotlin.time.Clock
 
 abstract class MangaKSource :
     KeiSource(),
@@ -38,7 +39,7 @@ abstract class MangaKSource :
 
     protected open val preferences: SharedPreferences by getPreferencesLazy()
 
-    // Catches 5xx errors from the primary CDN and falls back to the working domain
+    // Failed qvzr images are retried on the fallback host, like the site's reader
     private val imageFallbackInterceptor = Interceptor { chain ->
         val request = chain.request()
         val response = chain.proceed(request)
@@ -53,8 +54,6 @@ abstract class MangaKSource :
     }
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = this.addInterceptor(imageFallbackInterceptor)
-
-    // ============================== Popular ==============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$apiUrl/titles/search".toHttpUrl().newBuilder().apply {
@@ -71,10 +70,8 @@ abstract class MangaKSource :
 
         val response = client.get(url, Fetch.XHR)
         val dto = response.parseAs<SearchResponseDto>()
-        return MangasPage(dto.items.map { it.toSManga() }, dto.hasNext)
+        return MangasPage(dto.data.items.map { it.toSManga() }, dto.data.pagination.hasNext)
     }
-
-    // ============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$apiUrl/titles/search".toHttpUrl().newBuilder().apply {
@@ -90,10 +87,8 @@ abstract class MangaKSource :
 
         val response = client.get(url, Fetch.XHR)
         val dto = response.parseAs<SearchResponseDto>()
-        return MangasPage(dto.items.map { it.toSManga() }, dto.hasNext)
+        return MangasPage(dto.data.items.map { it.toSManga() }, dto.data.pagination.hasNext)
     }
-
-    // ============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$apiUrl/titles/search".toHttpUrl().newBuilder().apply {
@@ -129,15 +124,13 @@ abstract class MangaKSource :
                     is StatusFilter -> if (filter.selected.isNotBlank()) addQueryParameter("status", filter.selected)
                     is TypeFilter -> if (filter.selected.isNotBlank()) addQueryParameter("type", filter.selected)
                     is DemographicFilter -> if (filter.selected.isNotBlank()) addQueryParameter("demographic", filter.selected)
+                    is FormatFilter -> if (filter.selected.isNotBlank()) addQueryParameter("format", filter.selected)
+                    is TagFilter -> if (filter.state.isNotBlank()) addQueryParameter("tag", filter.state.toTagSlug())
+                    is AuthorFilter -> if (filter.state.isNotBlank()) addQueryParameter("author", filter.state)
+                    is MinChapterFilter -> if (filter.state.isNotBlank()) addQueryParameter("min_ch", filter.state)
+                    is MaxChapterFilter -> if (filter.state.isNotBlank()) addQueryParameter("max_ch", filter.state)
                     else -> {}
                 }
-            }
-
-            filters.firstInstanceOrNull<AuthorFilter>()?.state?.takeIf { it.isNotBlank() }?.let {
-                addQueryParameter("author", it)
-            }
-            filters.firstInstanceOrNull<MinChapterFilter>()?.state?.takeIf { it.isNotBlank() }?.let {
-                addQueryParameter("min_ch", it)
             }
 
             if (includedGenres.isNotEmpty()) addQueryParameter("genres", includedGenres.joinToString(","))
@@ -146,17 +139,27 @@ abstract class MangaKSource :
 
         val response = client.get(url, Fetch.XHR)
         val dto = response.parseAs<SearchResponseDto>()
-        return MangasPage(dto.items.map { it.toSManga() }, dto.hasNext)
+        return MangasPage(dto.data.items.map { it.toSManga() }, dto.data.pagination.hasNext)
     }
 
-    // ======================= Details & Chapters ==========================
-
+    // Entries migrated from MangaBuddy keep their old "#id" suffix
     override fun getMangaUrl(manga: SManga): String {
         val path = manga.url.substringBefore("#")
+        // `path` may be relative or already absolute depending on the API response,
+        // so resolve it against baseUrl instead of blindly concatenating.
         return baseUrl.toHttpUrl().resolve(path)?.toString() ?: (baseUrl + path)
     }
 
+    // `chapter.url` may be relative or already absolute depending on the API response,
+    // so resolve it against baseUrl instead of blindly concatenating.
     override fun getChapterUrl(chapter: SChapter): String = baseUrl.toHttpUrl().resolve(chapter.url)?.toString() ?: (baseUrl + chapter.url)
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val slug = url.pathSegments.first().ifEmpty { return null }
+        val titleUrl = baseUrl.toHttpUrl().newBuilder().addPathSegment(slug).build()
+        return fetchTitle(titleUrl.toString())?.toSManga()?.apply { initialized = true }
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -164,70 +167,49 @@ abstract class MangaKSource :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
-        val detailsUrl = getMangaUrl(manga)
-
-        val needsNextJsData = fetchDetails ||
-            (fetchChapters && manga.memo["id"]?.jsonPrimitive?.contentOrNull == null)
-
-        val nextJsData = if (needsNextJsData) {
-            val response = client.get(detailsUrl, Fetch.DOCUMENT)
-            response.extractNextJs<NextJsDto> {
-                it is JsonObject && "pageProps" in it
-            } ?: throw IllegalStateException("Could not extract Next.js data for: $detailsUrl")
+        val memoId = manga.memo["id"]?.stringOrNull
+        val title = if (fetchDetails || memoId == null) {
+            async {
+                fetchTitle(getMangaUrl(manga)) ?: throw Exception("Could not find manga details")
+            }
+        } else {
+            null
+        }
+        val chapterList = if (fetchChapters) {
+            async { fetchChaptersByApiId(memoId ?: title!!.await().id) }
         } else {
             null
         }
 
-        val detailsDeferred = async {
-            if (fetchDetails) {
-                nextJsData?.pageProps?.initialManga?.toSManga(manga.url)
-                    ?: throw IllegalStateException("Could not find manga details for: $detailsUrl")
-            } else {
-                manga
-            }
-        }
-
-        val chaptersDeferred = async {
-            if (fetchChapters) {
-                val id = manga.memo["id"]?.jsonPrimitive?.contentOrNull
-                    ?: nextJsData?.pageProps?.initialManga?.id
-                    ?: throw IllegalStateException("Could not find manga ID for migration for: $detailsUrl")
-
-                fetchChaptersByApiId(id)
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
+        SMangaUpdate(title?.await()?.toSManga(manga.url) ?: manga, chapterList?.await() ?: chapters)
     }
+
+    private suspend fun fetchTitle(url: String): InitialMangaDto? = client.get(url, Fetch.DOCUMENT)
+        .extractNextJs<MangaPageDto> { it is JsonObject && "pageProps" in it }
+        ?.pageProps?.initialManga
 
     private suspend fun fetchChaptersByApiId(id: String): List<SChapter> {
-        val url = "$apiUrl/titles/$id/chapters?cv=${System.currentTimeMillis()}"
-        val response = client.get(url, Fetch.XHR)
-        val chapterList = response.parseAs<ChapterListResponseDto>().chapters
-
-        return chapterList.sortedByDescending { it.chapterNumber ?: 0f }
-            .map { it.toSChapter() }
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("titles/$id/chapters")
+            // The chapter list is cached at the edge for a day
+            addQueryParameter("cv", Clock.System.now().toEpochMilliseconds().toString())
+        }.build()
+        return client.get(url, Fetch.XHR).parseAs<ChapterListResponseDto>().data.chapters.map { it.toSChapter() }
     }
-
-    // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
         val response = client.get(chapterUrl, Fetch.DOCUMENT)
-        val dto = response.extractNextJs<NextJsDto> {
+        val dto = response.extractNextJs<ChapterPageDto> {
             it is JsonObject && "pageProps" in it
         }
 
-        val images = dto?.pageProps?.initialChapter?.images ?: return emptyList()
+        val images = dto?.pageProps?.initialChapter?.images ?: throw Exception("Could not find pages")
 
         return images.mapIndexed { index, url ->
             Page(index, imageUrl = url)
         }
     }
-
-    // ============================== Filters ==============================
 
     override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres", Fetch.XHR).parseAs<JsonElement>()
 
@@ -240,9 +222,12 @@ abstract class MangaKSource :
             StatusFilter(),
             TypeFilter(),
             DemographicFilter(),
+            FormatFilter(),
             Filter.Separator(),
             AuthorFilter(),
             MinChapterFilter(),
+            MaxChapterFilter(),
+            TagFilter(),
         )
         if (genres.isNotEmpty()) {
             filters.add(Filter.Separator())
@@ -251,12 +236,12 @@ abstract class MangaKSource :
         return FilterList(filters)
     }
 
-    // ============================= Utilities =============================
+    private fun String.toTagSlug() = lowercase().replace(TAG_SLUG_DROP_REGEX, "").trim().replace(WHITESPACE_REGEX, "-")
 
     private fun getBlacklist(): Set<String> = preferences.getStringSet(PREF_BLACKLIST_KEY, emptySet()) ?: emptySet()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val genres = getFilterList().filterIsInstance<GenreList>().firstOrNull()?.state.orEmpty()
+        val genres = getFilterList().firstInstanceOrNull<GenreList>()?.state.orEmpty()
         val blacklistPref = MultiSelectListPreference(screen.context).apply {
             key = PREF_BLACKLIST_KEY
             title = "Global Genre Blacklist"
@@ -281,6 +266,8 @@ abstract class MangaKSource :
         private const val SORT_LATEST = "latest"
         private const val WINDOW_WEEK = "week"
 
-        private val IMAGE_FALLBACK_REGEX = "rx\\.qvzr[a-z]\\.org".toRegex()
+        private val IMAGE_FALLBACK_REGEX = """rx\.qvzr[a-z]\.org""".toRegex()
+        private val TAG_SLUG_DROP_REGEX = """[^a-z0-9\s-]""".toRegex()
+        private val WHITESPACE_REGEX = """\s+""".toRegex()
     }
 }

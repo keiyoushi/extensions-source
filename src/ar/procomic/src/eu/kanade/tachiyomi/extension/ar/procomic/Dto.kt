@@ -166,6 +166,8 @@ class ChapterRefDto(
 class SlotDto(
     // The failed page, by its performance.timeOrigin.
     val error: Double? = null,
+    // The reader waits on its security check.
+    val check: Boolean = false,
     val count: Int? = null,
     val origin: String? = null,
     val url: String? = null,

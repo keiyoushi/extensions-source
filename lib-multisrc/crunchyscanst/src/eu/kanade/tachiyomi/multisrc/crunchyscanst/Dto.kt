@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.fr.crunchyscanunoriginal
+package eu.kanade.tachiyomi.multisrc.crunchyscanst
 
 import keiyoushi.utils.stringOrNull
 import kotlinx.serialization.SerialName
