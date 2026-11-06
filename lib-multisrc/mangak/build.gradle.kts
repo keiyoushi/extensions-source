@@ -3,10 +3,10 @@ plugins {
 }
 
 keiyoushi {
-    baseVersionCode = 5
+    baseVersionCode = 6
     libVersion = "1.6"
 
     deeplink {
-        path("/.*/..*")
+        path("/..*")
     }
 }
