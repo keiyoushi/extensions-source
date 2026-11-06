@@ -97,8 +97,6 @@ abstract class Kemono :
 
     private val imgCdnUrl get() = baseUrl.replace("//", "//img.")
 
-    private fun String.formatAvatarUrl(): String = removePrefix("https://").replaceBefore('/', imgCdnUrl)
-
     override suspend fun getPopularManga(page: Int) = searchMangas(page, sortBy = "pop" to "desc")
 
     override suspend fun getLatestUpdates(page: Int) = searchMangas(page, sortBy = "lat" to "desc")
@@ -251,7 +249,7 @@ abstract class Kemono :
         val (service, _, user) = segments
         val zone = zone(service)
         if (segments.size == 3) {
-            if (fetchDetails) manga.thumbnail_url = manga.thumbnail_url!!.formatAvatarUrl()
+            if (fetchDetails) manga.thumbnail_url = "$imgCdnUrl/icons/$service/$user"
             return SMangaUpdate(manga, if (fetchChapters) fetchChapterList(manga, zone) else chapters)
         }
         return coroutineScope {
