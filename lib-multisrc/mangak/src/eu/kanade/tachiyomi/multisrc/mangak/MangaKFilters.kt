@@ -10,6 +10,8 @@ class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres)
 
 class AuthorFilter : Filter.Text("Author")
 class MinChapterFilter : Filter.Text("Min Chapters")
+class MaxChapterFilter : Filter.Text("Max Chapters")
+class TagFilter : Filter.Text("Tag")
 
 open class SelectFilter(
     displayName: String,
@@ -24,17 +26,16 @@ class SortFilter :
     SelectFilter(
         "Sort By",
         arrayOf(
-            Pair("Best Match", ""),
-            Pair("Most Followed", "popular"),
-            Pair("Latest Updated", "latest"),
-            Pair("Recently Added", "newest"),
-            Pair("Highest Rating", "rating"),
-            Pair("Most Viewed: Today", "views_today"),
-            Pair("Most Viewed: 7 Days", "views_7days"),
-            Pair("Most Viewed: 30 Days", "views_30days"),
-            Pair("Most Viewed: All Time", "views"),
-            Pair("Most Chapters", "chapters"),
-            Pair("A-Z", "alphabetical"),
+            "Best Match" to "",
+            "Most Followed" to "popular",
+            "Latest Updated" to "latest",
+            "Recently Added" to "newest",
+            "Highest Rating" to "rating",
+            "Most Viewed: Today" to "views_today",
+            "Most Viewed: 7 Days" to "views_7days",
+            "Most Viewed: 30 Days" to "views_30days",
+            "Most Viewed: All Time" to "views",
+            "Most Chapters" to "chapters",
         ),
     )
 
@@ -42,11 +43,11 @@ class ContentRatingFilter :
     SelectFilter(
         "Content Rating",
         arrayOf(
-            Pair("Any", ""),
-            Pair("Safe", "safe"),
-            Pair("Suggestive", "suggestive"),
-            Pair("Erotica", "erotica"),
-            Pair("Pornographic", "pornographic"),
+            "Any" to "",
+            "Safe" to "safe",
+            "Suggestive" to "suggestive",
+            "Erotica" to "erotica",
+            "Pornographic" to "pornographic",
         ),
     )
 
@@ -54,11 +55,9 @@ class StatusFilter :
     SelectFilter(
         "Status",
         arrayOf(
-            Pair("Any", ""),
-            Pair("Ongoing", "ongoing"),
-            Pair("Completed", "completed"),
-            Pair("Hiatus", "hiatus"),
-            Pair("Cancelled", "cancelled"),
+            "Any" to "",
+            "Ongoing" to "ongoing",
+            "Completed" to "completed",
         ),
     )
 
@@ -66,10 +65,20 @@ class TypeFilter :
     SelectFilter(
         "Type",
         arrayOf(
-            Pair("Any", ""),
-            Pair("Manga", "manga"),
-            Pair("Manhwa", "manhwa"),
-            Pair("Manhua", "manhua"),
+            "Any" to "",
+            "Manga" to "manga",
+            "Manhwa" to "manhwa",
+            "Manhua" to "manhua",
+        ),
+    )
+
+class FormatFilter :
+    SelectFilter(
+        "Format",
+        arrayOf(
+            "Any" to "",
+            "Oneshot" to "oneshot",
+            "Adaptation" to "adaptation",
         ),
     )
 
@@ -77,21 +86,18 @@ class DemographicFilter :
     SelectFilter(
         "Demographics",
         arrayOf(
-            Pair("Any", ""),
-            Pair("Boy (Shounen + Seinen)", "shounen,seinen"),
-            Pair("Girl (Shoujo + Josei)", "shoujo,josei"),
-            Pair("Shounen", "shounen"),
-            Pair("Shoujo", "shoujo"),
-            Pair("Seinen", "seinen"),
-            Pair("Josei", "josei"),
+            "Any" to "",
+            "Boy (Shounen + Seinen)" to "shounen,seinen",
+            "Girl (Shoujo + Josei)" to "shoujo,josei",
+            "Shounen" to "shounen",
+            "Shoujo" to "shoujo",
+            "Seinen" to "seinen",
+            "Josei" to "josei",
         ),
     )
 
 fun getGenreList(data: JsonElement? = null, blacklist: Set<String> = emptySet()): List<Genre> {
-    val items = data
-        ?.let { runCatching { it.parseAs<GenreResponseDto>() }.getOrNull() }
-        ?.genres
-        .orEmpty()
+    val items = data?.parseAs<GenreResponseDto>()?.data?.items.orEmpty()
 
     return items.map { item ->
         Genre(
