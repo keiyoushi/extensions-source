@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.fr.crunchyscanunoriginal
+package eu.kanade.tachiyomi.multisrc.crunchyscanst
 
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
