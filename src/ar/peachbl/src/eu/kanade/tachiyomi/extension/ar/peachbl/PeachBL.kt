@@ -102,9 +102,11 @@ abstract class PeachBL : KeiSource() {
     private fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1.wt-title")!!.text()
         thumbnail_url = document.selectFirst("img[fifulocal-featured]")?.absUrl("src")
-        val details = document.select(".wt-detail-row").associate {
-            it.selectFirst(".wt-detail-key")?.text().orEmpty() to it.selectFirst(".wt-detail-val")!!
-        }
+        val details = document.select(".wt-detail-row").mapNotNull { row ->
+            val key = row.selectFirst(".wt-detail-key")?.text() ?: return@mapNotNull null
+            val value = row.selectFirst(".wt-detail-val") ?: return@mapNotNull null
+            key to value
+        }.toMap()
         genre = details["التصنيفات"]?.select("a")?.eachText()?.joinToString()
         artist = details["الرسّام"]?.text()
         author = details["الكاتب"]?.text()
