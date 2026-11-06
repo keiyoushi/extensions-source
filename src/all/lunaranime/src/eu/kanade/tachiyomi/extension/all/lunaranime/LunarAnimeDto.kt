@@ -4,7 +4,7 @@ import android.util.Base64
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParseDateTime
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -17,9 +17,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.time.Instant
 
 @Serializable
 class LunarSearchResponse(
@@ -131,15 +130,10 @@ class LunarChapterDto(
             "$chapterNum: $chapterTitle"
         }
         chapter_number = chapter.toFloatOrNull() ?: this@LunarChapterDto.chapterNumber
-        date_upload = uploadedAt?.let { parseChapterDate(it) } ?: 0L
+        date_upload = Instant.tryParse(uploadedAt)
         scanlator = language.uppercase(Locale.ROOT)
     }
-
-    private fun parseChapterDate(date: String): Long = DATE_FORMAT.tryParseDateTime(date)
 }
-
-private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
-    .withZone(ZoneOffset.UTC)
 
 /**
  * The two seed strings every chapter token and session key is derived from.
