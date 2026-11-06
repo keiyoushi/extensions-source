@@ -95,7 +95,10 @@ abstract class HDPornComics : KeiSource() {
             val chapter = SChapter.create().apply {
                 url = manga.url
                 name = "Chapter"
-                date_upload = Instant.tryParse(DATE_MODIFIED_REGEX.find(document.html())?.groupValues?.get(1))
+                date_upload = Instant.tryParse(
+                    document.selectFirst("script.yoast-schema-graph")?.data()
+                        ?.let { DATE_MODIFIED_REGEX.find(it)?.groupValues?.get(1) },
+                )
             }
             SMangaUpdate(comicDetailsParse(document).apply { url = manga.url }, listOf(chapter))
         }
