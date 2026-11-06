@@ -144,14 +144,6 @@ abstract class HDPornComics : KeiSource() {
         ),
     )
 
-    private class TypeFilter : Filter.Select<String>("Type", arrayOf("Comics", "Manhwa"))
-
-    private class TagFilter(tags: Map<String, String>) : Filter.Select<String>("Comics tag", arrayOf("Any") + tags.keys) {
-        private val slugs = listOf(null) + tags.values
-
-        fun selectedPath() = slugs[state]
-    }
-
     private fun String.cleanTitle() = replace(TITLE_SUFFIX_REGEX, "")
 
     companion object {
