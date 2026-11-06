@@ -14,15 +14,10 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.tryParseDateTime
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.OkHttpClient
-import org.jsoup.nodes.Document
 import org.jsoup.select.Elements
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
@@ -30,12 +25,11 @@ abstract class Buttsmithy : KeiSource() {
 
     // the full version of alfie for some reason has a separate url and isn't accessed like the other comics
     private val baseUrlAlfie = "https://buttsmithy.com"
-    private val chapterOverviewBaseUrl = "$baseUrlAlfie/archives/chapter"
 
     private val inCase = "InCase"
     private val alfieTitle = "Alfie"
-    private val alfieDateParser = DateTimeFormatter.ofPattern("H:mm MMMM d, yyyy", Locale.US)
-    private val pageNrRegex = "p*[0-9]+".toRegex()
+    private val chapterNumberRegex = Regex("""\d+(?:\.\d+)?""")
+    private val imageSizeSuffixRegex = Regex("""-\d+x\d+(?=\.\w+$)""")
 
     override val supportsLatest = false
 
@@ -52,36 +46,10 @@ abstract class Buttsmithy : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) fetchMangaDetails(manga) else manga }
-        val chapterList = async {
-            when {
-                !fetchChapters -> chapters
-                // TODO misc-chapter is currently broken
-                manga.title.contains(alfieTitle) -> fetchAlfiePagesAsChapters(manga.url).reversed()
-                else -> fetchOtherPagesAsChapters(manga.title, baseUrl + manga.url).reversed()
-            }
-        }
-
-        SMangaUpdate(details.await(), chapterList.await())
-    }
-
-    private suspend fun fetchMangaDetails(manga: SManga): SManga = if (manga.title.contains(alfieTitle)) {
-        val pageDoc = client.get(baseUrlAlfie, Fetch.DOCUMENT).asJsoup()
-        val mostRecentChapTitle = extractChapterTitleFromPageDoc(pageDoc)
-        val chapTitle = manga.title.substringAfter("Alfie - ").trim()
-
-        SManga.create().apply {
-            url = "$chapterOverviewBaseUrl/${chapterTitleToChapterUrlName(chapTitle)}"
-            title = "$alfieTitle - $chapTitle"
-            author = inCase
-            artist = inCase
-            status = decideAlfieStatusFromTitle(chapTitle, mostRecentChapTitle)
-            genre = "fantasy, NSFW"
-            thumbnail_url = generateImageUrlWithText(alfieTitle)
-        }
-    } else {
-        manga
+    ): SMangaUpdate = when {
+        manga.url.startsWith(baseUrlAlfie) -> SMangaUpdate(alfieManga(), fetchAlfieChapters())
+        fetchChapters -> SMangaUpdate(manga, fetchOtherPagesAsChapters(manga.title, baseUrl + manga.url).reversed())
+        else -> SMangaUpdate(manga, chapters)
     }
 
     // Alfie manga and all chapters store absolute urls
@@ -90,6 +58,8 @@ abstract class Buttsmithy : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = chapter.url
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
+        if (chapter.url.startsWith(baseUrlAlfie)) return fetchAlfiePages(chapter.url)
+
         val comicPageDoc = client.get(chapter.url, Fetch.DOCUMENT).asJsoup()
         val imageUrl = comicPageDoc.select("#comic img").attr("src")
 
@@ -149,62 +119,39 @@ abstract class Buttsmithy : KeiSource() {
         }
     }
 
-    /**
-     * Fetches all the pages from one of Alfies chapters and returns them as separate SChapters.
-     *
-     * @param currentPageUrl url of the current page the function will start / continue the recursion on
-     * @param lastPageNr page Number the function start enumeration on if no page number can be extracted from the title
-     * @param allChapters list of all chapters (should be initialized with an empty list)
-     * @return returns a list of all pages that were found in the chapter overview as SChapters
-     * */
-    private tailrec suspend fun fetchAlfiePagesAsChapters(
-        currentPageUrl: String,
-        lastPageNr: Float = 0f,
-        allChapters: MutableList<SChapter> = mutableListOf(),
-    ): MutableList<SChapter> {
-        val currentDoc = client.get(currentPageUrl, Fetch.DOCUMENT).asJsoup()
-        val pagesAsChapters = currentDoc.select("article.has-post-thumbnail .post-content")
-            .mapIndexed { index, postElement ->
-                val postTitleElement = postElement.select(".post-info .post-title a")
-                val chapUrl = postTitleElement.attr("href")
-                val title = postTitleElement.text()
-                // this is needed for the MISC chapter where the pages are not numbered
-                val pageNr =
-                    if (pageNrRegex.matches(title)) {
-                        title.substringAfter("p").trim().toFloat()
-                    } else {
-                        index + lastPageNr
-                    }
-
-                val dateString = postElement.select(".post-info .post-date").text()
-                val timeString = postElement.select(".post-info .post-time").text()
-                val date = alfieDateParser.tryParseDateTime("$timeString $dateString")
-
+    private suspend fun fetchAlfieChapters(): List<SChapter> {
+        val document = client.get(baseUrlAlfie, Fetch.DOCUMENT).asJsoup()
+        return document.select("#chapter option.level-0")
+            .map { option ->
                 SChapter.create().apply {
-                    /* Alfie has its own name space and thus can't be handled like other comics.
-                     * This means the setUrlWithoutDomain method can't be used */
-                    url = chapUrl
-                    name = title
-                    chapter_number = pageNr
-                    date_upload = date
+                    url = option.absUrl("value")
+                    name = option.text()
                 }
             }
+            // the site lists its chapters out of order; Misc (holiday extras) goes on top
+            .sortedByDescending { chapterNumberRegex.find(it.name)?.value?.toFloat() ?: Float.MAX_VALUE }
+    }
 
-        allChapters.addAll(pagesAsChapters)
-
-        val potentialNextPageUrl = currentDoc.select(".paginav-next a").attr("href")
-        return if (potentialNextPageUrl.isEmpty()) {
-            allChapters
-        } else {
-            fetchAlfiePagesAsChapters(potentialNextPageUrl, lastPageNr, allChapters)
+    // Chapter archives list 10 comics per page, newest first; wide images there are WordPress's resized copy
+    private suspend fun fetchAlfiePages(firstComicUrl: String): List<Page> {
+        val firstComic = client.get(firstComicUrl, Fetch.DOCUMENT).asJsoup()
+        var archiveUrl = firstComic.selectFirst(".comic-chapter a")!!.absUrl("href")
+        val imageUrls = mutableListOf<String>()
+        while (archiveUrl.isNotEmpty()) {
+            val archive = client.get(archiveUrl, Fetch.DOCUMENT).asJsoup()
+            archive.select(".comic-thumbnail-in-archive img").mapTo(imageUrls) {
+                it.absUrl("src").replace(imageSizeSuffixRegex, "")
+            }
+            archiveUrl = archive.selectFirst(".paginav-next a")?.absUrl("href").orEmpty()
         }
+        return imageUrls.asReversed().mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
 
     /**
      * Fetches all comics that are currently hosted on buttsmithy (including the first version of
      * alfie currently)
      *
-     * @return a list of all comics currently hosted on buttsmithy with alfies chapters separated into separate mangas
+     * @return a list of all comics currently hosted on buttsmithy
      */
     private suspend fun fetchAllComics(): List<SManga> {
         val mainDoc = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
@@ -213,58 +160,22 @@ abstract class Buttsmithy : KeiSource() {
         // Incase other comics (ignoring alfie because alfie has its own subdomain)
         val otherComicsSelector = "#menu-item-38"
 
-        val alfieChapters = fetchAlfieSMangas()
         val cyoaComics = convertMenuElementToSManga(mainDoc.select(cyoaSelector))
         val otherComics = convertMenuElementToSManga(mainDoc.select(otherComicsSelector))
 
         // concat all different comic lists
-        return listOf(alfieChapters, cyoaComics, otherComics).flatten()
+        return listOf(listOf(alfieManga()), cyoaComics, otherComics).flatten()
     }
 
     private fun String.lowercase(): String = this.lowercase(Locale.getDefault())
 
-    /**
-     * Fetches all chapters of Alfie (one of InCases comics) as separate SManga because this comic
-     * is gigantic and only updates one page at a time. Putting the pages into SChapters would block
-     * the automatic update fetching.
-     *
-     * @return all of Alfies chapters as separate SManga
-     */
-    private suspend fun fetchAlfieSMangas(): List<SManga> {
-        val pageDoc = client.get(baseUrlAlfie, Fetch.DOCUMENT).asJsoup()
-        val mostRecentChapTitle = extractChapterTitleFromPageDoc(pageDoc)
-
-        val chaptersAsSManga: List<SManga> =
-            pageDoc.select("#chapter").select("option.level-0")
-                .map { chapterElement ->
-                    val chapTitle = chapterElement.text().lowercase()
-                    val chapUrlName = chapterTitleToChapterUrlName(chapTitle)
-
-                    SManga.create().apply {
-                        url = "$chapterOverviewBaseUrl/$chapUrlName"
-                        title = "$alfieTitle - $chapTitle"
-                        author = inCase
-                        artist = inCase
-                        status = decideAlfieStatusFromTitle(chapTitle, mostRecentChapTitle)
-                        genre = "fantasy, NSFW"
-                        thumbnail_url = generateImageUrlWithText(alfieTitle)
-                    }
-                }
-
-        return chaptersAsSManga
-    }
-
-    private fun decideAlfieStatusFromTitle(chapTitle: String, mostRecentChapTitle: String): Int = if (chapTitle == mostRecentChapTitle) {
-        SManga.UNKNOWN
-    } else {
-        SManga.COMPLETED
-    }
-
-    private fun extractChapterTitleFromPageDoc(doc: Document): String = doc.select(".comic-chapter a").first()!!.text().lowercase()
-
-    private fun chapterTitleToChapterUrlName(chapTitle: String): String = when (chapTitle.lowercase()) {
-        "chapter 1" -> "chapter-1v2"
-        else -> chapTitle.replace(" ", "-").replace(".", "-")
+    private fun alfieManga() = SManga.create().apply {
+        url = baseUrlAlfie
+        title = alfieTitle
+        author = inCase
+        artist = inCase
+        genre = "fantasy, NSFW"
+        thumbnail_url = generateImageUrlWithText(alfieTitle)
     }
 
     private fun convertMenuElementToSManga(menuElement: Elements): List<SManga> {
@@ -273,7 +184,6 @@ abstract class Buttsmithy : KeiSource() {
         val linkElements = menuElement.select(comicLinkSelector)
         return linkElements
             // filter out the first Alfie chapter that is still hosted under "incase.buttsmithy.com"
-            // see "fetchAlfieSMangas()" for how Alfie should be retrieved
             .filter { linkElement -> !linkElement.text().contains(alfieTitle) }
             .map { linkElement ->
                 val comicTitle = linkElement.text()
