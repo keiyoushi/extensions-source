@@ -6,10 +6,16 @@
         .getEntriesByType('resource')
         .some((entry) => entry.name.includes('/chapter-deferred-media/') && entry.responseEnd > 0);
     const row = document.querySelector('[data-reader-image-row]');
-    if (!fetched || !row) return {};
+    if (!row) return {};
     const list = row.parentElement;
-    // The reader's "loading the remaining pages" row, with a reload button when that failed.
+    // The reader's status row: its security check before the remaining pages, "loading the remaining pages" after,
+    // with a reload button when that failed.
     const status = [...list.children].find((child) => !child.querySelector('img') && child.textContent.trim());
+    if (!fetched) {
+        if (!status || status.querySelector('button')) return {};
+        status.scrollIntoView({ block: 'center' });
+        return { check: true };
+    }
     if (status) return status.querySelector('button') ? { error: performance.timeOrigin } : {};
     const count = list.children.length;
     const slot = list.children[index];

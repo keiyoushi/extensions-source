@@ -6,12 +6,12 @@ plugins {
 
 keiyoushi {
     name = "ProComic"
-    versionCode = 8
+    versionCode = 9
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
-        baseUrl = "https://procomic.net"
+        baseUrl = "https://procomic.pro"
         lang = "ar"
         versionId = 2
     }
