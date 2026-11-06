@@ -25,6 +25,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class KomikAV : KeiSource() {
@@ -50,16 +54,16 @@ abstract class KomikAV : KeiSource() {
         return mangaList(url, page)
     }
 
-    // The site's "load more" asks for ?page=N and gets pages 1 to N in one response,
-    // so keep only the cards after the first (N - 1) pages.
+    // The site's "load more" asks for ?page=N and gets pages 1 to N in one response.
+    // The app drops cards it has already shown, so each app page asks for several site pages.
     private suspend fun mangaList(url: HttpUrl, page: Int): MangasPage {
-        val pageUrl = if (page > 1) url.newBuilder().addQueryParameter("page", page.toString()).build() else url
+        val sitePage = page * SITE_PAGES_PER_PAGE
+        val pageUrl = url.newBuilder().addQueryParameter("page", sitePage.toString()).build()
         val mangas = client.get(pageUrl, Fetch.DOCUMENT).asJsoup()
             .select("a.relative.overflow-hidden[href^=\"/manga/\"]:has(img.lazyimage)")
             .map(::mangaFromElement)
             .distinctBy { it.url }
-            .drop((page - 1) * PAGE_SIZE)
-        return MangasPage(mangas, mangas.size >= PAGE_SIZE)
+        return MangasPage(mangas, mangas.size >= sitePage * PAGE_SIZE)
     }
 
     private fun mangaFromElement(element: Element) = SManga.create().apply {
@@ -118,17 +122,17 @@ abstract class KomikAV : KeiSource() {
     private fun parseRelativeDate(text: String?): Long {
         val parts = text?.split(' ') ?: return 0L
         val value = parts.getOrNull(0)?.toLongOrNull() ?: return 0L
-        val seconds = when (parts.getOrNull(1)) {
-            "dtk" -> 1L
-            "mnt" -> 60L
-            "jam" -> 3_600L
-            "hari" -> 86_400L
-            "mgg" -> 604_800L
-            "bln" -> 2_419_200L
-            "thn" -> 29_030_400L
+        val ago = when (parts.getOrNull(1)) {
+            "dtk" -> value.seconds
+            "mnt" -> value.minutes
+            "jam" -> value.hours
+            "hari" -> value.days
+            "mgg" -> (value * 7).days
+            "bln" -> (value * 28).days
+            "thn" -> (value * 336).days
             else -> return 0L
         }
-        return System.currentTimeMillis() - value * seconds * 1000
+        return System.currentTimeMillis() - ago.inWholeMilliseconds
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
@@ -161,5 +165,6 @@ abstract class KomikAV : KeiSource() {
 
     private companion object {
         const val PAGE_SIZE = 18
+        const val SITE_PAGES_PER_PAGE = 3
     }
 }

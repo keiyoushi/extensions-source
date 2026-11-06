@@ -6,7 +6,6 @@ plugins {
 
 keiyoushi {
     name = "Komik AV"
-    // Was 6 on the MangaThemesia theme (published 1.6.7), so it must stay above 7.
     versionCode = 8
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
