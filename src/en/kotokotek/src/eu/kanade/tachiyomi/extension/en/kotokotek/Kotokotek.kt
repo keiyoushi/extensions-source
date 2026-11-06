@@ -15,6 +15,8 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
@@ -74,9 +76,10 @@ abstract class Kotokotek : KeiSource() {
     }
 
     // The episode pages only render their first images, the rest comes from Wix's dynamic pages router
-    override suspend fun getPageList(chapter: SChapter): List<Page> {
+    override suspend fun getPageList(chapter: SChapter): List<Page> = coroutineScope {
         val chapterUrl = getChapterUrl(chapter)
         val prefix = chapter.url.removePrefix("$SITE_PATH/").substringBefore('/')
+        val tokens = async { client.get("$baseUrl$SITE_PATH/_api/v1/access-tokens", Fetch.XHR.from(chapterUrl)).parseAs<AccessTokens>() }
         val router = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
             .selectFirst("script#wix-viewer-model")!!.data()
             .parseAs<ViewerModel>()
@@ -99,7 +102,11 @@ abstract class Kotokotek : KeiSource() {
             .addEncodedQueryParameter(".r", request.toJsonString().gzipBase64Url())
             .build()
 
-        return client.get(url, Fetch.XHR.from(chapterUrl)).parseAs<RouterResponse>()
+        val routerHeaders = headers.newBuilder()
+            .set("Authorization", tokens.await().apps.getValue(router.urlData.appDefinitionId).instance)
+            .build()
+
+        client.get(url, routerHeaders, Fetch.XHR.from(chapterUrl)).parseAs<RouterResponse>()
             .result.data.items.first().mediagallery
             .mapIndexed { index, media ->
                 Page(index, imageUrl = "$MEDIA_URL/${media.src.removePrefix("wix:image://v1/").substringBefore('/')}")

@@ -16,7 +16,7 @@ class DynamicPages(val prefixToRouterFetchData: Map<String, RouterFetchData>)
 class RouterFetchData(val urlData: UrlData, val optionsData: OptionsData)
 
 @Serializable
-class UrlData(val basePath: String, val queryParams: String)
+class UrlData(val basePath: String, val queryParams: String, val appDefinitionId: String)
 
 @Serializable
 class OptionsData(val bodyData: RouterBodyData)
@@ -60,3 +60,9 @@ class RouterItem(val mediagallery: List<GalleryMedia>)
 
 @Serializable
 class GalleryMedia(val src: String)
+
+@Serializable
+class AccessTokens(val apps: Map<String, AppToken>)
+
+@Serializable
+class AppToken(val instance: String)
