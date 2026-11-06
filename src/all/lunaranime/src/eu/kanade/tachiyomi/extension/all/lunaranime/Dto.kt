@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.all.lunaranime
 import android.util.Base64
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.KSerializer
@@ -22,9 +23,9 @@ import kotlin.time.Instant
 
 @Serializable
 class LunarSearchResponse(
-    val manga: List<LunarMangaDto> = emptyList(),
-    val page: Int = 0,
-    @SerialName("total_pages") val totalPages: Int = 0,
+    val manga: List<LunarMangaDto>,
+    val page: Int,
+    @SerialName("total_pages") val totalPages: Int,
 )
 
 @Serializable
@@ -53,20 +54,10 @@ class LunarMangaDto(
         author = this@LunarMangaDto.author?.trim()
         artist = this@LunarMangaDto.artist?.trim()
 
-        description = buildString {
-            this@LunarMangaDto.description?.let { append(it) }
-
-            alternativeTitles?.let { alt ->
-                try {
-                    val titles = alt.parseAs<List<String>>()
-                    if (titles.isNotEmpty()) {
-                        if (isNotEmpty()) append("\n\n")
-                        append("Alternative Titles: ")
-                        append(titles.joinToString())
-                    }
-                } catch (_: Exception) {}
-            }
-        }
+        description = MarkdownDescription.Builder()
+            .description(this@LunarMangaDto.description)
+            .altTitles(alternativeTitles?.parseAs<List<String>>().orEmpty())
+            .build()
 
         status = when (publicationStatus?.lowercase(Locale.ROOT)) {
             "ongoing" -> SManga.ONGOING
@@ -82,32 +73,21 @@ class LunarMangaDto(
                 add(d.replaceFirstChar { it.titlecase(Locale.ROOT) })
             }
 
-            genres?.let { g ->
-                try {
-                    addAll(g.parseAs<List<String>>())
-                } catch (e: Exception) {
-                    add(g)
-                }
-            }
-
-            themes?.let { t ->
-                try {
-                    addAll(t.parseAs<List<String>>())
-                } catch (_: Exception) {}
-            }
-        }.filter { it.isNotBlank() }.distinct().joinToString()
+            genres?.let { addAll(it.parseAs<List<String>>()) }
+            themes?.let { addAll(it.parseAs<List<String>>()) }
+        }.filter { it.isNotBlank() }.distinct().joinToString().ifEmpty { null }
     }
 }
 
 @Serializable
 class LunarChapterListResponse(
-    val data: List<LunarChapterDto> = emptyList(),
+    val data: List<LunarChapterDto>,
 )
 
 @Serializable
 class LunarChapterDto(
     val chapter: String,
-    @SerialName("chapter_number") val chapterNumber: Float,
+    @SerialName("chapter_number") val chapterNumber: Float? = null,
     @SerialName("chapter_subnumber") val chapterSubnumber: Float? = null,
     @SerialName("chapter_title") val chapterTitle: String? = null,
     val language: String,
@@ -129,7 +109,7 @@ class LunarChapterDto(
         } else {
             "$chapterNum: $chapterTitle"
         }
-        chapter_number = chapter.toFloatOrNull() ?: this@LunarChapterDto.chapterNumber
+        chapter_number = chapter.toFloatOrNull() ?: this@LunarChapterDto.chapterNumber ?: -1f
         date_upload = Instant.tryParse(uploadedAt)
         scanlator = language.uppercase(Locale.ROOT)
     }
@@ -298,13 +278,17 @@ class LunarSeedPropsDto(private val props: Map<String, String>) {
 
 @Serializable
 class LunarPageListResponse(
-    val data: LunarPageListData? = null,
+    val data: LunarSessionDto,
+)
+
+@Serializable
+class LunarSessionDto(
+    @SerialName("session_data") val sessionData: String,
 )
 
 @Serializable
 class LunarPageListData(
-    val images: List<String> = emptyList(),
-    @SerialName("session_data") val sessionData: String? = null,
+    val images: List<String>,
 )
 
 @Serializable
@@ -316,26 +300,21 @@ class LunarPageListDecrypted(
 
 @Serializable
 class LunarCaptchaConfig(
-    @SerialName("reader_primary_sitekey") val readerPrimarySitekey: String? = null,
-)
-
-@Serializable
-class SecretKeyDto(
-    val secretKey: String,
+    @SerialName("manga_turnstile_sitekey") val mangaTurnstileSitekey: String,
 )
 
 @Serializable
 class LunarRecentResponse(
-    @SerialName("our_mangas") val mangas: List<LunarMangaDto> = emptyList(),
-    val page: Int = 0,
-    val limit: Int = 0,
-    @SerialName("total_count") val totalCount: Int = 0,
+    @SerialName("our_mangas") val mangas: List<LunarMangaDto>,
+    val page: Int,
+    val limit: Int,
+    @SerialName("total_count") val totalCount: Int,
 )
 
 @Serializable
 class LunarPasswordInfoResponse(
-    @SerialName("chapter_passwords") val chapterPasswords: List<LunarChapterPasswordDto> = emptyList(),
-    @SerialName("has_series_password") val hasSeriesPassword: Boolean = false,
+    @SerialName("chapter_passwords") val chapterPasswords: List<LunarChapterPasswordDto>,
+    @SerialName("has_series_password") val hasSeriesPassword: Boolean,
 )
 
 @Serializable
