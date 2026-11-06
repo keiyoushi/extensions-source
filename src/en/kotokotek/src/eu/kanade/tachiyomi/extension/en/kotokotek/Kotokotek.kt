@@ -15,9 +15,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
@@ -29,31 +26,21 @@ abstract class Kotokotek : KeiSource() {
 
     override val supportsLatest = false
 
-    // An archive of a handful of comics, all listed in the site menu
-    override suspend fun getPopularManga(page: Int): MangasPage = coroutineScope {
-        val paths = client.get("$baseUrl$SITE_PATH", Fetch.DOCUMENT).asJsoup()
-            .select("li:has(> div a[href$='/comics']) ul a[href]")
-            .map { it.absUrl("href").toHttpUrl().encodedPath }
-        val mangas = paths.map { path ->
-            async { mangaDetailsParse(client.get(baseUrl + path, Fetch.DOCUMENT).asJsoup()).apply { url = path } }
-        }.awaitAll()
-        MangasPage(mangas, false)
-    }
+    // The author stopped posting on the site in 2024, so its public comics are a fixed list. Each Wix page
+    // weighs about 1 MB, and the menu that links them only exists in the mobile layout.
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(COMICS.map { it.toSManga() }, false)
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val mangas = getPopularManga(1).mangas.filter { it.title.contains(query, ignoreCase = true) }
+        val mangas = COMICS.filter { it.title.contains(query, ignoreCase = true) }.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
-        val series = url.pathSegments.getOrNull(1)?.takeIf(String::isNotBlank) ?: return null
-        val path = "$SITE_PATH/$series"
-        val document = client.get(baseUrl + path, Fetch.DOCUMENT).asJsoup()
-        if (document.selectFirst("a[href*='$path/']") == null) return null
-        return mangaDetailsParse(document).apply { this.url = path }
+        val slug = url.pathSegments.getOrNull(1) ?: return null
+        return COMICS.find { it.slug == slug }?.toSManga()
     }
 
     override suspend fun fetchMangaUpdate(
@@ -124,9 +111,27 @@ abstract class Kotokotek : KeiSource() {
         return Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
     }
 
+    private class Comic(val slug: String, val title: String, private val cover: String) {
+        fun toSManga() = SManga.create().apply {
+            url = "$SITE_PATH/$slug"
+            title = this@Comic.title
+            thumbnail_url = "$MEDIA_URL/$cover"
+        }
+    }
+
     companion object {
         private const val SITE_PATH = "/kotokot-webcomics"
         private const val MEDIA_URL = "https://static.wixstatic.com/media"
         private val IMAGE_URI_REGEX = Regex(""""uri":"([^"]+)"""")
+
+        // The site's Comics menu, in its order. The Uncensored Comics menu is for paying members only.
+        private val COMICS = listOf(
+            Comic("swcensor", "Safeword is Handcuffs", "cd69cd_9fc58e0c8bda4357abd8d3df2f14b6c7~mv2.jpg"),
+            Comic("di-censor", "Demon Inside", "cd69cd_4a15d2e80b58401ab4e787e1025c4307~mv2.jpg"),
+            Comic("hccensor", "Handcuffs (old)", "cd69cd_9c9a525b647b4095ab388f7b99902381~mv2.jpg"),
+            Comic("gdcensor", "Guard Dog", "cd69cd_42dfa3efb91e45608e46558211b2545c~mv2.jpg"),
+            Comic("items-4", "Handcuffs remastered", "cd69cd_d63f6d0dd6e14695813091650315524e~mv2.jpg"),
+            Comic("soecensor", "Surprise of Eternity", "cd69cd_a4e59577f1f84baf93fcc3819634988c~mv2.jpg"),
+        )
     }
 }
