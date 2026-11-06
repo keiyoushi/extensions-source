@@ -27,5 +27,6 @@ keiyoushi {
     }
     deeplink {
         path("/manga/..*\\.html")
+        path("/original/..*\\.html")
     }
 }
