@@ -90,7 +90,7 @@ class ChallengeSolverInterceptor(
                         .filterKeys { it.startsWith("sec-ch-ua", ignoreCase = true) }
                     null
                 }
-                jsBridge("bridge") { resolve(it == "true") }
+                webMessageBridge("bridge", setOf("https://${url.host}")) { resolve(it == "true") }
                 loadData("https://${url.host}/@waf/solver", html)
             }
         }

@@ -44,6 +44,7 @@ import java.io.File
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.concurrent.Executors
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
@@ -331,8 +332,10 @@ abstract class Japscan :
         var done = false
 
         val response = client.get(chapterUrl, Fetch.DOCUMENT)
+        // Pages are saved off the main thread, in order, and passDone queues behind them
+        val saver = Executors.newSingleThreadExecutor()
 
-        return runCatching {
+        val pages = runCatching {
             runWebView<List<String>>(timeout = 3.minutes) {
                 domStorageEnabled = true
                 javaScriptEnabled = true
@@ -343,13 +346,16 @@ abstract class Japscan :
                     loadWithOverviewMode = false
                 }
 
-                jsBridge("${interfaceName}_savePage") { dataUri ->
-                    savePage(dataUri, sessionTag, savedPaths.size)?.let(savedPaths::add)
+                val origins = setOf(baseUrl)
+                webMessageBridge("${interfaceName}_savePage", origins) { dataUri ->
+                    saver.execute { savePage(dataUri, sessionTag, savedPaths.size)?.let(savedPaths::add) }
                 }
 
-                jsBridge("${interfaceName}_passDone") {
-                    done = true
-                    resolve(savedPaths)
+                webMessageBridge("${interfaceName}_passDone", origins) {
+                    saver.execute {
+                        done = true
+                        resolve(savedPaths)
+                    }
                 }
 
                 // The reader pulls rotating ad hosts whose modals break the detached descrambler,
@@ -376,7 +382,8 @@ abstract class Japscan :
                 loadData(chapterUrl, response.body.string())
             }
         }.getOrElse { emptyList() }
-            .takeIf { done } ?: emptyList()
+        saver.shutdown()
+        return pages.takeIf { done } ?: emptyList()
     }
 
     private fun savePage(
