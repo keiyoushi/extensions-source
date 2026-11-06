@@ -11,7 +11,9 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.firstInstance
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
@@ -56,14 +58,12 @@ abstract class YaoiMangaOnline : KeiSource() {
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val tags = buildList {
             languageTag?.let(::add)
-            filters.firstInstance<TagFilter>().takeIf { it.state != 0 }?.let { add(it.toString()) }
+            filters.firstInstanceOrNull<TagFilter>()?.state?.filter { it.state }?.forEach { add(it.value) }
         }
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("page/$page/")
             addQueryParameter("s", query)
-            filters.firstInstance<CategoryFilter>().takeIf { it.state != 0 }?.let {
-                addQueryParameter("cat", it.toString())
-            }
+            filters.firstInstanceOrNull<CategoryFilter>()?.selected?.let { addQueryParameter("cat", it) }
             if (tags.isNotEmpty()) addQueryParameter("tag", tags.joinToString("+"))
         }.build()
 
@@ -121,9 +121,28 @@ abstract class YaoiMangaOnline : KeiSource() {
         .select(".entry-content img")
         .mapIndexed { idx, img -> Page(idx, imageUrl = img.attr("src")) }
 
-    override fun getFilterList(data: JsonElement?) = FilterList(CategoryFilter(), TagFilter())
+    override val supportsFilterFetching get() = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
+        val categories = document.select("select#cat option:not([value=-1])")
+            .filter { it.attr("value") !in NON_MANGA_CATEGORIES }
+            .map { Option(it.text().substringBeforeLast("(").trim(), it.attr("value")) }
+        val tags = document.select(".tagcloud a")
+            .map { Option(it.text(), it.absUrl("href").toHttpUrl().pathSegments[1]) }
+        return FilterData(categories, tags).toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filterData = data?.parseAs<FilterData>() ?: return FilterList()
+        val tags = filterData.tags.filter { languageTag == null || it.value !in LANGUAGE_TAGS.values }
+        return FilterList(CategoryFilter(filterData.categories), TagFilter(tags))
+    }
 
     companion object {
+        // Gay Movies, Yaoi Anime
+        private val NON_MANGA_CATEGORIES = setOf("3017", "2009")
+
         private val LANGUAGE_TAGS = mapOf(
             "en" to "english-yaoi",
             "ja" to "japanese-yaoi",
