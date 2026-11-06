@@ -133,6 +133,7 @@ abstract class Tappytoon :
             genre = buildString {
                 it.genres.joinToString(this, postfix = ", ")
                 append("Rating: ").append(it.ageRating)
+                if (it.isSuperHighQualitySupported) append(", HD")
             }
             status = when {
                 it.isCompleted -> SManga.COMPLETED
