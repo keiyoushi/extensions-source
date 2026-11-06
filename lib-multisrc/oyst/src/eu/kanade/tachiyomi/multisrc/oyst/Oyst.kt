@@ -90,7 +90,7 @@ abstract class Oyst : KeiSource() {
         val mangaUrl = getMangaUrl(manga)
         val document = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
-            manga = if (fetchDetails) document.toSManga(manga.url) else manga,
+            manga = document.toSManga(manga.url),
             chapters = if (fetchChapters) getChapters(document, mangaUrl) else chapters,
         )
     }
