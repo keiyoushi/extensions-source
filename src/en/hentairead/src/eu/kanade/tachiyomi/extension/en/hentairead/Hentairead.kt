@@ -1,6 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.hentairead
 
+import android.content.SharedPreferences
 import android.util.Base64
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,6 +18,7 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.json.JsonElement
@@ -25,7 +30,11 @@ import java.time.format.DateTimeFormatterBuilder
 import java.util.Locale
 
 @Source
-abstract class Hentairead : KeiSource() {
+abstract class Hentairead :
+    KeiSource(),
+    ConfigurableSource {
+
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override suspend fun getPopularManga(page: Int): MangasPage = mangasPage("$baseUrl/hentai/${searchPage(page)}?sortby=views")
 
@@ -158,7 +167,11 @@ abstract class Hentairead : KeiSource() {
         fun createChapter(chapNum: Float = -1f, chapUrl: String = "", chapTitle: String = ""): SChapter = SChapter.create().apply {
             val titleText = chapTitle.ifEmpty { document.selectFirst("div.manga-titles h1")!!.text() }
             chapter_number = if (chapNum == -1f) 1f else chapNum
-            name = "${if (chapter_number % 1f == 0f) chapter_number.toInt() else chapter_number} - $titleText"
+            if (showCollections()) {
+                name = "${if (chapter_number % 1f == 0f) chapter_number.toInt() else chapter_number} - $titleText"
+            } else {
+                name = "Chapter"
+            }
             url = chapUrl.ifEmpty { manga.url }
             if (details.description?.contains("Scanlators") == true) {
                 scanlator = details.description?.substringAfter("Scanlators: ")?.substringBefore("\n")
@@ -170,7 +183,7 @@ abstract class Hentairead : KeiSource() {
 
         val allChapters = mutableListOf<SChapter>()
 
-        if (collectionsUrl.isNullOrBlank()) {
+        if (collectionsUrl.isNullOrBlank() || !showCollections()) {
             allChapters.add(createChapter())
         } else if (fetchChapters) {
             val collectionsPage = client.get(collectionsUrl, Fetch.DOCUMENT).asJsoup()
@@ -258,5 +271,20 @@ abstract class Hentairead : KeiSource() {
         return pages.data.chapter.images.mapIndexed { idx, page ->
             Page(idx, imageUrl = "$pageBaseUrl/${page.src}")
         }
+    }
+
+    private fun showCollections() = preferences.getBoolean(PREF_SHOW_COLLECTIONS, true)
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_SHOW_COLLECTIONS
+            title = "Show Collections"
+            summary = "Show collection of related chapters"
+            setDefaultValue(true)
+        }.let(screen::addPreference)
+    }
+
+    companion object {
+        private const val PREF_SHOW_COLLECTIONS = "pref_show_collections"
     }
 }
