@@ -5,6 +5,7 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaPaidChapterHelper
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
@@ -21,6 +22,13 @@ abstract class AthreaScans :
     private val preferences: SharedPreferences = getPreferences()
 
     private val paidChapterHelper = MangaThemesiaPaidChapterHelper()
+
+    override fun mangaDetailsParse(document: Document) = super.mangaDetailsParse(document).apply {
+        // Completed, with chapters still behind coins
+        if (status == SManga.COMPLETED && document.selectFirst("#chapterlist .eph-num a:not([href])") != null) {
+            status = SManga.PUBLISHING_FINISHED
+        }
+    }
 
     override fun chapterListSelector(): String = paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
         super.chapterListSelector(),
