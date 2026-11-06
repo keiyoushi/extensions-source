@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.multisrc.mangak
 import android.content.SharedPreferences
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -158,7 +159,7 @@ abstract class MangaKSource :
         if (url.host != baseUrl.toHttpUrl().host) return null
         val slug = url.pathSegments.first().ifEmpty { return null }
         val titleUrl = baseUrl.toHttpUrl().newBuilder().addPathSegment(slug).build()
-        return fetchTitle(titleUrl.toString())?.toSManga()?.apply { initialized = true }
+        return fetchTitle(titleUrl.toString())?.toSManga(includeTags = includeTags)?.apply { initialized = true }
     }
 
     override suspend fun fetchMangaUpdate(
@@ -181,7 +182,7 @@ abstract class MangaKSource :
             null
         }
 
-        SMangaUpdate(title?.await()?.toSManga(manga.url) ?: manga, chapterList?.await() ?: chapters)
+        SMangaUpdate(title?.await()?.toSManga(manga.url, includeTags) ?: manga, chapterList?.await() ?: chapters)
     }
 
     private suspend fun fetchTitle(url: String): InitialMangaDto? = client.get(url, Fetch.DOCUMENT)
@@ -240,7 +241,17 @@ abstract class MangaKSource :
 
     private fun getBlacklist(): Set<String> = preferences.getStringSet(PREF_BLACKLIST_KEY, emptySet()) ?: emptySet()
 
+    protected open val includeTags: Boolean
+        get() = preferences.getBoolean(PREF_INCLUDE_TAGS_KEY, PREF_INCLUDE_TAGS_DEFAULT)
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_INCLUDE_TAGS_KEY
+            title = "Include tags in genre list"
+            summary = "Include tags alongside genres in manga details"
+            setDefaultValue(PREF_INCLUDE_TAGS_DEFAULT)
+        }.let(screen::addPreference)
+
         val genres = getFilterList().firstInstanceOrNull<GenreList>()?.state.orEmpty()
         val blacklistPref = MultiSelectListPreference(screen.context).apply {
             key = PREF_BLACKLIST_KEY
@@ -259,6 +270,8 @@ abstract class MangaKSource :
 
     companion object {
         private const val PREF_BLACKLIST_KEY = "pref_blacklist"
+        private const val PREF_INCLUDE_TAGS_KEY = "pref_include_tags"
+        private const val PREF_INCLUDE_TAGS_DEFAULT = true
         private const val FALLBACK_IMAGE_HOST = "rx.rzyn.net"
         private const val DEFAULT_PAGE_LIMIT = "24"
         private const val QUERY_LENGTH_LIMIT = 50
