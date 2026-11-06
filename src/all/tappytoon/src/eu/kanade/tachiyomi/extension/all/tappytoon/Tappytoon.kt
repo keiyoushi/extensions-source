@@ -130,11 +130,11 @@ abstract class Tappytoon :
             thumbnail_url = it.posterThumbnailUrl
             author = it.authors.joinToString()
             artist = author
-            genre = buildString {
-                it.genres.joinToString(this, postfix = ", ")
-                append("Rating: ").append(it.ageRating)
-                if (it.isSuperHighQualitySupported) append(", HD")
-            }
+            genre = buildList {
+                it.genres.mapTo(this, Name::toString)
+                add("Rating: ${it.ageRating}")
+                if (it.isSuperHighQualitySupported) add("HD")
+            }.joinToString()
             status = when {
                 it.isCompleted -> SManga.COMPLETED
                 !it.isHiatus -> SManga.ONGOING
