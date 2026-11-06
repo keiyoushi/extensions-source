@@ -155,7 +155,6 @@ abstract class Kemono :
 
             val response = client.get(
                 "$baseUrl/$apiPath/creators",
-                headers,
                 Fetch.XHR,
                 CacheControl.Builder().maxStale(30.minutes).build(),
             )
@@ -311,16 +310,10 @@ abstract class Kemono :
     }
 
     override fun getImageRequest(page: Page): Request {
-        val imageUrl = page.imageUrl!!
+        if (!preferences.getBoolean(USE_LOW_RES_IMG, false)) return super.getImageRequest(page)
 
-        if (!preferences.getBoolean(USE_LOW_RES_IMG, false)) return Request.Builder().url(imageUrl).headers(headers).build()
-
-        val index = imageUrl.indexOf('/', 8)
-        val url = buildString {
-            append(imageUrl, 0, index)
-            append("/thumbnail")
-            append(imageUrl.substring(index))
-        }
+        val imageUrl = page.imageUrl!!.toHttpUrl()
+        val url = imageUrl.newBuilder().encodedPath("/thumbnail${imageUrl.encodedPath}").build()
         return Request.Builder().url(url).headers(headers).build()
     }
 
@@ -392,7 +385,6 @@ abstract class Kemono :
         private const val POST_PAGES_DEFAULT = "1"
         private const val POST_PAGES_MAX = 75
 
-        // private const val BASE_URL_PREF = "BASE_URL"
         private const val USE_LOW_RES_IMG = "USE_LOW_RES_IMG"
     }
 }
