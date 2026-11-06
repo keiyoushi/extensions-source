@@ -42,8 +42,3 @@ class ImageListDto(
 class ImageDto(
     val url: String,
 )
-
-@Serializable
-class UserAgentList(
-    val desktop: List<String>,
-)

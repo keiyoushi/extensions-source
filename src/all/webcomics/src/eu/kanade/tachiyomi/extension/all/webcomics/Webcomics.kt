@@ -20,10 +20,8 @@ import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getString
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -40,30 +38,12 @@ abstract class Webcomics : KeiSource() {
     private val apiSubDomain = "official-website-api"
     private val apiUrl = "https://$apiSubDomain.${baseUrl.substringAfterLast("/")}/api/web/v4/book"
 
-    override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor { chain ->
-            val request = chain.request()
-            val ua = runBlocking(Dispatchers.IO) {
-                getDesktopUA()
-            }
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)
 
-            val newHeaders = request.headers.newBuilder()
-                .set("User-Agent", ua.desktop.random())
-                .build()
-
-            val newRequest = request.newBuilder()
-                .headers(newHeaders)
-                .build()
-
-            chain.proceed(newRequest)
-        }
-        rateLimit(3)
-    }
-
-    private var userAgentList: UserAgentList? = null
-
-    private suspend fun getDesktopUA(): UserAgentList = userAgentList ?: network.client.get(UA_DB_URL, Fetch.XHR).parseAs<UserAgentList>().also {
-        userAgentList = it
+    // Mobile user agents get listings without the page numbers hasNextPage reads
+    override fun Headers.Builder.configureHeaders(): Headers.Builder {
+        val chromeVersion = CHROME_VERSION_REGEX.find(get("User-Agent").orEmpty())?.groupValues?.get(1) ?: "156"
+        return set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$chromeVersion.0.0.0 Safari/537.36")
     }
 
     // ========================== Popular =====================================
@@ -359,8 +339,8 @@ abstract class Webcomics : KeiSource() {
     companion object {
         val WHITE_SPACE_REGEX = """[\s]+""".toRegex()
         val PUNCTUATION_REGEX = "[\\p{Punct}]".toRegex()
+        private val CHROME_VERSION_REGEX = Regex("""Chrome/(\d+)""")
 
-        private const val UA_DB_URL = "https://keiyoushi.github.io/user-agents/user-agents.json"
         private const val CODE_OK = 1000
         private const val CODE_LOCKED = 1208
     }
