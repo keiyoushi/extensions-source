@@ -14,10 +14,11 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatter
@@ -183,69 +184,47 @@ abstract class Niadd : KeiSource() {
     }
 
     // Pages
-    // The reader pages go out as built too, see fetchChapterList
-    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter), Fetch.NONE).asJsoup())
-
-    private suspend fun pageListParse(document: Document): List<Page> {
-        val pages = mutableListOf<Page>()
-        val currentUrl = document.location()
-        val html = document.html()
-
-        if (html.contains("all_imgs_url")) {
-            val match = ALL_IMGS_URL_REGEX.find(html)
-            if (match != null) {
-                val content = match.groupValues[1]
-                val urls = content.split(",")
-                    .map { it.replace(CLEAN_IMG_URL_REGEX, "") }
-                    .filter { it.startsWith("http") }
-
-                urls.forEachIndexed { i, url ->
-                    pages.add(Page(i, currentUrl, imageUrl = url))
-                }
-                if (pages.isNotEmpty()) return pages
-            }
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterId = getChapterUrl(chapter).toHttpUrl().pathSegments[2]
+        val url = readerJumpUrl().newBuilder().setQueryParameter("cid", chapterId).build()
+        val html = try {
+            client.get(url, Fetch.DOCUMENT.from(getChapterUrl(chapter))).body.string()
+        } catch (e: Exception) {
+            readerJumpUrl = null
+            throw e
+        }
+        val imageList = ALL_IMGS_URL_REGEX.find(html)?.groupValues?.get(1) ?: run {
+            readerJumpUrl = null
+            throw Exception("Chapter pages not found on the site")
         }
 
-        val sourceButton = document.selectFirst("a.cool-blue.vision-button")
-        if (sourceButton != null) {
-            val sourceUrl = sourceButton.attr("abs:href")
-            val requestHeaders = headers.newBuilder()
-                .set("Referer", currentUrl)
-                .build()
-
-            return pageListParse(client.get(sourceUrl, requestHeaders, Fetch.NONE).asJsoup())
-        }
-
-        // One image per sub page; resolve them lazily instead of fetching every sub page up front
-        val subPages = document.select("select.sl-page option")
-            .map { it.absUrl("value") }
-            .filter(String::isNotEmpty)
-        if (subPages.isNotEmpty()) {
-            return subPages.mapIndexed { i, url -> Page(i, url) }
-        }
-
-        document.select(PAGE_IMAGE_SELECTOR).forEach { img ->
-            val url = img.attr("abs:src")
-            if (url.isNotEmpty() && !url.contains("cover") && !url.contains("logo")) {
-                pages.add(Page(pages.size, currentUrl, imageUrl = url))
-            }
-        }
-
-        return pages
+        return IMAGE_URL_REGEX.findAll(imageList).mapIndexed { i, match ->
+            Page(i, imageUrl = match.groupValues[1])
+        }.toList()
     }
 
-    override suspend fun getImageUrl(page: Page): String = client.get(page.url, Fetch.NONE).asJsoup()
-        .selectFirst(PAGE_IMAGE_SELECTOR)!!
-        .attr("abs:src")
+    private val readerJumpMutex = Mutex()
+    private var readerJumpUrl: HttpUrl? = null
 
-    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
-        .header("Referer", page.url)
-        .build()
+    // The site's /chapter/ links redirect to a dead host. Its chapter lists link each chapter through /go/rds/
+    // to a reader jump url that only differs in cid, and the reader page needs a niadd Referer
+    private suspend fun readerJumpUrl(): HttpUrl = readerJumpMutex.withLock {
+        readerJumpUrl ?: run {
+            val mangaUrl = client.get("$baseUrl/list/New-Update.html", Fetch.DOCUMENT).asJsoup()
+                .selectFirst("${popularMangaSelector()} a")!!.absUrl("href")
+            val redirectUrl = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
+                .selectFirst("a[href*=/go/rds/]")
+                ?.absUrl("href")
+                ?: throw Exception("The site has no reader for this language")
+            val script = client.get(redirectUrl, Fetch.DOCUMENT.from(mangaUrl)).body.string()
+            JUMP_URL_REGEX.find(script)!!.groupValues[1].toHttpUrl()
+        }.also { readerJumpUrl = it }
+    }
 
     companion object {
+        private val JUMP_URL_REGEX = Regex("""document\.location\s*=\s*'([^']+)'""")
         private val ALL_IMGS_URL_REGEX = Regex("""all_imgs_url\s*:\s*\[([\s\S]*?)\]""")
-        private val CLEAN_IMG_URL_REGEX = Regex("""["'\s]""")
-        private const val PAGE_IMAGE_SELECTOR = "div.pic_box img.manga_pic, div.reading-content img"
+        private val IMAGE_URL_REGEX = Regex(""""(https?://[^"]+)"""")
         private val CHAPTER_NUMBER_REGEX = Regex("""Capítulo\s+(\d+(\.\d+)?)""")
         private val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
     }
