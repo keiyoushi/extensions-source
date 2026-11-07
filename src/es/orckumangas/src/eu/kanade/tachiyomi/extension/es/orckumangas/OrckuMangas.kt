@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.orckumangas
 
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -25,7 +24,6 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import kotlin.time.Duration.Companion.seconds
@@ -39,23 +37,14 @@ abstract class OrckuMangas : KeiSource() {
         rateLimit(3, 1.seconds)
     }
 
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/ranking?page=$page", Fetch.DOCUMENT).asJsoup()
-        val mangas = document.select("ol li.border-t a[href*=ficha?id=]").mapNotNull { element ->
-            parseMangaCard(element)
-        }.distinctBy { it.url }
-        val hasNextPage = document.select("nav[aria-label=Páginas del ranking] a:containsOwn(Siguiente)").isNotEmpty()
-        return MangasPage(mangas, hasNextPage)
-    }
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter("vistas")))
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         if (page > 1) return MangasPage(emptyList(), false)
         val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
-        val mangas = document.select("#latestGrid div.reveal a[href*=ficha?id=]").mapNotNull { element ->
-            val title = element.selectFirst("span.line-clamp-2")?.text()?.takeIf { it.isNotBlank() }
-                ?: return@mapNotNull null
+        val mangas = document.select("#latestGrid div.reveal a[href*=ficha?id=]").map { element ->
             SManga.create().apply {
-                this.title = title
+                title = element.selectFirst("span.line-clamp-2")!!.text()
                 setUrlWithoutDomain(element.attr("abs:href"))
                 thumbnail_url = element.selectFirst("img")?.attr("abs:src")
             }
@@ -73,37 +62,29 @@ abstract class OrckuMangas : KeiSource() {
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val urlBuilder = "$baseUrl/biblioteca".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-        if (query.isNotBlank()) {
-            urlBuilder.addQueryParameter("search", query)
-        } else {
+        val url = "$baseUrl/biblioteca".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
+            if (query.isNotBlank()) addQueryParameter("search", query)
             filters.forEach { filter ->
                 when (filter) {
-                    is GenreFilter -> urlBuilder.addQueryParameter("genre", filter.selected)
-                    is TypeFilter -> urlBuilder.addQueryParameter("type", filter.selected)
-                    is StatusFilter -> urlBuilder.addQueryParameter("status", filter.selected)
+                    is SortFilter -> addQueryParameter("sort", filter.selected)
+                    is GenreFilter -> addQueryParameter("genre", filter.selected)
+                    is TypeFilter -> addQueryParameter("type", filter.selected)
+                    is StatusFilter -> addQueryParameter("status", filter.selected)
                     else -> {}
                 }
             }
+        }.build()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
+        val mangas = document.select("ul.grid li a[href*=ficha?id=]").map { element ->
+            SManga.create().apply {
+                title = element.selectFirst("span.truncate")!!.text()
+                setUrlWithoutDomain(element.attr("abs:href"))
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+            }
         }
-        val document = client.get(urlBuilder.build(), Fetch.DOCUMENT).asJsoup()
-        val mangas = document.select("ul.grid li a[href*=ficha?id=]").mapNotNull { element ->
-            parseMangaCard(element)
-        }.distinctBy { it.url }
-        val hasNextPage = document.select("nav[aria-label*=Página] a:containsOwn(Siguiente)").isNotEmpty()
+        val hasNextPage = document.selectFirst("nav[aria-label=Páginas del catálogo] a[rel=next]") != null
         return MangasPage(mangas, hasNextPage)
-    }
-
-    private fun parseMangaCard(element: Element): SManga? {
-        val title = element.selectFirst("span.truncate")?.text()?.takeIf { it.isNotBlank() }
-            ?: element.selectFirst("span.font-bold")?.text()?.takeIf { it.isNotBlank() }
-            ?: return null
-        return SManga.create().apply {
-            this.title = title
-            setUrlWithoutDomain(element.attr("abs:href"))
-            thumbnail_url = element.selectFirst("img")?.attr("abs:src")
-        }
     }
 
     override val supportRelatedMangasBySearch = true
@@ -188,7 +169,7 @@ abstract class OrckuMangas : KeiSource() {
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         buildList {
-            add(Filter.Header("Los filtros son ignorados si se realiza una búsqueda por texto"))
+            add(SortFilter())
             val genres = data?.parseAs<Map<String, String>>().orEmpty()
             if (genres.isNotEmpty()) add(GenreFilter(genres.toList()))
             add(TypeFilter())

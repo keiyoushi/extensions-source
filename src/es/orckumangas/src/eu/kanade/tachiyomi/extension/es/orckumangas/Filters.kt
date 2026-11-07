@@ -2,6 +2,25 @@ package eu.kanade.tachiyomi.extension.es.orckumangas
 
 import eu.kanade.tachiyomi.source.model.Filter
 
+class SortFilter(default: String = "recientes") :
+    Filter.Select<String>(
+        "Ordenar por",
+        sorts.map { it.first }.toTypedArray(),
+        sorts.indexOfFirst { it.second == default },
+    ) {
+    val selected get() = sorts[state].second
+
+    companion object {
+        private val sorts = listOf(
+            "Más recientes" to "recientes",
+            "Más vistos" to "vistas",
+            "Mejor puntuados" to "rating",
+            "Más capítulos" to "capitulos",
+            "A–Z" to "alfabetico",
+        )
+    }
+}
+
 class StatusFilter :
     Filter.Select<String>(
         "Estado",
@@ -11,10 +30,10 @@ class StatusFilter :
 
     companion object {
         private val statuses = listOf(
-            "Todos" to "",
-            "En curso" to "ongoing",
+            "Cualquiera" to "",
+            "En emisión" to "ongoing",
             "Finalizado" to "completed",
-            "Hiatus" to "hiatus",
+            "En pausa" to "hiatus",
             "Cancelado" to "cancelled",
         )
     }
