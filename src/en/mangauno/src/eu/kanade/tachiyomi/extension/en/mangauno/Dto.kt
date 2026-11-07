@@ -92,6 +92,7 @@ class ChapterDto(
     private val volume: Int?,
     private val title: String?,
     private val source: String?,
+    @SerialName("source_group_name") private val sourceGroupName: String?,
     @SerialName("published_at") private val publishedAt: String?,
 ) {
     fun toSChapter(mangaSlug: String) = SChapter.create().apply {
@@ -99,13 +100,13 @@ class ChapterDto(
 
         val chStr = chapterNumber?.toFloatOrNull()?.toString()?.removeSuffix(".0")?.let { "Ch. $it" }
         val volStr = volume?.let { "Vol. $it" }
-        val unescapedTitle = title?.let { Parser.unescapeEntities(it, true) }
+        val unescapedTitle = title?.let { Parser.unescapeEntities(it, true).trim() }
 
         val parts = listOfNotNull(chStr, volStr, unescapedTitle).filter { it.isNotEmpty() }
         name = parts.joinToString(" — ")
         if (name.isEmpty()) name = "Chapter"
 
-        scanlator = source
+        scanlator = sourceGroupName ?: source
         date_upload = Instant.tryParse(publishedAt)
     }
 }
