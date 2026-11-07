@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.lib.cronet.cronet
 import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
 import keiyoushi.network.get
@@ -64,6 +65,7 @@ abstract class CatharsisWorld : KeiSource() {
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::pageInterceptor)
         .rateLimit(24, 1.minutes, 2.seconds) { it.encodedPath.endsWith("/page-ticket") }
         .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .cronet()
 
     override suspend fun getPopularManga(page: Int) = searchMangas(page, "", "-n_visitas", null, null, emptyList())
 
