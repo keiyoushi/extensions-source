@@ -39,9 +39,10 @@ abstract class VyvyManga : KeiSource() {
     private val relativeDateRegex = Regex("""(\d+)""")
     private val ratingRegex = Regex("""([\d.]+)/10 \(([\d,]+) votes\)""")
 
-    // Popular
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val url = "$baseUrl/search" + if (page != 1) "?page=$page" else ""
+        val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
+            if (page != 1) addQueryParameter("page", page.toString())
+        }.build()
         return parseMangasPage(client.get(url, Fetch.DOCUMENT))
     }
 
@@ -58,13 +59,14 @@ abstract class VyvyManga : KeiSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    // Latest
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val url = "$baseUrl/search?sort=updated_at" + if (page != 1) "&page=$page" else ""
+        val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
+            addQueryParameter("sort", "updated_at")
+            if (page != 1) addQueryParameter("page", page.toString())
+        }.build()
         return parseMangasPage(client.get(url, Fetch.DOCUMENT))
     }
 
-    // Search
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("q", query)
@@ -93,24 +95,13 @@ abstract class VyvyManga : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         // Mirrors differ only in their top-level domain
-        if (url.host.substringBeforeLast('.') != baseUrl.toHttpUrl().host.substringBeforeLast('.') || url.pathSegments.size < 2 || url.pathSegments[0] != "manga") {
-            return null
-        }
+        if (url.host.removePrefix("www.").substringBeforeLast('.') != baseUrl.toHttpUrl().host.substringBeforeLast('.')) return null
+        if (url.pathSegments.size < 2 || url.pathSegments[0] != "manga") return null
 
-        val mangaUrl = "/manga/${url.pathSegments[1]}"
-        val manga = SManga.create().apply {
-            this.url = mangaUrl
-        }
-
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
-            .manga
-            .apply {
-                initialized = true
-                this.url = mangaUrl
-            }
+        val manga = SManga.create().apply { this.url = "/manga/${url.pathSegments[1]}" }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
-    // Updates
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -123,14 +114,14 @@ abstract class VyvyManga : KeiSource() {
             ?.let { ratingRegex.find(it) }
             ?.takeIf { it.groupValues[2] != "0" }
 
-        val manga = SManga.create().apply {
+        manga.apply {
             title = document.selectFirst("h1")!!.text()
             artist = document.select(".pre-title:contains(Artist) ~ a").eachText().joinToString().ifEmpty { null }
             author = document.select(".pre-title:contains(Author) ~ a").eachText().joinToString().ifEmpty { null }
             description = MarkdownDescription.Builder()
                 .rating(rating?.groupValues?.get(1)?.toDoubleOrNull(), votes = rating?.groupValues?.get(2)?.replace(",", "")?.toIntOrNull())
                 .description(document.selectFirst(".summary > .content")?.wholeText())
-                .altTitles(document.selectFirst("h1.title + p:not(.text-info)")?.text()?.split(',', ';').orEmpty())
+                .altTitles(document.selectFirst("h1.title + p:not(.text-info)")?.text()?.split(',', ';').orEmpty().filter { it.trim() != title })
                 .build()
             genre = document.select(".pre-title:contains(Genres) ~ a").eachText().joinToString().ifEmpty { null }
             status = when (document.selectFirst(".pre-title:contains(Status) ~ span:not(.space)")?.text()) {
@@ -153,8 +144,8 @@ abstract class VyvyManga : KeiSource() {
                 val stored = storedChapters[title]
                 url = stored?.url ?: "$chapterDate:$title".md5().toHexString().takeLast(10)
                 name = title
-                chapter_number = element.id().removePrefix("chapter-").toFloatOrNull() ?: -1f
-                scanlator = info?.selectFirst("span")?.textOrNull()
+                element.id().removePrefix("chapter-").toFloatOrNull()?.let { chapter_number = it }
+                scanlator = info?.selectFirst("span.font-weight-bold")?.textOrNull()
                 date_upload = if (stored != null && dateText?.endsWith("ago") == true) stored.date_upload else chapterDate
                 memo = buildJsonObject {
                     put("mangaUrl", mangaUrl)
@@ -166,20 +157,14 @@ abstract class VyvyManga : KeiSource() {
         return SMangaUpdate(manga, updatedChapters)
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = chapter.memo["chapterUrl"]?.string ?: run {
-        if (chapter.url.startsWith("http")) {
-            chapter.url
-        } else {
-            baseUrl + chapter.url
-        }
-    }
+    override fun getChapterUrl(chapter: SChapter): String = chapter.memo["chapterUrl"]?.string
+        ?: baseUrl.toHttpUrl().resolve(chapter.url)!!.toString()
 
-    // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val mangaUrl = chapter.memo["mangaUrl"]?.string ?: error("Refresh to reload chapters")
 
         // Chapter links expire after a few hours
-        val url = client.get(baseUrl + mangaUrl, Fetch.DOCUMENT).asJsoup()
+        val url = client.get(baseUrl.toHttpUrl().resolve(mangaUrl)!!, Fetch.DOCUMENT).asJsoup()
             .select(".list-group > a")
             .firstOrNull { it.selectFirst("span")!!.text() == chapter.name }
             ?.absUrl("href")
@@ -191,7 +176,6 @@ abstract class VyvyManga : KeiSource() {
         }
     }
 
-    // Date parsing
     private fun parseChapterDate(date: String?): Long {
         date ?: return 0L
 
@@ -214,7 +198,6 @@ abstract class VyvyManga : KeiSource() {
         }
     }
 
-    // Filters
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
@@ -222,8 +205,8 @@ abstract class VyvyManga : KeiSource() {
 
         return document.select(".check-genre div div:has(.checkbox-genre)").map {
             GenreData(
-                it.select("label").text(),
-                it.select(".checkbox-genre").attr("data-value"),
+                it.selectFirst("label")!!.text(),
+                it.selectFirst(".checkbox-genre")!!.attr("data-value"),
             )
         }.toJsonElement()
     }
