@@ -132,18 +132,20 @@ abstract class VyvyManga : KeiSource() {
             thumbnail_url = document.selectFirst(".img-manga img")?.absUrl("src")
         }
 
-        // Stored chapter urls by name: links expire and recent rows show relative dates
-        val storedUrls = chapters.associate { it.name to it.url }
+        // Stored chapters by name: links expire and recent rows show relative dates
+        val storedChapters = chapters.associateBy { it.name }
         val updatedChapters = document.select(".list-group > a").map { element ->
             SChapter.create().apply {
                 // "Uploaded by <span>name</span> date" on user uploads
                 val info = element.selectFirst("> p")
-                val chapterDate = parseChapterDate(info?.textNodes()?.lastOrNull()?.text()?.trim())
+                val dateText = info?.textNodes()?.lastOrNull()?.text()?.trim()
+                val chapterDate = parseChapterDate(dateText)
                 val title = element.selectFirst("span")!!.text()
-                url = storedUrls[title] ?: "$chapterDate:$title".md5().toHexString().takeLast(10)
+                val stored = storedChapters[title]
+                url = stored?.url ?: "$chapterDate:$title".md5().toHexString().takeLast(10)
                 name = title
                 scanlator = info?.selectFirst("span")?.textOrNull()
-                date_upload = chapterDate
+                date_upload = if (stored != null && dateText?.endsWith("ago") == true) stored.date_upload else chapterDate
                 memo = buildJsonObject {
                     put("mangaUrl", mangaUrl)
                     put("chapterUrl", element.absUrl("href"))
