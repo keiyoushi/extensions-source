@@ -545,6 +545,7 @@ use case. Each lib is self-documented via KDoc comments in its Kotlin source fil
 | [`lib-imagedecoder`](https://github.com/keiyoushi/extensions-source/tree/main/lib/imagedecoder)           | Decodes images to a `Bitmap` with the host app's decoder (AVIF, JPEG XL, HEIF)          |
 | [`lib-lzstring`](https://github.com/keiyoushi/extensions-source/tree/main/lib/lzstring)                   | LZ-String decompression and compression                                                 |
 | [`lib-publus`](https://github.com/keiyoushi/extensions-source/tree/main/lib/publus)                       | Handles Publus DRM-protected reader decryption, unscrambling, and page loading          |
+| [`lib-secretstream`](https://github.com/keiyoushi/extensions-source/tree/main/lib/secretstream)           | ChaCha20/Poly1305/X25519 cryptography for secret-stream encrypted sources               |
 | [`lib-speedbinb`](https://github.com/keiyoushi/extensions-source/tree/main/lib/speedbinb)                 | Processes, decrypts, and descrambles SpeedBinb reader payloads                          |
 | [`lib-synchrony`](https://github.com/keiyoushi/extensions-source/tree/main/lib/synchrony)                 | JavaScript deobfuscation via the Synchrony engine (QuickJS sandbox)                     |
 | [`lib-textinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/textinterceptor)     | Renders plain text or HTML as a PNG image page                                          |
