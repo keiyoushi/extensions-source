@@ -18,12 +18,15 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.applicationContext
+import keiyoushi.utils.getIntOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.Cache
 import okhttp3.CacheControl
 import okhttp3.HttpUrl
@@ -250,7 +253,7 @@ abstract class Kemono :
         val zone = zone(service)
         if (segments.size == 3) {
             if (fetchDetails) manga.thumbnail_url = "$imgCdnUrl/icons/$service/$user"
-            return SMangaUpdate(manga, if (fetchChapters) fetchChapterList(manga, zone) else chapters)
+            return SMangaUpdate(manga, if (fetchChapters) fetchChapterList(manga, zone, chapters) else chapters)
         }
         return coroutineScope {
             val creator = if (fetchDetails) async { fetchCreator(service, user) } else null
@@ -273,18 +276,25 @@ abstract class Kemono :
         else -> ZoneOffset.UTC
     }
 
-    private suspend fun fetchChapterList(manga: SManga, zone: ZoneId): List<SChapter> {
-        val prefMaxPost = preferences.getString(POST_PAGES_PREF, POST_PAGES_DEFAULT)!!
-            .toInt().coerceAtMost(POST_PAGES_MAX) * PAGE_POST_LIMIT
+    private suspend fun fetchChapterList(manga: SManga, zone: ZoneId, chapters: List<SChapter>): List<SChapter> {
+        val pages = preferences.getString(POST_PAGES_PREF, POST_PAGES_DEFAULT)!!.toInt().coerceAtMost(POST_PAGES_MAX)
+        // Posts come newest first: while the setting doesn't grow, only the posts made since the known chapters are needed
+        val fetchedPages = manga.memo.getIntOrNull(FETCHED_PAGES_MEMO) ?: 0
+        val known = if (fetchedPages >= pages) chapters.mapTo(HashSet()) { it.url } else emptySet()
         var offset = 0
         var hasNextPage = true
         val result = ArrayList<SChapter>()
-        while (offset < prefMaxPost && hasNextPage) {
+        while (offset < pages * PAGE_POST_LIMIT && hasNextPage) {
             val page: List<KemonoPostDto> = retry("$baseUrl/$apiPath${manga.url}/posts?o=$offset").parseAs()
-            page.forEach { post -> if (post.images.isNotEmpty()) result.add(post.toSChapter(zone)) }
+            for (post in page) {
+                val chapter = post.toSChapter(zone)
+                if (chapter.url in known) return result + chapters
+                if (post.images.isNotEmpty()) result.add(chapter)
+            }
             offset += PAGE_POST_LIMIT
             hasNextPage = page.size == PAGE_POST_LIMIT
         }
+        manga.memo = buildJsonObject { put(FETCHED_PAGES_MEMO, pages) }
         return result
     }
 
@@ -319,7 +329,7 @@ abstract class Kemono :
         ListPreference(screen.context).apply {
             key = POST_PAGES_PREF
             title = "Maximum posts to load"
-            summary = "Loading more posts costs more time and network traffic.\nCurrently: %s"
+            summary = "Loading more posts costs more time and network traffic the first time; later updates only load the new posts.\nCurrently: %s"
             entryValues = Array(POST_PAGES_MAX) { (it + 1).toString() }
             entries = Array(POST_PAGES_MAX) { "${(it + 1)} pages (${(it + 1) * PAGE_POST_LIMIT} posts)" }
             setDefaultValue(POST_PAGES_DEFAULT)
@@ -381,7 +391,10 @@ abstract class Kemono :
 
         private const val POST_PAGES_PREF = "POST_PAGES"
         private const val POST_PAGES_DEFAULT = "1"
-        private const val POST_PAGES_MAX = 75
+        private const val POST_PAGES_MAX = 200
+
+        // How many pages of posts the chapter list was last loaded with
+        private const val FETCHED_PAGES_MEMO = "fetchedPages"
 
         private const val USE_LOW_RES_IMG = "USE_LOW_RES_IMG"
     }
