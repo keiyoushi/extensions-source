@@ -34,7 +34,8 @@ abstract class MangaXiaoSi : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/rank", Fetch.DOCUMENT).asJsoup()
 
-        val popularSection = document.selectFirst(".mh-list.col3.top-cat > li:has(.title:contains(人气榜))")
+        // The overall ranking, which replaced the site's 人气榜 (popularity) one
+        val popularSection = document.selectFirst(".mh-list.col3.top-cat > li:has(.title:contains(总榜))")
 
         val mangas = popularSection?.select(".mh-item, .mh-itme-top")?.mapNotNull { element ->
             parseMangaFromElement(element, "h2.title a")
