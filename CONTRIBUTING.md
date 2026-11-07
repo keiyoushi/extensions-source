@@ -1654,6 +1654,7 @@ open class UriPartFilter(displayName: String, private val vals: Array<Pair<Strin
 
 - **Base URL and Mirrors:** Custom base URLs and mirror selectors are generated automatically by the `baseUrl { mirrors(...) }` and `baseUrl { custom(...) }` DSL blocks in `build.gradle.kts`. **Do not** implement these manually using `SharedPreferences` or `ListPreference`, as the KSP codegen handles preference migration, index coercion, and property overriding automatically.
 - **Other preferences:** For other custom settings (like image quality or language), implement the `ConfigurableSource` interface and use the `getPreferences()` or `getPreferencesLazy()` helpers to manage your settings.
+- **No tag filtering:** Do not add preferences that hide entries by tag, genre, keyword, type, format, demographic or category. Excluding these belongs in the search filters. Content-rating and origin-language settings, a choice of which site listing Popular/Latest show, and scanlator blocklists are fine.
 
 #### URL intent filter
 
