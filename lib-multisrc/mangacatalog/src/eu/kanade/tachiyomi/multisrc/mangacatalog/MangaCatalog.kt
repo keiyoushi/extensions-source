@@ -94,6 +94,10 @@ abstract class MangaCatalog : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup())
 
-    open fun pageListParse(document: Document): List<Page> = document.select("img[data-src]")
-        .mapIndexed { index, img -> Page(index, imageUrl = img.attr("abs:data-src")) }
+    // The first page loads right away from src, the next ones lazily from data-src (with a <noscript> copy on some sites)
+    open fun pageListParse(document: Document): List<Page> = document.select("img.js-page, img.pages__img, img[data-src]")
+        .map { img -> img.absUrl("data-src").ifEmpty { img.absUrl("src") } }
+        .filter { it.startsWith("http") }
+        .distinct()
+        .mapIndexed { index, url -> Page(index, imageUrl = url) }
 }
