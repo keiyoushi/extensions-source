@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.extension.zh.xipimanhua
 
 import android.util.Base64
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -14,11 +17,13 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -26,7 +31,11 @@ import okhttp3.Response
 import java.math.BigInteger
 
 @Source
-abstract class XipiManhua : KeiSource() {
+abstract class XipiManhua :
+    KeiSource(),
+    ConfigurableSource {
+
+    private val preferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 4) { it.host == API_HOST }
 
@@ -136,12 +145,17 @@ abstract class XipiManhua : KeiSource() {
             .build()
         val data = client.get(url, Fetch.XHR).parseData<ChapterPagesDto>()
 
-        val images = decodeImages(data.images).toMutableList()
+        // The reader decodes a string and takes an array as it is
+        val images = when (val raw = data.images) {
+            is JsonPrimitive -> decodeImages(raw.content)
+            else -> raw.parseAs<List<String>>()
+        }.toMutableList()
         if (images.isNotEmpty()) decoyIndex(images.size, data.orderId, data.sid)?.let(images::removeAt)
 
-        // Line 9 is served from the reader's "s1" image hosts
-        val imageBase = if (data.line == 9) IMAGE_URL_S1 else IMAGE_URL
-        return images.mapIndexed { index, path -> Page(index, imageUrl = imageBase + path) }
+        val line = preferences.getString(LINE_PREF, LINE_1)!!
+        // Line 9 is served from the reader's "<line>s" image hosts
+        val imageBase = IMAGE_URLS.getValue(if (data.line == 9) "${line}s" else line).toHttpUrl()
+        return images.mapIndexed { index, path -> Page(index, imageUrl = imageBase.resolve(path)!!.toString()) }
     }
 
     // The site reader's page list decoding (/assets/runtime/chapter-decoder.js on the reader host):
@@ -176,6 +190,17 @@ abstract class XipiManhua : KeiSource() {
         StatusFilter(),
     )
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = LINE_PREF
+            title = "線路"
+            entries = arrayOf("線路1", "線路2")
+            entryValues = arrayOf(LINE_1, LINE_2)
+            summary = "%s"
+            setDefaultValue(LINE_1)
+        }.let(screen::addPreference)
+    }
+
     private fun decode(base64: String): String = String(Base64.decode(base64, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP))
 
     private fun encode(text: String): String = Base64.encodeToString(text.toByteArray(), Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
@@ -186,8 +211,17 @@ abstract class XipiManhua : KeiSource() {
         private const val API_HOST = "hipapi1.s3file.top"
         private const val API_URL = "https://$API_HOST"
         private const val READER_HOST = "reader.hipmh.top"
-        private const val IMAGE_URL = "https://hip-tx-1.s3imgs.top"
-        private const val IMAGE_URL_S1 = "https://hip-tx-s1.s3imgs.top"
+        private const val LINE_PREF = "line"
+        private const val LINE_1 = "line1"
+        private const val LINE_2 = "line2"
+
+        // The reader's data-chapter-img-base-<line> attributes
+        private val IMAGE_URLS = mapOf(
+            LINE_1 to "https://hip-tx-1.s3imgs.top",
+            "${LINE_1}s" to "https://hip-tx-s1.s3imgs.top",
+            LINE_2 to "https://hip-cf-1.s3imgs.top",
+            "${LINE_2}s" to "https://hip-cf-s1.s3imgs.top",
+        )
         private const val ENCODED_ALPHABET = "_-9876543210abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
         private const val DECODED_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
         private val DECOY_SID_FACTOR = BigInteger.valueOf(0x9E3779B1L)
