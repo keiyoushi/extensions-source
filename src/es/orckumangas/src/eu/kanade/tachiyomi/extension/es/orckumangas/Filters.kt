@@ -2,11 +2,11 @@ package eu.kanade.tachiyomi.extension.es.orckumangas
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-class SortFilter(default: String = "recientes") :
+class SortFilter :
     Filter.Select<String>(
         "Ordenar por",
         sorts.map { it.first }.toTypedArray(),
-        sorts.indexOfFirst { it.second == default },
+        1,
     ) {
     val selected get() = sorts[state].second
 
@@ -26,7 +26,7 @@ class StatusFilter :
         "Estado",
         statuses.map { it.first }.toTypedArray(),
     ) {
-    val selected get() = statuses.getOrNull(state)?.second ?: ""
+    val selected get() = statuses[state].second
 
     companion object {
         private val statuses = listOf(
@@ -44,7 +44,7 @@ class TypeFilter :
         "Tipo",
         types.map { it.first }.toTypedArray(),
     ) {
-    val selected get() = types.getOrNull(state)?.second ?: ""
+    val selected get() = types[state].second
 
     companion object {
         private val types = listOf(
