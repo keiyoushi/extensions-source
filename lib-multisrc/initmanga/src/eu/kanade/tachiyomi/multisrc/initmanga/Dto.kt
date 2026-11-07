@@ -68,3 +68,19 @@ class GenreData(
     val name: String,
     val path: String,
 )
+
+@Serializable
+class ImageVaultDto(
+    val url: String,
+    val nonce: String,
+)
+
+@Serializable
+class ImageKeyResponseDto(
+    val data: ImageKeyDto,
+)
+
+@Serializable
+class ImageKeyDto(
+    val k: String,
+)
