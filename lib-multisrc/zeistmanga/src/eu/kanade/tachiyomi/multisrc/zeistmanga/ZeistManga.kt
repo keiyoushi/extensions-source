@@ -81,7 +81,7 @@ abstract class ZeistManga : KeiSource() {
             .addQueryParameter("orderby", orderBy)
             .addQueryParameter("max-results", (MAX_MANGA_RESULTS + 1).toString())
             .addQueryParameter("start-index", startIndex.toString())
-            .addQueryParameter("q", addCategoryLabels())
+            .addCategoryLabels()
             .build().toString()
     }
 
@@ -108,57 +108,70 @@ abstract class ZeistManga : KeiSource() {
     // AND strategy
     protected open val excludedCategories: List<String> get() = listOf("Anime", "Novel", "Novela", chapterCategory)
 
-    private fun addCategoryLabels(query: String = ""): String = buildString {
-        append("{")
-        includedCategories.forEach {
-            append("label:$it ")
-        }
-        append("}")
-        excludedCategories.forEach {
-            append("-label:$it ")
-        }
-        if (query.isNotBlank()) {
-            append(query)
-        }
-    }.trim()
+    private fun HttpUrl.Builder.addCategoryLabels(query: String = "", filterList: FilterList? = null): HttpUrl.Builder = addQueryParameter(
+        "q",
+        buildString {
+            append("{")
+            includedCategories.forEach {
+                append("label:$it ")
+            }
+            append("}")
+            excludedCategories.forEach {
+                append("-label:${it.trim()} ")
+            }
+            if (query.isNotBlank()) {
+                append(query.trim())
+            } else {
+                filterList?.forEach { filter ->
+                    when (filter) {
+                        is StatusList -> {
+                            filter.selected.value.trim()
+                                .takeIf { it.isNotEmpty() }
+                                ?.let { append("label:$it ") }
+                        }
+
+                        is TypeList -> {
+                            filter.selected.value.trim()
+                                .takeIf { it.isNotEmpty() }
+                                ?.let { append("label:$it ") }
+                        }
+
+                        is LanguageList -> {
+                            filter.selected.value.trim()
+                                .takeIf { it.isNotEmpty() }
+                                ?.let { append("label:$it ") }
+                        }
+
+                        is GenreList -> {
+                            val selectedGenres = filter.state
+                                .filter { it.state }
+                                .map { it.value.trim() }
+                                .filter { it.isNotEmpty() }
+                                .map { "label:$it" }
+
+                            if (selectedGenres.isNotEmpty()) {
+                                append(" ")
+                                append(selectedGenres.joinToString(" "))
+                            }
+                        }
+
+                        else -> {}
+                    }
+                }
+            }
+        }.trim(),
+    )
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val startIndex = MAX_MANGA_RESULTS * (page - 1) + 1
         val url = searchMangaUrl(page, query)
 
         val searchUrl = if (query.isNotBlank()) {
-            url.addQueryParameter("q", addCategoryLabels(query))
+            url.addCategoryLabels(query)
                 .addQueryParameter("max-results", (MAX_MANGA_RESULTS + 1).toString())
                 .addQueryParameter("start-index", startIndex.toString())
         } else {
-            filters.forEach { filter ->
-                url.addQueryParameter("q", addCategoryLabels())
-                when (filter) {
-                    is StatusList -> {
-                        url.addPathSegment(filter.selected.value)
-                    }
-
-                    is TypeList -> {
-                        url.addPathSegment(filter.selected.value)
-                    }
-
-                    is LanguageList -> {
-                        url.addPathSegment(filter.selected.value)
-                    }
-
-                    is GenreList -> {
-                        filter.state.forEach { genre ->
-                            when (genre.state) {
-                                true -> url.addPathSegment(genre.value)
-                                false -> {}
-                            }
-                        }
-                    }
-
-                    else -> {}
-                }
-            }
-            url
+            url.addCategoryLabels(filterList = filters)
         }.build()
 
         return parseSearchManga(client.get(searchUrl, Fetch.XHR))
