@@ -173,9 +173,14 @@ class WebViewScope<T> internal constructor(
      * origin, WebView sends both, comma-separated.
      *
      * The header is set on the WebView's profile, so it stays for every WebView of the app until the app is closed.
-     * Requires **Chromium 142+** (`CUSTOM_REQUEST_HEADERS`). Returns false if unsupported.
+     * Requires **Chromium 142+** (`CUSTOM_REQUEST_HEADERS`). On older WebView versions it immediately fails ([reject]s)
+     * with that requirement, unless [required] is false: it then returns false and the run goes on without the header.
      */
-    fun setOriginMatchedHeader(name: String, value: String, allowedOriginRules: Set<String>): Boolean = WebViewGlueBridge.setOriginMatchedHeader(webView, name, value, allowedOriginRules)
+    fun setOriginMatchedHeader(name: String, value: String, allowedOriginRules: Set<String>, required: Boolean = true): Boolean {
+        if (WebViewGlueBridge.setOriginMatchedHeader(webView, name, value, allowedOriginRules)) return true
+        if (required) reject(UnsupportedOperationException("CUSTOM_REQUEST_HEADERS is not supported on this WebView (requires Chromium 142+)"))
+        return false
+    }
 
     /** Runs [block] on every navigation start. */
     fun onPageStarted(block: (url: String) -> Unit) {

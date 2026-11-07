@@ -40,8 +40,9 @@ internal class SitePages(baseUrl: String, private val client: OkHttpClient, priv
         val result = try {
             runWebView<String>(timeout = TIMEOUT) {
                 userAgent = this@SitePages.userAgent()
-                // The site refuses WebView's X-Requested-With, which the requests left to the WebView carry
-                val requestedWithReplaced = setOriginMatchedHeader("X-Requested-With", "XMLHttpRequest", setOf("https://$host"))
+                // The site refuses WebView's X-Requested-With, which the requests left to the WebView carry. Only its check
+                // needs those, so an older WebView without the header still reads the pages until a check shows up
+                val requestedWithReplaced = setOriginMatchedHeader("X-Requested-With", "XMLHttpRequest", setOf("https://$host"), required = false)
                 interceptRequest { request ->
                     val requestHost = request.url.host
                     val path = request.url.path.orEmpty()
