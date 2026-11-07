@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.uk.honeymanga
 
 import androidx.preference.ListPreference
-import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -64,11 +63,9 @@ abstract class HoneyManga :
                 .build()
 
             client.get(url, Fetch.XHR).use { response ->
-                val blockedGenres = blockGenres()
-                val blockedTypes = blockTypes()
                 val contentShown = contentType()
                 val result = response.parseAs<List<ResponseData>>()
-                val mangas = result.mapNotNull { it.toSManga(imgUrl, blockedTypes, blockedGenres, contentShown) }
+                val mangas = result.filter { it.type != HideTypeFilter.NOVEL_TYPE }.mapNotNull { it.toSManga(imgUrl, contentShown) }
                 return MangasPage(mangas, false) // search by Name doesn't have pages
             }
         }
@@ -93,11 +90,11 @@ abstract class HoneyManga :
                     setSearchSort.sortBy = filter.selected
                     setSearchSort.sortOrder = if (filter.state?.ascending == true) "ASC" else "DESC"
                 }
-                is GenresFilter -> { // no need to add ignored genres from preferences since they are applied to filters
+                is GenresFilter -> {
                     filter.included?.let { searchFilters.add(SearchFilter("genres", "ALL", it)) }
                     filter.excluded?.let { searchFilters.add(SearchFilter("genres", "NOT_IN", it)) }
                 }
-                is HideTypeFilter -> { // no need to add ignored types from preferences since they are applied to filters
+                is HideTypeFilter -> {
                     filter.active?.let { searchFilters.add(SearchFilter("type", "NOT_IN", it)) }
                 }
                 is TypeFilter -> filter.selected?.let { searchFilters.add(SearchFilter("type", "EQUAL", listOf(it))) }
@@ -106,18 +103,11 @@ abstract class HoneyManga :
             }
         }
 
-        // Add ignored genres and types from preferences to Popular/Latest tab
         if (filters == null) {
-            val blockedTypes = blockTypes()
-            val blockedGenres = blockGenres()
             val contentShown = contentType()
 
-            if (blockedTypes.isNotEmpty() && !searchFilters.any { it.filterBy == "type" && it.filterOperator == "NOT_IN" }) {
-                searchFilters.add(SearchFilter("type", "NOT_IN", blockedTypes.toList()))
-            }
-            if (blockedGenres.isNotEmpty() && !searchFilters.any { it.filterBy == "genres" && it.filterOperator == "NOT_IN" }) {
-                searchFilters.add(SearchFilter("genres", "NOT_IN", blockedGenres.toList()))
-            }
+            searchFilters.add(SearchFilter("type", "NOT_IN", listOf(HideTypeFilter.NOVEL_TYPE)))
+
             if (contentShown != "all" && !searchFilters.any { it.filterBy == "adult" }) {
                 searchFilters.add(SearchFilter("adult", contentShown, listOf("18+")))
             }
@@ -231,9 +221,9 @@ abstract class HoneyManga :
     override fun getFilterList(data: JsonElement?) = FilterList(
         OrderBy(),
         TypeFilter(),
-        HideTypeFilter(blockTypes()),
+        HideTypeFilter(),
         Filter.Separator(),
-        GenresFilter(blockGenres()),
+        GenresFilter(),
         Filter.Separator(),
         TagsFilter(),
         StatusFilter(),
@@ -245,13 +235,6 @@ abstract class HoneyManga :
     companion object {
         private val cleanSearch = """[^\p{L}\d\s]""".toRegex()
         private const val DEFAULT_PAGE_SIZE = 30
-        private const val GENRES_PREF = "pref_genres_exclude"
-        private const val GENRES_PREF_TITLE = "Приховані жанри"
-        private const val GENRES_PREF_DIALOG = "Виберіть жанри які потрібно сховати"
-        private const val TYPE_PREF = "pref_types_exclude"
-        private const val TYPE_PREF_TITLE = "Приховані категорії"
-        private const val TYPE_PREF_DIALOG = "Виберіть категорії які потрібно сховати"
-        private const val DEFAULT_TYPE_BLOCK = "Новела"
         private const val CONTENT_PREF = "pref_content_type"
         private const val CONTENT_PREF_TITLE = "Виберіть тип контенту для відображення"
         private const val HIDE_LOCKED_CHAPTERS = "hide_locked_chapters"
@@ -261,47 +244,10 @@ abstract class HoneyManga :
 
     // ============================ Preferences =============================
 
-    private fun blockGenres(): Set<String> = preferences.getStringSet(GENRES_PREF, emptySet()) ?: emptySet()
-    private fun blockTypes(): Set<String> = preferences.getStringSet(TYPE_PREF, setOf(DEFAULT_TYPE_BLOCK)) ?: setOf(DEFAULT_TYPE_BLOCK)
     private fun contentType(): String = preferences.getString(CONTENT_PREF, "all") ?: "all"
     private fun hideLocked(): Boolean = preferences.getBoolean(HIDE_LOCKED_CHAPTERS, true)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        MultiSelectListPreference(screen.context).apply {
-            val tags = GenresFilter.options.toTypedArray()
-            key = GENRES_PREF
-            title = GENRES_PREF_TITLE
-            entries = tags
-            entryValues = tags
-            summary = blockGenres().joinToString()
-            dialogTitle = GENRES_PREF_DIALOG
-            setDefaultValue(emptySet<String>())
-
-            setOnPreferenceChangeListener { _, values ->
-                val selected = values as Set<*>
-                this.summary = selected.joinToString()
-                true
-            }
-        }.let(screen::addPreference)
-
-        MultiSelectListPreference(screen.context).apply {
-            val blockedTypes = blockTypes()
-            val types = HideTypeFilter.options.toTypedArray()
-            key = TYPE_PREF
-            title = TYPE_PREF_TITLE
-            entries = types
-            entryValues = types
-            summary = blockedTypes.joinToString()
-            dialogTitle = TYPE_PREF_DIALOG
-            setDefaultValue(setOf(DEFAULT_TYPE_BLOCK))
-
-            setOnPreferenceChangeListener { _, values ->
-                val selected = values as Set<*>
-                this.summary = selected.joinToString()
-                true
-            }
-        }.let(screen::addPreference)
-
         ListPreference(screen.context).apply {
             key = CONTENT_PREF
             title = CONTENT_PREF_TITLE

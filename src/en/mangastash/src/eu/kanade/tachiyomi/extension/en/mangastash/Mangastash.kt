@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.mangastash
 
 import androidx.preference.ListPreference
-import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -223,11 +222,11 @@ abstract class Mangastash :
         return if (thumbnails < 0) url.toString() else url.newBuilder().removePathSegment(thumbnails).build().toString()
     }
 
+    // Cookie order: level|genres|formats|demographics
     private fun contentFilterCookie(): Pair<String, String>? {
         val level = preferences.getString(PREF_RATING, RATING_ALL)!!
-        val hidden = HIDE_PREFS.map { preferences.getStringSet(it.key, emptySet())!!.sorted() }
-        if (level == RATING_ALL && hidden.all { it.isEmpty() }) return null
-        return CONTENT_FILTER_COOKIE to (listOf(level) + hidden.map { it.joinToString("~") }).joinToString("|")
+        if (level == RATING_ALL) return null
+        return CONTENT_FILTER_COOKIE to "$level|||"
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -239,17 +238,6 @@ abstract class Mangastash :
             setDefaultValue(RATING_ALL)
             summary = "%s"
         }.also(screen::addPreference)
-
-        HIDE_PREFS.forEach { pref ->
-            MultiSelectListPreference(screen.context).apply {
-                key = pref.key
-                title = pref.title
-                summary = "Left out of popular, latest and search"
-                entries = pref.options.map { it.first }.toTypedArray()
-                entryValues = pref.options.map { it.second }.toTypedArray()
-                setDefaultValue(emptySet<String>())
-            }.also(screen::addPreference)
-        }
     }
 
     companion object {
@@ -275,38 +263,5 @@ abstract class Mangastash :
             "Hide mature" to "no_mature",
             "Safe only" to "safe_only",
         )
-
-        // Cookie order: level|genres|formats|demographics
-        private val HIDE_PREFS = listOf(
-            HidePreference(
-                "hide_genres",
-                "Hidden genres",
-                listOf(
-                    "Action" to "action", "Adventure" to "adventure", "Comedy" to "comedy", "Drama" to "drama",
-                    "Fantasy" to "fantasy", "Horror" to "horror", "Isekai" to "isekai", "Mystery" to "mystery",
-                    "Romance" to "romance", "School Life" to "school-life", "Sci-Fi" to "sci-fi",
-                    "Slice of Life" to "slice-of-life", "Sports" to "sports", "Thriller" to "thriller",
-                ),
-            ),
-            HidePreference(
-                "hide_formats",
-                "Hidden formats",
-                listOf(
-                    "4-Koma" to "4-koma",
-                    "Manga" to "manga",
-                    "Manhua" to "manhua",
-                    "Manhwa" to "manhwa",
-                    "One-shot" to "one-shot",
-                    "Webtoon" to "webtoon",
-                ),
-            ),
-            HidePreference(
-                "hide_demographics",
-                "Hidden demographics",
-                listOf("Josei" to "josei", "Seinen" to "seinen", "Shoujo" to "shoujo", "Shounen" to "shounen"),
-            ),
-        )
     }
 }
-
-private class HidePreference(val key: String, val title: String, val options: List<Pair<String, String>>)

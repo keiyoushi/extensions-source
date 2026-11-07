@@ -63,7 +63,7 @@ class PostFilterUpdatesDto(
     @SerialName("release_start") val releaseStart: String? = null,
     @SerialName("release_end") val releaseEnd: String? = null,
     val genre: List<String> = emptyList(),
-    var excludeGenre: List<String> = emptyList(),
+    val excludeGenre: List<String> = emptyList(),
 )
 
 @Serializable

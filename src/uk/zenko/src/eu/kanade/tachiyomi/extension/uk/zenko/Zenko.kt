@@ -89,23 +89,14 @@ abstract class Zenko :
             }
 
             if (filters == null) {
-                val hiddenCat = hiddenCategories()
                 val ageCat = ageLimit()
-                val hiddenGenres = blockGenres()
                 addQueryParameter("sortBy", sortBy)
                 addQueryParameter("order", "DESC")
+                addQueryParameter("categories", CategoryFilter.readableCategories)
 
-                if (hiddenCat.isNotEmpty()) {
-                    val categoriesSetting = CategoryFilter.categories.filter { !hiddenCat.contains(it.second) }.joinToString(",") { it.second }
-                    addQueryParameter("categories", categoriesSetting)
-                }
                 if (ageCat.isNotEmpty()) {
                     val ageLimitSetting = ageCat.joinToString(",")
                     addQueryParameter("ageLimit", ageLimitSetting)
-                }
-                if (hiddenGenres.isNotEmpty()) {
-                    val hiddenGenresSetting = hiddenGenres.joinToString(",")
-                    addQueryParameter("excludeGenres", hiddenGenresSetting)
                 }
             }
 
@@ -180,8 +171,7 @@ abstract class Zenko :
         val mangaId = manga.url.substringAfter("titles/")
         val url = "$apiUrl/titles/$mangaId/similar"
         val data = client.get(url, Fetch.XHR).use { it.parseAs<List<SearchDetailsResponse>>() }
-        val hiddenCat = hiddenCategories()
-        return data.filter { !hiddenCat.contains(it.category) }.map { it.toSManga(lang, imgUrl) }
+        return data.filter { it.category != CategoryFilter.NOVEL_CATEGORY }.map { it.toSManga(lang, imgUrl) }
     }
 
     // =============================== Pages ================================
@@ -197,11 +187,11 @@ abstract class Zenko :
     // ============================= Filters ==============================
     override fun getFilterList(data: JsonElement?) = FilterList(
         OrderBy(),
-        CategoryFilter(hiddenCategories()),
+        CategoryFilter(),
         StatusFilter(),
         TranslationStatusFilter(),
         AgeFilter(ageLimit()),
-        GenresFilter(blockGenres()),
+        GenresFilter(),
         TagsFilter(),
         YearRangeFilter(),
     )
@@ -209,8 +199,6 @@ abstract class Zenko :
     // ============================ Preferences =============================
     private fun isEng(): String = preferences.getString(LANGUAGE_PREF, "ua") ?: "ua"
     private fun ageLimit(): Set<String> = preferences.getStringSet(SITE_AGE_PREF, emptySet()) ?: emptySet()
-    private fun hiddenCategories(): Set<String> = preferences.getStringSet(SITE_CATEGORIES_PREF, setOf(SITE_CATEGORIES_DEFAULT)) ?: setOf(SITE_CATEGORIES_DEFAULT)
-    private fun blockGenres(): Set<String> = preferences.getStringSet(GENRES_PREF, emptySet()) ?: emptySet()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
@@ -247,45 +235,6 @@ abstract class Zenko :
                 true
             }
         }.let(screen::addPreference)
-
-        MultiSelectListPreference(screen.context).apply {
-            val tags = GenresFilter.genres
-            key = GENRES_PREF
-            title = GENRES_PREF_TITLE
-            entries = tags.map { it.first }.toTypedArray()
-            entryValues = tags.map { it.second }.toTypedArray()
-            summary = blockGenres().joinToString()
-            dialogTitle = GENRES_PREF_DIALOG
-            setDefaultValue(emptySet<String>())
-
-            setOnPreferenceChangeListener { _, values ->
-                val selected = values as Set<*>
-                this.summary = selected.joinToString()
-                true
-            }
-        }.let(screen::addPreference)
-
-        MultiSelectListPreference(screen.context).apply {
-            key = SITE_CATEGORIES_PREF
-            title = SITE_CATEGORIES_PREF_TITLE
-            val tags = CategoryFilter.categories
-            entries = tags.map { it.first }.toTypedArray()
-            entryValues = tags.map { it.second }.toTypedArray()
-            summary = tags.filter { it.second in hiddenCategories() }
-                .joinToString { it.first }
-                .ifEmpty { SITE_AGE_PREF_ALL } + SITE_PREF_EXPLANATION
-            dialogTitle = SITE_CATEGORIES_PREF_DIALOG
-            setDefaultValue(setOf(SITE_CATEGORIES_DEFAULT))
-
-            setOnPreferenceChangeListener { _, values ->
-                @Suppress("UNCHECKED_CAST")
-                val selected = values as Set<String>
-                this.summary = tags.filter { it.second in selected }
-                    .joinToString { it.first }
-                    .ifEmpty { SITE_AGE_PREF_ALL } + SITE_PREF_EXPLANATION
-                true
-            }
-        }.let(screen::addPreference)
     }
 
     // ============================= Utilities ==============================
@@ -304,18 +253,10 @@ abstract class Zenko :
     companion object {
         private const val LANGUAGE_PREF = "TitleLanguagePref"
         private const val LANGUAGE_PREF_TITLE = "Вибір мови на обкладинці"
-        private const val GENRES_PREF = "pref_genres_exclude"
-        private const val GENRES_PREF_TITLE = "Приховані жанри"
-        private const val GENRES_PREF_DIALOG = "Виберіть жанри які потрібно сховати"
         private const val SITE_AGE_PREF = "site_age_categories"
         private const val SITE_AGE_PREF_TITLE = "Вікові обмеження"
         private const val SITE_AGE_PREF_DIALOG = "Контент з обраними віковими обмеженнями буде відображатися"
         private const val SITE_AGE_PREF_ALL = "Всі категорії (без обмежень)"
         private const val SITE_TOAST_WARNING = "Якщо мова обкладинки не змінилася, очистить базу даних у програмі (Налаштування -> Додатково -> Очистити базу даних)"
-        private const val SITE_CATEGORIES_PREF = "site_hidden_categories"
-        private const val SITE_CATEGORIES_PREF_TITLE = "Приховані категорії"
-        private const val SITE_CATEGORIES_PREF_DIALOG = "Оберіть категорії які не будуть відображатися"
-        private const val SITE_CATEGORIES_DEFAULT = "RANOBE"
-        private const val SITE_PREF_EXPLANATION = "\n\nⓘ Усі налаштування приховування та відображення контенту застосовуються до пошуку за назвою, \"Популярне\" та \"Новинки\".\nПошук без обмежень можливий у \"Фільтри\""
     }
 }

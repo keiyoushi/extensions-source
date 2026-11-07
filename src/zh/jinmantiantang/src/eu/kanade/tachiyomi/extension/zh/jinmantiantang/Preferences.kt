@@ -2,14 +2,10 @@ package eu.kanade.tachiyomi.extension.zh.jinmantiantang
 
 import android.content.SharedPreferences
 
-internal const val BLOCK_PREF = "BLOCK_GENRES_LIST"
 internal const val USERNAME_PREF = "username"
 internal const val PASSWORD_PREF = "password"
 internal const val CHECKIN_PREF = "auto_checkin"
 internal const val CHECKIN_DATE_PREF = "last_checkin_date"
-
-internal val SharedPreferences.blockList: List<String>
-    get() = getString(BLOCK_PREF, "")!!.substringBefore("//").trim().lowercase().split(' ')
 
 internal val SharedPreferences.credentials: Pair<String, String>?
     get() {

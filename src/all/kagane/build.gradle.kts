@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Kagane"
-    versionCode = 41
+    versionCode = 42
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

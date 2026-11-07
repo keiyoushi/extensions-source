@@ -1,9 +1,6 @@
 package eu.kanade.tachiyomi.extension.uk.faust
 
-import androidx.preference.MultiSelectListPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.HttpException
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -17,7 +14,6 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
@@ -34,14 +30,10 @@ import okhttp3.OkHttpClient
 import java.util.Calendar
 
 @Source
-abstract class Faust :
-    KeiSource(),
-    ConfigurableSource {
+abstract class Faust : KeiSource() {
 
     private val domain get() = baseUrl.toHttpUrl()
     private val apiUrl get() = "https://${domain.host}/api"
-
-    private val preferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(10) { it.host == domain.host }
@@ -100,10 +92,6 @@ abstract class Faust :
         }
 
         if (filters.isNullOrEmpty()) {
-            val ignoredGenres = ignoreGenres()
-            if (ignoredGenres.isNotEmpty()) {
-                requestBodyData.excludeGenreIds = JsonArray(ignoredGenres.map(::JsonPrimitive))
-            }
             requestBodyData.sortBy = sort
         }
 
@@ -201,10 +189,9 @@ abstract class Faust :
         filters.add(OrderBy())
         data?.parseAs<FiltersDto>()?.let {
             if (it.genres?.isNotEmpty() == true) {
-                val ignoredGenres = ignoreGenres()
                 GenresFilter.options = it.genres
                 filters.add(Filter.Separator())
-                filters.add(GenresFilter(ignoredGenres))
+                filters.add(GenresFilter())
             }
             if (it.tags?.isNotEmpty() == true) {
                 TagsFilter.options = it.tags
@@ -238,43 +225,5 @@ abstract class Faust :
         val value = input?.trim()?.takeIf(String::isNotEmpty)?.toIntOrNull() ?: return max.toString()
         if (value !in min..max) return max.toString()
         return value.toString()
-    }
-
-    // ============================== Preferences ===============================
-    private fun ignoreGenres(): Set<String> = preferences.getStringSet(SITE_GENRES_PREF, emptySet<String>())!!
-    private fun ignoreGenresTitles(): String? = preferences.getString(SITE_GENRES_PREF_TITLES, null)
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        MultiSelectListPreference(screen.context).apply {
-            key = SITE_GENRES_PREF
-            title = SITE_GENRES_PREF_TITLE
-            val tags = GenresFilter.options
-            entries = tags.map { it.first }.toTypedArray()
-            entryValues = tags.map { it.second }.toTypedArray()
-            summary = (ignoreGenresTitles() ?: "Не вибрано") + SITE_GENRES_PREF_SUM
-            dialogTitle = "Виберіть категорії які потрібно сховати"
-            setDefaultValue(emptySet<String>())
-
-            setOnPreferenceChangeListener { _, values ->
-                val selected = values as Set<*>
-                preferences.edit().putString(
-                    SITE_GENRES_PREF_TITLES,
-                    tags.filter { it.second in selected }
-                        .joinToString { it.first }
-                        .ifEmpty { "Не вибрано" },
-                ).apply()
-                this.summary = tags.filter { it.second in selected }
-                    .joinToString { it.first }
-                    .ifEmpty { "Не вибрано" } + SITE_GENRES_PREF_SUM
-                true
-            }
-        }.let(screen::addPreference)
-    }
-
-    companion object {
-        private const val SITE_GENRES_PREF = "site_hidden_genres"
-        private const val SITE_GENRES_PREF_TITLES = "site_hidden_genres_titles"
-        private const val SITE_GENRES_PREF_TITLE = "Приховані категорії"
-        private const val SITE_GENRES_PREF_SUM = "\n\nⓘЦі категорії завжди будуть приховані в 'Популярне', 'Новинки' та 'Фільтр'.\n\nⓘЯкщо список категорій порожній, зайдіть 'Огляд' -> 'Джерела' -> Faust -> 'Фільтр' та натисніть 'Скинути'"
     }
 }

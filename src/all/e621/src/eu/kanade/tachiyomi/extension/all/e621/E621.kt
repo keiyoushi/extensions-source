@@ -54,7 +54,6 @@ abstract class E621 :
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val searchMode = preferences.searchModePref
-        val category = preferences.categoryPref
         val popularMode = preferences.popularModePref
         val firstEnd = preferences.firstEndPref
 
@@ -63,7 +62,6 @@ abstract class E621 :
             "",
             FilterList(
                 ModeFilter(getDefaultModeIndex(searchMode)),
-                CategoryFilter(getDefaultCategoryIndex(category)),
                 OrderFilter(getDefaultOrderIndex("post_count")),
                 TagsFilter("$popularMode $firstEnd".trim()),
             ),
@@ -74,7 +72,6 @@ abstract class E621 :
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val searchMode = preferences.searchModePref
-        val category = preferences.categoryPref
         val scoreThresh = preferences.scoreThreshPref
 
         return getSearchMangaList(
@@ -82,7 +79,6 @@ abstract class E621 :
             "",
             FilterList(
                 ModeFilter(getDefaultModeIndex(searchMode)),
-                CategoryFilter(getDefaultCategoryIndex(category)),
                 OrderFilter(getDefaultOrderIndex("created_at")),
                 TagsFilter("order:id_desc score:>=$scoreThresh"),
             ),
@@ -108,13 +104,9 @@ abstract class E621 :
         var endPage = false
         var dateTag = ""
 
-        val blacklist = preferences.blacklistPref
-        val whitelist = preferences.whitelistPref
-
         filters.forEach { filter ->
             when (filter) {
                 is ModeFilter -> mode = filter.toUriPart()
-                is CategoryFilter -> category = filter.toUriPart()
                 is OrderFilter -> order = filter.toUriPart()
                 is TagsFilter -> tags = filter.state.trim()
                 is PoolGroupFilter -> {
@@ -148,7 +140,7 @@ abstract class E621 :
                 url.addQueryParameter("search[description_matches]", description)
             }
         } else {
-            tags = "$tagsMandatory $whitelist $blacklist $tags".trim()
+            tags = "$tagsMandatory $tags".trim()
             if (query.isNotEmpty()) {
                 val search = "*${query.trim().replace(" ", "_")}*"
                 tags = "$tags $search"
@@ -425,7 +417,7 @@ abstract class E621 :
 
     // ============================== Filters ==============================
 
-    override fun getFilterList(data: JsonElement?): FilterList = getE621FilterList(preferences.categoryPref)
+    override fun getFilterList(data: JsonElement?): FilterList = getE621FilterList()
 
     // ============================= Utilities =============================
 

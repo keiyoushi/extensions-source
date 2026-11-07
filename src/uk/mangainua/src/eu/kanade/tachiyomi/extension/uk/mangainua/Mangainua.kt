@@ -1,9 +1,5 @@
 package eu.kanade.tachiyomi.extension.uk.mangainua
 
-import androidx.preference.MultiSelectListPreference
-import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -18,7 +14,6 @@ import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.HttpUrl
@@ -34,11 +29,8 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class Mangainua :
-    KeiSource(),
-    ConfigurableSource {
+abstract class Mangainua : KeiSource() {
 
-    private val preferences by getPreferencesLazy()
     private val baseUrlHost get() = baseUrl.toHttpUrl().host
 
     override fun OkHttpClient.Builder.configureClient() = apply {
@@ -67,7 +59,7 @@ abstract class Mangainua :
                 .build()
 
             client.post(url, Fetch.DOCUMENT, body).use { response ->
-                return mangaParse(response, true)
+                return mangaParse(response)
             }
         }
         return makeSearchRequest(null, page, filters)
@@ -92,43 +84,27 @@ abstract class Mangainua :
                 }
             }
             if (filters.isNullOrEmpty()) {
-                val ignoredTagsSettings = ignoreTags()
-                if (ignoredTagsSettings.isNotEmpty()) addPathSegment("!cat=${ignoredTagsSettings.joinToString(",")}")
                 addPathSegment("sort=$sortBy")
             }
             if (page > 1) addPathSegments("page/$page/")
         }.build()
 
         client.get(url, Fetch.DOCUMENT).use { response ->
-            return mangaParse(response, false)
+            return mangaParse(response)
         }
     }
 
-    private fun mangaParse(response: Response, fromSearch: Boolean = false): MangasPage {
+    private fun mangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val ignoredTags = if (hideChaptersByTag && fromSearch) {
-            val ignoredIds = ignoreTags()
-            TagFilter.options.filter { it.second in ignoredIds }.map { it.first }.toSet()
-        } else {
-            emptySet()
-        }
-        val mangas = document.select("div#site-content article.item").mapNotNull { mangaFromElement(it, ignoredTags) }
+        val mangas = document.select("div#site-content article.item").mapNotNull { mangaFromElement(it) }
         val hasNextPage = document.selectFirst("a:contains(Наступна)") != null
         return MangasPage(mangas, hasNextPage)
     }
 
-    private fun mangaFromElement(element: Element, ignoredTags: Set<String>? = emptySet()): SManga? = SManga.create().apply {
+    private fun mangaFromElement(element: Element): SManga? = SManga.create().apply {
         // If there is no img, it's (probably) deleted manga, but site still shows it in search results
         // Example: https://manga.in.ua/filter/sort=nameukr;asc/
         element.selectFirst("img") ?: return null
-
-        // Hide manga by tags in Settings
-        if (hideChaptersByTag && ignoredTags?.isNotEmpty() == true) {
-            val mangaTags = element.select("div.card__category a").eachText()
-            if (mangaTags.any { it in ignoredTags }) {
-                return null
-            }
-        }
 
         element.selectFirst("h3.card__title a")!!.run {
             setUrlWithoutDomain(attr("href"))
@@ -274,7 +250,7 @@ abstract class Mangainua :
         Filter.Header("Фільтри не застосовуються під час пошуку за назвою"),
         CategoriesFilter(),
         StatusFilter(),
-        TagFilter(ignoreTags()),
+        TagFilter(),
         SortFilter("news_read;desc"),
         SizeFilter(),
         AgeFilter(),
@@ -297,48 +273,8 @@ abstract class Mangainua :
         else -> absUrl("src")
     }
 
-    private fun ignoreTags(): Set<String> = preferences.getStringSet(SITE_TAGS_PREF, emptySet()) ?: emptySet()
-    private val hideChaptersByTag = preferences.getBoolean(SITE_TAGS_SEARCH, false)
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        MultiSelectListPreference(screen.context).apply {
-            key = SITE_TAGS_PREF
-            title = SITE_TAGS_PREF_TITLE
-            val tags = TagFilter.options
-            entries = tags.map { it.first }.toTypedArray()
-            entryValues = tags.map { it.second }.toTypedArray()
-            summary = tags.filter { it.second in ignoreTags() }
-                .joinToString { it.first }
-                .ifEmpty { "Не вибрано" } + SITE_TAGS_PREF_SUM
-            dialogTitle = "Виберіть категорії які потрібно сховати"
-            setDefaultValue(emptySet<String>())
-
-            setOnPreferenceChangeListener { _, values ->
-                @Suppress("UNCHECKED_CAST")
-                val selected = values as Set<String>
-                this.summary = tags.filter { it.second in selected }
-                    .joinToString { it.first }
-                    .ifEmpty { "Не вибрано" } + SITE_TAGS_PREF_SUM
-                true
-            }
-        }.let(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
-            key = SITE_TAGS_SEARCH
-            title = SITE_TAGS_SEARCH_TITLE
-            summary = SITE_TAGS_SEARCH_SUM
-            setDefaultValue(false)
-        }.let(screen::addPreference)
-    }
-
     companion object {
         private val dateFormat = DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.ROOT)
         private const val SITE_LOGIN_HASH = "site_login_hash"
-        private const val SITE_TAGS_PREF = "site_hidden_tags"
-        private const val SITE_TAGS_PREF_TITLE = "Приховані категорії"
-        private const val SITE_TAGS_PREF_SUM = "\nⓘЦі категорії завжди будуть приховані в 'Популярне', 'Новинки' та 'Фільтр'."
-        private const val SITE_TAGS_SEARCH = "site_hidden_tags_search"
-        private const val SITE_TAGS_SEARCH_TITLE = "Приховувати обрані категорії при пошуку за назвою"
-        private const val SITE_TAGS_SEARCH_SUM = "\nⓘ При зміні цього параметра необхідно перезапустити програму з повною зупинкою."
     }
 }

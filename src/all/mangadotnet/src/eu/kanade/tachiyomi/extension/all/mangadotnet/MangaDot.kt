@@ -4,7 +4,6 @@ import android.content.SharedPreferences
 import android.util.Log
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
-import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -81,29 +80,6 @@ abstract class MangaDot :
             }
         }
 
-        if (all[BROWSE_TYPE_PREF] is String) {
-            val value = all[BROWSE_TYPE_PREF] as String
-            if (value.isNotEmpty()) {
-                edit().putStringSet(BROWSE_TYPE_PREF, setOf("JP", "KR", "CN", "ONESHOT") - value).apply()
-            } else {
-                edit().remove(BROWSE_TYPE_PREF).apply()
-            }
-        }
-
-        val demographics = setOf("Josei", "Seinen", "Shoujo", "Shounen")
-        val normalExcluded = getStringSet(EXCLUDE_GENRE_PREF, emptySet()) ?: emptySet()
-        val adultExcluded = getStringSet(EXCLUDE_GENRE_ADULT_PREF, emptySet()) ?: emptySet()
-        val migratedDemos = (normalExcluded + adultExcluded).intersect(demographics)
-
-        if (migratedDemos.isNotEmpty()) {
-            val existingDemos = getStringSet(EXCLUDE_DEMOGRAPHIC_PREF, emptySet()) ?: emptySet()
-            edit()
-                .putStringSet(EXCLUDE_DEMOGRAPHIC_PREF, existingDemos + migratedDemos)
-                .putStringSet(EXCLUDE_GENRE_PREF, normalExcluded - demographics)
-                .putStringSet(EXCLUDE_GENRE_ADULT_PREF, adultExcluded - demographics)
-                .apply()
-        }
-
         if (all[CONTENT_RATING_PREF] is Set<*>) {
             edit().remove(CONTENT_RATING_PREF).apply()
         }
@@ -142,16 +118,7 @@ abstract class MangaDot :
         val url = "$baseUrl/view-all/$mode.data".toHttpUrl().newBuilder().apply {
             addAdultParam()
             if (page > 1) addQueryParameter("page", page.toString())
-            excludedGenresPref().forEach { genre ->
-                addQueryParameter("genre", "-$genre")
-            }
-            excludedDemographicsPref().forEach { demo ->
-                addQueryParameter("genre", "-$demo")
-            }
             addQueryParameter("_routes", "pages/ViewAllPage")
-            includedTypes().forEach { origin ->
-                addQueryParameter("origin", origin)
-            }
             browseStatusPref()?.also { addQueryParameter("status", it) }
         }.build()
 
@@ -392,7 +359,7 @@ abstract class MangaDot :
             listOf(
                 ContentRatingFilter(excludedContentRatingPref()),
                 TypeFilter(),
-                DemographicFilter(excludedDemographicsPref()),
+                DemographicFilter(),
             ),
         )
 
@@ -400,7 +367,7 @@ abstract class MangaDot :
         val tagList = dto?.tags?.sortedBy { it.lowercase(Locale.ROOT) }
 
         if (genreList != null) {
-            filters.add(GenreFilter(genreList, excludedGenresPref()))
+            filters.add(GenreFilter(genreList))
         }
 
         if (tagList != null) {
@@ -710,31 +677,13 @@ abstract class MangaDot :
 
     private fun chapterModePref() = preferences.getString(CHAPTER_MODE, "chapters")!!
 
-    private fun excludedDemographicsPref(): Set<String> = preferences.getStringSet(EXCLUDE_DEMOGRAPHIC_PREF, emptySet())!!
-
     private fun excludedContentRatingPref(): Set<String> {
         val highest = preferences.getString(CONTENT_RATING_PREF, "suggestive")!!
         val index = contentRatings.indexOfFirst { it.second == highest }.coerceAtLeast(0)
         return contentRatings.drop(index + 1).map { it.second }.toSet()
     }
 
-    private fun excludedGenresPref(): Set<String> {
-        val mode = adultModePref()
-        return if (mode == "1" || mode == "both") {
-            preferences.getStringSet(EXCLUDE_GENRE_ADULT_PREF, emptySet())!!
-        } else {
-            preferences.getStringSet(EXCLUDE_GENRE_PREF, emptySet())!!
-        }
-    }
-
     private val allOrigins = setOf("JP", "KR", "CN", "EN", "ONESHOT")
-
-    private fun excludedTypesPref(): Set<String> = preferences.getStringSet(BROWSE_TYPE_PREF, emptySet())!!
-
-    private fun includedTypes(): Set<String> {
-        val included = allOrigins - excludedTypesPref()
-        return if (included.isEmpty() || included == allOrigins) emptySet() else included
-    }
 
     private fun browseStatusPref(): String? = preferences.getString(BROWSE_STATUS_PREF, "")
         ?.takeIf { it != "" }
@@ -792,8 +741,6 @@ abstract class MangaDot :
 
     // ============================= Settings ==============================
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val mode = adultModePref()
-
         val nsfwPref = ListPreference(screen.context).apply {
             key = NSFW_MODE
             title = "NSFW (18+) Content"
@@ -813,16 +760,6 @@ abstract class MangaDot :
             summary = "%s"
         }
         screen.addPreference(contentRatingPref)
-
-        val browseTypePref = MultiSelectListPreference(screen.context).apply {
-            key = BROWSE_TYPE_PREF
-            title = "Type Blacklist"
-            entries = arrayOf("Manga", "Manhwa", "Manhua", "OEL", "One Shot")
-            entryValues = arrayOf("JP", "KR", "CN", "EN", "ONESHOT")
-            setDefaultValue(emptySet<String>())
-            summary = "Exclude types from Popular & Latest."
-        }
-        screen.addPreference(browseTypePref)
 
         val browseStatusPref = ListPreference(screen.context).apply {
             key = BROWSE_STATUS_PREF
@@ -871,56 +808,6 @@ abstract class MangaDot :
 
         dedupeSwitch.setOnPreferenceChangeListener { _, newValue ->
             priorityPref.setEnabled(newValue as Boolean)
-            true
-        }
-
-        val sortedDemographics = demographicNames.sortedBy { it.lowercase(Locale.ROOT) }.toTypedArray()
-        val demographicPref = MultiSelectListPreference(screen.context).apply {
-            key = EXCLUDE_DEMOGRAPHIC_PREF
-            title = "Demographic Blacklist"
-            summary = "Exclude demographics when browsing."
-            entries = sortedDemographics
-            entryValues = sortedDemographics
-            setDefaultValue(emptySet<String>())
-        }
-        screen.addPreference(demographicPref)
-
-        val filters = getFilterList()
-        val genresFromFilters = filters.firstInstanceOrNull<GenreFilter>()?.state?.map { it.name }
-
-        val excludedNormal = preferences.getStringSet(EXCLUDE_GENRE_PREF, emptySet()) ?: emptySet()
-        val excludedAdult = preferences.getStringSet(EXCLUDE_GENRE_ADULT_PREF, emptySet()) ?: emptySet()
-
-        val genres = (genresFromFilters ?: (excludedNormal + excludedAdult).filter { it !in demographicNames })
-            .distinct()
-            .sortedBy { it.lowercase(Locale.ROOT) }
-
-        val normalGenrePref = MultiSelectListPreference(screen.context).apply {
-            key = EXCLUDE_GENRE_PREF
-            title = "Genre Blacklist"
-            summary = "Exclude genres when browsing without 18+ content."
-            entries = genres.toTypedArray()
-            entryValues = genres.toTypedArray()
-            setDefaultValue(emptySet<String>())
-            setEnabled(genres.isNotEmpty() && mode == "none")
-        }
-        screen.addPreference(normalGenrePref)
-
-        val adultGenrePref = MultiSelectListPreference(screen.context).apply {
-            key = EXCLUDE_GENRE_ADULT_PREF
-            title = "Genre Blacklist (Adult Mode)"
-            summary = "Exclude genres when browsing with 18+ content."
-            entries = genres.toTypedArray()
-            entryValues = genres.toTypedArray()
-            setDefaultValue(emptySet<String>())
-            setEnabled(genres.isNotEmpty() && (mode == "1" || mode == "both"))
-        }
-        screen.addPreference(adultGenrePref)
-
-        nsfwPref.setOnPreferenceChangeListener { _, newValue ->
-            val newMode = newValue as String
-            normalGenrePref.setEnabled(genres.isNotEmpty() && newMode == "none")
-            adultGenrePref.setEnabled(genres.isNotEmpty() && (newMode == "1" || newMode == "both"))
             true
         }
     }
@@ -992,12 +879,8 @@ abstract class MangaDot :
 
 private const val NSFW_MODE = "pref_nsfw_mode"
 private const val CHAPTER_MODE = "pref_chapter_mode"
-private const val EXCLUDE_GENRE_PREF = "pref_exclude_genre"
-private const val EXCLUDE_GENRE_ADULT_PREF = "pref_exclude_genre_adult"
-private const val BROWSE_TYPE_PREF = "pref_browse_type"
 private const val BROWSE_STATUS_PREF = "pref_browse_status"
 private const val DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
 private const val PREFERRED_SCANLATORS = "pref_preferred_scanlators"
-private const val EXCLUDE_DEMOGRAPHIC_PREF = "pref_exclude_demographic"
 private const val CONTENT_RATING_PREF = "pref_content_rating"
 private const val SHOW_TAGS_PREF = "pref_show_tags"

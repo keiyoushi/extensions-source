@@ -59,16 +59,12 @@ class TagExcludeCondition :
 class TagFilter(
     title: String,
     tags: List<FilterDto>,
-    excludedTags: Set<String> = emptySet(),
 ) : Filter.Group<TagTriState>(
     title,
-    tags.map { tag ->
-        val state = if (tag.name.trim().lowercase() in excludedTags) Filter.TriState.STATE_EXCLUDE else Filter.TriState.STATE_IGNORE
-        TagTriState(tag.name, tag.id, state)
-    },
+    tags.map { TagTriState(it.name, it.id) },
 )
 
-class TagTriState(name: String, val id: Int, state: Int = STATE_IGNORE) : Filter.TriState(name, state)
+class TagTriState(name: String, val id: Int) : Filter.TriState(name)
 
 open class UriPartFilter(
     displayName: String,

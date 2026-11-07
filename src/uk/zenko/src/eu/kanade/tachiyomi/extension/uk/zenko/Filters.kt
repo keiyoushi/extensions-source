@@ -65,17 +65,15 @@ internal class OrderBy :
         Selection(2, false),
     )
 
-internal class CategoryFilter(hiddenCategories: Set<String>) : MultiValueFilter("Категорії", categories) {
+internal class CategoryFilter : MultiValueFilter("Категорії", categories) {
     init {
-        if (hiddenCategories.isNotEmpty()) {
-            state.forEach { filter ->
-                if (!hiddenCategories.contains(filter.value)) {
-                    filter.state = true
-                }
-            }
-        }
+        state.forEach { it.state = it.value != NOVEL_CATEGORY }
     }
+
     companion object {
+        // Novels, whose chapters are text
+        const val NOVEL_CATEGORY = "RANOBE"
+
         val categories = listOf(
             "Мальопис" to "MANGA_UA",
             "Манґа" to "MANGA",
@@ -86,6 +84,8 @@ internal class CategoryFilter(hiddenCategories: Set<String>) : MultiValueFilter(
             "Роман" to "RANOBE",
             "Інше" to "OTHER",
         )
+
+        val readableCategories = categories.map { it.second }.filter { it != NOVEL_CATEGORY }.joinToString(",")
     }
 }
 
@@ -130,16 +130,7 @@ internal class AgeFilter(blockedAge: Set<String>) : MultiValueFilter("Віков
     }
 }
 
-internal class GenresFilter(blockedGenres: Set<String>) : TriStateGroup("Жанри", genres) {
-    init {
-        if (blockedGenres.isNotEmpty()) {
-            state.forEach { filter ->
-                if (blockedGenres.contains(filter.id)) {
-                    filter.state = 2
-                }
-            }
-        }
-    }
+internal class GenresFilter : TriStateGroup("Жанри", genres) {
     companion object {
         val genres = listOf(
             "Апокаліпсис" to "Апокаліпсис",

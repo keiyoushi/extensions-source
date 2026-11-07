@@ -97,12 +97,10 @@ private val AGE_RATINGS = mapOf(
 
 internal class GenresFilter(
     genres: List<FilterData>,
-    excludedIds: Set<String> = emptySet(),
 ) : JsonMultiSelectTriFilter(
     "Genres",
     "genres",
     genres.map { MultiSelectTriOption(it.name, it.id) },
-    extraExcluded = excludedIds,
 )
 
 internal class TagsSearchFilter(
@@ -186,7 +184,6 @@ internal open class JsonMultiSelectTriFilter(
     name: String,
     private val param: String,
     genres: List<MultiSelectTriOption>,
-    private val extraExcluded: Set<String> = emptySet(),
 ) : Filter.Group<MultiSelectTriOption>(name, genres),
     JsonFilter {
     override fun addToJsonObject(
@@ -195,7 +192,7 @@ internal open class JsonMultiSelectTriFilter(
         matchAll: Boolean?,
     ) {
         val whatToInclude = state.filter { it.state == TriState.STATE_INCLUDE }.map { it.id }
-        val whatToExclude = state.filter { it.state == TriState.STATE_EXCLUDE }.map { it.id } + extraExcluded
+        val whatToExclude = state.filter { it.state == TriState.STATE_EXCLUDE }.map { it.id }
 
         with(builder) {
             if (whatToInclude.isNotEmpty() || whatToExclude.isNotEmpty()) {
@@ -217,17 +214,12 @@ internal open class JsonMultiSelectTriFilter(
     }
 }
 
-internal class FormatFilter(
-    excluded: Set<String> = emptySet(),
-) : JsonMultiSelectFilter(
-    "Format",
-    "format",
-    FORMAT_OPTIONS.map {
-        MultiSelectOption(it).apply {
-            state = excluded.isNotEmpty() && it !in excluded
-        }
-    },
-)
+internal class FormatFilter :
+    JsonMultiSelectFilter(
+        "Format",
+        "format",
+        FORMAT_OPTIONS.map { MultiSelectOption(it) },
+    )
 
 internal val FORMAT_OPTIONS = listOf("Manga", "Manhwa", "Manhua", "Comic", "Other")
 

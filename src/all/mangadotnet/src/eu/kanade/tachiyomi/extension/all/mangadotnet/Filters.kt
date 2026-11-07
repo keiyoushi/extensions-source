@@ -157,13 +157,10 @@ val contentRatings = listOf(
 
 class TriStateFilter(name: String, val value: String = name, state: Int = STATE_IGNORE) : Filter.TriState(name, state)
 
-class DemographicFilter(excluded: Set<String> = emptySet()) :
+class DemographicFilter :
     Filter.Group<TriStateFilter>(
         name = "Demographics",
-        state = demographics.map { demo ->
-            val state = if (demo in excluded) TriState.STATE_EXCLUDE else TriState.STATE_IGNORE
-            TriStateFilter(demo, state = state)
-        },
+        state = demographics.map { TriStateFilter(it) },
     ) {
     val included get() = state.filter { it.isIncluded() }.map { it.value }
     val excluded get() = state.filter { it.isExcluded() }.map { it.value }
@@ -171,13 +168,10 @@ class DemographicFilter(excluded: Set<String> = emptySet()) :
 
 private val demographics = listOf("Josei", "Seinen", "Shoujo", "Shounen")
 
-class GenreFilter(genreValues: List<String>, excluded: Set<String>) :
+class GenreFilter(genreValues: List<String>) :
     Filter.Group<TriStateFilter>(
         name = "Genres",
-        state = genreValues.map { genre ->
-            val state = if (genre in excluded) TriState.STATE_EXCLUDE else TriState.STATE_IGNORE
-            TriStateFilter(genre, state = state)
-        },
+        state = genreValues.map { TriStateFilter(it) },
     ) {
     val included get() = state.filter { it.isIncluded() }.map { it.value }
     val excluded get() = state.filter { it.isExcluded() }.map { it.value }

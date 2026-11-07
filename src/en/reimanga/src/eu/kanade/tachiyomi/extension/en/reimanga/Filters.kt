@@ -34,7 +34,7 @@ private val statusValues = listOf(
     "Completed" to "completed",
 )
 
-class TriStateOption(name: String, val value: String, state: Int) : Filter.TriState(name, state)
+class TriStateOption(name: String, val value: String) : Filter.TriState(name)
 
 open class TriStateFilter(
     name: String,

@@ -8,7 +8,6 @@ import android.webkit.WebResourceResponse
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
-import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -301,9 +300,6 @@ abstract class Comix :
 
     private fun sourceFilters() = Filters(
         contentRating = preferences.contentRating(),
-        selectedTypes = preferences.defaultTypes(),
-        selectedDemographics = preferences.defaultDemographics(),
-        blockedGenres = preferences.blockedGenres(),
     )
 
     private fun HttpUrl.Builder.applyPreferenceFilters() {
@@ -944,36 +940,6 @@ abstract class Comix :
             setDefaultValue(DEFAULT_CONTENT_RATING)
         }.let(screen::addPreference)
 
-        MultiSelectListPreference(screen.context).apply {
-            key = PREF_DEFAULT_TYPES
-            title = "Default types"
-            summary = "Types to include in popular, latest, and search results. " +
-                "The Type filter in search overrides this."
-            entries = Filters.getTypes().map { it.first }.toTypedArray()
-            entryValues = Filters.getTypes().map { it.second }.toTypedArray()
-            setDefaultValue(Filters.getTypes().map { it.second }.toSet())
-        }.let(screen::addPreference)
-
-        MultiSelectListPreference(screen.context).apply {
-            key = PREF_DEFAULT_DEMOGRAPHICS
-            title = "Default demographics"
-            summary = "Unticked demographics are hidden from popular, latest, and search " +
-                "results. The Demographic filter in search overrides this."
-            entries = Filters.getDemographics().map { it.first }.toTypedArray()
-            entryValues = Filters.getDemographics().map { it.second }.toTypedArray()
-            setDefaultValue(Filters.getDemographics().map { it.second }.toSet())
-        }.let(screen::addPreference)
-
-        MultiSelectListPreference(screen.context).apply {
-            key = PREF_BLOCKED_GENRES
-            title = "Blocked genres"
-            summary = "Genres always excluded from results. The search filter " +
-                "can still include a blocked genre as a one-off override."
-            entries = Filters.getGenres().map { it.first }.toTypedArray()
-            entryValues = Filters.getGenres().map { it.second }.toTypedArray()
-            setDefaultValue(emptySet<String>())
-        }.let(screen::addPreference)
-
         SwitchPreferenceCompat(screen.context).apply {
             key = DEDUPLICATE_CHAPTERS
             title = "Deduplicate Chapters"
@@ -1047,18 +1013,6 @@ abstract class Comix :
 
     private fun SharedPreferences.showTagsInGenres() = getBoolean(PREF_SHOW_TAGS_IN_GENRES, false)
 
-    private fun SharedPreferences.defaultTypes(): Set<String> {
-        val all = Filters.getTypes().map { it.second }.toSet()
-        return getStringSet(PREF_DEFAULT_TYPES, all) ?: all
-    }
-
-    private fun SharedPreferences.defaultDemographics(): Set<String> {
-        val all = Filters.getDemographics().map { it.second }.toSet()
-        return getStringSet(PREF_DEFAULT_DEMOGRAPHICS, all)?.ifEmpty { all } ?: all
-    }
-
-    private fun SharedPreferences.blockedGenres(): Set<String> = getStringSet(PREF_BLOCKED_GENRES, emptySet()) ?: emptySet()
-
     // The legacy "Hide NSFW" boolean still exists in some users' preferences;
     // map it to a sensible default until they pick a value explicitly.
     private fun SharedPreferences.contentRating(): String {
@@ -1074,9 +1028,6 @@ abstract class Comix :
     companion object {
         private const val PREF_POSTER_QUALITY = "pref_poster_quality"
         private const val PREF_CONTENT_RATING = "pref_content_rating"
-        private const val PREF_DEFAULT_TYPES = "pref_default_types"
-        private const val PREF_DEFAULT_DEMOGRAPHICS = "pref_default_demographics"
-        private const val PREF_BLOCKED_GENRES = "pref_blocked_genres"
         private const val LEGACY_HIDE_NSFW_PREF = "nsfw_pref"
         private const val DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
         private const val PREF_FETCH_CHAPTERS_UNTIL_KNOWN = "pref_fetch_chapters_until_known"

@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.schalenetwork
 
 import android.content.SharedPreferences
-import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
@@ -52,12 +51,6 @@ abstract class SchaleNetwork :
 
     private fun trimTitlePref() = preferences.getBoolean(PREF_REM_ADD, false)
 
-    private fun excludeTagsPref(): Set<String> = preferences.getString(PREF_EXCLUDE_TAGS, null)
-        ?.split(",")
-        ?.mapNotNull { it.trim().lowercase().takeIf(String::isNotEmpty) }
-        ?.toSet()
-        .orEmpty()
-
     private suspend fun getBooks(page: Int, sort: String? = null): MangasPage {
         val url = "$apiUrl/books".toHttpUrl().newBuilder().apply {
             sort?.let { addQueryParameter("sort", it) }
@@ -65,10 +58,6 @@ abstract class SchaleNetwork :
 
             val terms = mutableListOf<String>()
             if (lang != "all") terms += "language:\"^$searchLang$\""
-            val excluded = excludeTagsPref()
-            if (excluded.isNotEmpty()) {
-                terms += "tag:\"${excluded.joinToString(",") { "-$it" }}\""
-            }
             if (terms.isNotEmpty()) addQueryParameter("s", terms.joinToString(" "))
         }.build()
 
@@ -155,7 +144,6 @@ abstract class SchaleNetwork :
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val tags = data?.parseAs<List<FilterDto>>().orEmpty()
-        val excluded = excludeTagsPref()
 
         val filters = buildList {
             add(SortFilter())
@@ -163,14 +151,14 @@ abstract class SchaleNetwork :
             add(Filter.Separator())
 
             if (tags.isNotEmpty()) {
-                add(TagFilter("Tags", tags.filter { it.namespace == 0 }, excluded))
-                add(TagFilter("Female Tags", tags.filter { it.namespace == 9 }, excluded))
-                add(TagFilter("Male Tags", tags.filter { it.namespace == 8 }, excluded))
-                add(TagFilter("Artists", tags.filter { it.namespace == 1 }, excluded))
-                add(TagFilter("Circles", tags.filter { it.namespace == 2 }, excluded))
-                add(TagFilter("Parodies", tags.filter { it.namespace == 3 }, excluded))
-                add(TagFilter("Mixed", tags.filter { it.namespace == 10 }, excluded))
-                add(TagFilter("Other", tags.filter { it.namespace == 12 }, excluded))
+                add(TagFilter("Tags", tags.filter { it.namespace == 0 }))
+                add(TagFilter("Female Tags", tags.filter { it.namespace == 9 }))
+                add(TagFilter("Male Tags", tags.filter { it.namespace == 8 }))
+                add(TagFilter("Artists", tags.filter { it.namespace == 1 }))
+                add(TagFilter("Circles", tags.filter { it.namespace == 2 }))
+                add(TagFilter("Parodies", tags.filter { it.namespace == 3 }))
+                add(TagFilter("Mixed", tags.filter { it.namespace == 10 }))
+                add(TagFilter("Other", tags.filter { it.namespace == 12 }))
                 add(TagIncludeCondition())
                 add(TagExcludeCondition())
                 add(Filter.Separator())
@@ -316,18 +304,10 @@ abstract class SchaleNetwork :
                 "Reload manga to apply changes to loaded manga."
             setDefaultValue(false)
         }.also(screen::addPreference)
-
-        EditTextPreference(screen.context).apply {
-            key = PREF_EXCLUDE_TAGS
-            title = "Tags to exclude from browse/search"
-            summary = "Separate tags with commas (,).\n" +
-                "Excluding: ${excludeTagsPref().joinToString(", ")}"
-        }.also(screen::addPreference)
     }
 
     companion object {
         private const val PREF_IMAGERES = "pref_image_quality"
         private const val PREF_REM_ADD = "pref_remove_additional"
-        private const val PREF_EXCLUDE_TAGS = "pref_exclude_tags"
     }
 }

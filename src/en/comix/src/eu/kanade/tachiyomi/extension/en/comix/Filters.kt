@@ -7,9 +7,6 @@ import java.util.Calendar
 
 class Filters(
     private val contentRating: String,
-    private val selectedTypes: Set<String>,
-    private val selectedDemographics: Set<String>,
-    private val blockedGenres: Set<String>,
 ) {
     interface UriFilter {
         fun addToUri(builder: HttpUrl.Builder)
@@ -124,16 +121,16 @@ class Filters(
     fun getFilterList() = FilterList(
         SortFilter(getSortables()),
         ContentRatingFilter(contentRating),
-        TypeFilter(selectedTypes),
+        TypeFilter(),
         Filter.Separator(),
         Filter.Header("Tags — comma separated"),
         TagsFilter(),
         Filter.Header("Match: AND requires every selection, OR matches any"),
         MatchModeFilter(),
-        GenreFilter(getGenres(), blockedGenres),
+        GenreFilter(getGenres()),
         FormatFilter(getFormats()),
         Filter.Separator(),
-        DemographicFilter(getDemographics(), selectedDemographics),
+        DemographicFilter(getDemographics()),
         StatusFilter(),
         ChapterLengthFilter("Minimum Chapter Length", "min_chap"),
         ChapterLengthFilter("Maximum Chapter Length", "max_chap"),
@@ -171,18 +168,15 @@ class Filters(
         name: String,
         private val param: String,
         private val vals: Array<Pair<String, String>>,
-        private val selectedValues: Set<String> = emptySet(),
         private val onlyIfSome: Boolean = false,
     ) : Filter.Group<UriMultiSelectOption>(
         name,
-        vals.map { (name, value) ->
-            UriMultiSelectOption(name, value).apply { state = value in selectedValues }
-        },
+        vals.map { (name, value) -> UriMultiSelectOption(name, value) },
     ),
         UriFilter {
         override fun addToUri(builder: HttpUrl.Builder) {
             val checked = state.filter { it.state }
-            // Ignore when no explicit inclusion (default)
+            // All ticked means no filter
             if (onlyIfSome && checked.size == vals.size) return
 
             checked.forEach {
@@ -196,16 +190,11 @@ class Filters(
     // Demographics are genre terms on the site
     private class DemographicFilter(
         demographics: Array<Pair<String, String>>,
-        selectedValues: Set<String>,
     ) : Filter.Group<UriTriSelectOption>(
         "Demographic",
-        demographics.map { (name, value) ->
-            UriTriSelectOption(name, value).apply {
-                if (value !in selectedValues) state = TriState.STATE_EXCLUDE
-            }
-        },
+        demographics.map { (name, value) -> UriTriSelectOption(name, value) },
     ),
-        PreferenceFilter {
+        UriFilter {
         override fun addToUri(builder: HttpUrl.Builder) {
             state.filter { it.state == TriState.STATE_INCLUDE }
                 .forEach { builder.addQueryParameter("demographics[]", it.value) }
@@ -214,27 +203,20 @@ class Filters(
         }
     }
 
-    private class TypeFilter(selectedValues: Set<String>) :
+    private class TypeFilter :
         UriMultiSelectFilter(
             "Type",
             "types[]",
             getTypes(),
-            selectedValues,
             true,
-        ),
-        PreferenceFilter
+        )
 
     private abstract class TermGroupFilter(
         title: String,
         options: Array<Pair<String, String>>,
-        excludedValues: Set<String> = emptySet(),
     ) : Filter.Group<UriTriSelectOption>(
         title,
-        options.map { (name, value) ->
-            UriTriSelectOption(name, value).apply {
-                if (value in excludedValues) state = TriState.STATE_EXCLUDE
-            }
-        },
+        options.map { (name, value) -> UriTriSelectOption(name, value) },
     ),
         UriFilter,
         TermFilter {
@@ -249,11 +231,7 @@ class Filters(
         }
     }
 
-    private class GenreFilter(
-        genres: Array<Pair<String, String>>,
-        blockedGenres: Set<String>,
-    ) : TermGroupFilter("Genres", genres, blockedGenres),
-        PreferenceFilter
+    private class GenreFilter(genres: Array<Pair<String, String>>) : TermGroupFilter("Genres", genres)
 
     private class FormatFilter(formats: Array<Pair<String, String>>) : TermGroupFilter("Formats", formats)
 

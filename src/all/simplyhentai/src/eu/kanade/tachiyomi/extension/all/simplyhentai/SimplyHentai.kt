@@ -1,8 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.simplyhentai
 
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -13,7 +10,6 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
@@ -21,10 +17,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.time.Instant
 
 @Source
-abstract class SimplyHentai :
-    KeiSource(),
-    ConfigurableSource {
-
+abstract class SimplyHentai : KeiSource() {
     private val langName: String
         get() = when (lang) {
             "en" -> "english"
@@ -41,8 +34,6 @@ abstract class SimplyHentai :
         }
 
     private val apiUrl = "https://api.simply-hentai.com/v3"
-
-    private val preferences by getPreferencesLazy()
 
     override suspend fun getPopularManga(page: Int): MangasPage = getLanguageList(page, null)
 
@@ -67,7 +58,6 @@ abstract class SimplyHentai :
         val url = "$apiUrl/search/complex".toHttpUrl().newBuilder().apply {
             addQueryParameter("query", query)
             addQueryParameter("page", page.toString())
-            addQueryParameter("blacklist", blacklist)
             addQueryParameter("filter[language][0]", langName.replaceFirstChar(Char::uppercase))
             filters.forEach { filter ->
                 when (filter) {
@@ -159,19 +149,4 @@ abstract class SimplyHentai :
         Note("characters"),
         CharactersFilter(),
     )
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = "blacklist"
-            title = "Blacklist"
-            summary = "Separate multiple tags with commas (,)"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString("blacklist", newValue as String).commit()
-            }
-        }.let(screen::addPreference)
-    }
-
-    private inline val blacklist: String
-        get() = preferences.getString("blacklist", "")!!
 }

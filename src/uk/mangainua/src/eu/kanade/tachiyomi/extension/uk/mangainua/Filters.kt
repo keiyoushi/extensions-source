@@ -89,16 +89,7 @@ class SizeFilter :
         ),
     )
 
-class TagFilter(blockedTags: Set<String>) : TriStateGroup("Жанри", options) {
-    init {
-        if (blockedTags.isNotEmpty()) {
-            state.forEach { filter ->
-                if (blockedTags.contains(filter.value)) {
-                    filter.state = 2
-                }
-            }
-        }
-    }
+class TagFilter : TriStateGroup("Жанри", options) {
     companion object {
         val options = listOf(
             "Божевілля" to "53",

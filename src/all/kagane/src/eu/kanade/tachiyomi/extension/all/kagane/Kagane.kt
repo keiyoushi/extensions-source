@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.all.kagane
 
 import android.util.LruCache
 import androidx.preference.ListPreference
-import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -19,7 +18,6 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
@@ -131,9 +129,6 @@ abstract class Kagane :
         FilterList(
             SortFilter(Filter.Sort.Selection(1, false)),
             ContentRatingFilter(contentRating.toSet(), showPornographic, showDisturbing),
-            FormatFilter(excludedFormats),
-            GenresFilter(emptyList(), excludedGenreIds),
-
         ),
     )
 
@@ -145,8 +140,6 @@ abstract class Kagane :
         FilterList(
             SortFilter(Filter.Sort.Selection(6, false)),
             ContentRatingFilter(contentRating.toSet(), showPornographic, showDisturbing),
-            FormatFilter(excludedFormats),
-            GenresFilter(emptyList(), excludedGenreIds),
         ),
     )
 
@@ -551,12 +544,6 @@ abstract class Kagane :
         else -> null
     }
 
-    private val excludedGenreIds: Set<String>
-        get() = prefs.getStringSet(GENRES_ID_PREF, emptySet()) ?: emptySet()
-
-    private val excludedFormats: Set<String>
-        get() = prefs.getStringSet(FORMATS_PREF, emptySet()) ?: emptySet()
-
     private val sourceDisplayMode: String
         get() = prefs.getString(SOURCE_DISPLAY_MODE, SOURCE_DISPLAY_MODE_DEFAULT) ?: SOURCE_DISPLAY_MODE_DEFAULT
 
@@ -613,44 +600,6 @@ abstract class Kagane :
         }
 
         listOf(contentRatingPref, pornSwitch, disturbingSwitch).forEach(screen::addPreference)
-
-        val genreFilter = getFilterList().firstInstanceOrNull<GenresFilter>()
-        val genreMap =
-            genreFilter?.state?.associate { it.id to it.name.replaceFirstChar { c -> c.uppercase() } } ?: emptyMap()
-
-        MultiSelectListPreference(screen.context).apply {
-            key = GENRES_ID_PREF
-            title = "Exclude Genres"
-            entries = genreMap.values.toTypedArray()
-            entryValues = genreMap.keys.toTypedArray()
-            summary = genreMap.keys
-                .filter { excludedGenreIds.contains(it) }
-                .map { id -> genreMap[id] }
-                .joinToString()
-            setDefaultValue(emptySet<String>())
-            setEnabled(genreMap.isNotEmpty())
-            setOnPreferenceChangeListener { _, values ->
-                @Suppress("UNCHECKED_CAST")
-                val selected = values as Set<String>
-                this.summary = selected.mapNotNull { genreMap[it] }.joinToString()
-                true
-            }
-        }.let(screen::addPreference)
-
-        MultiSelectListPreference(screen.context).apply {
-            key = FORMATS_PREF
-            title = "Exclude Formats"
-            entries = FORMAT_OPTIONS.toTypedArray()
-            entryValues = FORMAT_OPTIONS.toTypedArray()
-            summary = FORMAT_OPTIONS.filter { it in excludedFormats }.joinToString()
-            setDefaultValue(emptySet<String>())
-            setOnPreferenceChangeListener { _, values ->
-                @Suppress("UNCHECKED_CAST")
-                val selected = values as Set<String>
-                this.summary = FORMAT_OPTIONS.filter { it in selected }.joinToString()
-                true
-            }
-        }.let(screen::addPreference)
 
         ListPreference(screen.context).apply {
             key = SOURCE_DISPLAY_MODE
@@ -738,9 +687,6 @@ abstract class Kagane :
         private const val PORN_PREF = "pref_show_pornographic"
         private const val DISTURBING_PREF = "pref_show_disturbing"
 
-        private const val GENRES_ID_PREF = "pref_genre_id_exclude"
-        private const val FORMATS_PREF = "pref_format_exclude"
-
         private const val SOURCE_DISPLAY_MODE = "pref_source_display_mode"
         private const val SOURCE_DISPLAY_MODE_DEFAULT = "all"
 
@@ -819,7 +765,7 @@ abstract class Kagane :
         val filters = mutableListOf(
             SortFilter(),
             ContentRatingFilter(contentRating.toSet(), showPornographic, showDisturbing),
-            FormatFilter(excludedFormats),
+            FormatFilter(),
             PublicationStatusFilter(),
             Filter.Separator(),
         )
@@ -841,10 +787,7 @@ abstract class Kagane :
 
             filters.addAll(
                 listOf(
-                    GenresFilter(
-                        meta.getGenresList(),
-                        excludedGenreIds,
-                    ),
+                    GenresFilter(meta.getGenresList()),
                     MatchAllGenresFilter(),
                     TagsSearchFilter(meta.tags),
                     MatchAllTagsFilter(),

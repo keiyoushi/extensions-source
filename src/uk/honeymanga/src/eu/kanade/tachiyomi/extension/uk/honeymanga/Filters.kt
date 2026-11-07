@@ -62,16 +62,7 @@ internal class OrderBy :
         Selection(1, false),
     )
 
-internal class GenresFilter(blockedGenres: Set<String>) : TriStateGroup("Жанри", options) {
-    init {
-        if (blockedGenres.isNotEmpty()) {
-            state.forEach { filter ->
-                if (blockedGenres.contains(filter.id)) {
-                    filter.state = 2
-                }
-            }
-        }
-    }
+internal class GenresFilter : TriStateGroup("Жанри", options) {
     companion object {
         val options = listOf(
             "Апокаліпсис",
@@ -138,17 +129,15 @@ internal class TypeFilter :
         ),
     )
 
-internal class HideTypeFilter(blockedTypes: Set<String>) : MultiValueFilter("Тип (приховати)", options) {
+internal class HideTypeFilter : MultiValueFilter("Тип (приховати)", options) {
     init {
-        if (blockedTypes.isNotEmpty()) {
-            state.forEach { filter ->
-                if (blockedTypes.contains(filter.value)) {
-                    filter.state = true
-                }
-            }
-        }
+        state.first { it.value == NOVEL_TYPE }.state = true
     }
+
     companion object {
+        // Novels, whose chapters are text
+        const val NOVEL_TYPE = "Новела"
+
         val options = listOf(
             "Артбук",
             "Вебкомікс",

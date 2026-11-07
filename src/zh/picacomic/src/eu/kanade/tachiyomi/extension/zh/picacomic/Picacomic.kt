@@ -102,7 +102,6 @@ abstract class Picacomic :
         val comics = response.parseAs<PicaResponse>().data.comics!!.parseAs<List<PicaSearchComic>>()
 
         val mangas = comics
-            .filter { !hitBlocklist(it) }
             .map { it.toSManga(apiUrl) }
 
         return MangasPage(mangas, isRandom)
@@ -165,7 +164,6 @@ abstract class Picacomic :
         val comics = response.parseAs<PicaResponse>().data.comics!!.parseAs<PicaSearchComics>()
 
         val mangas = comics.docs
-            .filter { !hitBlocklist(it) }
             .map { it.toSManga(apiUrl) }
 
         return MangasPage(mangas, comics.page < comics.pages)
@@ -267,8 +265,6 @@ abstract class Picacomic :
             preferences.edit().putString("TOKEN", value).apply()
         }
 
-    private val blocklist get() = preferences.getString("BLOCK_GENRES", "")!!
-        .split(',').map { it.trim() }.filter(String::isNotEmpty)
     private val username get() = preferences.getString("USERNAME", "")!!
     private val password get() = preferences.getString("PASSWORD", "")!!
     private val quality get() = preferences.getString("IMAGE_QUALITY", "original")!!
@@ -286,15 +282,6 @@ abstract class Picacomic :
             setOnBindEditTextListener {
                 it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             }
-        }.let(screen::addPreference)
-
-        EditTextPreference(screen.context).apply {
-            key = "BLOCK_GENRES"
-            title = "屏蔽词列表"
-            dialogTitle = "屏蔽词列表"
-            dialogMessage = "根据关键词过滤漫画，关键词之间用','分离。" +
-                "关键词分为分类和标签两种，在热门和最新中只能按分类过滤（即在filter的类型中出现的词），" +
-                "而在搜索中两者都可以"
         }.let(screen::addPreference)
 
         ListPreference(screen.context).apply {
@@ -322,8 +309,6 @@ abstract class Picacomic :
     }
 
     // Utils
-    private fun hitBlocklist(comic: PicaSearchComic) = comic.genres.any { it in blocklist }
-
     private fun encrypt(url: String, time: Long, method: String, nonce: String): String {
         val hmacSha256Key = "~d}\$Q7\$eIni=V)9\\RK/P.RM4;9[7|@/CA}b~OW!3?EV`:<>M7pddUBL5n|0/*Cn"
         val apiKey = basicHeaders["api-key"]
