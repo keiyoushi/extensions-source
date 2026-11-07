@@ -14,4 +14,9 @@ keiyoushi {
         lang = "en"
         baseUrl = "https://manga.uno"
     }
+
+    deeplink {
+        path("/m/..*")
+        path("/r/..*")
+    }
 }
