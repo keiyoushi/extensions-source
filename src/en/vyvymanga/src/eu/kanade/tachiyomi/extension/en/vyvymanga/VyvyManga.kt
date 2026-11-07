@@ -89,7 +89,8 @@ abstract class VyvyManga : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.size < 2) {
+        // Mirrors differ only in their top-level domain
+        if (url.host.substringBeforeLast('.') != baseUrl.toHttpUrl().host.substringBeforeLast('.') || url.pathSegments.size < 2) {
             return null
         }
 
