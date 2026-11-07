@@ -144,6 +144,7 @@ abstract class VyvyManga : KeiSource() {
                 val stored = storedChapters[title]
                 url = stored?.url ?: "$chapterDate:$title".md5().toHexString().takeLast(10)
                 name = title
+                chapter_number = element.id().removePrefix("chapter-").toFloatOrNull() ?: -1f
                 scanlator = info?.selectFirst("span")?.textOrNull()
                 date_upload = if (stored != null && dateText?.endsWith("ago") == true) stored.date_upload else chapterDate
                 memo = buildJsonObject {
