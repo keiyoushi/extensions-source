@@ -99,24 +99,27 @@ class InitialMangaDto(
     private val releaseDate: String? = null,
     private val contentRating: String? = null,
     private val type: EntityDto? = null,
-    private val authors: List<EntityDto> = emptyList(),
-    private val artists: List<EntityDto> = emptyList(),
-    private val demographics: List<EntityDto> = emptyList(),
-    private val formats: List<EntityDto> = emptyList(),
-    private val genres: List<EntityDto> = emptyList(),
-    private val tags: List<EntityDto> = emptyList(),
-    private val altNames: List<EntityDto> = emptyList(),
-    private val trackers: List<TrackerDto> = emptyList(),
+    private val authors: List<EntityDto>? = null,
+    private val artists: List<EntityDto>? = null,
+    private val demographics: List<EntityDto>? = null,
+    private val formats: List<EntityDto>? = null,
+    private val genres: List<EntityDto>? = null,
+    private val tags: List<EntityDto>? = null,
+    private val altNames: List<EntityDto>? = null,
+    private val trackers: List<TrackerDto>? = null,
 ) {
-    fun toSManga(mangaUrl: String = url) = SManga.create().apply {
+    fun toSManga(mangaUrl: String = url, includeTags: Boolean = true) = SManga.create().apply {
         url = mangaUrl
         title = name
         thumbnail_url = cover
-        author = authors.joinToString { it.name }.ifEmpty { null }
-        artist = artists.joinToString { it.name }.ifEmpty { null }
+        author = authors.orEmpty().joinToString { it.name }.ifEmpty { null }
+        artist = artists.orEmpty().joinToString { it.name }.ifEmpty { null }
         genre = buildList {
             type?.name?.takeIf { it != "other" }?.let { add(it.replaceFirstChar(Char::uppercase)) }
-            addAll((demographics + formats + genres + tags).map { it.name })
+            addAll((demographics.orEmpty() + formats.orEmpty() + genres.orEmpty()).map { it.name })
+            if (includeTags) {
+                addAll(tags.orEmpty().map { it.name })
+            }
         }.distinctBy { it.lowercase() }.joinToString().ifEmpty { null }
         status = when (this@InitialMangaDto.status?.lowercase()) {
             "ongoing" -> SManga.ONGOING
@@ -129,8 +132,8 @@ class InitialMangaDto(
             .rating(rating.takeIf { (ratingsCount ?: 0) > 0 }, max = 5, votes = ratingsCount)
             .info(releaseDate, contentRating?.replaceFirstChar(Char::uppercase))
             .markdown(summary)
-            .altTitles(altNames.map { it.name }.filter { it != name })
-            .links(trackers.map { (TRACKER_NAMES[it.slug] ?: it.slug) to it.url })
+            .altTitles(altNames.orEmpty().map { it.name }.filter { it != name })
+            .links(trackers.orEmpty().map { (TRACKER_NAMES[it.slug] ?: it.slug) to it.url })
             .build()
         memo = buildJsonObject {
             put("id", id)
