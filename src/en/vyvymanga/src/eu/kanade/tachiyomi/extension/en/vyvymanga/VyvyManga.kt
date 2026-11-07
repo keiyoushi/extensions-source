@@ -14,6 +14,7 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
+import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
@@ -135,10 +136,13 @@ abstract class VyvyManga : KeiSource() {
         val storedUrls = chapters.associate { it.name to it.url }
         val updatedChapters = document.select(".list-group > a").map { element ->
             SChapter.create().apply {
-                val chapterDate = parseChapterDate(element.selectFirst("> p")?.text())
+                // "Uploaded by <span>name</span> date" on user uploads
+                val info = element.selectFirst("> p")
+                val chapterDate = parseChapterDate(info?.textNodes()?.lastOrNull()?.text()?.trim())
                 val title = element.selectFirst("span")!!.text()
                 url = storedUrls[title] ?: "$chapterDate:$title".md5().toHexString().takeLast(10)
                 name = title
+                scanlator = info?.selectFirst("span")?.textOrNull()
                 date_upload = chapterDate
                 memo = buildJsonObject {
                     put("mangaUrl", mangaUrl)
