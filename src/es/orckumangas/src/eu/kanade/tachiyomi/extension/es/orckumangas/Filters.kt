@@ -2,19 +2,38 @@ package eu.kanade.tachiyomi.extension.es.orckumangas
 
 import eu.kanade.tachiyomi.source.model.Filter
 
+class SortFilter :
+    Filter.Select<String>(
+        "Ordenar por",
+        sorts.map { it.first }.toTypedArray(),
+        1,
+    ) {
+    val selected get() = sorts[state].second
+
+    companion object {
+        private val sorts = listOf(
+            "Más recientes" to "recientes",
+            "Más vistos" to "vistas",
+            "Mejor puntuados" to "rating",
+            "Más capítulos" to "capitulos",
+            "A–Z" to "alfabetico",
+        )
+    }
+}
+
 class StatusFilter :
     Filter.Select<String>(
         "Estado",
         statuses.map { it.first }.toTypedArray(),
     ) {
-    val selected get() = statuses.getOrNull(state)?.second ?: ""
+    val selected get() = statuses[state].second
 
     companion object {
         private val statuses = listOf(
-            "Todos" to "",
-            "En curso" to "ongoing",
+            "Cualquiera" to "",
+            "En emisión" to "ongoing",
             "Finalizado" to "completed",
-            "Hiatus" to "hiatus",
+            "En pausa" to "hiatus",
             "Cancelado" to "cancelled",
         )
     }
@@ -25,7 +44,7 @@ class TypeFilter :
         "Tipo",
         types.map { it.first }.toTypedArray(),
     ) {
-    val selected get() = types.getOrNull(state)?.second ?: ""
+    val selected get() = types[state].second
 
     companion object {
         private val types = listOf(
