@@ -2,10 +2,13 @@ package eu.kanade.tachiyomi.multisrc.kemono
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.double
+import org.jsoup.Jsoup
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -64,13 +67,15 @@ class KemonoPostDto(
     private val service: String,
     private val user: String,
     private val title: String,
+    private val content: String? = null,
+    private val tags: List<String>? = null,
     private val added: String? = null,
     private val published: String?,
     private val edited: String? = null,
     private val file: KemonoFileDto,
     private val attachments: List<KemonoAttachmentDto>,
 ) {
-    val images: List<String>
+    private val imageFiles: List<KemonoAttachmentDto>
         get() = buildList(attachments.size + 1) {
             if (file.path != null) add(KemonoAttachmentDto(file.name, file.path))
             addAll(attachments)
@@ -79,21 +84,41 @@ class KemonoPostDto(
                 "png", "jpg", "gif", "jpeg", "webp" -> true
                 else -> false
             }
-        }.distinctBy { it.path }.map { it.toString() }
+        }.distinctBy { it.path }
+
+    val images: List<String>
+        get() = imageFiles.map { it.toString() }
+
+    private fun date(zone: ZoneId) = DateTimeFormatter.ISO_LOCAL_DATE_TIME.tryParseDateTime(edited ?: published ?: added, zone)
+
+    private fun displayTitle(zone: ZoneId) = title.trim().ifBlank {
+        val postDate = date(zone)
+        val postDateString = when {
+            postDate != 0L -> chapterNameDateFormat.format(Instant.ofEpochMilli(postDate).atZone(ZoneId.systemDefault()))
+            else -> "unknown date"
+        }
+
+        "Post from $postDateString"
+    }
+
+    fun toSManga(creator: String?, baseUrl: String, imgCdnUrl: String, zone: ZoneId) = SManga.create().apply {
+        url = "/$service/user/$user/post/$id"
+        title = displayTitle(zone)
+        author = creator
+        description = MarkdownDescription.Builder()
+            .description(content?.let { Jsoup.parseBodyFragment(it, baseUrl).body() }, keepNewlines = true)
+            .build()
+        genre = tags?.takeIf { it.isNotEmpty() }?.joinToString()
+        thumbnail_url = imageFiles.firstOrNull()
+            ?.let { "$imgCdnUrl/thumbnail/data${it.path}" }
+            ?: "$imgCdnUrl/icons/$service/$user"
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+    }
 
     fun toSChapter(zone: ZoneId) = SChapter.create().apply {
-        val postDate = DateTimeFormatter.ISO_LOCAL_DATE_TIME.tryParseDateTime(edited ?: published ?: added, zone)
-
         url = "/$service/user/$user/post/$id"
-        date_upload = postDate
-        name = title.ifBlank {
-            val postDateString = when {
-                postDate != 0L -> chapterNameDateFormat.format(Instant.ofEpochMilli(postDate).atZone(ZoneId.systemDefault()))
-                else -> "unknown date"
-            }
-
-            "Post from $postDateString"
-        }
+        date_upload = date(zone)
+        name = displayTitle(zone)
         chapter_number = -2f
     }
 }

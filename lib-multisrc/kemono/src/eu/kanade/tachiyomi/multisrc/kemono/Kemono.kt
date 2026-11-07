@@ -20,16 +20,21 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Cache
 import okhttp3.CacheControl
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.io.File
 import java.io.IOException
+import java.time.ZoneId
 import java.time.ZoneOffset
 import kotlin.math.min
 import kotlin.time.Duration.Companion.minutes
@@ -92,8 +97,6 @@ abstract class Kemono :
 
     private val imgCdnUrl get() = baseUrl.replace("//", "//img.")
 
-    private fun String.formatAvatarUrl(): String = removePrefix("https://").replaceBefore('/', imgCdnUrl)
-
     override suspend fun getPopularManga(page: Int) = searchMangas(page, sortBy = "pop" to "desc")
 
     override suspend fun getLatestUpdates(page: Int) = searchMangas(page, sortBy = "lat" to "desc")
@@ -150,7 +153,6 @@ abstract class Kemono :
 
             val response = client.get(
                 "$baseUrl/$apiPath/creators",
-                headers,
                 Fetch.XHR,
                 CacheControl.Builder().maxStale(30.minutes).build(),
             )
@@ -222,23 +224,56 @@ abstract class Kemono :
         return MangasPage(final, toIndex != maxIndex)
     }
 
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val segments = url.pathSegments.filter(String::isNotEmpty)
+        if (segments.size < 3 || segments[1] != "user") return null
+        val (service, _, user) = segments
+        return when {
+            segments.size == 3 -> fetchCreator(service, user).toSManga(imgCdnUrl)
+            segments.size == 5 && segments[3] == "post" -> {
+                val manga = SManga.create().apply { this.url = "/$service/user/$user/post/${segments[4]}" }
+                getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+            }
+            else -> null
+        }
+    }
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        if (fetchDetails) manga.thumbnail_url = manga.thumbnail_url!!.formatAvatarUrl()
-        return SMangaUpdate(manga, if (fetchChapters) fetchChapterList(manga) else chapters)
+        val segments = getMangaUrl(manga).toHttpUrl().pathSegments
+        val (service, _, user) = segments
+        val zone = zone(service)
+        if (segments.size == 3) {
+            if (fetchDetails) manga.thumbnail_url = "$imgCdnUrl/icons/$service/$user"
+            return SMangaUpdate(manga, if (fetchChapters) fetchChapterList(manga, zone) else chapters)
+        }
+        return coroutineScope {
+            val creator = if (fetchDetails) async { fetchCreator(service, user) } else null
+            val post = fetchPost(manga.url)
+            SMangaUpdate(
+                post.toSManga(creator?.await()?.name ?: manga.author, baseUrl, imgCdnUrl, zone),
+                if (post.images.isNotEmpty()) listOf(post.toSChapter(zone).apply { name = "Post" }) else emptyList(),
+            )
+        }
     }
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url.replace("$apiPath/", "")}"
 
-    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
-        val zone = when (manga.author) {
-            "Pixiv Fanbox", "Fantia" -> ZoneOffset.ofHours(9)
-            else -> ZoneOffset.UTC
-        }
+    private suspend fun fetchCreator(service: String, user: String) = client.get("$baseUrl/$apiPath/$service/user/$user/profile", Fetch.XHR).parseAs<KemonoCreatorDto>()
+
+    private suspend fun fetchPost(path: String) = client.get("$baseUrl/$apiPath$path", Fetch.XHR).parseAs<KemonoPostDtoWrapped>().post
+
+    private fun zone(service: String) = when (service) {
+        "fanbox", "fantia" -> ZoneOffset.ofHours(9)
+        else -> ZoneOffset.UTC
+    }
+
+    private suspend fun fetchChapterList(manga: SManga, zone: ZoneId): List<SChapter> {
         val prefMaxPost = preferences.getString(POST_PAGES_PREF, POST_PAGES_DEFAULT)!!
             .toInt().coerceAtMost(POST_PAGES_MAX) * PAGE_POST_LIMIT
         var offset = 0
@@ -273,16 +308,10 @@ abstract class Kemono :
     }
 
     override fun getImageRequest(page: Page): Request {
-        val imageUrl = page.imageUrl!!
+        if (!preferences.getBoolean(USE_LOW_RES_IMG, false)) return super.getImageRequest(page)
 
-        if (!preferences.getBoolean(USE_LOW_RES_IMG, false)) return Request.Builder().url(imageUrl).headers(headers).build()
-
-        val index = imageUrl.indexOf('/', 8)
-        val url = buildString {
-            append(imageUrl, 0, index)
-            append("/thumbnail")
-            append(imageUrl.substring(index))
-        }
+        val imageUrl = page.imageUrl!!.toHttpUrl()
+        val url = imageUrl.newBuilder().encodedPath("/thumbnail${imageUrl.encodedPath}").build()
         return Request.Builder().url(url).headers(headers).build()
     }
 
@@ -354,7 +383,6 @@ abstract class Kemono :
         private const val POST_PAGES_DEFAULT = "1"
         private const val POST_PAGES_MAX = 75
 
-        // private const val BASE_URL_PREF = "BASE_URL"
         private const val USE_LOW_RES_IMG = "USE_LOW_RES_IMG"
     }
 }
