@@ -15,13 +15,13 @@ import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
-import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -33,7 +33,7 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class VyvyManga : KeiSource() {
-    private val dateFormat = DateTimeFormatter.ofPattern("MMM dd, yyy", Locale.US)
+    private val dateFormat = DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.US)
     private val relativeDateRegex = Regex("""(\d+)""")
 
     // Popular
@@ -90,7 +90,7 @@ abstract class VyvyManga : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         // Mirrors differ only in their top-level domain
-        if (url.host.substringBeforeLast('.') != baseUrl.toHttpUrl().host.substringBeforeLast('.') || url.pathSegments.size < 2) {
+        if (url.host.substringBeforeLast('.') != baseUrl.toHttpUrl().host.substringBeforeLast('.') || url.pathSegments.size < 2 || url.pathSegments[0] != "manga") {
             return null
         }
 
@@ -115,14 +115,14 @@ abstract class VyvyManga : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val mangaUrl = manga.url
-        val document = client.get(baseUrl + mangaUrl, Fetch.DOCUMENT).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val manga = SManga.create().apply {
             title = document.selectFirst("h1")!!.text()
-            artist = document.selectFirst(".pre-title:contains(Artist) ~ a")?.text()
-            author = document.selectFirst(".pre-title:contains(Author) ~ a")?.text()
-            description = document.selectFirst(".summary > .content")?.text()
-            genre = document.select(".pre-title:contains(Genres) ~ a").joinToString { it.text() }
+            artist = document.select(".pre-title:contains(Artist) ~ a").eachText().joinToString().ifEmpty { null }
+            author = document.select(".pre-title:contains(Author) ~ a").eachText().joinToString().ifEmpty { null }
+            description = document.selectFirst(".summary > .content")?.wholeText()?.trim()?.ifEmpty { null }
+            genre = document.select(".pre-title:contains(Genres) ~ a").eachText().joinToString().ifEmpty { null }
             status = when (document.selectFirst(".pre-title:contains(Status) ~ span:not(.space)")?.text()) {
                 "Ongoing" -> SManga.ONGOING
                 "Completed" -> SManga.COMPLETED
@@ -181,9 +181,7 @@ abstract class VyvyManga : KeiSource() {
 
         return when {
             date.endsWith("ago") -> parseRelativeDate(date)
-            else -> runCatching {
-                LocalDate.parse(date, dateFormat).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-            }.getOrDefault(0L)
+            else -> dateFormat.tryParseDate(date, ZoneOffset.UTC)
         }
     }
 
