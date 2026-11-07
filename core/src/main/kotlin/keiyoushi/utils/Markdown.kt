@@ -59,26 +59,44 @@ object MarkdownDescription {
     class Builder {
         private val sections = mutableListOf<String>()
         private var lastIsInline = false
+        private var lastIsRating = false
 
         private fun add(section: String?) = apply {
             if (section.isNullOrBlank()) return@apply
             sections += section
             lastIsInline = false
+            lastIsRating = false
         }
 
         private fun addInline(text: String?) = apply {
             if (text.isNullOrBlank()) return@apply
-            if (lastIsInline) sections[sections.lastIndex] += " · $text" else sections += text
-            lastIsInline = true
+            when {
+                lastIsRating -> {
+                    sections[sections.lastIndex] += "\n$text"
+                    lastIsRating = false
+                    lastIsInline = true
+                }
+                lastIsInline -> {
+                    sections[sections.lastIndex] += " · $text"
+                }
+                else -> {
+                    sections += text
+                    lastIsInline = true
+                }
+            }
         }
 
         /** Adds [rating], out of [max], as stars followed by the number and the [votes] count. */
-        fun rating(rating: Number?, max: Int = 10, votes: Number? = null) = addInline(
-            rating?.toDouble()?.takeIf { it.isFinite() }?.let { value ->
+        fun rating(rating: Number?, max: Int = 10, votes: Number? = null) = apply {
+            val text = rating?.toDouble()?.takeIf { it.isFinite() }?.let { value ->
                 val number = BigDecimal(value.toString()).setScale(2, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
                 "${ratingStars(value, max)} $number" + (votes?.let { count -> " ($count)" } ?: "")
-            },
-        )
+            }
+            if (!text.isNullOrBlank()) {
+                addInline(text)
+                lastIsRating = true
+            }
+        }
 
         /** Adds [facts], separated by dots. */
         fun info(vararg facts: String?) = addInline(facts.filterNot { it.isNullOrBlank() }.joinToString(" · ") { it!!.trim().escapeMarkdown() })
@@ -112,6 +130,9 @@ object MarkdownDescription {
                 links.mapNotNull { (text, url) -> url?.takeIf { it.isNotBlank() }?.let { "[${text.escapeMarkdown()}](${it.encodeMarkdownUrl()})" } },
             ),
         )
+
+        /** Adds a horizontal rule separator (`---`). */
+        fun separator() = add("---")
 
         /** Returns the description, or null when nothing was added. */
         fun build(): String? = sections.joinToString("\n\n").ifEmpty { null }

@@ -195,7 +195,7 @@ class Manga(
         private val listRegex = Regex("\n\n(-|•|\\d+\\.)")
     }
 
-    fun toSManga(baseUrl: String, showTags: Boolean = true, extraVolumeCount: Int? = null) = SManga.create().apply {
+    fun toSManga(baseUrl: String, showTags: Boolean = true, extraVolumeCount: Int? = null, showMetadata: Boolean = true) = SManga.create().apply {
         url = id.toString()
         title = this@Manga.title
         thumbnail_url = photo?.let {
@@ -238,12 +238,15 @@ class Manga(
             }
         }
         description = MarkdownDescription.Builder().apply {
-            rating(this@Manga.rating, votes = ratingCount?.takeIf { it > 0 })
-            field("Year", year?.toString())
-            field("Chapters", chapterCount?.toString())
-            field("Volumes", extraVolumeCount?.takeIf { it > 0 }?.toString())
-            field("Tracked", trackedCount?.toString())
-            field("Content Rating", contentRating?.replaceFirstChar { it.uppercase() })
+            if (showMetadata) {
+                rating(this@Manga.rating, votes = ratingCount?.takeIf { it > 0 })
+                field("Year", year?.toString())
+                field("Chapters", chapterCount?.toString())
+                field("Volumes", extraVolumeCount?.takeIf { it > 0 }?.toString())
+                field("Tracked", trackedCount?.toString())
+                field("Content Rating", contentRating?.replaceFirstChar { it.uppercase() })
+                separator()
+            }
             markdown(
                 this@Manga.description?.replace("\r\n", "\n")
                     ?.replace(multipleNewlinesRegex, "\n\n")
