@@ -10,6 +10,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
@@ -36,6 +37,7 @@ import kotlin.time.Duration.Companion.seconds
 abstract class VyvyManga : KeiSource() {
     private val dateFormat = DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.US)
     private val relativeDateRegex = Regex("""(\d+)""")
+    private val ratingRegex = Regex("""([\d.]+)/10 \(([\d,]+) votes\)""")
 
     // Popular
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -117,12 +119,19 @@ abstract class VyvyManga : KeiSource() {
     ): SMangaUpdate {
         val mangaUrl = manga.url
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        val rating = document.selectFirst("p:has(.pre-title:contains(Rating))")?.text()
+            ?.let { ratingRegex.find(it) }
+            ?.takeIf { it.groupValues[2] != "0" }
 
         val manga = SManga.create().apply {
             title = document.selectFirst("h1")!!.text()
             artist = document.select(".pre-title:contains(Artist) ~ a").eachText().joinToString().ifEmpty { null }
             author = document.select(".pre-title:contains(Author) ~ a").eachText().joinToString().ifEmpty { null }
-            description = document.selectFirst(".summary > .content")?.wholeText()?.trim()?.ifEmpty { null }
+            description = MarkdownDescription.Builder()
+                .rating(rating?.groupValues?.get(1)?.toDoubleOrNull(), votes = rating?.groupValues?.get(2)?.replace(",", "")?.toIntOrNull())
+                .description(document.selectFirst(".summary > .content")?.wholeText())
+                .altTitles(document.selectFirst("h1.title + p:not(.text-info)")?.text()?.split(',', ';').orEmpty())
+                .build()
             genre = document.select(".pre-title:contains(Genres) ~ a").eachText().joinToString().ifEmpty { null }
             status = when (document.selectFirst(".pre-title:contains(Status) ~ span:not(.space)")?.text()) {
                 "Ongoing" -> SManga.ONGOING
