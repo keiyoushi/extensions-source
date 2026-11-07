@@ -131,12 +131,13 @@ abstract class VyvyManga : KeiSource() {
             thumbnail_url = document.selectFirst(".img-manga img")?.absUrl("src")
         }
 
-        val updatedChapters = document.select(".list-group > a").mapIndexed { index, element ->
+        // Stored chapter urls by name: links expire and recent rows show relative dates
+        val storedUrls = chapters.associate { it.name to it.url }
+        val updatedChapters = document.select(".list-group > a").map { element ->
             SChapter.create().apply {
                 val chapterDate = parseChapterDate(element.selectFirst("> p")?.text())
                 val title = element.selectFirst("span")!!.text()
-                // Avoid the dynamic URLs
-                url = "$chapterDate:$title".md5().toHexString().takeLast(10)
+                url = storedUrls[title] ?: "$chapterDate:$title".md5().toHexString().takeLast(10)
                 name = title
                 date_upload = chapterDate
                 memo = buildJsonObject {
