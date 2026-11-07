@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.en.mangatown
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-class MethodFilter(name: String) :
+open class MethodFilter(name: String) :
     Filter.Select<String>(
         name,
         METHODS.map { it.first }.toTypedArray(),
@@ -19,9 +19,15 @@ class MethodFilter(name: String) :
     }
 }
 
+class TitleMethodFilter : MethodFilter("Title Method")
+
 class AuthorFilter : Filter.Text("Author")
 
+class AuthorMethodFilter : MethodFilter("Author Method")
+
 class ArtistFilter : Filter.Text("Artist")
+
+class ArtistMethodFilter : MethodFilter("Artist Method")
 
 class DemographicFilter :
     Filter.Select<String>(

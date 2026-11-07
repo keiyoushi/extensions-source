@@ -44,21 +44,21 @@ abstract class Mangatown : KeiSource() {
 
             if (query.isNotEmpty()) {
                 addQueryParameter("name", query)
-                filters.firstInstanceOrNull<MethodFilter>()?.let {
+                filters.firstInstanceOrNull<TitleMethodFilter>()?.let {
                     addQueryParameter("name_method", it.selected)
                 }
             }
 
             filters.firstInstanceOrNull<AuthorFilter>()?.state?.takeIf { it.isNotBlank() }?.let { author ->
                 addQueryParameter("author", author)
-                filters.filterIsInstance<MethodFilter>().getOrNull(1)?.let {
+                filters.firstInstanceOrNull<AuthorMethodFilter>()?.let {
                     addQueryParameter("author_method", it.selected)
                 }
             }
 
             filters.firstInstanceOrNull<ArtistFilter>()?.state?.takeIf { it.isNotBlank() }?.let { artist ->
                 addQueryParameter("artist", artist)
-                filters.filterIsInstance<MethodFilter>().getOrNull(2)?.let {
+                filters.firstInstanceOrNull<ArtistMethodFilter>()?.let {
                     addQueryParameter("artist_method", it.selected)
                 }
             }
@@ -98,11 +98,11 @@ abstract class Mangatown : KeiSource() {
     }
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
-        MethodFilter("Title Method"),
+        TitleMethodFilter(),
         AuthorFilter(),
-        MethodFilter("Author Method"),
+        AuthorMethodFilter(),
         ArtistFilter(),
-        MethodFilter("Artist Method"),
+        ArtistMethodFilter(),
         DemographicFilter(),
         GenreFilter(),
         StatusFilter(),
