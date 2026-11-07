@@ -118,7 +118,7 @@ abstract class MangaPortali : KeiSource() {
                 .build()
             val response = client.get(url, Fetch.XHR).parseAs<PagedResponse<ChapterDto>>()
             response.items
-                .filterNot { it.isEarlyAccessLocked }
+                .filterNot { it.isChapterLocked }
                 .mapTo(this) { it.toSChapter(slug) }
             page++
         } while (response.hasNextPage)
@@ -126,10 +126,11 @@ abstract class MangaPortali : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val response = client.get("$baseUrl/api/chapters/${chapter.url}", Fetch.XHR).parseAs<ChapterPagesResponse>()
+        val siteUrl = baseUrl.toHttpUrl()
         return response.pages
             .sortedBy { it.index }
             .mapIndexed { index, page ->
-                Page(index, url = getChapterUrl(chapter), imageUrl = page.imageUrl)
+                Page(index, url = getChapterUrl(chapter), imageUrl = siteUrl.resolve(page.imageUrl)!!.toString())
             }
     }
 
