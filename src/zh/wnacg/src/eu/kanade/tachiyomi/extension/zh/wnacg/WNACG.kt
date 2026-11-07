@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.wnacg
 
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -38,9 +36,7 @@ import java.time.format.DateTimeFormatter
 import kotlin.time.Duration.Companion.minutes
 
 @Source
-abstract class WNACG :
-    KeiSource(),
-    ConfigurableSource {
+abstract class WNACG : KeiSource() {
     private val preferences = getPreferences { preferenceMigration() }
 
     override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = client.get(DOMAIN_LIST_URL, Fetch.DOCUMENT).body.string().split(',')
@@ -68,70 +64,15 @@ abstract class WNACG :
         return response
     }
 
-    private val popularPagingState = FilterPagingState()
-
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        val blacklist = preferences.titleBlacklist
-        if (blacklist.isEmpty()) {
-            popularPagingState.reset()
-            return mangaListParse(client.get(popularMangaUrl(page), Fetch.DOCUMENT)).filterBlockedTitles()
-        }
-        val maxScanPages = preferences.blacklistMaxScanPages
-
-        return fetchFilteredMangaPage(
-            appPage = page,
-            key = "$maxScanPages|${blacklist.joinToString("\u0000")}",
-            state = popularPagingState,
-            urlForPage = ::popularMangaUrl,
-            blacklist = blacklist,
-            maxScanPages = maxScanPages,
-        )
-    }
+    override suspend fun getPopularManga(page: Int): MangasPage = mangaListParse(client.get(popularMangaUrl(page), Fetch.DOCUMENT))
 
     private fun popularMangaUrl(page: Int, period: String = "week") = "$baseUrl/albums-favorite_ranking-page-$page-type-$period.html"
 
-    private val latestPagingState = FilterPagingState()
-
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val blacklist = preferences.titleBlacklist
-        if (blacklist.isEmpty()) {
-            latestPagingState.reset()
-            return mangaListParse(client.get(latestUpdatesUrl(page), Fetch.DOCUMENT)).filterBlockedTitles()
-        }
-        val maxScanPages = preferences.blacklistMaxScanPages
-
-        return fetchFilteredMangaPage(
-            appPage = page,
-            key = "$maxScanPages|${blacklist.joinToString("\u0000")}",
-            state = latestPagingState,
-            urlForPage = ::latestUpdatesUrl,
-            blacklist = blacklist,
-            maxScanPages = maxScanPages,
-        )
-    }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaListParse(client.get(latestUpdatesUrl(page), Fetch.DOCUMENT))
 
     private fun latestUpdatesUrl(page: Int) = "$baseUrl/albums-index-page-$page.html"
 
-    private val searchPagingState = FilterPagingState()
-
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val blacklist = preferences.titleBlacklist
-        if (!preferences.filterSearchResults || blacklist.isEmpty()) {
-            searchPagingState.reset()
-            return mangaListParse(client.get(searchMangaUrl(page, query, filters), Fetch.DOCUMENT))
-        }
-
-        val urlForPage = { sourcePage: Int -> searchMangaUrl(sourcePage, query, filters) }
-        val maxScanPages = preferences.blacklistMaxScanPages
-        return fetchFilteredMangaPage(
-            appPage = page,
-            key = urlForPage(1) + "|$maxScanPages|" + blacklist.joinToString("\u0000"),
-            state = searchPagingState,
-            urlForPage = urlForPage,
-            blacklist = blacklist,
-            maxScanPages = maxScanPages,
-        )
-    }
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = mangaListParse(client.get(searchMangaUrl(page, query, filters), Fetch.DOCUMENT))
 
     private fun searchMangaUrl(page: Int, query: String, filters: FilterList): String {
         if (query.isBlank()) {
@@ -272,11 +213,6 @@ abstract class WNACG :
         TagFilter(),
     )
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        getPreferencesInternal(screen.context, preferences)
-            .forEach(screen::addPreference)
-    }
-
     private fun mangaListParse(response: Response): MangasPage {
         val document = response.asJsoup()
         saveExtraCategories(document)
@@ -294,41 +230,6 @@ abstract class WNACG :
             unlistedCategoryId(link.attr("href"))?.let { name to it }
         }
         preferences.extraCategories = categories
-    }
-
-    private fun MangasPage.filterBlockedTitles(
-        blacklist: List<String> = preferences.titleBlacklist,
-    ): MangasPage {
-        if (blacklist.isEmpty()) return this
-
-        val filteredMangas = mangas.filterNot { manga ->
-            blacklist.any { keyword -> manga.title.contains(keyword, ignoreCase = true) }
-        }
-        return MangasPage(filteredMangas, hasNextPage)
-    }
-
-    private suspend fun fetchFilteredMangaPage(
-        appPage: Int,
-        key: String,
-        state: FilterPagingState,
-        urlForPage: (Int) -> String,
-        blacklist: List<String>,
-        maxScanPages: Int,
-    ): MangasPage {
-        val snapshot = state.snapshot(appPage, key)
-        var sourcePage = appPage + snapshot.offset
-        repeat(maxScanPages) {
-            val page = mangaListParse(client.get(urlForPage(sourcePage), Fetch.DOCUMENT)).filterBlockedTitles(blacklist)
-            when {
-                page.mangas.isNotEmpty() -> {
-                    state.updateOffset(key, snapshot.generation, sourcePage - appPage)
-                    return page
-                }
-                !page.hasNextPage -> return MangasPage(emptyList(), false)
-            }
-            sourcePage++
-        }
-        throw Exception("连续 $maxScanPages 页均无可显示结果，请调整黑名单或扫描页数后刷新。")
     }
 
     private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
@@ -358,39 +259,5 @@ abstract class WNACG :
         private val chapterDateRegex = Regex("""\d{4}-\d{2}-\d{2}""")
         private val chapterDateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd")
         private val chapterZone = ZoneId.of("Asia/Taipei")
-    }
-}
-
-private class PagingSnapshot(
-    val generation: Int,
-    val offset: Int,
-)
-
-private class FilterPagingState {
-    private var key: String? = null
-    private var generation = 0
-    private var offset = 0
-
-    @Synchronized
-    fun snapshot(appPage: Int, key: String): PagingSnapshot {
-        if (appPage == 1 || this.key != key) {
-            this.key = key
-            generation++
-            offset = 0
-        }
-        return PagingSnapshot(generation, offset)
-    }
-
-    @Synchronized
-    fun reset() {
-        key = null
-        generation++
-        offset = 0
-    }
-
-    @Synchronized
-    fun updateOffset(key: String, generation: Int, offset: Int) {
-        if (this.key != key || this.generation != generation) return
-        this.offset = offset
     }
 }

@@ -64,23 +64,23 @@ internal val tagFilter = hashSetOf(
     "color_coded_speech_bubble", "patreon", "polygonal_speech_bubble", "blockage_(layout)",
 )
 
-fun getE621FilterList(categoryPref: String): FilterList = FilterList(
+fun getE621FilterList(): FilterList = FilterList(
     Filter.Header("Note: You will need to be logged into E621 via WebView to see certain posts (e.g., 'No Image')"),
     ModeFilter(),
     Filter.Separator(),
-    PoolGroupFilter("Pool Search Options", categoryPref),
+    PoolGroupFilter("Pool Search Options"),
     Filter.Separator(),
     TagGroupFilter("Tag Search Options"),
 )
 
-class PoolGroupFilter(displayName: String, categoryPref: String) :
+class PoolGroupFilter(displayName: String) :
     Filter.Group<Filter<*>>(
         displayName,
         listOf(
             Header("(Pools Search Mode only)"),
             DescriptionFilter(),
             OrderFilter(),
-            CategoryFilter(getDefaultCategoryIndex(categoryPref)),
+            CategoryFilter(),
             ActiveOnlyFilter(),
         ),
     ) {
@@ -115,12 +115,6 @@ class TagGroupFilter(displayName: String) :
 fun getDefaultModeIndex(modePref: String): Int = when (modePref) {
     "pools" -> 0
     "tags" -> 1
-    else -> 0
-}
-
-fun getDefaultCategoryIndex(categoryPref: String): Int = when (categoryPref) {
-    "series" -> 1
-    "collection" -> 2
     else -> 0
 }
 
@@ -182,7 +176,7 @@ class DateFilter(defaultIndex: Int = 0) :
         defaultIndex,
     )
 
-class CategoryFilter(defaultIndex: Int = 0) :
+class CategoryFilter :
     UriPartFilter(
         "Category",
         arrayOf(
@@ -190,7 +184,6 @@ class CategoryFilter(defaultIndex: Int = 0) :
             Pair("Series", "series"),
             Pair("Collection", "collection"),
         ),
-        defaultIndex,
     )
 
 class TagsFilter(defaultTags: String = "") : Filter.Text("Space Separated Tags", defaultTags)

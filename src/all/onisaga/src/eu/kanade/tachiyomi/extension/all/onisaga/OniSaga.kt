@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.all.onisaga
 
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
-import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -117,14 +116,12 @@ abstract class OniSaga :
         page: Int,
         updates: PostFilterUpdatesDto? = null,
     ): MangasPage {
-        val prefExcluded = excludedGenresPref()
-
         val state = if (cachedStateUrl == url && cachedState != null) {
             cachedState!!
         } else {
             val doc = client.get(url, Fetch.DOCUMENT).asJsoup()
 
-            if (page == 1 && updates == null && prefExcluded.isEmpty()) {
+            if (page == 1 && updates == null) {
                 return parseMangaList(doc)
             }
 
@@ -136,18 +133,12 @@ abstract class OniSaga :
             newState
         }
 
-        val effectiveUpdates = (updates ?: PostFilterUpdatesDto()).also { dto ->
-            if (prefExcluded.isNotEmpty()) {
-                dto.excludeGenre = (dto.excludeGenre + prefExcluded).distinct()
-            }
-        }
-
         val request = MangaLivewireRequest(
             token = state.token,
             components = listOf(
                 MangaLivewireRequest.Component(
                     snapshot = state.snapshot,
-                    updates = effectiveUpdates,
+                    updates = updates ?: PostFilterUpdatesDto(),
                     calls = listOf(
                         LivewireCall(
                             method = "gotoPage",
@@ -753,26 +744,12 @@ abstract class OniSaga :
 
     class LivewireState(val snapshot: String, val token: String)
 
-    private fun excludedGenresPref(): Set<String> {
-        val showNsfw = preferences.getBoolean(PREF_NSFW_KEY, false)
-        return if (showNsfw) {
-            preferences.getStringSet(PREF_EXCLUDE_GENRE_ADULT, emptySet())!!
-        } else {
-            preferences.getStringSet(PREF_EXCLUDE_GENRE, emptySet())!!
-        }
-    }
-
     private fun typePref(): String = preferences.getString(PREF_TYPE_KEY, "")!!
     private fun statusPref(): String = preferences.getString(PREF_STATUS_KEY, "")!!
 
     // =============================== Preferences =================================
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val showNsfw = preferences.getBoolean(PREF_NSFW_KEY, false)
-
-        val genreNames = genreList.map { it.first }.toTypedArray()
-        val genreIds = genreList.map { it.second }.toTypedArray()
-
         val nsfwPref = SwitchPreferenceCompat(screen.context).apply {
             key = PREF_NSFW_KEY
             title = "Show NSFW / 18+ Content"
@@ -801,35 +778,6 @@ abstract class OniSaga :
         }
         screen.addPreference(statusPref)
 
-        val normalGenrePref = MultiSelectListPreference(screen.context).apply {
-            key = PREF_EXCLUDE_GENRE
-            title = "Genre Blacklist"
-            summary = "Exclude genres when browsing without 18+ content."
-            entries = genreNames
-            entryValues = genreIds
-            setDefaultValue(emptySet<String>())
-            setEnabled(!showNsfw)
-        }
-        screen.addPreference(normalGenrePref)
-
-        val adultGenrePref = MultiSelectListPreference(screen.context).apply {
-            key = PREF_EXCLUDE_GENRE_ADULT
-            title = "Genre Blacklist (Adult)"
-            summary = "Exclude genres when browsing with 18+ content."
-            entries = genreNames
-            entryValues = genreIds
-            setDefaultValue(emptySet<String>())
-            setEnabled(showNsfw)
-        }
-        screen.addPreference(adultGenrePref)
-
-        nsfwPref.setOnPreferenceChangeListener { _, newValue ->
-            val enabled = newValue as Boolean
-            normalGenrePref.setEnabled(!enabled)
-            adultGenrePref.setEnabled(enabled)
-            true
-        }
-
         val rateLimitPref = ListPreference(screen.context).apply {
             key = PREF_RATE_LIMIT_KEY
             title = "Image Requests Limit"
@@ -845,8 +793,6 @@ abstract class OniSaga :
         private const val PREF_NSFW_KEY = "pref_nsfw"
         private const val PREF_TYPE_KEY = "pref_type"
         private const val PREF_STATUS_KEY = "pref_status"
-        private const val PREF_EXCLUDE_GENRE = "pref_exclude_genre"
-        private const val PREF_EXCLUDE_GENRE_ADULT = "pref_exclude_genre_adult"
         private const val PREF_RATE_LIMIT_KEY = "pref_rate_limit"
 
         private val READER_TOKEN_REGEX = Regex("""readerToken["']?\s*:\s*["']([^"']+)["']""")

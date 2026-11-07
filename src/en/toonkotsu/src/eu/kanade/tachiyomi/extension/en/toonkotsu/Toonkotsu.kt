@@ -114,18 +114,12 @@ abstract class Toonkotsu :
         return MangasPage(data.items.map { it.toSManga(baseUrl, showSpoilerTags) }, data.hasNextPage)
     }
 
-    // Like the site's own language and tag settings: a search's own language wins, excluded tags add up and match any
+    // Like the site's own language setting: a search's own language wins
     private fun HttpUrl.Builder.applyContentPreferences() {
         val current = build()
         val languages = preferences.getStringSet(PREF_LANGUAGES, emptySet())!!
         if (current.queryParameter("originalLanguage") == null && languages.isNotEmpty()) {
             addQueryParameter("originalLanguage", languages.sorted().joinToString(","))
-        }
-        val excludedTags = commaList(PREF_EXCLUDED_TAGS, "")
-        if (excludedTags.isNotEmpty()) {
-            val excluded = current.queryParameter("exclude")?.split(',').orEmpty() + excludedTags
-            setQueryParameter("exclude", excluded.distinct().joinToString(","))
-            setQueryParameter("excludeMode", "any")
         }
     }
 
@@ -347,14 +341,6 @@ abstract class Toonkotsu :
             setDefaultValue(emptySet<String>())
         }.let(screen::addPreference)
 
-        EditTextPreference(screen.context).apply {
-            key = PREF_EXCLUDED_TAGS
-            title = "Excluded tags"
-            summary = "Tag names, comma-separated, as in the genre filter. Titles with any of them are left out of Popular, Latest and search, like the site's tag setting"
-            dialogTitle = "Excluded tags"
-            setDefaultValue("")
-        }.let(screen::addPreference)
-
         val preferredGroups = EditTextPreference(screen.context).apply {
             key = PREF_PREFERRED_GROUPS
             title = "Preferred groups"
@@ -430,7 +416,6 @@ abstract class Toonkotsu :
         private const val PREF_SPOILER_TAGS = "pref_spoiler_tags"
         private const val PREF_CHAPTER_NAMES = "pref_chapter_names"
         private const val PREF_LANGUAGES = "pref_original_languages"
-        private const val PREF_EXCLUDED_TAGS = "pref_excluded_tags"
         private const val PREF_CHAPTER_LIST = "pref_chapter_list"
         private const val PREF_PREFERRED_SOURCES = "pref_preferred_sources"
         private const val PREF_PREFERRED_GROUPS = "pref_preferred_groups"

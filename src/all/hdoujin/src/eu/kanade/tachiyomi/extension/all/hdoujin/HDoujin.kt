@@ -4,7 +4,6 @@ import CategoryFilter
 import SelectFilter
 import TagType
 import TextFilter
-import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
@@ -54,42 +53,6 @@ abstract class HDoujin :
     private val preferences = getPreferences()
     private fun quality() = preferences.getString(PREF_IMAGE_RES, "1280")!!
     private fun remadd() = preferences.getBoolean(PREF_REM_ADD, false)
-    private fun alwaysIncludeTags() = preferences.getString(PREF_INCLUDE_TAGS, "")
-    private fun alwaysExcludeTags() = preferences.getString(PREF_EXCLUDE_TAGS, "")
-    private fun getTagsPreference(): String {
-        val include = alwaysIncludeTags()
-            ?.split(",")
-            ?.map(String::trim)
-            ?.filter(String::isNotBlank)
-
-        val exclude = alwaysExcludeTags()
-            ?.split(",")
-            ?.map(String::trim)
-            ?.filter(String::isNotBlank)
-            ?.map { "-$it" }
-
-        val tags: List<String> = include?.plus(exclude ?: emptyList()) ?: exclude?.plus(include ?: emptyList()) ?: emptyList()
-        if (tags.isNotEmpty()) {
-            val tagGroups: Map<String, Set<String>> = tags
-                .groupBy {
-                    val tag = it.removePrefix("-")
-                    val parts = tag.split(":", limit = 2)
-                    if (parts.size == 2 && parts[0].isNotBlank()) parts[0] else "tag"
-                }
-                .mapValues { (_, values) ->
-                    values.mapTo(mutableSetOf()) {
-                        val tag = it.removePrefix("-").split(":").last().trim()
-                        if (it.startsWith("-")) "-$tag" else tag
-                    }
-                }
-
-            return tagGroups.entries.joinToString(" ") { (key, values) ->
-                "$key:\"${values.joinToString(",")}\""
-            }
-        }
-        return ""
-    }
-
     private val baseApiUrl: String get() = "https://api." + baseUrl.removePrefix("https://")
     private val bookApiUrl: String get() = "$baseApiUrl/books"
 
@@ -130,10 +93,8 @@ abstract class HDoujin :
             addQueryParameter("sort", "8")
             addQueryParameter("page", page.toString())
 
-            val tags = getTagsPreference()
             val terms: MutableList<String> = mutableListOf()
             if (lang != "all") terms += "language:\"^$siteLang\""
-            if (tags.isNotBlank()) terms += tags
 
             if (terms.isNotEmpty()) addQueryParameter("s", terms.joinToString(" "))
         }.build()
@@ -145,10 +106,8 @@ abstract class HDoujin :
         val url = bookApiUrl.toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
 
-            val tags = getTagsPreference()
             val terms: MutableList<String> = mutableListOf()
             if (lang != "all") terms += "language:\"^$siteLang\""
-            if (tags.isNotBlank()) terms += tags
 
             if (terms.isNotEmpty()) addQueryParameter("s", terms.joinToString(" "))
         }.build()
@@ -320,25 +279,9 @@ abstract class HDoujin :
                 "Reload manga to apply changes to loaded manga."
             setDefaultValue(false)
         }.also(screen::addPreference)
-
-        EditTextPreference(screen.context).apply {
-            key = PREF_INCLUDE_TAGS
-            title = "Tags to include from browse/search"
-            summary = "Separate tags with commas (,).\n" +
-                "Excluding: ${alwaysIncludeTags()}"
-        }.also(screen::addPreference)
-        EditTextPreference(screen.context).apply {
-            key = PREF_EXCLUDE_TAGS
-            title = "Tags to exclude from browse/search"
-            summary = "Separate tags with commas (,). Supports tag types (females, male, etc), defaults to 'tag' if not specified.\n" +
-                "Example: 'ai generated, female:hairy, male:hairy'\n" +
-                "Excluding: ${alwaysExcludeTags()}"
-        }.also(screen::addPreference)
     }
     companion object {
         private const val PREF_REM_ADD = "pref_remove_additional"
         private const val PREF_IMAGE_RES = "pref_image_quality"
-        private const val PREF_INCLUDE_TAGS = "pref_include_tags"
-        private const val PREF_EXCLUDE_TAGS = "pref_exclude_tags"
     }
 }

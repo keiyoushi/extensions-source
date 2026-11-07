@@ -28,14 +28,9 @@ class SearchResponseTitlesDto(
     @SerialName("_id") private val id: String,
     private val title: String,
     private val cover: String,
-    private val genres: Array<String> = arrayOf(),
     private val type: String? = null,
 ) {
-    fun toSManga(ignoredGenres: Set<String>): SManga? = SManga.create().apply {
-        // Hide manga by genres in Settings
-        if (ignoredGenres.isNotEmpty()) {
-            if (genres.any { it in ignoredGenres }) return null
-        }
+    fun toSManga(): SManga? = SManga.create().apply {
         // hide novels
         if (type == "novel") return null
 

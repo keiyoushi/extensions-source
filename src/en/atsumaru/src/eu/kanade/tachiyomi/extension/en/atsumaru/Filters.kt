@@ -2,17 +2,10 @@ package eu.kanade.tachiyomi.extension.en.atsumaru
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-internal class GenreFilter(genres: List<Genre>, excludedIds: Set<String> = emptySet()) :
+internal class GenreFilter(genres: List<Genre>) :
     Filter.Group<Filter.TriState>(
         "Genres",
-        genres.map { genre ->
-            val state = if (genre.id in excludedIds) {
-                Filter.TriState.STATE_EXCLUDE
-            } else {
-                Filter.TriState.STATE_IGNORE
-            }
-            object : Filter.TriState(genre.name, state) {}
-        },
+        genres.map { genre -> object : Filter.TriState(genre.name) {} },
     ) {
     val genreIds = genres.map { it.id }
 }

@@ -83,20 +83,12 @@ abstract class Jinmantiantang :
 
     private suspend fun albumList(url: HttpUrl): MangasPage {
         val list = apiGet<AlbumListDto>(url)
-        val mangas = list.content.map { it.toSManga(coverHost) }.filterGenre()
+        val mangas = list.content.map { it.toSManga(coverHost) }
         return MangasPage(mangas, list.content.size >= PAGE_SIZE)
     }
 
     // The site's own image CDN: its cover urls stay the same, unlike the API's rotating image hosts
     private val coverHost get() = "https://cdn-msp.${baseUrl.toHttpUrl().host}"
-
-    private fun List<SManga>.filterGenre(): List<SManga> {
-        val removedGenres = preferences.blockList
-        if (removedGenres.all { it.isBlank() }) return this
-        return filterNot { manga ->
-            manga.genre.orEmpty().lowercase().split(", ").any { it in removedGenres }
-        }
-    }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (filters.firstInstanceOrNull<FavoritesFilter>()?.isEnabled() == true) {
@@ -131,7 +123,7 @@ abstract class Jinmantiantang :
         )
         val list = apiGet<AlbumListDto>(url)
         list.redirectAid?.let { return MangasPage(listOfNotNull(fetchAlbum(it.toString())), hasNextPage = false) }
-        return MangasPage(list.content.map { it.toSManga(coverHost) }.filterGenre(), list.content.size >= PAGE_SIZE)
+        return MangasPage(list.content.map { it.toSManga(coverHost) }, list.content.size >= PAGE_SIZE)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -393,16 +385,6 @@ abstract class Jinmantiantang :
                 checkIn(showError = true)
                 false
             }
-        }.let(screen::addPreference)
-
-        EditTextPreference(context).apply {
-            key = BLOCK_PREF
-            title = "屏蔽词列表"
-            setDefaultValue(
-                "// 例如 \"YAOI cos 扶他 毛絨絨 獵奇 韩漫 韓漫\", " +
-                    "关键词之间用空格分离, 大小写不敏感, \"//\"后的字符会被忽略",
-            )
-            dialogTitle = "关键词列表"
         }.let(screen::addPreference)
     }
 

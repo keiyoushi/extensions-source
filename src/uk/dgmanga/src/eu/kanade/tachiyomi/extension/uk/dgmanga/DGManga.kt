@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.uk.dgmanga
 
-import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -24,7 +23,6 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.collections.joinToString
 import kotlin.getValue
-import kotlin.text.ifEmpty
 
 @Source
 abstract class DGManga :
@@ -77,8 +75,7 @@ abstract class DGManga :
 
         client.get(url, Fetch.XHR).use { response ->
             val data = response.parseAs<CatalogResponseDto>()
-            val ignoredGenres = ignoreGenres()
-            val mangas = data.titles.mapNotNull { it.toSManga(ignoredGenres) }
+            val mangas = data.titles.mapNotNull { it.toSManga() }
 
             return MangasPage(mangas, (data.totalPages > data.page))
         }
@@ -150,8 +147,7 @@ abstract class DGManga :
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val url = "$apiUrl/titles/${manga.url}/similar"
         val data = client.get(url, Fetch.XHR).parseAs<List<SearchResponseTitlesDto>>()
-        val ignoredGenres = ignoreGenres()
-        return data.mapNotNull { it.toSManga(ignoredGenres) }
+        return data.mapNotNull { it.toSManga() }
     }
 
     // ============================== Filters ===============================
@@ -167,32 +163,9 @@ abstract class DGManga :
     )
 
     // ============================== Preference ===============================
-    private fun ignoreGenres(): Set<String> = preferences.getStringSet(SITE_GENRES_PREF, emptySet<String>())!!
     private val hideLicensedInSearch = preferences.getBoolean(SITE_LICENSED_SEARCH, false)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        MultiSelectListPreference(screen.context).apply {
-            key = SITE_GENRES_PREF
-            title = SITE_GENRES_PREF_TITLE
-            val tags = GenresFilter.values
-            entries = tags.map { it.first }.toTypedArray()
-            entryValues = tags.map { it.second }.toTypedArray()
-            summary = tags.filter { it.second in ignoreGenres() }
-                .joinToString { it.first }
-                .ifEmpty { "Не вибрано" } + SITE_GENRES_PREF_SUM
-            dialogTitle = "Виберіть категорії які потрібно сховати"
-            setDefaultValue(emptySet<String>())
-
-            setOnPreferenceChangeListener { _, values ->
-                @Suppress("UNCHECKED_CAST")
-                val selected = values as Set<String>
-                this.summary = tags.filter { it.second in selected }
-                    .joinToString { it.first }
-                    .ifEmpty { "Не вибрано" } + SITE_GENRES_PREF_SUM
-                true
-            }
-        }.let(screen::addPreference)
-
         SwitchPreferenceCompat(screen.context).apply {
             key = SITE_LICENSED_SEARCH
             title = SITE_LICENSED_SEARCH_TITLE
@@ -202,9 +175,6 @@ abstract class DGManga :
     }
 
     companion object {
-        private const val SITE_GENRES_PREF = "site_hidden_genres"
-        private const val SITE_GENRES_PREF_TITLE = "Приховані категорії"
-        private const val SITE_GENRES_PREF_SUM = "\nⓘЦі категорії завжди будуть приховані в 'Популярне', 'Новинки' та 'Фільтр'."
         private const val SITE_LICENSED_SEARCH = "site_hide_licensed"
         private const val SITE_LICENSED_SEARCH_TITLE = "Скривати ліцензовані твори"
         private const val SITE_LICENSED_SEARCH_SUM = "\nⓘ При зміні цього параметра необхідно перезапустити програму з повною зупинкою."

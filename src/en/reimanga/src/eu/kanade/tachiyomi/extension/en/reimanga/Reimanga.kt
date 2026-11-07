@@ -1,8 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.reimanga
 
-import androidx.preference.MultiSelectListPreference
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -17,9 +14,7 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getLongOrNull
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParse
@@ -35,16 +30,12 @@ import okio.IOException
 import kotlin.time.Instant
 
 @Source
-abstract class Reimanga :
-    KeiSource(),
-    ConfigurableSource {
+abstract class Reimanga : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addCookie("showAdultContent" to "true")
         protocols(listOf(Protocol.HTTP_1_1))
     }
-
-    private val preferences by getPreferencesLazy()
 
     private val rscHeaders
         get() = headersBuilder()
@@ -224,20 +215,11 @@ abstract class Reimanga :
 
         val cachedTags = data?.parseAs<TagList>()
         if (cachedTags != null) {
-            val excluded = preferences.getStringSet(EXCLUDE_TAG_PREF, emptySet()) ?: emptySet()
             val genres = cachedTags.genres.map { tag ->
-                TriStateOption(
-                    tag.name,
-                    tag.slug,
-                    if (tag.slug in excluded) Filter.TriState.STATE_EXCLUDE else Filter.TriState.STATE_IGNORE,
-                )
+                TriStateOption(tag.name, tag.slug)
             }.sortedBy { it.name }
             val tags = cachedTags.tags.map { tag ->
-                TriStateOption(
-                    tag.name,
-                    tag.slug,
-                    if (tag.slug in excluded) Filter.TriState.STATE_EXCLUDE else Filter.TriState.STATE_IGNORE,
-                )
+                TriStateOption(tag.name, tag.slug)
             }.sortedBy { it.name }
 
             filters.add(GenreFilter(genres))
@@ -246,45 +228,6 @@ abstract class Reimanga :
 
         return FilterList(filters)
     }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val filters = getFilterList()
-        val tags = buildList {
-            filters.firstInstanceOrNull<GenreFilter>()?.state?.let(::addAll)
-            filters.firstInstanceOrNull<TagFilter>()?.state?.let(::addAll)
-        }.sortedBy { it.name }
-
-        MultiSelectListPreference(screen.context).apply {
-            key = EXCLUDE_TAG_PREF
-            title = "Exclude Tags from Browse"
-            entries = tags.map { it.name }.toTypedArray()
-            entryValues = tags.map { it.value }.toTypedArray()
-            setDefaultValue(emptySet<String>())
-            setEnabled(tags.isNotEmpty())
-
-            fun updateSummary(pref: MultiSelectListPreference, selected: Set<String>?) {
-                pref.summary = if (selected.isNullOrEmpty()) {
-                    "None"
-                } else {
-                    val entryMap = pref.entryValues.zip(pref.entries).toMap()
-                    selected.joinToString { entryMap[it] ?: it }
-                }
-            }
-
-            updateSummary(this, preferences.getStringSet(EXCLUDE_TAG_PREF, emptySet()))
-
-            setOnPreferenceChangeListener { pref, newValue ->
-                val updated = pref as MultiSelectListPreference
-
-                @Suppress("UNCHECKED_CAST")
-                val newSet = newValue as Set<String>
-
-                updateSummary(updated, newSet)
-                true
-            }
-        }.also(screen::addPreference)
-    }
 }
 
-const val EXCLUDE_TAG_PREF = "pref_exclude_tag"
 private const val MANGA_ID_MEMO = "mangaId"

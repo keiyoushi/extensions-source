@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.mangak
 
 import android.content.SharedPreferences
-import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -16,7 +15,6 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
-import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
@@ -62,11 +60,6 @@ abstract class MangaKSource :
             addQueryParameter("window", WINDOW_WEEK)
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", DEFAULT_PAGE_LIMIT)
-
-            val blacklist = getBlacklist()
-            if (blacklist.isNotEmpty()) {
-                addQueryParameter("exclude", blacklist.joinToString(","))
-            }
         }.build()
 
         val response = client.get(url, Fetch.XHR)
@@ -79,11 +72,6 @@ abstract class MangaKSource :
             addQueryParameter("sort", SORT_LATEST)
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", DEFAULT_PAGE_LIMIT)
-
-            val blacklist = getBlacklist()
-            if (blacklist.isNotEmpty()) {
-                addQueryParameter("exclude", blacklist.joinToString(","))
-            }
         }.build()
 
         val response = client.get(url, Fetch.XHR)
@@ -104,17 +92,14 @@ abstract class MangaKSource :
             }
 
             val includedGenres = mutableListOf<String>()
-            val excludedGenres = getBlacklist().toMutableSet()
+            val excludedGenres = mutableSetOf<String>()
 
             filters.forEach { filter ->
                 when (filter) {
                     is GenreList -> {
                         filter.state.forEach { genre ->
                             when (genre.state) {
-                                Filter.TriState.STATE_INCLUDE -> {
-                                    includedGenres.add(genre.value)
-                                    excludedGenres.remove(genre.value)
-                                }
+                                Filter.TriState.STATE_INCLUDE -> includedGenres.add(genre.value)
                                 Filter.TriState.STATE_EXCLUDE -> excludedGenres.add(genre.value)
                                 Filter.TriState.STATE_IGNORE -> {}
                             }
@@ -215,7 +200,7 @@ abstract class MangaKSource :
     override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres", Fetch.XHR).parseAs<JsonElement>()
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val genres = getGenreList(data, getBlacklist())
+        val genres = getGenreList(data)
 
         val filters = mutableListOf<Filter<*>>(
             SortFilter(),
@@ -239,8 +224,6 @@ abstract class MangaKSource :
 
     private fun String.toTagSlug() = lowercase().replace(TAG_SLUG_DROP_REGEX, "").trim().replace(WHITESPACE_REGEX, "-")
 
-    private fun getBlacklist(): Set<String> = preferences.getStringSet(PREF_BLACKLIST_KEY, emptySet()) ?: emptySet()
-
     protected open val includeTags: Boolean
         get() = preferences.getBoolean(PREF_INCLUDE_TAGS_KEY, PREF_INCLUDE_TAGS_DEFAULT)
 
@@ -251,25 +234,9 @@ abstract class MangaKSource :
             summary = "Include tags alongside genres in manga details"
             setDefaultValue(PREF_INCLUDE_TAGS_DEFAULT)
         }.let(screen::addPreference)
-
-        val genres = getFilterList().firstInstanceOrNull<GenreList>()?.state.orEmpty()
-        val blacklistPref = MultiSelectListPreference(screen.context).apply {
-            key = PREF_BLACKLIST_KEY
-            title = "Global Genre Blacklist"
-            summary = if (genres.isEmpty()) {
-                "Open search filters in the browse screen once to load and sync genres."
-            } else {
-                "Select genres to always exclude from search and browse results."
-            }
-            entries = genres.map { it.name }.toTypedArray()
-            entryValues = genres.map { it.value }.toTypedArray()
-            setDefaultValue(emptySet<String>())
-        }
-        screen.addPreference(blacklistPref)
     }
 
     companion object {
-        private const val PREF_BLACKLIST_KEY = "pref_blacklist"
         private const val PREF_INCLUDE_TAGS_KEY = "pref_include_tags"
         private const val PREF_INCLUDE_TAGS_DEFAULT = true
         private const val FALLBACK_IMAGE_HOST = "rx.rzyn.net"

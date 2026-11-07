@@ -233,8 +233,8 @@ class FilterData(
     val types: List<Filter>?,
     val statuses: List<Filter>?,
 ) {
-    fun getFilterList(excludedGenreIds: Set<String> = emptySet()) = buildList {
-        genres?.let { add(GenreFilter(it.map { Genre(it.name, it.id) }, excludedGenreIds)) }
+    fun getFilterList() = buildList {
+        genres?.let { add(GenreFilter(it.map { Genre(it.name, it.id) })) }
         tags?.let { add(TagFilters(it.map { Tag(it.name, it.id) })) }
         types?.let { add(TypeFilter(it.map { Type(it.name, it.id) })) }
         statuses?.let { add(StatusFilter(it.map { Status(it.name, it.id) })) }

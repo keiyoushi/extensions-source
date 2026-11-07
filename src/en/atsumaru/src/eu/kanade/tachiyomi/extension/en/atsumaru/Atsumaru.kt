@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.atsumaru
 
 import androidx.preference.EditTextPreference
-import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -17,7 +16,6 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
@@ -50,7 +48,7 @@ abstract class Atsumaru :
         val offset = (page - 1) * BROWSE_LIMIT
         val data = client.get(
             "$baseUrl/api/home2/popular?offset=$offset&limit=$BROWSE_LIMIT" +
-                "&types=Manga,Manwha,Manhua,OEL&mediums=Comic&timeframe=daily${get18Mode()}${excludedGenresQuery()}",
+                "&types=Manga,Manwha,Manhua,OEL&mediums=Comic&timeframe=daily${get18Mode()}",
             Fetch.XHR,
         ).parseAs<BrowseMangaDto>()
 
@@ -63,7 +61,7 @@ abstract class Atsumaru :
         val offset = (page - 1) * BROWSE_LIMIT
         val data = client.get(
             "$baseUrl/api/home2/recentlyUpdated?offset=$offset&limit=$BROWSE_LIMIT" +
-                "&types=Manga,Manwha,Manhua,OEL&mediums=Comic${get18Mode()}${excludedGenresQuery()}",
+                "&types=Manga,Manwha,Manhua,OEL&mediums=Comic${get18Mode()}",
             Fetch.XHR,
         ).parseAs<BrowseMangaDto>()
 
@@ -246,8 +244,7 @@ abstract class Atsumaru :
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val excludedGenres = prefs.getStringSet(PREF_EXCLUDE_GENRES, emptySet()).orEmpty()
-        val filters = data?.parseAs<FilterData>()?.getFilterList(excludedGenres).orEmpty()
+        val filters = data?.parseAs<FilterData>()?.getFilterList().orEmpty()
 
         return FilterList(
             filters + listOf(
@@ -371,12 +368,6 @@ abstract class Atsumaru :
         return if (isEnabled) "&adult=1" else ""
     }
 
-    private fun excludedGenresQuery(): String {
-        val ids = prefs.getStringSet(PREF_EXCLUDE_GENRES, emptySet()).orEmpty()
-        if (ids.isEmpty()) return ""
-        return "&excludedTags=${ids.joinToString(",")}"
-    }
-
     private val deduplicateChapters: Boolean
         get() = prefs.getBoolean(PREF_DEDUPLICATE_CHAPTERS, false)
 
@@ -393,41 +384,6 @@ abstract class Atsumaru :
             title = "Toggle adult mode"
             summaryOff = "Safe (default)"
             summaryOn = "+18"
-        }.let(screen::addPreference)
-
-        val genreFilter = getFilterList().firstInstanceOrNull<GenreFilter>()
-        val genres = genreFilter?.state.orEmpty()
-        val genreIds = genreFilter?.genreIds.orEmpty()
-
-        MultiSelectListPreference(screen.context).apply {
-            key = PREF_EXCLUDE_GENRES
-            title = "Exclude Genres from Browse"
-            entries = genres.map { it.name }.toTypedArray()
-            entryValues = genreIds.toTypedArray()
-            setDefaultValue(emptySet<String>())
-            setEnabled(genres.isNotEmpty())
-
-            fun updateSummary(pref: MultiSelectListPreference, selected: Set<String>?) {
-                pref.summary = if (selected.isNullOrEmpty()) {
-                    "None"
-                } else {
-                    val entryMap = pref.entryValues.zip(pref.entries).toMap()
-                    selected.joinToString { entryMap[it] ?: it }
-                }
-            }
-
-            updateSummary(this, prefs.getStringSet(PREF_EXCLUDE_GENRES, emptySet()))
-
-            setOnPreferenceChangeListener { pref, newValue ->
-                @Suppress("UNCHECKED_CAST")
-                val updated = pref as MultiSelectListPreference
-
-                @Suppress("UNCHECKED_CAST")
-                val newSet = newValue as Set<String>
-
-                updateSummary(updated, newSet)
-                true
-            }
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
@@ -448,7 +404,6 @@ abstract class Atsumaru :
 
     companion object {
         private const val PREF_SHOW_18 = "pref_18_mode"
-        private const val PREF_EXCLUDE_GENRES = "pref_exclude_genres"
         private const val PREF_DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
         private const val PREF_SCANLATOR_BLACKLIST = "pref_scanlator_blacklist"
         private const val BROWSE_LIMIT = 40

@@ -27,16 +27,7 @@ abstract class TriStateGroup(
     val excluded get() = state.filter { it.isExcluded() }.map { it.value }.takeUnless { it.isEmpty() }
 }
 
-class GenresFilter(blockedGenres: Set<String>) : TriStateGroup("Жанри", options) {
-    init {
-        if (blockedGenres.isNotEmpty()) {
-            state.forEach { filter ->
-                if (blockedGenres.contains(filter.value)) {
-                    filter.state = 2
-                }
-            }
-        }
-    }
+class GenresFilter : TriStateGroup("Жанри", options) {
     companion object {
         var options = emptyList<Pair<String, String>>()
     }

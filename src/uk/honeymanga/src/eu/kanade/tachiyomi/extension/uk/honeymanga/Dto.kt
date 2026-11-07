@@ -23,13 +23,10 @@ class ResponseData(
     private val id: String,
     private val posterId: String,
     private val title: String,
-    private val type: String,
-    private val genres: List<String>? = emptyList(),
+    val type: String,
     private val adult: String,
 ) {
-    fun toSManga(imageUrl: String, blockedTypes: Set<String>? = emptySet(), blockedGenres: Set<String>? = emptySet(), contentShown: String? = null): SManga? {
-        if (blockedTypes?.contains(type) == true) return null
-        if (blockedGenres?.intersect(genres?.toSet().orEmpty())?.isNotEmpty() == true) return null
+    fun toSManga(imageUrl: String, contentShown: String? = null): SManga? {
         if (contentShown == "IN" && adult != "18+") return null
         if (contentShown == "NOT_IN" && adult == "18+") return null
 

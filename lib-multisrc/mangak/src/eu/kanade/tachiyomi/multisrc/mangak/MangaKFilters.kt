@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.source.model.Filter
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 
-class Genre(name: String, val value: String, state: Int = Filter.TriState.STATE_IGNORE) : Filter.TriState(name, state)
+class Genre(name: String, val value: String) : Filter.TriState(name)
 
 class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres)
 
@@ -96,14 +96,13 @@ class DemographicFilter :
         ),
     )
 
-fun getGenreList(data: JsonElement? = null, blacklist: Set<String> = emptySet()): List<Genre> {
+fun getGenreList(data: JsonElement? = null): List<Genre> {
     val items = data?.parseAs<GenreResponseDto>()?.data?.items.orEmpty()
 
     return items.map { item ->
         Genre(
             name = item.name,
             value = item.slug,
-            state = if (item.slug in blacklist) Filter.TriState.STATE_EXCLUDE else Filter.TriState.STATE_IGNORE,
         )
     }
 }
