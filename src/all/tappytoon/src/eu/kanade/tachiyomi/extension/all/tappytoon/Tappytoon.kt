@@ -1,5 +1,9 @@
 package eu.kanade.tachiyomi.extension.all.tappytoon
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,6 +17,7 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
@@ -30,7 +35,11 @@ import java.util.Locale
 import kotlin.time.Instant
 
 @Source
-abstract class Tappytoon : KeiSource() {
+abstract class Tappytoon :
+    KeiSource(),
+    ConfigurableSource {
+
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
         val res = chain.proceed(chain.request())
@@ -121,10 +130,11 @@ abstract class Tappytoon : KeiSource() {
             thumbnail_url = it.posterThumbnailUrl
             author = it.authors.joinToString()
             artist = author
-            genre = buildString {
-                it.genres.joinToString(this, postfix = ", ")
-                append("Rating: ").append(it.ageRating)
-            }
+            genre = buildList {
+                it.genres.mapTo(this, Name::toString)
+                add("Rating: ${it.ageRating}")
+                if (it.isSuperHighQualitySupported) add("HD")
+            }.joinToString()
             status = when {
                 it.isCompleted -> SManga.COMPLETED
                 !it.isHiatus -> SManga.ONGOING
@@ -162,16 +172,38 @@ abstract class Tappytoon : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val media = if (preferences.getBoolean(PREF_HD_MODE, false)) {
+            // Only comics marked for HD have super_high images (others answer 404), and the API can refuse it, so fall back.
+            try {
+                contents(chapter, "super_high")
+            } catch (_: IOException) {
+                contents(chapter, "high")
+            }
+        } else {
+            contents(chapter, "high")
+        }
+        return media.mapIndexed { idx, img ->
+            Page(idx, "", img.toString())
+        }
+    }
+
+    private suspend fun contents(chapter: SChapter, variant: String): Media {
         val url = apiUrl.newBuilder()
             .addEncodedPathSegments("content-delivery/contents")
             .addEncodedQueryParameter("chapterId", chapter.url)
-            .addEncodedQueryParameter("variant", "high")
+            .addEncodedQueryParameter("variant", variant)
             .addEncodedQueryParameter("locale", lang)
             .build()
+        return client.get(url, apiHeaders(), Fetch.XHR).parseAs<Media>()
+    }
 
-        return client.get(url, apiHeaders(), Fetch.XHR).parseAs<Media>().mapIndexed { idx, img ->
-            Page(idx, "", img.toString())
-        }
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_HD_MODE
+            title = "HD mode"
+            summary = "Load chapters at 1280 px for comics that have HD on Tappytoon. Other comics stay at 720 px."
+            setDefaultValue(false)
+        }.let(screen::addPreference)
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(
@@ -195,6 +227,8 @@ abstract class Tappytoon : KeiSource() {
 
     companion object {
         private const val IMG_CONTENT_TYPE = "image/jpeg"
+
+        private const val PREF_HD_MODE = "pref_hd_mode"
 
         private val apiUrl: HttpUrl = "https://api-global.tappytoon.com".toHttpUrl()
 
