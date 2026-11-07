@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.teamx
 
-import android.util.Log
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -88,7 +87,6 @@ abstract class TeamX : KeiSource() {
     // ============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        Log.d("TeamX", "getSearchMangaList called")
         if (query.isNotEmpty()) {
             val url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("keyword", query)
