@@ -112,7 +112,12 @@ class ChapterDto(
 
 @Serializable
 class PageListResponse(
-    val pages: List<String>,
+    val chapter: PageListChapterDto,
+)
+
+@Serializable
+class PageListChapterDto(
+    @SerialName("page_count") val pageCount: Int,
 )
 
 @Serializable
