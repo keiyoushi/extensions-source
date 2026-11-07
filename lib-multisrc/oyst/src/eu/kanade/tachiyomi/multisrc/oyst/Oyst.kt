@@ -20,6 +20,7 @@ import keiyoushi.utils.runWebViewBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -35,7 +36,7 @@ import kotlin.time.Duration.Companion.seconds
 abstract class Oyst : KeiSource() {
 
     // The reader's endpoints only answer the site's own scripts.
-    private val readerHeaders by lazy { headers.newBuilder().set("X-Requested-With", "XMLHttpRequest").build() }
+    private val readerHeaders: Headers get() = headersBuilder().set("X-Requested-With", "XMLHttpRequest").build()
 
     private val anubisLock = Any()
 
@@ -218,9 +219,9 @@ abstract class Oyst : KeiSource() {
                 val appUserAgent = request.header("User-Agent")
                 runWebViewBlocking<Unit>(chain.call()) {
                     // The app's user agent, which Cloudflare's cookie is tied to.
-                    appUserAgent?.let { userAgent = it }
+                    userAgent = appUserAgent!!
                     // The check page sends the WebView back to the requested page once passed.
-                    onPageFinished { url -> if (url.toHttpUrlOrNull()?.isAnubis() == false) resolve(Unit) }
+                    onPageStarted { url -> if (url.toHttpUrlOrNull()?.isAnubis() == false) resolve(Unit) }
                     loadUrl(checkUrl.toString())
                 }
                 anubisPassedAt = System.currentTimeMillis()
