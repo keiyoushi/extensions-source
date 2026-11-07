@@ -13,6 +13,9 @@ object MDConstants {
     const val MANGA_LIMIT = 20
     const val LATEST_CHAPTER_LIMIT = 100
 
+    // Language of the source that shows every translation together
+    const val ALL_LANGUAGES = "all"
+
     const val CHAPTER = "chapter"
     const val MANGA = "manga"
     const val COVER_ART = "cover_art"

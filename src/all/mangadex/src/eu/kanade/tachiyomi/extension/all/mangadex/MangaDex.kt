@@ -69,6 +69,10 @@ class MangaDex(
             else -> lang
         }
 
+    // Empty for the all-language source, so that its requests leave the language out
+    private val translatedLanguages: Set<String>
+        get() = if (dexLang == MDConstants.ALL_LANGUAGES) emptySet() else setOf(dexLang)
+
     private val preferences by getPreferencesLazy { sanitizeExistingUuidPrefs() }
 
     @Suppress("DEPRECATION")
@@ -100,7 +104,11 @@ class MangaDex(
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = MDConstants.API_MANGA_URL.toHttpUrl().newBuilder()
             .addQueryParameter("order[followedCount]", "desc")
-            .addQueryParameter("availableTranslatedLanguage[]", dexLang)
+            .addQueryParameter("availableTranslatedLanguage[]", translatedLanguages)
+            .apply {
+                // What the language above does for the other sources: only series with chapters to read
+                if (translatedLanguages.isEmpty()) addQueryParameter("hasAvailableChapters", "true")
+            }
             .addQueryParameter("limit", MDConstants.MANGA_LIMIT.toString())
             .addQueryParameter("offset", helper.getMangaListOffset(page))
             .addQueryParameter("includes[]", MDConstants.COVER_ART)
@@ -147,7 +155,7 @@ class MangaDex(
     private fun latestUpdatesUrl(page: Int): HttpUrl = MDConstants.API_CHAPTER_URL.toHttpUrl().newBuilder()
         .addQueryParameter("offset", helper.getLatestChapterOffset(page))
         .addQueryParameter("limit", MDConstants.LATEST_CHAPTER_LIMIT.toString())
-        .addQueryParameter("translatedLanguage[]", dexLang)
+        .addQueryParameter("translatedLanguage[]", translatedLanguages)
         .addQueryParameter("order[publishAt]", "desc")
         .addQueryParameter(
             "includeFutureUpdates",
@@ -419,7 +427,7 @@ class MangaDex(
     private fun searchMangaUploaderUrl(page: Int, uploader: String): HttpUrl = MDConstants.API_CHAPTER_URL.toHttpUrl().newBuilder()
         .addQueryParameter("offset", helper.getLatestChapterOffset(page))
         .addQueryParameter("limit", MDConstants.LATEST_CHAPTER_LIMIT.toString())
-        .addQueryParameter("translatedLanguage[]", dexLang)
+        .addQueryParameter("translatedLanguage[]", translatedLanguages)
         .addQueryParameter("order[publishAt]", "desc")
         .addQueryParameter(
             "includeFutureUpdates",
@@ -469,7 +477,7 @@ class MangaDex(
 
         return helper.createManga(
             manga.data!!,
-            fetchSimpleChapterList(manga, dexLang),
+            fetchSimpleChapterList(manga),
             fetchFirstVolumeCover(manga),
             dexLang,
             preferences.coverQuality,
@@ -486,8 +494,10 @@ class MangaDex(
      * @see MangaDexHelper.getPublicationStatus
      * @see AggregateDto
      */
-    private fun fetchSimpleChapterList(manga: MangaDto, langCode: String): Map<String, AggregateVolume> {
-        val url = "${MDConstants.API_MANGA_URL}/${manga.data!!.id}/aggregate?translatedLanguage[]=$langCode"
+    private fun fetchSimpleChapterList(manga: MangaDto): Map<String, AggregateVolume> {
+        val url = "${MDConstants.API_MANGA_URL}/${manga.data!!.id}/aggregate".toHttpUrl().newBuilder()
+            .addQueryParameter("translatedLanguage[]", translatedLanguages)
+            .build()
         val response = client.newCall(GET(url, headers).newBuilder().fetch(Fetch.XHR).build()).execute()
 
         return runCatching { response.parseAs<AggregateDto>() }
@@ -589,7 +599,8 @@ class MangaDex(
     /**
      * Required because the chapter list API endpoint is paginated.
      */
-    private fun paginatedChapterListUrl(mangaId: String, offset: Int): HttpUrl = helper.getChapterEndpoint(mangaId, offset, dexLang).toHttpUrl().newBuilder()
+    private fun paginatedChapterListUrl(mangaId: String, offset: Int): HttpUrl = helper.getChapterEndpoint(mangaId, offset).toHttpUrl().newBuilder()
+        .addQueryParameter("translatedLanguage[]", translatedLanguages)
         .addQueryParameter("contentRating[]", MDConstants.allContentRatings)
         .addQueryParameter("excludedGroups[]", preferences.blockedGroups)
         .addQueryParameter("excludedUploaders[]", preferences.blockedUploaders)
