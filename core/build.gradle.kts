@@ -24,15 +24,6 @@ dependencies {
 
     testImplementation(libs.bundles.common)
     testImplementation(libs.tachiyomi.lib.v16)
-    // Newest stable androidx.webkit, to check the WebView glue against
-    testImplementation("androidx.webkit:webkit:[1.18.0,)")
+    testImplementation(libs.androidx.webkit)
     testImplementation(libs.junit)
-}
-
-configurations.configureEach {
-    resolutionStrategy.componentSelection.all {
-        if (candidate.group == "androidx.webkit" && Regex("-(alpha|beta|rc)").containsMatchIn(candidate.version)) {
-            reject("pre-release")
-        }
-    }
 }
