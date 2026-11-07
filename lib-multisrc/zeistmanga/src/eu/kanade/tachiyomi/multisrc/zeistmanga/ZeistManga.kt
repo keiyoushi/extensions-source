@@ -33,11 +33,15 @@ abstract class ZeistManga : KeiSource() {
 
     protected open val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
-    protected open val mangaCategory = "Series"
-
-    open fun apiUrl(feed: String = mangaCategory): HttpUrl.Builder = "$baseUrl/feeds/posts/default/-/".toHttpUrl().newBuilder()
-        .addPathSegment(feed)
-        .addQueryParameter("alt", "json")
+    open fun apiUrl(feed: String = ""): HttpUrl.Builder {
+        val url = "$baseUrl/feeds/posts/default/".toHttpUrl().newBuilder()
+        if (feed.isNotEmpty()) {
+            url.addPathSegment("-")
+            url.addPathSegment(feed)
+        }
+        url.addQueryParameter("alt", "json")
+        return url
+    }
 
     protected val intl = Intl(
         language = lang,
@@ -77,12 +81,11 @@ abstract class ZeistManga : KeiSource() {
             .addQueryParameter("orderby", orderBy)
             .addQueryParameter("max-results", (MAX_MANGA_RESULTS + 1).toString())
             .addQueryParameter("start-index", startIndex.toString())
+            .addQueryParameter("q", addCategoryLabels())
             .build().toString()
     }
 
     override suspend fun getLatestUpdates(page: Int) = parseSearchManga(client.get(latestUpdatesUrl(page), Fetch.XHR))
-
-    open fun parseLastestUpdates(response: Response) = parseSearchManga(response)
 
     // Search
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -99,16 +102,37 @@ abstract class ZeistManga : KeiSource() {
 
     open fun searchMangaUrl(page: Int, query: String) = apiUrl()
 
+    // OR strategy
+    protected open val includedCategories: List<String> get() = listOf("Series", "Manga", "Manhwa", "Manhua", "Doujinshi", "Web Novel (JP)", "Web Novel (KR)", "Web Novel (CN)")
+
+    // AND strategy
+    protected open val excludedCategories: List<String> get() = listOf("Anime", "Novel", "Novela", chapterCategory)
+
+    private fun addCategoryLabels(query: String = ""): String = buildString {
+        append("{")
+        includedCategories.forEach {
+            append("label:$it ")
+        }
+        append("}")
+        excludedCategories.forEach {
+            append("-label:$it ")
+        }
+        if (query.isNotBlank()) {
+            append(query)
+        }
+    }.trim()
+
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val startIndex = MAX_MANGA_RESULTS * (page - 1) + 1
         val url = searchMangaUrl(page, query)
 
         val searchUrl = if (query.isNotBlank()) {
-            url.addQueryParameter("q", query)
+            url.addQueryParameter("q", addCategoryLabels(query))
                 .addQueryParameter("max-results", (MAX_MANGA_RESULTS + 1).toString())
                 .addQueryParameter("start-index", startIndex.toString())
         } else {
             filters.forEach { filter ->
+                url.addQueryParameter("q", addCategoryLabels())
                 when (filter) {
                     is StatusList -> {
                         url.addPathSegment(filter.selected.value)
@@ -135,18 +159,14 @@ abstract class ZeistManga : KeiSource() {
                 }
             }
             url
-        }.build().toString().replaceLast("q=", "q=label:$mangaCategory+")
+        }.build()
 
         return parseSearchManga(client.get(searchUrl, Fetch.XHR))
     }
 
-    protected open val excludedCategories: List<String> = listOf("Anime", "Novel", "Novela")
-
     open fun parseSearchManga(response: Response): MangasPage {
         val result = response.parseAs<ZeistMangaDto>()
         val mangas = result.feed?.entry.orEmpty()
-            .filter { it.category.orEmpty().any { category -> category.term == mangaCategory } }
-            .filterNot { it.category.orEmpty().any { category -> excludedCategories.contains(category.term) } }
             .map { it.toSManga(baseUrl) }
 
         val mangalist = mangas.toMutableList()
