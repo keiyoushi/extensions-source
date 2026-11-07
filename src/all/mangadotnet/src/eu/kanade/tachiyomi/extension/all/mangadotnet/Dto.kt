@@ -239,15 +239,12 @@ class Manga(
         }
         description = MarkdownDescription.Builder().apply {
             if (showMetadata) {
-                metadata(
-                    this@Manga.rating,
-                    votes = ratingCount?.takeIf { it > 0 },
-                    year?.toString()?.let { "**Year:** $it" },
-                    chapterCount?.toString()?.let { "**Chapters:** $it" },
-                    extraVolumeCount?.takeIf { it > 0 }?.let { "**Volumes:** $it" },
-                    trackedCount?.toString()?.let { "**Tracked:** $it" },
-                    contentRating?.replaceFirstChar { c -> c.uppercase() }?.let { "**Content Rating:** $it" },
-                )
+                rating(this@Manga.rating, votes = ratingCount?.takeIf { it > 0 })
+                field("Year", year?.toString())
+                field("Chapters", chapterCount?.toString())
+                field("Volumes", extraVolumeCount?.takeIf { it > 0 }?.toString())
+                field("Tracked", trackedCount?.toString())
+                field("Content Rating", contentRating?.replaceFirstChar { it.uppercase() })
                 separator()
             }
             markdown(

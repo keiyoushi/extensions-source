@@ -128,7 +128,8 @@ class MarkdownTest {
             .build()
         assertEquals(
             """
-            ★★★★☆ 8.25 (12) · 2019 · Manhwa
+            ★★★★☆ 8.25 (12)
+            2019 · Manhwa
 
             \# Intro
             Second line
@@ -178,9 +179,11 @@ class MarkdownTest {
     }
 
     @Test
-    fun `description builder with metadata and separator`() {
+    fun `description builder with fields and separator`() {
         val description = MarkdownDescription.Builder()
-            .metadata(8.5, votes = 100, "**Year:** 2021", "**Chapters:** 231")
+            .rating(8.5, votes = 100)
+            .field("Year", "2021")
+            .field("Chapters", "231")
             .separator()
             .description("Manga description.")
             .build()
