@@ -37,7 +37,8 @@ import okhttp3.Interceptor
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -278,9 +279,10 @@ abstract class InitManga :
         val response = chain.proceed(request)
         if (!response.isSuccessful) return response
 
-        // The real image header sits at the end of the file
-        val image = ImageProtector.decrypt(response.body.bytes(), key) ?: throw IOException("Failed to decrypt image")
-        return response.newBuilder().body(image.toResponseBody(response.body.contentType())).build()
+        // The real image header sits at the end of the file, so the whole body is needed
+        val data = response.body.use { body -> Buffer().apply { writeAll(body.source()) } }
+        val image = ImageProtector.decrypt(data, key) ?: throw IOException("Failed to decrypt image")
+        return response.newBuilder().body(image.asResponseBody(response.body.contentType(), image.size)).build()
     }
 
     // Reader data is in inline scripts or base64 data: scripts
