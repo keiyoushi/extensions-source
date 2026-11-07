@@ -35,11 +35,11 @@ abstract class Cubari : KeiSource() {
     // History and pins only exist in the site's remoteStorage cache, reachable through its own JS
     private suspend fun fetchHistory(): List<HistoryEntryDto> = runWebView<String>(10.seconds) {
         userAgent = headers["User-Agent"]!!
-        jsBridge("android") { resolve(it) }
+        webMessageBridge("android", setOf(baseUrl)) { resolve(it) }
         onPageFinished {
             evaluateJs(
                 "Promise.all([globalHistoryHandler.getAllPinnedSeries(), globalHistoryHandler.getAllUnpinnedSeries()])" +
-                    ".then(e => android.post(JSON.stringify(e.flat())))",
+                    ".then(e => android.postMessage(JSON.stringify(e.flat())))",
             )
         }
         loadUrl("$baseUrl/")
@@ -117,9 +117,9 @@ abstract class Cubari : KeiSource() {
     // history-ready fires after our listener is attached.
     private suspend fun tagHistory(source: String, slug: String) = runWebView<Unit>(10.seconds) {
         userAgent = headers["User-Agent"]!!
-        jsBridge("android") { resolve(Unit) }
+        webMessageBridge("android", setOf(baseUrl)) { resolve(Unit) }
         onPageFinished {
-            evaluateJs("window.addEventListener('history-ready', () => android.post(''), { once: true }); tag();")
+            evaluateJs("window.addEventListener('history-ready', () => android.postMessage(''), { once: true }); tag();")
         }
         loadUrl("$baseUrl/read/$source/$slug/")
     }

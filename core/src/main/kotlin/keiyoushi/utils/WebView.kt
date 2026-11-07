@@ -108,8 +108,8 @@ interface WebMessageReplyProxy {
  * DSL for configuring and driving a single [runWebView] run.
  *
  * Threading: page/navigation hooks, [poll] and [webMessageBridge] handlers run on the main
- * thread; [interceptRequest] and [jsBridge] handlers (and [webMessageBridge] handlers on the
- * pre-Chromium 116 fallback) run on WebView background threads. An exception thrown from any
+ * thread; [interceptRequest] handlers (and [webMessageBridge] handlers on the pre-Chromium 116
+ * fallback) run on WebView background threads. An exception thrown from any
  * callback fails the run via [reject].
  */
 @SuppressLint("SetJavaScriptEnabled")
@@ -323,34 +323,6 @@ class WebViewScope<T> internal constructor(
             message.ifEmpty { if (isSuccessful) "OK" else "Error" },
             kept,
             body.byteStream(),
-        )
-    }
-
-    /**
-     * Exposes `window.$name.post(message)` to the page, invoking [handler] with the message.
-     * Must be called before [loadUrl]/[loadData]; interfaces added afterward are not visible
-     * to the already-loaded page.
-     */
-    @Deprecated(
-        message = "Use webMessageBridge instead for asynchronous, origin-scoped messaging. " +
-            "Note that JavaScript calls window.<name>.postMessage() instead of .post(), " +
-            "and the handler runs on the main thread instead of a background thread.",
-    )
-    fun jsBridge(name: String, handler: (String) -> Unit) {
-        check(bridgeNames.add(name)) { "Bridge '$name' has already been registered on this WebView" }
-        webView.addJavascriptInterface(
-            object {
-                @JavascriptInterface
-                fun post(message: String) {
-                    if (destroyed) return
-                    try {
-                        handler(message)
-                    } catch (t: Throwable) {
-                        reject(t)
-                    }
-                }
-            },
-            name,
         )
     }
 
