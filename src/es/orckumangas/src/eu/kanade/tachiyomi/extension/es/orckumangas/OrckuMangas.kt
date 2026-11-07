@@ -147,7 +147,9 @@ abstract class OrckuMangas : KeiSource() {
             SChapter.create().apply {
                 this.name = name
                 setUrlWithoutDomain(it.attr("abs:href"))
-                date_upload = it.selectFirst("span.text-ink-dim")?.text().parseDate()
+                val info = it.selectFirst("span.text-ink-dim")?.text()
+                scanlator = info?.substringBefore(" · ")
+                date_upload = info?.substringAfter(" · ").parseDate()
             }
         }
     }
