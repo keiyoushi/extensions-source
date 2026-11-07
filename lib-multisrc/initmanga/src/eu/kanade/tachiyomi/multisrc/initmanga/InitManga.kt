@@ -299,9 +299,8 @@ abstract class InitManga :
     }
 
     private suspend fun fetchChapterKey(payload: EncryptedPayloadDto, chapterUrl: String): ByteArray {
-        val keyHeaders = headers.newBuilder().set("Referer", chapterUrl).build()
         val body = ChapterKeyRequestDto(payload.cid!!, payload.e!!, payload.g!!).toJsonRequestBody()
-        return client.post("$baseUrl/wp-json/initmanga/v1/chapter-key", keyHeaders, Fetch.XHR, body)
+        return client.post("$baseUrl/wp-json/initmanga/v1/chapter-key", Fetch.XHR.from(chapterUrl), body)
             .parseAs<ChapterKeyResponseDto>().key.decodeHex()
     }
 
