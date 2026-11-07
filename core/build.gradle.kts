@@ -24,5 +24,6 @@ dependencies {
 
     testImplementation(libs.bundles.common)
     testImplementation(libs.tachiyomi.lib.v16)
+    testImplementation(libs.androidx.webkit)
     testImplementation(libs.junit)
 }

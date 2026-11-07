@@ -22,6 +22,7 @@
     },
     {
       "matchPackageNames": [
+        "androidx.webkit:webkit",
         "com.android.tools.build:gradle",
         "gradle"
       ],
