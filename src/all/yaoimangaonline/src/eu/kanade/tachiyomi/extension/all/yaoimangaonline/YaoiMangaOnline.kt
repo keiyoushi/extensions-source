@@ -10,6 +10,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstanceOrNull
@@ -105,10 +106,10 @@ abstract class YaoiMangaOnline : KeiSource() {
     private fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1.entry-title")!!.text().substringBeforeLast(" by ")
         thumbnail_url = document.selectFirst("meta[property=og:image]")?.attrOrNull("content")
-        description = document
-            .select(".entry-content > p:not(:has(img)):not(:contains(You need to login))")
-            .joinToString("\n\n") { it.wholeText() }
-            .ifEmpty { null }
+        // As HTML, a <br> followed by a newline is a single line break, as on the site
+        description = MarkdownDescription.Builder().apply {
+            document.select(".entry-content > p:not(:has(img)):not(:contains(You need to login))").forEach { description(it) }
+        }.build()
         genre = document.select(".meta-category a:not([href*=/mangaka/]):not([href~=/yaoi-webtoons/.+]), .meta-tags > a")
             .joinToString { it.text() }
             .ifEmpty { null }
