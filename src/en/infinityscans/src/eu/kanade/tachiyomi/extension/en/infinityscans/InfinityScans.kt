@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.infinityscans
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -14,6 +13,7 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.getPreferencesLazy
@@ -27,7 +27,8 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
+import okhttp3.RequestBody
+import okhttp3.Response
 import org.jsoup.nodes.Element
 
 @Source
@@ -39,6 +40,10 @@ abstract class InfinityScans : KeiSource() {
     private var slugHash: String
         get() = preferences.getString(PREF_SLUG_HASH, DEFAULT_SLUG_HASH) ?: DEFAULT_SLUG_HASH
         set(value) = preferences.edit().putString(PREF_SLUG_HASH, value).apply()
+
+    private var actionId: String
+        get() = preferences.getString(PREF_ACTION_ID, DEFAULT_ACTION_ID) ?: DEFAULT_ACTION_ID
+        set(value) = preferences.edit().putString(PREF_ACTION_ID, value).apply()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(WebviewInterceptor(baseUrl))
@@ -193,26 +198,48 @@ abstract class InfinityScans : KeiSource() {
         val chapterId = chapter.url.substringAfterLast('/')
         val mangaId = chapter.url.split("/")[1]
 
-        val pageHeaders = headersBuilder()
-            .set("next-action", "603b9ae64dc53c5457f77cf6a4ea08b361e2e36b2f")
-            .build()
-
         val body = listOf(mangaId, chapterId).toJsonRequestBody()
         // Dummy slug for server to trigger empty set-cookie if expired, baseUrl alone doesn't.
         val pagesUrl = "$baseUrl/comic/$mangaId/dummy-slug/chapter/$chapterId"
+        val response = getPages(pagesUrl, body)
 
-        val response = client.post(pagesUrl, pageHeaders, Fetch.DOCUMENT, body)
         val pages = response.extractNextJs<List<PageEntryDto>>()
         return pages?.mapIndexed { index, p ->
             Page(index, imageUrl = "https://$pageCdnHost/${p.path}")
         } ?: emptyList()
     }
 
-    override fun getImageRequest(page: Page): Request {
-        val pageHeaders = headers.newBuilder().apply {
-            add("Host", page.imageUrl!!.toHttpUrl().host)
-        }.build()
-        return GET(page.imageUrl!!, pageHeaders)
+    private suspend fun getPages(url: String, body: RequestBody): Response {
+        suspend fun post() = client.post(
+            url,
+            headersBuilder().set("next-action", actionId).build(),
+            Fetch.DOCUMENT,
+            body,
+            ensureSuccess = false,
+        )
+
+        post().let {
+            if (it.code != 404) return it
+            it.close()
+        }
+
+        for (
+        src in client.get(url, headers, Fetch.DOCUMENT).asJsoup()
+            .select("script[src*=.js]").eachAttr("abs:src").distinct()
+        ) {
+            val js = client.get(src, headers, Fetch.DOCUMENT).body.string()
+
+            for (match in ACTION_HASH_REGEX.findAll(js)) {
+                val id = match.groupValues[1]
+                actionId = id
+                post().let {
+                    if (it.code != 404) return it
+                    it.close()
+                }
+            }
+        }
+
+        error("No working action ID")
     }
 
     // ============================== Filters ==============================
@@ -261,7 +288,11 @@ abstract class InfinityScans : KeiSource() {
 
     companion object {
         private const val DEFAULT_SLUG_HASH = "d806990541c8"
+        private const val DEFAULT_ACTION_ID = "60610a8a90f941d06db8af699e17f246116e26badf"
         private const val PREF_SLUG_HASH = "pref_slug_hash"
+        private const val PREF_ACTION_ID = "pref_action_id"
+
         private val HASH_REGEX = Regex("NEXT_REDIRECT.*https.+?-(\\w+);")
+        private val ACTION_HASH_REGEX = Regex("""createServerReference\)\(\W(\w+)""")
     }
 }
