@@ -594,8 +594,6 @@ class MangaDex(
         .addQueryParameter("excludedGroups[]", preferences.blockedGroups)
         .addQueryParameter("excludedUploaders[]", preferences.blockedUploaders)
         .addQueryParameter("includeUnavailable", if (preferences.includeUnavailable) "1" else "0")
-        // includeEmptyPages=1 lists only empty chapters
-        .apply { if (!preferences.includeEmptyPages) addQueryParameter("includeEmptyPages", "0") }
         .build()
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
@@ -746,13 +744,6 @@ class MangaDex(
             setDefaultValue(false)
         }
 
-        val includeEmptyPagesPref = SwitchPreferenceCompat(screen.context).apply {
-            key = MDConstants.getIncludeEmptyPagesPrefKey(dexLang)
-            title = helper.intl["include_empty_pages"]
-            summary = helper.intl["include_empty_pages_summary"]
-            setDefaultValue(false)
-        }
-
         screen.addPreference(coverQualityPref)
         screen.addPreference(tryUsingFirstVolumeCoverPref)
         screen.addPreference(dataSaverPref)
@@ -761,7 +752,6 @@ class MangaDex(
         screen.addPreference(preferExtensionLangTitlePref)
         screen.addPreference(finalChapterInDescPref)
         screen.addPreference(includeUnavailablePref)
-        screen.addPreference(includeEmptyPagesPref)
         screen.addPreference(contentRatingPref)
         screen.addPreference(originalLanguagePref)
         screen.addPreference(blockedGroupsPref)
@@ -856,9 +846,6 @@ class MangaDex(
 
     private val SharedPreferences.includeUnavailable
         get() = getBoolean(MDConstants.getIncludeUnavailablePrefKey(dexLang), false)
-
-    private val SharedPreferences.includeEmptyPages
-        get() = getBoolean(MDConstants.getIncludeEmptyPagesPrefKey(dexLang), false)
 
     /**
      * Previous versions of the extension allowed invalid UUID values to be stored in the
