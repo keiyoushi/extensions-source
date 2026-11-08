@@ -6,12 +6,12 @@ plugins {
 
 keiyoushi {
     name = "Read The Exiled Heavy Knight Manga Online"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
     source {
         lang = "en"
-        baseUrl = "https://w2.theexiledheavyknight.com"
+        baseUrl = "https://w3.theexiledheavyknight.com"
     }
 }
