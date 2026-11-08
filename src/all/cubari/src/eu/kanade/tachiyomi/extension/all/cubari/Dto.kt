@@ -65,17 +65,15 @@ private fun createManga(
     this.author = author
     this.description = description?.substringBefore("Tags: ")?.replace(STATUS_REGEX, "")?.trim()?.ifEmpty { null }
     genre = description?.takeIf { "Tags: " in it }?.substringAfter("Tags: ")
-    status = description?.let(::parseStatus) ?: SManga.UNKNOWN
+    status = when (description?.let { STATUS_REGEX.find(it) }?.groupValues?.get(1)?.trim()?.lowercase()) {
+        "ongoing" -> SManga.ONGOING
+        "completed" -> SManga.COMPLETED
+        "cancelled" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
+    }
     this.url = url
     thumbnail_url = cover
 }
 
-// Some series write their status in the description, on a "Status: " line like the "Tags: " one
-private fun parseStatus(description: String): Int = when (STATUS_REGEX.find(description)?.groupValues?.get(1)?.trim()?.lowercase()) {
-    "ongoing" -> SManga.ONGOING
-    "completed" -> SManga.COMPLETED
-    "cancelled" -> SManga.CANCELLED
-    else -> SManga.UNKNOWN
-}
-
-private val STATUS_REGEX = Regex("""^Status: *(.+)$""", RegexOption.MULTILINE)
+// Status line some gists write next to the "Tags: " one
+private val STATUS_REGEX = Regex("""^Status: *(.+)$\R*""", RegexOption.MULTILINE)
