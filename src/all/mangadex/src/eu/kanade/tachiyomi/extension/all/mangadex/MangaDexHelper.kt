@@ -463,7 +463,6 @@ class MangaDexHelper(private val lang: String) {
             ""
         }
 
-        // The all-language source mixes the translations, so each chapter says its language
         val languagePrefix = if (lang == MDConstants.ALL_LANGUAGES) "[${attr.translatedLanguage}] " else ""
 
         return SChapter.create().apply {

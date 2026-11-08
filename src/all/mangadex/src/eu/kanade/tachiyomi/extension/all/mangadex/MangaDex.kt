@@ -36,6 +36,7 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.applicationContext
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -69,7 +70,6 @@ class MangaDex(
             else -> lang
         }
 
-    // Empty for the all-language source, so that its requests leave the language out
     private val translatedLanguages: Set<String>
         get() = if (dexLang == MDConstants.ALL_LANGUAGES) emptySet() else setOf(dexLang)
 
@@ -104,11 +104,8 @@ class MangaDex(
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = MDConstants.API_MANGA_URL.toHttpUrl().newBuilder()
             .addQueryParameter("order[followedCount]", "desc")
+            .addQueryParameter("hasAvailableChapters", "true")
             .addQueryParameter("availableTranslatedLanguage[]", translatedLanguages)
-            .apply {
-                // What the language above does for the other sources: only series with chapters to read
-                if (translatedLanguages.isEmpty()) addQueryParameter("hasAvailableChapters", "true")
-            }
             .addQueryParameter("limit", MDConstants.MANGA_LIMIT.toString())
             .addQueryParameter("offset", helper.getMangaListOffset(page))
             .addQueryParameter("includes[]", MDConstants.COVER_ART)
@@ -181,7 +178,7 @@ class MangaDex(
     /**
      * Used by Komikku
      */
-    fun latestUpdatesRequest(page: Int): Request = GET(latestUpdatesUrl(page), headers, CacheControl.FORCE_NETWORK)
+    fun latestUpdatesRequest(page: Int): Request = GET(latestUpdatesUrl(page), headers, CacheControl.FORCE_NETWORK).newBuilder().fetch(Fetch.XHR).build()
 
     /**
      * The API endpoint can't sort by date yet, so not implemented.
@@ -360,7 +357,7 @@ class MangaDex(
         )
     }
 
-    private fun searchMangaListParse(response: Response, page: Int, filters: FilterList): MangasPage {
+    private suspend fun searchMangaListParse(response: Response, page: Int, filters: FilterList): MangasPage {
         val listDto = response.parseAs<ListDto>()
         val listDtoFiltered = listDto.data!!.relationships.filterIsInstance<MangaDataDto>()
         val amount = listDtoFiltered.count()
@@ -389,9 +386,7 @@ class MangaDex(
             dexLang = dexLang,
         )
 
-        val mangaRequest = GET(finalUrl, headers, CacheControl.FORCE_NETWORK).newBuilder().fetch(Fetch.XHR).build()
-        val mangaResponse = client.newCall(mangaRequest).execute()
-        val mangaList = searchMangaListParse(mangaResponse)
+        val mangaList = searchMangaListParse(client.get(finalUrl, Fetch.XHR, CacheControl.FORCE_NETWORK))
 
         val hasNextPage = amount.toFloat() / MDConstants.MANGA_LIMIT - (page.toFloat() - 1) > 1 &&
             ids.size == MDConstants.MANGA_LIMIT
@@ -400,13 +395,6 @@ class MangaDex(
     }
 
     private fun searchMangaListParse(response: Response): List<SManga> {
-        // This check will be used as the source is doing additional requests to this
-        // that are not parsed by the asObservableSuccess() method. It should throw the
-        // HttpException from the app if it becomes available in a future version of extensions-lib.
-        if (response.isSuccessful.not()) {
-            throw Exception("HTTP error ${response.code}")
-        }
-
         val mangaListDto = response.parseAs<MangaListDto>()
         val firstVolumeCovers = fetchFirstVolumeCovers(mangaListDto.data).orEmpty()
 
@@ -494,11 +482,11 @@ class MangaDex(
      * @see MangaDexHelper.getPublicationStatus
      * @see AggregateDto
      */
-    private fun fetchSimpleChapterList(manga: MangaDto): Map<String, AggregateVolume> {
+    private suspend fun fetchSimpleChapterList(manga: MangaDto): Map<String, AggregateVolume> {
         val url = "${MDConstants.API_MANGA_URL}/${manga.data!!.id}/aggregate".toHttpUrl().newBuilder()
             .addQueryParameter("translatedLanguage[]", translatedLanguages)
             .build()
-        val response = client.newCall(GET(url, headers).newBuilder().fetch(Fetch.XHR).build()).execute()
+        val response = client.get(url, Fetch.XHR, ensureSuccess = false)
 
         return runCatching { response.parseAs<AggregateDto>() }
             .getOrNull()?.volumes.orEmpty()
@@ -644,7 +632,6 @@ class MangaDex(
 
     override fun getImageRequest(page: Page): Request = helper.getValidImageUrlForPage(page, headers, client)
 
-    @Suppress("UNCHECKED_CAST")
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val coverQualityPref = ListPreference(screen.context).apply {
             key = MDConstants.getCoverQualityPreferenceKey(dexLang)
@@ -653,16 +640,6 @@ class MangaDex(
             entryValues = MDConstants.getCoverQualityPreferenceEntryValues()
             setDefaultValue(MDConstants.getCoverQualityPreferenceDefaultValue())
             summary = "%s"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-
-                preferences.edit()
-                    .putString(MDConstants.getCoverQualityPreferenceKey(dexLang), entry)
-                    .commit()
-            }
         }
 
         val tryUsingFirstVolumeCoverPref = SwitchPreferenceCompat(screen.context).apply {
@@ -670,14 +647,6 @@ class MangaDex(
             title = helper.intl["try_using_first_volume_cover"]
             summary = helper.intl["try_using_first_volume_cover_summary"]
             setDefaultValue(MDConstants.TRY_USING_FIRST_VOLUME_COVER_DEFAULT)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-
-                preferences.edit()
-                    .putBoolean(MDConstants.getTryUsingFirstVolumeCoverPrefKey(dexLang), checkValue)
-                    .commit()
-            }
         }
 
         val dataSaverPref = SwitchPreferenceCompat(screen.context).apply {
@@ -685,14 +654,6 @@ class MangaDex(
             title = helper.intl["data_saver"]
             summary = helper.intl["data_saver_summary"]
             setDefaultValue(false)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-
-                preferences.edit()
-                    .putBoolean(MDConstants.getDataSaverPreferenceKey(dexLang), checkValue)
-                    .commit()
-            }
         }
 
         val standardHttpsPortPref = SwitchPreferenceCompat(screen.context).apply {
@@ -700,14 +661,6 @@ class MangaDex(
             title = helper.intl["standard_https_port"]
             summary = helper.intl["standard_https_port_summary"]
             setDefaultValue(false)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-
-                preferences.edit()
-                    .putBoolean(MDConstants.getStandardHttpsPreferenceKey(dexLang), checkValue)
-                    .commit()
-            }
         }
 
         val contentRatingPref = MultiSelectListPreference(screen.context).apply {
@@ -727,14 +680,6 @@ class MangaDex(
                 MDConstants.CONTENT_RATING_PREF_VAL_PORNOGRAPHIC,
             )
             setDefaultValue(MDConstants.contentRatingPrefDefaults)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Set<String>
-
-                preferences.edit()
-                    .putStringSet(MDConstants.getContentRatingPrefKey(dexLang), checkValue)
-                    .commit()
-            }
         }
 
         val originalLanguagePref = MultiSelectListPreference(screen.context).apply {
@@ -752,14 +697,6 @@ class MangaDex(
                 MDConstants.ORIGINAL_LANGUAGE_PREF_VAL_KOREAN,
             )
             setDefaultValue(MDConstants.originalLanguagePrefDefaults)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Set<String>
-
-                preferences.edit()
-                    .putStringSet(MDConstants.getOriginalLanguagePrefKey(dexLang), checkValue)
-                    .commit()
-            }
         }
 
         val blockedGroupsPref = EditTextPreference(screen.context).apply {
@@ -768,12 +705,6 @@ class MangaDex(
             summary = helper.intl["block_group_by_uuid_summary"]
 
             setOnBindEditTextListener(helper::setupEditTextUuidValidator)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit()
-                    .putString(MDConstants.getBlockedGroupsPrefKey(dexLang), newValue.toString())
-                    .commit()
-            }
         }
 
         val blockedUploaderPref = EditTextPreference(screen.context).apply {
@@ -782,12 +713,6 @@ class MangaDex(
             summary = helper.intl["block_uploader_by_uuid_summary"]
 
             setOnBindEditTextListener(helper::setupEditTextUuidValidator)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit()
-                    .putString(MDConstants.getBlockedUploaderPrefKey(dexLang), newValue.toString())
-                    .commit()
-            }
         }
 
         val altTitlesInDescPref = SwitchPreferenceCompat(screen.context).apply {
@@ -795,14 +720,6 @@ class MangaDex(
             title = helper.intl["alternative_titles_in_description"]
             summary = helper.intl["alternative_titles_in_description_summary"]
             setDefaultValue(false)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-
-                preferences.edit()
-                    .putBoolean(MDConstants.getAltTitlesInDescPrefKey(dexLang), checkValue)
-                    .commit()
-            }
         }
 
         val preferExtensionLangTitlePref = SwitchPreferenceCompat(screen.context).apply {
@@ -810,14 +727,6 @@ class MangaDex(
             title = helper.intl["prefer_title_in_extension_language"]
             summary = helper.intl["prefer_title_in_extension_language_summary"]
             setDefaultValue(true)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-
-                preferences.edit()
-                    .putBoolean(MDConstants.getPreferExtensionLangTitlePrefKey(dexLang), checkValue)
-                    .commit()
-            }
         }
 
         val finalChapterInDescPref = SwitchPreferenceCompat(screen.context).apply {
@@ -825,14 +734,6 @@ class MangaDex(
             title = helper.intl["final_chapter_in_description"]
             summary = helper.intl["final_chapter_in_description_summary"]
             setDefaultValue(true)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-
-                preferences.edit()
-                    .putBoolean(MDConstants.getFinalChapterInDescPrefKey(dexLang), checkValue)
-                    .commit()
-            }
         }
 
         val includeUnavailablePref = SwitchPreferenceCompat(screen.context).apply {
@@ -840,14 +741,6 @@ class MangaDex(
             title = helper.intl["include_unavailable"]
             summary = helper.intl["include_unavailable_summary"]
             setDefaultValue(false)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-
-                preferences.edit()
-                    .putBoolean(MDConstants.getIncludeUnavailablePrefKey(dexLang), checkValue)
-                    .commit()
-            }
         }
 
         screen.addPreference(coverQualityPref)
@@ -889,8 +782,6 @@ class MangaDex(
     private inline fun <reified T> Response.parseAs(): T = use {
         helper.json.decodeFromString(body.string())
     }
-
-    private inline fun <reified T> List<*>.firstInstanceOrNull(): T? = firstOrNull { it is T } as? T?
 
     private val SharedPreferences.contentRating
         get() = getStringSet(
