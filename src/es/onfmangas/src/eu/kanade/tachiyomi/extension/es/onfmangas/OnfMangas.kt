@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.onfmangas
 
 import android.content.SharedPreferences
-import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import app.cash.quickjs.QuickJs
@@ -173,14 +172,12 @@ abstract class OnfMangas :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        val pages = document.selectFirst("#viewerContainer")!!.attr("data-reader-pages")
-
-        return Base64.decode(pages, Base64.DEFAULT).decodeToString()
+        return document.selectFirst("script[type=application/json]:containsData(\"src\":)")!!.data()
             .parseAs<List<PageDto>>()
             .mapIndexed { index, dto -> dto.toPage(index, document.location()) }
     }
 
-    // The site's MangaDex proxy answers 403 without the chapter page as Referer
+    // The site's image proxy answers 403 without the chapter page as Referer
     override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .fetch(imageFetch.from(page.url))
         .build()

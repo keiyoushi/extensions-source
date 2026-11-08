@@ -43,7 +43,15 @@ internal object WebViewGlueBridge {
             .asBoundary()
     }
 
-    private val supportedFeatures: Set<String> by lazy { factory.supportedFeatures.toHashSet() }
+    // Empty where WebView has no support library glue, such as Suwayomi
+    private val supportedFeatures: Set<String> by lazy {
+        try {
+            factory.supportedFeatures.toHashSet()
+        } catch (e: Throwable) {
+            Log.e("WebViewGlueBridge", "WebView support library unavailable", e)
+            emptySet()
+        }
+    }
 
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
 
@@ -70,12 +78,7 @@ internal object WebViewGlueBridge {
     }
 
     /** Exact match only: features suffixed with `:dev` are unreleased and must not be used. */
-    fun isFeatureSupported(featureName: String): Boolean = try {
-        featureName in supportedFeatures
-    } catch (e: Throwable) {
-        Log.e("WebViewGlueBridge", """isFeatureSupported("$featureName")""", e)
-        false
-    }
+    fun isFeatureSupported(featureName: String): Boolean = featureName in supportedFeatures
 
     fun setAudioMuted(webView: WebView, muted: Boolean) {
         if (!isFeatureSupported("MUTE_AUDIO")) return
@@ -241,104 +244,106 @@ internal object WebViewGlueBridge {
         settings: WebSettings,
         userAgent: String,
     ) {
-        val versionMatch = CHROME_VERSION_REGEX.find(userAgent)
-
-        if (versionMatch == null) {
-            Log.i("WebViewGlueBridge", "Not a valid Chrome UserAgent for client hints")
-            return
-        }
-
         if (!isFeatureSupported("USER_AGENT_METADATA")) {
             Log.i("WebViewGlueBridge", "USER_AGENT_METADATA not supported")
             return
         }
 
-        val majorVersion = versionMatch.groupValues[1]
-        val fullVersion = majorVersion + versionMatch.groupValues[2].ifEmpty { ".0.0.0" }
-        val isMobile = userAgent.contains("Mobile") ||
-            userAgent.contains("Android") ||
-            userAgent.contains("iPhone") ||
-            userAgent.contains("iPad")
-        var platform = "Android"
-        var platformVersion = ""
-        var architecture = "arm"
-
-        when {
-            userAgent.contains("Android") -> {
-                val androidVersion = ANDROID_VERSION_REGEX.find(userAgent)?.groupValues?.get(1) ?: ""
-                platform = "Android"
-                platformVersion = androidVersion
-            }
-            userAgent.contains("iPhone") || userAgent.contains("iPad") -> {
-                platform = "iOS"
-            }
-            userAgent.contains("Windows") -> {
-                platform = "Windows"
-                platformVersion = "19.0.0"
-                architecture = "x86"
-            }
-            userAgent.contains("Macintosh") || userAgent.contains("Mac OS X") -> {
-                val macVersion = MAC_OS_X_REGEX.find(userAgent)?.groupValues?.get(1)?.replace("_", ".")
-                platform = "macOS"
-                platformVersion = macVersion ?: ""
-            }
-            userAgent.contains("Linux") -> {
-                val arch = LINUX_ARCH_REGEX.find(userAgent)?.groupValues?.get(1)
-                platform = "Linux"
-                architecture = if (arch == "aarch64") "arm" else "x86"
-            }
-        }
-
         try {
             val boundarySettings = getBoundarySettings(settings) ?: return
-
-            val uaMetadata = boundarySettings.userAgentMetadataMap
-            val updated = HashMap(uaMetadata)
-
-            // Real Chrome reduces its UA string to "Chrome/<major>.0.0.0" and "Android 10; K", but
-            // its client hints still report the exact versions. Keep the engine's own values when
-            // the claimed major version is the engine's, instead of the placeholders from the UA.
-            val hintFullVersion = (uaMetadata["FULL_VERSION"] as? String)
-                ?.takeIf { it.substringBefore('.') == majorVersion }
-                ?: fullVersion
-            if (userAgent.contains("Android 10; K)")) {
-                (uaMetadata["PLATFORM_VERSION"] as? String)?.let { platformVersion = it }
+            val hints = clientHintsFor(userAgent, boundarySettings.userAgentMetadataMap)
+            if (hints == null) {
+                Log.i("WebViewGlueBridge", "Not a valid Chrome UserAgent for client hints")
+                return
             }
-
-            val brandList = uaMetadata["BRAND_VERSION_LIST"]
-            if (brandList is Array<*> && brandList.isArrayOf<Array<String>>()) {
-                @Suppress("UNCHECKED_CAST")
-                val brands = brandList as Array<Array<String>>
-
-                val updatedBrands = brands.map { original ->
-                    original.copyOf().also { brand ->
-                        if (brand.size < 3) return@also
-
-                        when (brand[0]) {
-                            "Android WebView" -> brand[0] = "Google Chrome"
-                            "Chromium" -> Unit
-                            else -> return@also
-                        }
-
-                        brand[1] = majorVersion
-                        brand[2] = hintFullVersion
-                    }
-                }.toTypedArray()
-
-                updated["BRAND_VERSION_LIST"] = updatedBrands
-            }
-
-            updated["FULL_VERSION"] = hintFullVersion
-            updated["PLATFORM"] = platform
-            updated["PLATFORM_VERSION"] = platformVersion
-            updated["ARCHITECTURE"] = architecture
-            updated["MOBILE"] = isMobile
-
-            boundarySettings.setUserAgentMetadataFromMap(updated)
+            boundarySettings.setUserAgentMetadataFromMap(hints)
         } catch (e: Throwable) {
             Log.e("WebViewGlueBridge", "setUserClientHints", e)
         }
     }
+}
+
+/** The client hints a Chrome with [userAgent] sends, from the engine's [current] ones; null when it isn't Chrome's. */
+internal fun clientHintsFor(userAgent: String, current: Map<String, Any>): MutableMap<String, Any>? {
+    val versionMatch = CHROME_VERSION_REGEX.find(userAgent) ?: return null
+
+    val majorVersion = versionMatch.groupValues[1]
+    val fullVersion = majorVersion + versionMatch.groupValues[2].ifEmpty { ".0.0.0" }
+    val isMobile = userAgent.contains("Mobile") ||
+        userAgent.contains("Android") ||
+        userAgent.contains("iPhone") ||
+        userAgent.contains("iPad")
+    var platform = "Android"
+    var platformVersion = ""
+    var architecture = "arm"
+
+    when {
+        userAgent.contains("Android") -> {
+            val androidVersion = ANDROID_VERSION_REGEX.find(userAgent)?.groupValues?.get(1) ?: ""
+            platform = "Android"
+            platformVersion = androidVersion
+        }
+        userAgent.contains("iPhone") || userAgent.contains("iPad") -> {
+            platform = "iOS"
+        }
+        userAgent.contains("Windows") -> {
+            platform = "Windows"
+            platformVersion = "19.0.0"
+            architecture = "x86"
+        }
+        userAgent.contains("Macintosh") || userAgent.contains("Mac OS X") -> {
+            val macVersion = MAC_OS_X_REGEX.find(userAgent)?.groupValues?.get(1)?.replace("_", ".")
+            platform = "macOS"
+            platformVersion = macVersion ?: ""
+        }
+        userAgent.contains("Linux") -> {
+            val arch = LINUX_ARCH_REGEX.find(userAgent)?.groupValues?.get(1)
+            platform = "Linux"
+            architecture = if (arch == "aarch64") "arm" else "x86"
+        }
+    }
+
+    val updated = HashMap(current)
+
+    // Real Chrome reduces its UA string to "Chrome/<major>.0.0.0" and "Android 10; K", but
+    // its client hints still report the exact versions. Keep the engine's own values when
+    // the claimed major version is the engine's, instead of the placeholders from the UA.
+    val hintFullVersion = (current["FULL_VERSION"] as? String)
+        ?.takeIf { it.substringBefore('.') == majorVersion }
+        ?: fullVersion
+    if (userAgent.contains("Android 10; K)")) {
+        (current["PLATFORM_VERSION"] as? String)?.let { platformVersion = it }
+    }
+
+    val brandList = current["BRAND_VERSION_LIST"]
+    if (brandList is Array<*> && brandList.isArrayOf<Array<String>>()) {
+        @Suppress("UNCHECKED_CAST")
+        val brands = brandList as Array<Array<String>>
+
+        val updatedBrands = brands.map { original ->
+            original.copyOf().also { brand ->
+                if (brand.size < 3) return@also
+
+                when (brand[0]) {
+                    "Android WebView" -> brand[0] = "Google Chrome"
+                    "Chromium" -> Unit
+                    else -> return@also
+                }
+
+                brand[1] = majorVersion
+                brand[2] = hintFullVersion
+            }
+        }.toTypedArray()
+
+        updated["BRAND_VERSION_LIST"] = updatedBrands
+    }
+
+    updated["FULL_VERSION"] = hintFullVersion
+    updated["PLATFORM"] = platform
+    updated["PLATFORM_VERSION"] = platformVersion
+    updated["ARCHITECTURE"] = architecture
+    updated["MOBILE"] = isMobile
+    return updated
 }
 
 private val CHROME_VERSION_REGEX = """Chrome/(\d+)(\.[\d.]+)?""".toRegex()

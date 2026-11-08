@@ -7,12 +7,14 @@ plugins {
 keiyoushi {
     name = "Minda Fansub"
     theme = "madara"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
     source {
-        baseUrl = "https://mindafansub.dev"
+        baseUrl {
+            custom("https://mindafansub.nl")
+        }
         lang = "tr"
     }
 }
