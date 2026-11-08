@@ -17,6 +17,7 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.double
+import kotlinx.serialization.json.jsonArray
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import kotlin.time.Duration.Companion.seconds
@@ -76,27 +77,10 @@ abstract class Cubari : KeiSource() {
         }
 
         else -> {
-            val series = client.get(seriesApiUrl(chapter.url), Fetch.XHR).parseAs<SeriesDto>()
-            seriesJsonPageListParse(series, chapter)
-        }
-    }
-
-    private fun seriesJsonPageListParse(series: SeriesDto, chapter: SChapter): List<Page> {
-        val groupMap = series.groups.entries.associateBy({ it.value.ifEmpty { "default" } }, { it.key })
-        val chapterScanlator = chapter.scanlator ?: "default" // workaround for "" as group causing NullPointerException (#13772)
-
-        // prevent NullPointerException when chapters.key is 084 and chapter.chapter_number is 84
-        val chapters = series.chapters.mapKeys {
-            it.key.replace(Regex("^0+(?!$)"), "")
-        }
-
-        val chapterDto = chapters[chapter.chapter_number.toString()]
-            ?: chapters[chapter.chapter_number.toInt().toString()]!!
-
-        val pages = chapterDto.groups[groupMap[chapterScanlator]]!! as JsonArray
-
-        return pages.mapIndexed { i, jsonEl ->
-            Page(i, "", jsonEl.pageSrc())
+            val (chapterKey, groupKey) = chapter.url.split("/").takeLast(2)
+            client.get(seriesApiUrl(chapter.url), Fetch.XHR).parseAs<SeriesDto>()
+                .chapters[chapterKey]!!.groups[groupKey]!!.jsonArray
+                .mapIndexed { i, jsonEl -> Page(i, imageUrl = jsonEl.pageSrc()) }
         }
     }
 
