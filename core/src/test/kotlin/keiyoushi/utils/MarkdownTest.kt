@@ -128,7 +128,8 @@ class MarkdownTest {
             .build()
         assertEquals(
             """
-            ★★★★☆ 8.25 (12) · 2019 · Manhwa
+            ★★★★☆ 8.25 (12)
+            2019 · Manhwa
 
             \# Intro
             Second line
@@ -175,5 +176,52 @@ class MarkdownTest {
             .rating(85, max = 100)
             .build()
         assertEquals("**A:** 1\n\na **b**\n\n**B:** 2\n\n**kept**\n\n★★★★☆ 85", description)
+    }
+
+    @Test
+    fun `description builder with fields and separator`() {
+        val description = MarkdownDescription.Builder()
+            .rating(8.5, votes = 100)
+            .field("Year", "2021")
+            .field("Chapters", "231")
+            .separator()
+            .description("Manga description.")
+            .build()
+        assertEquals(
+            """
+            ★★★★☆ 8.5 (100)
+            **Year:** 2021 · **Chapters:** 231
+
+            ---
+
+            Manga description.
+            """.trimIndent(),
+            description,
+        )
+    }
+
+    @Test
+    fun `rating starts its own line`() {
+        val description = MarkdownDescription.Builder()
+            .info("2021")
+            .rating(8.0)
+            .info("Manhwa")
+            .field("A", "1")
+            .build()
+        assertEquals("2021\n\n★★★★☆ 8\nManhwa · **A:** 1", description)
+    }
+
+    @Test
+    fun `separators are dropped first, last and doubled`() {
+        val description = MarkdownDescription.Builder()
+            .separator()
+            .description("a")
+            .separator()
+            .separator()
+            .description("b")
+            .separator()
+            .build()
+        assertEquals("a\n\n---\n\nb", description)
+        assertNull(MarkdownDescription.Builder().separator().separator().build())
     }
 }

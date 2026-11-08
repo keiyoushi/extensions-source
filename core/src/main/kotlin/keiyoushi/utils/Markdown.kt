@@ -42,12 +42,15 @@ private fun String.escapeMarkdownBackticks() = replace(MARKDOWN_BACKTICK) { "\\$
 
 /**
  * Builds a Markdown description from sections, in the order they're added. Sections are separated by a blank line,
- * except a run of [rating], [info] and [field], which share one line. Null, blank and empty input adds nothing.
+ * except a run of [info] and [field], which share one line. A [rating] starts its own line, and the [info] and [field]
+ * right after it share the next one. A [separator] that would come first, last or next to another is dropped. Null,
+ * blank and empty input adds nothing.
  *
  * ```
  * description = MarkdownDescription.Builder()
  *     .rating(score, votes = votes)
  *     .info(year, type)
+ *     .separator()
  *     .description(document.selectFirst(".synopsis")) // or plain text
  *     .field("Publisher", publisher)
  *     .altTitles(altTitles)
@@ -59,26 +62,35 @@ object MarkdownDescription {
     class Builder {
         private val sections = mutableListOf<String>()
         private var lastIsInline = false
+        private var lastIsRating = false
 
         private fun add(section: String?) = apply {
             if (section.isNullOrBlank()) return@apply
             sections += section
             lastIsInline = false
+            lastIsRating = false
         }
 
         private fun addInline(text: String?) = apply {
             if (text.isNullOrBlank()) return@apply
-            if (lastIsInline) sections[sections.lastIndex] += " · $text" else sections += text
+            when {
+                lastIsRating -> sections[sections.lastIndex] += "\n$text"
+                lastIsInline -> sections[sections.lastIndex] += " · $text"
+                else -> sections += text
+            }
             lastIsInline = true
+            lastIsRating = false
         }
 
-        /** Adds [rating], out of [max], as stars followed by the number and the [votes] count. */
-        fun rating(rating: Number?, max: Int = 10, votes: Number? = null) = addInline(
-            rating?.toDouble()?.takeIf { it.isFinite() }?.let { value ->
+        /** Adds [rating], out of [max], as stars followed by the number and the [votes] count, on its own line. */
+        fun rating(rating: Number?, max: Int = 10, votes: Number? = null) = apply {
+            val text = rating?.toDouble()?.takeIf { it.isFinite() }?.let { value ->
                 val number = BigDecimal(value.toString()).setScale(2, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
                 "${ratingStars(value, max)} $number" + (votes?.let { count -> " ($count)" } ?: "")
-            },
-        )
+            } ?: return@apply
+            add(text)
+            lastIsRating = true
+        }
 
         /** Adds [facts], separated by dots. */
         fun info(vararg facts: String?) = addInline(facts.filterNot { it.isNullOrBlank() }.joinToString(" · ") { it!!.trim().escapeMarkdown() })
@@ -113,9 +125,21 @@ object MarkdownDescription {
             ),
         )
 
+        /** Adds a horizontal rule (`---`). */
+        fun separator() = add(SEPARATOR)
+
         /** Returns the description, or null when nothing was added. */
-        fun build(): String? = sections.joinToString("\n\n").ifEmpty { null }
+        fun build(): String? {
+            val kept = sections.fold(mutableListOf<String>()) { kept, section ->
+                if (section != SEPARATOR || (kept.isNotEmpty() && kept.last() != SEPARATOR)) kept += section
+                kept
+            }
+            if (kept.lastOrNull() == SEPARATOR) kept.removeAt(kept.lastIndex)
+            return kept.joinToString("\n\n").ifEmpty { null }
+        }
     }
+
+    private const val SEPARATOR = "---"
 }
 
 private fun markdownList(label: String, items: List<String>): String? {

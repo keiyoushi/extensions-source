@@ -244,6 +244,7 @@ class Manga(
             field("Volumes", extraVolumeCount?.takeIf { it > 0 }?.toString())
             field("Tracked", trackedCount?.toString())
             field("Content Rating", contentRating?.replaceFirstChar { it.uppercase() })
+            separator()
             markdown(
                 this@Manga.description?.replace("\r\n", "\n")
                     ?.replace(multipleNewlinesRegex, "\n\n")
