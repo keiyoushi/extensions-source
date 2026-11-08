@@ -13,6 +13,7 @@ import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
@@ -186,7 +187,7 @@ abstract class MangaTek : KeiSource() {
         val token = props.unlockToken!!
         val proof = OverlayCrypto.proof(readerSeeds(document).proofSalt, token, chapterId)
         val request = PagesRequest(chapterId, props.mangaSlug!!, props.chapterRef!!, token, proof)
-        return client.post(PAGES_API_URL, Fetch.XHR, body = request.toJsonRequestBody())
+        return client.post(PAGES_API_URL, fingerprint.headers, Fetch.XHR, request.toJsonRequestBody())
             .parseAs<PagesResponse>().data.toReaderImages()
     }
 
@@ -197,20 +198,25 @@ abstract class MangaTek : KeiSource() {
         val seeds = readerSeeds(document)
         val proof = OverlayCrypto.proof(seeds.proofSalt, token, chapterId)
         val esid = OverlayCrypto.esid(seeds.readerSeed)
-        val request = UnlockRequest(chapterId, token, proof, esid)
+        val request = UnlockRequest(chapterId, token, proof, esid, fingerprint.fpc)
 
-        var response = client.post(UNLOCK_API_URL, Fetch.XHR, body = request.toJsonRequestBody()).parseAs<UnlockResponse>()
-        val nonce = response.nonce
-        if (response.needsChallenge && nonce != null) {
-            val pow = response.powBits?.let { OverlayCrypto.pow(nonce, it) }
-            val retry = UnlockRequest(chapterId, token, proof, esid, nonce, pow)
-            response = client.post(UNLOCK_API_URL, Fetch.XHR, body = retry.toJsonRequestBody()).parseAs<UnlockResponse>()
+        var response = client.post(UNLOCK_API_URL, fingerprint.headers, Fetch.XHR, request.toJsonRequestBody()).parseAs<UnlockResponse>()
+        if (response.needsChallenge) {
+            val nonce = response.nonce
+            val pow = if (nonce != null) response.powBits?.let { OverlayCrypto.pow(nonce, it) } else null
+            val turnstileToken = if (response.turnstileRequired) getTurnstileToken(document.location(), TURNSTILE_SITE_KEY) else null
+            val retry = UnlockRequest(chapterId, token, proof, esid, fingerprint.fpc, nonce, pow, turnstileToken)
+            response = client.post(UNLOCK_API_URL, fingerprint.headers, Fetch.XHR, retry.toJsonRequestBody()).parseAs<UnlockResponse>()
         }
 
+        check(!response.denied) { "The site refused this chapter's translated text" }
         val overlay = response.overlay ?: return null
         return OverlayCrypto.decryptOverlay(seeds.readerSeed, overlay, response.ks, response.key, token, chapterId)
             ?.parseAs<OverlayData>()
     }
+
+    // Kept for the session, as the site's reader keeps its fingerprint in localStorage
+    private val fingerprint by lazy { Fingerprint(headers) }
 
     @Volatile
     private var cachedSeeds: Pair<String, BundleSeeds.Seeds>? = null
@@ -242,5 +248,6 @@ abstract class MangaTek : KeiSource() {
         private const val API_BASE = "https://api.mangatek.com"
         private const val PAGES_API_URL = "$API_BASE/api/reader/pages"
         private const val UNLOCK_API_URL = "$API_BASE/api/reader/unlock"
+        private const val TURNSTILE_SITE_KEY = "0x4AAAAAABegcsrB2MhtDccs"
     }
 }

@@ -148,8 +148,43 @@ class UnlockRequest(
     private val token: String,
     private val proof: String,
     private val esid: String,
+    private val fpc: Fpc,
     private val nonce: String? = null,
     private val pow: String? = null,
+    private val turnstileToken: String? = null,
+)
+
+@Serializable
+class Fpc(
+    private val v: Int,
+    private val ua: String,
+    private val lang: String,
+    private val platform: String,
+    private val cores: Int,
+    private val mem: Int,
+    private val touch: Int,
+    private val tz: String,
+    private val tzOffset: Int,
+    private val screen: String,
+    private val avail: String,
+    private val dpr: Double,
+    private val canvas: String,
+    private val webgl: String,
+    private val app: FpcApp,
+)
+
+@Serializable
+class FpcApp(
+    private val webdriver: Boolean,
+    private val vendor: String,
+    private val plugins: Int,
+    private val pdfViewer: Boolean,
+    private val chromeObj: String,
+    private val androidBridge: Boolean,
+    private val flutter: Boolean,
+    private val reactNative: Boolean,
+    private val webkitHandlers: Boolean,
+    private val standalone: Boolean,
 )
 
 @Serializable
@@ -160,4 +195,23 @@ class UnlockResponse(
     @SerialName("needs_challenge") val needsChallenge: Boolean = false,
     val nonce: String? = null,
     @SerialName("pow_bits") val powBits: Int? = null,
+    @SerialName("turnstile_required") val turnstileRequired: Boolean = false,
+    val denied: Boolean = false,
+)
+
+@Serializable
+class Signals(
+    private val ua: String,
+    private val lang: String,
+    private val platform: String,
+    private val cores: Int,
+    private val mem: Int,
+    private val touch: Int,
+    private val tz: String,
+    private val tzOffset: Int,
+    private val screen: String,
+    private val avail: String,
+    private val dpr: Double,
+    private val canvas: String,
+    private val webgl: String,
 )
