@@ -6,13 +6,18 @@ plugins {
 
 keiyoushi {
     name = "VyvyManga"
-    versionCode = 46
+    versionCode = 47
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
         lang = "en"
-        baseUrl = "https://mangavyvy.net"
+        baseUrl {
+            mirrors(
+                "https://mangavyvy.net",
+                "https://mangavyvy.com",
+            )
+        }
     }
 
     deeplink {
