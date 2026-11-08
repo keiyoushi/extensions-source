@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Babes Rater"
-    versionCode = 1
+    versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
@@ -18,5 +18,7 @@ keiyoushi {
     deeplink {
         path("/person/..*")
         path("/gallery/..*")
+        path("/picture/..*")
+        path("/infinite-scroll/..*")
     }
 }
