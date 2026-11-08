@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Manga Xiao Si"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
@@ -16,7 +16,13 @@ keiyoushi {
             mirrors(
                 "https://www.jjmhw2.top",
                 "https://www.jjmh.top",
+                "https://mxs13.cc",
             )
         }
+    }
+
+    deeplink {
+        path("/book/..*")
+        path("/chapter/..*")
     }
 }

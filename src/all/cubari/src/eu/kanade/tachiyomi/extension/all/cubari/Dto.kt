@@ -61,16 +61,19 @@ private fun createManga(
     url: String,
 ) = SManga.create().apply {
     this.title = title
-    this.artist = artist ?: Cubari.ARTIST_FALLBACK
-    this.author = author ?: Cubari.AUTHOR_FALLBACK
-    this.description = description?.substringBefore("Tags: ") ?: Cubari.DESCRIPTION_FALLBACK
-    genre = description?.let {
-        if (it.contains("Tags: ")) {
-            it.substringAfter("Tags: ")
-        } else {
-            ""
-        }
-    } ?: ""
+    this.artist = artist
+    this.author = author
+    this.description = description?.substringBefore("Tags: ")?.replace(STATUS_REGEX, "")?.trim()?.ifEmpty { null }
+    genre = description?.takeIf { "Tags: " in it }?.substringAfter("Tags: ")
+    status = when (description?.let { STATUS_REGEX.find(it) }?.groupValues?.get(1)?.trim()?.lowercase()) {
+        "ongoing" -> SManga.ONGOING
+        "completed" -> SManga.COMPLETED
+        "cancelled" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
+    }
     this.url = url
-    thumbnail_url = cover ?: ""
+    thumbnail_url = cover
 }
+
+// Status line some gists write next to the "Tags: " one
+private val STATUS_REGEX = Regex("""^Status: *(.+)$\R*""", RegexOption.MULTILINE)

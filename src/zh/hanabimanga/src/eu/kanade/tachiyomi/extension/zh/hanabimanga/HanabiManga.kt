@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.hanabimanga
 
 import android.os.Build
-import android.util.Log
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -74,7 +73,7 @@ abstract class HanabiManga :
     private val pref by getPreferencesLazy()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        preferencesInternal(screen.context, pref).forEach(screen::addPreference)
+        preferencesInternal(screen.context, pref, ::clearTokens).forEach(screen::addPreference)
     }
 
     // Customize
@@ -100,9 +99,9 @@ abstract class HanabiManga :
     }
 
     private suspend fun login(): String {
-        val email = pref.getString("EMAIL", null)
-        val password = pref.getString("PASSWORD", null)
-        if (email == null || password == null) return ANONYMOUS_TOKEN
+        val email = pref.getString(PREF_EMAIL, null)
+        val password = pref.getString(PREF_PASSWORD, null)
+        if (email.isNullOrEmpty() || password.isNullOrEmpty()) return ANONYMOUS_TOKEN
 
         val body = buildJsonObject {
             put("email", email)
@@ -123,6 +122,14 @@ abstract class HanabiManga :
         val c2 = Cookie.Builder().name("refresh_token").value(json.getString("refresh_token")).domain(httpUrl.host)
             .expiresAt(expiresAt + 259200000L).build()
         client.cookieJar.saveFromResponse(httpUrl, listOf(c1, c2))
+    }
+
+    private fun clearTokens() {
+        val httpUrl = getHomeUrl().toHttpUrl()
+        val expired = listOf("access_token", "refresh_token").map {
+            Cookie.Builder().name(it).value("").domain(httpUrl.host).expiresAt(0).build()
+        }
+        client.cookieJar.saveFromResponse(httpUrl, expired)
     }
 
     private fun HttpUrl.Builder.addPaginationParameters(page: Int, order: String) = addQueryParameter("select", COMIC_BODY)
@@ -262,15 +269,8 @@ abstract class HanabiManga :
                 "FREE_QUOTA_EXCEEDED" -> throw Exception("今日超分额度已用完")
             }
         }
-        return response.parseAs<PagesResult>().let { result ->
-            if (result.scrambleInfo == null) {
-                Log.v("HanabiManga", "移动端 | comicId: ${chapter.memo["cid"]!!.int}, chapterId: ${chapter.url}")
-                result.urls.mapIndexed { i, p -> Page(i, imageUrl = p.getString("url")) }
-            } else {
-                Log.v("HanabiManga", "网页端 | comicId: ${chapter.memo["cid"]!!.int}, chapterId: ${chapter.url}")
-                val info = with(result.scrambleInfo) { "$ticket|$nonce|$cols|$rows" }
-                result.urls.mapIndexed { i, p -> Page(i, imageUrl = "${p.getString("url")}#$info") }
-            }
-        }
+        val result = response.parseAs<PagesResult>()
+        val fragment = result.scrambleInfo?.run { "#$ticket|$nonce|$cols|$rows" }.orEmpty()
+        return result.urls.mapIndexed { i, p -> Page(i, imageUrl = p.getString("url") + fragment) }
     }
 }
