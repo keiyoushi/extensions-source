@@ -36,6 +36,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
@@ -250,7 +251,7 @@ class MangaDexHelper(private val lang: String) {
             return getMdAtHomeUrl(tokenRequestUrl, client, headers, CacheControl.FORCE_NETWORK)
         }
 
-        return response.use { json.decodeFromString<AtHomeDto>(it.body.string()).baseUrl }
+        return response.parseAs<AtHomeDto>(json).baseUrl
     }
 
     /**

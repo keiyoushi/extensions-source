@@ -38,6 +38,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
@@ -130,7 +131,7 @@ class MangaDex(
             return MangasPage(emptyList(), false)
         }
 
-        val mangaListDto = response.parseAs<MangaListDto>()
+        val mangaListDto = response.parseAs<MangaListDto>(helper.json)
 
         val coverSuffix = preferences.coverQuality
         val firstVolumeCovers = fetchFirstVolumeCovers(mangaListDto.data).orEmpty()
@@ -186,7 +187,7 @@ class MangaDex(
      * Used by Komikku
      */
     fun latestUpdatesParse(response: Response): MangasPage {
-        val chapterListDto = response.parseAs<ChapterListDto>()
+        val chapterListDto = response.parseAs<ChapterListDto>(helper.json)
 
         val mangaIds = chapterListDto.data
             .asSequence()
@@ -205,7 +206,7 @@ class MangaDex(
 
         val mangaRequest = GET(mangaApiUrl, headers, CacheControl.FORCE_NETWORK).newBuilder().fetch(Fetch.XHR).build()
         val mangaResponse = client.newCall(mangaRequest).execute()
-        val mangaListDto = mangaResponse.parseAs<MangaListDto>()
+        val mangaListDto = mangaResponse.parseAs<MangaListDto>(helper.json)
         val firstVolumeCovers = fetchFirstVolumeCovers(mangaListDto.data).orEmpty()
 
         val mangaDtoMap = mangaListDto.data.associateBy({ it.id }, { it })
@@ -295,7 +296,7 @@ class MangaDex(
             throw Exception(helper.intl.format("unable_to_process_chapter_request", response.code))
         }
 
-        return response.parseAs<ChapterDto>().data!!.relationships.firstInstanceOrNull<MangaDataDto>()!!.id
+        return response.parseAs<ChapterDto>(helper.json).data!!.relationships.firstInstanceOrNull<MangaDataDto>()!!.id
     }
 
     private fun searchMangaUrl(page: Int, query: String, filters: FilterList): HttpUrl {
@@ -358,7 +359,7 @@ class MangaDex(
     }
 
     private suspend fun searchMangaListParse(response: Response, page: Int, filters: FilterList): MangasPage {
-        val listDto = response.parseAs<ListDto>()
+        val listDto = response.parseAs<ListDto>(helper.json)
         val listDtoFiltered = listDto.data!!.relationships.filterIsInstance<MangaDataDto>()
         val amount = listDtoFiltered.count()
 
@@ -395,7 +396,7 @@ class MangaDex(
     }
 
     private fun searchMangaListParse(response: Response): List<SManga> {
-        val mangaListDto = response.parseAs<MangaListDto>()
+        val mangaListDto = response.parseAs<MangaListDto>(helper.json)
         val firstVolumeCovers = fetchFirstVolumeCovers(mangaListDto.data).orEmpty()
 
         val coverSuffix = preferences.coverQuality
@@ -461,7 +462,7 @@ class MangaDex(
                 .build(),
             fetch = Fetch.XHR,
             cacheControl = CacheControl.FORCE_NETWORK,
-        ).parseAs<MangaDto>()
+        ).parseAs<MangaDto>(helper.json)
 
         return helper.createManga(
             manga.data!!,
@@ -488,7 +489,7 @@ class MangaDex(
             .build()
         val response = client.get(url, Fetch.XHR, ensureSuccess = false)
 
-        return runCatching { response.parseAs<AggregateDto>() }
+        return runCatching { response.parseAs<AggregateDto>(helper.json) }
             .getOrNull()?.volumes.orEmpty()
     }
 
@@ -525,7 +526,7 @@ class MangaDex(
             .build()
 
         val result = runCatching {
-            client.newCall(GET(apiUrl, headers).newBuilder().fetch(Fetch.XHR).build()).execute().parseAs<CoverArtListDto>().data
+            client.newCall(GET(apiUrl, headers).newBuilder().fetch(Fetch.XHR).build()).execute().parseAs<CoverArtListDto>(helper.json).data
         }
 
         val covers = result.getOrNull() ?: return null
@@ -556,7 +557,7 @@ class MangaDex(
             return emptyList()
         }
 
-        val chapterListResponse = response.parseAs<ChapterListDto>()
+        val chapterListResponse = response.parseAs<ChapterListDto>(helper.json)
 
         val chapterListResults = chapterListResponse.data.toMutableList()
 
@@ -573,7 +574,7 @@ class MangaDex(
             offset += chapterListResponse.limit
 
             val newResponse = client.get(paginatedChapterListUrl(mangaId, offset), Fetch.XHR, CacheControl.FORCE_NETWORK)
-            val newChapterList = newResponse.parseAs<ChapterListDto>()
+            val newChapterList = newResponse.parseAs<ChapterListDto>(helper.json)
             chapterListResults.addAll(newChapterList.data)
 
             hasNextPage = newChapterList.hasNextPage
@@ -611,7 +612,7 @@ class MangaDex(
 
         val response = client.get(url, Fetch.XHR, CacheControl.FORCE_NETWORK)
         val atHomeRequestUrl = response.request.url
-        val atHomeDto = response.parseAs<AtHomeDto>()
+        val atHomeDto = response.parseAs<AtHomeDto>(helper.json)
         val host = atHomeDto.baseUrl
 
         // Have to add the time, and url to the page because pages timeout within 30 minutes now.
@@ -777,10 +778,6 @@ class MangaDex(
 
     private fun HttpUrl.Builder.addQueryParameter(name: String, value: Set<String>?) = apply {
         value?.forEach { addQueryParameter(name, it) }
-    }
-
-    private inline fun <reified T> Response.parseAs(): T = use {
-        helper.json.decodeFromString(body.string())
     }
 
     private val SharedPreferences.contentRating
