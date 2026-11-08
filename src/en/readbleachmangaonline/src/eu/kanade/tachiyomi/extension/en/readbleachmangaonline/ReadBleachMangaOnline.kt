@@ -6,12 +6,12 @@ import keiyoushi.annotation.Source
 @Source
 abstract class ReadBleachMangaOnline : MangaCatalog() {
     override val sourceList = listOf(
-        Pair("Bleach", "$baseUrl/manga/bleach/"),
-        Pair("Bleach Digital Colored Comics", "$baseUrl/manga/bleach-digital-colored-comics/"),
-        Pair("Bleach: The Unforgivens", "$baseUrl/manga/bleach-the-unforgivens/"),
-        Pair("Bleach: Can't Fear Your Own World", "$baseUrl/manga/bleach-cant-fear-your-own-world/"),
-        Pair("Bleach Unmasked Short Stories", "$baseUrl/manga/bleach-unmasked-short-stories/"),
-        Pair("Bleach One Shot: Burn the Witch", "$baseUrl/manga/bleach-one-shot-burn-the-witch/"),
-        Pair("Zombie Powder", "$baseUrl/manga/zombie-powder/"),
+        "Bleach" to "$baseUrl/manga/bleach/",
+        "Bleach Digital Colored Comics" to "$baseUrl/manga/bleach-digital-colored-comics/",
+        "Bleach: The Unforgivens" to "$baseUrl/manga/bleach-the-unforgivens/",
+        "Bleach: Can't Fear Your Own World" to "$baseUrl/manga/bleach-cant-fear-your-own-world/",
+        "Bleach Unmasked Short Stories" to "$baseUrl/manga/bleach-unmasked-short-stories/",
+        "Bleach One Shot: Burn the Witch" to "$baseUrl/manga/bleach-one-shot-burn-the-witch/",
+        "Zombie Powder" to "$baseUrl/manga/zombie-powder/",
     )
 }

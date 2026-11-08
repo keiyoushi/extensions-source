@@ -6,6 +6,6 @@ import keiyoushi.annotation.Source
 @Source
 abstract class ReadIchiTheWitchMangaOnline : MangaCatalog() {
     override val sourceList = listOf(
-        Pair("Ichi the Witch", "$baseUrl/manga/ichi-the-witch/"),
+        "Ichi the Witch" to "$baseUrl/manga/ichi-the-witch/",
     )
 }

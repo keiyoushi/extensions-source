@@ -6,10 +6,12 @@ import keiyoushi.annotation.Source
 @Source
 abstract class ReadSakamotoDaysMangaOnline : MangaCatalog() {
     override val sourceList = listOf(
-        Pair("Sakamoto Days", "$baseUrl/manga/sakamoto-days/"),
-        Pair("Sakamoto Days Digital Colored Comics", "$baseUrl/manga/sakamoto-days-digital-colored-comics/"),
-        Pair("Sakamoto Days: Assassin's Method", "$baseUrl/manga/sakamoto-days-assassins-method/"),
-        Pair("Garaku", "$baseUrl/manga/garaku/"),
-        Pair("Locker Room", "$baseUrl/manga/locker-room/"),
+        "Sakamoto Days" to "$baseUrl/manga/sakamoto-days/",
+        "Sakamoto Days Digital Colored Comics" to "$baseUrl/manga/sakamoto-days-digital-colored-comics/",
+        "Sakamoto Days: Assassin's Method" to "$baseUrl/manga/sakamoto-days-assassins-method/",
+        "Sakamoto Days Official Fan Book" to "$baseUrl/manga/sakamoto-days-official-fan-book/",
+        "Sakamoto Holidays" to "$baseUrl/manga/sakamoto-holidays/",
+        "Garaku" to "$baseUrl/manga/garaku/",
+        "Locker Room" to "$baseUrl/manga/locker-room/",
     )
 }

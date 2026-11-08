@@ -6,11 +6,11 @@ import keiyoushi.annotation.Source
 @Source
 abstract class ReadKagurabachiMangaOnline : MangaCatalog() {
     override val sourceList = listOf(
-        Pair("Kagurabachi", "$baseUrl/manga/kagurabachi/"),
-        Pair("Enten", "$baseUrl/manga/enten/"),
-        Pair("Chain", "$baseUrl/manga/chain/"),
-        Pair("Roku no Meiyaku", "$baseUrl/manga/roks-death-testament/"),
-        Pair("Madogiwa de Amu", "$baseUrl/manga/knitting-by-the-window/"),
-        Pair("Farewell! Cherry Boy!", "$baseUrl/manga/farewell-cherry-boy/"),
+        "Kagurabachi" to "$baseUrl/manga/kagurabachi/",
+        "Enten" to "$baseUrl/manga/enten/",
+        "Chain" to "$baseUrl/manga/chain/",
+        "Roku no Meiyaku" to "$baseUrl/manga/roks-death-testament/",
+        "Madogiwa de Amu" to "$baseUrl/manga/knitting-by-the-window/",
+        "Farewell! Cherry Boy!" to "$baseUrl/manga/farewell-cherry-boy/",
     )
 }
