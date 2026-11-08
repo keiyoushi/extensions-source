@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.manhuarm
+package eu.kanade.tachiyomi.multisrc.manhuarm
 
 data class Language(
     val lang: String,

@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.manhuarm.interceptors
+package eu.kanade.tachiyomi.multisrc.manhuarm.interceptors
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -11,9 +11,9 @@ import android.os.Build
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
-import eu.kanade.tachiyomi.extension.all.manhuarm.Dialog
-import eu.kanade.tachiyomi.extension.all.manhuarm.Language
-import eu.kanade.tachiyomi.extension.all.manhuarm.Manhuarm.Companion.PAGE_REGEX
+import eu.kanade.tachiyomi.multisrc.manhuarm.Dialog
+import eu.kanade.tachiyomi.multisrc.manhuarm.Language
+import eu.kanade.tachiyomi.multisrc.manhuarm.Manhuarm.Companion.PAGE_REGEX
 import keiyoushi.utils.parseAs
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType

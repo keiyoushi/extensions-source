@@ -1,13 +1,17 @@
-package eu.kanade.tachiyomi.extension.all.manhuarm
+package eu.kanade.tachiyomi.multisrc.manhuarm
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.HttpUrl
 
-fun getFilters() = FilterList(
-    SortFilter(),
-    GenreFilter(),
-    StatusFilter(),
+fun getFilters(
+    sorts: List<Pair<String, String>> = SORTS,
+    genres: List<Pair<String, String>> = GENRES,
+    statuses: List<Pair<String, String>> = STATUSES,
+) = FilterList(
+    SortFilter(sorts),
+    GenreFilter(genres),
+    StatusFilter(statuses),
     TypeFilter(),
 )
 
@@ -15,18 +19,18 @@ interface UrlFilter {
     fun addToUrl(url: HttpUrl.Builder)
 }
 
-class SortFilter :
-    Filter.Select<String>("Sort by", SORTS.map { it.first }.toTypedArray()),
+class SortFilter(private val sorts: List<Pair<String, String>>) :
+    Filter.Select<String>("Sort by", sorts.map { it.first }.toTypedArray()),
     UrlFilter {
     override fun addToUrl(url: HttpUrl.Builder) {
-        url.addQueryParameter("sort", SORTS[state].second)
+        url.addQueryParameter("sort", sorts[state].second)
     }
 }
 
 class Genre(name: String, val slug: String) : Filter.TriState(name)
 
-class GenreFilter :
-    Filter.Group<Genre>("Genres", GENRES.map { Genre(it.first, it.second) }),
+class GenreFilter(genres: List<Pair<String, String>>) :
+    Filter.Group<Genre>("Genres", genres.map { Genre(it.first, it.second) }),
     UrlFilter {
     override fun addToUrl(url: HttpUrl.Builder) {
         state.forEach {
@@ -48,17 +52,7 @@ open class CheckBoxGroup(name: String, private val param: String, options: List<
     }
 }
 
-class StatusFilter :
-    CheckBoxGroup(
-        "Status",
-        "status[]",
-        listOf(
-            "OnGoing" to "on-going",
-            "Completed" to "end",
-            "Canceled" to "canceled",
-            "On Hold" to "on-hold",
-        ),
-    )
+class StatusFilter(statuses: List<Pair<String, String>>) : CheckBoxGroup("Status", "status[]", statuses)
 
 class TypeFilter :
     CheckBoxGroup(
@@ -71,6 +65,13 @@ class TypeFilter :
             "Other" to "other",
         ),
     )
+
+private val STATUSES = listOf(
+    "OnGoing" to "on-going",
+    "Completed" to "end",
+    "Canceled" to "canceled",
+    "On Hold" to "on-hold",
+)
 
 private val SORTS = listOf(
     "Best match" to "best_match",

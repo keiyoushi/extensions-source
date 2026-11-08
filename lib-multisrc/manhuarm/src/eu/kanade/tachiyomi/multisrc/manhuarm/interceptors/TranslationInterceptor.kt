@@ -1,9 +1,9 @@
-package eu.kanade.tachiyomi.extension.all.manhuarm.interceptors
+package eu.kanade.tachiyomi.multisrc.manhuarm.interceptors
 
-import eu.kanade.tachiyomi.extension.all.manhuarm.Dialog
-import eu.kanade.tachiyomi.extension.all.manhuarm.Language
-import eu.kanade.tachiyomi.extension.all.manhuarm.Manhuarm.Companion.PAGE_REGEX
-import eu.kanade.tachiyomi.extension.all.manhuarm.translator.TranslatorEngine
+import eu.kanade.tachiyomi.multisrc.manhuarm.Dialog
+import eu.kanade.tachiyomi.multisrc.manhuarm.Language
+import eu.kanade.tachiyomi.multisrc.manhuarm.Manhuarm.Companion.PAGE_REGEX
+import eu.kanade.tachiyomi.multisrc.manhuarm.translator.TranslatorEngine
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.Dispatchers

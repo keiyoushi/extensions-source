@@ -1,6 +1,6 @@
-package eu.kanade.tachiyomi.extension.all.manhuarm.translator.bing
+package eu.kanade.tachiyomi.multisrc.manhuarm.translator.bing
 
-import eu.kanade.tachiyomi.extension.all.manhuarm.translator.TranslatorEngine
+import eu.kanade.tachiyomi.multisrc.manhuarm.translator.TranslatorEngine
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post

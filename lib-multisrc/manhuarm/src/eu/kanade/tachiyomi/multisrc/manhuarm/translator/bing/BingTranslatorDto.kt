@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.manhuarm.translator.bing
+package eu.kanade.tachiyomi.multisrc.manhuarm.translator.bing
 
 import kotlinx.serialization.Serializable
 

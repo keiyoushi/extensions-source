@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.manhuarm
+package eu.kanade.tachiyomi.multisrc.manhuarm
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -105,6 +105,8 @@ private object DialogListSerializer :
 
 @Serializable
 class OcrRequestDto(
-    private val cid: String,
-    private val ref: String,
+    private val ch: String,
+    private val tk: String,
+    private val ts: Long,
+    private val nc: String,
 )
