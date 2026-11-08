@@ -106,6 +106,7 @@ abstract class TeamX : KeiSource() {
         }
 
         val url = "$baseUrl/series".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
             filters.filterIsInstance<UrlPartFilter>().forEach {
                 it.addUrlParameter(this)
             }
