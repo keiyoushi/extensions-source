@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.es.aquellosquetraducen
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -9,7 +10,8 @@ import kotlin.time.Instant
 
 private val driveIdRegex = Regex("""[-\w]{25,}""")
 
-fun driveThumbnailUrl(id: String, width: Int) = "https://drive.google.com/thumbnail?id=$id&sz=w$width"
+// Original file from Drive's image host; without "=s0" it caps the long side at 1600 px
+fun driveImageUrl(id: String) = "https://lh3.googleusercontent.com/d/$id=s0"
 
 @Serializable
 class WorksDto(
@@ -33,19 +35,27 @@ class WorkDto(
 
     fun toSManga() = SManga.create().apply {
         url = "/obra.html?id=$id"
-        title = fields.titulo.stringValue
-        // The site keeps either a Drive file ID or a Drive link, and shows the file's thumbnail
+        title = this@WorkDto.title
+        // The site keeps either a Drive file ID or a Drive link
         thumbnail_url = fields.portadaUrl?.stringValue?.let { cover ->
-            driveIdRegex.find(cover)?.let { driveThumbnailUrl(it.value, 600) } ?: cover
+            driveIdRegex.find(cover)?.let { driveImageUrl(it.value) } ?: cover
         }
-        description = fields.sinopsis?.stringValue
-        genre = (listOfNotNull(type) + genres).joinToString()
-        status = when (fields.estado?.stringValue) {
+        description = MarkdownDescription.Builder()
+            .info(
+                fields.likes?.let { "👍 ${it.integerValue}" },
+                fields.dislikes?.let { "👎 ${it.integerValue}" },
+                fields.visitas?.let { "${it.integerValue} visitas" },
+            )
+            .description(fields.sinopsis?.stringValue)
+            .build()
+        genre = (listOfNotNull(type) + genres).joinToString().ifEmpty { null }
+        status = when (this@WorkDto.status) {
             "emision" -> SManga.ONGOING
             "pausa" -> SManga.ON_HIATUS
             "finalizado" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
+        initialized = true
     }
 }
 
@@ -58,6 +68,8 @@ class WorkFieldsDto(
     val estado: StringValueDto? = null,
     val generos: ArrayValueDto? = null,
     val likes: IntegerValueDto? = null,
+    val dislikes: IntegerValueDto? = null,
+    val visitas: IntegerValueDto? = null,
     val driveFolderId: StringValueDto? = null,
 )
 
