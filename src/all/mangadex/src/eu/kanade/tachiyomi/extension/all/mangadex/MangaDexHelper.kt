@@ -119,7 +119,6 @@ class MangaDexHelper(private val lang: String) {
         .addQueryParameter("order[volume]", "desc")
         .addQueryParameter("order[chapter]", "desc")
         .addQueryParameter("includeFuturePublishAt", "0")
-        .addQueryParameter("includeEmptyPages", "0")
         .toString()
 
     /**
