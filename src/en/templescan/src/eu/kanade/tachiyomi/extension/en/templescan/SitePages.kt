@@ -9,6 +9,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import kotlin.time.Duration.Companion.milliseconds
@@ -18,7 +19,7 @@ import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
 /** Loads the site's pages in a WebView, one at a time, and reads what they render with an asset script. */
-internal class SitePages(baseUrl: String, private val userAgent: () -> String) {
+internal class SitePages(baseUrl: String, private val client: OkHttpClient, private val userAgent: () -> String) {
 
     private val host = baseUrl.toHttpUrl().host
 
@@ -39,10 +40,19 @@ internal class SitePages(baseUrl: String, private val userAgent: () -> String) {
         val result = try {
             runWebView<String>(timeout = TIMEOUT) {
                 userAgent = this@SitePages.userAgent()
+                // The site refuses WebView's X-Requested-With, which the requests left to the WebView carry
+                val requestedWithReplaced = setOriginMatchedHeader("X-Requested-With", "XMLHttpRequest", setOf("https://$host"))
                 interceptRequest { request ->
                     val requestHost = request.url.host
+                    val path = request.url.path.orEmpty()
                     when {
-                        requestHost == null || requestHost == host || requestHost == TURNSTILE_HOST -> null
+                        requestHost == host -> when {
+                            // Stylesheets and fonts
+                            path.startsWith("/_next/static/css/") || path.startsWith("/_next/static/media/") -> blocked()
+                            // Not the X-Requested-With set for the requests left to the WebView
+                            else -> proxyRequest(request, client) { removeHeader("X-Requested-With") }
+                        }
+                        requestHost == null || requestHost == TURNSTILE_HOST -> null
                         // The reader loads a few pages at a time and mounts the next ones once those have loaded
                         requestHost.endsWith(".$host") -> pixel()
                         else -> blocked()
@@ -62,7 +72,7 @@ internal class SitePages(baseUrl: String, private val userAgent: () -> String) {
                                 val seenAt = challengeSeenAt ?: TimeSource.Monotonic.markNow().also { challengeSeenAt = it }
                                 if (recentlyFailed || seenAt.elapsedNow() > CHALLENGE_WAIT) {
                                     failedAt = TimeSource.Monotonic.markNow()
-                                    reject(IOException(SOLVE_MANUALLY))
+                                    reject(IOException(if (requestedWithReplaced) SOLVE_MANUALLY else UPDATE_WEBVIEW))
                                 }
                             }
                             page.status != null -> reject(IOException("HTTP error ${page.status}"))
@@ -106,6 +116,8 @@ internal class SitePages(baseUrl: String, private val userAgent: () -> String) {
         private val CHALLENGE_WAIT = 30.seconds
 
         private const val SOLVE_MANUALLY = "Open in WebView to pass the site's verification"
+
+        private const val UPDATE_WEBVIEW = "Update Android System WebView to pass the site's verification"
 
         private val BACKOFF = 5.minutes
     }

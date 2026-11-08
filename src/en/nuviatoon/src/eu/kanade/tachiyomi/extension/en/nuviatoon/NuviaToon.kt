@@ -19,6 +19,7 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
+import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -88,13 +89,26 @@ abstract class NuviaToon :
         return response.parseAs<ContentResponse>().data.toPageList()
     }
 
-    override fun getFilterList(data: JsonElement?) = FilterList(
-        SortFilter(),
-        StatusFilter(),
-        GenreFilter(),
-        TypeFilter(),
-        RatingFilter(),
-    )
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/genres", Fetch.XHR)
+        .parseAs<GenresResponse>().data
+        .map { it.name.toTitleCase() to it.slug }
+        .toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.parseAs<List<Pair<String, String>>>().orEmpty()
+
+        return FilterList(
+            buildList {
+                add(SortFilter())
+                add(StatusFilter())
+                if (genres.isNotEmpty()) add(GenreFilter(genres))
+                add(TypeFilter())
+                add(RatingFilter())
+            },
+        )
+    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {

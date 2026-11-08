@@ -18,6 +18,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
@@ -88,6 +89,14 @@ abstract class Mangauno :
         return MangasPage(mangas, mangas.size >= PAGE_SIZE)
     }
 
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        if (url.pathSegments.firstOrNull() !in setOf("m", "r")) return null
+        val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
+        val manga = SManga.create().apply { this.url = slug }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -104,10 +113,10 @@ abstract class Mangauno :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.url.substringAfterLast("/")
-        val response = client.get("$apiUrl/chapter/$chapterId", Fetch.XHR)
+        val response = client.get("$apiUrl/chapter/$chapterId", Fetch.XHR.from(getChapterUrl(chapter)))
         val data = response.parseAs<PageListResponse>()
-        return data.pages.mapIndexed { index, url ->
-            Page(index, imageUrl = url)
+        return List(data.chapter.pageCount) { index ->
+            Page(index, imageUrl = "$apiUrl/chapter/$chapterId/page/${index + 1}")
         }
     }
 

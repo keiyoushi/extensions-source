@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "SchaleNetwork"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     pkgName = "all.koharu"
@@ -15,12 +15,7 @@ keiyoushi {
         source {
             lang = it
             if (it == "en") id = 1484902275639232927L
-            baseUrl {
-                mirrors(
-                    "https://shupogaki.moe",
-                    "https://niyaniya.moe",
-                )
-            }
+            baseUrl = "https://niyaniya.moe"
         }
     }
 

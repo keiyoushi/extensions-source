@@ -13,8 +13,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.network.Fetch
+import keiyoushi.network.XorInterceptor
 import keiyoushi.network.get
+import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
@@ -22,16 +25,11 @@ import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.Response
-import okhttp3.ResponseBody.Companion.asResponseBody
-import okhttp3.ResponseBody.Companion.toResponseBody
-import okio.Buffer
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 
@@ -42,14 +40,14 @@ abstract class InkStory :
     abstract val serviceName: String
 
     private val preferences by getPreferencesLazy {
-        val keysToRemove = listOf(
-            "inkstory_image_quality",
-            "inkstory_image_type",
-            "inkstory_image_width",
-        )
-        if (keysToRemove.any(::contains)) {
+        val mode = getString(PREF_LEGACY_BRANCH_MODE, null)
+        val query = getString(PREF_LEGACY_BRANCH_QUERY, null)
+        val legacyKeys = listOf(PREF_LEGACY_BRANCH_MODE, PREF_LEGACY_BRANCH_QUERY, "inkstory_image_quality", "inkstory_image_type", "inkstory_image_width")
+        if (legacyKeys.any(::contains)) {
             edit().apply {
-                keysToRemove.forEach(::remove)
+                if (mode == "latest" || mode == "preferred") putBoolean(PREF_DEDUPE, true)
+                if (mode == "preferred" && !query.isNullOrBlank()) putString(PREF_PREFERRED_GROUPS, query)
+                legacyKeys.forEach(::remove)
             }.apply()
         }
     }
@@ -57,186 +55,80 @@ abstract class InkStory :
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
         // User Agent required by source. Don't change
         set("User-Agent", "Tachiyomi (+https://github.com/keiyoushi/extensions-source)")
-        set("Accept", "application/json, text/plain, */*")
-        set("X-Service-Name", serviceName)
     }
+
+    // Fetch adds no fetch metadata for the UA above, and server functions refuse requests without it
+    private val serverFnHeaders get() = headers.newBuilder()
+        .set("Accept", "application/json")
+        .set("x-tsr-serverFn", "true")
+        .set("Sec-Fetch-Site", "same-origin")
+        .build()
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
-        addInterceptor(::imageDecryptInterceptor)
+        rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
+        addInterceptor(XorInterceptor(IMAGE_KEY) { it.url.isXorImage() })
     }
 
-    // ============================== Interceptors ===============================
-    private fun imageDecryptInterceptor(chain: Interceptor.Chain): Response {
-        val response = chain.proceed(chain.request())
-        if (!response.isSuccessful) return response
-
-        val contentType = response.body.contentType()
-        if (contentType?.subtype == "json") {
-            return response
-        }
-
-        if (detectImageCodec(response.request.url.toString()) != ImageCodec.XOR) {
-            return response
-        }
-
-        val source = response.body.source()
-        val buffer = Buffer()
-        source.readAll(buffer)
-
-        if (buffer.size < MIN_IMAGE_SIGNATURE_SIZE) {
-            return response.newBuilder()
-                .body(buffer.asResponseBody(contentType, buffer.size))
-                .build()
-        }
-
-        // Peek the first bytes without consuming from buffer
-        val peek = buffer.peek().readByteArray(MIN_IMAGE_SIGNATURE_SIZE.toLong())
-        if (looksLikeImage(peek) != null) {
-            return response.newBuilder()
-                .body(buffer.asResponseBody(contentType, buffer.size))
-                .build()
-        }
-
-        // Verify decrypted header
-        val decryptedHeader = ByteArray(MIN_IMAGE_SIGNATURE_SIZE) { index ->
-            (peek[index].toInt() xor SECRET_KEY_BYTES[index % SECRET_KEY_BYTES.size].toInt()).toByte()
-        }
-
-        val detectedType = looksLikeImage(decryptedHeader)
-            ?: return response.newBuilder()
-                .body(buffer.asResponseBody(contentType, buffer.size))
-                .build()
-
-        val payload = buffer.readByteArray()
-        for (i in payload.indices) {
-            payload[i] = (payload[i].toInt() xor SECRET_KEY_BYTES[i % SECRET_KEY_BYTES.size].toInt()).toByte()
-        }
-
-        val mediaType = detectedType.toMediaType()
-        return response.newBuilder()
-            .body(payload.toResponseBody(mediaType))
+    private suspend inline fun <reified T> serverFnOrNull(id: String, data: JsonElement): T? {
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("_serverFn")
+            .addPathSegment(id)
+            .addQueryParameter("payload", serovalPayload(data))
             .build()
+        return client.get(url, serverFnHeaders, Fetch.XHR).parseAs<JsonObject>().serverFnResult()?.parseAs<T>()
     }
 
-    private fun looksLikeImage(payload: ByteArray): String? {
-        if (payload.size < MIN_IMAGE_SIGNATURE_SIZE) return null
+    private suspend inline fun <reified T> serverFn(id: String, data: JsonElement): T = serverFnOrNull<T>(id, data) ?: throw Exception("Not found")
 
-        val isJpeg = payload[0] == 0xFF.toByte() && payload[1] == 0xD8.toByte() && payload[2] == 0xFF.toByte()
-        if (isJpeg) return "image/jpeg"
+    private suspend fun getBook(slug: String): BookDto? = serverFnOrNull(FN_BOOK, BookInput(slug, createView = false).toJsonElement())
 
-        val isPng = payload[0] == 0x89.toByte() && payload[1] == 0x50.toByte() &&
-            payload[2] == 0x4E.toByte() && payload[3] == 0x47.toByte()
-        if (isPng) return "image/png"
-
-        val isGif = payload[0] == 0x47.toByte() && payload[1] == 0x49.toByte() &&
-            payload[2] == 0x46.toByte() && payload[3] == 0x38.toByte()
-        if (isGif) return "image/gif"
-
-        val isWebp = payload[0] == 0x52.toByte() && payload[1] == 0x49.toByte() &&
-            payload[2] == 0x46.toByte() && payload[3] == 0x46.toByte() &&
-            payload[8] == 0x57.toByte() && payload[9] == 0x45.toByte() &&
-            payload[10] == 0x42.toByte() && payload[11] == 0x50.toByte()
-        if (isWebp) return "image/webp"
-
-        val isAvif = payload[4] == 0x66.toByte() && payload[5] == 0x74.toByte() &&
-            payload[6] == 0x79.toByte() && payload[7] == 0x70.toByte() &&
-            payload[8] == 0x61.toByte() && payload[9] == 0x76.toByte() &&
-            payload[10] == 0x69.toByte()
-        if (isAvif) return "image/avif"
-
-        return null
+    private suspend fun catalogue(input: CatalogueInput, page: Int): MangasPage {
+        val catalogue = serverFn<CatalogueDto>(FN_CATALOGUE, input.toJsonElement())
+        val titleLanguage = prefTitleLanguage
+        return MangasPage(catalogue.books.map { it.toSManga(titleLanguage) }, page * PAGE_SIZE < catalogue.total)
     }
 
-    // ============================== Popular ===============================
-    override suspend fun getPopularManga(page: Int): MangasPage = makeCatalogRequest("viewsCount", page)
+    override suspend fun getPopularManga(page: Int): MangasPage = catalogue(CatalogueInput(PAGE_SIZE, page - 1, sort = "viewsCount", orderBy = "desc", readingRestriction = READING_RESTRICTIONS), page)
 
-    // ============================== Latest ===============================
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val url = API_URL.toHttpUrl().newBuilder()
-            .addPathSegment("chapter-update-feed")
-            .addQueryParameter("serviceName", serviceName)
-            .addQueryParameter("onlyBorderChapters", "true")
-            .addQueryParameter("page", (page - 1).coerceAtLeast(0).toString())
-            .addQueryParameter("size", PAGE_SIZE.toString())
-            .build()
-        return client.get(url, Fetch.XHR).use { response ->
-            val manga = response.parseAs<List<MangaFromSearchDto>>().map { it.book.toSManga() }
-            MangasPage(manga, manga.size >= PAGE_SIZE)
-        }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = catalogue(CatalogueInput(PAGE_SIZE, page - 1, sort = "latestChapterAt", orderBy = "desc", readingRestriction = READING_RESTRICTIONS), page)
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val sort = filters.firstInstanceOrNull<SortFilter>()
+        val genres = filters.firstInstanceOrNull<GenreFilter>()
+        val tags = filters.firstInstanceOrNull<TagFilter>()
+        val rating = filters.firstInstanceOrNull<RatingFilter>()
+        val year = filters.firstInstanceOrNull<YearFilter>()
+        val chapters = filters.firstInstanceOrNull<ChaptersFilter>()
+        val input = CatalogueInput(
+            size = PAGE_SIZE,
+            page = page - 1,
+            sort = sort?.selected ?: "viewsCount",
+            orderBy = sort?.order ?: "desc",
+            readingRestriction = READING_RESTRICTIONS,
+            search = query.trim().ifEmpty { null },
+            labelsInclude = (genres?.included.orEmpty() + tags?.included.orEmpty()).ifEmpty { null },
+            labelsExclude = (genres?.excluded.orEmpty() + tags?.excluded.orEmpty()).ifEmpty { null },
+            strictLabelEqual = filters.firstInstanceOrNull<StrictLabelEqualFilter>()?.state?.takeIf { it },
+            status = filters.firstInstanceOrNull<StatusFilter>()?.selected,
+            country = filters.firstInstanceOrNull<CountryFilter>()?.selected,
+            contentStatus = filters.firstInstanceOrNull<ContentStatusFilter>()?.selected,
+            formats = filters.firstInstanceOrNull<FormatFilter>()?.selected,
+            averageRatingMin = rating?.min,
+            averageRatingMax = rating?.max,
+            yearMin = year?.min,
+            yearMax = year?.max,
+            chaptersCountMin = chapters?.min,
+            chaptersCountMax = chapters?.max,
+        )
+        return catalogue(input, page)
     }
 
-    // ============================== Search ===============================
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = makeCatalogRequest("viewsCount", page, query, filters)
-
-    // ============================== Search Utilities ===============================
-    protected open suspend fun makeCatalogRequest(sortBy: String, page: Int, query: String? = null, filters: FilterList? = null): MangasPage {
-        val url = "$API_URL/books".toHttpUrl().newBuilder().apply {
-            addQueryParameter("serviceName", serviceName)
-            var sort = sortBy
-            var order = "desc"
-
-            filters?.forEach { filter ->
-                when (filter) {
-                    is GenreFilter -> {
-                        filter.included?.forEach { addQueryParameter("labelsInclude", it) }
-                        filter.excluded?.forEach { addQueryParameter("labelsExclude", it) }
-                    }
-                    is StrictLabelEqualFilter -> if (filter.state) {
-                        addQueryParameter("strictLabelEqual", "true")
-                    }
-                    is FormatFilter -> filter.selected?.forEach { addQueryParameter("formats", it) }
-                    is ContentStatusFilter -> filter.selected?.forEach { addQueryParameter("contentStatus", it) }
-                    is CountryFilter -> filter.selected?.forEach { addQueryParameter("country", it) }
-                    is StatusFilter -> filter.selected?.forEach { addQueryParameter("status", it) }
-                    is ChaptersRangeFilter -> {
-                        filter.minValue?.let { normalizeInt(it, 0, 100000)?.let { v -> addQueryParameter("chaptersCountMin", v) } }
-                        filter.maxValue?.let { normalizeInt(it, 0, 100000)?.let { v -> addQueryParameter("chaptersCountMax", v) } }
-                    }
-                    is RatingRangeFilter -> {
-                        filter.minValue?.let { normalizeDecimal(it)?.let { v -> addQueryParameter("averageRatingMin", v) } }
-                        filter.maxValue?.let { normalizeDecimal(it)?.let { v -> addQueryParameter("averageRatingMax", v) } }
-                    }
-                    is YearRangeFilter -> {
-                        filter.minValue?.let { normalizeInt(it, 1900, 2100)?.let { v -> addQueryParameter("yearMin", v) } }
-                        filter.maxValue?.let { normalizeInt(it, 1900, 2100)?.let { v -> addQueryParameter("yearMax", v) } }
-                    }
-                    is OrderBy -> {
-                        sort = filter.selected
-                        order = filter.order
-                    }
-                    else -> {}
-                }
-            }
-            if (query?.isNotBlank() == true) addQueryParameter("search", query)
-            addQueryParameter("page", (page - 1).coerceAtLeast(0).toString())
-            addQueryParameter("size", PAGE_SIZE.toString())
-            addQueryParameter("sort", "$sort,$order")
-        }.build()
-
-        return client.get(url, Fetch.XHR).use { response ->
-            val mangas = response.parseAs<List<BookFromSearchDto>>().map { it.toSManga() }
-            val totalHits = response.header("x-estimated-total-hits")?.toIntOrNull()
-            val hasNextPage = if (totalHits != null) {
-                page * PAGE_SIZE < totalHits
-            } else {
-                mangas.size >= PAGE_SIZE
-            }
-            MangasPage(mangas, hasNextPage)
-        }
-    }
-
-    // =========================== Deeplink ============================
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "content" && url.pathSegments[1].length > 1) {
-            val tmpManga = SManga.create().apply {
-                this.url = url.pathSegments[1]
-            }
-            return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
-        }
-        return null
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.getOrNull(0) != "content") return null
+        val slug = url.pathSegments.getOrNull(1)?.ifEmpty { null } ?: return null
+        return getBook(slug)?.toSMangaDetails(prefTitleLanguage)?.apply { initialized = true }
     }
 
-    // ============================== Manga ===============================
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/content/${manga.url}"
 
     override suspend fun fetchMangaUpdate(
@@ -245,229 +137,169 @@ abstract class InkStory :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
-        val mangaAsync = async {
-            if (fetchDetails) {
-                val url = "$API_URL/books/${manga.url}"
-                client.get(url, Fetch.XHR).parseAs<MangaFullDto>().toSManga()
-            } else {
-                manga
-            }
+        val bookId = manga.memo["id"]?.string
+        val details = async {
+            if (fetchDetails || bookId == null) (getBook(manga.url) ?: throw Exception("Not found")).toSMangaDetails(prefTitleLanguage) else null
         }
-        val chaptersAsync = async {
-            if (fetchChapters) {
-                val bookId = manga.memo["id"]!!.string
-                val branches = client.get("$API_URL/branches?bookId=$bookId&moderationStatus=APPROVED", Fetch.XHR)
-                    .parseAs<List<BranchDto>>()
-                    .associate { it.id to it.publisherName() }
-                val branchType = prefBranch()
-                val delay = prefDelay()
-                val url = "$API_URL/chapters?bookId=$bookId&moderationStatus=APPROVED"
-                val fourDaysAgo = Clock.System.now().minus(4.days).toEpochMilliseconds()
-
-                val data = client.get(url, Fetch.XHR).parseAs<List<ChapterDto>>()
-                    .map { it.toSChapter(branches, manga.url) }
-                    .filter { !delay || it.date_upload <= 0L || it.date_upload <= fourDaysAgo }
-                when (branchType) {
-                    "all" -> data
-                    "preferred" -> {
-                        val branchQuery = prefBranchQuery()
-                        val preferred = if (branchQuery.isNotBlank()) {
-                            data.filter { it.scanlator?.contains(branchQuery, ignoreCase = true) == true }.ifEmpty { data }
-                        } else {
-                            data
-                        }
-                        deduplicateChapters(preferred)
-                    }
-                    "latest" -> deduplicateChapters(data)
-                    else -> data
-                }
-            } else {
-                chapters
-            }
+        val chapterList = async {
+            if (fetchChapters) getChapters(manga.url, bookId ?: details.await()!!.memo["id"]!!.string) else chapters
         }
-        SMangaUpdate(mangaAsync.await(), chaptersAsync.await())
+        SMangaUpdate(details.await() ?: manga, chapterList.await())
     }
 
-    // ============================== Chapters ===============================
+    private suspend fun getChapters(slug: String, bookId: String): List<SChapter> {
+        val blocked = prefBlockedGroups
+        val chapterList = serverFn<ChapterListDto>(FN_CHAPTERS, bookId.toJsonElement())
+        val chapters = chapterList.chapters.filter { chapter -> chapter.groups().none { it in blocked } }
+        val shown = if (prefDedupe) {
+            val preferred = prefPreferredGroups
+            val branchOrder = chapterList.branches.withIndex().associate { it.value.id to it.index }
+            chapters.groupBy { it.key }.values.map { uploads ->
+                preferred.firstNotNullOfOrNull { group -> uploads.firstOrNull { group in it.groups() } }
+                    ?: uploads.minBy { branchOrder[it.branchId] ?: Int.MAX_VALUE }
+            }
+        } else {
+            chapters
+        }
+        val list = shown.map { it.toSChapter(slug) }
+        if (!prefDelay) return list
+        val hideAfter = Clock.System.now().minus(4.days).toEpochMilliseconds()
+        return list.filter { it.date_upload <= hideAfter }
+    }
+
+    private fun ChapterDto.groups() = publisherNames.orEmpty().split(',').map { it.trim().lowercase() }
+
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/content/${chapter.memo["slug"]!!.string}/${chapter.url}"
 
-    private fun deduplicateChapters(chaptersList: List<SChapter>): List<SChapter> {
-        val latestMap = mutableMapOf<Float, SChapter>()
-        val result = mutableListOf<SChapter>()
+    override val supportsRelatedMangas = true
 
-        for (chapter in chaptersList) {
-            if (chapter.chapter_number >= 0f) {
-                val existing = latestMap[chapter.chapter_number]
-                if (existing == null || chapter.date_upload > existing.date_upload) {
-                    latestMap[chapter.chapter_number] = chapter
-                }
-            }
-        }
-
-        val seen = mutableSetOf<Float>()
-        for (chapter in chaptersList) {
-            if (chapter.chapter_number < 0f) {
-                result.add(chapter)
-            } else if (seen.add(chapter.chapter_number)) {
-                latestMap[chapter.chapter_number]?.let(result::add)
-            }
-        }
-
-        return result
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val bookId = manga.memo["id"]?.string ?: getBook(manga.url)!!.id
+        val input = CatalogueInput(RELATED_SIZE, 0, relatedBookId = bookId)
+        val titleLanguage = prefTitleLanguage
+        return serverFn<CatalogueDto>(FN_CATALOGUE, input.toJsonElement()).books.map { it.toSManga(titleLanguage) }
     }
 
-    // ============================== Pages ===============================
-    override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val url = "$API_URL/chapters/${chapter.url}"
-        val chapter = client.get(url, Fetch.XHR).parseAs<PagesDto>()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = serverFn<ChapterPagesDto>(FN_CHAPTER, ChapterInput(chapter.url, createView = false).toJsonElement())
+        .pages
+        .sortedBy { it.index }
+        .mapIndexed { index, page -> Page(index, imageUrl = page.image) }
 
-        return chapter.pages
-            .sortedBy { it.index ?: Int.MAX_VALUE }
-            .mapIndexedNotNull { index, page ->
-                page.image?.takeIf(String::isNotBlank)?.let { imageUrl ->
-                    val normalized = normalizeImageUrl(imageUrl)
-                    Page(index = index, imageUrl = normalized)
-                }
-            }
-    }
-
-    private fun normalizeImageUrl(imageUrl: String): String = if (detectImageCodec(imageUrl) == ImageCodec.SEC) {
-        replaceFileNameMode(imageUrl)
-    } else {
-        imageUrl
-    }
-
-    private fun detectImageCodec(imageUrl: String): ImageCodec? {
-        val fileName = imageUrl.substringAfterLast('/').substringBefore('?')
-        val baseName = fileName.substringBeforeLast('.', missingDelimiterValue = fileName)
-        if (baseName.length != IMAGE_NAME_LENGTH) return null
-        return when (baseName.getOrNull(IMAGE_MODE_INDEX)) {
-            's' -> ImageCodec.SEC
-            'x' -> ImageCodec.XOR
-            else -> null
-        }
-    }
-
-    private fun replaceFileNameMode(imageUrl: String, replacementMode: Char = 'x'): String {
-        val lastSlash = imageUrl.lastIndexOf('/')
-        if (lastSlash == -1) return imageUrl
-        val modeIndex = lastSlash + 1 + IMAGE_MODE_INDEX
-        if (modeIndex >= imageUrl.length) return imageUrl
-
-        val chars = imageUrl.toCharArray()
-        chars[modeIndex] = replacementMode
-        return String(chars)
-    }
-
-    // ============================== Filters ===============================
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val genres = client.get("$API_URL/labels", Fetch.XHR)
-            .parseAs<List<GenresDto>>()
-            .filter { it.kind == "GENRE" }
-            .map { it.name to it.slug }
-
-        return FiltersData(
-            genres = genres,
+        val url = "$API_URL/labels".toHttpUrl().newBuilder()
+            .addQueryParameter("serviceName", serviceName)
+            .build()
+        val labels = client.get(url, Fetch.XHR).parseAs<List<LabelListItemDto>>()
+        return FilterData(
+            genres = labels.filter { it.kind == "GENRE" }.map { it.name to it.id },
+            tags = labels.filter { it.kind == "TAG" }.map { it.name to it.id },
         ).toJsonElement()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val filters = mutableListOf<Filter<*>>()
-
-        filters.add(OrderBy())
-
-        data?.parseAs<FiltersData>()?.let {
-            if (it.genres?.isNotEmpty() == true) {
-                filters.add(GenreFilter(it.genres))
-                filters.add(Filter.Separator())
-                filters.add(StrictLabelEqualFilter())
-            }
-        }
-
-        filters.addAll(
-            listOf(
+        val labels = data?.parseAs<FilterData>()
+        return FilterList(
+            listOfNotNull<Filter<*>>(
+                SortFilter(),
+                labels?.genres?.takeIf { it.isNotEmpty() }?.let(::GenreFilter),
+                labels?.tags?.takeIf { it.isNotEmpty() }?.let(::TagFilter),
+                labels?.let { StrictLabelEqualFilter() },
                 StatusFilter(),
+                FormatFilter(),
                 CountryFilter(),
                 ContentStatusFilter(),
-                FormatFilter(),
-                RatingRangeFilter(),
-                YearRangeFilter(),
-                ChaptersRangeFilter(),
+                RatingFilter(),
+                YearFilter(),
+                ChaptersFilter(),
             ),
         )
-
-        return FilterList(filters)
     }
 
-    // ============================== Preferences ===============================
-    private fun prefBranch(): String = preferences.getString(PREF_CHAPTER_BRANCH_MODE, DEFAULT_CHAPTER_BRANCH_MODE) ?: DEFAULT_CHAPTER_BRANCH_MODE
-    private fun prefBranchQuery(): String = preferences.getString(PREF_PREFERRED_BRANCH_QUERY, DEFAULT_PREFERRED_BRANCH_QUERY) ?: DEFAULT_PREFERRED_BRANCH_QUERY
-    private fun prefDelay(): Boolean = preferences.getBoolean(DELAY_CHAPTERS, false)
+    private val prefDedupe get() = preferences.getBoolean(PREF_DEDUPE, false)
+    private val prefPreferredGroups get() = preferences.getString(PREF_PREFERRED_GROUPS, "")!!.groupList()
+    private val prefBlockedGroups get() = preferences.getString(PREF_BLOCKED_GROUPS, "")!!.groupList().toSet()
+    private val prefDelay get() = preferences.getBoolean(PREF_DELAY, false)
+    private val prefTitleLanguage get() = preferences.getString(PREF_TITLE_LANGUAGE, "ru")!!
+
+    private fun String.groupList() = split(',').map { it.trim().lowercase() }.filter(String::isNotEmpty)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
-            key = PREF_CHAPTER_BRANCH_MODE
-            title = "Режим веток глав"
-            entries = BRANCH_MODE.map { it.first }.toTypedArray()
-            entryValues = BRANCH_MODE.map { it.second }.toTypedArray()
+            key = PREF_TITLE_LANGUAGE
+            title = "Язык названий"
+            entries = arrayOf("Русский", "Английский", "Оригинальный")
+            entryValues = arrayOf("ru", "en", "original")
             summary = "%s"
-            setDefaultValue(DEFAULT_CHAPTER_BRANCH_MODE)
+            setDefaultValue("ru")
         }.let(screen::addPreference)
 
+        val preferredGroups = EditTextPreference(screen.context).apply {
+            key = PREF_PREFERRED_GROUPS
+            title = "Предпочитаемые команды"
+            dialogTitle = title
+            summary = "Через запятую, по порядку. Если ни одной нет, остаётся ветка, которую сайт показывает первой"
+            setDefaultValue("")
+        }
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_DEDUPE
+            title = "Одна версия каждой главы"
+            summaryOff = "Главы всех команд"
+            summaryOn = "Одна глава на номер, по предпочитаемым командам"
+            setDefaultValue(false)
+            setOnPreferenceChangeListener { _, value ->
+                preferredGroups.setEnabled(value as Boolean)
+                true
+            }
+        }.let(screen::addPreference)
+        preferredGroups.setEnabled(prefDedupe)
+        screen.addPreference(preferredGroups)
+
         EditTextPreference(screen.context).apply {
-            key = PREF_PREFERRED_BRANCH_QUERY
-            title = "Предпочитаемая ветка"
-            dialogTitle = "Предпочитаемая ветка"
-            summary = "Используется в режиме \"Предпочитаемая ветка\" (поиск по части названия команды)"
-            setDefaultValue(DEFAULT_PREFERRED_BRANCH_QUERY)
+            key = PREF_BLOCKED_GROUPS
+            title = "Скрытые команды"
+            dialogTitle = title
+            summary = "Через запятую. Главы этих команд не показываются"
+            setDefaultValue("")
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
-            key = DELAY_CHAPTERS
-            title = DELAY_CHAPTERS_TITLE
-            summaryOn = DELAY_CHAPTERS_SUM_ON
-            summaryOff = DELAY_CHAPTERS_SUM_OFF
+            key = PREF_DELAY
+            title = "Скрывать главы"
+            summaryOn = "Главы новее 4 дней скрыты"
+            summaryOff = "Показываются все главы"
             setDefaultValue(false)
         }.let(screen::addPreference)
     }
 
-    // ============================== Utilities ===============================
-    private fun normalizeDecimal(rawValue: String?, min: Double = 0.0, max: Double = 10.0): String? {
-        val value = rawValue?.trim()?.replace(',', '.')?.takeIf(String::isNotEmpty) ?: return null
-        val parsed = value.toDoubleOrNull() ?: return null
-        if (parsed !in min..max) return null
-        return if (parsed % 1.0 == 0.0) parsed.toLong().toString() else parsed.toString()
-    }
-
-    private fun normalizeInt(rawValue: String?, min: Int, max: Int): String? {
-        val value = rawValue?.trim()?.takeIf(String::isNotEmpty) ?: return null
-        val parsed = value.toIntOrNull() ?: return null
-        if (parsed !in min..max) return null
-        return parsed.toString()
+    // The site marks XOR'd pages with an `x` in the uuid file name's version slot
+    private fun HttpUrl.isXorImage(): Boolean {
+        val name = pathSegments.last().substringBeforeLast('.')
+        return host == IMAGE_HOST && name.length == 36 && name[14] == 'x'
     }
 
     companion object {
         private const val API_URL = "https://api.inuko.me/v2"
-        private const val PAGE_SIZE = 30
-        private const val IMAGE_NAME_LENGTH = 36
-        private const val IMAGE_MODE_INDEX = 14
-        private const val MIN_IMAGE_SIGNATURE_SIZE = 12
-        private const val PREF_CHAPTER_BRANCH_MODE = "inkstory_chapter_branch_mode"
-        private const val PREF_PREFERRED_BRANCH_QUERY = "inkstory_preferred_branch_query"
-        private const val DEFAULT_CHAPTER_BRANCH_MODE = "all"
-        private const val DEFAULT_PREFERRED_BRANCH_QUERY = ""
-        private const val SECRET_KEY = "UySkp0BzPhwlvP2V"
-        private const val DELAY_CHAPTERS = "delay_chapters"
-        private const val DELAY_CHAPTERS_TITLE = "Скрывать главы"
-        private const val DELAY_CHAPTERS_SUM_ON = "Главы новее 4 дней скрыты"
-        private const val DELAY_CHAPTERS_SUM_OFF = "Показываются все главы"
-        private val SECRET_KEY_BYTES = SECRET_KEY.toByteArray()
-        private val BRANCH_MODE = arrayOf(
-            "Все ветки" to "all",
-            "Последняя версия главы" to "latest",
-            "Предпочитаемая ветка" to "preferred",
-        )
+        private const val IMAGE_HOST = "static.inuko.me"
+        private const val PAGE_SIZE = 40
+        private const val RELATED_SIZE = 20
+
+        // Server function ids: SHA-256 of the function's place in the site's code, the same for every inuko.me site
+        private const val FN_CATALOGUE = "5e920c6f2538a89f74b8cc297001d862340f690c4684e8ab6c14522960998b2e"
+        private const val FN_BOOK = "f1eb190aebb53f98ebd70df7ef5ec57105819b52503dba8d8943811d2bced2f2"
+        private const val FN_CHAPTERS = "1c9d8e028fe5eab8c867ee5fc39b0a75acc20270c6cecf479cfd582404e947bc"
+        private const val FN_CHAPTER = "c342d30c43b5931eec428542eb9d2bf68431a41a046ae931929f8f018d7f5505"
+
+        private val READING_RESTRICTIONS = listOf("NONE", "AUTHORIZED_ONLY", "LIBRARY_ONLY")
+        private val IMAGE_KEY = "UySkp0BzPhwlvP2V".toByteArray()
+
+        private const val PREF_DEDUPE = "inkstory_one_per_chapter"
+        private const val PREF_PREFERRED_GROUPS = "inkstory_preferred_groups"
+        private const val PREF_BLOCKED_GROUPS = "inkstory_blocked_groups"
+        private const val PREF_DELAY = "delay_chapters"
+        private const val PREF_TITLE_LANGUAGE = "inkstory_title_language"
+        private const val PREF_LEGACY_BRANCH_MODE = "inkstory_chapter_branch_mode"
+        private const val PREF_LEGACY_BRANCH_QUERY = "inkstory_preferred_branch_query"
     }
 }

@@ -66,10 +66,9 @@ abstract class HentaiNexus :
         val manga = SManga.create().apply {
             title = document.selectFirst("h1.title")!!.text()
 
-            val artists = table.select("td.viewcolumn:contains(Artist) + td a").map { it.ownText() }
-            val authors = table.select("td.viewcolumn:contains(Author) + td a").map { it.ownText() }
-            author = (authors + artists).distinct().joinToString().takeIf { it.isNotEmpty() }
-            artist = null
+            artist = table.select("td.viewcolumn:contains(Artist) + td a").joinToString { it.ownText() }
+            val circle = table.select("td.viewcolumn:contains(Circle) + td a").joinToString { it.ownText() }
+            author = table.select("td.viewcolumn:contains(Author) + td a").joinToString { it.ownText() }.ifEmpty { circle }.ifEmpty { artist }
 
             description = buildString {
                 listOf("Circle", "Event", "Magazine", "Parody", "Publisher", "Pages", "Favorites").forEach { key ->
@@ -206,7 +205,6 @@ abstract class HentaiNexus :
             """
             Separate items with commas (,)
             Prepend with dash (-) to exclude
-            For items with multiple words, surround them with double quotes (")
             """.trimIndent(),
         ),
         TagFilter(),

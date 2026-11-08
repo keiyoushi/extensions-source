@@ -6,12 +6,17 @@ plugins {
 
 keiyoushi {
     name = "Manga.uno"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
         lang = "en"
         baseUrl = "https://manga.uno"
+    }
+
+    deeplink {
+        path("/m/..*")
+        path("/r/..*")
     }
 }

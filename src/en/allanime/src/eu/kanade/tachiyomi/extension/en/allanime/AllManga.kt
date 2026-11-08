@@ -271,7 +271,7 @@ abstract class AllManga :
                         Response.prototype.json = function() {
                             return originalJson.call(this).then(data => {
                                 if (data && data.chapterPages) {
-                                    window.$interfaceName.post(JSON.stringify(data));
+                                    window.$interfaceName.postMessage(JSON.stringify(data));
                                 }
                                 return data;
                             });
@@ -282,7 +282,7 @@ abstract class AllManga :
                             apply(target, thisArg, args) {
                                 const result = Reflect.apply(target, thisArg, args);
                                 if (result && result.chapterPages) {
-                                    window.$interfaceName.post(args[0]);
+                                    window.$interfaceName.postMessage(String(args[0]));
                                 }
                                 return result;
                             }
@@ -343,7 +343,7 @@ abstract class AllManga :
                 })();
             """.trimIndent()
 
-            jsBridge(interfaceName) {
+            webMessageBridge(interfaceName, setOf(baseUrl)) {
                 wvChapterUrl = null
                 resolve(it)
             }

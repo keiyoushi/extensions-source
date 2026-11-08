@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 class DataWrapper<T>(
+    val code: Int,
     val data: T,
 )
 
