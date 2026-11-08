@@ -10,6 +10,10 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
+import keiyoushi.utils.textOrNull
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
@@ -19,14 +23,11 @@ import org.jsoup.nodes.Element
 abstract class MangaCatalog : KeiSource() {
 
     open val sourceList = listOf(
-        Pair(name, baseUrl),
+        name to baseUrl,
     ).sortedBy { it.first }.distinctBy { it.second }
-
-    // Info
 
     override val supportsLatest = false
 
-    // Popular
     override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(sourceList.map { popularMangaFromPair(it.first, it.second) }, false)
 
     private fun popularMangaFromPair(name: String, sourceurl: String): SManga = SManga.create().apply {
@@ -34,18 +35,25 @@ abstract class MangaCatalog : KeiSource() {
         url = sourceurl
     }
 
-    // Latest
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    // Search
-
+    // Romaji titles are only in the slugs
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val mangas = sourceList.filter {
-            it.first.contains(query, ignoreCase = true)
-        }.map {
-            popularMangaFromPair(it.first, it.second)
+        val slugQuery = query.trim().replace(' ', '-')
+        val mangas = sourceList.filter { (name, mangaUrl) ->
+            name.contains(query, ignoreCase = true) ||
+                mangaUrl.toHttpUrl().pathSegments.getOrNull(1)?.contains(slugQuery, ignoreCase = true) == true
+        }.map { (name, mangaUrl) ->
+            popularMangaFromPair(name, mangaUrl)
         }
         return MangasPage(mangas, false)
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val path = url.encodedPath.removeSuffix("/")
+        return sourceList.firstOrNull { it.second.toHttpUrl().encodedPath.removeSuffix("/") == path }
+            ?.let { (name, mangaUrl) -> popularMangaFromPair(name, mangaUrl) }
     }
 
     // Manga and chapter URLs are stored as absolute URLs
@@ -64,36 +72,27 @@ abstract class MangaCatalog : KeiSource() {
         return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document))
     }
 
-    // Details
-
     open fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        val info = document.select("div.bg-bg-secondary > div.px-6 > div.flex-col").text()
-        title = document.select("div.container > h1").text()
-        description = if ("Description" in info) info.substringAfter("Description").trim() else info
-        thumbnail_url = document.select("div.flex > img").attr("abs:src")
+        val info = document.selectFirst("div.bg-bg-secondary > div.px-6 > div.flex-col")?.textOrNull()
+        title = document.selectFirst("div.container > h1")!!.text()
+        description = info?.substringAfter("Description")?.trim()
+        thumbnail_url = document.selectFirst("div.flex > img")?.attrOrNull("abs:src")
     }
-
-    // Chapters
 
     open fun chapterListSelector(): String = "div.w-full > div.bg-bg-secondary > div.grid"
 
     open fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val name1 = element.select(".col-span-4 > a").text()
-        val name2 = element.select(".text-xs:not(a)").text()
-        name = if (name2.isEmpty()) {
-            name1
-        } else {
-            "$name1 - $name2"
-        }
-        url = element.select(".col-span-4 > a").attr("abs:href")
+        val link = element.selectFirst(".col-span-4 > a")!!
+        val subtitle = element.selectFirst(".text-xs:not(a)")?.textOrNull()
+        name = listOfNotNull(link.text(), subtitle).joinToString(" - ")
+        url = link.absUrl("href")
     }
 
     private fun chapterListParse(document: Document): List<SChapter> = document.select(chapterListSelector()).map { chapterFromElement(it) }
 
-    // Pages
-
     override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup())
 
-    open fun pageListParse(document: Document): List<Page> = document.select("img[data-src]")
-        .mapIndexed { index, img -> Page(index, imageUrl = img.attr("abs:data-src")) }
+    // First page in src, the lazy-loaded rest in data-src
+    open fun pageListParse(document: Document): List<Page> = document.select("img.js-page:not(noscript img), img.pages__img")
+        .mapIndexed { index, img -> Page(index, imageUrl = img.attrOrNull("abs:data-src") ?: img.absUrl("src")) }
 }
