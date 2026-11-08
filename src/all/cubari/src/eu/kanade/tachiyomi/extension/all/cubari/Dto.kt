@@ -63,7 +63,7 @@ private fun createManga(
     this.title = title
     this.artist = artist ?: Cubari.ARTIST_FALLBACK
     this.author = author ?: Cubari.AUTHOR_FALLBACK
-    this.description = description?.substringBefore("Tags: ") ?: Cubari.DESCRIPTION_FALLBACK
+    this.description = description?.substringBefore("Tags: ")?.replace(STATUS_REGEX, "")?.trim() ?: Cubari.DESCRIPTION_FALLBACK
     genre = description?.let {
         if (it.contains("Tags: ")) {
             it.substringAfter("Tags: ")
@@ -77,15 +77,11 @@ private fun createManga(
 }
 
 // Some series write their status in the description, on a "Status: " line like the "Tags: " one
-private fun parseStatus(description: String): Int {
-    val status = STATUS_REGEX.find(description)?.groupValues?.get(1)?.lowercase() ?: return SManga.UNKNOWN
-    return when {
-        "ongoing" in status -> SManga.ONGOING
-        "complete" in status || "finished" in status -> SManga.COMPLETED
-        "hiatus" in status -> SManga.ON_HIATUS
-        "cancel" in status || "dropped" in status -> SManga.CANCELLED
-        else -> SManga.UNKNOWN
-    }
+private fun parseStatus(description: String): Int = when (STATUS_REGEX.find(description)?.groupValues?.get(1)?.trim()?.lowercase()) {
+    "ongoing" -> SManga.ONGOING
+    "completed" -> SManga.COMPLETED
+    "cancelled" -> SManga.CANCELLED
+    else -> SManga.UNKNOWN
 }
 
 private val STATUS_REGEX = Regex("""^Status: *(.+)$""", RegexOption.MULTILINE)
