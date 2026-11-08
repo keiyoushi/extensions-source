@@ -40,9 +40,8 @@ internal class SitePages(baseUrl: String, private val client: OkHttpClient, priv
         val result = try {
             runWebView<String>(timeout = TIMEOUT) {
                 userAgent = this@SitePages.userAgent()
-                // The site refuses WebView's X-Requested-With, which the requests left to the WebView carry. Only its check
-                // needs those, so an older WebView without the header still reads the pages until a check shows up
-                val requestedWithReplaced = setOriginMatchedHeader("X-Requested-With", "XMLHttpRequest", setOf("https://$host"), required = false)
+                // The site refuses WebView's X-Requested-With, which the requests left to the WebView carry; only its check needs them
+                if (originMatchedHeaderSupported) setOriginMatchedHeader("X-Requested-With", "XMLHttpRequest", setOf("https://$host"))
                 interceptRequest { request ->
                     val requestHost = request.url.host
                     val path = request.url.path.orEmpty()
@@ -73,7 +72,7 @@ internal class SitePages(baseUrl: String, private val client: OkHttpClient, priv
                                 val seenAt = challengeSeenAt ?: TimeSource.Monotonic.markNow().also { challengeSeenAt = it }
                                 if (recentlyFailed || seenAt.elapsedNow() > CHALLENGE_WAIT) {
                                     failedAt = TimeSource.Monotonic.markNow()
-                                    reject(IOException(if (requestedWithReplaced) SOLVE_MANUALLY else UPDATE_WEBVIEW))
+                                    reject(IOException(if (originMatchedHeaderSupported) SOLVE_MANUALLY else UPDATE_WEBVIEW))
                                 }
                             }
                             page.status != null -> reject(IOException("HTTP error ${page.status}"))
