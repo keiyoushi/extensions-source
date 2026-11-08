@@ -253,7 +253,7 @@ abstract class Kemono :
         val zone = zone(service)
         if (segments.size == 3) {
             if (fetchDetails) manga.thumbnail_url = "$imgCdnUrl/icons/$service/$user"
-            return SMangaUpdate(manga, if (fetchChapters) fetchChapterList(manga, zone, chapters, fetchDetails) else chapters)
+            return SMangaUpdate(manga, if (fetchChapters) fetchChapterList(manga, zone, chapters) else chapters)
         }
         return coroutineScope {
             val creator = if (fetchDetails) async { fetchCreator(service, user) } else null
@@ -276,12 +276,12 @@ abstract class Kemono :
         else -> ZoneOffset.UTC
     }
 
-    private suspend fun fetchChapterList(manga: SManga, zone: ZoneId, chapters: List<SChapter>, fullLoad: Boolean): List<SChapter> {
+    private suspend fun fetchChapterList(manga: SManga, zone: ZoneId, chapters: List<SChapter>): List<SChapter> {
         val pages = preferences.getString(POST_PAGES_PREF, POST_PAGES_DEFAULT)!!.toInt().coerceAtMost(POST_PAGES_MAX)
         val fetchedPages = manga.memo.getIntOrNull(FETCHED_PAGES_MEMO) ?: 0
-        // Library updates load the posts newer than the newest known one; a manual refresh reloads the setting's pages,
-        // since kemono lists imported posts under their original date
-        val newOnly = !fullLoad && fetchedPages >= pages && chapters.isNotEmpty()
+        // Once the setting's pages are loaded, only the posts newer than the newest known one are; changing the setting
+        // reloads its pages, which also picks up imported posts kemono lists under their original date
+        val newOnly = fetchedPages == pages && chapters.isNotEmpty()
         val known = chapters.mapTo(HashSet()) { it.url }
         var offset = 0
         var hasNextPage = true
