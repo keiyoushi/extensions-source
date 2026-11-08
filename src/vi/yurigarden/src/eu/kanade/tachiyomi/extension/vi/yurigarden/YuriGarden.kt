@@ -159,10 +159,10 @@ abstract class YuriGarden :
             .joinToString("")
         val readAuthTokenScript = javaClass.getResource("/assets/read_auth_token.js")?.readText()
             ?: throw IllegalStateException("read_auth_token.js not found in assets")
-        val script = readAuthTokenScript.replace("__AUTH_BRIDGE_NAME__", bridgeName)
+        val script = "($readAuthTokenScript)(window.$bridgeName)"
 
         return runWebView(timeout = 10.seconds) {
-            jsBridge(bridgeName) { value ->
+            webMessageBridge(bridgeName, setOf(baseUrl)) { value ->
                 if (staleToken == null) {
                     resolve(value.ifBlank { null })
                 } else if (value.isNotBlank() && value != staleToken) {

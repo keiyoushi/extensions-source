@@ -71,7 +71,7 @@ internal object BrowserHeadersInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val original = chain.request()
         val call = original.tag(BrowserCall::class.java) ?: return chain.proceed(original)
-        val http2 = chain.connection()?.protocol() == Protocol.HTTP_2
+        val http2 = (chain.connection()?.protocol() ?: original.tag(TransportProtocol::class.java)?.protocol) == Protocol.HTTP_2
         val response = chain.proceed(call.hop(original).inWireOrder(http2))
         return response.newBuilder()
             // The cache keeps the request as the source built it

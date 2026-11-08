@@ -13,6 +13,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.array
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import kotlinx.serialization.json.JsonArray
@@ -35,11 +36,11 @@ abstract class Cubari : KeiSource() {
     // History and pins only exist in the site's remoteStorage cache, reachable through its own JS
     private suspend fun fetchHistory(): List<HistoryEntryDto> = runWebView<String>(10.seconds) {
         userAgent = headers["User-Agent"]!!
-        jsBridge("android") { resolve(it) }
+        webMessageBridge("android", setOf(baseUrl)) { resolve(it) }
         onPageFinished {
             evaluateJs(
                 "Promise.all([globalHistoryHandler.getAllPinnedSeries(), globalHistoryHandler.getAllUnpinnedSeries()])" +
-                    ".then(e => android.post(JSON.stringify(e.flat())))",
+                    ".then(e => android.postMessage(JSON.stringify(e.flat())))",
             )
         }
         loadUrl("$baseUrl/")
@@ -72,31 +73,14 @@ abstract class Cubari : KeiSource() {
         chapter.url.contains("/chapter/") -> {
             client.get("$baseUrl${chapter.url}", Fetch.XHR)
                 .parseAs<JsonArray>()
-                .mapIndexed { i, jsonEl -> Page(i, "", jsonEl.pageSrc()) }
+                .mapIndexed { i, jsonEl -> Page(i, imageUrl = jsonEl.pageSrc()) }
         }
 
         else -> {
-            val series = client.get(seriesApiUrl(chapter.url), Fetch.XHR).parseAs<SeriesDto>()
-            seriesJsonPageListParse(series, chapter)
-        }
-    }
-
-    private fun seriesJsonPageListParse(series: SeriesDto, chapter: SChapter): List<Page> {
-        val groupMap = series.groups.entries.associateBy({ it.value.ifEmpty { "default" } }, { it.key })
-        val chapterScanlator = chapter.scanlator ?: "default" // workaround for "" as group causing NullPointerException (#13772)
-
-        // prevent NullPointerException when chapters.key is 084 and chapter.chapter_number is 84
-        val chapters = series.chapters.mapKeys {
-            it.key.replace(Regex("^0+(?!$)"), "")
-        }
-
-        val chapterDto = chapters[chapter.chapter_number.toString()]
-            ?: chapters[chapter.chapter_number.toInt().toString()]!!
-
-        val pages = chapterDto.groups[groupMap[chapterScanlator]]!! as JsonArray
-
-        return pages.mapIndexed { i, jsonEl ->
-            Page(i, "", jsonEl.pageSrc())
+            val (chapterKey, groupKey) = chapter.url.split("/").takeLast(2)
+            client.get(seriesApiUrl(chapter.url), Fetch.XHR).parseAs<SeriesDto>()
+                .chapters[chapterKey]!!.groups[groupKey]!!.array
+                .mapIndexed { i, jsonEl -> Page(i, imageUrl = jsonEl.pageSrc()) }
         }
     }
 
@@ -117,9 +101,9 @@ abstract class Cubari : KeiSource() {
     // history-ready fires after our listener is attached.
     private suspend fun tagHistory(source: String, slug: String) = runWebView<Unit>(10.seconds) {
         userAgent = headers["User-Agent"]!!
-        jsBridge("android") { resolve(Unit) }
+        webMessageBridge("android", setOf(baseUrl)) { resolve(Unit) }
         onPageFinished {
-            evaluateJs("window.addEventListener('history-ready', () => android.post(''), { once: true }); tag();")
+            evaluateJs("window.addEventListener('history-ready', () => android.postMessage(''), { once: true }); tag();")
         }
         loadUrl("$baseUrl/read/$source/$slug/")
     }
@@ -201,7 +185,7 @@ abstract class Cubari : KeiSource() {
                 val releaseDate = chapterObj.releaseDate?.get(groupNum)
 
                 SChapter.create().apply {
-                    scanlator = series.groups[groupNum]!!
+                    scanlator = series.groups[groupNum]?.ifEmpty { null }
                     chapter_number = chapterNum.toFloatOrNull() ?: -1f
 
                     date_upload = if (releaseDate != null) {
@@ -245,9 +229,6 @@ abstract class Cubari : KeiSource() {
     }
 
     companion object {
-        const val AUTHOR_FALLBACK = "Unknown"
-        const val ARTIST_FALLBACK = "Unknown"
-        const val DESCRIPTION_FALLBACK = "No description."
         const val SEARCH_FALLBACK_MSG = "Please enter a valid Cubari URL"
 
         enum class SortType {

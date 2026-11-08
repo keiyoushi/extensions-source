@@ -34,6 +34,7 @@ internal class DetailResponse(val data: ComicDto)
 internal class ComicDto(
     private val slug: String,
     private val title: String,
+    private val type: String? = null,
     private val coverThumbUrl: String? = null,
     private val coverUrl: String? = null,
     private val description: String? = null,
@@ -68,7 +69,9 @@ internal class ComicDto(
                 altTitles.forEach { append("- $it\n") }
             }
         }.trim().ifEmpty { null }
-        genre = genres?.joinToString { it.name }
+        genre = (listOfNotNull(type?.lowercase()) + genres.orEmpty().map { it.name })
+            .joinToString { it.toTitleCase() }
+            .ifEmpty { null }
         status = parseStatus(seriesStatus)
     }
 
@@ -85,6 +88,12 @@ internal class ComicDto(
 
 @Serializable
 internal class GenreDto(val name: String)
+
+@Serializable
+internal class GenresResponse(val data: List<GenreOptionDto>)
+
+@Serializable
+internal class GenreOptionDto(val slug: String, val name: String)
 
 @Serializable
 internal class ChapterDto(
@@ -117,3 +126,5 @@ internal class ContentDto(private val pages: List<PageDto>) {
 
 @Serializable
 internal class PageDto(val index: Int, val url: String)
+
+internal fun String.toTitleCase() = split(" ").joinToString(" ") { it.replaceFirstChar(Char::uppercase) }

@@ -251,7 +251,7 @@ abstract class Comikey :
                     javaScriptEnabled = true
                     domStorageEnabled = true
 
-                    jsBridge(interfaceName) { message ->
+                    webMessageBridge(interfaceName, setOf(baseUrl)) { message ->
                         resolve(message.parseAs<Payload>())
                     }
 
@@ -377,14 +377,14 @@ abstract class Comikey :
     private fun webviewScript(interfaceName: String, intl: Intl) = """
         document.addEventListener("DOMContentLoaded", (e) => {
             if (document.querySelector("#unlock-full")) {
-                $interfaceName.post(JSON.stringify({error: "${intl["error_locked_chapter_unlock_in_webview"]}"}));
+                $interfaceName.postMessage(JSON.stringify({error: "${intl["error_locked_chapter_unlock_in_webview"]}"}));
             }
         });
 
         document.addEventListener(
             "you-right-now:reeeeeee",
             async (e) => {
-                const postError = (error) => $interfaceName.post(JSON.stringify({ error }));
+                const postError = (error) => $interfaceName.postMessage(JSON.stringify({ error }));
                 try {
                     const db = await new Promise((resolve, reject) => {
                         const request = indexedDB.open("firebase-app-check-database");
@@ -414,7 +414,7 @@ abstract class Comikey :
                     });
 
                     const manifest = JSON.parse(document.querySelector("#lmao-init").textContent).manifest;
-                    $interfaceName.post(JSON.stringify({
+                    $interfaceName.postMessage(JSON.stringify({
                         manifestUrl: manifest,
                         act,
                         manifest: JSON.parse(await e.detail)

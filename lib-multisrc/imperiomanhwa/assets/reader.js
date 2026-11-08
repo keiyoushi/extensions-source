@@ -1,33 +1,15 @@
-// Open the chapter's sealed pages with the site's own reader module
+// Unwrap the chapter's reader key with the site's openReader, the export that derives the rk|/ks| keys
 async (input) => {
-    let challenge = null;
-    window.turnstile = {
-        render: (el, options) => {
-            if (input.token) {
-                setTimeout(() => options.callback(input.token));
-            } else {
-                challenge = { sitekey: options.sitekey, action: options.action, cdata: options.cData };
-                setTimeout(() => options["error-callback"]());
-            }
-            return "shim";
-        },
-        remove: () => {},
-    };
-
     const entry = await import(input.entry);
-    const reader = Object.values(entry).find(
-        (it) => it && typeof it.openReader === "function" && typeof it.fetchManifest === "function",
-    );
-    if (!reader) throw new Error("Reader module not found");
-
-    const opened = reader.openReader(input.reader, input.chapterId);
-    if (!opened) throw new Error("Reader sealed");
-    let pages;
-    try {
-        pages = await reader.fetchManifest(opened, input.chapterId, input.seriesSlug, opened.q);
-    } catch (e) {
-        if (challenge) Object.assign(e, challenge);
-        throw e;
-    }
-    return pages.map((page) => ({ n: page.n, src: page.src, srcset: page.srcset }));
+    const openReader = Object.values(entry)
+        .flatMap((value) => (value && typeof value === 'object' ? Object.values(value) : [value]))
+        .find((fn) => {
+            if (typeof fn !== 'function') return false;
+            const source = Function.prototype.toString.call(fn);
+            return source.includes('rk|') && source.includes('ks|');
+        });
+    if (!openReader) throw new Error('Reader module not found');
+    const opened = openReader(input.reader, input.chapterId);
+    if (!opened) throw new Error('Reader sealed');
+    return { ep: opened.ep, p: opened.p, v: opened.v, k: opened.k, q: opened.q };
 }

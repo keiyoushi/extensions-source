@@ -15,6 +15,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.lib.cronet.cronet
+import keiyoushi.lib.cronet.isCronet
 import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
 import keiyoushi.network.get
@@ -64,6 +66,7 @@ abstract class CatharsisWorld : KeiSource() {
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::pageInterceptor)
         .rateLimit(24, 1.minutes, 2.seconds) { it.encodedPath.endsWith("/page-ticket") }
         .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+        .cronet()
 
     override suspend fun getPopularManga(page: Int) = searchMangas(page, "", "-n_visitas", null, null, emptyList())
 
@@ -386,7 +389,7 @@ abstract class CatharsisWorld : KeiSource() {
         }
         val code = response.apiError()?.code
         if (code == "READER_PASS_REQUIRED") return null
-        throw siteError(response.code, code)
+        throw response.siteError(code)
     }
 
     // Null when the site rejects the session token: expired, or issued to another IP
@@ -447,7 +450,7 @@ abstract class CatharsisWorld : KeiSource() {
             ReaderPassRequest(capToken, system.capSitekey).toJsonRequestBody(),
             ensureSuccess = false,
         )
-        if (!response.isSuccessful) throw siteError(response.code, response.apiError()?.code)
+        if (!response.isSuccessful) throw response.siteError(response.apiError()?.code)
         return response.parseAs<ReaderPassDto>().also { currentReaderPass = it }
     }
 
@@ -475,11 +478,16 @@ abstract class CatharsisWorld : KeiSource() {
         return parseAs<ApiErrorDto>()
     }
 
-    // Error codes the site's reader shows a message for
-    private fun siteError(status: Int, code: String?): Exception = when (code) {
+    // Site error codes with a message for the user
+    private fun Response.siteError(apiCode: String?): Exception = when (apiCode) {
+        "CLIENT_NOT_ALLOWED" -> if (isCronet) {
+            Exception("The site refused the app's connection")
+        } else {
+            Exception("Unsupported device")
+        }
         "DATACENTER_BLOCKED" -> Exception("The site doesn't allow reading through a VPN or proxy")
         "EARLY_ACCESS" -> Exception("This chapter is still in early access on the site")
-        else -> HttpException(status)
+        else -> HttpException(code)
     }
 
     private class Login(val token: String, val expiresAt: Instant)

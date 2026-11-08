@@ -6,12 +6,14 @@ plugins {
 
 keiyoushi {
     name = "Yaoi Manga Online"
-    versionCode = 1
+    versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
-    source {
-        lang = "all"
-        baseUrl = "https://yaoimangaonline.com"
+    listOf("all", "en", "ja", "zh", "ko", "es").forEach { language ->
+        source {
+            lang = language
+            baseUrl = "https://yaoimangaonline.com"
+        }
     }
 }

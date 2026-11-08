@@ -127,7 +127,7 @@ internal class InkrAuth(
     private suspend fun readAuthUser(): StoredAuthUser? = runCatching {
         runWebView<StoredAuthUser?>(timeout = 15.seconds) {
             domStorageEnabled = true
-            jsBridge(BRIDGE_NAME) { message ->
+            webMessageBridge(BRIDGE_NAME, setOf(baseUrl())) { message ->
                 resolve(
                     message.takeUnless { it.isEmpty() }
                         ?.let { runCatching { it.parseAs<StoredAuthUser>() }.getOrNull() },
@@ -177,10 +177,10 @@ internal class InkrAuth(
             (async () => {
               const post = (key, value) => {
                 if (value == null) {
-                  window.$BRIDGE_NAME.post("");
+                  window.$BRIDGE_NAME.postMessage("");
                   return;
                 }
-                window.$BRIDGE_NAME.post(JSON.stringify({ key: key || "", value: String(value) }));
+                window.$BRIDGE_NAME.postMessage(JSON.stringify({ key: key || "", value: String(value) }));
               };
               const unwrap = (entry) => {
                 if (entry == null) return null;

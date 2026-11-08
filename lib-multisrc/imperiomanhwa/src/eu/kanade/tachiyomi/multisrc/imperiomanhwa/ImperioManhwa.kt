@@ -1,9 +1,11 @@
 package eu.kanade.tachiyomi.multisrc.imperiomanhwa
 
+import android.util.Base64
 import android.webkit.WebResourceResponse
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -17,18 +19,26 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.decodeHex
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.getTurnstileToken
+import keiyoushi.utils.int
+import keiyoushi.utils.intOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
+import keiyoushi.utils.string
 import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
+import keiyoushi.utils.xor
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -159,18 +169,19 @@ abstract class ImperioManhwa :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
+        val chapterUrl = getChapterUrl(chapter)
+        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
         val page = document.inertiaPage<JsonElement>()
         if (page.component == "Reader/Locked") return emptyList()
 
         val props = page.props.parseAs<ReaderProps>()
-        // Inline first page, then the sealed rest from the site's reader
+        // Inline first page, then the sealed rest from the manifest
         val pages = if (props.dims.isEmpty()) {
             props.pages
         } else {
             val entry = document.selectFirst("script[type=module][src*=/build/assets/]")!!.absUrl("src")
-            val input = ReaderInput(entry, props.reader, props.chapter.id, props.series.slug)
-            val sealed = openReader(input, getChapterUrl(chapter)).associateBy { it.n }
+            val reader = openReader(ReaderInput(entry, props.reader, props.chapter.id))
+            val sealed = fetchManifest(reader, props.chapter.id, props.series.slug, chapterUrl).associateBy { it.n }
             val inline = props.pages.size
             props.pages + (inline + 1..inline + props.dims.size).map { sealed[it] ?: throw IOException("Page $it missing") }
         }
@@ -185,23 +196,11 @@ abstract class ImperioManhwa :
     // One reader WebView at a time
     private val readerMutex = Mutex()
 
-    // A manifest can answer 428 with a Turnstile sitekey. Cloudflare's script is blocked in the reader, so
-    // reader.js shims window.turnstile to hand the sitekey back, then the solved token on a second run
-    private suspend fun openReader(input: ReaderInput, chapterUrl: String): List<PageDto> {
-        val first = runReader(input)
-        val result = first.sitekey?.let { sitekey ->
-            input.token = getTurnstileToken(chapterUrl, sitekey, action = first.action, cData = first.cdata)
-            runReader(input)
-        } ?: first
-        result.error?.let { throw IOException(it) }
-        return result.pages!!
-    }
-
-    private suspend fun runReader(input: ReaderInput): ReaderResult = readerMutex.withLock {
+    private suspend fun openReader(input: ReaderInput): OpenedReader = readerMutex.withLock {
         val bridge = "r" + Random.nextLong().toULong().toString(36)
         val script = "(${asset("reader.js")})(${input.toJsonString()})" +
-            ".then((pages) => $bridge.postMessage(JSON.stringify({ pages })), (e) => $bridge.postMessage(JSON.stringify({ error: String(e), sitekey: e?.sitekey, action: e?.action, cdata: e?.cdata })))"
-        try {
+            ".then((reader) => $bridge.postMessage(JSON.stringify({ reader })), (e) => $bridge.postMessage(JSON.stringify({ error: String(e) })))"
+        val result = try {
             runWebView<ReaderResult> {
                 blockImages = true
                 interceptRequest { request ->
@@ -217,6 +216,45 @@ abstract class ImperioManhwa :
         } catch (e: Throwable) {
             throw IOException(e.message, e)
         }
+        result.reader ?: throw IOException(result.error)
+    }
+
+    // p: the query names for the series slug, the Turnstile token and q
+    private suspend fun fetchManifest(reader: OpenedReader, chapterId: Int, seriesSlug: String, chapterUrl: String): List<PageDto> {
+        val url = baseHttpUrl.newBuilder()
+            .addPathSegments(reader.ep)
+            .addPathSegment(chapterId.toString())
+            .addQueryParameter(reader.p[0], seriesSlug)
+            .addQueryParameter(reader.p[2], reader.q)
+            .build()
+        val fetch = Fetch.XHR.from(chapterUrl)
+        var response = client.get(url, fetch, ensureSuccess = false)
+        if (response.code == 428) {
+            val challenge = response.parseAs<ManifestChallengeDto>()
+            val token = getTurnstileToken(chapterUrl, challenge.sitekey, action = challenge.action, cData = challenge.cdata)
+            response = client.get(url.newBuilder().addQueryParameter(reader.p[1], token).build(), fetch)
+        } else if (!response.isSuccessful) {
+            response.close()
+            throw HttpException(response.code)
+        }
+
+        // Envelope by v / 3, page encoding by v % 3
+        val body = response.parseAs<JsonElement>()
+        val manifest = when {
+            reader.v / 3 == 1 && body is JsonArray -> ManifestDto(body[0].int, body[2].string)
+            reader.v / 3 == 2 && body is JsonObject -> body["r"]!!.parseAs<ManifestDto>()
+            else -> body.parseAs<ManifestDto>()
+        }
+        if (manifest.c != chapterId) throw IOException("Manifest for another chapter")
+        val pages = when (reader.v % 3) {
+            0 -> manifest.d
+            1 -> Base64.decode(manifest.d, Base64.URL_SAFE).decodeToString()
+            else -> Base64.decode(manifest.d, Base64.URL_SAFE).xor(reader.k.decodeHex()).decodeToString()
+        }
+        // Rows without a page number are skipped, as on the site
+        return pages.parseAs<List<JsonElement>>()
+            .filter { ((it as? JsonObject)?.get("n") as? JsonPrimitive)?.intOrNull != null }
+            .map { it.parseAs<PageDto>() }
     }
 
     private fun asset(name: String) = javaClass.getResource("/assets/$name")!!.readText()

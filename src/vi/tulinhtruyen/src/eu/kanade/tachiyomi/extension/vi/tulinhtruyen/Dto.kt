@@ -8,10 +8,10 @@ import kotlin.time.Instant
 
 @Serializable
 class MangaListResponse(
-    val data: List<MangaDto> = emptyList(),
-    val total: Int = 0,
-    val offset: Int = 0,
-    val limit: Int = 20,
+    val data: List<MangaDto>,
+    val total: Int,
+    val offset: Int,
+    val limit: Int,
 )
 
 @Serializable
@@ -20,10 +20,15 @@ class MangaDetailResponse(
 )
 
 @Serializable
+class TagListResponse(
+    val data: List<TagDto>,
+)
+
+@Serializable
 class MangaDto(
     private val id: String,
     private val attributes: MangaAttributes,
-    val relationships: List<RelationshipDto> = emptyList(),
+    private val relationships: List<RelationshipDto> = emptyList(),
 ) {
     fun toSManga(apiUrl: String): SManga = SManga.create().apply {
         url = "/manga/$id"
@@ -49,7 +54,8 @@ class MangaDto(
         thumbnail_url = coverFileName(apiUrl, id)
         genre = attributes.tags.mapNotNull { it.attributes.name["en"] ?: it.attributes.name["vi"] }
             .joinToString()
-        author = relationships.authorNames()
+        author = relationships.names("author")
+        artist = relationships.names("artist")
         status = when (attributes.status) {
             "ongoing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
@@ -74,7 +80,7 @@ class MangaDto(
 
 @Serializable
 class MangaAttributes(
-    val title: Map<String, String> = emptyMap(),
+    val title: Map<String, String>,
     val altTitles: List<Map<String, String>> = emptyList(),
     val description: Map<String, String>? = null,
     val status: String? = null,
@@ -88,7 +94,8 @@ class TagDto(
 
 @Serializable
 class TagAttributes(
-    val name: Map<String, String> = emptyMap(),
+    val name: Map<String, String>,
+    val group: String? = null,
 )
 
 @Serializable
@@ -107,7 +114,7 @@ class RelationshipAttributes(
 
 private fun Map<String, String>.preferred(): String = this["vi"] ?: this["en"] ?: values.firstOrNull() ?: ""
 
-private fun List<RelationshipDto>.authorNames(): String? = filter { it.type == "author" }
+private fun List<RelationshipDto>.names(type: String): String? = filter { it.type == type }
     .mapNotNull { it.attributes?.name }
     .distinct()
     .joinToString()
@@ -115,7 +122,7 @@ private fun List<RelationshipDto>.authorNames(): String? = filter { it.type == "
 
 @Serializable
 class ChapterListResponse(
-    val data: List<ChapterDto> = emptyList(),
+    val data: List<ChapterDto>,
 )
 
 @Serializable
@@ -173,5 +180,5 @@ class AtHomeResponse(
 @Serializable
 class AtHomeChapter(
     val hash: String,
-    val data: List<String> = emptyList(),
+    val data: List<String>,
 )

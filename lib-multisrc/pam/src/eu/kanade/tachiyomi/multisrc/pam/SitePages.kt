@@ -47,6 +47,7 @@ internal class SitePages(
     private val userAgent: () -> String,
 ) {
     private val baseHttpUrl = baseUrl.toHttpUrl()
+    private val siteOrigins = setOf("${baseHttpUrl.scheme}://${baseHttpUrl.host}")
 
     private val mutex = Mutex()
 
@@ -115,17 +116,17 @@ internal class SitePages(
                     }
                     heldResponse(released)
                 }
-                jsBridge(bridge) { posted ->
+                webMessageBridge(bridge, siteOrigins) { posted ->
                     val message = posted.parseAs<SiteMessage>()
                     synchronized(lock) {
                         when {
                             message.reader != null -> readerResult = message.reader
                             message.error != null -> {
                                 if (message.status == 403 || message.status == 429) failed(challenge = false)
-                                return@jsBridge reject(IOException(message.error))
+                                return@webMessageBridge reject(IOException(message.error))
                             }
                             else -> {
-                                val page = message.page ?: return@jsBridge reject(IOException("Missing page data"))
+                                val page = message.page ?: return@webMessageBridge reject(IOException("Missing page data"))
                                 readerV2 = reader && page.parseAs<PageListResponse>().props.readerV2
                                 site = SitePage(page, message.fetched, message.chapters)
                             }
@@ -134,7 +135,7 @@ internal class SitePages(
                     }
                 }
                 if (readerScript != null) {
-                    injectAtDocumentStart(readerScript, setOf("${baseHttpUrl.scheme}://${baseHttpUrl.host}"))
+                    injectAtDocumentStart(readerScript, siteOrigins)
                 }
                 onReceivedError { webRequest, error ->
                     if (webRequest.isForMainFrame) reject(IOException(error.description.toString()))

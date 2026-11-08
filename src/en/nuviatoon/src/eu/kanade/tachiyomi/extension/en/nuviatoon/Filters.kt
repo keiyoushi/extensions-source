@@ -53,31 +53,10 @@ class RatingFilter :
     }
 }
 
-class GenreFilter :
+class GenreFilter(private val genres: List<Pair<String, String>>) :
     Filter.Select<String>(
         "Genre",
-        arrayOf(
-            "All",
-            "Action",
-            "Adventure",
-            "Comedy",
-            "Drama",
-            "Fantasy",
-            "Isekai",
-            "Mature",
-            "Mystery",
-            "Psychological",
-            "Historical",
-            "Josei",
-            "Revenge",
-            "Romance",
-            "Shoujo",
-            "Slice Of Life",
-        ),
+        arrayOf("All") + genres.map { it.first },
     ) {
-    fun toUriPart(): String? = if (state == 0) {
-        null
-    } else {
-        values[state].lowercase(Locale.ROOT).replace(" ", "-")
-    }
+    fun toUriPart(): String? = genres.getOrNull(state - 1)?.second
 }

@@ -16,6 +16,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getInt
+import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getString
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
@@ -26,9 +27,11 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.RequestBody
 import okhttp3.Response
 
 @Source
@@ -245,12 +248,21 @@ abstract class Webcomics : KeiSource() {
             put("index", chapter.memo.getInt("index"))
         }.toJsonRequestBody()
 
-        val dto = client.post("$apiUrl/chapter/detail", Fetch.XHR, body).parseAs<DataWrapper<ImageListDto>>().data
+        var result = chapterDetail(body, headers)
+        if (result.code == CODE_LOCKED) {
+            // The site keeps the login token in localStorage, not in a cookie, so it has to be sent by hand.
+            val token = getLocalStorage(baseUrl, "tk")
+            if (token != null) result = chapterDetail(body, headers.newBuilder().set("Token", token).build())
+            if (result.code != CODE_OK) throw Exception("Log in and unlock this chapter in WebView")
+        }
+        val dto = result.data
 
         return dto.images.mapIndexed { index, img ->
             Page(index, imageUrl = dto.base_url + img.url)
         }
     }
+
+    private suspend fun chapterDetail(body: RequestBody, headers: Headers) = client.post("$apiUrl/chapter/detail", headers, Fetch.XHR, body).parseAs<DataWrapper<ImageListDto>>()
 
     // ========================== Filters ==================================
 
@@ -349,5 +361,7 @@ abstract class Webcomics : KeiSource() {
         val PUNCTUATION_REGEX = "[\\p{Punct}]".toRegex()
 
         private const val UA_DB_URL = "https://keiyoushi.github.io/user-agents/user-agents.json"
+        private const val CODE_OK = 1000
+        private const val CODE_LOCKED = 1208
     }
 }

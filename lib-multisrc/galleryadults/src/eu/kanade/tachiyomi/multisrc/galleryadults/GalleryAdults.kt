@@ -204,10 +204,11 @@ abstract class GalleryAdults :
             supportSpeechless && speechlessFilter?.state == true ->
                 speechlessFilterSearchUrl(page, query, filters)
 
-            supportAdvancedSearch && advancedSearchFilters.any { it.state.isNotBlank() } ->
+            supportAdvancedSearch &&
+                (advancedSearchFilters.any { it.state.isNotBlank() } || (selectedGenres.isNotEmpty() && query.isBlank())) ->
                 advancedSearchUrl(page, query, filters)
 
-            selectedGenres.size == 1 && query.isBlank() ->
+            useBasicSearch && selectedGenres.size == 1 && query.isBlank() ->
                 tagBrowsingSearchUrl(page, query, filters)
 
             useIntermediateSearch ->
