@@ -161,7 +161,7 @@ abstract class Hentairead :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
-        val collectionsUrl = document.selectFirst("#mangaCollection a")?.absUrl("href")
+        val collection = document.selectFirst("div.collection-listing > div")
         val details = mangaDetailsParse(document).apply { url = manga.url }
 
         fun createChapter(chapNum: Float = -1f, chapUrl: String = "", chapTitle: String = ""): SChapter = SChapter.create().apply {
@@ -183,11 +183,10 @@ abstract class Hentairead :
 
         val allChapters = mutableListOf<SChapter>()
 
-        if (collectionsUrl.isNullOrBlank() || !showCollections()) {
+        if (collection == null || !showCollections()) {
             allChapters.add(createChapter())
         } else if (fetchChapters) {
-            val collectionsPage = client.get(collectionsUrl, Fetch.DOCUMENT).asJsoup()
-            for (element: Element in collectionsPage.select("div.manga-item__wrapper")) {
+            for (element: Element in collection.select("div.manga-item")) {
                 val chapNum = element.selectFirst("div.collection-badge")!!.text().toFloat()
                 val chapUrl = element.selectFirst("a.manga-item__link")!!.absUrl("href")
                 val chapTitle = element.selectFirst("a.manga-item__link")!!.text()
