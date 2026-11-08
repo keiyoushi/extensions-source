@@ -102,10 +102,8 @@ abstract class ZeistManga : KeiSource() {
 
     open fun searchMangaUrl(page: Int, query: String) = apiUrl()
 
-    // OR strategy
     protected open val includedCategories: List<String> get() = listOf("Series", "Manga", "Manhwa", "Manhua", "Doujinshi", "Web Novel (JP)", "Web Novel (KR)", "Web Novel (CN)")
 
-    // AND strategy
     protected open val excludedCategories: List<String> get() = listOf("Anime", "Novel", "Novela", chapterCategory)
 
     private fun HttpUrl.Builder.addCategoryLabels(query: String = "", filterList: FilterList? = null): HttpUrl.Builder = addQueryParameter(
