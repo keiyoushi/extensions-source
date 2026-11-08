@@ -199,4 +199,29 @@ class MarkdownTest {
             description,
         )
     }
+
+    @Test
+    fun `rating starts its own line`() {
+        val description = MarkdownDescription.Builder()
+            .info("2021")
+            .rating(8.0)
+            .info("Manhwa")
+            .field("A", "1")
+            .build()
+        assertEquals("2021\n\n★★★★☆ 8\nManhwa · **A:** 1", description)
+    }
+
+    @Test
+    fun `separators are dropped first, last and doubled`() {
+        val description = MarkdownDescription.Builder()
+            .separator()
+            .description("a")
+            .separator()
+            .separator()
+            .description("b")
+            .separator()
+            .build()
+        assertEquals("a\n\n---\n\nb", description)
+        assertNull(MarkdownDescription.Builder().separator().separator().build())
+    }
 }

@@ -1185,8 +1185,9 @@ val directText = element.ownTextOrNull() // excludes text of nested child elemen
 import keiyoushi.utils.MarkdownDescription
 
 description = MarkdownDescription.Builder()
-    .rating(score) // out of 10, or set `max`; optional `votes`
-    .info(year, type) // a run of rating, info and fields shares one line
+    .rating(score) // out of 10, or set `max`; optional `votes`. On its own line
+    .info(year, type) // a run of info and fields shares one line, right under the rating
+    .separator() // a horizontal rule, dropped when it would come first, last or doubled
     .description(document.selectFirst(".synopsis")) // HTML or plain text; `markdown()` for site Markdown
     .field("Publisher", publisher)
     .altTitles(altTitles)
