@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
-import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
@@ -22,11 +21,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.TextNode
-import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class BacaKomikPics : KeiSource() {
@@ -34,8 +31,6 @@ abstract class BacaKomikPics : KeiSource() {
 
     private val chapterDataRegex = Regex("""chapterData\s*=\s*(\[.*?]);""", RegexOption.DOT_MATCHES_ALL)
     private val chapterNumberRegex = Regex("""\d+(?:\.\d+)?""")
-
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3, 1.seconds)
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/komik-populer/", Fetch.DOCUMENT).asJsoup()
@@ -49,20 +44,32 @@ abstract class BacaKomikPics : KeiSource() {
         return MangasPage(mangas, false)
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = seriesList(page, null, null)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = seriesList(page, null, "modified", "desc", null)
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = seriesList(page, query.trim().ifEmpty { null }, filters.firstInstanceOrNull<GenreFilter>()?.genreId)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val sort = filters.firstInstanceOrNull<SortFilter>()
+        return seriesList(
+            page,
+            query.trim().ifEmpty { null },
+            sort?.orderBy ?: "relevance",
+            sort?.order ?: "desc",
+            filters.firstInstanceOrNull<GenreFilter>()?.genreId,
+        )
+    }
 
-    private suspend fun seriesList(page: Int, query: String?, genreId: String?): MangasPage {
+    private suspend fun seriesList(page: Int, query: String?, orderBy: String, order: String, genreId: String?): MangasPage {
         val url = "$apiUrl/komik_series".toHttpUrl().newBuilder()
             .addQueryParameter("per_page", "20")
             .addQueryParameter("page", page.toString())
             .addQueryParameter("_embed", "wp:featuredmedia")
             .apply {
-                if (query == null) {
+                query?.let { addQueryParameter("search", it) }
+                if (query == null && orderBy == "relevance") {
                     addQueryParameter("orderby", "modified")
+                    addQueryParameter("order", "desc")
                 } else {
-                    addQueryParameter("search", query)
+                    addQueryParameter("orderby", orderBy)
+                    addQueryParameter("order", order)
                 }
                 genreId?.let { addQueryParameter("genre", it) }
             }
@@ -78,7 +85,7 @@ abstract class BacaKomikPics : KeiSource() {
         if (url.pathSegments.firstOrNull() != "series") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
         val manga = SManga.create().apply { this.url = "/series/$slug/" }
-        return parseDetails(client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup(), manga)
+        return parseDetails(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup(), manga).apply { initialized = true }
     }
 
     override suspend fun fetchMangaUpdate(
@@ -87,7 +94,7 @@ abstract class BacaKomikPics : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(parseDetails(document, manga), parseChapters(document))
     }
 
@@ -132,7 +139,7 @@ abstract class BacaKomikPics : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(".viewer-komik img[data-wm]")
             .mapIndexed { index, img -> Page(index, imageUrl = img.absUrl("src")) }
     }
@@ -151,6 +158,6 @@ abstract class BacaKomikPics : KeiSource() {
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data?.jsonObject?.map { (id, name) -> name.string to id }.orEmpty()
-        return if (genres.isEmpty()) FilterList() else FilterList(GenreFilter(genres))
+        return FilterList(listOfNotNull(SortFilter(), genres.takeIf { it.isNotEmpty() }?.let { GenreFilter(it) }))
     }
 }
