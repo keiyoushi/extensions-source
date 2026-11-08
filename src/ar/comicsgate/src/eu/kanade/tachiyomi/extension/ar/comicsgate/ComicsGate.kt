@@ -21,7 +21,9 @@ abstract class ComicsGate : KeiSource() {
 
     override val supportsLatest = false
 
-    private val postsUrl get() = "$baseUrl/home/wp-json/wp/v2/posts".toHttpUrl()
+    private fun postsUrl() = "$baseUrl/home/wp-json/wp/v2/posts".toHttpUrl().newBuilder()
+        .addQueryParameter("categories", MAGAZINE_CATEGORY)
+        .addQueryParameter("_fields", POST_FIELDS)
 
     override suspend fun getPopularManga(page: Int) = getIssues(page, "")
 
@@ -30,21 +32,21 @@ abstract class ComicsGate : KeiSource() {
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = getIssues(page, query.trim())
 
     private suspend fun getIssues(page: Int, query: String): MangasPage {
-        val url = postsUrl.newBuilder()
-            .addQueryParameter("categories", MAGAZINE_CATEGORY)
+        val url = postsUrl()
             .addQueryParameter("per_page", "20")
             .addQueryParameter("page", page.toString())
             .apply { if (query.isNotEmpty()) addQueryParameter("search", query) }
-            .addQueryParameter("_fields", POST_FIELDS)
             .build()
         val response = client.get(url, Fetch.XHR)
         val totalPages = response.header("X-WP-TotalPages")!!.toInt()
-        return MangasPage(response.parseAs<List<Post>>().map { it.toSManga(baseUrl) }, page < totalPages)
+        return MangasPage(response.parseAs<List<Post>>().map { it.toSManga() }, page < totalPages)
     }
 
+    // Post urls: /home/<year>/<month>/<day>/<slug>/
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments[0] != "home") return null
-        return getPost(url.pathSegments.last { it.isNotEmpty() })?.toSManga(baseUrl)
+        if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host.removePrefix("www.") || url.pathSegments[0] != "home") return null
+        val slug = url.pathSegments.getOrNull(4)?.takeIf { it.isNotEmpty() } ?: return null
+        return getPost(slug)?.toSManga()
     }
 
     override suspend fun fetchMangaUpdate(
@@ -53,25 +55,22 @@ abstract class ComicsGate : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val post = getPost(manga.url.trimEnd('/').substringAfterLast('/'))!!
-        return SMangaUpdate(post.toSManga(baseUrl).apply { url = manga.url }, listOfNotNull(post.toSChapter()))
+        val post = getPost(getMangaUrl(manga).toHttpUrl().pathSegments[4])!!
+        return SMangaUpdate(post.toSManga().apply { url = manga.url }, listOf(post.toSChapter()))
     }
 
     private suspend fun getPost(slug: String): Post? {
-        val url = postsUrl.newBuilder()
-            .addQueryParameter("categories", MAGAZINE_CATEGORY)
-            .addQueryParameter("slug", slug)
-            .addQueryParameter("_fields", POST_FIELDS)
-            .build()
+        val url = postsUrl().addQueryParameter("slug", slug).build()
         return client.get(url, Fetch.XHR).parseAs<List<Post>>().firstOrNull()
     }
 
     // Each issue is read in an aXmag page-flip reader: setting.xml gives the page count, m/<n>.jpg are the full-size pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val readerUrl = getChapterUrl(chapter)
-        val pageCount = client.get("${readerUrl}setting.xml", Fetch.XHR.from(readerUrl)).asJsoup(Parser.xmlParser())
+        val readerUrl = getChapterUrl(chapter).toHttpUrl()
+        val pageCount = client.get(readerUrl.resolve("setting.xml")!!, Fetch.XHR.from(readerUrl.toString()))
+            .asJsoup(Parser.xmlParser())
             .selectFirst("pagecount")!!.text().toInt()
-        return (1..pageCount).map { Page(it - 1, imageUrl = "${readerUrl}m/$it.jpg") }
+        return (1..pageCount).map { Page(it - 1, imageUrl = readerUrl.resolve("m/$it.jpg")!!.toString()) }
     }
 
     companion object {

@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "ComicsGate"
-    versionCode = 1
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
@@ -16,6 +16,8 @@ keiyoushi {
     }
 
     deeplink {
+        host("www.comicsgate.net")
+        host("comicsgate.net")
         path("/home/..*")
     }
 }
