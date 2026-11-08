@@ -14,7 +14,7 @@ class THComic(
     val type: Int,
     val cover: String,
     val title: String,
-    val subtitle: String,
+    val subtitle: String? = null,
     val authors: List<String>,
     val keywords: List<String>? = null,
     val introduction: String? = null,
@@ -24,7 +24,7 @@ class THComic(
 ) {
     private fun getDescription(): String? {
         var result = ""
-        if (subtitle.isNotEmpty()) result += "「$subtitle」\n"
+        if (!subtitle.isNullOrEmpty()) result += "「$subtitle」\n"
         if (introduction != null) result += introduction
         return result.ifEmpty { null }
     }
