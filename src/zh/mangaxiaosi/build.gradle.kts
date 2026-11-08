@@ -20,4 +20,9 @@ keiyoushi {
             )
         }
     }
+
+    deeplink {
+        path("/book/..*")
+        path("/chapter/..*")
+    }
 }
