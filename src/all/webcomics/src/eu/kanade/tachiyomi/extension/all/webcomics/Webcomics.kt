@@ -20,12 +20,15 @@ import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getString
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -37,36 +40,21 @@ import okhttp3.Response
 @Source
 abstract class Webcomics : KeiSource() {
 
-    private val apiSubDomain = "official-website-api"
-    private val apiUrl = "https://$apiSubDomain.${baseUrl.substringAfterLast("/")}/api/web/v4/book"
+    private val apiUrl get() = "https://official-website-api.${baseUrl.toHttpUrl().host}/api/web/v4/book"
 
-    override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor { chain ->
-            val request = chain.request()
-            val ua = runBlocking(Dispatchers.IO) {
-                getDesktopUA()
-            }
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3) { !it.host.endsWith(IMAGE_DOMAIN) }
 
-            val newHeaders = request.headers.newBuilder()
-                .set("User-Agent", ua.desktop.random())
-                .build()
-
-            val newRequest = request.newBuilder()
-                .headers(newHeaders)
-                .build()
-
-            chain.proceed(newRequest)
-        }
-        rateLimit(3)
+    // Language ids from the site's API client
+    private val apiLang = when (lang) {
+        "en" -> "0"
+        "fr" -> "5"
+        "pt" -> "6"
+        "es" -> "7"
+        "id" -> "1"
+        else -> throw IllegalArgumentException("Invalid lang: $lang")
     }
 
-    private var userAgentList: UserAgentList? = null
-
-    private suspend fun getDesktopUA(): UserAgentList = userAgentList ?: network.client.get(UA_DB_URL, Fetch.XHR).parseAs<UserAgentList>().also {
-        userAgentList = it
-    }
-
-    // ========================== Popular =====================================
+    private val apiHeaders: Headers get() = headers.newBuilder().set("lang", apiLang).build()
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -82,33 +70,10 @@ abstract class Webcomics : KeiSource() {
     }
 
     private fun parseMangasPage(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val nuxtData = document.selectFirst("script#__NUXT_DATA__")?.data()
-
-        val mangaList = document.select(".grid > a").map { element ->
-            val url = element.attr("abs:href")
-            val thumbnail = element.selectFirst("img[src]")?.attr("abs:src")?.takeIf { it.startsWith("http") } ?: run {
-                val regex = Regex(""""${url.substringAfterLast('/')}"[^"]*"[^"]*"[^"]*"(https[^"]+)"""")
-                nuxtData?.let { regex.find(it) }?.groupValues?.get(1)
-            }
-
-            val segments = url.toHttpUrl().pathSegments
-            SManga.create().apply {
-                title = element.selectFirst("p.text-ink,span[class*=text]")!!.text()
-                thumbnail_url = thumbnail
-                this.url = segments[3]
-                memo = buildJsonObject {
-                    put("slug", segments[1])
-                    put("name", segments[2])
-                }
-            }
-        }
-
-        val hasNextPage = document.selectFirst("div > span.cursor-default.bg-primary + a") != null
-        return MangasPage(mangaList, hasNextPage)
+        val nuxtData = response.asJsoup().selectFirst("script#__NUXT_DATA__")!!.data().parseAs<JsonArray>()
+        val bookList = nuxtData.indexOfFirst { it is JsonObject && "list" in it && "pagination" in it }
+        return nuxtData.unflatten(bookList).parseAs<BookListDto>().toMangasPage()
     }
-
-    // ========================== Latest =====================================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -123,13 +88,9 @@ abstract class Webcomics : KeiSource() {
         return parseMangasPage(client.get(url, Fetch.DOCUMENT))
     }
 
-    // ========================== Search =====================================
-
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = if (query.isNotBlank()) {
-        val url = "$baseUrl/$lang/search".toHttpUrl().newBuilder()
-            .addQueryParameter("q", query)
-            .build()
-        parseMangasPage(client.get(url, Fetch.DOCUMENT))
+        val body = SearchBody(query, page, 20).toJsonRequestBody()
+        client.post("$apiUrl/search", apiHeaders, Fetch.XHR, body).parseAs<DataWrapper<BookListDto>>().data.toMangasPage()
     } else {
         val genre = filters.firstInstance<GenreFilter>().selected()
         val status = filters.firstInstance<StatusFilter>().selected()
@@ -147,24 +108,24 @@ abstract class Webcomics : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments[0] != lang || url.pathSegments.size < 4) {
+        // Series: /lang/slug/name/id, chapter: /lang/slug/name/index/id
+        val segments = url.pathSegments.filter { it.isNotEmpty() }
+        val isSeries = segments.size == 4
+        val isChapter = segments.size == 5 && segments[3].toIntOrNull() != null
+        if (url.host != baseUrl.toHttpUrl().host || segments.firstOrNull() != lang || !(isSeries || isChapter) || !ID_REGEX.matches(segments.last())) {
             return null
         }
 
-        val mangaUrl = "/$lang/${url.pathSegments[1]}/${url.pathSegments[2]}/${url.pathSegments[3]}"
         val manga = SManga.create().apply {
-            this.url = mangaUrl
+            this.url = segments.last()
+            memo = buildJsonObject {
+                put("slug", segments[1])
+                put("name", segments[2])
+            }
         }
 
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
-            .manga
-            .apply {
-                initialized = true
-                this.url = mangaUrl
-            }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
-
-    // ========================== Updates ====================================
 
     override fun getMangaUrl(manga: SManga): String = baseUrl.toHttpUrl().newBuilder().apply {
         addPathSegment(lang)
@@ -197,12 +158,11 @@ abstract class Webcomics : KeiSource() {
     }
 
     private suspend fun getMangaDetails(manga: SManga): SManga {
-        val body = buildJsonObject {
-            put("book_id", manga.url)
-        }.toJsonRequestBody()
+        val body = BookBody(manga.url).toJsonRequestBody()
 
-        val dto = client.post("$apiUrl/info", Fetch.XHR, body).parseAs<DataWrapper<BookDto>>().data
+        val dto = client.post("$apiUrl/info", apiHeaders, Fetch.XHR, body).parseAs<DataWrapper<BookDto>>().data
         return SManga.create().apply {
+            url = manga.url
             title = dto.name
             thumbnail_url = dto.cover
             description = dto.description
@@ -215,20 +175,15 @@ abstract class Webcomics : KeiSource() {
 
     private suspend fun getChapterList(manga: SManga): List<SChapter> {
         val mangaId = manga.url
-        val body = buildJsonObject {
-            put("book_id", mangaId)
-            put("page", 1)
-            put("size", 9999)
-            put("sort", "desc")
-        }.toJsonRequestBody()
+        val body = ChapterListBody(mangaId, 1, 9999, "desc").toJsonRequestBody()
 
-        val dto = client.post("$apiUrl/chapter/list", Fetch.XHR, body).parseAs<DataWrapper<ChapterListDto>>().data
+        val dto = client.post("$apiUrl/chapter/list", apiHeaders, Fetch.XHR, body).parseAs<DataWrapper<ChapterListDto>>().data
         return dto.list.map { chapter ->
             SChapter.create().apply {
-                name = if (chapter.is_pay) "🔒 ${chapter.name}" else chapter.name
-                date_upload = chapter.update_time
+                name = if (chapter.isPay) "🔒 ${chapter.name}" else chapter.name
+                date_upload = chapter.updateTime
                 chapter_number = chapter.index.toFloat()
-                url = chapter.chapter_id
+                url = chapter.chapterId
                 memo = buildJsonObject {
                     put("index", chapter.index)
                     put("mangaId", mangaId)
@@ -239,32 +194,24 @@ abstract class Webcomics : KeiSource() {
         }
     }
 
-    // ========================== Pages ====================================
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val body = buildJsonObject {
-            put("book_id", chapter.memo.getString("mangaId"))
-            put("chapter_id", chapter.url)
-            put("index", chapter.memo.getInt("index"))
-        }.toJsonRequestBody()
+        val body = ChapterDetailBody(chapter.memo.getString("mangaId"), chapter.url, chapter.memo.getInt("index")).toJsonRequestBody()
 
-        var result = chapterDetail(body, headers)
+        var result = chapterDetail(body, apiHeaders)
         if (result.code == CODE_LOCKED) {
-            // The site keeps the login token in localStorage, not in a cookie, so it has to be sent by hand.
+            // Login token from the site's localStorage
             val token = getLocalStorage(baseUrl, "tk")
-            if (token != null) result = chapterDetail(body, headers.newBuilder().set("Token", token).build())
+            if (token != null) result = chapterDetail(body, apiHeaders.newBuilder().set("Token", token).build())
             if (result.code != CODE_OK) throw Exception("Log in and unlock this chapter in WebView")
         }
         val dto = result.data
 
         return dto.images.mapIndexed { index, img ->
-            Page(index, imageUrl = dto.base_url + img.url)
+            Page(index, imageUrl = dto.baseUrl + img.url)
         }
     }
 
     private suspend fun chapterDetail(body: RequestBody, headers: Headers) = client.post("$apiUrl/chapter/detail", headers, Fetch.XHR, body).parseAs<DataWrapper<ImageListDto>>()
-
-    // ========================== Filters ==================================
 
     private open inner class SelectFilter(name: String, val items: Array<String>) : Filter.Select<String>(name, items) {
         fun selected() = items[state].toPathSegment()
@@ -349,7 +296,12 @@ abstract class Webcomics : KeiSource() {
         SortFilter(),
     )
 
-    // =============================== Utils ====================================
+    // Nuxt payload: every value is an index into the root array, negative ones are undefined
+    private fun JsonArray.unflatten(index: Int): JsonElement = when (val value = getOrNull(index) ?: JsonNull) {
+        is JsonObject -> JsonObject(value.mapValues { unflatten(it.value.jsonPrimitive.int) })
+        is JsonArray -> JsonArray(value.map { unflatten(it.jsonPrimitive.int) })
+        else -> value
+    }
 
     private fun String.toPathSegment(): String = this
         .replace(PUNCTUATION_REGEX, "")
@@ -357,10 +309,11 @@ abstract class Webcomics : KeiSource() {
         .lowercase()
 
     companion object {
-        val WHITE_SPACE_REGEX = """[\s]+""".toRegex()
-        val PUNCTUATION_REGEX = "[\\p{Punct}]".toRegex()
+        private val WHITE_SPACE_REGEX = """\s+""".toRegex()
+        private val PUNCTUATION_REGEX = """\p{Punct}""".toRegex()
+        private val ID_REGEX = "[0-9a-f]{24}".toRegex()
+        private const val IMAGE_DOMAIN = ".mangaina.com"
 
-        private const val UA_DB_URL = "https://keiyoushi.github.io/user-agents/user-agents.json"
         private const val CODE_OK = 1000
         private const val CODE_LOCKED = 1208
     }
