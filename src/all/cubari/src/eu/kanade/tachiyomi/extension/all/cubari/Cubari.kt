@@ -13,11 +13,11 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.array
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.double
-import kotlinx.serialization.json.jsonArray
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import kotlin.time.Duration.Companion.seconds
@@ -79,7 +79,7 @@ abstract class Cubari : KeiSource() {
         else -> {
             val (chapterKey, groupKey) = chapter.url.split("/").takeLast(2)
             client.get(seriesApiUrl(chapter.url), Fetch.XHR).parseAs<SeriesDto>()
-                .chapters[chapterKey]!!.groups[groupKey]!!.jsonArray
+                .chapters[chapterKey]!!.groups[groupKey]!!.array
                 .mapIndexed { i, jsonEl -> Page(i, imageUrl = jsonEl.pageSrc()) }
         }
     }
