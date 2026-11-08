@@ -111,11 +111,11 @@ abstract class ZeistManga : KeiSource() {
         buildString {
             append("{")
             includedCategories.forEach {
-                append("label:$it ")
+                append("label:\"$it\" ")
             }
             append("}")
             excludedCategories.forEach {
-                append("-label:${it.trim()} ")
+                append("-label:\"${it.trim()}\" ")
             }
             if (query.isNotBlank()) {
                 append(query.trim())
@@ -125,19 +125,19 @@ abstract class ZeistManga : KeiSource() {
                         is StatusList -> {
                             filter.selected.value.trim()
                                 .takeIf { it.isNotEmpty() }
-                                ?.let { append("label:$it ") }
+                                ?.let { append("label:\"$it\" ") }
                         }
 
                         is TypeList -> {
                             filter.selected.value.trim()
                                 .takeIf { it.isNotEmpty() }
-                                ?.let { append("label:$it ") }
+                                ?.let { append("label:\"$it\" ") }
                         }
 
                         is LanguageList -> {
                             filter.selected.value.trim()
                                 .takeIf { it.isNotEmpty() }
-                                ?.let { append("label:$it ") }
+                                ?.let { append("label:\"$it\" ") }
                         }
 
                         is GenreList -> {
@@ -145,7 +145,7 @@ abstract class ZeistManga : KeiSource() {
                                 .filter { it.state }
                                 .map { it.value.trim() }
                                 .filter { it.isNotEmpty() }
-                                .map { "label:$it" }
+                                .map { "label:\"$it\"" }
 
                             if (selectedGenres.isNotEmpty()) {
                                 append(" ")
@@ -164,13 +164,10 @@ abstract class ZeistManga : KeiSource() {
         val startIndex = MAX_MANGA_RESULTS * (page - 1) + 1
         val url = searchMangaUrl(page, query)
 
-        val searchUrl = if (query.isNotBlank()) {
-            url.addCategoryLabels(query)
-                .addQueryParameter("max-results", (MAX_MANGA_RESULTS + 1).toString())
-                .addQueryParameter("start-index", startIndex.toString())
-        } else {
-            url.addCategoryLabels(filterList = filters)
-        }.build()
+        val searchUrl = url.addCategoryLabels(query, filters)
+            .addQueryParameter("max-results", (MAX_MANGA_RESULTS + 1).toString())
+            .addQueryParameter("start-index", startIndex.toString())
+            .build()
 
         return parseSearchManga(client.get(searchUrl, Fetch.XHR))
     }
