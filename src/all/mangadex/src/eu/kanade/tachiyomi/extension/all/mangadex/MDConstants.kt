@@ -135,6 +135,9 @@ object MDConstants {
     private const val INCLUDE_UNAVAILABLE_PREF = "includeUnavailable"
     fun getIncludeUnavailablePrefKey(dexLang: String): String = "${INCLUDE_UNAVAILABLE_PREF}_$dexLang"
 
+    private const val INCLUDE_EMPTY_PAGES_PREF = "includeEmptyPages"
+    fun getIncludeEmptyPagesPrefKey(dexLang: String): String = "${INCLUDE_EMPTY_PAGES_PREF}_$dexLang"
+
     private const val TAG_GROUP_CONTENT = "content"
     private const val TAG_GROUP_FORMAT = "format"
     private const val TAG_GROUP_GENRE = "genre"
