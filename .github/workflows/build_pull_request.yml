@@ -118,5 +118,8 @@ jobs:
           TASKS=()
           for module in $MODULES; do
             TASKS+=("${module}:lintRelease")
+            if [ "$module" = ":core" ]; then
+              TASKS+=(":core:testDebugUnitTest")
+            fi
           done
           ./gradlew "${TASKS[@]}"
