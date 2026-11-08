@@ -9,6 +9,7 @@ keiyoushi {
     versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
+    theme = "hentaicosplayxxx"
 
     source {
         lang = "all"

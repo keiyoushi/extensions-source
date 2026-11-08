@@ -12,8 +12,9 @@ import okhttp3.Response
 @Source
 abstract class Hanmokkuscan : ZeistManga() {
 
-    override val mangaCategory = "Todos os Projetos"
     override val chapterCategory = "Capítulo"
+
+    override val includedCategories = super.includedCategories.plus("Todos os Projetos")
 
     override val hasFilters = true
     override val hasStatusFilter = false

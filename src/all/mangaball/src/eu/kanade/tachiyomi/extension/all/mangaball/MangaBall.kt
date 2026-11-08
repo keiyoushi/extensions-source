@@ -124,8 +124,15 @@ abstract class MangaBall :
                 addQueryParameter("keyword", query.trim())
             }
 
+            // Popular and Latest pass no filters, so they only list titles translated to the source's language.
+            if (filters.firstInstanceOrNull<TranslatedLanguageFilter>()?.state != false) {
+                addQueryParameter("chapterLanguage", siteLang.joinToString(","))
+            }
+
             filters.firstInstanceOrNull<TypeFilter>()?.selected?.takeIf { it.isNotEmpty() }
                 ?.let { addQueryParameter("type", it) }
+            filters.firstInstanceOrNull<OriginalLanguageFilter>()?.selected?.takeIf { it.isNotEmpty() }
+                ?.let { addQueryParameter("originalLanguage", it) }
             filters.firstInstanceOrNull<DemographicFilter>()?.selected?.takeIf { it.isNotEmpty() }
                 ?.let { addQueryParameter("publicationDemographic", it) }
             filters.firstInstanceOrNull<StatusFilter>()?.selected?.takeIf { it.isNotEmpty() }
@@ -147,7 +154,9 @@ abstract class MangaBall :
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         SortFilter(),
+        TranslatedLanguageFilter(),
         TypeFilter(),
+        OriginalLanguageFilter(),
         DemographicFilter(),
         StatusFilter(),
         TagModeFilter(),

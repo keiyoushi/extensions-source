@@ -29,8 +29,8 @@ class MangaDto(
         description = Entities.unescape(content)
         genre = Entities.unescape(tags.joinToString())
         status = when (serialize) {
-            "连载", "連載中", "En cours", "OnGoing" -> SManga.ONGOING
-            "完结", "已完結", "Terminé", "Complete", "Complété" -> SManga.COMPLETED
+            "连载", "连载中", "連載中", "En cours", "OnGoing" -> SManga.ONGOING
+            "完结", "已完结", "已完結", "Terminé", "Complete", "Complété" -> SManga.COMPLETED
             else -> if (isUpdating(addtime)) SManga.ONGOING else SManga.UNKNOWN
         }
         thumbnail_url = "$pic#$id"
