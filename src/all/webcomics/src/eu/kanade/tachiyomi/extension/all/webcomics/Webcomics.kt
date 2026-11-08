@@ -40,7 +40,7 @@ import okhttp3.Response
 @Source
 abstract class Webcomics : KeiSource() {
 
-    private val apiUrl = "https://official-website-api.${baseUrl.toHttpUrl().host}/api/web/v4/book"
+    private val apiUrl get() = "https://official-website-api.${baseUrl.toHttpUrl().host}/api/web/v4/book"
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3) { !it.host.endsWith(IMAGE_DOMAIN) }
 
