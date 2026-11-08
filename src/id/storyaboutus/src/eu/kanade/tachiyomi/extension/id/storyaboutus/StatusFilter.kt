@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.source.model.Filter
 class StatusFilter :
     Filter.Select<String>(
         "Status",
-        arrayOf("All", "Ongoing", "End", "End Season", "Hiatus"),
+        arrayOf("Semua", "Berjalan", "Tamat", "Akhir Season", "Hiatus"),
     ) {
     fun toUriPart() = when (state) {
         1 -> "ongoing"

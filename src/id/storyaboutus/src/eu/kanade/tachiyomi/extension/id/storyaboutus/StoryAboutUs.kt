@@ -90,7 +90,7 @@ abstract class StoryAboutUs : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val id = url.queryParameter("title") ?: return null
-        return fetchManga(id).takeIf { it.chapters.isNotEmpty() }?.toSManga()
+        return fetchManga(id).takeIf { it.chapters.isNotEmpty() }?.toSManga()?.apply { initialized = true }
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/chapter.html?title=${manga.url}"
