@@ -1,0 +1,9 @@
+ext {
+    extName = 'Punk Records'
+    pkgNameSuffix = 'fr.punkrecords'
+    extClass = '.PunkRecords'
+    extVersionCode = 1
+    libVersion = '1.4'
+}
+
+apply from: "$rootDir/common.gradle"
