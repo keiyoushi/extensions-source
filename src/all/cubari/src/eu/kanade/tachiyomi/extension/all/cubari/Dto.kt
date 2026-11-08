@@ -61,19 +61,13 @@ private fun createManga(
     url: String,
 ) = SManga.create().apply {
     this.title = title
-    this.artist = artist ?: Cubari.ARTIST_FALLBACK
-    this.author = author ?: Cubari.AUTHOR_FALLBACK
-    this.description = description?.substringBefore("Tags: ")?.replace(STATUS_REGEX, "")?.trim() ?: Cubari.DESCRIPTION_FALLBACK
-    genre = description?.let {
-        if (it.contains("Tags: ")) {
-            it.substringAfter("Tags: ")
-        } else {
-            ""
-        }
-    } ?: ""
+    this.artist = artist
+    this.author = author
+    this.description = description?.substringBefore("Tags: ")?.replace(STATUS_REGEX, "")?.trim()?.ifEmpty { null }
+    genre = description?.takeIf { "Tags: " in it }?.substringAfter("Tags: ")
     status = description?.let(::parseStatus) ?: SManga.UNKNOWN
     this.url = url
-    thumbnail_url = cover ?: ""
+    thumbnail_url = cover
 }
 
 // Some series write their status in the description, on a "Status: " line like the "Tags: " one

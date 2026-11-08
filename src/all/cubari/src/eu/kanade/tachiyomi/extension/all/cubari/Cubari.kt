@@ -73,7 +73,7 @@ abstract class Cubari : KeiSource() {
         chapter.url.contains("/chapter/") -> {
             client.get("$baseUrl${chapter.url}", Fetch.XHR)
                 .parseAs<JsonArray>()
-                .mapIndexed { i, jsonEl -> Page(i, "", jsonEl.pageSrc()) }
+                .mapIndexed { i, jsonEl -> Page(i, imageUrl = jsonEl.pageSrc()) }
         }
 
         else -> {
@@ -185,7 +185,7 @@ abstract class Cubari : KeiSource() {
                 val releaseDate = chapterObj.releaseDate?.get(groupNum)
 
                 SChapter.create().apply {
-                    scanlator = series.groups[groupNum]!!
+                    scanlator = series.groups[groupNum]?.ifEmpty { null }
                     chapter_number = chapterNum.toFloatOrNull() ?: -1f
 
                     date_upload = if (releaseDate != null) {
@@ -229,9 +229,6 @@ abstract class Cubari : KeiSource() {
     }
 
     companion object {
-        const val AUTHOR_FALLBACK = "Unknown"
-        const val ARTIST_FALLBACK = "Unknown"
-        const val DESCRIPTION_FALLBACK = "No description."
         const val SEARCH_FALLBACK_MSG = "Please enter a valid Cubari URL"
 
         enum class SortType {
