@@ -102,7 +102,8 @@ abstract class Manhuarm :
         .addInterceptor(TranslationInterceptor({ settings }, { translator }))
         .addInterceptor(ComposedImageInterceptor { settings })
         .rateLimit(3, 2.seconds) { it.host == BingTranslator.HOST || it.host == GoogleTranslator.HOST }
-        .rateLimit(2)
+        // The scripts of a chapter page load all at once, as in a browser
+        .rateLimit(2) { !it.encodedPath.endsWith(".js") }
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
         customUserAgent.takeIf(String::isNotEmpty)?.let { set("User-Agent", it) }
@@ -315,13 +316,17 @@ abstract class Manhuarm :
         val text = runWebView<String>(timeout = 20.seconds) {
             headers["User-Agent"]?.let { userAgent = it }
             blockImages = true
+            // The page's own request sets X-Requested-With itself; anything else WebView sends gets the same value
+            setOriginMatchedHeader("X-Requested-With", "XMLHttpRequest", setOf("https://$host"))
+            val blocked = { WebResourceResponse("text/plain", null, 403, "Blocked", null, ByteArrayInputStream(ByteArray(0))) }
             interceptRequest { request ->
-                // The page itself is a data: URL, without a host
-                val requestHost = request.url.host
-                if (requestHost == null || requestHost == host) {
-                    null
-                } else {
-                    WebResourceResponse("text/plain", null, 403, "Blocked", null, ByteArrayInputStream(ByteArray(0)))
+                when (request.url.host) {
+                    // The page itself is a data: URL, without a host
+                    null -> null
+                    // Its scripts load as in a browser, without X-Requested-With; its POST stays with the WebView
+                    host -> proxyRequest(request, client) { removeHeader("X-Requested-With") }
+                        ?: if (request.method == "GET") blocked() else null
+                    else -> blocked()
                 }
             }
             webMessageBridge(bridge, setOf(baseUrl)) { resolve(it) }
