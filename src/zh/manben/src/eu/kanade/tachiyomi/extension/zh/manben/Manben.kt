@@ -92,6 +92,7 @@ abstract class Manben : KeiSource() {
         return SManga.create().apply {
             setUrlWithoutDomain(document.location())
             parseDetails(document)
+            initialized = true
         }
     }
 
