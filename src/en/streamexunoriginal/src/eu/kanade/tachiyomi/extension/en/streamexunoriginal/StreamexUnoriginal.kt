@@ -45,7 +45,7 @@ abstract class StreamexUnoriginal : KeiSource() {
         val segments = url.pathSegments
         if (segments.firstOrNull() != "manga") return null
         val id = segments.getOrNull(if (segments.getOrNull(1) == "read") 2 else 1)?.toIntOrNull() ?: return null
-        return getDetails(id.toString())
+        return getDetails(id.toString()).apply { initialized = true }
     }
 
     override suspend fun fetchMangaUpdate(
