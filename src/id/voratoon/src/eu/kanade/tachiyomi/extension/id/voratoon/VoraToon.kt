@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -22,6 +23,7 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import kotlin.time.Clock
 
 private const val SESSION_MARGIN_SECONDS = 30
 
@@ -39,6 +41,7 @@ abstract class VoraToon : KeiSource() {
             request.newBuilder()
                 .url(baseUrl.toHttpUrl())
                 .headers(headersBuilder().removeAll("Accept").build())
+                .fetch(Fetch.DOCUMENT)
                 .build(),
         ).close()
     }
@@ -48,7 +51,7 @@ abstract class VoraToon : KeiSource() {
             ?: return true
         // token is v1.<issued>.<expires>.<id>.<signature>, valid for 15 minutes unlike the 24h cookie
         val expires = token.split('.').getOrNull(2)?.toLongOrNull() ?: return false
-        return expires - SESSION_MARGIN_SECONDS <= System.currentTimeMillis() / 1000
+        return expires - SESSION_MARGIN_SECONDS <= Clock.System.now().epochSeconds
     }
 
     override fun OkHttpClient.Builder.configureClient() = apply {
@@ -57,7 +60,6 @@ abstract class VoraToon : KeiSource() {
             val request = chain.request()
             if (!isApiRequest(request)) return@addInterceptor chain.proceed(request)
 
-            // the session is fetched upfront: Suwayomi's Cloudflare interceptor treats the 403 of a missing one as a challenge
             synchronized(sessionLock) {
                 if (client.sessionExpired(request.url)) chain.refreshSession(request)
             }
