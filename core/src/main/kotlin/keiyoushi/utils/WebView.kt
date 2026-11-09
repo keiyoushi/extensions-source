@@ -3,6 +3,8 @@ package keiyoushi.utils
 import android.annotation.SuppressLint
 import android.content.res.Resources
 import android.graphics.Bitmap
+import android.graphics.Point
+import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -127,6 +129,12 @@ class WebViewScope<T> internal constructor(
 
     @Volatile
     internal var interceptHook: ((WebResourceRequest) -> WebResourceResponse?)? = null
+
+    // Shown by showToUser, dismissed when the run ends; main thread only
+    internal var overlay: CaptchaOverlayDialog? = null
+
+    // Counts showToUser and hideFromUser calls, so an area measured for an earlier call isn't shown; main thread only
+    private var overlayCall = 0
 
     @Volatile
     internal var destroyed = false
@@ -332,6 +340,46 @@ class WebViewScope<T> internal constructor(
             kept,
             body.byteStream(),
         )
+    }
+
+    /**
+     * Shows the run's WebView to the user over the app, for a check that wants a tap, such as a Turnstile checkbox;
+     * [hideFromUser] hides it again, and the run's end does too. With an [area], a CSS selector, only the first element
+     * it matches is shown, scrolled into view, e.g. [TURNSTILE_AREA] for a Turnstile widget; the whole page shows while
+     * it matches nothing. Calling it again while shown measures the area again.
+     *
+     * Show it once the check hasn't passed by itself for a few seconds: most pass without a tap. The run fails with
+     * "Captcha cancelled" when the user dismisses it. When the app's screen goes away, such as on a rotation, it is
+     * hidden until the next call. Returns false, leaving the WebView hidden, when the app isn't in the foreground.
+     */
+    fun showToUser(area: String? = null): Boolean {
+        if (destroyed || deferred.isCompleted || foregroundActivity() == null) return false
+        runOnMain {
+            if (destroyed) return@runOnMain
+            val call = ++overlayCall
+            val dialog = overlay ?: CaptchaOverlayDialog(
+                webView = webView,
+                transparent = false,
+                onCancel = { reject(IOException("Captcha cancelled")) },
+                // Hidden, for a later call to show again
+                onNoActivity = {},
+                onScreenGone = {},
+            ).also { overlay = it }
+            if (area == null) return@runOnMain dialog.show()
+            evaluateJs(measureAreaScript(area)) { json ->
+                if (destroyed || call != overlayCall) return@evaluateJs
+                dialog.show(json.parseAs<List<Int>?>()?.let { (left, top, right, bottom) -> Rect(left, top, right, bottom) })
+            }
+        }
+        return true
+    }
+
+    /** Hides the WebView [showToUser] showed. */
+    fun hideFromUser() {
+        runOnMain {
+            overlayCall++
+            overlay?.dismiss()
+        }
     }
 
     /**
@@ -662,16 +710,35 @@ private fun setupWebView(webView: WebView) {
 
     WebViewGlueBridge.setAudioMuted(webView, true)
 
+    layOutOffscreen(webView)
+}
+
+/** The size a run's WebView has while it isn't shown: the screen's. */
+internal fun offscreenSize(): Point = Resources.getSystem().displayMetrics.let { Point(it.widthPixels, it.heightPixels) }
+
+/** Gives [webView] its [offscreenSize], as no window lays it out. */
+internal fun layOutOffscreen(webView: WebView) {
     runCatching {
-        val metrics = Resources.getSystem().displayMetrics
-        webView.layoutParams = ViewGroup.LayoutParams(metrics.widthPixels, metrics.heightPixels)
+        val size = offscreenSize()
+        webView.layoutParams = ViewGroup.LayoutParams(size.x, size.y)
         webView.measure(
-            View.MeasureSpec.makeMeasureSpec(metrics.widthPixels, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(metrics.heightPixels, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(size.x, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(size.y, View.MeasureSpec.EXACTLY),
         )
-        webView.layout(0, 0, metrics.widthPixels, metrics.heightPixels)
+        webView.layout(0, 0, size.x, size.y)
     }
 }
+
+// Scrolls the first element [selector] matches to the middle and returns its edges in device pixels, or null
+private fun measureAreaScript(selector: String) = """
+    (() => {
+        const area = document.querySelector(${selector.toJsonString()});
+        if (!area) return null;
+        area.scrollIntoView({ block: 'center', behavior: 'instant' });
+        const box = area.getBoundingClientRect();
+        return [box.left, box.top, box.right, box.bottom].map((value) => Math.round(value * devicePixelRatio));
+    })()
+""".trimIndent()
 
 /** The [Fetch] a proxied WebView request goes out as, or null for one proxyRequest leaves to the WebView. */
 internal fun proxyFetch(method: String, path: String, accept: String, isForMainFrame: Boolean): Fetch? {
@@ -720,6 +787,7 @@ suspend fun <T> runWebView(
         }
     } finally {
         scope.destroyed = true
+        scope.overlay?.dismiss()
         runCatching { (webView.parent as? ViewGroup)?.removeView(webView) }
         webView.stopLoading()
         webView.destroy()
