@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.dlsite
 
 import eu.kanade.tachiyomi.source.model.Filter
-import kotlinx.serialization.Serializable
+import eu.kanade.tachiyomi.source.model.FilterList
 
 class SectionFilter : Filter.Select<String>("Section", SECTIONS.map { it.first }.toTypedArray()) {
     val value get() = SECTIONS[state].second
@@ -17,12 +17,13 @@ class TypeFilter : OptionGroupFilter("Work type", TYPES)
 
 class SortFilter(state: Int = 0) : Filter.Select<String>("Sort by", SORTS.map { it.first }.toTypedArray(), state) {
     val value get() = SORTS[state].second
+
+    companion object {
+        val LATEST get() = FilterList(SortFilter(1))
+    }
 }
 
-class FreeFilter : Filter.CheckBox("Free works only")
-
-@Serializable
-class GenreOption(val name: String, val id: String)
+class NoAiFilter : Filter.CheckBox("Exclude AI-generated works")
 
 class GenreFilter(genres: List<GenreOption>) : OptionGroupFilter("Genres (works with all of them)", genres.map { it.name to it.id })
 
@@ -32,6 +33,7 @@ private val SECTIONS = listOf(
     "All Ages" to "home",
     "Otome (R18)" to "girls",
     "BL (R18)" to "bl",
+    "My library (log in via WebView)" to DLsite.LIBRARY_SECTION,
 )
 
 // None checked means both, like the lists
@@ -40,7 +42,7 @@ private val TYPES = listOf(
     "CG + Illustrations" to "illust",
 )
 
-val SORTS = listOf(
+private val SORTS = listOf(
     "Trending" to "trend",
     "Newest" to "release_d",
     "Best Selling" to "dl_d",
