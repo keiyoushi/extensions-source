@@ -50,13 +50,16 @@ abstract class Relamanhua : KeiSource() {
     ).toMangasPage()
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host.removePrefix("www.").removePrefix("m.") !in DOMAINS) return null
         val segments = url.pathSegments
-        if (segments.getOrNull(0) != "v2h5") return null
-        val pathWord = when (segments.getOrNull(1)) {
-            "details" -> segments.getOrNull(3)
-            "comicContent" -> segments.getOrNull(2)
+        val pathWord = when {
+            // Desktop pages: /comic/<path word>, and /comic/<path word>/chapter/<uuid> for a chapter
+            segments[0] == "comic" -> segments.getOrNull(1)
+            segments[0] != "v2h5" -> null
+            segments.getOrNull(1) == "details" -> segments.getOrNull(3)
+            segments.getOrNull(1) == "comicContent" -> segments.getOrNull(2)
             else -> null
-        } ?: return null
+        }?.takeIf { it.isNotEmpty() } ?: return null
         return getComic(pathWord).comic.toSMangaDetails().apply { initialized = true }
     }
 
@@ -117,6 +120,9 @@ abstract class Relamanhua : KeiSource() {
 
     companion object {
         private const val API_URL = "https://api.manga2026.xyz/api/v3"
+
+        // The same site on both domains, with m. (mobile), www. or no prefix
+        private val DOMAINS = listOf("2024manga.com", "manga2026.xyz")
         private const val PAGE_SIZE = 30
         private const val CHAPTER_PAGE_SIZE = 500
     }
