@@ -18,8 +18,12 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.Response
+
+private const val SESSION_MARGIN_SECONDS = 30
 
 @Source
 abstract class VoraToon : KeiSource() {
@@ -27,24 +31,41 @@ abstract class VoraToon : KeiSource() {
 
     private val apiUrl get() = "https://$baseHost/api/proxy"
 
+    private fun isApiRequest(request: Request) = request.url.host == baseHost && request.url.encodedPath.contains("/api/")
+
+    private fun Interceptor.Chain.refreshSession(request: Request) {
+        // Set-Cookie vt_proxy
+        proceed(
+            request.newBuilder()
+                .url(baseUrl.toHttpUrl())
+                .headers(headersBuilder().removeAll("Accept").build())
+                .build(),
+        ).close()
+    }
+
+    private fun OkHttpClient.sessionExpired(url: HttpUrl): Boolean {
+        val token = cookieJar.loadForRequest(url).firstOrNull { it.name == "vt_proxy" }?.value
+            ?: return true
+        // token is v1.<issued>.<expires>.<id>.<signature>, valid for 15 minutes unlike the 24h cookie
+        val expires = token.split('.').getOrNull(2)?.toLongOrNull() ?: return false
+        return expires - SESSION_MARGIN_SECONDS <= System.currentTimeMillis() / 1000
+    }
+
     override fun OkHttpClient.Builder.configureClient() = apply {
+        val sessionLock = Any()
         addInterceptor { chain ->
             val request = chain.request()
+            if (!isApiRequest(request)) return@addInterceptor chain.proceed(request)
+
+            // the session is fetched upfront: Suwayomi's Cloudflare interceptor treats the 403 of a missing one as a challenge
+            synchronized(sessionLock) {
+                if (client.sessionExpired(request.url)) chain.refreshSession(request)
+            }
+
             val response = chain.proceed(request)
-
-            if (response.code == 403 &&
-                request.url.host == baseHost &&
-                request.url.encodedPath.contains("/api/")
-            ) {
+            if (response.code == 403) {
                 response.close()
-                // Set-Cookie vt_proxy
-                chain.proceed(
-                    request.newBuilder()
-                        .url(baseUrl.toHttpUrl())
-                        .headers(headersBuilder().removeAll("Accept").build())
-                        .build(),
-                ).close()
-
+                chain.refreshSession(request)
                 chain.proceed(request)
             } else {
                 response
