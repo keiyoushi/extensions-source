@@ -90,7 +90,7 @@ abstract class Dm5 :
     // Series and chapter links, from any host of the site and in any of its path forms
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.siteName() != baseUrl.toHttpUrl().siteName()) return null
-        var document = client.get(baseUrl + url.encodedPath, Fetch.DOCUMENT).asJsoup()
+        var document = client.get(baseUrl.toHttpUrl().newBuilder().encodedPath(url.encodedPath).build(), Fetch.DOCUMENT).asJsoup()
         if (document.selectFirst(DETAILS_SELECTOR) == null) {
             val mangaUrl = document.selectFirst("a.back")?.absUrl("href") ?: return null
             document = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
