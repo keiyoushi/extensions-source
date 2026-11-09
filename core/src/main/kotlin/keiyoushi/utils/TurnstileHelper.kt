@@ -259,6 +259,9 @@ internal class CaptchaOverlayDialog(
         d.setContentView(root)
     }
 
+    /** Whether it's on screen; main thread only. */
+    val isShowing: Boolean get() = dialog != null
+
     fun dismiss() = runOnMain {
         val d = dialog ?: return@runOnMain
         dialog = null

@@ -26,16 +26,16 @@ import keiyoushi.webview.internal.WebViewGlueBridge
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Call
 import okhttp3.Headers.Companion.toHeaders
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -49,7 +49,10 @@ import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 /** Thrown when the WebView's render process crashes or is killed mid-run. */
 class RenderProcessGoneException internal constructor(
@@ -132,6 +135,10 @@ class WebViewScope<T> internal constructor(
 
     // Shown by showToUser, dismissed when the run ends; main thread only
     internal var overlay: CaptchaOverlayDialog? = null
+
+    // The host of the page last started, for showToUser's cooldown after the user dismisses it
+    @Volatile
+    internal var pageHost: String? = null
 
     // Counts showToUser and hideFromUser calls, so an area measured for an earlier call isn't shown; main thread only
     private var overlayCall = 0
@@ -348,19 +355,28 @@ class WebViewScope<T> internal constructor(
      * it matches is shown, scrolled into view, e.g. [TURNSTILE_AREA] for a Turnstile widget; the whole page shows while
      * it matches nothing. Calling it again while shown measures the area again.
      *
-     * Show it once the check hasn't passed by itself for a few seconds: most pass without a tap. The run fails with
-     * "Captcha cancelled" when the user dismisses it. When the app's screen goes away, such as on a rotation, it is
-     * hidden until the next call. Returns false, leaving the WebView hidden, when the app isn't in the foreground.
+     * Show it once the check hasn't passed by itself for a few seconds: most pass without a tap. The run's timeout
+     * waits while it's shown. The run fails with "Captcha cancelled" when the user dismisses it, and for a few minutes
+     * after, showing the same site's page again returns false. When the app's screen goes away, such as on a rotation,
+     * it is hidden until the next call. Returns false, leaving the WebView hidden, when the app isn't in the foreground.
      */
     fun showToUser(area: String? = null): Boolean {
         if (destroyed || deferred.isCompleted || foregroundActivity() == null) return false
+        val host = pageHost
+        if (host != null) {
+            if (dismissedUntil[host]?.hasNotPassedNow() == true) return false
+            dismissedUntil.remove(host)
+        }
         runOnMain {
             if (destroyed) return@runOnMain
             val call = ++overlayCall
             val dialog = overlay ?: CaptchaOverlayDialog(
                 webView = webView,
                 transparent = false,
-                onCancel = { reject(IOException("Captcha cancelled")) },
+                onCancel = {
+                    if (host != null) dismissedUntil[host] = TimeSource.Monotonic.markNow() + DISMISSED_COOLDOWN
+                    reject(IOException("Captcha cancelled"))
+                },
                 // Hidden, for a later call to show again
                 onNoActivity = {},
                 onScreenGone = {},
@@ -643,6 +659,7 @@ private class ScopeWebViewClient(
 
     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
         if (scope.destroyed || url in scope.refreshPages) return
+        url?.toHttpUrlOrNull()?.host?.let { scope.pageHost = it }
         scope.pageStartedHooks.forEach { it(url.orEmpty()) }
     }
 
@@ -758,6 +775,10 @@ private val SCRIPT_EXTENSIONS = listOf(".js", ".mjs")
 
 private val FONT_EXTENSIONS = listOf(".woff2", ".woff", ".ttf", ".otf")
 
+// Until when showToUser stays hidden for each site the user dismissed it on
+private val dismissedUntil = ConcurrentHashMap<String, TimeMark>()
+private val DISMISSED_COOLDOWN = 5.minutes
+
 /**
  * Runs a WebView with [configure], suspending until it calls `resolve`/`reject` or [timeout]
  * elapses. The WebView is torn down whether this returns, throws, or is canceled.
@@ -778,13 +799,11 @@ suspend fun <T> runWebView(
         } catch (t: Throwable) {
             deferred.completeExceptionally(t)
         }
-        try {
-            withTimeout(timeout) {
-                deferred.await()
-            }
-        } catch (_: TimeoutCancellationException) {
-            throw WebViewTimeoutException(timeout)
+        // The timeout waits while the user sees the WebView
+        while (withTimeoutOrNull(timeout) { deferred.join() } == null) {
+            if (scope.overlay?.isShowing != true) throw WebViewTimeoutException(timeout)
         }
+        deferred.await()
     } finally {
         scope.destroyed = true
         scope.overlay?.dismiss()
