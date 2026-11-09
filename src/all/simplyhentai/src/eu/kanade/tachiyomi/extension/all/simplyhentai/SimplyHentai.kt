@@ -123,7 +123,7 @@ abstract class SimplyHentai :
         }
         val album = response.parseAs<SHAlbum>().data
         // Section links such as /language/english also have two segments
-        return album.takeIf { it.series.slug == segments[0] }?.toSManga()
+        return album.takeIf { it.series.slug == segments[0] }?.toSManga()?.apply { initialized = true }
     }
 
     private val linkHosts get() = setOf(baseUrl.toHttpUrl().host.removePrefix("www."), "doujin.sexy")
