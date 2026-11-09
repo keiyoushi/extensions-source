@@ -82,12 +82,12 @@ abstract class Manben : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host.removePrefix("www.")) return null
-        var document = client.get(baseUrl + url.encodedPath, Fetch.DOCUMENT).asJsoup()
+        var document = client.get(baseUrl.toHttpUrl().newBuilder().encodedPath(url.encodedPath).build(), Fetch.DOCUMENT).asJsoup()
         if (document.selectFirst(DETAILS_SELECTOR) == null) {
             val mangaPath = document.selectFirst("script:containsData(referUrl)")?.data()
                 ?.substringAfter("referUrl = \"")?.substringBefore('"')
                 ?: return null
-            document = client.get(baseUrl + mangaPath, Fetch.DOCUMENT).asJsoup()
+            document = client.get(baseUrl.toHttpUrl().resolve(mangaPath) ?: return null, Fetch.DOCUMENT).asJsoup()
         }
         return SManga.create().apply {
             setUrlWithoutDomain(document.location())
