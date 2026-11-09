@@ -234,6 +234,18 @@ class BrowserHeadersTest {
     }
 
     @Test
+    fun browserRequestKeepsItsHeaders() {
+        val request = builder("https://a.test/api/x").kind(Fetch.Kind.XHR).tag(SentByBrowser::class.java, SentByBrowser)
+            .post(json()).header("Content-Type", "application/json; charset=utf-8")
+            .tag(TransportProtocol::class.java, TransportProtocol(Protocol.HTTP_2)).build()
+        val sent = intercept(request, wireOrder = true)
+        assertEquals("application/json; charset=utf-8", sent.header("Content-Type"))
+        assertNull(sent.header("Sec-Fetch-Mode"))
+        assertNull(sent.header("Origin"))
+        assertEquals("u=1, i", sent.header("Priority"))
+    }
+
+    @Test
     fun sourceCacheControlIsKept() {
         val sent = intercept(builder("https://a.test/", referer = "https://a.test/").fetch(Fetch.DOCUMENT).cacheControl(CacheControl.FORCE_NETWORK).build(), wireOrder = true)
         assertEquals("no-cache", sent.header("Cache-Control"))
