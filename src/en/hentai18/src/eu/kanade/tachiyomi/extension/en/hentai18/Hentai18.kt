@@ -53,7 +53,7 @@ abstract class Hentai18 : KeiSource() {
         val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         // Chapter links share the series' path prefix and point back to their series
         val seriesPath = document.selectFirst("[data-comic-url]")?.attr("data-comic-url")
-            ?: return parseDetails(document, url.encodedPath)
+            ?: return parseDetails(document, url.encodedPath).apply { initialized = true }
         val manga = SManga.create().apply { this.url = seriesPath }
         return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
