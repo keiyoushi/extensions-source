@@ -88,6 +88,7 @@ abstract class HManga : KeiSource() {
         val segments = url.pathSegments.filter { it.isNotEmpty() }
         if (segments.size != 1 || !url.isSite()) return null
         return getPost(segments[0], DETAILS_FIELDS, DETAILS_EMBED)?.toSMangaDetails()
+            ?.apply { initialized = true }
     }
 
     private fun HttpUrl.isSite() = host.removePrefix("www.") == baseUrl.toHttpUrl().host
