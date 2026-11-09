@@ -1,6 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.weebcentral
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -13,6 +17,7 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
@@ -22,12 +27,18 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Element
+import kotlin.text.replace
+import kotlin.text.trim
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 @Source
-abstract class WeebCentral : KeiSource() {
+abstract class WeebCentral :
+    KeiSource(),
+    ConfigurableSource {
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(1, 2.seconds) { it.host == baseUrlHost }
@@ -116,7 +127,7 @@ abstract class WeebCentral : KeiSource() {
             }
 
             with(document.select("section[x-data] > section")[1]) {
-                title = selectFirst("h1")!!.text()
+                title = cleanTitleIfNeeded(selectFirst("h1")!!.text())
 
                 description = buildString {
                     selectFirst("li:has(strong:contains(Description)) > p")?.text()?.let {
@@ -244,7 +255,21 @@ abstract class WeebCentral : KeiSource() {
         return GET(page.imageUrl!!, imgHeaders)
     }
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_CLEAN_TITLE
+            title = "Clean title"
+            summary = "Removes extra brackets or parentheses in title"
+            setDefaultValue(PREF_CLEAN_TITLE_DEFAULT)
+        }.let(screen::addPreference)
+    }
+
     // ============================= Utilities ==============================
+
+    private val cleanTitle: Boolean
+        get() = preferences.getBoolean(PREF_CLEAN_TITLE, PREF_CLEAN_TITLE_DEFAULT)
+
+    private fun cleanTitleIfNeeded(title: String): String = if (cleanTitle) title.replace(BRACKET_REGEX, "").trim() else title.trim()
 
     private fun Element.sourceImg(): String? = selectFirst("source")?.attr("srcset")?.replace("small", "normal")
         ?: selectFirst("img")?.attr("abs:src")
@@ -269,5 +294,10 @@ abstract class WeebCentral : KeiSource() {
         private val excludedSearchCharacters = "[!#:(),-]".toRegex()
 
         private val seasonRegex = Regex("""(Season|S)\s*\d+""", RegexOption.IGNORE_CASE)
+
+        private val BRACKET_REGEX = Regex("""(\([^()]*\)|\[[^\[\]]*])\s*$""")
+
+        private const val PREF_CLEAN_TITLE = "pref_clean_title"
+        private const val PREF_CLEAN_TITLE_DEFAULT = false
     }
 }
