@@ -11,6 +11,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.cronet.cronet
+import keiyoushi.network.Fetch
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.MarkdownDescription
@@ -18,8 +20,10 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
+import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
@@ -49,7 +53,13 @@ abstract class TempleScan :
         cronet()
     }
 
-    private val sitePages by lazy { SitePages(baseUrl, client) { headers["User-Agent"]!! } }
+    private val sitePages by lazy { SitePages(baseUrl, client, { headers["User-Agent"]!! }, ::passSiteCheck) }
+
+    // Outside the site's page: its verify request is refused with any `X-Requested-With`, which WebView always sends
+    private suspend fun passSiteCheck(siteKey: String) {
+        val token = getTurnstileToken("$baseUrl/challenge", siteKey)
+        client.post("$baseUrl/api/turnstile/verify", fetch = Fetch.XHR.from("/challenge"), body = TurnstileToken(token).toJsonRequestBody()).close()
+    }
 
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", OrderFilter.POPULAR)
 
