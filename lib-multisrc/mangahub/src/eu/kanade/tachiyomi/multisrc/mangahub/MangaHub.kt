@@ -52,7 +52,6 @@ abstract class MangaHub : KeiSource() {
 
     abstract val mangaSource: String
 
-    private val baseApiUrl get() = "https://api.mghcdn.com"
     private val baseCdnUrl get() = "https://imgx.mghcdn.com"
     private val baseThumbCdnUrl get() = "https://thumb.mghcdn.com"
 
@@ -108,7 +107,7 @@ abstract class MangaHub : KeiSource() {
             .set("x-mhub-access", apiKey)
             .build()
 
-        return client.post("$baseApiUrl/graphql", requestHeaders, Fetch.XHR, body)
+        return client.post("$baseUrl/graphql", requestHeaders, Fetch.XHR, body)
     }
 
     private val refreshMutex = Mutex()
