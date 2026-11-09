@@ -154,6 +154,7 @@ abstract class Ikanmh : KeiSource() {
         }
         val manga = SManga.create().apply { this.url = bookPath }
         return client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup().parseDetails(manga)
+            .apply { initialized = true }
     }
 
     // ---- 正文 ----
