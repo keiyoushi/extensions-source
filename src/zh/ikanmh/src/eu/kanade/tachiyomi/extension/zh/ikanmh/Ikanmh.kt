@@ -173,7 +173,7 @@ abstract class Ikanmh : KeiSource() {
     private companion object {
         val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ENGLISH)
         val CHAPTER_NUMBER = Regex("""第(\d+)""")
-        val DOMAINS = setOf("ikanmh.xyz", "ikanmh.cc")
+        val DOMAINS = setOf("ikanmh.xyz", "ikanmh.cc", "jjmhw12.top")
     }
 }
 

@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Ikanmh"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
@@ -17,6 +17,7 @@ keiyoushi {
             mirrors(
                 "https://ikanmh.xyz",
                 "https://ikanmh.cc",
+                "https://www.jjmhw12.top",
             )
         }
     }
@@ -26,6 +27,8 @@ keiyoushi {
         host("www.ikanmh.xyz")
         host("ikanmh.cc")
         host("www.ikanmh.cc")
+        host("jjmhw12.top")
+        host("www.jjmhw12.top")
         path("/book/..*")
         path("/chapter/..*")
     }
