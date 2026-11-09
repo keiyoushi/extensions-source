@@ -42,6 +42,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okio.IOException
 import org.jsoup.Jsoup
@@ -79,11 +80,7 @@ abstract class Kagane :
         val url = request.url
         val urlToken = url.queryParameter("token") ?: return chain.proceed(request)
 
-        val chapterId = if (url.pathSegments[4] == "datasaver") {
-            url.pathSegments[5]
-        } else {
-            url.pathSegments[4]
-        }
+        val chapterId = url.pathSegments[url.pathSize - 2]
 
         val token = pageTokens.get(chapterId)?.value ?: urlToken
         val response = chain.proceed(request.withToken(token))
@@ -475,9 +472,7 @@ abstract class Kagane :
 
         return pageList.map { page ->
             val pageUrl = "$cacheUrl/api/v2/books/page".toHttpUrl().newBuilder().apply {
-                if (dataSaver) {
-                    addPathSegment("datasaver")
-                }
+                addPathSegment(if (dataSaver) "datasaver" else "original")
                 addPathSegment(chapterId)
                 addPathSegment("${page.pageUuid}.${page.ext ?: "jxl"}")
                 addQueryParameter("token", accessToken)
@@ -513,14 +508,12 @@ abstract class Kagane :
         val integrityToken = getIntegrityToken()
 
         val challengeUrl = "$apiUrl/books/$chapterId".toHttpUrl().newBuilder()
-            .addQueryParameter("is_datasaver", dataSaver.toString())
+            .addQueryParameter("intent", "Read")
             .build()
-
-        val challengeBody = "{}".toJsonRequestBody()
 
         val headers = headers.newBuilder().add("x-integrity-token", integrityToken).build()
 
-        val response = client.post(challengeUrl.toString(), headers, Fetch.XHR, challengeBody)
+        val response = client.post(challengeUrl, headers, Fetch.XHR, "".toRequestBody())
 
         return response.parseAs<ChallengeDto>()
     }
