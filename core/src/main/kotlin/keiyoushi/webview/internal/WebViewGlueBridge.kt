@@ -89,8 +89,10 @@ internal object WebViewGlueBridge {
         }
     }
 
+    fun isOriginMatchedHeaderSupported(): Boolean = isFeatureSupported("MULTI_PROFILE") && isFeatureSupported("CUSTOM_REQUEST_HEADERS")
+
     fun setOriginMatchedHeader(webView: WebView, headerName: String, headerValue: String, originRules: Set<String>): Boolean {
-        if (!isFeatureSupported("MULTI_PROFILE") || !isFeatureSupported("CUSTOM_REQUEST_HEADERS")) return false
+        if (!isOriginMatchedHeaderSupported()) return false
         val profile = try {
             getProvider(webView)!!.getProfile().asBoundary<ProfileBoundaryInterface>()
         } catch (e: Throwable) {
