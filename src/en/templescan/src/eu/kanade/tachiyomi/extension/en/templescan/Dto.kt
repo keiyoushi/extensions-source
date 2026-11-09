@@ -17,7 +17,15 @@ class CatalogArgs(
 
 /** What `run.js` reports instead of a script's result. */
 @Serializable
-class PageStatus(val challenge: Boolean = false, val status: Int? = null, val error: String? = null)
+class PageStatus(
+    val challenge: Boolean = false,
+    val siteCheck: Boolean = false,
+    val status: Int? = null,
+    val error: String? = null,
+)
+
+@Serializable
+class TurnstileToken(private val token: String)
 
 /** What `catalog.js` read: the comics page's cards per status, and the site search's results for a query. */
 @Serializable
