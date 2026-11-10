@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.util.LruCache
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -38,7 +39,6 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Element
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Instant
 
 /**
@@ -53,7 +53,7 @@ abstract class Huaka :
     KeiSource(),
     ConfigurableSource {
     private val preferences = getPreferences()
-    private val comicSearchPageTokens = ConcurrentHashMap<String, ConcurrentHashMap<Int, String>>()
+    private val comicSearchPageTokens = LruCache<String, LruCache<Int, String>>(16)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context)
@@ -92,7 +92,7 @@ abstract class Huaka :
                             runCatching {
                                 kotlinx.coroutines.runBlocking {
                                     val url = "$baseUrl/api/bff/users/me?profileRefresh=1"
-                                    client.get(url, Fetch.XHR.from("$baseUrl/zh-CN/announcements")).use { response ->
+                                    client.get(url, Fetch.XHR.from("$baseUrl/zh-CN/announcements"), ensureSuccess = false).use { response ->
                                         when (response.code) {
                                             200 -> "已登录：花咔服务器已确认当前会话有效"
                                             401 -> "未登录或会话失效：请使用上方官方登录页重新登录"
@@ -157,17 +157,20 @@ abstract class Huaka :
     ): MangasPage {
         require(page >= 1) { "Invalid Huaka page: $page" }
 
-        val tokens = comicSearchPageTokens.computeIfAbsent(criteria.cacheKey) { ConcurrentHashMap() }
-        if (page == 1) tokens.clear()
+        val tokens =
+            synchronized(comicSearchPageTokens) {
+                val cached = if (page == 1) null else comicSearchPageTokens.get(criteria.cacheKey)
+                cached ?: LruCache<Int, String>(32).also { comicSearchPageTokens.put(criteria.cacheKey, it) }
+            }
 
-        var pageToken = if (page == 1) null else tokens[page]
+        var pageToken = if (page == 1) null else tokens.get(page)
         if (page > 1 && pageToken == null) {
             var cursor: String? = null
             for (previousPage in 1 until page) {
                 val previousData = requestComicSearchPage(criteria, cursor)
                 cursor = previousData.nextPageToken?.takeIf(String::isNotBlank)
                     ?: return MangasPage(emptyList(), false)
-                tokens[previousPage + 1] = cursor
+                tokens.put(previousPage + 1, cursor)
             }
             pageToken = cursor
         }
@@ -176,7 +179,7 @@ abstract class Huaka :
         val nextToken = data.nextPageToken?.takeIf(String::isNotBlank)
         if (nextToken != null) {
             check(nextToken != pageToken) { "Huaka returned a duplicate comic-search pageToken" }
-            tokens[page + 1] = nextToken
+            tokens.put(page + 1, nextToken)
         } else {
             tokens.remove(page + 1)
         }
@@ -450,7 +453,8 @@ abstract class Huaka :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val body = fetchMangaRsc(manga)
-        parseMangaMetadata(manga, body)
+        if (fetchDetails) parseMangaMetadata(manga, body)
+        if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
         val episodeData =
             body.extractNextJsRsc<EpisodeData> { element ->
@@ -618,39 +622,29 @@ abstract class Huaka :
 }
 
 @Serializable
-private data class ComicSearchResponse(
+private class ComicSearchResponse(
     val statusCode: Int,
     val message: String = "",
     val data: ComicSearchData? = null,
 )
 
 @Serializable
-private data class ComicSearchData(
+private class ComicSearchData(
     val comics: List<ComicEntry> = emptyList(),
     val nextPageToken: String? = null,
-    val totalCount: Int? = null,
-    val facets: JsonElement? = null,
 )
 
 @Serializable
-private data class ComicEntry(
+private class ComicEntry(
     val id: String,
     val title: String,
     val huaCode: String? = null,
     val thumbnailUrl: String? = null,
     val description: String? = null,
     val authors: List<String> = emptyList(),
-    val translationTeams: List<String> = emptyList(),
     val categories: List<String> = emptyList(),
     val tags: List<String> = emptyList(),
     val finished: Boolean? = null,
-    val totalEpisodes: Int? = null,
-    val totalPages: Int? = null,
-    val totalReads: Long? = null,
-    val totalBookmarks: Long? = null,
-    val totalLikes: Long? = null,
-    val updatedAt: String? = null,
-    val createdAt: String? = null,
 ) {
     fun toManga(): SManga = SManga.create().apply {
         url = "/zh-CN/comics/${huaCode?.takeIf(String::isNotBlank) ?: id}"
@@ -669,7 +663,7 @@ private data class ComicEntry(
 }
 
 @Serializable
-private data class EpisodeData(
+private class EpisodeData(
     val comicId: String,
     val initialEpisodes: List<EpisodeEntry>,
     val initialNextPageToken: String? = null,
@@ -677,68 +671,64 @@ private data class EpisodeData(
 )
 
 @Serializable
-private data class EpisodesResponse(
+private class EpisodesResponse(
     val statusCode: Int,
     val message: String = "",
     val data: EpisodesData? = null,
 )
 
 @Serializable
-private data class EpisodesData(
+private class EpisodesData(
     val episodes: List<EpisodeEntry> = emptyList(),
     val nextPageToken: String? = null,
     val totalCount: Int? = null,
 )
 
 @Serializable
-private data class EpisodeEntry(
+private class EpisodeEntry(
     val id: String,
     val title: String,
     val order: Int,
     val createdAt: String? = null,
-    val updatedAt: String? = null,
-    val pagesCount: Int? = null,
-    val thumbnailUrl: String? = null,
-    val comicId: String? = null,
 )
 
 @Serializable
-private data class CoverData(
+private class CoverData(
     val title: String,
     val thumbnailUrl: String? = null,
 )
 
 @Serializable
-private data class DescriptionData(
+private class DescriptionData(
     val text: String,
 )
 
 @Serializable
-private data class IdentityData(
+private class IdentityData(
     val comic: IdentityComic,
 )
 
 @Serializable
-private data class IdentityComic(
+private class IdentityComic(
     val authors: List<String> = emptyList(),
     val tags: List<String> = emptyList(),
 )
 
 @Serializable
-private data class ComicPagesResponse(
+private class ComicPagesResponse(
     val statusCode: Int,
     val message: String = "",
     val data: ComicPagesData? = null,
 )
 
 @Serializable
-private data class ComicPagesData(
+private class ComicPagesData(
     val pages: List<ComicPage> = emptyList(),
     val nextPageToken: String? = null,
 )
 
 @Serializable
-private data class ComicPage(
+private class ComicPage(
     val mediaUrl: String,
 )
 
