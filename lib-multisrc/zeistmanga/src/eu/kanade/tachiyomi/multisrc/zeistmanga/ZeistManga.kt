@@ -89,15 +89,13 @@ abstract class ZeistManga : KeiSource() {
 
     // Search
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.pathSegments.size < 3) return null
-        val doc = client.get(url, Fetch.DOCUMENT).asJsoup()
-        return mangaDetailsParse(doc).apply {
-            if (title.isEmpty()) {
-                title = doc.selectFirst("meta[property='og:title']")!!.attr("content")
-                    .substringBefore("-").trim()
-            }
-            setUrlWithoutDomain(url.toString())
-        }
+        if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host.removePrefix("www.")) return null
+        if (!POST_PATH_REGEX.matches(url.encodedPath)) return null
+        // Blogger's feed finds a post by its path
+        val postUrl = apiUrl().addQueryParameter("path", url.encodedPath).build()
+        val post = client.get(postUrl, Fetch.XHR).parseAs<ZeistMangaDto>().feed?.entry?.singleOrNull() ?: return null
+        if (post.category.orEmpty().any { it.term in excludedCategories }) return null
+        return post.toSManga(baseUrl)
     }
 
     open fun searchMangaUrl(page: Int, query: String) = apiUrl()
@@ -556,6 +554,7 @@ abstract class ZeistManga : KeiSource() {
     }
 
     companion object {
+        private val POST_PATH_REGEX = Regex("""/\d{4}/\d{2}/[^/]+\.html""")
         private const val MAX_MANGA_RESULTS = 20
         private const val MAX_CHAPTER_RESULTS = 150
         private const val CHAPTER_CHUNK = 50

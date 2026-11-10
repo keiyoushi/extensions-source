@@ -7,7 +7,7 @@ dependencies {
 }
 
 keiyoushi {
-    baseVersionCode = 17
+    baseVersionCode = 18
     libVersion = "1.6"
 
     deeplink {
