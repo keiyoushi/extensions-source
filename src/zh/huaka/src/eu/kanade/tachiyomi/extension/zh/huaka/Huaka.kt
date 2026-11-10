@@ -56,7 +56,7 @@ abstract class Huaka :
     private val comicSearchPageTokens = ConcurrentHashMap<String, ConcurrentHashMap<Int, String>>()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        Preference(screen.context)
+        EditTextPreference(screen.context)
             .apply {
                 key = PREF_LOGIN_ACTION
                 title = "打开花咔官方登录页面"
@@ -80,7 +80,7 @@ abstract class Huaka :
                 }
             }.let(screen::addPreference)
 
-        Preference(screen.context)
+        EditTextPreference(screen.context)
             .apply {
                 key = PREF_CHECK_LOGIN
                 title = "检查登录状态"
@@ -109,7 +109,7 @@ abstract class Huaka :
                 }
             }.let(screen::addPreference)
 
-        Preference(screen.context)
+        EditTextPreference(screen.context)
             .apply {
                 key = PREF_CLEAR_PASSWORD
                 title = "清除旧版保存的密码"
