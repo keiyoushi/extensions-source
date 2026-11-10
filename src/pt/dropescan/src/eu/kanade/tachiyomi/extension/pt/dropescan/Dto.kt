@@ -22,8 +22,8 @@ class MetaDto(
 )
 
 @Serializable
-class RecentDto(
-    val data: RecentPageDto,
+class DataDto<T>(
+    val data: T,
 )
 
 @Serializable
@@ -53,7 +53,6 @@ class ObraDto(
     @SerialName("Formats") private val formats: List<FormatDto>? = null,
     @SerialName("Genres") private val genres: List<GenreDto>? = null,
     @SerialName("Themes") private val themes: List<ThemeDto>? = null,
-    @SerialName("Chapters") val chapters: List<ChapterDto>? = null,
 ) {
     fun toSManga() = SManga.create().apply {
         url = "/obras/$id"
@@ -132,15 +131,19 @@ class ThemeDto(
 )
 
 @Serializable
+class ChapterListDto(
+    val chapters: List<ChapterDto>,
+)
+
+@Serializable
 class ChapterDto(
     @SerialName("ChapterId") private val id: String,
-    @SerialName("ChapterObraId") private val obraId: String,
     @SerialName("ChapterNumber") private val number: String,
     @SerialName("ChapterName") private val name: String? = null,
     @SerialName("CreatedAt") private val createdAt: String? = null,
     @SerialName("Groups") private val groups: List<GroupDto>? = null,
 ) {
-    fun toSChapter() = SChapter.create().apply {
+    fun toSChapter(obraId: String) = SChapter.create().apply {
         url = "/obras/$obraId/$id/1"
         name = buildString {
             append("Capítulo ").append(number)
@@ -154,12 +157,17 @@ class ChapterDto(
 
 @Serializable
 class GroupDto(
-    @SerialName("GroupName") val name: String,
+    @SerialName("Name") val name: String,
 )
 
 @Serializable
-class ReaderDto(
-    val pages: List<PageDto>,
+class ChapterDetailsDto(
+    val chapter: ChapterContentDto,
+)
+
+@Serializable
+class ChapterContentDto(
+    @SerialName("ChapterContent") val pages: List<PageDto>,
 )
 
 @Serializable

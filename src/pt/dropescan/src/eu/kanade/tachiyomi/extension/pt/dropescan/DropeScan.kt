@@ -31,7 +31,7 @@ abstract class DropeScan : KeiSource() {
         val url = "$API_URL/chapters/recent".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
-        val recent = client.get(url, Fetch.XHR).parseAs<RecentDto>().data
+        val recent = client.get(url, Fetch.XHR).parseAs<DataDto<RecentPageDto>>().data
 
         return MangasPage(recent.data.map { it.toSManga() }, recent.meta.currentPage < recent.meta.lastPage)
     }
@@ -76,19 +76,32 @@ abstract class DropeScan : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val obra = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
-            .extractNextJs<ObraDto> { it is JsonObject && "ObraId" in it && "Chapters" in it }!!
-
-        return SMangaUpdate(
-            obra.toSManga(),
-            obra.chapters!!.map { it.toSChapter() }.sortedByDescending { it.chapter_number },
-        )
+    ): SMangaUpdate = coroutineScope {
+        val details = async { if (fetchDetails) getMangaDetails(manga) else manga }
+        val chapterList = async { if (fetchChapters) getChapterList(manga) else chapters }
+        SMangaUpdate(details.await(), chapterList.await())
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
-        .extractNextJs<ReaderDto>()!!.pages
-        .mapIndexed { i, page -> Page(i, imageUrl = imageUrl(page.path)) }
+    private suspend fun getMangaDetails(manga: SManga): SManga = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
+        .extractNextJs<ObraDto> { it is JsonObject && "ObraId" in it && "Chapters" in it }!!
+        .toSManga()
+
+    private suspend fun getChapterList(manga: SManga): List<SChapter> {
+        val mangaUrl = getMangaUrl(manga)
+        val obraId = mangaUrl.toHttpUrl().pathSegments[1]
+
+        return client.get("$API_URL/obras/$obraId/chapters", Fetch.XHR.from(mangaUrl)).parseAs<DataDto<ChapterListDto>>().data.chapters
+            .map { it.toSChapter(obraId) }
+            .sortedByDescending { it.chapter_number }
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterUrl = getChapterUrl(chapter)
+        val chapterId = chapterUrl.toHttpUrl().pathSegments[2]
+
+        return client.get("$API_URL/chapter/$chapterId", Fetch.XHR.from(chapterUrl)).parseAs<DataDto<ChapterDetailsDto>>().data.chapter.pages
+            .mapIndexed { i, page -> Page(i, imageUrl = imageUrl(page.path)) }
+    }
 
     override val supportsFilterFetching = true
 
