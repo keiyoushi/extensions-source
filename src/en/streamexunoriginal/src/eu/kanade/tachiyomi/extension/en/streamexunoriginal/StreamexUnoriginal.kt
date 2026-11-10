@@ -41,11 +41,11 @@ abstract class StreamexUnoriginal : KeiSource() {
     private suspend fun getList(list: String, page: Int) = client.get("$apiUrl/$list?page=$page", Fetch.XHR).parseAs<ListDto>().toMangasPage()
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) return null
+        if (url.host.removePrefix("www.") !in DOMAINS) return null
         val segments = url.pathSegments
         if (segments.firstOrNull() != "manga") return null
         val id = segments.getOrNull(if (segments.getOrNull(1) == "read") 2 else 1)?.toIntOrNull() ?: return null
-        return getDetails(id.toString())
+        return getDetails(id.toString()).apply { initialized = true }
     }
 
     override suspend fun fetchMangaUpdate(
@@ -74,9 +74,11 @@ abstract class StreamexUnoriginal : KeiSource() {
         val url = "$apiUrl/pages".toHttpUrl().newBuilder()
             .addQueryParameter("chapterId", chapterId)
             .build()
-        // The site shows the pages through its image proxy
-        return client.get(url, Fetch.XHR.from(getChapterUrl(chapter))).parseAs<List<PageDto>>().mapIndexed { index, page ->
-            val image = "$baseUrl/api/manga-image".toHttpUrl().newBuilder()
+        val response = client.get(url, Fetch.XHR.from(getChapterUrl(chapter)))
+        // Pages go through the site's image proxy, on the host that answered after any redirect
+        val imageProxy = response.request.url.resolve("/api/manga-image")!!
+        return response.parseAs<List<PageDto>>().mapIndexed { index, page ->
+            val image = imageProxy.newBuilder()
                 .addQueryParameter("url", page.img)
                 .build()
             Page(index, imageUrl = image.toString())
@@ -84,4 +86,8 @@ abstract class StreamexUnoriginal : KeiSource() {
     }
 
     override fun getFilterList(data: JsonElement?) = getFilters()
+
+    companion object {
+        private val DOMAINS = setOf("streamex.hn", "streamex.net", "streamex.sh")
+    }
 }
