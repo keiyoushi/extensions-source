@@ -371,10 +371,12 @@ class MangaDexHelper(private val lang: String) {
 
         if (altTitlesInDesc) {
             val romanizedOriginalLang = MDConstants.romanizedLangCodes[attr.originalLanguage].orEmpty()
+            val allLanguages = lang == MDConstants.ALL_LANGUAGES
             val altTitles = attr.altTitles
-                .filter { it.containsKey(lang) || it.containsKey(romanizedOriginalLang) }
-                .mapNotNull { it.values.singleOrNull() }
-                .filter(String::isNotEmpty)
+                .filter { allLanguages || it.containsKey(lang) || it.containsKey(romanizedOriginalLang) }
+                .mapNotNull { it.entries.singleOrNull() }
+                .filter { it.value.isNotEmpty() }
+                .map { (code, title) -> if (allLanguages) "[$code] $title" else title }
 
             if (altTitles.isNotEmpty()) {
                 val altTitlesDesc = altTitles
