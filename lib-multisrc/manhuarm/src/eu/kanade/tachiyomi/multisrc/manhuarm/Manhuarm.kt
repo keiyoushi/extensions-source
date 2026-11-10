@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.multisrc.manhuarm
 
 import android.util.Base64
+import android.webkit.WebResourceResponse
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
@@ -28,9 +29,13 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.CacheControl
@@ -40,11 +45,13 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.io.ByteArrayInputStream
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
+import kotlin.random.Random
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -95,7 +102,8 @@ abstract class Manhuarm :
         .addInterceptor(TranslationInterceptor({ settings }, { translator }))
         .addInterceptor(ComposedImageInterceptor { settings })
         .rateLimit(3, 2.seconds) { it.host == BingTranslator.HOST || it.host == GoogleTranslator.HOST }
-        .rateLimit(2)
+        // The scripts of a chapter page load all at once, as in a browser
+        .rateLimit(2) { !it.encodedPath.endsWith(".js") }
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
         customUserAgent.takeIf(String::isNotEmpty)?.let { set("User-Agent", it) }
@@ -252,14 +260,32 @@ abstract class Manhuarm :
     }
 
     /**
-     * The chapter page posts its OCR request with the credentials of its `_0xvault` array:
-     * `[base64 chapter id, token, timestamp, nonce, endpoint]`. A vault the page never reads is a decoy whose token
-     * the server rejects and logs: such a chapter loads without its text overlay.
+     * The chapter page gets the text of its overlay from an OCR endpoint in one of two ways: it posts the credentials
+     * of its `_0xvault` array, or it answers a challenge that only its own JavaScript can and decrypts the reply.
      */
     private suspend fun fetchDialogues(document: Document, chapterUrl: String): List<PageDto> {
-        val vault = document.select("script").map(Element::data)
-            .firstOrNull { "_0xvault[" in it }
-            ?.let { VAULT_REGEX.find(it) }
+        val scripts = document.select("script").map(Element::data)
+        // Pages are still readable without the translation overlay
+        return try {
+            val vaultScript = scripts.firstOrNull { "_0xvault[" in it }
+            when {
+                vaultScript != null -> fetchVaultDialogues(vaultScript, chapterUrl)
+                scripts.any { "crypto.subtle" in it && "fetch-ocr" in it } -> decryptDialogues(document)
+                else -> emptyList()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /**
+     * The vault is `[base64 chapter id, token, timestamp, nonce, endpoint]`. A vault the page never reads is a decoy
+     * whose token the server rejects and logs: it is never sent.
+     */
+    private suspend fun fetchVaultDialogues(script: String, chapterUrl: String): List<PageDto> {
+        val vault = VAULT_REGEX.find(script)
             ?.groupValues?.get(1)
             ?.parseAs<List<JsonPrimitive>>()
             ?.map(JsonPrimitive::content)
@@ -272,13 +298,42 @@ abstract class Manhuarm :
             .set("Cache-Control", "no-cache")
             .build()
 
-        // Pages are still readable without the translation overlay
-        return try {
-            val body = OcrRequestDto(String(Base64.decode(vault[0], Base64.DEFAULT)), vault[1], vault[2].toLong(), vault[3])
-            client.post(vault[4], ocrHeaders, Fetch.XHR, body.toJsonRequestBody()).parseAs<List<PageDto>>()
-        } catch (_: Exception) {
-            emptyList()
+        val body = OcrRequestDto(String(Base64.decode(vault[0], Base64.DEFAULT)), vault[1], vault[2].toLong(), vault[3])
+        return client.post(vault[4], ocrHeaders, Fetch.XHR, body.toJsonRequestBody()).parseAs<List<PageDto>>()
+    }
+
+    // One chapter page in a WebView at a time
+    private val webViewMutex = Mutex()
+
+    /**
+     * The challenge changes with every page load, so the chapter page already fetched runs in a WebView as the site's
+     * reader, its single-use credentials included, without images or other sites' requests. The text it decrypts for
+     * its overlay is passed on as it comes out.
+     */
+    private suspend fun decryptDialogues(document: Document): List<PageDto> = webViewMutex.withLock {
+        val bridge = "o" + Random.nextLong().toULong().toString(36)
+        val host = baseUrl.toHttpUrl().host
+        val text = runWebView<String>(timeout = 20.seconds) {
+            headers["User-Agent"]?.let { userAgent = it }
+            blockImages = true
+            // The page's own request sets X-Requested-With itself; anything else WebView sends gets the same value
+            setOriginMatchedHeader("X-Requested-With", "XMLHttpRequest", setOf("https://$host"))
+            val blocked = { WebResourceResponse("text/plain", null, 403, "Blocked", null, ByteArrayInputStream(ByteArray(0))) }
+            interceptRequest { request ->
+                when (request.url.host) {
+                    // The page itself is a data: URL, without a host
+                    null -> null
+                    // Its scripts load as in a browser, without X-Requested-With; its POST stays with the WebView
+                    host -> proxyRequest(request, client) { removeHeader("X-Requested-With") }
+                        ?: if (request.method == "GET") blocked() else null
+                    else -> blocked()
+                }
+            }
+            webMessageBridge(bridge, setOf(baseUrl)) { resolve(it) }
+            injectAtDocumentStart("($DECRYPT_HOOK)('$bridge')", setOf(baseUrl))
+            loadData(document.location(), document.outerHtml())
         }
+        if (text.isEmpty()) emptyList() else text.parseAs<List<PageDto>>()
     }
 
     // =============================== Utils ================================
@@ -423,6 +478,36 @@ abstract class Manhuarm :
         val PAGE_REGEX = Regex(".*?\\.(webp|png|jpg|jpeg)#\\[.*?]", RegexOption.IGNORE_CASE)
 
         private val VAULT_REGEX = Regex("""_0xvault\s*=\s*(\[.*?])""", RegexOption.DOT_MATCHES_ALL)
+
+        // Posts what the page decrypts, or an empty message when its gated request or the decryption fails
+        private const val DECRYPT_HOOK = """(bridge) => {
+            const post = (text) => window[bridge].postMessage(text);
+            const subtle = window.crypto && crypto.subtle;
+            if (!subtle) return;
+            const decrypt = subtle.decrypt;
+            subtle.decrypt = function () {
+                const result = decrypt.apply(subtle, arguments);
+                result.then((buffer) => {
+                    const text = new TextDecoder().decode(buffer);
+                    if (text.trimStart().startsWith('[')) post(text);
+                }, () => post(''));
+                return result;
+            };
+            const gated = new WeakSet();
+            const setRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
+            XMLHttpRequest.prototype.setRequestHeader = function (name) {
+                if (/^x-gate-/i.test(name)) gated.add(this);
+                return setRequestHeader.apply(this, arguments);
+            };
+            const send = XMLHttpRequest.prototype.send;
+            XMLHttpRequest.prototype.send = function () {
+                this.addEventListener('loadend', () => {
+                    if (gated.has(this) && (this.status < 200 || this.status >= 300)) post('');
+                });
+                return send.apply(this, arguments);
+            };
+        }"""
+
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH)
 
         // Machine translations are only available for chapters released after 2025-09-09
