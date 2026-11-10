@@ -8,13 +8,13 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
@@ -28,10 +28,6 @@ abstract class VoraToon : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         rateLimit(3)
-    }
-
-    override fun Headers.Builder.configureHeaders() = apply {
-        set("Referer", "$baseUrl/")
     }
 
     private val rscHeaders: Headers
@@ -86,19 +82,10 @@ abstract class VoraToon : KeiSource() {
             it is JsonObject && "series" in it && "chapters" in it
         } ?: return SMangaUpdate(manga, chapters)
 
-        val updatedManga = if (fetchDetails) {
-            dto.series.firstOrNull()?.toSManga() ?: manga
-        } else {
-            manga
-        }
-
-        val updatedChapters = if (fetchChapters) {
-            dto.chapters.map { it.toSChapter(slug) }
-        } else {
-            chapters
-        }
-
-        return SMangaUpdate(updatedManga, updatedChapters)
+        return SMangaUpdate(
+            dto.series.firstOrNull()?.toSManga() ?: manga,
+            dto.chapters.map { it.toSChapter(slug) },
+        )
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -130,84 +117,31 @@ abstract class VoraToon : KeiSource() {
         return dto.chapter.toPageList(chapterUrl)
     }
 
-    override fun getImageRequest(page: Page): Request {
-        val referer = page.url.ifEmpty { "$baseUrl/" }
-        return super.getImageRequest(page).newBuilder()
-            .header("Referer", referer)
-            .build()
-    }
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
+        .fetch(Fetch.IMAGE.from(page.url))
+        .build()
 
     override val supportsFilterFetching: Boolean get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
         val dto = client.get("$baseUrl/browse", rscHeaders, Fetch.XHR).extractNextJs<FilterPayloadDto> {
             it is JsonObject && "genres" in it
-        } ?: return JsonArray(emptyList())
+        } ?: error("Failed to fetch filter data")
         return dto.genres.toJsonElement()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val genres = data?.parseAs<List<GenreItem>>()?.map { it.toPair() }?.toTypedArray()
-            ?: DEFAULT_GENRES
+        val genres = data?.parseAs<List<GenreItem>>()?.map { it.toPair() }
         return FilterList(
-            SortFilter(),
-            StatusFilter(),
-            FormatFilter(),
-            TypeFilter(),
-            GenreFilter(genres),
-        )
-    }
-
-    companion object {
-        private val DEFAULT_GENRES = arrayOf(
-            Pair("Adult", "adult"),
-            Pair("4-Koma", "4-koma"),
-            Pair("Action", "action"),
-            Pair("Adventure", "adventure"),
-            Pair("Comedy", "comedy"),
-            Pair("Cooking", "cooking"),
-            Pair("Demons", "demons"),
-            Pair("Drama", "drama"),
-            Pair("Ecchi", "ecchi"),
-            Pair("Fantasy", "fantasy"),
-            Pair("Game", "game"),
-            Pair("Gender Bender", "gender bender"),
-            Pair("Gore", "gore"),
-            Pair("Harem", "harem"),
-            Pair("Historical", "historical"),
-            Pair("Horror", "horror"),
-            Pair("Isekai", "isekai"),
-            Pair("Josei", "josei"),
-            Pair("Magic", "magic"),
-            Pair("Martial Arts", "martial arts"),
-            Pair("Mature", "mature"),
-            Pair("Mecha", "mecha"),
-            Pair("Medical", "medical"),
-            Pair("Military", "military"),
-            Pair("Music", "music"),
-            Pair("Mystery", "mystery"),
-            Pair("One-Shot", "one-shot"),
-            Pair("Police", "police"),
-            Pair("Psychological", "psychological"),
-            Pair("Reincarnation", "reincarnation"),
-            Pair("Romance", "romance"),
-            Pair("School", "school"),
-            Pair("School Life", "school life"),
-            Pair("Sci-Fi", "sci-fi"),
-            Pair("Seinen", "seinen"),
-            Pair("Shoujo", "shoujo"),
-            Pair("Shoujo Ai", "shoujo ai"),
-            Pair("Shounen", "shounen"),
-            Pair("Shounen Ai", "shounen ai"),
-            Pair("Slice of Life", "slice of life"),
-            Pair("Sports", "sports"),
-            Pair("Super Power", "super power"),
-            Pair("Supernatural", "supernatural"),
-            Pair("Thriller", "thriller"),
-            Pair("Tragedy", "tragedy"),
-            Pair("Vampire", "vampire"),
-            Pair("Webtoons", "webtoons"),
-            Pair("Yuri", "yuri"),
+            buildList {
+                add(SortFilter())
+                add(StatusFilter())
+                add(FormatFilter())
+                add(TypeFilter())
+                if (!genres.isNullOrEmpty()) {
+                    add(GenreFilter(genres.toTypedArray()))
+                }
+            },
         )
     }
 }
