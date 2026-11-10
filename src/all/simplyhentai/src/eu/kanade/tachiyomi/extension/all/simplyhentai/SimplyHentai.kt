@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.simplyhentai
 
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -17,6 +18,7 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.time.Instant
 
@@ -108,6 +110,24 @@ abstract class SimplyHentai :
         }
     }
 
+    // Doujin.sexy shows the same albums under the same paths
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val segments = url.pathSegments
+        if (url.host.removePrefix("www.") !in linkHosts || segments.size < 2) return null
+        val response = client.get("$apiUrl/manga/${segments[1]}", Fetch.XHR, ensureSuccess = false)
+        if (!response.isSuccessful) {
+            response.close()
+            // Paths that aren't albums get a 404
+            if (response.code == 404) return null
+            throw HttpException(response.code)
+        }
+        val album = response.parseAs<SHAlbum>().data
+        // Section links such as /language/english also have two segments
+        return album.takeIf { it.series.slug == segments[0] }?.toSManga()?.apply { initialized = true }
+    }
+
+    private val linkHosts get() = setOf(baseUrl.toHttpUrl().host.removePrefix("www."), "doujin.sexy")
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -116,21 +136,7 @@ abstract class SimplyHentai :
     ): SMangaUpdate {
         val album = client.get("$apiUrl/manga/${manga.url.split('/')[2]}", Fetch.XHR).parseAs<SHAlbum>().data
 
-        val updatedManga = manga.apply {
-            url = album.path
-            title = album.title
-            description = buildString {
-                if (!album.description.isNullOrEmpty()) {
-                    append(album.description, "\n\n")
-                }
-                append("Series: ", album.series.title, "\n")
-                album.characters.joinTo(this, prefix = "Characters: ") { it.title }
-            }
-            thumbnail_url = album.preview.sizes.thumb
-            genre = album.tags.joinToString { it.title }
-            artist = album.artists.joinToString { it.title }
-            author = artist
-        }
+        val updatedManga = album.toSManga()
 
         val chapter = SChapter.create().apply {
             name = "Chapter"
