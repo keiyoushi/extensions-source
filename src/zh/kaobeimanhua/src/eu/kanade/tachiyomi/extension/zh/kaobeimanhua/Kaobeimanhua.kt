@@ -127,7 +127,9 @@ abstract class Kaobeimanhua : KeiSource() {
         .set("version", WEB_VERSION)
         .build()
 
-    private val desktopHeaders: Headers get() = headersBuilder().set("User-Agent", DESKTOP_USER_AGENT).build()
+    private val desktopHeaders: Headers get() = headersBuilder()
+        .apply { get("User-Agent")?.let { set("User-Agent", it.toDesktopUserAgent()) } }
+        .build()
 
     private suspend inline fun <reified T> api(path: String, vararg query: Pair<String, String?>): T {
         val url = API_URL.toHttpUrl().newBuilder()
@@ -145,9 +147,13 @@ abstract class Kaobeimanhua : KeiSource() {
         private const val WEB_VERSION = "2026.10.16"
         private const val PAGE_SIZE = 30
         private const val CHAPTER_PAGE_SIZE = 500
-        private const val DESKTOP_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
         private val DOMAINS = setOf("mangacopy.com", "copy4000.com", "copy5000.com", "copy20.com", "copymanga.fun")
         private val KEY_REGEX = Regex("""var cct = '([^']*)'""")
         private val CONTENT_KEY_REGEX = Regex("""var contentKey = '([^']*)'""")
     }
 }
+
+// The app's mobile Chrome user agent, as the same Chrome on a Windows desktop
+private fun String.toDesktopUserAgent() = replace(ANDROID_PLATFORM_REGEX, "(Windows NT 10.0; Win64; x64)").replace(" Mobile Safari/", " Safari/")
+
+private val ANDROID_PLATFORM_REGEX = Regex("""\(Linux; Android[^)]*\)""")
