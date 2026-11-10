@@ -143,10 +143,18 @@ abstract class Ikanmh : KeiSource() {
     // ---- URL 搜索（在搜索框粘贴站点链接） ----
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "book") return null
-        return client.get(url, Fetch.DOCUMENT).asJsoup().parseDetails(SManga.create()).apply {
-            this.url = url.encodedPath
+        if (url.host.removePrefix("www.") !in DOMAINS) return null
+        val id = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
+        val bookPath = when (url.pathSegments[0]) {
+            "book" -> "/book/$id"
+            "chapter" -> client.get("$baseUrl/chapter/$id", Fetch.DOCUMENT).asJsoup()
+                .selectFirst("a.view-fix-bottom-bar-item[href^=/book/]")!!
+                .absUrl("href").toHttpUrl().encodedPath
+            else -> return null
         }
+        val manga = SManga.create().apply { this.url = bookPath }
+        return client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup().parseDetails(manga)
+            .apply { initialized = true }
     }
 
     // ---- 正文 ----
@@ -166,6 +174,7 @@ abstract class Ikanmh : KeiSource() {
     private companion object {
         val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ENGLISH)
         val CHAPTER_NUMBER = Regex("""第(\d+)""")
+        val DOMAINS = setOf("ikanmh.xyz", "ikanmh.cc", "jjmhw12.top")
     }
 }
 
