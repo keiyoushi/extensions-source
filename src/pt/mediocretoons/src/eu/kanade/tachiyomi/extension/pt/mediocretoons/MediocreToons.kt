@@ -51,7 +51,7 @@ abstract class MediocreToons :
             preferences.edit().putString(TOKEN_PREF, value).apply()
         }
 
-    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::authIntercept).rateLimit(permits = 2, period = 1.seconds)
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::authIntercept).rateLimit(permits = 1, period = 2.seconds)
 
     private fun authIntercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
