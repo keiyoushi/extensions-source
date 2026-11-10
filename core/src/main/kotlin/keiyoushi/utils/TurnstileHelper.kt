@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.Dialog
 import android.content.res.Configuration
 import android.graphics.Color
+import android.graphics.Point
 import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
 import android.os.Handler
@@ -183,7 +184,8 @@ internal fun foregroundActivity(): Activity? = runCatching { topActivity() }.get
 /**
  * Shows [webView] over the foreground Activity, dimmed around it, for a check that wants the user's tap: all of it, or
  * only an area of it. A [transparent] WebView shows the app through it, for a page that is only the widget.
- * [onScreenGone] runs when the Activity it is shown on goes away, after it is hidden.
+ * [onScreenGone] runs when the Activity it is shown on goes away, after it is hidden, and [onFailure] when showing or
+ * placing it throws.
  */
 internal class CaptchaOverlayDialog(
     private val webView: WebView,
@@ -191,9 +193,11 @@ internal class CaptchaOverlayDialog(
     private val onCancel: () -> Unit,
     private val onNoActivity: () -> Unit,
     private val onScreenGone: () -> Unit = onCancel,
+    private val onFailure: (Throwable) -> Unit = { onCancel() },
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var dialog: Dialog? = null
+    private var shownOn: Activity? = null
     private var unhook: (() -> Unit)? = null
     private var placed: Rect? = null
 
@@ -202,13 +206,13 @@ internal class CaptchaOverlayDialog(
     }
 
     /**
-     * Shows the WebView, or only its [area] (in the WebView's pixels at its off-screen size) when given; moves the
-     * area if it is already shown.
+     * Shows the WebView, or only its [area] (in the WebView's pixels at its current size, which it keeps) when given;
+     * moves the area if it is already shown.
      */
     fun show(area: Rect? = null) = runOnMain {
         if (dialog != null) {
             // The same area again leaves the view where it is, so a tap isn't lost
-            if (area != placed) runCatching { place(area) }.onFailure { onCancel() }
+            if (area != placed) runCatching { place(area) }.onFailure(onFailure)
             return@runOnMain
         }
         val activity = foregroundActivity() ?: return@runOnMain onNoActivity()
@@ -228,26 +232,28 @@ internal class CaptchaOverlayDialog(
                 setOnDismissListener { onCancel() }
             }
             dialog = d
+            shownOn = activity
             place(area)
             unhook = activity.onDestroyed {
                 dismiss()
                 onScreenGone()
             }
             d.show()
-        } catch (_: Throwable) {
-            onCancel()
+        } catch (t: Throwable) {
+            onFailure(t)
         }
     }
 
-    // The whole WebView, or a box of the area's size in the middle of the screen with the WebView moved under it
+    // The whole WebView, or a box of the area's size in the middle of the screen with the WebView moved under it, at
+    // the size the area was measured at: off-screen, or the window's while the whole WebView is shown
     private fun place(area: Rect?) {
         val d = dialog ?: return
         placed = area
+        val size = if (webView.width > 0 && webView.height > 0) Point(webView.width, webView.height) else offscreenSize()
         (webView.parent as? ViewGroup)?.removeView(webView)
         webView.translationX = 0f
         webView.translationY = 0f
         if (area == null || area.isEmpty) return d.setContentView(webView)
-        val size = offscreenSize()
         val box = FrameLayout(d.context).apply {
             addView(webView, FrameLayout.LayoutParams(size.x, size.y))
             webView.translationX = -area.left.toFloat()
@@ -262,9 +268,13 @@ internal class CaptchaOverlayDialog(
     /** Whether it's on screen; main thread only. */
     val isShowing: Boolean get() = dialog != null
 
+    /** Whether it's on screen over an Activity the user is in, not one left in the background; main thread only. */
+    val isInFront: Boolean get() = dialog != null && foregroundActivity() === shownOn
+
     fun dismiss() = runOnMain {
         val d = dialog ?: return@runOnMain
         dialog = null
+        shownOn = null
         placed = null
         unhook?.invoke()
         unhook = null

@@ -356,11 +356,14 @@ class WebViewScope<T> internal constructor(
      * it matches nothing. Calling it again while shown measures the area again.
      *
      * Show it once the check hasn't passed by itself for a few seconds: most pass without a tap. The run's timeout
-     * waits while it's shown. The run fails with "Captcha cancelled" when the user dismisses it, and for a few minutes
-     * after, showing the same site's page again returns false. When the app's screen goes away, such as on a rotation,
-     * it is hidden until the next call. Returns false, leaving the WebView hidden, when the app isn't in the foreground.
+     * waits while it's shown and the user is in the app, for at most three minutes after it was first shown. The run
+     * fails with "Captcha cancelled" when the user dismisses it, and for a few minutes after, showing the same site's
+     * page again returns false. When the app's screen goes away, such as on a rotation, it is hidden until the next call.
+     * Returns false, leaving the WebView hidden, when the app isn't in the foreground. Call it on the main thread, where
+     * [poll] and [onPageFinished] run.
      */
     fun showToUser(area: String? = null): Boolean {
+        check(Looper.myLooper() == Looper.getMainLooper()) { "showToUser must be called on the main thread" }
         if (destroyed || deferred.isCompleted || foregroundActivity() == null) return false
         val host = pageHost
         if (host != null) {
@@ -380,6 +383,7 @@ class WebViewScope<T> internal constructor(
                 // Hidden, for a later call to show again
                 onNoActivity = {},
                 onScreenGone = {},
+                onFailure = ::reject,
             ).also { overlay = it }
             if (area == null) return@runOnMain dialog.show()
             evaluateJs(measureAreaScript(area)) { json ->
@@ -779,6 +783,10 @@ private val FONT_EXTENSIONS = listOf(".woff2", ".woff", ".ttf", ".otf")
 private val dismissedUntil = ConcurrentHashMap<String, TimeMark>()
 private val DISMISSED_COOLDOWN = 5.minutes
 
+// How often a run rechecks whether its WebView is shown, and how long after it was first shown the run may last
+private val SHOWN_RECHECK = 1.seconds
+private val SHOWN_TIME_LIMIT = 3.minutes
+
 /**
  * Runs a WebView with [configure], suspending until it calls `resolve`/`reject` or [timeout]
  * elapses. The WebView is torn down whether this returns, throws, or is canceled.
@@ -799,9 +807,20 @@ suspend fun <T> runWebView(
         } catch (t: Throwable) {
             deferred.completeExceptionally(t)
         }
-        // The timeout waits while the user sees the WebView
-        while (withTimeoutOrNull(timeout) { deferred.join() } == null) {
-            if (scope.overlay?.isShowing != true) throw WebViewTimeoutException(timeout)
+        // The timeout waits while the user sees the WebView, until SHOWN_TIME_LIMIT after it was first shown
+        var deadline = TimeSource.Monotonic.markNow() + timeout
+        var limit: TimeSource.Monotonic.ValueTimeMark? = null
+        var checked = TimeSource.Monotonic.markNow()
+        while (!deferred.isCompleted) {
+            val left = -deadline.elapsedNow()
+            if (!left.isPositive()) throw WebViewTimeoutException(timeout)
+            withTimeoutOrNull(minOf(left, SHOWN_RECHECK)) { deferred.join() }
+            val now = TimeSource.Monotonic.markNow()
+            if (scope.overlay?.isInFront == true) {
+                val end = limit ?: (now + SHOWN_TIME_LIMIT).also { limit = it }
+                deadline = maxOf(deadline, minOf(deadline + (now - checked), end))
+            }
+            checked = now
         }
         deferred.await()
     } finally {
