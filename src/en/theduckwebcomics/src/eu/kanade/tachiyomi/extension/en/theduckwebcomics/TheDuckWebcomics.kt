@@ -46,7 +46,7 @@ abstract class TheDuckWebcomics : KeiSource() {
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
+        val url = "$baseUrl/search/".toHttpUrl().newBuilder().apply {
             addQueryParameter("search", query)
             addQueryParameter("page", page.toString())
             filters.filterIsInstance<QueryParam>().forEach {
@@ -70,13 +70,13 @@ abstract class TheDuckWebcomics : KeiSource() {
             val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
 
             document.selectFirst(".yellow-box > .paranomargin")?.text()?.let(::error)
-            document.select("#page_dropdown > option").mapIndexed { idx, el ->
+            document.chapters().mapIndexed { idx, pages ->
                 SChapter.create().apply {
                     chapter_number = idx + 1f
-                    name = el.text().substringAfter("- ")
-                    setUrlWithoutDomain(el.absUrl("value") + "/")
+                    name = pages.first().title
+                    url = "${manga.url}${pages.first().id}/"
                 }
-            }
+            }.reversed()
         } else {
             chapters
         }
@@ -85,11 +85,23 @@ abstract class TheDuckWebcomics : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
-        val imageUrl = document.selectFirst(".page-image")?.absUrl("src")
-            ?: throw Exception("Page image not found")
-        return listOf(Page(0, imageUrl = imageUrl))
+        val chapterUrl = getChapterUrl(chapter)
+        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
+        val (comic, id) = chapterUrl.toHttpUrl().pathSegments
+        // A page of the last chapter, listed on its own before a newer chapter started
+        val pages = document.chapters().firstOrNull { it.first().id == id }
+            ?: return listOf(Page(0, imageUrl = document.pageImage()))
+
+        return pages.mapIndexed { idx, page ->
+            if (idx == 0) {
+                Page(0, imageUrl = document.pageImage())
+            } else {
+                Page(idx, url = "$baseUrl/$comic/${page.id}/")
+            }
+        }
     }
+
+    override suspend fun getImageUrl(page: Page): String = client.get(page.url, Fetch.DOCUMENT).asJsoup().pageImage()
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         TypeFilter(),
@@ -99,4 +111,21 @@ abstract class TheDuckWebcomics : KeiSource() {
         RatingFilter(),
         UpdateFilter(),
     )
+
+    private fun Document.pageImage(): String = selectFirst(".page-image")?.absUrl("src")
+        ?: throw Exception("Page image not found")
+
+    // The site's page list shows the first page of a chapter without a dash
+    private fun Document.chapters(): List<List<ComicPage>> {
+        val chapters = mutableListOf<MutableList<ComicPage>>()
+        select("#page_dropdown > option").reversed().forEach { option ->
+            val text = option.text()
+            if (!text.startsWith("-") || chapters.isEmpty()) chapters.add(mutableListOf())
+            chapters.last().add(ComicPage(option.attr("value"), text.removePrefix("- ")))
+        }
+        // The last chapter can still get new pages, so they stay separate to show up as new chapters
+        return chapters.dropLast(1) + chapters.lastOrNull().orEmpty().map { listOf(it) }
+    }
 }
+
+private class ComicPage(val id: String, val title: String)

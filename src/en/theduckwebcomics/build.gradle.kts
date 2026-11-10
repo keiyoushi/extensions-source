@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "The Duck Webcomics"
-    versionCode = 5
+    versionCode = 6
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
