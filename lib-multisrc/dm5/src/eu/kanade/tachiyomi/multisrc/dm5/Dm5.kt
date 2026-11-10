@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.lib.unpacker.Unpacker
 import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.MarkdownDescription
@@ -45,7 +46,7 @@ abstract class Dm5 :
         // Some mangas are blocked without this
         set("Accept-Language", "zh-TW")
         // Mobile browsers are sent to the m. site, whose pages are different
-        set("User-Agent", USER_AGENT)
+        get("User-Agent")?.let { set("User-Agent", it.toDesktopUserAgent()) }
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList("$baseUrl/manhua-list-p$page/")
@@ -224,9 +225,7 @@ abstract class Dm5 :
     }
 
     override suspend fun getImageUrl(page: Page): String {
-        val referer = page.url.substringBefore("chapterfun.ashx")
-        val newHeaders = headers.newBuilder().set("Referer", referer).build()
-        val response = client.get(page.url, newHeaders, Fetch.SCRIPT)
+        val response = client.get(page.url, Fetch.SCRIPT.from(page.url.substringBefore("chapterfun.ashx")))
         val script = Unpacker.unpack(response.body.string())
         val pix = script.substringAfter("var pix=\"").substringBefore("\"")
         val pvalue = script.substringAfter("var pvalue=[\"").substringBefore("\"")
@@ -234,15 +233,13 @@ abstract class Dm5 :
         return pix + pvalue + query
     }
 
-    // The image server checks that the Referer is the chapter page
-    override fun getImageRequest(page: Page): Request {
-        val newHeaders = headers.newBuilder().set("Referer", page.url.substringBefore("chapterfun.ashx")).build()
-        return Request.Builder()
-            .url(page.imageUrl!!)
-            .headers(newHeaders)
-            .get()
-            .build()
-    }
+    // The chapter page's referrer policy (no-referrer-when-downgrade) sends its full address, which the image host checks:
+    // Fetch.from would cut it to the origin, as the default policy does
+    override fun getImageRequest(page: Page): Request = Request.Builder()
+        .url(page.imageUrl!!)
+        .fetch(Fetch.IMAGE)
+        .header("Referer", page.url.substringBefore("chapterfun.ashx"))
+        .build()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val chapterCommentsPreference = SwitchPreferenceCompat(screen.context).apply {
@@ -310,6 +307,10 @@ abstract class Dm5 :
         private const val NEXT_PAGE_SELECTOR = "div.page-pagination a:contains(>)"
         private const val SEARCH_MANGA_SELECTOR = "ul.mh-list > li, div.banner_detail_form"
         private const val DETAILS_SELECTOR = "div.banner_detail_form"
-        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"
     }
 }
+
+// The app's mobile Chrome user agent, as the same Chrome on a Windows desktop
+private fun String.toDesktopUserAgent() = replace(ANDROID_PLATFORM_REGEX, "(Windows NT 10.0; Win64; x64)").replace(" Mobile Safari/", " Safari/")
+
+private val ANDROID_PLATFORM_REGEX = Regex("""\(Linux; Android[^)]*\)""")
