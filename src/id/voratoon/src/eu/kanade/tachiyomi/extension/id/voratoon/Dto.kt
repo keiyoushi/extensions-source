@@ -10,14 +10,30 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlin.time.Instant
 
 @Serializable
-class SeriesListResponse(
-    val data: List<SeriesItem>,
-    val meta: Meta? = null,
+class BrowseDto(
+    val series: List<SeriesItem> = emptyList(),
+    val seriesMeta: Meta? = null,
+)
+
+@Serializable
+class FilterPayloadDto(
+    val genres: List<GenreItem> = emptyList(),
+)
+
+@Serializable
+class SeriesDetailsDto(
+    val series: List<SeriesItem> = emptyList(),
+    val chapters: List<ChapterItem> = emptyList(),
+)
+
+@Serializable
+class ChapterPageDto(
+    val chapter: ChapterItem,
 )
 
 @Serializable
 class SeriesItem(
-    private val id: Int,
+    private val id: Int? = null,
     private val data: SeriesData,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
@@ -40,7 +56,7 @@ class SeriesItem(
 
 @Serializable
 class SeriesData(
-    val slug: String?,
+    val slug: String? = null,
     val title: String,
     val author: String? = null,
     val status: String? = null,
@@ -60,27 +76,16 @@ class GenreInfo(
 )
 
 @Serializable
-class GenreResponse(
-    val data: List<GenreItem>,
-)
-
-@Serializable
 class GenreItem(
-    val id: Int,
     private val data: GenreInfo,
 ) {
-    fun toPair(): Pair<String, String> = data.name to id.toString()
+    fun toPair(): Pair<String, String> = data.name to data.name.lowercase()
 }
 
 @Serializable
 class Meta(
     val page: Int? = null,
     val lastPage: Int? = null,
-)
-
-@Serializable
-class SeriesDetailResponse(
-    val data: SeriesItem,
 )
 
 @Serializable
@@ -103,8 +108,8 @@ class ChapterItem(
         chapter_number = index
     }
 
-    fun toPageList(): List<Page> = data.images?.mapIndexed { index, imageUrl ->
-        Page(index, imageUrl = imageUrl)
+    fun toPageList(chapterUrl: String = ""): List<Page> = data.images?.mapIndexed { index, imageUrl ->
+        Page(index, url = chapterUrl, imageUrl = imageUrl)
     } ?: emptyList()
 }
 
@@ -113,16 +118,6 @@ class ChapterData(
     val index: Float? = null,
     val title: String? = null,
     val images: List<String>? = null,
-)
-
-@Serializable
-class ChapterListResponse(
-    val data: List<ChapterItem>,
-)
-
-@Serializable
-class ChapterDetailResponse(
-    val data: ChapterItem,
 )
 
 private fun parseChapterDate(dateString: String): Long = Instant.tryParse(dateString)

@@ -8,145 +8,97 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
-import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
+import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
-import kotlin.time.Clock
-
-private const val SESSION_MARGIN_SECONDS = 30
 
 @Source
 abstract class VoraToon : KeiSource() {
-    private val baseHost get() = baseUrl.toHttpUrl().host
-
-    private val apiUrl get() = "https://$baseHost/api/proxy"
-
-    private fun isApiRequest(request: Request) = request.url.host == baseHost && request.url.encodedPath.contains("/api/")
-
-    private fun Interceptor.Chain.refreshSession(request: Request) {
-        // Set-Cookie vt_proxy
-        proceed(
-            request.newBuilder()
-                .url(baseUrl.toHttpUrl())
-                .headers(headersBuilder().removeAll("Accept").build())
-                .fetch(Fetch.DOCUMENT)
-                .build(),
-        ).close()
-    }
-
-    private fun OkHttpClient.sessionExpired(url: HttpUrl): Boolean {
-        val token = cookieJar.loadForRequest(url).firstOrNull { it.name == "vt_proxy" }?.value
-            ?: return true
-        // token is v1.<issued>.<expires>.<id>.<signature>, valid for 15 minutes unlike the 24h cookie
-        val expires = token.split('.').getOrNull(2)?.toLongOrNull() ?: return false
-        return expires - SESSION_MARGIN_SECONDS <= Clock.System.now().epochSeconds
-    }
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        val sessionLock = Any()
-        addInterceptor { chain ->
-            val request = chain.request()
-            if (!isApiRequest(request)) return@addInterceptor chain.proceed(request)
-
-            synchronized(sessionLock) {
-                if (client.sessionExpired(request.url)) chain.refreshSession(request)
-            }
-
-            val response = chain.proceed(request)
-            if (response.code == 403) {
-                response.close()
-                chain.refreshSession(request)
-                chain.proceed(request)
-            } else {
-                response
-            }
-        }
-        rateLimit(3) { it.encodedPath.contains("/api/") }
+        rateLimit(3)
     }
 
     override fun Headers.Builder.configureHeaders() = apply {
-        set("Accept", "application/json")
-        set("Accept-language", "en-US,en;q=0.9,id;q=0.8")
+        set("Referer", "$baseUrl/")
     }
 
-    override suspend fun getPopularManga(page: Int) = parseSeriesListResponse(
-        client.get(
-            "$apiUrl/series".toHttpUrl().newBuilder()
-                .addQueryParameter("includeMeta", "true")
-                .addQueryParameter("take", "30")
-                .addQueryParameter("page", page.toString())
-                .addQueryParameter("sort", "popularity")
-                .addQueryParameter("sortOrder", "desc")
-                .build(),
-            Fetch.XHR,
-        ),
+    private val rscHeaders: Headers
+        get() = headers.newBuilder().set("RSC", "1").build()
+
+    override suspend fun getPopularManga(page: Int): MangasPage = parseSeriesList(
+        "$baseUrl/browse".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("sort", "popular")
+            .build(),
     )
 
-    override suspend fun getLatestUpdates(page: Int) = parseSeriesListResponse(
-        client.get(
-            "$apiUrl/series".toHttpUrl().newBuilder()
-                .addQueryParameter("includeMeta", "true")
-                .addQueryParameter("take", "30")
-                .addQueryParameter("page", page.toString())
-                .addQueryParameter("sort", "latest")
-                .addQueryParameter("sortOrder", "desc")
-                .build(),
-            Fetch.XHR,
-        ),
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseSeriesList(
+        "$baseUrl/browse".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("sort", "new")
+            .build(),
     )
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = parseSeriesListResponse(
-        client.get(
-            "$apiUrl/series".toHttpUrl().newBuilder()
-                .addQueryParameter("includeMeta", "true")
-                .addQueryParameter("take", "30")
-                .addQueryParameter("page", page.toString())
-                .apply {
-                    if (query.isNotEmpty()) {
-                        addQueryParameter("title", query)
-                    }
-                    val filterBuilder = StringBuilder()
-                    filters.filterIsInstance<UriFilter>().forEach {
-                        it.addToFilter(filterBuilder)
-                    }
-                    if (filterBuilder.isNotEmpty()) {
-                        addQueryParameter("filter", filterBuilder.toString())
-                    }
-                    filters.filterIsInstance<UriQueryFilter>().forEach {
-                        it.addToQuery(this)
-                    }
-                }
-                .build(),
-            Fetch.XHR,
-        ),
-    )
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "$baseUrl/browse".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
+            if (query.isNotEmpty()) {
+                addQueryParameter("q", query)
+            }
+            filters.filterIsInstance<UriQueryFilter>().forEach {
+                it.addToQuery(this)
+            }
+        }.build()
+
+        return parseSeriesList(url)
+    }
+
+    private suspend fun parseSeriesList(url: HttpUrl): MangasPage {
+        val dto = client.get(url, rscHeaders, Fetch.XHR).extractNextJs<BrowseDto> {
+            it is JsonObject && "series" in it && "seriesMeta" in it
+        } ?: return MangasPage(emptyList(), false)
+
+        val mangas = dto.series.map { it.toSManga() }
+        val hasNextPage = dto.seriesMeta?.let { (it.page ?: 0) < (it.lastPage ?: 0) } ?: false
+        return MangasPage(mangas, hasNextPage)
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val slug = manga.getSlug(baseUrl)
-        val details = if (fetchDetails) async { client.get("$apiUrl/series/$slug", Fetch.XHR) } else null
-        val chapterList = if (fetchChapters) async { client.get("$apiUrl/series/$slug/chapters", Fetch.XHR) } else null
+        val dto = client.get("$baseUrl/series/$slug", rscHeaders, Fetch.XHR).extractNextJs<SeriesDetailsDto> {
+            it is JsonObject && "series" in it && "chapters" in it
+        } ?: return SMangaUpdate(manga, chapters)
 
-        SMangaUpdate(
-            details?.await()?.parseAs<SeriesDetailResponse>()?.data?.toSManga() ?: manga,
-            chapterList?.await()?.parseAs<ChapterListResponse>()?.data?.map { it.toSChapter(slug) } ?: chapters,
-        )
+        val updatedManga = if (fetchDetails) {
+            dto.series.firstOrNull()?.toSManga() ?: manga
+        } else {
+            manga
+        }
+
+        val updatedChapters = if (fetchChapters) {
+            dto.chapters.map { it.toSChapter(slug) }
+        } else {
+            chapters
+        }
+
+        return SMangaUpdate(updatedManga, updatedChapters)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -159,43 +111,103 @@ abstract class VoraToon : KeiSource() {
         return getMangaUpdate(
             manga,
             emptyList(),
-            true,
-            false,
+            fetchDetails = true,
+            fetchChapters = false,
         ).manga
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (slug, chapterIndex) = chapter.getSlugAndIndex(baseUrl)
-        return client.get(
-            "$apiUrl/series/$slug/chapters/$chapterIndex",
+        val chapterUrl = "$baseUrl/series/$slug/chapter/$chapterIndex"
+        val dto = client.get(
+            chapterUrl,
+            rscHeaders,
             Fetch.XHR,
-        ).parseAs<ChapterDetailResponse>().data.toPageList()
+        ).extractNextJs<ChapterPageDto> {
+            it is JsonObject && "chapter" in it
+        } ?: error("Failed to extract chapter pages")
+
+        return dto.chapter.toPageList(chapterUrl)
     }
 
-    private fun parseSeriesListResponse(response: Response): MangasPage {
-        val result = response.parseAs<SeriesListResponse>()
-        val mangas = result.data.map { it.toSManga() }
-        val hasNextPage = result.meta?.let { (it.page ?: 0) < (it.lastPage ?: 0) } ?: false
-        return MangasPage(mangas, hasNextPage)
+    override fun getImageRequest(page: Page): Request {
+        val referer = page.url.ifEmpty { "$baseUrl/" }
+        return super.getImageRequest(page).newBuilder()
+            .header("Referer", referer)
+            .build()
     }
 
     override val supportsFilterFetching: Boolean get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres", Fetch.XHR).parseAs()
+    override suspend fun fetchFilterData(): JsonElement {
+        val dto = client.get("$baseUrl/browse", rscHeaders, Fetch.XHR).extractNextJs<FilterPayloadDto> {
+            it is JsonObject && "genres" in it
+        } ?: return JsonArray(emptyList())
+        return dto.genres.toJsonElement()
+    }
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val genres = data?.parseAs<GenreResponse>()?.data?.map { it.toPair() }
+        val genres = data?.parseAs<List<GenreItem>>()?.map { it.toPair() }?.toTypedArray()
+            ?: DEFAULT_GENRES
         return FilterList(
-            buildList {
-                add(SortFilter())
-                add(SortOrderFilter())
-                add(StatusFilter())
-                add(FormatFilter())
-                add(TypeFilter())
-                if (!genres.isNullOrEmpty()) {
-                    add(GenreFilter(genres.toTypedArray()))
-                }
-            },
+            SortFilter(),
+            StatusFilter(),
+            FormatFilter(),
+            TypeFilter(),
+            GenreFilter(genres),
+        )
+    }
+
+    companion object {
+        private val DEFAULT_GENRES = arrayOf(
+            Pair("Adult", "adult"),
+            Pair("4-Koma", "4-koma"),
+            Pair("Action", "action"),
+            Pair("Adventure", "adventure"),
+            Pair("Comedy", "comedy"),
+            Pair("Cooking", "cooking"),
+            Pair("Demons", "demons"),
+            Pair("Drama", "drama"),
+            Pair("Ecchi", "ecchi"),
+            Pair("Fantasy", "fantasy"),
+            Pair("Game", "game"),
+            Pair("Gender Bender", "gender bender"),
+            Pair("Gore", "gore"),
+            Pair("Harem", "harem"),
+            Pair("Historical", "historical"),
+            Pair("Horror", "horror"),
+            Pair("Isekai", "isekai"),
+            Pair("Josei", "josei"),
+            Pair("Magic", "magic"),
+            Pair("Martial Arts", "martial arts"),
+            Pair("Mature", "mature"),
+            Pair("Mecha", "mecha"),
+            Pair("Medical", "medical"),
+            Pair("Military", "military"),
+            Pair("Music", "music"),
+            Pair("Mystery", "mystery"),
+            Pair("One-Shot", "one-shot"),
+            Pair("Police", "police"),
+            Pair("Psychological", "psychological"),
+            Pair("Reincarnation", "reincarnation"),
+            Pair("Romance", "romance"),
+            Pair("School", "school"),
+            Pair("School Life", "school life"),
+            Pair("Sci-Fi", "sci-fi"),
+            Pair("Seinen", "seinen"),
+            Pair("Shoujo", "shoujo"),
+            Pair("Shoujo Ai", "shoujo ai"),
+            Pair("Shounen", "shounen"),
+            Pair("Shounen Ai", "shounen ai"),
+            Pair("Slice of Life", "slice of life"),
+            Pair("Sports", "sports"),
+            Pair("Super Power", "super power"),
+            Pair("Supernatural", "supernatural"),
+            Pair("Thriller", "thriller"),
+            Pair("Tragedy", "tragedy"),
+            Pair("Vampire", "vampire"),
+            Pair("Webtoons", "webtoons"),
+            Pair("Yuri", "yuri"),
         )
     }
 }
