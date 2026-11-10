@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -37,7 +38,7 @@ abstract class HentaiArchive : KeiSource() {
 
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/category/hentai-recenti/page/$page").asJsoup()
+        val document = client.get("$baseUrl/category/hentai-recenti/page/$page", Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select("div.posts-container article").map { element ->
             SManga.create().apply {
@@ -60,7 +61,7 @@ abstract class HentaiArchive : KeiSource() {
         val url = "$baseUrl/page/$page/".toHttpUrl().newBuilder()
             .addQueryParameter("s", query)
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select("article.result").map { element ->
             SManga.create().apply {
@@ -83,7 +84,7 @@ abstract class HentaiArchive : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val details = if (fetchDetails) {
-            val document = client.get(getMangaUrl(manga)).asJsoup()
+            val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
             SManga.create().apply {
                 url = manga.url
@@ -129,7 +130,7 @@ abstract class HentaiArchive : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         return document.select("div.content-inner img:not(.sp-banner img)").mapIndexed { index, element ->
             val imageUrl = element.imgAttr().replace(imageRegex, "")

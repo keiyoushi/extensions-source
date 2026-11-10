@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
@@ -63,7 +64,7 @@ abstract class Tapastic :
             .addQueryParameter("page", (page - 1).toString())
             .build()
 
-        return parseMangaList(client.get(url))
+        return parseMangaList(client.get(url, Fetch.XHR))
     }
 
     private fun parseMangaList(response: Response): MangasPage {
@@ -83,7 +84,7 @@ abstract class Tapastic :
             .addQueryParameter("page", (page - 1).toString())
             .build()
 
-        return parseMangaList(client.get(url))
+        return parseMangaList(client.get(url, Fetch.XHR))
     }
 
     // ============================== Search ====================================
@@ -94,7 +95,7 @@ abstract class Tapastic :
             .addQueryParameter("q", query)
             .addQueryParameter("t", "COMICS")
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".search-item-wrap").map { element ->
             SManga.create().apply {
                 title = element.select(".item__thumb img").firstOrNull()?.attr("alt") ?: element.select(".title-section .title a").text()
@@ -116,7 +117,7 @@ abstract class Tapastic :
         val mangaUrl = if (slug.toIntOrNull() != null) {
             "/series/$slug"
         } else {
-            val document = client.get(url).asJsoup()
+            val document = client.get(url, Fetch.DOCUMENT).asJsoup()
             val id = document.selectFirst("meta[content^=tapastic://series]")
                 ?.attr("content")
                 ?.substringAfterLast('/')
@@ -156,7 +157,7 @@ abstract class Tapastic :
     }
 
     private suspend fun getMangaDetails(manga: SManga): SManga {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SManga.create().apply {
             title = document.selectFirst(".info__right .title")!!.text()
             thumbnail_url = document.selectFirst(".thumb.js-thumbnail img")?.absUrl("src")
@@ -189,6 +190,7 @@ abstract class Tapastic :
     private suspend fun getChapterList(manga: SManga): List<SChapter> {
         var page = 1
         val chapters = mutableListOf<SChapter>()
+        val showEpisodeNumber = showEpisodeNumberPref
         do {
             val url = "$baseUrl${manga.url}/episodes".toHttpUrl().newBuilder()
                 .addQueryParameter("page", (page++).toString())
@@ -198,11 +200,11 @@ abstract class Tapastic :
                 .addQueryParameter("last_access", "0")
                 .addQueryParameter("", "") // make the same request as the browser
                 .build()
-            val response = client.get(url)
+            val response = client.get(url, Fetch.XHR)
             val dto = response.parseAs<DataWrapper<ChapterListDto>>()
             chapters += dto.data.episodes
                 .filter { it.isPaywalledVisible() && it.isScheduledVisible() }
-                .map(ChapterDto::toSChapter)
+                .map { it.toSChapter(showEpisodeNumber) }
         } while (dto.data.hasNextPage())
 
         return chapters
@@ -215,7 +217,7 @@ abstract class Tapastic :
     // ============================== Pages =====================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
 
         // check if the "Style" button is in the toolbar, because it is even present on locked chapters, so even those are detected correctly
         val isNovel = document.selectFirst(".toolbar a[data-type=\"style\"]") != null
@@ -284,6 +286,13 @@ abstract class Tapastic :
                 true
             }
         }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_EPISODE_NUMBER_KEY
+            title = "Show episode number in chapter name"
+            summary = "Prefix chapter names with their episode number (e.g. \"1 - Title\"). Refresh the chapter list to apply. Existing downloads won't be recognized after toggling this."
+            setDefaultValue(false)
+        }.also(screen::addPreference)
     }
 
     private var showLockedChapterPref: Boolean get() =
@@ -309,10 +318,15 @@ abstract class Tapastic :
                 .putBoolean(SHOW_AUTHORS_NOTES_KEY, value)
                 .apply()
         }
+
+    private val showEpisodeNumberPref: Boolean
+        get() = preferences.getBoolean(SHOW_EPISODE_NUMBER_KEY, false)
+
     companion object {
         private const val LOCKED_CHAPTER_VISIBILITY_PREF = "lockedChapterVisibilityPref"
         private const val SCHEDULED_CHAPTER_VISIBILITY_PREF = "scheduledChapterVisibilityPref"
         private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
+        private const val SHOW_EPISODE_NUMBER_KEY = "showEpisodeNumber"
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:105.0) Gecko/20100101 Firefox/105.0"
     }
 }

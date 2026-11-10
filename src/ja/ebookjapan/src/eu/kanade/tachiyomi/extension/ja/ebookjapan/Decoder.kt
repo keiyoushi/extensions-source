@@ -4,8 +4,8 @@ import android.util.Base64
 import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.aesGcm
 import keiyoushi.utils.inflate
+import keiyoushi.utils.sha256
 import java.nio.ByteBuffer
-import java.security.MessageDigest
 
 class Book(
     private val fileId: String,
@@ -100,8 +100,6 @@ private fun parseBook(data: ByteArray, fileId: String): Book {
 
     return Book(fileId, prefix, margin, unit, generated, tables, pages)
 }
-
-private fun String.sha256() = MessageDigest.getInstance("SHA-256").digest(this.toByteArray())
 
 private fun ByteBuffer.readUByte() = get().toInt() and 0xFF
 

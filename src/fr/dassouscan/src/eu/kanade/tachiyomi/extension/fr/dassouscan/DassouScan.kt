@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -56,7 +57,7 @@ abstract class DassouScan :
             }
         }.build()
 
-        return parseCatalogue(client.get(url).asJsoup())
+        return parseCatalogue(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // ============================== Latest ===============================
@@ -69,7 +70,7 @@ abstract class DassouScan :
             }
         }.build()
 
-        return parseCatalogue(client.get(url).asJsoup())
+        return parseCatalogue(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // ============================== Search ===============================
@@ -82,7 +83,7 @@ abstract class DassouScan :
             }
         }.build()
 
-        return parseCatalogue(client.get(url).asJsoup())
+        return parseCatalogue(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private fun parseCatalogue(document: Document): MangasPage {
@@ -111,7 +112,7 @@ abstract class DassouScan :
         if (url.pathSegments.firstOrNull() != "manga" || url.pathSegments.size != 2) {
             return null
         }
-        return parseMangaDetails(client.get(url).asJsoup())
+        return parseMangaDetails(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun fetchMangaUpdate(
@@ -120,7 +121,7 @@ abstract class DassouScan :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
     }
 
@@ -166,7 +167,7 @@ abstract class DassouScan :
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         return document.select("#dsc-chapter-reader-content .dsc-chapter-strip-img").mapIndexed { i, img ->
             val url = img.attr("abs:data-src").ifEmpty { img.attr("abs:src") }

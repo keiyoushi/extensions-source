@@ -9,8 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.lib.randomua.UserAgentType
-import keiyoushi.lib.randomua.setRandomUserAgent
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -28,13 +27,15 @@ import java.util.Locale
 
 @Source
 abstract class Toonkor : KeiSource() {
-
     // The site serves a reduced 30-item listing to Android user agents.
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = setRandomUserAgent(UserAgentType.DESKTOP)
+    override fun Headers.Builder.configureHeaders(): Headers.Builder {
+        val chromeVersion = CHROME_VERSION_REGEX.find(get("User-Agent").orEmpty())?.groupValues?.get(1) ?: "156"
+        return set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$chromeVersion.0.0.0 Safari/537.36")
+    }
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl$WEBTOONS_PATH$ALL_STATUS_PATH$SORT_POPULAR"))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl$WEBTOONS_PATH$ALL_STATUS_PATH$SORT_POPULAR", Fetch.DOCUMENT))
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl$WEBTOONS_PATH$ALL_STATUS_PATH$SORT_LATEST"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl$WEBTOONS_PATH$ALL_STATUS_PATH$SORT_LATEST", Fetch.DOCUMENT))
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val type = filters.firstInstanceOrNull<TypeFilter>()
@@ -46,7 +47,7 @@ abstract class Toonkor : KeiSource() {
             else -> "${type?.toUriPart() ?: ""}${status?.toUriPart() ?: ""}${sort?.toUriPart() ?: ""}"
         }
 
-        return parseMangaList(client.get(baseUrl + requestPath))
+        return parseMangaList(client.get(baseUrl + requestPath, Fetch.DOCUMENT))
     }
 
     private fun parseMangaList(response: Response): MangasPage {
@@ -72,7 +73,7 @@ abstract class Toonkor : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
             chapters = parseChapterList(document),
@@ -104,7 +105,7 @@ abstract class Toonkor : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
         // Several scripts mention toon_img; only the one assigning the base64 blob is useful,
         // so match the assignment instead of taking the first quoted string of the first match.
         val encoded = document.select("script")
@@ -142,5 +143,6 @@ abstract class Toonkor : KeiSource() {
         private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
         private val toonImgRegex = Regex("""toon_img\s*=\s*'([^']+)'""")
         private val pageListRegex = Regex("""src="([^"]*)"""")
+        private val CHROME_VERSION_REGEX = Regex("""Chrome/(\d+)""")
     }
 }

@@ -10,10 +10,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cryptoaes.CryptoAES
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.aesCbc
+import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.sync.Mutex
@@ -36,7 +38,6 @@ abstract class SunshineButterflyScans : KeiSource() {
     }
 
     private fun apiHeaders() = headersBuilder().apply {
-        add("Accept", "*/*")
     }.build()
 
     @Volatile
@@ -53,7 +54,7 @@ abstract class SunshineButterflyScans : KeiSource() {
         mutex.withLock {
             if (!initialized) {
                 initialized = true
-                chaptersData = client.get("$baseUrl/json/chapters.json", apiHeaders()).parseAs<List<EntryDto>>().groupBy {
+                chaptersData = client.get("$baseUrl/json/chapters.json", apiHeaders(), Fetch.XHR).parseAs<List<EntryDto>>().groupBy {
                     it.series
                 }.values.map { it.sortedByDescending { it.num } }
             }
@@ -193,7 +194,7 @@ abstract class SunshineButterflyScans : KeiSource() {
         val chapterDto = getChaptersData().flatten().first {
             "${it.projectName}&num=${it.num}" == chapter.url.substringAfter("series=")
         }
-        val decrypted = CryptoAES.decrypt(chapterDto.albumID, KEY, IV)
+        val decrypted = Base64.decode(chapterDto.albumID, Base64.DEFAULT).aesDecrypt(aesCbc(KEY, IV)).decodeToString()
         val isGoogleDrive = decrypted.length > 10
 
         val url = if (isGoogleDrive) {
@@ -208,7 +209,7 @@ abstract class SunshineButterflyScans : KeiSource() {
             }
         }.build()
 
-        val response = client.get(url, headers)
+        val response = client.get(url, headers, Fetch.XHR)
         return if (isGoogleDrive) {
             response.parseAs<GoogleDriveResponseDto>().files.sortedBy {
                 it.name
@@ -222,9 +223,8 @@ abstract class SunshineButterflyScans : KeiSource() {
         }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val imgHeaders = headersBuilder().apply {
-            add("Accept", "image/avif,image/webp,*/*")
             add("Host", page.imageUrl!!.toHttpUrl().host)
         }.build()
 

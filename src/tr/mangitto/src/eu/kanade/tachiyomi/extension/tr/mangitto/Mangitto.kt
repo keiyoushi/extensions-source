@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -31,14 +32,14 @@ abstract class Mangitto : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val skip = (page - 1) * PAGE_SIZE
-        val data = client.get("$apiUrl/populer?skip=$skip&take=$PAGE_SIZE").parseAs<MangttoPopularData>()
+        val data = client.get("$apiUrl/populer?skip=$skip&take=$PAGE_SIZE", Fetch.XHR).parseAs<MangttoPopularData>()
 
         return MangasPage(data.mangas.map { it.toSManga() }, skip + data.mangas.size < data.total)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val skip = (page - 1) * PAGE_SIZE
-        val data = client.get("$apiUrl/latest?skip=$skip&take=$PAGE_SIZE").parseAs<MangttoLatestData>()
+        val data = client.get("$apiUrl/latest?skip=$skip&take=$PAGE_SIZE", Fetch.XHR).parseAs<MangttoLatestData>()
 
         // The API returns a list of chapters, so we distinct by slug to avoid duplicates.
         val mangas = data.chapters.map { it.manga }.distinctBy { it.slug }.map { it.toSManga() }
@@ -71,14 +72,14 @@ abstract class Mangitto : KeiSource() {
             ?.takeIf { it.isNotBlank() }
             ?.let { url.addQueryParameter("releaseDate", it.trim()) }
 
-        val data = client.get(url.build()).parseAs<MangttoSearchData>()
+        val data = client.get(url.build(), Fetch.XHR).parseAs<MangttoSearchData>()
 
         return MangasPage(data.hits.map { it.document.toSManga() }, page * SEARCH_PAGE_SIZE < data.estimatedTotalHits)
     }
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/genres").parseAs()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/genres", Fetch.XHR).parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data?.parseAs<MangttoGenres>()?.genres.orEmpty()
@@ -101,7 +102,7 @@ abstract class Mangitto : KeiSource() {
         }
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotBlank() } ?: return null
 
-        return client.get("$apiUrl/$slug").parseAs<MangttoDetailData>().toSManga().apply { initialized = true }
+        return client.get("$apiUrl/$slug", Fetch.XHR).parseAs<MangttoDetailData>().toSManga().apply { initialized = true }
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
@@ -115,7 +116,7 @@ abstract class Mangitto : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
         val details = async {
-            if (fetchDetails) client.get("$apiUrl/${manga.url}").parseAs<MangttoDetailData>().toSManga() else manga
+            if (fetchDetails) client.get("$apiUrl/${manga.url}", Fetch.XHR).parseAs<MangttoDetailData>().toSManga() else manga
         }
         val chapterList = async {
             if (fetchChapters) fetchAllChapters(manga.url) else chapters
@@ -129,7 +130,7 @@ abstract class Mangitto : KeiSource() {
         var skip = 0
 
         while (true) {
-            val data = client.get("$apiUrl/$slug/chapters?skip=$skip&take=$PAGE_SIZE").parseAs<MangttoChapterPageData>()
+            val data = client.get("$apiUrl/$slug/chapters?skip=$skip&take=$PAGE_SIZE", Fetch.XHR).parseAs<MangttoChapterPageData>()
 
             allChapters.addAll(data.chapters.map { it.toSChapter(slug) })
             skip += data.chapters.size
@@ -143,7 +144,7 @@ abstract class Mangitto : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val slug = chapter.memo.getString("mangaSlug")
-        val data = client.get("$apiUrl/$slug/${chapter.url}").parseAs<MangttoPageData>()
+        val data = client.get("$apiUrl/$slug/${chapter.url}", Fetch.XHR).parseAs<MangttoPageData>()
         val upload = data.uploads.firstOrNull() ?: return emptyList()
 
         return (1..upload.fileLength).map { pageNum ->

@@ -5,11 +5,14 @@
     if (window[installed]) return;
     window[installed] = true;
 
-    const post = (reader) => window[bridge].post(JSON.stringify({ reader }));
+    const post = (reader) => window[bridge].postMessage(JSON.stringify({ reader }));
     const defineProperty = Object.defineProperty;
 
     // Proxied native getters, so they still read as native code
-    for (const [name, value] of [["visibilityState", "visible"], ["hidden", false]]) {
+    for (const [name, value] of [
+        ['visibilityState', 'visible'],
+        ['hidden', false],
+    ]) {
         const descriptor = Object.getOwnPropertyDescriptor(Document.prototype, name);
         defineProperty(Document.prototype, name, { ...descriptor, get: new Proxy(descriptor.get, { apply: () => value }) });
     }
@@ -29,18 +32,18 @@
         apply(target, thisArg, args) {
             const defined = Reflect.apply(target, thisArg, args);
             const [obj, key, desc] = args;
-            if (!obj || (key !== "base" && key !== "count" && key !== "variants")) return defined;
+            if (!obj || (key !== 'base' && key !== 'count' && key !== 'variants')) return defined;
             let spec = specs.get(obj);
             if (!spec) specs.set(obj, (spec = {}));
             const value = desc && desc.value;
-            if (key === "base" && typeof value === "string" && value.startsWith("/p/")) spec.base = value;
-            else if (key === "count" && Number.isInteger(value) && value > 0) spec.count = value;
-            else if (key === "variants" && Array.isArray(value)) spec.variants = value;
+            if (key === 'base' && typeof value === 'string' && value.startsWith('/p/')) spec.base = value;
+            else if (key === 'count' && Number.isInteger(value) && value > 0) spec.count = value;
+            else if (key === 'variants' && Array.isArray(value)) spec.variants = value;
             if (!spec.scheduled) {
                 spec.scheduled = true;
                 queueMicrotask(() => {
                     spec.scheduled = false;
-                    if (manifest || typeof spec.base !== "string" || !Number.isInteger(spec.count)) return;
+                    if (manifest || typeof spec.base !== 'string' || !Number.isInteger(spec.count)) return;
                     manifest = { base: spec.base, count: spec.count, variants: spec.variants || [] };
                     publish();
                 });
@@ -50,7 +53,7 @@
     });
 
     new BroadcastChannel(bridge).onmessage = (event) => {
-        if (contentKey || typeof event.data !== "string" || !event.data) return;
+        if (contentKey || typeof event.data !== 'string' || !event.data) return;
         contentKey = event.data;
         publish();
     };
@@ -74,7 +77,7 @@
     window.IntersectionObserver = new Proxy(NativeObserver, {
         construct(target, args, newTarget) {
             const [callback, ...rest] = args;
-            if (typeof callback !== "function") return Reflect.construct(target, args, newTarget);
+            if (typeof callback !== 'function') return Reflect.construct(target, args, newTarget);
             const forced = new WeakSet();
             const filtered = function (entries, observer) {
                 const kept = entries.filter((entry) => entry.isIntersecting || !forced.has(entry.target));
@@ -101,8 +104,8 @@
     window.Worker = new Proxy(NativeWorker, {
         construct(target, args, newTarget) {
             const absolute = new URL(String(args[0]), location.href);
-            if (!absolute.pathname.endsWith(".js")) return Reflect.construct(target, args, newTarget);
-            absolute.searchParams.set(bridge, "");
+            if (!absolute.pathname.endsWith('.js')) return Reflect.construct(target, args, newTarget);
+            absolute.searchParams.set(bridge, '');
             return Reflect.construct(target, [absolute, args[1]], newTarget);
         },
     });

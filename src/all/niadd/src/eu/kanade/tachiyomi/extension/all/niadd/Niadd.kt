@@ -7,65 +7,111 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.booleanOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.textOrNull
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import okhttp3.Headers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
+import okhttp3.Interceptor
+import okhttp3.OkHttpClient
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.io.IOException
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class Niadd : KeiSource() {
 
-    // Causes pageList 302
-    override fun Headers.Builder.configureHeaders() = removeAll("Referer")
+    override fun OkHttpClient.Builder.configureClient() = addNetworkInterceptor(::blockedUserInterceptor)
 
-    // Popular
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/list/Hot-Manga.html").asJsoup())
-
-    private fun popularMangaSelector() = "div.manga-item"
-
-    private fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("div.manga-name")!!.text()
-        val rawUrl = element.selectFirst("a")!!.absUrl("href")
-        setUrlWithoutDomain(rawUrl)
-        element.selectFirst("div.manga-img img")?.attr("abs:src")?.also { thumbnail_url = it }
+    // The site flags networks with a cookie and then serves a fake "404 Not Found" page with status 200 on every route.
+    // A flagged network gets that page with or without the cookie, so the cookie only keeps blocking after a network change.
+    private fun blockedUserInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val cookies = request.header("Cookie")
+            ?.split("; ")
+            ?.filterNot { it.startsWith("$BLOCKED_COOKIE=") }
+            ?.joinToString("; ")
+        val response = chain.proceed(
+            request.newBuilder().apply {
+                if (cookies.isNullOrEmpty()) removeHeader("Cookie") else header("Cookie", cookies)
+            }.build(),
+        )
+        if (response.headers("Set-Cookie").any { it.startsWith("$BLOCKED_COOKIE=") }) {
+            response.close()
+            throw IOException(BLOCKED_NETWORK)
+        }
+        return response
     }
+
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/list/Hot-Manga.html", Fetch.DOCUMENT).asJsoup())
 
     private fun parseMangaList(document: Document): MangasPage {
-        val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
-        return MangasPage(mangas, false)
+        val mangas = document.select("div.manga-item").mapNotNull(::mangaFromElement)
+        return MangasPage(mangas, document.selectFirst("a.next") != null)
     }
 
-    // Search
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.pathSegments.size < 2) return null
-
-        return fetchMangaUpdate(
-            SManga.create().apply { this.url = url.encodedPath },
-            emptyList(),
-            true,
-            false,
-        ).manga
+    // Lists carry blank cards linking /manga/.html
+    private fun mangaFromElement(element: Element): SManga? {
+        val title = element.selectFirst("div.manga-name")!!.textOrNull() ?: return null
+        return SManga.create().apply {
+            this.title = title
+            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+            thumbnail_url = element.selectFirst("div.manga-img img")?.absUrl("src")
+        }
     }
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/list/New-Update.html", Fetch.DOCUMENT).asJsoup())
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val url = "$baseUrl/search/".toHttpUrl().newBuilder()
-            .addQueryParameter("name", query)
-            .build()
-        return parseMangaList(client.get(url).asJsoup())
+        val url = "$baseUrl/search/".toHttpUrl().newBuilder().apply {
+            addQueryParameter("name", query)
+            filters.forEach { filter ->
+                when (filter) {
+                    is AuthorFilter -> addQueryParameter("author", filter.state)
+                    is ArtistFilter -> addQueryParameter("artist", filter.state)
+                    is SelectFilter -> addQueryParameter(filter.parameter, filter.value)
+                    is GenreFilter -> {
+                        addQueryParameter("category_id", filter.included.joinToString(","))
+                        addQueryParameter("out_category_id", filter.excluded.joinToString(","))
+                    }
+                    else -> {}
+                }
+            }
+            addQueryParameter("page", "$page.html")
+        }.build()
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
-    // Latest
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/list/New-Update.html").asJsoup())
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val segments = url.pathSegments
+        if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host.removePrefix("www.") ||
+            segments.size != 2 ||
+            segments[0] !in ENTRY_PATHS ||
+            !segments[1].endsWith(".html")
+        ) {
+            return null
+        }
+
+        val manga = SManga.create().apply { setUrlWithoutDomain(url.newBuilder().query(null).fragment(null).build().toString()) }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -79,171 +125,154 @@ abstract class Niadd : KeiSource() {
         SMangaUpdate(details.await(), chapterList.await())
     }
 
-    // Details
-    private suspend fun fetchDetails(manga: SManga): SManga = SManga.create().apply {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
-        val infoElement = document.select("div.bookside-general, div.detail-general")
+    private suspend fun fetchDetails(manga: SManga): SManga {
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        val info = document.selectFirst("div.bookside-bookinfo")
+        val released = document.selectFirst("div.bookside-general-cell:has([itemprop=datePublished])")
 
-        url = manga.url
-        title = document.selectFirst("h1, .book-headline-name")!!.text()
-        author = infoElement.select(".detail-general-cell:contains(Autor) span, [itemprop=author] span").text()
-            .replace("Autor (es):", "", ignoreCase = true)
-        artist = infoElement.select(".detail-general-cell:contains(Artista) span").text()
-            .replace("Artista:", "", ignoreCase = true)
-        genre = document.select("[itemprop=genre]").eachText().joinToString()
-
-        val yearKeywords = listOf(
-            "Released:",
-            "Lanzado:",
-            "Rilasciato:",
-            "Выпущенный:",
-            "Liberado:",
-            "Freigegeben:",
-        )
-
-        val yearRaw = infoElement.select(".detail-general-cell").firstOrNull { cell ->
-            yearKeywords.any { cell.text().contains(it, ignoreCase = true) }
-        }?.selectFirst("span")?.text().orEmpty()
-
-        val yearClean = yearRaw
-            .let { text ->
-                yearKeywords.fold(text) { acc, keyword -> acc.replace(keyword, "", ignoreCase = true) }
+        return SManga.create().apply {
+            url = manga.url
+            title = document.selectFirst("h1.book-headline-name")!!.text()
+            author = info?.select("a[href*=author=]")?.eachText()?.joinToString()?.ifEmpty { null }
+            artist = info?.select("a[href*=artist=]")?.eachText()?.joinToString()?.ifEmpty { null }
+            genre = document.select("div.bookside-general-cell [itemprop=genre]").eachText().joinToString().ifEmpty { null }
+            status = when (document.selectFirst("span.book-status")?.text()?.lowercase()?.removeSurrounding("(", ")")) {
+                in ONGOING_STATUSES -> SManga.ONGOING
+                in COMPLETED_STATUSES -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
             }
-
-        val synopsisKeywords = listOf(
-            "Synopsis",
-            "Sinopsis",
-            "Sinossi",
-            "конспект",
-            "Sinopse",
-            "Zusammenfassung",
-        )
-
-        val synopsisText = run {
-            val titles = document.select(".detail-cate-title")
-            for (title in titles) {
-                val titleText = title.text()
-                if (synopsisKeywords.any { keyword -> titleText.contains(keyword, ignoreCase = true) }) {
-                    val nextSection = title.nextElementSibling()
-                    if (nextSection != null && nextSection.hasClass("detail-section")) {
-                        if (!nextSection.select("a[itemprop=genre]").any()) {
-                            return@run nextSection.text()
-                        }
-                    }
-                }
-            }
-            ""
+            description = MarkdownDescription.Builder()
+                .rating(
+                    document.selectFirst("div.bookside-big-rate")?.text()?.toDoubleOrNull(),
+                    max = 5,
+                    votes = document.selectFirst("div.bookside-rate-vote span")?.text()?.toIntOrNull(),
+                )
+                .field(
+                    released?.selectFirst("span")?.text()?.removeSuffix(":").orEmpty(),
+                    released?.selectFirst("[itemprop=datePublished]")?.text(),
+                )
+                // The genre and uploader blocks share this class, and an empty genre block is blank
+                .description(document.selectFirst("section.detail-synopsis:not(:has(a)):matchesOwn(\\S)"))
+                // The unlabelled cell is the alternative names
+                .altTitles(document.selectFirst("div.bookside-general-cell:not(:has(a, [itemprop]))")?.ownText()?.split(";").orEmpty())
+                .build()
+            thumbnail_url = document.selectFirst("div.bookside-img img")?.absUrl("src")
         }
-
-        description = buildString {
-            if (yearClean.isNotEmpty()) append("Ano: $yearClean\n\n")
-            if (synopsisText.isNotEmpty()) append(synopsisText)
-        }
-
-        document.selectFirst("div.detail-img img, div.bookside-img img")?.attr("abs:src").also { thumbnail_url = it }
-        status = SManga.ONGOING
     }
 
-    // Chapters
-    private val chapterListSelector = "ul.chapter-list a.hover-underline"
+    override val supportsRelatedMangas get() = true
 
-    private fun parseDate(dateString: String): Long {
-        if (dateString.contains("atrás", ignoreCase = true) ||
-            dateString.contains("ago", ignoreCase = true)
-        ) {
-            return 0L
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        .select("section.related-book-list div.bkslf-book-item")
+        .map { element ->
+            SManga.create().apply {
+                title = element.selectFirst("div.bkslf-book-name")!!.text()
+                setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+                thumbnail_url = element.selectFirst("img")?.absUrl("src")
+            }
         }
-
-        return dateFormat.tryParseDate(dateString)
-    }
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
-        val chaptersUrl = baseUrl + manga.url.removeSuffix(".html") + "/chapters.html"
-        val document = client.get(chaptersUrl).asJsoup()
+        val chaptersUrl = getMangaUrl(manga).removeSuffix(".html") + "/chapters.html"
+        // Sent as built: to requests that look like a browser the site serves /go/rds/ ad redirects instead of chapter links
+        val document = client.get(chaptersUrl, Fetch.NONE).asJsoup()
         document.selectFirst("ul.chapter-list")!!
+        val isOriginal = manga.url.startsWith("/original/")
 
-        return document.select(chapterListSelector).map { chapterFromElement(it) }
-    }
-
-    private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val rawUrl = element.attr("abs:href")
-        setUrlWithoutDomain(rawUrl)
-
-        name = element.selectFirst("span.chp-title, span.chapter-name, span.name")?.text()
-            ?.takeIf(String::isNotEmpty)
-            ?: element.text()
-
-        element.selectFirst("span.chp-time, span.chapter-time, span.time")?.text()
-            ?.also { date_upload = parseDate(it) }
-
-        chapter_number = CHAPTER_NUMBER_REGEX.find(name)
-            ?.groupValues?.get(1)?.toFloatOrNull() ?: -1f
-    }
-
-    // Pages
-    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter)).asJsoup())
-
-    private suspend fun pageListParse(document: Document): List<Page> {
-        val pages = mutableListOf<Page>()
-        val currentUrl = document.location()
-        val html = document.html()
-
-        if (html.contains("all_imgs_url")) {
-            val match = ALL_IMGS_URL_REGEX.find(html)
-            if (match != null) {
-                val content = match.groupValues[1]
-                val urls = content.split(",")
-                    .map { it.replace(CLEAN_IMG_URL_REGEX, "") }
-                    .filter { it.startsWith("http") }
-
-                urls.forEachIndexed { i, url ->
-                    pages.add(Page(i, currentUrl, imageUrl = url))
-                }
-                if (pages.isNotEmpty()) return pages
+        return document.select("ul.chapter-list a.hover-underline[href*=/chapter/]").map { element ->
+            SChapter.create().apply {
+                setUrlWithoutDomain(element.absUrl("href"))
+                name = element.selectFirst("span.chp-title")!!.text()
+                date_upload = dateFormat.tryParseDate(element.selectFirst("span.chp-time")?.text())
+                if (isOriginal) memo = buildJsonObject { put("original", true) }
             }
         }
-
-        val sourceButton = document.selectFirst("a.cool-blue.vision-button")
-        if (sourceButton != null) {
-            val sourceUrl = sourceButton.attr("abs:href")
-            val requestHeaders = headers.newBuilder()
-                .set("Referer", currentUrl)
-                .build()
-
-            return pageListParse(client.get(sourceUrl, requestHeaders).asJsoup())
-        }
-
-        // One image per sub page; resolve them lazily instead of fetching every sub page up front
-        val subPages = document.select("select.sl-page option")
-            .map { it.absUrl("value") }
-            .filter(String::isNotEmpty)
-        if (subPages.isNotEmpty()) {
-            return subPages.mapIndexed { i, url -> Page(i, url) }
-        }
-
-        document.select(PAGE_IMAGE_SELECTOR).forEach { img ->
-            val url = img.attr("abs:src")
-            if (url.isNotEmpty() && !url.contains("cover") && !url.contains("logo")) {
-                pages.add(Page(pages.size, currentUrl, imageUrl = url))
-            }
-        }
-
-        return pages
     }
 
-    override suspend fun getImageUrl(page: Page): String = client.get(page.url).asJsoup()
-        .selectFirst(PAGE_IMAGE_SELECTOR)!!
-        .attr("abs:src")
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterUrl = getChapterUrl(chapter)
+        val chapterId = chapterUrl.toHttpUrl().pathSegments[2].removeSuffix(".html")
+        val url = readerJumpUrl().newBuilder().apply {
+            setQueryParameter("cid", chapterId)
+            // Users' original works have their own reader type in every language
+            if (chapter.memo["original"]?.booleanOrNull == true) setQueryParameter("type", "ogniadd")
+        }.build()
+        val imageUrls = try {
+            val html = client.get(url, Fetch.DOCUMENT.from(chapterUrl)).body.string()
+            val imageList = ALL_IMGS_URL_REGEX.find(html)?.groupValues?.get(1) ?: throw Exception(PAGES_NOT_FOUND)
+            IMAGE_URL_REGEX.findAll(imageList).map { it.groupValues[1] }.toList()
+        } catch (e: Exception) {
+            cachedJumpUrl = null
+            throw e
+        }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
-        .header("Referer", page.url)
-        .build()
+        return imageUrls.mapIndexed { i, imageUrl -> Page(i, imageUrl = imageUrl) }
+    }
+
+    private val readerJumpMutex = Mutex()
+    private var cachedJumpUrl: HttpUrl? = null
+    private var hasNoReader = false
+
+    // The site's /chapter/ links redirect to a dead host. Its chapter lists link each chapter through /go/rds/
+    // to a reader jump url that only differs in cid
+    private suspend fun readerJumpUrl(): HttpUrl = readerJumpMutex.withLock {
+        cachedJumpUrl?.let { return@withLock it }
+        if (hasNoReader) throw Exception(NO_READER)
+
+        val mangaUrl = getMangaUrl(getLatestUpdates(1).mangas.first())
+        val redirectUrl = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
+            .selectFirst("a[href*=/go/rds/]")
+            ?.absUrl("href")
+        if (redirectUrl == null) {
+            hasNoReader = true
+            throw Exception(NO_READER)
+        }
+        val script = client.get(redirectUrl, Fetch.DOCUMENT.from(mangaUrl)).body.string()
+        val jumpUrl = JUMP_URL_REGEX.find(script)?.groupValues?.get(1) ?: throw Exception(PAGES_NOT_FOUND)
+        jumpUrl.toHttpUrl().also { cachedJumpUrl = it }
+    }
+
+    override val supportsFilterFetching get() = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val document = client.get("$baseUrl/search/?type=high", Fetch.DOCUMENT).asJsoup()
+        fun options(group: String) = document.select("[option_group_name=$group]").map { it.text() to it.attr("option_val") }
+
+        return FilterData(
+            genres = document.select("li.genre-item a[onclick*=clickGenre]").map {
+                it.text() to GENRE_ID_REGEX.find(it.attr("onclick"))!!.groupValues[1]
+            },
+            years = options("publish_years"),
+            ratings = options("rating"),
+        ).toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filterData = data?.parseAs<FilterData>()
+        return FilterList(
+            listOfNotNull(
+                AuthorFilter(),
+                ArtistFilter(),
+                SelectFilter("Completed", "completed_series", listOf("Either" to "", "Yes" to "YES", "No" to "NO")),
+                filterData?.ratings?.takeIf { it.isNotEmpty() }?.let { SelectFilter("Rating", "rate_star", it) },
+                filterData?.years?.takeIf { it.isNotEmpty() }?.let { SelectFilter("Released", "released", it) },
+                filterData?.genres?.takeIf { it.isNotEmpty() }?.let(::GenreFilter),
+            ),
+        )
+    }
 
     companion object {
+        private const val PAGES_NOT_FOUND = "Chapter pages not found on the site"
+        private const val BLOCKED_COOKIE = "niadd_bad_user_2"
+        private const val BLOCKED_NETWORK = "Niadd has blocked this network, try another network"
+        private const val NO_READER = "The site has no reader for this language"
+        private val ENTRY_PATHS = setOf("manga", "original")
+        private val GENRE_ID_REGEX = Regex("""'(\d+)'""")
+        private val JUMP_URL_REGEX = Regex("""document\.location\s*=\s*'([^']+)'""")
         private val ALL_IMGS_URL_REGEX = Regex("""all_imgs_url\s*:\s*\[([\s\S]*?)\]""")
-        private val CLEAN_IMG_URL_REGEX = Regex("""["'\s]""")
-        private const val PAGE_IMAGE_SELECTOR = "div.pic_box img.manga_pic, div.reading-content img"
-        private val CHAPTER_NUMBER_REGEX = Regex("""Capítulo\s+(\d+(\.\d+)?)""")
+        private val IMAGE_URL_REGEX = Regex(""""(https?://[^"]+)"""")
         private val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
+        private val ONGOING_STATUSES = setOf("ongoing", "en marcha", "em progresso", "in corso", "laufend", "en cours", "постоянный")
+        private val COMPLETED_STATUSES = setOf("completed", "terminado", "concluído", "completato", "abgeschlossen", "complété", "завершенный")
     }
 }

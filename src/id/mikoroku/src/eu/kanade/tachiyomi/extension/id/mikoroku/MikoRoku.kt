@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -16,7 +17,6 @@ import org.jsoup.Jsoup
 
 @Source
 abstract class MikoRoku : KeiSource() {
-
     override suspend fun getPopularManga(page: Int): MangasPage = fetchCatalog()
         .sortedByDescending { it.rating }
         .toMangasPage()
@@ -115,7 +115,7 @@ abstract class MikoRoku : KeiSource() {
     private suspend fun fetchChaptersSubcollection(slug: String): List<SChapter> {
         val url = "https://firestore.googleapis.com/v1/projects/mikoroku/databases/(default)/documents/manga/$slug/chapters?pageSize=500"
 
-        val response = client.get(url, ensureSuccess = false)
+        val response = client.get(url, Fetch.XHR, ensureSuccess = false)
         if (response.code != 200) {
             response.close()
             return emptyList()
@@ -179,7 +179,7 @@ abstract class MikoRoku : KeiSource() {
     private suspend fun fetchFirestorePages(slug: String, key: String): List<Page>? {
         val subcollectionImages = run {
             val url = "https://firestore.googleapis.com/v1/projects/mikoroku/databases/(default)/documents/manga/$slug/chapters/$key"
-            val response = client.get(url, ensureSuccess = false)
+            val response = client.get(url, Fetch.XHR, ensureSuccess = false)
             if (response.code != 200) {
                 response.close()
                 null
@@ -206,7 +206,7 @@ abstract class MikoRoku : KeiSource() {
             .addQueryParameter("alt", "json")
             .build()
 
-        return client.get(url).parseAs<BloggerEntryResponse>().entry.imageUrls().toPages()
+        return client.get(url, Fetch.XHR).parseAs<BloggerEntryResponse>().entry.imageUrls().toPages()
     }
 
     private suspend fun fetchBloggerChapterPages(mangaTitle: String, chapterName: String): List<Page> {
@@ -223,14 +223,14 @@ abstract class MikoRoku : KeiSource() {
     private fun List<String>.toPages(): List<Page> = mapIndexed { index, url -> Page(index, imageUrl = url) }
 
     private suspend fun fetchCatalog(): List<CatalogEntry> {
-        val catalog = client.get("https://raw.githubusercontent.com/moemaomao/mymangadata/main/all-manga.json").parseAs<List<CatalogEntry>>()
+        val catalog = client.get("https://raw.githubusercontent.com/moemaomao/mymangadata/main/all-manga.json", Fetch.XHR).parseAs<List<CatalogEntry>>()
         return catalog
     }
 
     private suspend fun fetchFirestoreDoc(slug: String): FirestoreMap? {
         val url = "https://firestore.googleapis.com/v1/projects/mikoroku/databases/(default)/documents/manga/$slug"
 
-        val response = client.get(url, ensureSuccess = false)
+        val response = client.get(url, Fetch.XHR, ensureSuccess = false)
         if (response.code != 200) {
             response.close()
             return null
@@ -267,7 +267,7 @@ abstract class MikoRoku : KeiSource() {
             .addQueryParameter("q", query)
             .build()
 
-        return client.get(url).parseAs<BloggerFeedResponse>().feed.entry
+        return client.get(url, Fetch.XHR).parseAs<BloggerFeedResponse>().feed.entry
     }
 
     private fun String.normalize(): String = normalized()

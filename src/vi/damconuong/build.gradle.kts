@@ -6,14 +6,14 @@ plugins {
 
 keiyoushi {
     name = "DamCoNuong"
-    versionCode = 16
+    versionCode = 21
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
     source {
         lang = "vi"
         baseUrl {
-            custom("https://damconuong.win")
+            custom("https://damconuong.cool")
         }
     }
 

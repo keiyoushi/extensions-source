@@ -7,6 +7,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -17,23 +19,69 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import kotlin.time.Clock
+
+private const val SESSION_MARGIN_SECONDS = 30
 
 @Source
 abstract class VoraToon : KeiSource() {
+    private val baseHost get() = baseUrl.toHttpUrl().host
 
-    private val apiUrl = "https://api.voratoon.com"
+    private val apiUrl get() = "https://$baseHost/api/proxy"
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3) { it.host == "api.voratoon.com" }
+    private fun isApiRequest(request: Request) = request.url.host == baseHost && request.url.encodedPath.contains("/api/")
 
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
-        add("Accept", "application/json")
-        add("Accept-language", "en-US,en;q=0.9,id;q=0.8")
+    private fun Interceptor.Chain.refreshSession(request: Request) {
+        // Set-Cookie vt_proxy
+        proceed(
+            request.newBuilder()
+                .url(baseUrl.toHttpUrl())
+                .headers(headersBuilder().removeAll("Accept").build())
+                .fetch(Fetch.DOCUMENT)
+                .build(),
+        ).close()
     }
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseSeriesListResponse(
+    private fun OkHttpClient.sessionExpired(url: HttpUrl): Boolean {
+        val token = cookieJar.loadForRequest(url).firstOrNull { it.name == "vt_proxy" }?.value
+            ?: return true
+        // token is v1.<issued>.<expires>.<id>.<signature>, valid for 15 minutes unlike the 24h cookie
+        val expires = token.split('.').getOrNull(2)?.toLongOrNull() ?: return false
+        return expires - SESSION_MARGIN_SECONDS <= Clock.System.now().epochSeconds
+    }
+
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        val sessionLock = Any()
+        addInterceptor { chain ->
+            val request = chain.request()
+            if (!isApiRequest(request)) return@addInterceptor chain.proceed(request)
+
+            synchronized(sessionLock) {
+                if (client.sessionExpired(request.url)) chain.refreshSession(request)
+            }
+
+            val response = chain.proceed(request)
+            if (response.code == 403) {
+                response.close()
+                chain.refreshSession(request)
+                chain.proceed(request)
+            } else {
+                response
+            }
+        }
+        rateLimit(3) { it.encodedPath.contains("/api/") }
+    }
+
+    override fun Headers.Builder.configureHeaders() = apply {
+        set("Accept", "application/json")
+        set("Accept-language", "en-US,en;q=0.9,id;q=0.8")
+    }
+
+    override suspend fun getPopularManga(page: Int) = parseSeriesListResponse(
         client.get(
             "$apiUrl/series".toHttpUrl().newBuilder()
                 .addQueryParameter("includeMeta", "true")
@@ -42,10 +90,11 @@ abstract class VoraToon : KeiSource() {
                 .addQueryParameter("sort", "popularity")
                 .addQueryParameter("sortOrder", "desc")
                 .build(),
+            Fetch.XHR,
         ),
     )
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseSeriesListResponse(
+    override suspend fun getLatestUpdates(page: Int) = parseSeriesListResponse(
         client.get(
             "$apiUrl/series".toHttpUrl().newBuilder()
                 .addQueryParameter("includeMeta", "true")
@@ -54,10 +103,11 @@ abstract class VoraToon : KeiSource() {
                 .addQueryParameter("sort", "latest")
                 .addQueryParameter("sortOrder", "desc")
                 .build(),
+            Fetch.XHR,
         ),
     )
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = parseSeriesListResponse(
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = parseSeriesListResponse(
         client.get(
             "$apiUrl/series".toHttpUrl().newBuilder()
                 .addQueryParameter("includeMeta", "true")
@@ -79,6 +129,7 @@ abstract class VoraToon : KeiSource() {
                     }
                 }
                 .build(),
+            Fetch.XHR,
         ),
     )
 
@@ -89,12 +140,12 @@ abstract class VoraToon : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
         val slug = manga.getSlug(baseUrl)
-        val details = if (fetchDetails) async { client.get("$apiUrl/series/$slug") } else null
-        val chapterList = if (fetchChapters) async { client.get("$apiUrl/series/$slug/chapters") } else null
+        val details = if (fetchDetails) async { client.get("$apiUrl/series/$slug", Fetch.XHR) } else null
+        val chapterList = if (fetchChapters) async { client.get("$apiUrl/series/$slug/chapters", Fetch.XHR) } else null
 
         SMangaUpdate(
-            manga = details?.await()?.parseAs<SeriesDetailResponse>()?.data?.toSManga() ?: manga,
-            chapters = chapterList?.await()?.parseAs<ChapterListResponse>()?.data?.map { it.toSChapter(slug) } ?: chapters,
+            details?.await()?.parseAs<SeriesDetailResponse>()?.data?.toSManga() ?: manga,
+            chapterList?.await()?.parseAs<ChapterListResponse>()?.data?.map { it.toSChapter(slug) } ?: chapters,
         )
     }
 
@@ -105,12 +156,20 @@ abstract class VoraToon : KeiSource() {
         val manga = SManga.create().apply {
             this.url = "/series/$slug"
         }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaUpdate(
+            manga,
+            emptyList(),
+            true,
+            false,
+        ).manga
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (slug, chapterIndex) = chapter.getSlugAndIndex(baseUrl)
-        return client.get("$apiUrl/series/$slug/chapters/$chapterIndex").parseAs<ChapterDetailResponse>().data.toPageList()
+        return client.get(
+            "$apiUrl/series/$slug/chapters/$chapterIndex",
+            Fetch.XHR,
+        ).parseAs<ChapterDetailResponse>().data.toPageList()
     }
 
     private fun parseSeriesListResponse(response: Response): MangasPage {
@@ -122,7 +181,7 @@ abstract class VoraToon : KeiSource() {
 
     override val supportsFilterFetching: Boolean get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres").parseAs()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres", Fetch.XHR).parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data?.parseAs<GenreResponse>()?.data?.map { it.toPair() }
@@ -138,18 +197,5 @@ abstract class VoraToon : KeiSource() {
                 }
             },
         )
-    }
-
-    override fun imageRequest(page: Page): Request {
-        val newHeaders = headersBuilder()
-            .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-            .set("Referer", "$baseUrl/")
-            .build()
-
-        return Request.Builder()
-            .url(page.imageUrl!!)
-            .headers(newHeaders)
-            .get()
-            .build()
     }
 }

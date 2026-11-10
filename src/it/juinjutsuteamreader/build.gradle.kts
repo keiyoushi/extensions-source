@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Juin Jutsu Team Reader"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "foolslide"

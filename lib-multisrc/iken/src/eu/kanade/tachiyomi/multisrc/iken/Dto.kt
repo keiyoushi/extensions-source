@@ -17,6 +17,17 @@ class SearchResponse(
 )
 
 @Serializable
+class PostsResponse(
+    val novelPosts: List<NovelPost>,
+    val novelTotalCount: Int,
+)
+
+@Serializable
+class NovelPost(
+    val id: Int,
+)
+
+@Serializable
 class MangaDto(
     val totalChapterCount: Int? = null,
     val post: Manga,

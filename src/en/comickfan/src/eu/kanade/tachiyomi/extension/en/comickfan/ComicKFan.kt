@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -73,7 +74,7 @@ abstract class ComicKFan : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        return parseSearch(client.get(url))
+        return parseSearch(client.get(url, Fetch.DOCUMENT))
     }
 
     private fun parseSearch(response: Response): MangasPage {
@@ -103,7 +104,7 @@ abstract class ComicKFan : KeiSource() {
     ) = coroutineScope {
         val detailsDeferred = async {
             if (fetchDetails) {
-                val doc = client.get(getMangaUrl(manga)).asJsoup()
+                val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
                 parseDetails(doc)
             } else {
                 manga
@@ -148,7 +149,7 @@ abstract class ComicKFan : KeiSource() {
         val comicId = "$baseUrl${manga.url}".toHttpUrl().pathSegments.getOrNull(1)
             ?: throw Exception("Invalid manga URL: ${manga.url}")
 
-        val response = client.get("$baseUrl/api/comics/$comicId/chapter-list?translation_group_id=")
+        val response = client.get("$baseUrl/api/comics/$comicId/chapter-list?translation_group_id=", Fetch.XHR)
 
         return response.parseAs<ComicKFanChapterListResponseDto>().data
             .map { it.toSChapter(comicId) }
@@ -156,7 +157,7 @@ abstract class ComicKFan : KeiSource() {
 
     // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val pages = document.select("div.w-full > img[loading=lazy]")
         return pages.mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("src"))

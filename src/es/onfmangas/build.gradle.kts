@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "ONF MANGAS"
-    versionCode = 7
+    versionCode = 10
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

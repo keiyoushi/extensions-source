@@ -6,13 +6,15 @@ plugins {
 
 keiyoushi {
     name = "BlackToon"
-    versionCode = 0
+    versionCode = 2
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
         name = "블랙툰"
         lang = "ko"
-        baseUrl = "https://blacktoon.me"
+        baseUrl {
+            custom("https://blacktoon426.com")
+        }
     }
 }

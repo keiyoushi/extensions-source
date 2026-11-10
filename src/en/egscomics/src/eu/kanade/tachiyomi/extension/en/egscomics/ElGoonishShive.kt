@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -16,6 +17,7 @@ import java.util.Locale
 
 @Source
 abstract class ElGoonishShive : KeiSource() {
+
     override val supportsLatest = false
 
     private val dateFormat = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.US)
@@ -89,7 +91,7 @@ abstract class ElGoonishShive : KeiSource() {
     ): SMangaUpdate {
         if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val chapterList = document.select("select[name=comic] option[value~=^(comic|egsnp|sketchbook)]").map { element ->
             SChapter.create().apply {
                 chapter_number = element.previousElementSiblings().size.toFloat()
@@ -103,7 +105,7 @@ abstract class ElGoonishShive : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("#cc-comic").mapIndexed { i, element ->
             Page(i, imageUrl = element.absUrl("src"))
         }

@@ -11,8 +11,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
-import keiyoushi.lib.randomua.addRandomUAPreference
-import keiyoushi.lib.randomua.setRandomUserAgent
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -20,7 +19,6 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -148,13 +146,10 @@ abstract class ProjectSuki :
     private val preferences by lazy { ProjectSukiPreferences(sharedPreferences) }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        screen.addRandomUAPreference()
         with(preferences) { screen.configure() }
     }
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2, 1.seconds)
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = setRandomUserAgent()
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = homepageUrl.newBuilder()
@@ -162,10 +157,10 @@ abstract class ProjectSuki :
             .addPathSegment((page - 1).toString())
             .build()
 
-        return searchMangaParse(client.get(url).asJsoup())
+        return searchMangaParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = searchMangaParse(client.get(homepageUrl).asJsoup(), overrideHasNextPage = false)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = searchMangaParse(client.get(homepageUrl, Fetch.DOCUMENT).asJsoup(), overrideHasNextPage = false)
 
     private inline fun <reified T> HttpUrl.Builder.applyPSFilter(
         from: FilterList,
@@ -203,7 +198,7 @@ abstract class ProjectSuki :
                 .encodedQuery(urlQuery)
                 .build()
 
-            return searchMangaParse(client.get(searchUrl).asJsoup(), overrideHasNextPage = false)
+            return searchMangaParse(client.get(searchUrl, Fetch.DOCUMENT).asJsoup(), overrideHasNextPage = false)
         }
 
         return MangasPage(emptyList(), hasNextPage = false)
@@ -230,7 +225,7 @@ abstract class ProjectSuki :
                     .applyPSFilter<ProjectSukiFilters.Artist>(from = filters)
                     .build()
 
-                searchMangaParse(client.get(url).asJsoup())
+                searchMangaParse(client.get(url, Fetch.DOCUMENT).asJsoup())
             }
         }
     }
@@ -267,7 +262,7 @@ abstract class ProjectSuki :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document: Document = client.get(getMangaUrl(manga)).asJsoup()
+        val document: Document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val extractor = DataExtractor(document)
 
         return SMangaUpdate(

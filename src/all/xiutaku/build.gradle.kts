@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Xiutaku"
-    versionCode = 0
+    versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
@@ -19,9 +19,4 @@ keiyoushi {
         host("xiutaku.com")
         path("/.*")
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:randomua"))
 }

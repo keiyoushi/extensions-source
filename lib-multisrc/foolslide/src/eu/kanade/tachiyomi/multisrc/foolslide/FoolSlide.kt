@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -39,7 +40,7 @@ abstract class FoolSlide :
     protected open val urlModifier = ""
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl$urlModifier/directory/$page/").asJsoup()
+        val document = client.get("$baseUrl$urlModifier/directory/$page/", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
         val hasNextPage = popularMangaNextPageSelector().let { selector -> document.select(selector).first() != null }
         return MangasPage(mangas, hasNextPage)
@@ -60,7 +61,7 @@ abstract class FoolSlide :
     open fun popularMangaNextPageSelector() = "div.next"
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl$urlModifier/latest/$page/").asJsoup()
+        val document = client.get("$baseUrl$urlModifier/latest/$page/", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(latestUpdatesSelector()).map { latestUpdatesFromElement(it) }
         val hasNextPage = latestUpdatesNextPageSelector()?.let { selector -> document.select(selector).first() != null } ?: false
         return MangasPage(mangas, hasNextPage)
@@ -79,7 +80,7 @@ abstract class FoolSlide :
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val form = FormBody.Builder().add("search", query).build()
-        val document = client.post("$baseUrl$urlModifier/search/", headers, form).asJsoup()
+        val document = client.post("$baseUrl$urlModifier/search/", headers, Fetch.DOCUMENT, form).asJsoup()
         val mangas = document.select(searchMangaSelector()).map { searchMangaFromElement(it) }
         val hasNextPage = searchMangaNextPageSelector().let { selector -> document.select(selector).first() != null }
         return MangasPage(mangas, hasNextPage)
@@ -102,7 +103,7 @@ abstract class FoolSlide :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url, adultHeaders).asJsoup()
+        val document = client.get(baseUrl + manga.url, adultHeaders, Fetch.DOCUMENT).asJsoup()
 
         val sManga = mangaDetailsParse(document).apply { url = manga.url }
         val sChapters = document.select(chapterListSelector()).map { chapterFromElement(it) }
@@ -115,7 +116,7 @@ abstract class FoolSlide :
     // if there's no image on the details page, get the first page of the first chapter
     protected suspend fun getDetailsThumbnail(document: Document, urlSelector: String = chapterUrlSelector): String? = document.select("div.thumbnail img, table.thumb img").firstOrNull()?.attr("abs:src")
         ?: document.select(chapterListSelector()).lastOrNull()?.select(urlSelector)?.attr("abs:href")
-            ?.let { url -> client.get(url, adultHeaders).asJsoup() }
+            ?.let { url -> client.get(url, adultHeaders, Fetch.DOCUMENT).asJsoup() }
             ?.let { doc -> pageListParse(doc).firstOrNull()?.imageUrl }
 
     open suspend fun mangaDetailsParse(document: Document) = SManga.create().apply {
@@ -155,6 +156,7 @@ abstract class FoolSlide :
                 val form = FormBody.Builder().add("adult", "true").build()
                 request.newBuilder()
                     .removeHeader("Adult")
+                    .header("Origin", baseUrl)
                     .method("POST", form)
                     .build()
             } else {
@@ -253,7 +255,7 @@ abstract class FoolSlide :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url, adultHeaders).asJsoup()
+        val document = client.get(baseUrl + chapter.url, adultHeaders, Fetch.DOCUMENT).asJsoup()
         return pageListParse(document)
     }
 

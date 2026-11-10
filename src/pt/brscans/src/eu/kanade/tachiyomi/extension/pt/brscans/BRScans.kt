@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -15,9 +16,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
 abstract class BRScans : KeiSource() {
-
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val mangas = client.get("$API_URL/manhwas/top/").parseAs<List<ManhwaDto>>()
+        val mangas = client.get("$API_URL/manhwas/top/", Fetch.XHR).parseAs<List<ManhwaDto>>()
         return MangasPage(mangas.map { it.toSManga() }, false)
     }
 
@@ -25,7 +25,7 @@ abstract class BRScans : KeiSource() {
         val url = "$API_URL/manhwas/".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .build()
-        val data = client.get(url).parseAs<ManhwaPageDto>()
+        val data = client.get(url, Fetch.XHR).parseAs<ManhwaPageDto>()
         return MangasPage(data.results.map { it.toSManga() }, data.next != null)
     }
 
@@ -33,7 +33,7 @@ abstract class BRScans : KeiSource() {
         val url = "$API_URL/manhwas/search/".toHttpUrl().newBuilder()
             .addQueryParameter("query", query)
             .build()
-        val mangas = client.get(url).parseAs<List<ManhwaDto>>()
+        val mangas = client.get(url, Fetch.XHR).parseAs<List<ManhwaDto>>()
         return MangasPage(mangas.map { it.toSManga() }, false)
     }
 
@@ -51,7 +51,7 @@ abstract class BRScans : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val id = getMangaUrl(manga).toHttpUrl().pathSegments[1]
-        val data = client.get("$API_URL/manhwas/$id/").parseAs<ManhwaDto>()
+        val data = client.get("$API_URL/manhwas/$id/", Fetch.XHR).parseAs<ManhwaDto>()
         return SMangaUpdate(
             data.toSManga(),
             data.chapters.reversed().flatMap { chapter -> Variant.entries.map { chapter.toSChapter(manga.url, it) } },
@@ -61,7 +61,7 @@ abstract class BRScans : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = getChapterUrl(chapter).toHttpUrl()
         val variant = Variant.entries.first { it.key == url.queryParameter("variant") }
-        val pages = client.get("$API_URL/chapters/${url.pathSegments.last()}/").parseAs<ChapterPagesDto>().pages
+        val pages = client.get("$API_URL/chapters/${url.pathSegments.last()}/", Fetch.XHR).parseAs<ChapterPagesDto>().pages
         return pages.mapNotNull { it.images.url(variant) }
             .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -28,7 +29,7 @@ import java.util.Locale
 abstract class Toon11 : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/bbs/board.php?bo_table=toon_c&is_over=0").asJsoup()
+        val document = client.get("$baseUrl/bbs/board.php?bo_table=toon_c&is_over=0", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("li[data-id]").map { element ->
             SManga.create().apply {
                 title = element.selectFirst(".homelist-title")!!.text()
@@ -41,7 +42,7 @@ abstract class Toon11 : KeiSource() {
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/bbs/board.php?bo_table=toon_c&sord=&type=upd&page=$page").asJsoup()
+        val document = client.get("$baseUrl/bbs/board.php?bo_table=toon_c&sord=&type=upd&page=$page", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("li[data-id]").map { element ->
             SManga.create().apply {
                 title = element.selectFirst(".homelist-title")!!.text()
@@ -76,7 +77,7 @@ abstract class Toon11 : KeiSource() {
             }.build()
         }
 
-        val document = client.get(searchUrl).asJsoup()
+        val document = client.get(searchUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("li[data-id]").map { element ->
             SManga.create().apply {
                 title = element.selectFirst(".homelist-title")!!.text()
@@ -98,7 +99,7 @@ abstract class Toon11 : KeiSource() {
         if (url.queryParameter("bo_table") != "toons") return null
         val id = url.queryParameter("is") ?: return null
 
-        val document = client.get("$baseUrl/bbs/board.php?bo_table=toons&is=$id").asJsoup()
+        val document = client.get("$baseUrl/bbs/board.php?bo_table=toons&is=$id", Fetch.DOCUMENT).asJsoup()
         return parseMangaDetails(document).apply {
             this.url = mangaUrl(title, id)
             initialized = true
@@ -111,7 +112,7 @@ abstract class Toon11 : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(
             parseMangaDetails(document).apply { url = manga.url },
@@ -144,7 +145,7 @@ abstract class Toon11 : KeiSource() {
         var nextUrl = document.selectFirst(".pg_current ~ .pg_page")?.absUrl("href")
 
         while (!nextUrl.isNullOrBlank()) {
-            val newpage = client.get(nextUrl).asJsoup()
+            val newpage = client.get(nextUrl, Fetch.DOCUMENT).asJsoup()
             newpage.select("#comic-episode-list > li").mapTo(chapters, ::parseChapter)
             nextUrl = newpage.selectFirst(".pg_current ~ .pg_page")?.absUrl("href")
         }
@@ -168,7 +169,7 @@ abstract class Toon11 : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + "/bbs" + chapter.url
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val script = document.selectFirst("script:containsData(img_list)")?.data() ?: return emptyList()
         val imgList = extractList(imgListRegex, script)
         val fallbackList = extractList(imgList2Regex, script)

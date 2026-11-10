@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.head
 import keiyoushi.source.KeiSource
@@ -38,21 +39,21 @@ abstract class Hennojin : KeiSource() {
             }
         }.build()
 
-        return parseMangaList(client.get(url))
+        return parseMangaList(client.get(url, Fetch.DOCUMENT))
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         // The search is ignored without the current WordPress nonce, which rotates
-        val nonce = client.get(httpUrl).asJsoup().selectFirst("input#_wpnonce")!!.attr("value")
+        val nonce = client.get(httpUrl, Fetch.DOCUMENT).asJsoup().selectFirst("input#_wpnonce")!!.attr("value")
         val url = httpUrl.newBuilder()
             .addEncodedPathSegments("page/$page")
             .addQueryParameter("keyword", query)
             .addQueryParameter("_wpnonce", nonce)
             .build()
 
-        return parseMangaList(client.get(url))
+        return parseMangaList(client.get(url, Fetch.DOCUMENT))
     }
 
     private fun parseMangaList(response: Response): MangasPage {
@@ -76,7 +77,7 @@ abstract class Hennojin : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = manga.apply {
             description = document.select(".manga-subtitle + p + p")
@@ -129,7 +130,7 @@ abstract class Hennojin : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(".slideshow-container > img")
             .mapIndexed { idx, img -> Page(idx, imageUrl = img.absUrl("src")) }
     }

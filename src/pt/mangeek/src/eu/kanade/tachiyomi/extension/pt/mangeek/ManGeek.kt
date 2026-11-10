@@ -7,10 +7,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
@@ -18,8 +20,6 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
 import java.util.Locale
 
 @Source
@@ -55,11 +55,13 @@ abstract class ManGeek : KeiSource() {
         val mangas = if (normalizedQuery.isBlank()) {
             client.post(
                 signedUrl("discover"),
+                Fetch.XHR,
                 TagsBody(includedTags).toJsonRequestBody(),
             ).parseAs<List<MangaDto>>()
         } else {
             client.post(
                 signedUrl("search", normalizedQuery),
+                Fetch.XHR,
                 TagsBody(includedTags).toJsonRequestBody(),
             ).parseAs<List<MangaDto>>()
         }
@@ -70,7 +72,7 @@ abstract class ManGeek : KeiSource() {
         )
     }
 
-    private suspend fun fetchHome(): HomeDto = client.get(signedUrl("home")).parseAs<HomeDto>()
+    private suspend fun fetchHome(): HomeDto = client.get(signedUrl("home"), Fetch.XHR).parseAs<HomeDto>()
 
     override val supportsFilterFetching get() = true
 
@@ -102,7 +104,7 @@ abstract class ManGeek : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val dto = client.get(signedUrl("manga", manga.url)).parseAs<MangaDto>()
+        val dto = client.get(signedUrl("manga", manga.url), Fetch.XHR).parseAs<MangaDto>()
 
         return SMangaUpdate(
             manga = dto.toSManga(details = true),
@@ -125,12 +127,12 @@ abstract class ManGeek : KeiSource() {
         return fetchChapterPages("mirror", chapter.url)
     }
 
-    private suspend fun fetchChapterPages(route: String, chapterId: String): List<Page> = client.get(signedUrl(route, chapterId)).parseAs<ChapterPagesDto>().toPageList()
+    private suspend fun fetchChapterPages(route: String, chapterId: String): List<Page> = client.get(signedUrl(route, chapterId), Fetch.XHR).parseAs<ChapterPagesDto>().toPageList()
 
     private fun signedUrl(route: String, input: String? = null): HttpUrl {
         val nonce = System.currentTimeMillis().toString(16).uppercase(Locale.ROOT)
         val signatureInput = input ?: nonce
-        val key = md5("M<$signatureInput#MANG33K>D")
+        val key = "M<$signatureInput#MANG33K>D".md5().toHexString()
 
         return apiUrl.newBuilder()
             .addPathSegment(route)
@@ -139,8 +141,4 @@ abstract class ManGeek : KeiSource() {
             .addPathSegment(key)
             .build()
     }
-
-    private fun md5(value: String): String = MessageDigest.getInstance("MD5")
-        .digest(value.toByteArray(StandardCharsets.UTF_8))
-        .joinToString("") { "%02x".format(it.toInt() and 0xff) }
 }

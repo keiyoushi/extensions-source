@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -31,7 +32,7 @@ abstract class MangaTales : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", getFilterList())
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val response = client.get("$baseUrl/api/releases?page=$page")
+        val response = client.get("$baseUrl/api/releases?page=$page", Fetch.XHR)
         val releases = response.parseAs<LatestChaptersDto>().releases
             .filterNot { it.manga.isNovel }
 
@@ -115,7 +116,7 @@ abstract class MangaTales : KeiSource() {
             ),
         ).toJsonRequestBody()
 
-        val data = client.post("$baseUrl/api/mangas/search", body).decryptAs<SearchMangaDto>()
+        val data = client.post("$baseUrl/api/mangas/search", Fetch.XHR, body).decryptAs<SearchMangaDto>()
 
         return MangasPage(
             data.mangas.map { it.toSManga() },
@@ -126,7 +127,7 @@ abstract class MangaTales : KeiSource() {
     override val supportsFilterFetching: Boolean get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/mangas/").asJsoup()
+        val document = client.get("$baseUrl/mangas/", Fetch.DOCUMENT).asJsoup()
 
         val categories = document.select(".js-react-on-rails-component").html()
             .parseAs<FiltersDto>().categories
@@ -181,14 +182,14 @@ abstract class MangaTales : KeiSource() {
     ): SMangaUpdate = coroutineScope {
         val detailsDeferred = async {
             if (!fetchDetails) return@async manga
-            val response = client.get(baseUrl + manga.url)
+            val response = client.get(baseUrl + manga.url, Fetch.DOCUMENT)
             response.asJsoup().select(".js-react-on-rails-component").html()
                 .parseAs<MangaDataAction<MangaDetailsDto>>()
                 .mangaDataAction.mangaData.toSManga()
         }
         val chaptersDeferred = async {
             if (!fetchChapters) return@async chapters
-            val response = client.get("$baseUrl/api${manga.url}")
+            val response = client.get("$baseUrl/api${manga.url}", Fetch.XHR)
             response.parseAs<ChapterListDto>().mangaReleases
                 .map { it.toSChapter() }.sortChapters()
         }
@@ -204,7 +205,7 @@ abstract class MangaTales : KeiSource() {
     )
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$baseUrl/${chapter.url}")
+        val response = client.get("$baseUrl/${chapter.url}", Fetch.DOCUMENT)
         val data = response.asJsoup()
             .select(".js-react-on-rails-component").html()
             .parseAs<ReaderDto>()

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -23,7 +24,6 @@ import java.util.LinkedHashMap
 
 @Source
 abstract class Doujindesu : KeiSource() {
-
     private val apiUrl get() = "$baseUrl/api"
 
     private val decryptor = Decryptor { apiUrl }
@@ -63,7 +63,7 @@ abstract class Doujindesu : KeiSource() {
     }
 
     private suspend fun fetchMangaList(url: HttpUrl, page: Int): MangasPage {
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         val total = response.headers["x-total-count"]?.toIntOrNull()
         val hasNextPage = total?.let { page * LIMIT < it } ?: true
         val mangas = response.parseAs<List<MangaItem>>()
@@ -71,7 +71,7 @@ abstract class Doujindesu : KeiSource() {
     }
 
     private suspend fun fetchTaxonomyList(url: HttpUrl): MangasPage {
-        val dto = client.get(url).parseAs<TaxonomyMangas>()
+        val dto = client.get(url, Fetch.XHR).parseAs<TaxonomyMangas>()
         return MangasPage(
             dto.mangaList.map { it.toSManga(baseUrl) },
             dto.pagination.page < dto.pagination.totalPages,
@@ -96,7 +96,7 @@ abstract class Doujindesu : KeiSource() {
                         .addQueryParameter("search", agsValue)
                         .addQueryParameter("limit", "1")
                         .build()
-                    client.get(url).parseAs<TermsResult>().terms.firstOrNull()?.slug
+                    client.get(url, Fetch.XHR).parseAs<TermsResult>().terms.firstOrNull()?.slug
                         ?: throw IOException("Gagal menemukan: $agsValue")
                 }.also { slugCache[cacheKey] = it }
 
@@ -156,11 +156,11 @@ abstract class Doujindesu : KeiSource() {
             "manga" -> url.pathSegments.getOrNull(1)
             "reader" -> {
                 val chapterId = url.pathSegments.getOrNull(1) ?: return null
-                client.get("$apiUrl/chapters/$chapterId".toHttpUrl()).parseAs<PageList>().mangaSlug
+                client.get("$apiUrl/chapters/$chapterId".toHttpUrl(), Fetch.XHR).parseAs<PageList>().mangaSlug
             }
             else -> return null
         } ?: return null
-        return client.get("$apiUrl/manga/$slug".toHttpUrl()).parseAs<MangaItem>().toSManga(baseUrl).apply {
+        return client.get("$apiUrl/manga/$slug".toHttpUrl(), Fetch.XHR).parseAs<MangaItem>().toSManga(baseUrl).apply {
             setUrlWithoutDomain(getMangaUrl(this))
             initialized = true
         }
@@ -172,7 +172,7 @@ abstract class Doujindesu : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val item = client.get("$apiUrl/manga/${manga.getSlug()}".toHttpUrl()).parseAs<MangaItem>()
+        val item = client.get("$apiUrl/manga/${manga.getSlug()}".toHttpUrl(), Fetch.XHR).parseAs<MangaItem>()
         return SMangaUpdate(
             item.toSManga(baseUrl),
             item.chapters.mapIndexed { index, chapter ->
@@ -183,7 +183,7 @@ abstract class Doujindesu : KeiSource() {
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/reader/${chapter.url}"
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/chapters/${chapter.url}".toHttpUrl()).parseAs<PageList>().pages.mapIndexed { i, imgUrl ->
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/chapters/${chapter.url}".toHttpUrl(), Fetch.XHR).parseAs<PageList>().pages.mapIndexed { i, imgUrl ->
         Page(i, imageUrl = Parser.unescapeEntities(imgUrl, false))
     }
 

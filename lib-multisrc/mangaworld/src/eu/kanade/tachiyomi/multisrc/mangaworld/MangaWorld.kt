@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -32,9 +33,9 @@ abstract class MangaWorld : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(CookieRedirectInterceptor(network.client))
 
-    override suspend fun getPopularManga(page: Int) = parseMangasPage(client.get("$baseUrl/archive?sort=most_read&page=$page").asJsoup())
+    override suspend fun getPopularManga(page: Int) = parseMangasPage(client.get("$baseUrl/archive?sort=most_read&page=$page", Fetch.DOCUMENT).asJsoup())
 
-    override suspend fun getLatestUpdates(page: Int) = parseMangasPage(client.get("$baseUrl/?page=$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int) = parseMangasPage(client.get("$baseUrl/?page=$page", Fetch.DOCUMENT).asJsoup())
 
     private fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
         thumbnail_url = element.selectFirst("a.thumb img")?.attr("abs:src")
@@ -84,14 +85,14 @@ abstract class MangaWorld : KeiSource() {
                 else -> {}
             }
         }
-        return parseMangasPage(client.get(url.build()).asJsoup())
+        return parseMangasPage(client.get(url.build(), Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "manga" || url.pathSegments.size < 3) return null
 
         val mangaUrl = url.pathSegments.take(3).joinToString("/", prefix = "/")
-        val document = client.get(baseUrl + mangaUrl).asJsoup()
+        val document = client.get(baseUrl + mangaUrl, Fetch.DOCUMENT).asJsoup()
         return mangaDetailsParse(document).apply {
             this.url = mangaUrl
             title = document.selectFirst("div.comic-info h1")!!.text()
@@ -105,7 +106,7 @@ abstract class MangaWorld : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val details = mangaDetailsParse(document).apply { title = manga.title }
         return SMangaUpdate(details, chapterListParse(document))
     }
@@ -168,13 +169,13 @@ abstract class MangaWorld : KeiSource() {
     protected fun parseChapterNumber(name: String): Float? = chapterNumberRegex.find(name)?.let { it.groups[1]?.value?.toFloatOrNull() }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("div#page img.page-image").mapIndexed { index, it ->
             Page(index, imageUrl = it.attr("abs:src"))
         }
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("User-Agent", "Mozilla/5.0 (Linux; U; Android 4.1.1; en-gb; Build/KLP) AppleWebKit/534.30 (KHTML, like Gecko) Version/4.0 Safari/534.30")
         .build()
 

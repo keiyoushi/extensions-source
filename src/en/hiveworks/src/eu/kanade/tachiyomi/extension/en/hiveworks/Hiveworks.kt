@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -30,7 +31,6 @@ import kotlin.time.Duration.Companion.minutes
  */
 @Source
 abstract class Hiveworks : KeiSource() {
-
     // Client
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = connectTimeout(1.minutes)
@@ -40,7 +40,7 @@ abstract class Hiveworks : KeiSource() {
 
     // Popular
 
-    override suspend fun getPopularManga(page: Int): MangasPage = comicBlocksParse(client.get(baseUrl))
+    override suspend fun getPopularManga(page: Int): MangasPage = comicBlocksParse(client.get(baseUrl, Fetch.DOCUMENT))
 
     private fun comicBlocksParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -59,7 +59,7 @@ abstract class Hiveworks : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val day = LocalDate.now().dayOfWeek.name.lowercase(Locale.US)
-        return comicBlocksParse(client.get("$baseUrl/home/update-day/$day"))
+        return comicBlocksParse(client.get("$baseUrl/home/update-day/$day", Fetch.DOCUMENT))
     }
 
     // Search
@@ -87,7 +87,7 @@ abstract class Hiveworks : KeiSource() {
         query: String = "",
         transform: (Element) -> SManga = ::mangaFromElement,
     ): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select(SEARCH_MANGA_SELECTOR)
             .filter { query.isEmpty() || it.text().contains(query, true) }
@@ -197,7 +197,7 @@ abstract class Hiveworks : KeiSource() {
     // Pages
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(chapter.url)
+        val response = client.get(chapter.url, Fetch.DOCUMENT)
         val url = response.request.url
         val document = response.asJsoup()
         val pages = mutableListOf<Page>()
@@ -308,7 +308,7 @@ abstract class Hiveworks : KeiSource() {
 
     // Used to throw custom error codes for http codes
     private suspend fun getWithErrors(url: String): Response {
-        val response = client.get(url, ensureSuccess = false)
+        val response = client.get(url, Fetch.DOCUMENT, ensureSuccess = false)
         if (!response.isSuccessful) {
             response.close()
             when (response.code) {

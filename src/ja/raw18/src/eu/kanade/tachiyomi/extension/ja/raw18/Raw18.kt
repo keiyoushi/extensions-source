@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -57,7 +58,7 @@ abstract class Raw18 : WPComics() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        return parseMangaPage(client.get(url), searchMangaSelector(), ::searchMangaFromElement)
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT), searchMangaSelector(), ::searchMangaFromElement)
     }
 
     override fun getStatusList(): List<Pair<String?, String>> = listOf(

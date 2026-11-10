@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
@@ -79,7 +80,7 @@ abstract class MangaGun : FMReader() {
             manga.url.substringAfter("raw-")
         }.substringBefore(".html")
 
-        return client.get("$baseUrl/app/manga/controllers/cont.Listchapter.php?slug=$slug").asJsoup().select(".at-series a").map {
+        return client.get("$baseUrl/app/manga/controllers/cont.Listchapter.php?slug=$slug", Fetch.DOCUMENT).asJsoup().select(".at-series a").map {
             SChapter.create().apply {
                 name = it.select(".chapter-name").text()
                 url = it.attr("abs:href").substringAfter("controllers")

@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
 import keiyoushi.lib.speedbinb.fetchPages
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -22,7 +23,7 @@ abstract class OhtaWebComic : KeiSource() {
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(SpeedBinbInterceptor())
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val mangas = client.get("$baseUrl/list/").asJsoup().select(".bnrList ul li a").map {
+        val mangas = client.get("$baseUrl/list/", Fetch.DOCUMENT).asJsoup().select(".bnrList ul li a").map {
             SManga.create().apply {
                 setUrlWithoutDomain(it.absUrl("href"))
                 title = it.selectFirst(".title")!!.text()
@@ -35,7 +36,7 @@ abstract class OhtaWebComic : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val mangas = client.get("$baseUrl/list/").asJsoup().select(".bnrList ul li a")
+        val mangas = client.get("$baseUrl/list/", Fetch.DOCUMENT).asJsoup().select(".bnrList ul li a")
             .filter { it.selectFirst(".title")?.text()?.contains(query, true) == true }
             .map {
                 SManga.create().apply {
@@ -53,7 +54,7 @@ abstract class OhtaWebComic : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val details = SManga.create().apply {
             title = document.selectFirst("[itemprop=name]")!!.text()
             author = document.selectFirst("[itemprop=author]")?.text()
@@ -105,13 +106,13 @@ abstract class OhtaWebComic : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = "https://www.yondemill.jp/contents/${chapter.url}?view=1&u0=1"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val readerUrl = client.get(getChapterUrl(chapter)).asJsoup()
+        val readerUrl = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
             .selectFirst("script:containsData(location.href)")!!
             .data()
             .substringAfter("location.href='")
             .substringBefore("';")
 
-        return client.fetchPages(client.get(readerUrl).asJsoup())
+        return client.fetchPages(client.get(readerUrl, Fetch.DOCUMENT).asJsoup())
     }
 }
 

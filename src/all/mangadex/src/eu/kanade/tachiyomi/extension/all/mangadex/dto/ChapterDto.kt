@@ -10,13 +10,14 @@ typealias ChapterDto = ResponseDto<ChapterDataDto>
 
 @Serializable
 @SerialName(MDConstants.CHAPTER)
-data class ChapterDataDto(override val attributes: ChapterAttributesDto? = null) : EntityDto()
+class ChapterDataDto(override val attributes: ChapterAttributesDto? = null) : EntityDto()
 
 @Serializable
-data class ChapterAttributesDto(
+class ChapterAttributesDto(
     val title: String?,
     val volume: String?,
     val chapter: String?,
+    val translatedLanguage: String,
     val pages: Int,
     val publishAt: String,
     val updatedAt: String,

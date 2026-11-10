@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -57,7 +58,7 @@ abstract class OkuToon : KeiSource() {
     }
 
     private suspend fun parseMangaList(url: HttpUrl): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".series-grid .series-card").map { element ->
             SManga.create().apply {
                 setUrlWithoutDomain(element.attr("abs:href"))
@@ -75,7 +76,7 @@ abstract class OkuToon : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document))
     }
@@ -85,26 +86,27 @@ abstract class OkuToon : KeiSource() {
         author = document.selectFirst(".series-detail-author")?.text()?.takeIf { it != "Bilinmiyor" }
         description = document.selectFirst("[data-series-description-content]")?.text()
         genre = document.select(".series-detail-genres .tag").joinToString { it.text() }
-        status = parseStatus(document.selectFirst(".series-detail-meta .badge-completed, .series-detail-meta .badge-ongoing")?.text())
+        status = parseStatus(document.selectFirst(".series-detail-kicker .series-status")?.className())
         thumbnail_url = document.selectFirst(".series-detail-cover img")?.attr("abs:src")
     }
 
-    private fun parseStatus(status: String?) = when (status?.trim()) {
-        "Devam Ediyor" -> SManga.ONGOING
-        "Tamamlandı" -> SManga.COMPLETED
+    private fun parseStatus(className: String?) = when {
+        className?.contains("series-status--ongoing") == true -> SManga.ONGOING
+        className?.contains("series-status--completed") == true -> SManga.COMPLETED
         else -> SManga.UNKNOWN
     }
 
-    private fun chapterListParse(document: Document): List<SChapter> = document.select("a.chapter-item").map { element ->
+    // Site moved the chapter <a> inside a wrapper div; the link element no longer has the "chapter-item" class
+    private fun chapterListParse(document: Document): List<SChapter> = document.select(".chapter-item").map { element ->
         SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("abs:href"))
-            name = element.selectFirst(".chapter-title")?.text() ?: element.text()
+            setUrlWithoutDomain(element.selectFirst("a.chapter-item-link")!!.attr("abs:href"))
+            name = element.selectFirst(".chapter-title")!!.text()
             date_upload = dateFormat.tryParseDate(element.selectFirst(".chapter-date")?.text())
         }
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("#readerPages img.reader-page").mapIndexed { index, img ->
             Page(index, imageUrl = img.attr("abs:src"))
         }

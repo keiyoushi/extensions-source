@@ -6,12 +6,16 @@ plugins {
 
 keiyoushi {
     name = "CapibaraTraductor"
-    versionCode = 1
+    versionCode = 5
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
         lang = "es"
         baseUrl = "https://capibaratraductor.com"
+    }
+
+    deeplink {
+        path("/.*/manga/..*")
     }
 }

@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "EternalMangas"
-    versionCode = 30
+    versionCode = 32
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

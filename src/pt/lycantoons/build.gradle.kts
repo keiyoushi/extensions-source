@@ -6,12 +6,16 @@ plugins {
 
 keiyoushi {
     name = "Lycan Toons"
-    versionCode = 0
+    versionCode = 3
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
     source {
         lang = "pt-BR"
         baseUrl = "https://lycantoons.com"
+    }
+
+    deeplink {
+        path("/series/..*")
     }
 }

@@ -17,6 +17,7 @@ import keiyoushi.lib.publus.PublusContent
 import keiyoushi.lib.publus.PublusInterceptor
 import keiyoushi.lib.publus.fetchPages
 import keiyoushi.lib.publus.parseFragmentOrNull
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
@@ -83,7 +84,7 @@ abstract class BookWalkerJp :
             .addQueryParameter("np", "0")
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(url, desktopHeaders).asJsoup().toMangasPage()
+        return client.get(url, desktopHeaders, Fetch.DOCUMENT).asJsoup().toMangasPage()
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -92,7 +93,7 @@ abstract class BookWalkerJp :
             .addQueryParameter("np", "0")
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(url, desktopHeaders).asJsoup().toMangasPage()
+        return client.get(url, desktopHeaders, Fetch.DOCUMENT).asJsoup().toMangasPage()
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -100,7 +101,7 @@ abstract class BookWalkerJp :
         val sort = filters.firstInstance<SortFilter>()
         val library = filters.firstInstance<LibraryFilter>()
         if (library.state) {
-            val response = client.get("$baseUrl/prx/holdBooks-api/hold-book-list/?page=$page")
+            val response = client.get("$baseUrl/prx/holdBooks-api/hold-book-list/?page=$page", Fetch.XHR)
             val result = response.parseAs<LibraryResponse>().holdBookList
             val hasNextPage = response.request.url.queryParameter("page")!!.toInt() < result.totalPage
             val mangas = result.entities.map { it.toSManga() }
@@ -114,7 +115,7 @@ abstract class BookWalkerJp :
             .addQueryParameter("np", "0")
             .addQueryParameter("page", page.toString())
             .build()
-        return client.get(url, desktopHeaders).asJsoup().toMangasPage()
+        return client.get(url, desktopHeaders, Fetch.DOCUMENT).asJsoup().toMangasPage()
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(
@@ -151,7 +152,7 @@ abstract class BookWalkerJp :
     ): SMangaUpdate {
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val isBook = manga.url.startsWith("de")
-        val seriesDoc = if (!isBook) client.get(seriesUrl(manga.url), desktopHeaders).asJsoup() else null
+        val seriesDoc = if (!isBook) client.get(seriesUrl(manga.url), desktopHeaders, Fetch.DOCUMENT).asJsoup() else null
         val wayomi = seriesDoc?.selectFirst(".p-episode__list") != null
         val (details, firstListPage) = fetchBookDetails(manga, seriesDoc, wayomi)
 
@@ -175,32 +176,32 @@ abstract class BookWalkerJp :
         val bookId = when {
             manga.url.startsWith("de") -> manga.url
             wayomi -> seriesDoc!!.firstEpisodeId()
-            else -> client.get(seriesListUrl(manga.url, 1), desktopHeaders).asJsoup()
+            else -> client.get(seriesListUrl(manga.url, 1), desktopHeaders, Fetch.DOCUMENT).asJsoup()
                 .also { firstListPage = it }
                 .firstBookId()
         }
-        val details = client.get(booksUpdatesUrl(bookId)).parseAs<List<DetailsResponse>>().first()
+        val details = client.get(booksUpdatesUrl(bookId), Fetch.XHR).parseAs<List<DetailsResponse>>().first()
         return details to firstListPage
     }
 
     private suspend fun chapterList(seriesId: String, hideLocked: Boolean, firstPage: Document? = null): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
         var page = 1
-        var document = firstPage ?: client.get(seriesListUrl(seriesId, page), desktopHeaders).asJsoup()
+        var document = firstPage ?: client.get(seriesListUrl(seriesId, page), desktopHeaders, Fetch.DOCUMENT).asJsoup()
         while (true) {
             val items = document.select(".m-tile-list .m-book-item")
             if (items.isEmpty()) break
             items.mapNotNullTo(chapters) { it.toSChapter(hideLocked) }
             if (!document.hasNextPage()) break
             page++
-            document = client.get(seriesListUrl(seriesId, page), desktopHeaders).asJsoup()
+            document = client.get(seriesListUrl(seriesId, page), desktopHeaders, Fetch.DOCUMENT).asJsoup()
         }
         return chapters.reversed()
     }
 
     private suspend fun resolveSeriesId(manga: SManga): String {
         if (!manga.url.startsWith("de")) return manga.url
-        return client.get(booksUpdatesUrl(manga.url)).parseAs<List<DetailsResponse>>().first().seriesId.toString()
+        return client.get(booksUpdatesUrl(manga.url), Fetch.XHR).parseAs<List<DetailsResponse>>().first().seriesId.toString()
     }
 
     private fun booksUpdatesUrl(bookId: String): HttpUrl = "$memberApiUrl/books/updates".toHttpUrl().newBuilder()
@@ -274,13 +275,13 @@ abstract class BookWalkerJp :
             cookies.find { it.name == "u2" }?.let { addQueryParameter("u2", it.value) }
         }.build()
 
-        client.get(refreshUrl).parseAs<PublusContent>().authInfo?.toAuth(bid = "0")
+        client.get(refreshUrl, Fetch.XHR).parseAs<PublusContent>().authInfo?.toAuth(bid = "0")
     }
 
     override fun getChapterUrl(chapter: SChapter): String = chapter.memo["viewerUrl"]?.string ?: throw Exception("Refresh Chapter List")
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterUrl = client.get(getChapterUrl(chapter), desktopHeaders, ensureSuccess = false).use { it.request.url }
+        val chapterUrl = client.get(getChapterUrl(chapter), desktopHeaders, Fetch.DOCUMENT, ensureSuccess = false).use { it.request.url }
         val cid = chapterUrl.queryParameter("cid")
         val cty = chapterUrl.queryParameter("cty")?.toIntOrNull()
         val host = chapterUrl.host
@@ -303,7 +304,7 @@ abstract class BookWalkerJp :
                 } else {
                     "$viewerUrl/browserWebApi/03/getLoader"
                 }
-                val loaderScript = client.get(loaderUrl).body.string()
+                val loaderScript = client.get(loaderUrl, Fetch.SCRIPT).body.string()
                 cr = fetchCr(loaderScript, chapterUrl.toString())
             }
 
@@ -323,7 +324,7 @@ abstract class BookWalkerJp :
                 addQueryParameter("BID", "0") // universal
             }.build()
 
-            val content = client.get(cApiUrl).parseAs<PublusContent>()
+            val content = client.get(cApiUrl, Fetch.XHR).parseAs<PublusContent>()
             val contentUrl = content.url
                 ?: throw Exception("Log in via WebView and rent or purchase this chapter to read.")
 
@@ -373,8 +374,8 @@ abstract class BookWalkerJp :
         }
     }
 
-    override fun imageRequest(page: Page): Request {
-        val request = super.imageRequest(page)
+    override fun getImageRequest(page: Page): Request {
+        val request = super.getImageRequest(page)
         val session = request.url.fragment?.parseFragmentOrNull()?.extra ?: return request
         val auth = runBlocking { publusAuth.currentAuth(session["cid"]!!, session) } ?: return request
         val url = auth.applyTo(request.url.newBuilder().query(null)).build()

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -70,7 +71,7 @@ abstract class Randowiz : KeiSource() {
         if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
         val chapterList = mutableListOf<SChapter>()
-        var currentDocument = client.get(getMangaUrl(manga)).asJsoup()
+        var currentDocument = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         while (true) {
             chapterList += currentDocument.select(".has-post-thumbnail").map { element ->
@@ -85,7 +86,7 @@ abstract class Randowiz : KeiSource() {
             val nextUrl = currentDocument.selectFirst(".next")?.attr("abs:href")
             if (nextUrl.isNullOrEmpty()) break
 
-            currentDocument = client.get(nextUrl).asJsoup()
+            currentDocument = client.get(nextUrl, Fetch.DOCUMENT).asJsoup()
         }
 
         return SMangaUpdate(
@@ -96,7 +97,7 @@ abstract class Randowiz : KeiSource() {
         )
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup().select(".elementor-widget-theme-post-content img").mapIndexed { index, img ->
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup().select(".elementor-widget-theme-post-content img").mapIndexed { index, img ->
         Page(index, imageUrl = img.attr("abs:src"))
     }
 

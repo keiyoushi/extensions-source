@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -43,6 +44,7 @@ import java.io.File
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.concurrent.Executors
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
@@ -52,7 +54,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class Japscan :
     KeiSource(),
     ConfigurableSource {
-
     private val preferences by getPreferencesLazy()
 
     // Pages are captured from the reader's canvases and spooled to the cache dir; their imageUrl
@@ -74,9 +75,9 @@ abstract class Japscan :
     // a cloudflare protected page
     override fun getHomeUrl() = "$baseUrl/mangas/?sort=popular&p=1"
 
-    override suspend fun getPopularManga(page: Int) = parseMangaList(client.get("$baseUrl/mangas/?sort=popular&p=$page").asJsoup())
+    override suspend fun getPopularManga(page: Int) = parseMangaList(client.get("$baseUrl/mangas/?sort=popular&p=$page", Fetch.DOCUMENT).asJsoup())
 
-    override suspend fun getLatestUpdates(page: Int) = parseMangaList(client.get("$baseUrl/mangas/?sort=updated&p=$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int) = parseMangaList(client.get("$baseUrl/mangas/?sort=updated&p=$page", Fetch.DOCUMENT).asJsoup())
 
     private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select(".mangas-list .manga-block:not(:has(a[href='']))").map { element ->
@@ -96,7 +97,7 @@ abstract class Japscan :
         if (query.isBlank()) return getPopularManga(page)
         val body = FormBody.Builder().add("search", query).build()
         val searchHeaders = headers.newBuilder().add("X-Requested-With", "XMLHttpRequest").build()
-        val results = client.post("$baseUrl/ls/", searchHeaders, body).parseAs<List<SearchResultDto>>()
+        val results = client.post("$baseUrl/ls/", searchHeaders, Fetch.XHR, body).parseAs<List<SearchResultDto>>()
         return MangasPage(results.map { it.toSManga(baseUrl) }, false)
     }
 
@@ -105,7 +106,7 @@ abstract class Japscan :
         val segments = url.pathSegments.filter(String::isNotEmpty)
         if (segments.size < 2 || segments[0] !in CHAPTER_PATH_TYPES) return null
         val mangaUrl = "/${segments[0]}/${segments[1]}/"
-        val document = client.get(baseUrl + mangaUrl).asJsoup()
+        val document = client.get(baseUrl + mangaUrl, Fetch.DOCUMENT).asJsoup()
         return parseMangaDetails(document).apply {
             this.url = mangaUrl
             title = document.selectFirst("#main .card-body h1")!!.text()
@@ -118,7 +119,7 @@ abstract class Japscan :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(baseUrl + manga.url)
+        val response = client.get(baseUrl + manga.url, Fetch.DOCUMENT)
         val mangaSlug = extractMangaSlug(response.request.url)
         val document = response.asJsoup()
         val details = parseMangaDetails(document).apply {
@@ -262,7 +263,7 @@ abstract class Japscan :
         }
     }
 
-    private suspend fun captchaPresent(chapterUrl: String): Boolean = client.get(chapterUrl, CacheControl.FORCE_NETWORK).use {
+    private suspend fun captchaPresent(chapterUrl: String): Boolean = client.get(chapterUrl, Fetch.DOCUMENT, CacheControl.FORCE_NETWORK).use {
         CAPTCHA_REGEX.containsMatchIn(it.body.string())
     }
 
@@ -308,7 +309,7 @@ abstract class Japscan :
 
     private suspend fun warmupWebViewSession() {
         runCatching {
-            val response = client.get(baseUrl)
+            val response = client.get(baseUrl, Fetch.DOCUMENT)
 
             runWebView<Unit>(timeout = 8.seconds) {
                 var finished = false
@@ -330,9 +331,11 @@ abstract class Japscan :
         val savedPaths = mutableListOf<String>()
         var done = false
 
-        val response = client.get(chapterUrl)
+        val response = client.get(chapterUrl, Fetch.DOCUMENT)
+        // Pages are saved off the main thread, in order, and passDone queues behind them
+        val saver = Executors.newSingleThreadExecutor()
 
-        return runCatching {
+        val pages = runCatching {
             runWebView<List<String>>(timeout = 3.minutes) {
                 domStorageEnabled = true
                 javaScriptEnabled = true
@@ -343,13 +346,16 @@ abstract class Japscan :
                     loadWithOverviewMode = false
                 }
 
-                jsBridge("${interfaceName}_savePage") { dataUri ->
-                    savePage(dataUri, sessionTag, savedPaths.size)?.let(savedPaths::add)
+                val origins = setOf(baseUrl)
+                webMessageBridge("${interfaceName}_savePage", origins) { dataUri ->
+                    saver.execute { savePage(dataUri, sessionTag, savedPaths.size)?.let(savedPaths::add) }
                 }
 
-                jsBridge("${interfaceName}_passDone") {
-                    done = true
-                    resolve(savedPaths)
+                webMessageBridge("${interfaceName}_passDone", origins) {
+                    saver.execute {
+                        done = true
+                        resolve(savedPaths)
+                    }
                 }
 
                 // The reader pulls rotating ad hosts whose modals break the detached descrambler,
@@ -376,7 +382,8 @@ abstract class Japscan :
                 loadData(chapterUrl, response.body.string())
             }
         }.getOrElse { emptyList() }
-            .takeIf { done } ?: emptyList()
+        saver.shutdown()
+        return pages.takeIf { done } ?: emptyList()
     }
 
     private fun savePage(

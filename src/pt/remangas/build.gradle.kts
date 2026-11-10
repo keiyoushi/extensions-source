@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "NoxManga"
-    versionCode = 54
+    versionCode = 56
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -17,10 +18,9 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class AnimeGDRClub : KeiSource() {
+    override suspend fun getPopularManga(page: Int): MangasPage = mangasParse(client.get("$baseUrl/serie.php", Fetch.DOCUMENT), popularMangaSelector(), 1)
 
-    override suspend fun getPopularManga(page: Int): MangasPage = mangasParse(client.get("$baseUrl/serie.php"), popularMangaSelector(), 1)
-
-    override suspend fun getLatestUpdates(page: Int): MangasPage = mangasParse(client.get("$baseUrl/"), latestUpdatesSelector(), 2)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = mangasParse(client.get("$baseUrl/", Fetch.DOCUMENT), latestUpdatesSelector(), 2)
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/".toHttpUrl().newBuilder()
@@ -57,7 +57,7 @@ abstract class AnimeGDRClub : KeiSource() {
             }
             if (status.isNotEmpty()) "$baseUrl/serie.php#stati=$status" else url.toString()
         }
-        return mangasParse(client.get(requestUrl), searchMangaSelector(), 3)
+        return mangasParse(client.get(requestUrl, Fetch.DOCUMENT), searchMangaSelector(), 3)
     }
 
     private fun mangasParse(response: Response, selector: String, num: Int): MangasPage {
@@ -116,7 +116,7 @@ abstract class AnimeGDRClub : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val infoElement = document.select(".tabellaalta")
         val details = SManga.create().apply {
@@ -148,7 +148,7 @@ abstract class AnimeGDRClub : KeiSource() {
     private fun chapterListSelector() = ".capitoli_cont > a"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         val nomemanga = document.selectFirst("#nomemanga")?.attr("class")
         val numcap = document.selectFirst(".numcap")?.text()

@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -52,7 +53,7 @@ abstract class WarForRayuba : KeiSource() {
     }.build()
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("https://api.github.com/repos/xrabohrok/WarMap/contents/tools").parseAs<List<GithubFileDto>>()
+        val response = client.get("https://api.github.com/repos/xrabohrok/WarMap/contents/tools", Fetch.XHR).parseAs<List<GithubFileDto>>()
         val mangaList = response.filter { it.name.endsWith(".json") }.map {
             SManga.create().apply {
                 title = it.name
@@ -72,7 +73,7 @@ abstract class WarForRayuba : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val roundDto = client.get(manga.url).parseAs<RoundDto>(json)
+        val roundDto = client.get(manga.url, Fetch.XHR).parseAs<RoundDto>(json)
 
         val manga = SManga.create().apply {
             title = roundDto.title
@@ -99,7 +100,7 @@ abstract class WarForRayuba : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = chapter.url
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterData = client.get(chapter.url, cubariHeaders).parseAs<List<PageDto>>(json)
+        val chapterData = client.get(chapter.url, cubariHeaders, Fetch.XHR).parseAs<List<PageDto>>(json)
 
         val pageList = chapterData.mapIndexed { index, page ->
             Page(index, page.src.slice(0..page.src.lastIndexOf(".")), page.src)

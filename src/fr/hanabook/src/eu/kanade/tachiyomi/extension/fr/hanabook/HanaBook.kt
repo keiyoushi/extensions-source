@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -116,7 +117,7 @@ abstract class HanaBook :
             .set("Referer", "$baseUrl/hana-book/login")
             .build()
 
-        val data = client.post("$apiUrl/user/", loginHeaders, body, ensureSuccess = false)
+        val data = client.post("$apiUrl/user/", loginHeaders, Fetch.XHR, body, ensureSuccess = false)
             .parseAs<LoginResponse>(transform = ::stripXssi)
         val token = data.token ?: throw Exception("Login échoué: ${data.message ?: "identifiants invalides"}")
 
@@ -142,7 +143,7 @@ abstract class HanaBook :
     override suspend fun getLatestUpdates(page: Int): MangasPage = getProduitsInfo(6)
 
     private suspend fun getProduitsInfo(id: Int): MangasPage {
-        val data = client.get("$apiUrl/produits/info/?id=$id&option=0&filterAbo=false&filterPasDejaLu=false")
+        val data = client.get("$apiUrl/produits/info/?id=$id&option=0&filterAbo=false&filterPasDejaLu=false", Fetch.XHR)
             .parseAs<LatestResponse>(transform = ::stripXssi)
         val seen = HashSet<String>()
         val mangas = data.ebooks?.ebooks.orEmpty().mapNotNull { e ->
@@ -172,7 +173,7 @@ abstract class HanaBook :
                 .addQueryParameter("key", query)
                 .addQueryParameter("filterAbo", "false")
                 .build()
-            val data = client.get(url).parseAs<SearchResponse>(transform = ::stripXssi)
+            val data = client.get(url, Fetch.XHR).parseAs<SearchResponse>(transform = ::stripXssi)
             val seen = HashSet<Int>()
             val mangas = data.ebooks
                 .filter { seen.add(it.idSerie) }
@@ -220,7 +221,7 @@ abstract class HanaBook :
         if (ages.isNotEmpty()) builder.addQueryParameter("ages", ages.joinToString(","))
         if (types.isNotEmpty()) builder.addQueryParameter("types", types.joinToString(","))
 
-        val data = client.get(builder.build()).parseAs<CatalogueResponse>(transform = ::stripXssi)
+        val data = client.get(builder.build(), Fetch.XHR).parseAs<CatalogueResponse>(transform = ::stripXssi)
         val mangas = data.licences.mapNotNull { l ->
             val ref = l.coverRef ?: return@mapNotNull null
             SManga.create().apply {
@@ -237,7 +238,7 @@ abstract class HanaBook :
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/catalogue/filters/?filterAbo=false")
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/catalogue/filters/?filterAbo=false", Fetch.XHR)
         .parseAs<FiltersResponse>(transform = ::stripXssi)
         .toJsonElement()
 
@@ -260,7 +261,7 @@ abstract class HanaBook :
     ): SMangaUpdate {
         ensureLogin()
         val ref = refFromUrl(manga.url)
-        val ebook = client.get("$apiUrl/produit/?id=$ref")
+        val ebook = client.get("$apiUrl/produit/?id=$ref", Fetch.XHR)
             .parseAs<ProduitResponse>(transform = ::stripXssi).ebook
             ?: if (fetchDetails) throw Exception("Ebook introuvable") else return SMangaUpdate(manga, emptyList())
 
@@ -291,7 +292,7 @@ abstract class HanaBook :
         }
     }
 
-    private suspend fun fetchDossier(idSerie: Int): Dossier? = client.get("$apiUrl/licence-dossier/?id_licence=$idSerie")
+    private suspend fun fetchDossier(idSerie: Int): Dossier? = client.get("$apiUrl/licence-dossier/?id_licence=$idSerie", Fetch.XHR)
         .parseAs<DossierResponse>(transform = ::stripXssi).dossier
 
     private fun buildDescription(e: Ebook, d: Dossier?): String {
@@ -345,7 +346,7 @@ abstract class HanaBook :
             .addQueryParameter("key", ebook.titreSerie)
             .addQueryParameter("filterAbo", "false")
             .build()
-        val volumes = client.get(searchUrl)
+        val volumes = client.get(searchUrl, Fetch.XHR)
             .parseAs<SearchResponse>(transform = ::stripXssi).ebooks
             .filter { it.idSerie == ebook.idSerie }
 
@@ -390,7 +391,7 @@ abstract class HanaBook :
             .addQueryParameter("devicePixelRatio", "1.25")
             .build()
 
-        val data = client.get(url).parseAs<ImagesResponse>(transform = ::stripXssi)
+        val data = client.get(url, Fetch.XHR).parseAs<ImagesResponse>(transform = ::stripXssi)
         if (data.images.isEmpty()) {
             throw Exception(data.message ?: "Aucune image (connexion ou abonnement requis)")
         }

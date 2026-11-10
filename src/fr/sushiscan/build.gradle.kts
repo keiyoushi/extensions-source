@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Sushi-Scan"
-    versionCode = 17
+    versionCode = 18
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "mangathemesia"
@@ -15,9 +15,4 @@ keiyoushi {
         lang = "fr"
         baseUrl = "https://sushiscan.net"
     }
-}
-
-dependencies {
-
-    implementation(project(":lib:randomua"))
 }

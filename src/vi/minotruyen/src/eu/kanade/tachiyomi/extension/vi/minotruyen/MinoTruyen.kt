@@ -8,11 +8,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import keiyoushi.lib.cryptoaes.CryptoAES
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.cryptoJsDecrypt
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -28,7 +29,6 @@ import java.nio.charset.StandardCharsets
 
 @Source
 abstract class MinoTruyen : KeiSource() {
-
     private val category: String
         get() = when {
             name.contains("Comics") -> "comics"
@@ -51,7 +51,7 @@ abstract class MinoTruyen : KeiSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("category", category)
             .build()
-        val result = client.get(url).parseAs<BooksResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<BooksResponse>()
         return MangasPage(result.toSMangaList(baseUrl), result.hasNextPage(page))
     }
 
@@ -77,7 +77,7 @@ abstract class MinoTruyen : KeiSource() {
             ?.selectedValues()
             ?.forEach { url.addQueryParameter("includeTags", it) }
 
-        val result = client.get(url.build()).parseAs<BooksResponse>()
+        val result = client.get(url.build(), Fetch.XHR).parseAs<BooksResponse>()
         val mangaList = result.toSMangaList(baseUrl)
         return MangasPage(mangaList, result.hasNextPage(page))
     }
@@ -109,7 +109,7 @@ abstract class MinoTruyen : KeiSource() {
         val apiUrl = getApiUrl()
         val mangaDeferred = if (fetchDetails) {
             async {
-                client.get("$apiUrl/books/$bookId")
+                client.get("$apiUrl/books/$bookId", Fetch.XHR)
                     .parseAs<BookDetailResponse>()
                     .toSManga(baseUrl)
             }
@@ -121,7 +121,7 @@ abstract class MinoTruyen : KeiSource() {
                 val url = "$apiUrl/books/$bookId/chapters".toHttpUrl().newBuilder()
                     .addQueryParameter("order", "desc")
                     .build()
-                client.get(url).parseAs<ChaptersResponse>().toSChapterList(bookId)
+                client.get(url, Fetch.XHR).parseAs<ChaptersResponse>().toSChapterList(bookId)
             }
         } else {
             null
@@ -136,7 +136,7 @@ abstract class MinoTruyen : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl/$category${chapter.url}").asJsoup()
+        val document = client.get("$baseUrl/$category${chapter.url}", Fetch.DOCUMENT).asJsoup()
         val chapterId = chapter.url.substringAfterLast('/').toIntOrNull()
         val embeddedPages = document.extractNextJs<ReaderChapter>()
             ?.takeIf { chapterId == null || it.chapterId == chapterId }
@@ -151,8 +151,7 @@ abstract class MinoTruyen : KeiSource() {
 
             val encData = encrypted.substringAfter(":")
 
-            val decrypted = CryptoAES.decrypt(encData, aesKey)
-            if (decrypted.isBlank()) return emptyList()
+            val decrypted = encData.cryptoJsDecrypt(aesKey)
 
             val servers = decrypted.parseAs<List<ChapterServer>>()
 
@@ -238,7 +237,7 @@ abstract class MinoTruyen : KeiSource() {
             .addQueryParameter("take", "50")
             .addQueryParameter("category", category)
             .build()
-        return client.get(url).parseAs<TagsResponse>().data.tags.toJsonElement()
+        return client.get(url, Fetch.XHR).parseAs<TagsResponse>().data.tags.toJsonElement()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList = getFilters(data?.parseAs<List<TagOption>>())
@@ -249,13 +248,13 @@ abstract class MinoTruyen : KeiSource() {
         resolvedApiUrl?.let { return it }
 
         val resolved = runCatching {
-            client.get("$apiUrlDefault/books?take=1&category=$category").close()
+            client.get("$apiUrlDefault/books?take=1&category=$category", Fetch.DOCUMENT).close()
             apiUrlDefault
         }.getOrElse {
-            val document = client.get(baseUrl).asJsoup()
+            val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
             document.select("script[src*=chunks]").firstNotNullOfOrNull { script ->
                 runCatching {
-                    val text = client.get(script.absUrl("src")).use { it.body.string() }
+                    val text = client.get(script.absUrl("src"), Fetch.SCRIPT).use { it.body.string() }
                     apiUrlRegex.find(text)?.groupValues?.get(1)?.let { "$it/api" }
                 }.getOrNull()
             } ?: apiUrlDefault

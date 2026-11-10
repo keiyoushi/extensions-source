@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -24,7 +25,7 @@ import java.time.format.DateTimeFormatter
 abstract class HeavenManga : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/top?orderby=views&pages=$page").asJsoup()
+        val document = client.get("$baseUrl/top?orderby=views&pages=$page", Fetch.DOCUMENT).asJsoup()
         return parseMangaGrid(document)
     }
 
@@ -42,7 +43,7 @@ abstract class HeavenManga : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = if (page == 1) baseUrl else "$baseUrl?pages=$page"
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.selectFirst("div.col-lg-8 > div#loop-content")
             ?.select("div.list-group-item:not(:has(div:containsOwn(Novela)))")
@@ -107,7 +108,7 @@ abstract class HeavenManga : KeiSource() {
         if (page > 1) url.addQueryParameter("pages", page.toString())
 
         val requestUrl = url.build()
-        val document = client.get(requestUrl).asJsoup()
+        val document = client.get(requestUrl, Fetch.DOCUMENT).asJsoup()
 
         if (!requestUrl.pathSegments.contains("buscar")) {
             return parseMangaGrid(document)
@@ -139,7 +140,7 @@ abstract class HeavenManga : KeiSource() {
     }
 
     private suspend fun fetchDetails(manga: SManga): SManga {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SManga.create().apply {
             title = manga.title
             document.select("div.tab-summary").let { info ->
@@ -167,11 +168,11 @@ abstract class HeavenManga : KeiSource() {
             .add("X-Requested-With", "XMLHttpRequest")
             .build()
 
-        val result = client.get(url, headers).parseAs<PayloadChaptersDto>()
+        val result = client.get(url, headers, Fetch.XHR).parseAs<PayloadChaptersDto>()
         val chapterBaseUrl = mangaUrl.toString().removeSuffix("/")
 
         return result.data
-            .sortedByDescending { it.slug.toFloatOrNull() ?: 0f }
+            .sortedByDescending { CHAPTER_NUMBER_REGEX.find(it.slug)?.value?.toFloat() ?: 0f }
             .map {
                 SChapter.create().apply {
                     name = "Capítulo: ${it.slug}"
@@ -185,7 +186,7 @@ abstract class HeavenManga : KeiSource() {
         val chapterId = chapter.url.substringAfterLast("#")
         if (chapterId.isBlank()) throw Exception("Error al obtener el id del capítulo. Actualice la lista")
 
-        val document = client.get("$baseUrl/manga/leer/$chapterId").asJsoup()
+        val document = client.get("$baseUrl/manga/ver/$chapterId", Fetch.DOCUMENT).asJsoup()
         val data = document.selectFirst("script:containsData(pUrl)")?.data()
             ?: throw Exception("Script pages no encontrado")
         val jsonString = PAGES_REGEX.find(data)?.groupValues?.get(1)?.removeTrailingComma()
@@ -210,6 +211,7 @@ abstract class HeavenManga : KeiSource() {
         private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
         val PAGES_REGEX = """pUrl\s*=\s*(\[[\s\S]*?\])\s*;""".toRegex()
         val TRAILING_COMMA_REGEX = """,\s*(\}|\])""".toRegex()
+        private val CHAPTER_NUMBER_REGEX = """^\d+(?:\.\d+)?""".toRegex()
         private const val CHAPTER_LIST_LIMIT = 10000
     }
 }

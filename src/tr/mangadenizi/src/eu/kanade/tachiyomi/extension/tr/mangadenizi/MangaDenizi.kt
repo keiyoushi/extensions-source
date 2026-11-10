@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
@@ -29,7 +30,7 @@ abstract class MangaDenizi : KeiSource() {
     // =============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val json = client.get("$baseUrl/api/v1/web/manga?sort=popular&page=$page", apiHeaders)
+        val json = client.get("$baseUrl/api/v1/web/manga?sort=popular&page=$page", apiHeaders, Fetch.XHR)
             .parseAs<MangaApiResponse<MangaIndexData>>().data.manga
         val mangas = json.data.map { it.toSManga() }
         val hasNextPage = json.currentPage < json.lastPage
@@ -39,7 +40,7 @@ abstract class MangaDenizi : KeiSource() {
     // =============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val json = client.get("$baseUrl/api/v1/web/manga?sort=latest&page=$page", apiHeaders)
+        val json = client.get("$baseUrl/api/v1/web/manga?sort=latest&page=$page", apiHeaders, Fetch.XHR)
             .parseAs<MangaApiResponse<MangaIndexData>>().data.manga
         val mangas = json.data.map { it.toSManga() }
         val hasNextPage = json.currentPage < json.lastPage
@@ -81,7 +82,7 @@ abstract class MangaDenizi : KeiSource() {
             }
         }.build()
 
-        val json = client.get(url, apiHeaders)
+        val json = client.get(url, apiHeaders, Fetch.XHR)
             .parseAs<MangaApiResponse<MangaIndexData>>().data.manga
         val mangas = json.data.map { it.toSManga() }
         val hasNextPage = json.currentPage < json.lastPage
@@ -95,7 +96,7 @@ abstract class MangaDenizi : KeiSource() {
         val segments = url.pathSegments
         if (segments.firstOrNull() != "manga" || segments.size < 2) return null
         val slug = segments[1]
-        val manga = client.get("$baseUrl/api/v1/web/manga/$slug", apiHeaders)
+        val manga = client.get("$baseUrl/api/v1/web/manga/$slug", apiHeaders, Fetch.XHR)
             .parseAs<MangaApiResponse<MangaDetailsData>>().data.manga
         return manga.toSManga()
     }
@@ -109,7 +110,7 @@ abstract class MangaDenizi : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.url.trim().removePrefix("/").removePrefix("manga/")
-        val mangaData = client.get("$baseUrl/api/v1/web/manga/$slug", apiHeaders)
+        val mangaData = client.get("$baseUrl/api/v1/web/manga/$slug", apiHeaders, Fetch.XHR)
             .parseAs<MangaApiResponse<MangaDetailsData>>().data.manga
         val sManga = mangaData.toSManga()
         val sChapters = mangaData.chapters.map { it.toSChapter(mangaData.slug) }
@@ -122,7 +123,7 @@ abstract class MangaDenizi : KeiSource() {
         val trimmed = chapter.url.trim().removePrefix("/").removePrefix("read/").removePrefix("manga/")
         val mangaSlug = trimmed.substringBefore("/")
         val chapterSlug = trimmed.substringAfter("/")
-        val dto = client.get("$baseUrl/api/v1/reader/$mangaSlug/$chapterSlug", apiHeaders)
+        val dto = client.get("$baseUrl/api/v1/reader/$mangaSlug/$chapterSlug", apiHeaders, Fetch.XHR)
             .parseAs<ReaderDto>()
         return dto.pages.mapIndexed { index, page -> page.toPage(index) }
     }

@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.clipstudioreader.ClipStudioReaderInterceptor
 import keiyoushi.lib.clipstudioreader.fetchPages
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
@@ -49,7 +50,7 @@ abstract class Hakusensha :
             .addQueryParameter("type", "comic")
             .addQueryParameter("ts", System.currentTimeMillis().toString())
             .build()
-        val result = client.get(url, apiHeaders).parseAs<RankingResponse>()
+        val result = client.get(url, apiHeaders, Fetch.XHR).parseAs<RankingResponse>()
         val mangas = result.ranking.map { it.product.toSManga() }.distinctBy { it.url }
         return MangasPage(mangas, false)
     }
@@ -66,7 +67,7 @@ abstract class Hakusensha :
         } else {
             "$apiUrl/search/$listFilter".toHttpUrl()
         }
-        val result = client.get(url, apiHeaders).parseAs<GroupsResponse>()
+        val result = client.get(url, apiHeaders, Fetch.XHR).parseAs<GroupsResponse>()
         val mangas = result.groups.map { it.toSManga() }.distinctBy { it.url }
         return MangasPage(mangas, false)
     }
@@ -82,7 +83,7 @@ abstract class Hakusensha :
             val url = "https://order.api.hakusensha-e.net/v1/users/${auth.userId}/purchasedJdcns".toHttpUrl().newBuilder()
                 .addQueryParameter("title_name", manga.url)
                 .build()
-            val response = client.get(url, userHeaders(auth), ensureSuccess = false)
+            val response = client.get(url, userHeaders(auth), Fetch.XHR, ensureSuccess = false)
             if (response.code == 403) {
                 response.close()
                 expireAuth(auth)
@@ -90,7 +91,7 @@ abstract class Hakusensha :
             }
             response.parseAs<PurchasedResponse>().purchasedList
         }
-        val products = async { client.get("$apiUrl/products/group/${manga.url}", apiHeaders).parseAs<ProductsResponse>() }
+        val products = async { client.get("$apiUrl/products/group/${manga.url}", apiHeaders, Fetch.XHR).parseAs<ProductsResponse>() }
 
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val result = products.await()
@@ -135,7 +136,7 @@ abstract class Hakusensha :
             .build()
 
         val newHeaders = if (auth != null) userHeaders(auth) else apiHeaders
-        val response = client.get(url, newHeaders, ensureSuccess = false)
+        val response = client.get(url, newHeaders, Fetch.XHR, ensureSuccess = false)
         if (auth != null && response.code == 403) {
             response.close()
             expireAuth(auth)

@@ -1,25 +1,25 @@
 // The site's Inertia page data, and the site's own API calls made from that page.
 (bridge, request) => {
-    if (window._cf_chl_opt) return "challenge";
-    const post = (result) => window[bridge].post(JSON.stringify(result));
+    if (window._cf_chl_opt) return 'challenge';
+    const post = (result) => window[bridge].postMessage(JSON.stringify(result));
     // An error page, once it has loaded without turning out to be a challenge.
-    const status = performance.getEntriesByType("navigation")[0]?.responseStatus ?? 0;
-    if (status >= 400 && document.readyState === "complete") {
+    const status = performance.getEntriesByType('navigation')[0]?.responseStatus ?? 0;
+    if (status >= 400 && document.readyState === 'complete') {
         post({ error: `HTTP error ${status}`, status });
         return null;
     }
-    const app = document.getElementById("app");
+    const app = document.getElementById('app');
     const data = app?.dataset.page ?? document.querySelector('script[data-page="app"][type="application/json"]')?.textContent;
     if (!data) return null;
     const started = Symbol.for(`${bridge}-read`);
     if (window[started]) return null;
     window[started] = true;
 
-    const xsrf = decodeURIComponent(document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/)?.[1] ?? "");
+    const xsrf = decodeURIComponent(document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/)?.[1] ?? '');
     const api = async (path) => {
         const response = await fetch(path, {
-            headers: { Accept: "application/json, text/plain, */*", "X-Requested-With": "XMLHttpRequest", "X-XSRF-TOKEN": xsrf },
-            credentials: "same-origin",
+            headers: { Accept: 'application/json, text/plain, */*', 'X-Requested-With': 'XMLHttpRequest', 'X-XSRF-TOKEN': xsrf },
+            credentials: 'same-origin',
         });
         if (!response.ok) throw new Error(`HTTP error ${response.status}`);
         return response.json();

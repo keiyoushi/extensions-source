@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import info.debatty.java.stringsimilarity.JaroWinkler
 import info.debatty.java.stringsimilarity.Levenshtein
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
@@ -41,7 +42,7 @@ abstract class Mango :
     // ============================== Popular ==============================
     // Our popular manga are just our library of manga
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val result = client.get("$apiUrl/library?depth=0").parseOrLoginError<LibraryDto>()
+        val result = client.get("$apiUrl/library?depth=0", Fetch.XHR).parseOrLoginError<LibraryDto>()
         val mangas = result.titles ?: return MangasPage(emptyList(), false)
 
         return MangasPage(mangas.map { it.toSManga() }, false)
@@ -97,7 +98,7 @@ abstract class Mango :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val result = client.get(apiUrl + manga.url + "?sort=auto").parseOrLoginError<TitleDto>()
+        val result = client.get(apiUrl + manga.url + "?sort=auto", Fetch.XHR).parseOrLoginError<TitleDto>()
         return SMangaUpdate(result.toSManga(), listChapters(result))
     }
 
@@ -198,7 +199,7 @@ abstract class Mango :
             .add("password", password)
             .build()
 
-        val loginRequest = POST("$basePath/login", headers, formBody)
+        val loginRequest = POST("$basePath/login", headers.newBuilder().set("Origin", baseUrl).build(), formBody)
         val response = chain.proceed(loginRequest)
 
         if (!response.isSuccessful || response.header("Set-Cookie") == null) {

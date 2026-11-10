@@ -2,6 +2,8 @@ package eu.kanade.tachiyomi.multisrc.pam
 
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.utils.WebViewTimeoutException
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
@@ -45,6 +47,7 @@ internal class SitePages(
     private val userAgent: () -> String,
 ) {
     private val baseHttpUrl = baseUrl.toHttpUrl()
+    private val siteOrigins = setOf("${baseHttpUrl.scheme}://${baseHttpUrl.host}")
 
     private val mutex = Mutex()
 
@@ -113,17 +116,17 @@ internal class SitePages(
                     }
                     heldResponse(released)
                 }
-                jsBridge(bridge) { posted ->
+                webMessageBridge(bridge, siteOrigins) { posted ->
                     val message = posted.parseAs<SiteMessage>()
                     synchronized(lock) {
                         when {
                             message.reader != null -> readerResult = message.reader
                             message.error != null -> {
                                 if (message.status == 403 || message.status == 429) failed(challenge = false)
-                                return@jsBridge reject(IOException(message.error))
+                                return@webMessageBridge reject(IOException(message.error))
                             }
                             else -> {
-                                val page = message.page ?: return@jsBridge reject(IOException("Missing page data"))
+                                val page = message.page ?: return@webMessageBridge reject(IOException("Missing page data"))
                                 readerV2 = reader && page.parseAs<PageListResponse>().props.readerV2
                                 site = SitePage(page, message.fetched, message.chapters)
                             }
@@ -132,7 +135,7 @@ internal class SitePages(
                     }
                 }
                 if (readerScript != null) {
-                    injectAtDocumentStart(readerScript, setOf("${baseHttpUrl.scheme}://${baseHttpUrl.host}"))
+                    injectAtDocumentStart(readerScript, siteOrigins)
                 }
                 onReceivedError { webRequest, error ->
                     if (webRequest.isForMainFrame) reject(IOException(error.description.toString()))
@@ -175,7 +178,7 @@ internal class SitePages(
     /** Reader worker, with its HKDF page-key import reported to reader.js. */
     private fun rewrittenWorker(webRequest: WebResourceRequest, bridge: String): WebResourceResponse {
         val url = webRequest.url.toString().toHttpUrl().newBuilder().removeAllQueryParameters(bridge).build()
-        val request = Request.Builder().url(url).headers(webRequest.requestHeaders.toHeaders()).build()
+        val request = Request.Builder().url(url).headers(webRequest.requestHeaders.toHeaders()).fetch(Fetch.SCRIPT).build()
         client().newCall(request).execute().use { upstream ->
             // The unpatched worker would only time out without the page key
             if (!upstream.isSuccessful) throw IOException("The site's reader did not load (HTTP ${upstream.code}), try opening the chapter in WebView")

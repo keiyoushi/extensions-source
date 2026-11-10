@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -32,7 +33,7 @@ abstract class ArabsHentai : KeiSource() {
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
 
     // ============================== Popular ===============================
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/manga/page/$page/?orderby=new-manga"))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/manga/page/$page/?orderby=new-manga", Fetch.DOCUMENT))
 
     private fun parseMangaList(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -51,7 +52,7 @@ abstract class ArabsHentai : KeiSource() {
     }
 
     // =============================== Latest ===============================
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/manga/page/$page/?orderby=new_chapter"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/manga/page/$page/?orderby=new_chapter", Fetch.DOCUMENT))
 
     // =============================== Search ===============================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -66,7 +67,7 @@ abstract class ArabsHentai : KeiSource() {
             }
         }
 
-        val document = client.get(url.build()).asJsoup()
+        val document = client.get(url.build(), Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".search-page .result-item article:not(:has(.tvshows))").mapNotNull { it.toSearchManga() }
         val hasNextPage = document.selectFirst(".pagination span.current + a") != null
         return MangasPage(mangas, hasNextPage)
@@ -89,7 +90,7 @@ abstract class ArabsHentai : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val content = document.selectFirst(".content") ?: throw Exception("Failed to parse manga details")
         val updatedManga = manga.apply {
@@ -139,7 +140,7 @@ abstract class ArabsHentai : KeiSource() {
 
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val script = client.get(getChapterUrl(chapter)).asJsoup()
+        val script = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
             .selectFirst("script:containsData(const images = [)")!!.data()
         return script.substringAfter("const images = ").substringBefore("];").plus("]").parseAs<List<ImageDto>>()
             .mapIndexed { index, image ->
@@ -160,7 +161,7 @@ abstract class ArabsHentai : KeiSource() {
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val items = client.get("$baseUrl/%d8%aa%d8%b5%d9%86%d9%8a%d9%81%d8%a7%d8%aa").asJsoup()
+        val items = client.get("$baseUrl/%d8%aa%d8%b5%d9%86%d9%8a%d9%81%d8%a7%d8%aa", Fetch.DOCUMENT).asJsoup()
             .select("#archive-content ul.genre-list li.item-genre .genre-data a")
         return items.map {
             val value = it.ownText()

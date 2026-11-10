@@ -11,11 +11,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.ratingStars
 import keiyoushi.utils.string
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -48,19 +50,6 @@ abstract class Desu :
         authorsStr: String? = authors?.joinToString { it.name },
     ): SManga {
         val ratingValue = score?.value ?: 0.0f
-        val ratingStar = when {
-            ratingValue > 9.5 -> "★★★★★"
-            ratingValue > 8.5 -> "★★★★✬"
-            ratingValue > 7.5 -> "★★★★☆"
-            ratingValue > 6.5 -> "★★★✬☆"
-            ratingValue > 5.5 -> "★★★☆☆"
-            ratingValue > 4.5 -> "★★✬☆☆"
-            ratingValue > 3.5 -> "★★☆☆☆"
-            ratingValue > 2.5 -> "★✬☆☆☆"
-            ratingValue > 1.5 -> "★☆☆☆☆"
-            ratingValue > 0.5 -> "✬☆☆☆☆"
-            else -> "☆☆☆☆☆"
-        }
 
         val rawAgeStop = when (content_rating) {
             "no" -> ""
@@ -97,7 +86,7 @@ abstract class Desu :
                 name
             } else {
                 russian
-            } + "\n" + ratingStar + " " + ratingValue + " (голосов: " +
+            } + "\n" + ratingStars(ratingValue.toDouble()) + " " + ratingValue + " (голосов: " +
                 totalVotes + ")\n" + altName + description
             manga.genre = ("$category, $rawAgeStop, $genresStr").split(", ").filter { it.isNotEmpty() }.joinToString { it.trim() }
             manga.status = when (trans_status) {
@@ -149,7 +138,7 @@ abstract class Desu :
             url.addQueryParameter("search", query)
         }
 
-        val response = client.get(url.build())
+        val response = client.get(url.build(), Fetch.XHR)
 
         val page = response.parseAs<PageWrapperDto<MangaDetDto>>()
 
@@ -171,7 +160,7 @@ abstract class Desu :
     ): SMangaUpdate = coroutineScope {
         val mangaDeferred = if (fetchDetails) {
             async {
-                val responseManga = client.get("$baseUrl$API_URL${manga.url}/")
+                val responseManga = client.get("$baseUrl$API_URL${manga.url}/", Fetch.XHR)
                 responseManga.parseAs<InfoWrapperDto<MangaDetDto>>().manga.toSManga()
             }
         } else {
@@ -180,7 +169,7 @@ abstract class Desu :
 
         val chaptersDeferred = if (fetchChapters) {
             async {
-                val responseChapter = client.get("$baseUrl$API_URL${manga.url}/chapters")
+                val responseChapter = client.get("$baseUrl$API_URL${manga.url}/chapters", Fetch.XHR)
                 val objChapter = responseChapter.parseAs<SeriesWrapperDto<List<ChaptersDto>>>().chapters
                 objChapter.map { chapter ->
                     val fullNumStr = "${chapter.volume}. Глава ${chapter.number}"
@@ -214,7 +203,7 @@ abstract class Desu :
         val chapterId = chapter.url
         val url = "$baseUrl$API_URL$titleId/chapters/$chapterId"
 
-        val response = client.get(url.toHttpUrl())
+        val response = client.get(url.toHttpUrl(), Fetch.XHR)
 
         val result = response.parseAs<ChapterWrapperDto<ChapterDataDto>>()
 

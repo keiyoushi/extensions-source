@@ -79,6 +79,7 @@ private val configurable = ClassName("eu.kanade.tachiyomi.source", "Configurable
 private val preferenceScreen = ClassName("androidx.preference", "PreferenceScreen")
 private val mirrorPrefsClass = ClassName("keiyoushi.source", "MirrorPreferences")
 private val customUrlPrefsClass = ClassName("keiyoushi.source", "CustomUrlPreferences")
+private val fetchableBaseUrlClass = ClassName("keiyoushi.source", "FetchableBaseUrl")
 private val getPreferencesFn = MemberName("keiyoushi.utils", "getPreferences")
 
 class SourceProcessor(
@@ -167,6 +168,11 @@ class SourceProcessor(
             }
             .map { it.simpleName.asString() }
             .toSet()
+            .plus(
+                annotated.getAllFunctions()
+                    .filter { it.simpleName.asString() == "fetchBaseUrls" && Modifier.OVERRIDE in it.modifiers }
+                    .map { it.simpleName.asString() },
+            )
 
         val fileProps = mutableListOf<PropertySpec>()
 
@@ -368,6 +374,10 @@ class SourceProcessor(
         }
 
         val urlSpec = source.baseUrl
+        val fetchesBaseUrl = "fetchBaseUrls" in overridden
+        if (fetchesBaseUrl && urlSpec.type == "static") {
+            logger.error("fetchBaseUrls is overridden in $className but needs a mirrors(...) or custom(...) baseUrl", node)
+        }
         when {
             "baseUrl" in overridden && urlSpec.type == "static" ->
                 logger.warn("baseUrl is provided by $className; skipping generated baseUrl (DSL baseUrl is used for metadata/hosts only)", node)
@@ -387,7 +397,7 @@ class SourceProcessor(
                     .add("%T(\n", mirrorPrefsClass)
                     .indent()
                     .add("preferences = %M(%LL),\n", getPreferencesFn, source.id)
-                    .add("mirrors = arrayOf(\n")
+                    .add("defaultMirrors = arrayOf(\n")
                     .indent()
                     .apply {
                         urlSpec.mirrors.forEach { mirror ->
@@ -409,6 +419,7 @@ class SourceProcessor(
                         .getter(FunSpec.getterBuilder().addStatement("return %N.baseUrl", prefsName).build())
                         .build(),
                 )
+                if (fetchesBaseUrl) addFetchableBaseUrl(prefsName)
                 addPreferenceScreen(isConfigurable) { addStatement("%N.setupPreferenceScreen(screen)", prefsName) }
                 if (!isConfigurable) addSuperinterface(configurable)
             }
@@ -419,7 +430,7 @@ class SourceProcessor(
                     .add("%T(\n", customUrlPrefsClass)
                     .indent()
                     .add("preferences = %M(%LL),\n", getPreferencesFn, source.id)
-                    .add("defaultUrl = %S,\n", urlSpec.defaultUrl)
+                    .add("hardcodedUrl = %S,\n", urlSpec.defaultUrl)
                     .add("title = %S,\n", strings.customUrlTitle)
                     .add("dialogMessage = %S,\n", strings.customUrlDialogMessage)
                     .unindent()
@@ -434,10 +445,19 @@ class SourceProcessor(
                         .getter(FunSpec.getterBuilder().addStatement("return %N.baseUrl", prefsName).build())
                         .build(),
                 )
+                if (fetchesBaseUrl) addFetchableBaseUrl(prefsName)
                 addPreferenceScreen(isConfigurable) { addStatement("%N.setupPreferenceScreen(screen)", prefsName) }
                 if (!isConfigurable) addSuperinterface(configurable)
             }
         }
+    }
+
+    private fun TypeSpec.Builder.addFetchableBaseUrl(prefsName: String) {
+        addProperty(
+            PropertySpec.builder("fetchableBaseUrl", fetchableBaseUrlClass, KModifier.OVERRIDE, KModifier.PROTECTED)
+                .getter(FunSpec.getterBuilder().addStatement("return %N", prefsName).build())
+                .build(),
+        )
     }
 
     private fun TypeSpec.Builder.addPreferenceScreen(

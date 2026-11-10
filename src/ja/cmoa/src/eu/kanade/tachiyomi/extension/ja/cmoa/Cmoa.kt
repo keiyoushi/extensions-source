@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
 import keiyoushi.lib.speedbinb.fetchPages
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
@@ -44,10 +45,10 @@ abstract class Cmoa :
     // load desktop selectors
     override fun Headers.Builder.configureHeaders() = set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36")
 
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/search/purpose/ranking/all?period=daily&daily=all").toMangasPage()
+    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/search/purpose/ranking/all?period=daily&daily=all", Fetch.DOCUMENT).toMangasPage()
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/newrelease/?page=$page").asJsoup()
+        val document = client.get("$baseUrl/newrelease/?page=$page", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("ul.title_list li.title_wrap").map {
             SManga.create().apply {
                 title = it.selectFirst("div.text_box p.title_name")!!.text()
@@ -82,7 +83,7 @@ abstract class Cmoa :
             addFilter("complete_flg", filters.firstInstance<CompleteFilter>())
             addQueryParameter("page", page.toString())
         }.build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     private fun Response.toMangasPage(): MangasPage {
@@ -107,7 +108,7 @@ abstract class Cmoa :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
-        val document = client.get("$baseUrl/title/${manga.url}?page=1&order=down").asJsoup()
+        val document = client.get("$baseUrl/title/${manga.url}?page=1&order=down", Fetch.DOCUMENT).asJsoup()
         val mangaTitle = document.selectFirst("section.brCramb a[href^=/title/]")!!.text()
         val details = SManga.create().apply {
             title = mangaTitle
@@ -127,7 +128,7 @@ abstract class Cmoa :
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
         val lastPage = document.select("div.pagination li a").mapNotNull { it.text().toIntOrNull() }.maxOrNull() ?: 1
         val otherPages = (2..lastPage).map { page ->
-            async { client.get("$baseUrl/title/${manga.url}?page=$page&order=down").asJsoup() }
+            async { client.get("$baseUrl/title/${manga.url}?page=$page&order=down", Fetch.DOCUMENT).asJsoup() }
         }
 
         val seriesTitle = mangaTitle.replace('\u3000', ' ')
@@ -162,7 +163,7 @@ abstract class Cmoa :
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/reader/browserviewer/content_id/${chapter.url}/"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         if (document.location().toHttpUrl().encodedPath.contains("/bib/reader")) {
             throw Exception("Novels are not supported.")

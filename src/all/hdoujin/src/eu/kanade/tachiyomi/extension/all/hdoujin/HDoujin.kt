@@ -18,6 +18,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import getFilters
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -30,6 +32,7 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.Response
 import okio.IOException
 
@@ -104,9 +107,9 @@ abstract class HDoujin :
             .build()
 
         val response = if (post) {
-            client.post(newUrl, headers, FormBody.Builder().build(), ensureSuccess = false)
+            client.post(newUrl, headers, Fetch.XHR, FormBody.Builder().build(), ensureSuccess = false)
         } else {
-            client.get(newUrl, headers, ensureSuccess = false)
+            client.get(newUrl, headers, Fetch.XHR, ensureSuccess = false)
         }
 
         if (response.code in listOf(400, 403)) {
@@ -216,7 +219,7 @@ abstract class HDoujin :
 
     override fun getFilterList(data: JsonElement?): FilterList = getFilters()
 
-    private suspend fun getImagesByMangaData(entry: MangaData, entryId: String, entryKey: String): Pair<ImagesInfo, String> {
+    private suspend fun getImagesByMangaData(entry: MangaData, entryId: String, entryKey: String): ImagesInfo {
         val data = entry.data
         fun getIPK(
             ori: DataKey?,
@@ -248,9 +251,8 @@ abstract class HDoujin :
             else -> "0"
         }
 
-        val images = clearanceRequest("$bookApiUrl/data/$entryId/$entryKey/$id/$public_key/$realQuality")
+        return clearanceRequest("$bookApiUrl/data/$entryId/$entryKey/$id/$public_key/$realQuality")
             .parseAs<ImagesInfo>()
-        return images to realQuality
     }
 
     private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
@@ -290,10 +292,15 @@ abstract class HDoujin :
         val (entryId, entryKey) = chapter.url.split("/")
         val imagesInfo = getImagesByMangaData(mangaData, entryId, entryKey)
 
-        return imagesInfo.first.entries.mapIndexed { index, image ->
-            Page(index, imageUrl = "${imagesInfo.first.base}/${image.path}?w=${imagesInfo.second}")
+        return imagesInfo.entries.mapIndexed { index, image ->
+            Page(index, imageUrl = imagesInfo.base + image.path)
         }
     }
+
+    // the image cdn answers 400 unless the site's Origin is sent, like the reader's XHR does
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
+        .fetch(Fetch.XHR)
+        .build()
 
     // Settings
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Terra Historicus"
-    versionCode = 1
+    versionCode = 3
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 

@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.mangatown
 
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -7,11 +8,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -25,23 +29,88 @@ abstract class Mangatown : KeiSource() {
     private val dateFormat = DateTimeFormatter.ofPattern("MMM dd,yyyy", Locale.US)
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/directory/0-0-0-0-0-0/$page.htm").asJsoup()
+        val document = client.get("$baseUrl/directory/0-0-0-0-0-0/$page.htm", Fetch.DOCUMENT).asJsoup()
         return parseMangasPage(document)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/latest/$page.htm").asJsoup()
+        val document = client.get("$baseUrl/latest/$page.htm", Fetch.DOCUMENT).asJsoup()
         return parseMangasPage(document)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val url = "$baseUrl/search".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("name", query)
-            .build()
-        val document = client.get(url).asJsoup()
+        val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
+
+            if (query.isNotEmpty()) {
+                addQueryParameter("name", query)
+                filters.firstInstanceOrNull<TitleMethodFilter>()?.let {
+                    addQueryParameter("name_method", it.selected)
+                }
+            }
+
+            filters.firstInstanceOrNull<AuthorFilter>()?.state?.takeIf { it.isNotBlank() }?.let { author ->
+                addQueryParameter("author", author)
+                filters.firstInstanceOrNull<AuthorMethodFilter>()?.let {
+                    addQueryParameter("author_method", it.selected)
+                }
+            }
+
+            filters.firstInstanceOrNull<ArtistFilter>()?.state?.takeIf { it.isNotBlank() }?.let { artist ->
+                addQueryParameter("artist", artist)
+                filters.firstInstanceOrNull<ArtistMethodFilter>()?.let {
+                    addQueryParameter("artist_method", it.selected)
+                }
+            }
+
+            filters.firstInstanceOrNull<DemographicFilter>()?.selected?.takeIf { it.isNotEmpty() }?.let {
+                addQueryParameter("demographic", it)
+            }
+
+            filters.firstInstanceOrNull<GenreFilter>()?.state?.forEach { genre ->
+                when (genre.state) {
+                    Filter.TriState.STATE_INCLUDE -> addQueryParameter("genres[${genre.name}]", "1")
+                    Filter.TriState.STATE_EXCLUDE -> addQueryParameter("genres[${genre.name}]", "2")
+                }
+            }
+
+            filters.firstInstanceOrNull<StatusFilter>()?.selected?.takeIf { it.isNotEmpty() }?.let {
+                addQueryParameter("is_completed", it)
+            }
+
+            filters.firstInstanceOrNull<ReleasedFilter>()?.state?.takeIf { it.isNotBlank() }?.let { released ->
+                addQueryParameter("released", released)
+                filters.firstInstanceOrNull<ReleasedMethodFilter>()?.let {
+                    addQueryParameter("released_method", it.selected)
+                }
+            }
+
+            filters.firstInstanceOrNull<RatingFilter>()?.selected?.takeIf { it.isNotEmpty() }?.let { rating ->
+                addQueryParameter("rating", rating)
+                filters.firstInstanceOrNull<RatingMethodFilter>()?.let {
+                    addQueryParameter("rating_method", it.selected)
+                }
+            }
+        }.build()
+
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseMangasPage(document)
     }
+
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
+        TitleMethodFilter(),
+        AuthorFilter(),
+        AuthorMethodFilter(),
+        ArtistFilter(),
+        ArtistMethodFilter(),
+        DemographicFilter(),
+        GenreFilter(),
+        StatusFilter(),
+        ReleasedFilter(),
+        ReleasedMethodFilter(),
+        RatingFilter(),
+        RatingMethodFilter(),
+    )
 
     private fun parseMangasPage(document: Document): MangasPage {
         val mangas = document.select("li:has(a.manga_cover)").map { mangaFromElement(it) }
@@ -65,7 +134,7 @@ abstract class Mangatown : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(parseMangaDetails(document), parseChapterList(document))
     }
 
@@ -111,7 +180,7 @@ abstract class Mangatown : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val elements = document.select("select#top_chapter_list ~ div.page_select option:not(:contains(featured))")
         return if (elements.isNotEmpty()) {
             elements.mapIndexed { i, e ->
@@ -125,7 +194,7 @@ abstract class Mangatown : KeiSource() {
     }
 
     override suspend fun getImageUrl(page: Page): String {
-        val document = client.get(page.url).asJsoup()
+        val document = client.get(page.url, Fetch.DOCUMENT).asJsoup()
         return document.selectFirst("div#viewer img")!!.absUrl("src")
     }
 }

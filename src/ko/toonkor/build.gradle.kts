@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Toonkor"
-    versionCode = 11
+    versionCode = 13
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -20,8 +20,4 @@ keiyoushi {
             custom("https://toonkor0.org")
         }
     }
-}
-
-dependencies {
-    implementation(project(":lib:randomua"))
 }

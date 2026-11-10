@@ -6,16 +6,21 @@ plugins {
 
 keiyoushi {
     name = "Lunar Manga"
-    versionCode = 1
+    versionCode = 7
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     val languages = listOf(
-        "all", "en", "ar", "bg", "bn", "da", "de", "es", "es-419",
-        "fa", "fi", "fr", "he", "hi", "id", "it", "ja", "ko",
-        "ms", "nl", "no", "pl", "pt", "pt-BR", "ru", "sv",
-        "th", "tl", "tr", "ur", "vi", "zh",
+        "all",
+        "en",
+        "id",
+        "ja",
     )
+
+    deeplink {
+        host("lunarx.to")
+        path("/manga/..*")
+    }
 
     languages.forEach { language ->
         source {
@@ -23,8 +28,4 @@ keiyoushi {
             lang = language
         }
     }
-}
-
-dependencies {
-    implementation(project(":lib:cryptoaes"))
 }

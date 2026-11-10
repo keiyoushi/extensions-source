@@ -1,14 +1,13 @@
 package eu.kanade.tachiyomi.extension.it.juinjutsuteamreader
 
 import eu.kanade.tachiyomi.multisrc.foolslide.FoolSlide
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import org.jsoup.nodes.Document
@@ -26,8 +25,7 @@ abstract class JuinJutsuTeamReader : FoolSlide() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         if (page == 1) seenMangaUrls.clear()
-        val request = GET("$baseUrl/latest/$page/", headers)
-        val document = client.newCall(request).await().asJsoup()
+        val document = client.get("$baseUrl/latest/$page/", headers, Fetch.DOCUMENT, ensureSuccess = false).asJsoup()
         val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
         val newMangas = mangas.filter { seenMangaUrls.add(it.url) }
         val hasNextPage = newMangas.isNotEmpty() && popularMangaNextPageSelector().let { selector -> document.select(selector).first() != null }
@@ -46,7 +44,7 @@ abstract class JuinJutsuTeamReader : FoolSlide() {
 
     override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate {
         val document: Document? = if (fetchDetails || fetchChapters) {
-            client.get(baseUrl + manga.url, adultHeaders).asJsoup()
+            client.get(baseUrl + manga.url, adultHeaders, Fetch.DOCUMENT).asJsoup()
         } else {
             null
         }
@@ -69,7 +67,7 @@ abstract class JuinJutsuTeamReader : FoolSlide() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url, adultHeaders).asJsoup()
+        val document = client.get(baseUrl + chapter.url, adultHeaders, Fetch.DOCUMENT).asJsoup()
         return pageListParse(document)
     }
 }

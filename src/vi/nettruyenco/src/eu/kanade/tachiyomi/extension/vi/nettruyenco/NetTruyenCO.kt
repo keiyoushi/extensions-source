@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
@@ -58,7 +59,7 @@ abstract class NetTruyenCO : WPComics() {
                 .addQueryParameter("slug", slug)
                 .addQueryParameter("comicId", comicId)
                 .build()
-            val response = client.get(url)
+            val response = client.get(url, Fetch.XHR)
             val chaptersDto = response.parseAs<ChaptersData>().data
 
             chaptersDto.map { dto ->

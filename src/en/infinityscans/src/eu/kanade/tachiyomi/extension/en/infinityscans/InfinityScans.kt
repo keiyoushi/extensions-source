@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.infinityscans
 
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -9,10 +8,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.getPreferencesLazy
@@ -26,12 +27,12 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
+import okhttp3.RequestBody
+import okhttp3.Response
 import org.jsoup.nodes.Element
 
 @Source
 abstract class InfinityScans : KeiSource() {
-
     private val cdnHost = "cv.infinityscans.org"
 
     private val pageCdnHost = "ch.infinityscans.org"
@@ -39,6 +40,10 @@ abstract class InfinityScans : KeiSource() {
     private var slugHash: String
         get() = preferences.getString(PREF_SLUG_HASH, DEFAULT_SLUG_HASH) ?: DEFAULT_SLUG_HASH
         set(value) = preferences.edit().putString(PREF_SLUG_HASH, value).apply()
+
+    private var actionId: String
+        get() = preferences.getString(PREF_ACTION_ID, DEFAULT_ACTION_ID) ?: DEFAULT_ACTION_ID
+        set(value) = preferences.edit().putString(PREF_ACTION_ID, value).apply()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(WebviewInterceptor(baseUrl))
@@ -51,9 +56,6 @@ abstract class InfinityScans : KeiSource() {
     private val apiHeaders
         get() = headersBuilder().apply {
             add("Accept", "application/json, text/javascript, */*; q=0.01")
-            add("Sec-Fetch-Dest", "empty")
-            add("Sec-Fetch-Mode", "cors")
-            add("Sec-Fetch-Site", "same-origin")
             add("X-requested-with", "XMLHttpRequest")
         }.build()
 
@@ -66,7 +68,7 @@ abstract class InfinityScans : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList(page, SortType.Latest.value)
 
     private suspend fun getMangaList(page: Int, sort: String): MangasPage {
-        val response = client.get("$baseUrl/api/comics?page=$page&sort=$sort", apiHeaders)
+        val response = client.get("$baseUrl/api/comics?page=$page&sort=$sort", apiHeaders, Fetch.XHR)
         val data = response.parseAs<SearchResultDto>()
         val entries = data.titles.map { it.toSManga(cdnHost) }
         return MangasPage(entries, entries.isNotEmpty())
@@ -92,10 +94,10 @@ abstract class InfinityScans : KeiSource() {
                     }
                 }
             }.build()
-            client.get(url, apiHeaders)
+            client.get(url, apiHeaders, Fetch.XHR)
         } else {
             val body = SearchRequestBody(search = query).toJsonRequestBody()
-            client.post("$baseUrl/api/search", apiHeaders, body)
+            client.post("$baseUrl/api/search", apiHeaders, Fetch.XHR, body)
         }
 
         return if (query.isNotEmpty()) {
@@ -117,7 +119,7 @@ abstract class InfinityScans : KeiSource() {
         val id = pathSegments[1]
         val slug = pathSegments[2]
 
-        val html = client.get(url, rscHeaders).body.string()
+        val html = client.get(url, rscHeaders, Fetch.XHR).body.string()
         return parseMangaDetails(html)
     }
 
@@ -136,12 +138,12 @@ abstract class InfinityScans : KeiSource() {
 
     private suspend fun getMangaDetails(manga: SManga): SManga {
         val url = "$baseUrl/comic/${manga.url}-$slugHash"
-        val html = client.get(url, rscHeaders).body.string()
+        val html = client.get(url, rscHeaders, Fetch.XHR).body.string()
         return runCatching { parseMangaDetails(html) }
             .getOrElse {
                 val newHash = HASH_REGEX.find(html)?.groupValues?.get(1) ?: error("Failed to find slug hash")
                 slugHash = newHash
-                val newHtml = client.get("$baseUrl/comic/${manga.url}-$slugHash", rscHeaders).body.string()
+                val newHtml = client.get("$baseUrl/comic/${manga.url}-$slugHash", rscHeaders, Fetch.XHR).body.string()
                 parseMangaDetails(newHtml)
             }
     }
@@ -173,7 +175,7 @@ abstract class InfinityScans : KeiSource() {
 
     private suspend fun getChapterList(manga: SManga) = coroutineScope {
         val id = manga.url.substringBefore("/")
-        val first = client.get("$baseUrl/api/comic/$id/chapters?page=0").parseAs<ChapterListDto>()
+        val first = client.get("$baseUrl/api/comic/$id/chapters?page=0", Fetch.XHR).parseAs<ChapterListDto>()
 
         val all = first.chapters.toMutableList()
         if (first.total > first.chapters.size) {
@@ -182,7 +184,7 @@ abstract class InfinityScans : KeiSource() {
 
             (1 until totalPages).map { page ->
                 async {
-                    client.get("$baseUrl/api/comic/$id/chapters?page=$page")
+                    client.get("$baseUrl/api/comic/$id/chapters?page=$page", Fetch.XHR)
                         .parseAs<ChapterListDto>().chapters
                 }
             }.awaitAll().forEach { all.addAll(it) }
@@ -196,27 +198,48 @@ abstract class InfinityScans : KeiSource() {
         val chapterId = chapter.url.substringAfterLast('/')
         val mangaId = chapter.url.split("/")[1]
 
-        val pageHeaders = headersBuilder()
-            .set("next-action", "603b9ae64dc53c5457f77cf6a4ea08b361e2e36b2f")
-            .build()
-
         val body = listOf(mangaId, chapterId).toJsonRequestBody()
         // Dummy slug for server to trigger empty set-cookie if expired, baseUrl alone doesn't.
         val pagesUrl = "$baseUrl/comic/$mangaId/dummy-slug/chapter/$chapterId"
+        val response = getPages(pagesUrl, body)
 
-        val response = client.post(pagesUrl, pageHeaders, body)
         val pages = response.extractNextJs<List<PageEntryDto>>()
         return pages?.mapIndexed { index, p ->
             Page(index, imageUrl = "https://$pageCdnHost/${p.path}")
         } ?: emptyList()
     }
 
-    override fun imageRequest(page: Page): Request {
-        val pageHeaders = headers.newBuilder().apply {
-            add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*")
-            add("Host", page.imageUrl!!.toHttpUrl().host)
-        }.build()
-        return GET(page.imageUrl!!, pageHeaders)
+    private suspend fun getPages(url: String, body: RequestBody): Response {
+        suspend fun post() = client.post(
+            url,
+            headersBuilder().set("next-action", actionId).build(),
+            Fetch.DOCUMENT,
+            body,
+            ensureSuccess = false,
+        )
+
+        post().let {
+            if (it.code != 404) return it
+            it.close()
+        }
+
+        for (
+        src in client.get(url, headers, Fetch.DOCUMENT).asJsoup()
+            .select("script[src*=.js]").eachAttr("abs:src").distinct()
+        ) {
+            val js = client.get(src, headers, Fetch.DOCUMENT).body.string()
+
+            for (match in ACTION_HASH_REGEX.findAll(js)) {
+                val id = match.groupValues[1]
+                actionId = id
+                post().let {
+                    if (it.code != 404) return it
+                    it.close()
+                }
+            }
+        }
+
+        error("No working action ID")
     }
 
     // ============================== Filters ==============================
@@ -225,7 +248,7 @@ abstract class InfinityScans : KeiSource() {
 
     override suspend fun fetchFilterData(): JsonElement {
         // load genre and author filters
-        val response = client.get("$baseUrl/api/comics/options", apiHeaders)
+        val response = client.get("$baseUrl/api/comics/options", apiHeaders, Fetch.XHR)
         return response.parseAs<FiltersDto>().toJsonElement()
     }
 
@@ -265,7 +288,11 @@ abstract class InfinityScans : KeiSource() {
 
     companion object {
         private const val DEFAULT_SLUG_HASH = "d806990541c8"
+        private const val DEFAULT_ACTION_ID = "60610a8a90f941d06db8af699e17f246116e26badf"
         private const val PREF_SLUG_HASH = "pref_slug_hash"
+        private const val PREF_ACTION_ID = "pref_action_id"
+
         private val HASH_REGEX = Regex("NEXT_REDIRECT.*https.+?-(\\w+);")
+        private val ACTION_HASH_REGEX = Regex("""createServerReference\)\(\W(\w+)""")
     }
 }

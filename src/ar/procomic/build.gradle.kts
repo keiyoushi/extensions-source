@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "ProComic"
-    versionCode = 0
+    versionCode = 10
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -24,5 +24,6 @@ keiyoushi {
 }
 
 dependencies {
+    implementation(project(":lib:cronet"))
     implementation(project(":lib:imagedecoder"))
 }

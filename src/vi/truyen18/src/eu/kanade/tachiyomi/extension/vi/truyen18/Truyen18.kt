@@ -7,18 +7,17 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.extractNextJsRsc
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
@@ -46,11 +45,11 @@ abstract class Truyen18 : KeiSource() {
 
     // ============================== Popular ===============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(client.get(buildPagedUrl("/xem-nhieu-nhat", page)))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(client.get(buildPagedUrl("/xem-nhieu-nhat", page), Fetch.DOCUMENT))
 
     // ============================== Latest ================================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaPage(client.get(buildPagedUrl("/moi-cap-nhat", page)))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaPage(client.get(buildPagedUrl("/moi-cap-nhat", page), Fetch.DOCUMENT))
 
     // ============================== Search ================================
 
@@ -66,7 +65,7 @@ abstract class Truyen18 : KeiSource() {
             buildPagedUrl("/category/$genreSlug", page).toHttpUrl()
         }
 
-        return parseMangaPage(client.get(url))
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT))
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -131,7 +130,7 @@ abstract class Truyen18 : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
             chapters = parseChapterList(document),
@@ -237,8 +236,12 @@ abstract class Truyen18 : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterSlug = getChapterUrl(chapter).toHttpUrl().pathSegments.lastOrNull()
             ?: return emptyList()
-        val chapterData = client.get(getChapterUrl(chapter)).asJsoup()
-            .extractReaderChapter(chapterSlug)
+        val chapterData = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
+            .extractNextJs<ReaderChapter> { element ->
+                element is JsonObject &&
+                    element.getStringOrNull("slug") == chapterSlug &&
+                    !element.getStringOrNull("content").isNullOrBlank()
+            }
             ?: return emptyList()
 
         return Jsoup.parseBodyFragment(chapterData.content, baseUrl)
@@ -249,34 +252,12 @@ abstract class Truyen18 : KeiSource() {
             }
     }
 
-    private fun Document.extractReaderChapter(chapterSlug: String): ReaderChapter? {
-        val rscBody = select("script:not([src])")
-            .mapNotNull { script ->
-                val data = script.data()
-                if (!data.startsWith(nextFlightPrefix)) return@mapNotNull null
-
-                runCatching {
-                    data.substring(nextFlightPrefix.length, data.lastIndexOf(')'))
-                        .parseAs<JsonArray>()
-                        .getOrNull(1)
-                        ?.stringOrNull
-                }.getOrNull()
-            }
-            .joinToString("")
-
-        return rscBody.extractNextJsRsc<ReaderChapter> { element ->
-            element is JsonObject &&
-                element.getStringOrNull("slug") == chapterSlug &&
-                !element.getStringOrNull("content").isNullOrBlank()
-        }
-    }
-
     // ============================== Filters ===============================
 
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val categoryList = document.select("h2")
             .firstOrNull { it.text().contains("Danh sách thể loại") }
             ?.parent()
@@ -302,7 +283,7 @@ abstract class Truyen18 : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val relatedSection = document.select("h2")
             .firstOrNull { it.text().contains("Bạn có thể đọc thêm") }
             ?.closest("section")
@@ -316,5 +297,4 @@ abstract class Truyen18 : KeiSource() {
     private val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
     private val vietnamZone = ZoneId.of("Asia/Ho_Chi_Minh")
     private val dateNumberRegex = Regex("\\d+")
-    private val nextFlightPrefix = "self.__next_f.push("
 }

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -18,10 +19,9 @@ import java.util.Locale
 
 @Source
 abstract class MangaPill : KeiSource() {
-
     // Popular fetches the homepage where the "Trending Mangas" section is
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/").asJsoup()
+        val document = client.get("$baseUrl/", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div:has(h4:contains(Trending)) > .grid > div:not([class])").map { element ->
             latestUpdatesFromElement(element)
         }
@@ -30,7 +30,7 @@ abstract class MangaPill : KeiSource() {
 
     // Latest fetches the /chapters url
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/chapters").asJsoup()
+        val document = client.get("$baseUrl/chapters", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".grid > div:not([class])").map { element ->
             latestUpdatesFromElement(element)
         }
@@ -49,7 +49,7 @@ abstract class MangaPill : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val details = SManga.create()
         details.title = manga.title
@@ -83,7 +83,7 @@ abstract class MangaPill : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("picture img").mapIndexed { i, it ->
             Page(i, imageUrl = it.attr("data-src"))
         }
@@ -118,7 +118,7 @@ abstract class MangaPill : KeiSource() {
             }
         }
 
-        val document = client.get(url.build()).asJsoup()
+        val document = client.get(url.build(), Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".grid > div:not([class])").map { element ->
             latestUpdatesFromElement(element)
         }

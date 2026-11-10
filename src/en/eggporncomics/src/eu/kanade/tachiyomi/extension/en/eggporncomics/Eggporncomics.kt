@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -24,7 +25,7 @@ abstract class Eggporncomics : KeiSource() {
     // Popular
 
     // couldn't find a page with popular comics, defaulting to the popular "anime-comics" category
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/category/1/anime-comics?page=$page").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/category/1/anime-comics?page=$page", Fetch.DOCUMENT).asJsoup())
 
     private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select("div.preview:has(div.name)").map { element ->
@@ -42,7 +43,7 @@ abstract class Eggporncomics : KeiSource() {
 
     // Latest
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/latest-comics?page=$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/latest-comics?page=$page", Fetch.DOCUMENT).asJsoup())
 
     // Search
 
@@ -70,7 +71,7 @@ abstract class Eggporncomics : KeiSource() {
             url.build()
         }
 
-        val response = client.get(url, ensureSuccess = false)
+        val response = client.get(url, Fetch.DOCUMENT, ensureSuccess = false)
         if (!response.isSuccessful) {
             response.close()
             // when combining a category filter and comics filter, if there are no results the source
@@ -92,7 +93,7 @@ abstract class Eggporncomics : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         val chapterUrl = response.request.url.toString()
         val document = response.asJsoup()
 
@@ -124,7 +125,7 @@ abstract class Eggporncomics : KeiSource() {
     private fun Element.toFullSizeImage() = absUrl("src").replace("thumb300_", "")
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("div.grid div.image img").mapIndexed { i, img ->
             Page(i, imageUrl = img.toFullSizeImage())
         }

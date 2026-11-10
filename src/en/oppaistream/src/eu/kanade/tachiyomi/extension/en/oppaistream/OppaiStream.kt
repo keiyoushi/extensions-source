@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -55,7 +56,7 @@ abstract class OppaiStream : KeiSource() {
             addQueryParameter("limit", "$SEARCH_LIMIT")
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val elements = document.select("div.in-grid > a")
 
         val mangas = elements.map { element ->
@@ -82,7 +83,7 @@ abstract class OppaiStream : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = manga.apply {
             thumbnail_url = document.select(".cover-img").attr("src")
@@ -114,7 +115,7 @@ abstract class OppaiStream : KeiSource() {
         val slug = chapterUrl.queryParameter("m")
         val chapNo = chapterUrl.queryParameter("c")
 
-        return client.get("$cdnUrl/manhwa/im.php?f-m=$slug&c=$chapNo").asJsoup().select("img").mapIndexed { index, img ->
+        return client.get("$cdnUrl/manhwa/im.php?f-m=$slug&c=$chapNo", Fetch.DOCUMENT).asJsoup().select("img").mapIndexed { index, img ->
             Page(index, imageUrl = img.attr("src"))
         }
     }

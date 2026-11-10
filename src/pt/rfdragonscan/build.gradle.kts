@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "RF Dragon Scan"
-    versionCode = 0
+    versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 

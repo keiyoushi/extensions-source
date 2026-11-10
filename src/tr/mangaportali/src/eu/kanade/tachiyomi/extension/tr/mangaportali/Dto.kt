@@ -60,7 +60,7 @@ class ChapterDto(
     private val title: String,
     private val number: Float,
     private val publishedAt: String,
-    val isEarlyAccessLocked: Boolean,
+    val isChapterLocked: Boolean,
 ) {
     fun toSChapter(seriesSlug: String) = SChapter.create().apply {
         url = id

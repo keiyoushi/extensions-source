@@ -2,10 +2,10 @@ package eu.kanade.tachiyomi.extension.all.fsicomics
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-class GenreFilter(private val genres: List<Pair<String, String>>) : Filter.Select<String>("Genre", genres.map { it.first }.toTypedArray()) {
-    fun toUriPart() = genres[state].second
+class CategoryFilter(private val options: List<Pair<String, String>>) : Filter.Select<String>("Category", options.map { it.first }.toTypedArray()) {
+    fun toUriPart() = options[state].second
 }
 
-class TagFilter : Filter.Text("Tag")
+class TagFilter : Filter.Text("Tag (e.g. Fantasy)")
 
-class SortFilter : Filter.Sort("Sort", arrayOf("Relevance", "Date"))
+class SortFilter : Filter.Select<String>("Sort", arrayOf("Newest", "Oldest", "Relevance", "Title A-Z"))

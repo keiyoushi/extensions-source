@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -54,14 +55,14 @@ abstract class ShadowManga : KeiSource() {
         if (page > 1) {
             url.addQueryParameter("p", getAdultPageToken(page, 48))
         }
-        val result = client.get(url.build()).parseAs<AdultCatalogResponse>()
+        val result = client.get(url.build(), Fetch.XHR).parseAs<AdultCatalogResponse>()
         val mangas = result.items
             .filter { !it.externo }
             .map { it.toSManga() }
         val hasNextPage = mangas.isNotEmpty() && (result.pageTokens?.next != null || result.page < result.totalPages)
         MangasPage(mangas, hasNextPage)
     } else {
-        val result = client.get("$baseUrl/api/series-locales/popular").parseAs<List<SeriesWrapper>>()
+        val result = client.get("$baseUrl/api/series-locales/popular", Fetch.XHR).parseAs<List<SeriesWrapper>>()
         val series = result.flatMap { it.series }.distinctBy { it.id }.map { it.toSManga() }
         MangasPage(series, false)
     }
@@ -75,14 +76,14 @@ abstract class ShadowManga : KeiSource() {
         if (page > 1) {
             url.addQueryParameter("p", getAdultPageToken(page, 48))
         }
-        val result = client.get(url.build()).parseAs<AdultCatalogResponse>()
+        val result = client.get(url.build(), Fetch.XHR).parseAs<AdultCatalogResponse>()
         val mangas = result.items
             .filter { !it.externo }
             .map { it.toSManga() }
         val hasNextPage = mangas.isNotEmpty() && (result.pageTokens?.next != null || result.page < result.totalPages)
         MangasPage(mangas, hasNextPage)
     } else {
-        val result = client.get("$baseUrl/api/series-locales/capitulos/recientes?page=$page&pageSize=24").parseAs<RecentChaptersResponse>()
+        val result = client.get("$baseUrl/api/series-locales/capitulos/recientes?page=$page&pageSize=24", Fetch.XHR).parseAs<RecentChaptersResponse>()
         val mangas = result.items.map { it.serie.toSManga() }.distinctBy { it.url }
         val hasNextPage = result.page < result.totalPages
         MangasPage(mangas, hasNextPage)
@@ -116,7 +117,7 @@ abstract class ShadowManga : KeiSource() {
             if (orden != "recientes") {
                 url.addQueryParameter("orden", orden)
             }
-            val result = client.get(url.build()).parseAs<AdultCatalogResponse>()
+            val result = client.get(url.build(), Fetch.XHR).parseAs<AdultCatalogResponse>()
             val mangas = result.items
                 .filter { series ->
                     excludedGenres.isEmpty() || series.getGenreList().none { genre ->
@@ -139,7 +140,7 @@ abstract class ShadowManga : KeiSource() {
             url.addQueryParameter("tags", it)
         }
 
-        val mangas = client.get(url.build()).parseAs<List<Series>>()
+        val mangas = client.get(url.build(), Fetch.XHR).parseAs<List<Series>>()
             .filter { series ->
                 excludedGenres.isEmpty() || series.getGenreList().none { genre ->
                     genre in excludedGenres
@@ -154,12 +155,12 @@ abstract class ShadowManga : KeiSource() {
         val segments = url.pathSegments
         if (segments.size >= 3 && segments[0] == "serie" && segments[1] == "local") {
             val id = segments[2]
-            val series = client.get("$baseUrl/api/series-locales/$id").parseAs<Series>()
+            val series = client.get("$baseUrl/api/series-locales/$id", Fetch.XHR).parseAs<Series>()
             return series.toSMangaDetails()
         }
         if (segments.size >= 4 && segments[0] == "adultos" && segments[1] == "manga" && segments[2] == "o") {
             val smId = segments[3]
-            val oneshot = client.get("$baseUrl/api/series-locales/ext/$smId").parseAs<OneshotDetails>()
+            val oneshot = client.get("$baseUrl/api/series-locales/ext/$smId", Fetch.XHR).parseAs<OneshotDetails>()
             return oneshot.toSMangaDetails()
         }
         return null
@@ -191,7 +192,7 @@ abstract class ShadowManga : KeiSource() {
     ): SMangaUpdate {
         if (manga.url.startsWith("ext/")) {
             val smId = manga.url.removePrefix("ext/")
-            val oneshot = client.get("$baseUrl/api/series-locales/ext/$smId").parseAs<OneshotDetails>()
+            val oneshot = client.get("$baseUrl/api/series-locales/ext/$smId", Fetch.XHR).parseAs<OneshotDetails>()
             val chapter = SChapter.create().apply {
                 name = "Capítulo 1"
                 url = "ext/${oneshot.smId}/${oneshot.chapterId}"
@@ -200,7 +201,7 @@ abstract class ShadowManga : KeiSource() {
             return SMangaUpdate(oneshot.toSMangaDetails(), listOf(chapter))
         }
 
-        val series = client.get("$baseUrl/api/series-locales/${manga.url}").parseAs<Series>()
+        val series = client.get("$baseUrl/api/series-locales/${manga.url}", Fetch.XHR).parseAs<Series>()
         val chapterList = series.chapters
             .sortedByDescending { it.chapterNumber }
             .map { it.toSChapter(series.id) }
@@ -218,7 +219,7 @@ abstract class ShadowManga : KeiSource() {
             val chapterId = chapter.url.substringAfter("/")
             "$baseUrl/api/series-locales/$mangaId/capitulos/$chapterId/paginas"
         }
-        val result = client.get(url).parseAs<PagesWrapper>()
+        val result = client.get(url, Fetch.XHR).parseAs<PagesWrapper>()
         return result.pages.mapIndexed { index, pageUrl ->
             Page(index, imageUrl = pageUrl)
         }
@@ -228,7 +229,7 @@ abstract class ShadowManga : KeiSource() {
 
     override val supportsFilterFetching get() = !isNsfw
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/series-locales/tags").parseAs()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/series-locales/tags", Fetch.XHR).parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val tags = data?.parseAs<List<String>>().orEmpty()

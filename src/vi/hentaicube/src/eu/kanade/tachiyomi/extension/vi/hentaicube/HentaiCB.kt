@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -86,7 +87,7 @@ abstract class HentaiCB : Madara() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
-        val document = client.get(chapterUrl).asJsoup()
+        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
 
         val msr3Element = document.selectFirst(".msr-reader[data-msr-api]")
         if (msr3Element != null) {
@@ -111,7 +112,7 @@ abstract class HentaiCB : Madara() {
                 .build()
 
             val pagesPayload = MsrPagesRequest(manga = mangaId, chapter = chapterId).toJsonRequestBody()
-            val pagesResponse = client.post("$baseApiUrl/pages", apiHeaders, pagesPayload, ensureSuccess = false)
+            val pagesResponse = client.post("$baseApiUrl/pages", apiHeaders, Fetch.XHR, pagesPayload, ensureSuccess = false)
 
             val imageUrls = if (pagesResponse.code == 401 && siteKey.isNotEmpty()) {
                 pagesResponse.close()
@@ -123,14 +124,14 @@ abstract class HentaiCB : Madara() {
                 )
 
                 val verifyPayload = MsrVerifyRequest(token = token).toJsonRequestBody()
-                val verifyResponse = client.post("$baseApiUrl/verify", apiHeaders, verifyPayload)
+                val verifyResponse = client.post("$baseApiUrl/verify", apiHeaders, Fetch.XHR, verifyPayload)
                 val verifyResult = verifyResponse.parseAs<MsrVerifyResponse>()
                 if (!verifyResult.ok) {
                     error("Verification failed")
                 }
 
                 val retryPayload = MsrPagesRequest(manga = mangaId, chapter = chapterId).toJsonRequestBody()
-                val retryResponse = client.post("$baseApiUrl/pages", apiHeaders, retryPayload)
+                val retryResponse = client.post("$baseApiUrl/pages", apiHeaders, Fetch.XHR, retryPayload)
                 val data = retryResponse.parseAs<MsrPagesResponse>()
                 data.items
             } else if (pagesResponse.isSuccessful) {
@@ -164,7 +165,7 @@ abstract class HentaiCB : Madara() {
 
         do {
             val url = buildApiUrl(currentToken, clientId)
-            val response = client.get(url, apiHeaders)
+            val response = client.get(url, apiHeaders, Fetch.XHR)
             val data = response.parseAs<ReaderPageResponse>()
 
             imageUrls.addAll(data.items)

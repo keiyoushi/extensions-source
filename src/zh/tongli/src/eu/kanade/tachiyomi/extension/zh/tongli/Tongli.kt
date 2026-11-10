@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -39,7 +40,7 @@ abstract class Tongli :
     // Popular
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$apiUrl/SellRanking/1")
+        val response = client.get("$apiUrl/SellRanking/1", Fetch.XHR)
         val mangas = response.parseAs<PopularResponseDto>().rankingSet[0].week.map {
             it.toSManga()
         }
@@ -51,6 +52,7 @@ abstract class Tongli :
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val responseDto = client.get(
             "$apiUrl/SellShelf/6e7e5b75-1acd-4b7c-0097-08d6179fc10a/$page?pageSize=20",
+            Fetch.XHR,
         ).parseAs<LatestResponseDto>()
         val mangas = responseDto.books.map {
             it.toSManga()
@@ -72,7 +74,7 @@ abstract class Tongli :
             .addFormDataPart("SearchStr", query)
             .build()
 
-        val response = client.post("$apiUrl/Search", requestBody)
+        val response = client.post("$apiUrl/Search", Fetch.XHR, requestBody)
         val mangas = response.parseAs<List<MangaDto>>().map {
             it.toSManga()
         }
@@ -84,6 +86,7 @@ abstract class Tongli :
 
     override suspend fun fetchRelatedMangaList(manga: SManga) = client.get(
         "$apiUrl/Book/MutualsLike/${manga.url.substringBefore(",")}",
+        Fetch.XHR,
     ).parseAs<List<MangaDto>>().map { it.toSManga() }
 
     // mangaUpdate
@@ -105,6 +108,7 @@ abstract class Tongli :
                 client.get(
                     "$apiUrl/Book/BookVol/$id?bookID=null&isSerial=$isSerial",
                     headersBuilder().addToken(getToken()),
+                    Fetch.XHR,
                 ).parseAs<List<ChapterDto>>().mapNotNull {
                     it.toSChapter()
                 }.reversed()
@@ -117,6 +121,7 @@ abstract class Tongli :
 
     private suspend fun getMangaDetails(id: String, isSerial: String) = client.get(
         "$apiUrl/Book?bookGroupID=$id&isSerial=$isSerial",
+        Fetch.XHR,
     ).parseAs<DetailsDto>().toSManga()
 
     override fun getMangaUrl(manga: SManga): String {
@@ -130,6 +135,7 @@ abstract class Tongli :
     override suspend fun getPageList(chapter: SChapter) = client.get(
         "$apiUrl/Comic/sas/${chapter.url}",
         headersBuilder().addToken(getToken()),
+        Fetch.XHR,
     ).parseAs<PageListResponseDto>().pages.mapIndexed { index, it ->
         Page(index, imageUrl = it.imageURL)
     }
@@ -160,7 +166,7 @@ abstract class Tongli :
             put("returnSecureToken", true)
         }.toJsonRequestBody()
         try {
-            val response = client.post(VERIFY_PASSWORD_URL, requestBody)
+            val response = client.post(VERIFY_PASSWORD_URL, Fetch.XHR, requestBody)
             return saveToPreferences(response)
         } catch (e: SerializationException) {
             // Remove email/password after failed login
@@ -176,7 +182,7 @@ abstract class Tongli :
         val requestBody = buildJsonObject {
             put("returnSecureToken", true)
         }.toJsonRequestBody()
-        val response = client.post(SIGNUP_URL, requestBody)
+        val response = client.post(SIGNUP_URL, Fetch.XHR, requestBody)
         return saveToPreferences(response)
     }
 
@@ -185,7 +191,7 @@ abstract class Tongli :
             put("grant_type", "refresh_token")
             put("refresh_token", refreshToken)
         }.toJsonRequestBody()
-        val response = client.post(REFRESH_TOKEN_URL, requestBody)
+        val response = client.post(REFRESH_TOKEN_URL, Fetch.XHR, requestBody)
         return saveToPreferences(response)
     }
 

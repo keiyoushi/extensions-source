@@ -43,21 +43,24 @@ class ContentDto(
     private val metadata: MetadataDto? = null,
     private val isBlockedSeries: Boolean = false,
 ) {
-    // Novels are text-only and blocked series need a login.
+    // Novels are text-only; blocked series need a login.
     val isReadable get() = type != "novel" && !isBlockedSeries
 
-    fun toSManga(siteHost: String) = SManga.create().apply {
+    // The site filters genres on the page of results it gets back, by English name.
+    fun hasGenres(included: List<String>, excluded: List<String>): Boolean {
+        val genres = metadata?.genres.orEmpty()
+        return genres.containsAll(included) && genres.none { it in excluded }
+    }
+
+    private fun toSManga(siteHost: String) = SManga.create().apply {
         url = id.toString()
         title = this@ContentDto.title
-        thumbnail_url = when {
-            thumbnail == null -> coverImage
-            thumbnail.startsWith("/") -> HttpUrl.Builder()
-                .scheme("https")
-                .host("$cdnPath.$siteHost")
-                .encodedPath(thumbnail)
-                .build()
-                .toString()
-            else -> thumbnail
+        thumbnail_url = (coverImage ?: metadata?.coverImage ?: thumbnail)?.let { cover ->
+            if (cover.startsWith("/")) {
+                HttpUrl.Builder().scheme("https").host("$cdnPath.$siteHost").encodedPath(cover).build().toString()
+            } else {
+                cover
+            }
         }
         memo = buildJsonObject {
             put("slug", slug)
@@ -70,7 +73,7 @@ class ContentDto(
         artist = metadata?.artist
         description = buildString {
             this@ContentDto.description?.let { append(it.trim(), "\n\n") }
-            metadata?.altTitles?.takeIf { it.isNotEmpty() }?.let {
+            listOfNotNull(metadata?.originalTitle).plus(metadata?.altTitles.orEmpty()).distinct().takeIf { it.isNotEmpty() }?.let {
                 append("عناوين بديلة\n")
                 it.forEach { append("- ", it, "\n") }
             }
@@ -87,7 +90,7 @@ class ContentDto(
         status = when (progress?.trim()) {
             "مستمر" -> SManga.ONGOING
             "مكتمل" -> SManga.COMPLETED
-            "متوقف" -> SManga.ON_HIATUS
+            "متوقف", "متوقف من الراو" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
         initialized = true
@@ -103,6 +106,14 @@ class MetadataDto(
     val genres: List<String>? = null,
     val tags: List<String>? = null,
     val altTitles: List<String>? = null,
+    val originalTitle: String? = null,
+    val coverImage: String? = null,
+)
+
+@Serializable
+class GenreDto(
+    val en: String,
+    val ar: String? = null,
 )
 
 @Serializable
@@ -139,6 +150,7 @@ class ChapterDto(
             append("الفصل ", number)
             title?.takeIf { it.isNotBlank() && it != number }?.let { append(" \u200F- ", it) }
         }
+        chapter_number = number.toFloatOrNull() ?: -1f
         scanlator = translator
         date_upload = Instant.tryParse(publishedAt)
     }
@@ -149,96 +161,33 @@ class ChapterRefDto(
     @SerialName("content_id") val contentId: Int,
 )
 
+// One page slot of the reader, see slot.js.
 @Serializable
-class ReaderDto(
-    val chapterId: Int,
-    val appImages: List<AppImageDto>,
-    val cdnPath: String,
-    val deferredMedia: DeferredMediaDto? = null,
+class SlotDto(
+    // The failed page, by its performance.timeOrigin.
+    val error: Double? = null,
+    // The reader waits on its security check.
+    val check: Boolean = false,
+    val count: Int? = null,
+    val origin: String? = null,
+    val url: String? = null,
+    val pieces: List<PieceDto>? = null,
 )
 
 @Serializable
-class AppImageDto(
-    val mobile: String? = null,
-    val desktop: String? = null,
+class PageRefDto(
+    val chapter: String,
+    val index: Int,
 )
 
+// Position and size in fractions of the page.
 @Serializable
-class DeferredMediaDto(
-    val token: String,
-)
-
-@Serializable
-class DeferredPageDto(
-    val data: DeferredDataDto,
-)
-
-@Serializable
-class DeferredDataDto(
-    val images: List<String>,
-    val maps: List<MapEntryDto>,
-)
-
-@Serializable
-class MapEntryDto(
-    val token: String,
-    val method: String,
-)
-
-@Serializable
-class MapPlanResponseDto(
-    val data: MapPlanWrapperDto,
-)
-
-@Serializable
-class MapPlanWrapperDto(
-    val map: MapPlanDto,
-)
-
-@Serializable
-class MapPlanDto(
-    val dim: List<Int>,
-    val pieces: List<String>,
-    val order: List<Int>,
-    val rects: List<MapRectDto>,
-)
-
-@Serializable
-class MapRectDto(
-    val left: Int,
-    val top: Int,
-    val width: Int,
-    val height: Int,
-)
-
-@Serializable
-class MovedDto(
-    val targetUrl: String,
-)
-
-@Serializable
-class SignRequestDto(
+class PieceDto(
     val url: String,
-)
-
-@Serializable
-class SignedImageDto(
-    val token: String,
-    val expires: Long,
-)
-
-@Serializable
-class MapRequestDto(
-    val chapterId: Int,
-    val plan: MapPlanBodyDto,
-)
-
-@Serializable
-class MapPlanBodyDto(
-    val token: String,
-    val method: String,
-    val cdnPath: String,
-    val pageIndex: Int,
+    val left: Float,
+    val top: Float,
+    val width: Float,
+    val height: Float,
 )
 
 object StringOrListSerializer : JsonTransformingSerializer<String>(String.serializer()) {

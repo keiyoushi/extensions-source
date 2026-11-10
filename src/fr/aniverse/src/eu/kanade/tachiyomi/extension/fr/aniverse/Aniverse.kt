@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.fr.aniverse
 
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -8,10 +7,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.extractNextJs
-import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -20,33 +19,31 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class Aniverse : KeiSource() {
 
-    // The site only exposes one listing, ordered by latest chapter release.
-    override val supportsLatest get() = false
+    override suspend fun getPopularManga(page: Int): MangasPage = searchManga(page, "", getFilterList())
 
-    override suspend fun getPopularManga(page: Int): MangasPage = fetchMangaList(page, genre = null)
-
-    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
-
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        if (query.isBlank()) {
-            return fetchMangaList(page, filters.firstInstance<GenreFilter>().value)
-        }
-
-        val url = "$baseUrl/api/anime/quicksearch".toHttpUrl().newBuilder()
-            .addQueryParameter("q", query)
-            .addQueryParameter("media", "manga")
-            .build()
-        val mangas = client.get(url).parseAs<List<MangaItemDto>>().map { it.toSManga() }
-        return MangasPage(mangas, false)
-    }
-
-    private suspend fun fetchMangaList(page: Int, genre: String?): MangasPage {
+    // Ordered by latest chapter release.
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/api/manga".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
-            .apply { if (genre != null) addQueryParameter("genre", genre) }
             .build()
-        val dto = client.get(url).parseAs<MangaListDto>()
+        val dto = client.get(url, Fetch.XHR).parseAs<MangaListDto>()
         return MangasPage(dto.items.map { it.toSManga() }, dto.hasNextPage)
+    }
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = searchManga(page, query, filters)
+
+    private suspend fun searchManga(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "$baseUrl/api/anime/search".toHttpUrl().newBuilder()
+            .addQueryParameter("media", "manga")
+            .apply {
+                if (query.isNotBlank()) addQueryParameter("q", query.trim())
+                filters.filterIsInstance<UrlFilter>().forEach { it.addToUrl(this) }
+            }
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("pageSize", "40")
+            .build()
+        val dto = client.get(url, Fetch.XHR).parseAs<SearchDto>()
+        return MangasPage(dto.data.map { it.toSManga() }, dto.hasNextPage)
     }
 
     override suspend fun fetchMangaUpdate(
@@ -67,7 +64,7 @@ abstract class Aniverse : KeiSource() {
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
 
-    private suspend fun fetchMangaPage(slug: String): MangaPageDto = client.get("$baseUrl/manga/$slug").extractNextJs<MangaPageDto>()
+    private suspend fun fetchMangaPage(slug: String): MangaPageDto = client.get("$baseUrl/manga/$slug", Fetch.XHR).extractNextJs<MangaPageDto>()
         ?: throw Exception("Impossible d'extraire les données du manga")
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -78,7 +75,7 @@ abstract class Aniverse : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter))
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         // Locked chapters redirect to the sign-in page.
         if (response.request.url.encodedPath.startsWith("/sign-in")) {
             response.close()
@@ -93,7 +90,10 @@ abstract class Aniverse : KeiSource() {
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(
-        Filter.Header("Le filtre de genre est ignoré lors d'une recherche textuelle."),
+        SortFilter(),
+        KindFilter(),
+        StatusFilter(),
+        TypeFilter(),
         GenreFilter(),
     )
 }

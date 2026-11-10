@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.GraphQLErrorInterceptor
@@ -49,6 +50,7 @@ abstract class JumpToon :
     override suspend fun getPopularManga(page: Int): MangasPage {
         val result = client.post(
             url = apiUrl,
+            fetch = Fetch.XHR,
             body = graphQLBody(
                 query = RANKING_QUERY,
                 operationName = "SeriesOverallRankingPage",
@@ -61,6 +63,7 @@ abstract class JumpToon :
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val result = client.post(
             url = apiUrl,
+            fetch = Fetch.XHR,
             body = graphQLBody(
                 query = LATEST_QUERY,
                 operationName = "TopPageData",
@@ -73,6 +76,7 @@ abstract class JumpToon :
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val result = client.post(
             url = apiUrl,
+            fetch = Fetch.XHR,
             body = graphQLBody(
                 query = SEARCH_QUERY,
                 operationName = "SearchSeries",
@@ -96,6 +100,7 @@ abstract class JumpToon :
         val result = client.post(
             url = apiUrl,
             headers = apiHeaders,
+            fetch = Fetch.XHR,
             body = graphQLBody(
                 query = DETAILS_QUERY,
                 operationName = "SeriesPageData",
@@ -135,6 +140,7 @@ abstract class JumpToon :
             client.post(
                 url = apiUrl,
                 headers = apiHeaders(),
+                fetch = Fetch.XHR,
                 body = graphQLBody(
                     query = query,
                     operationName = operationName,
@@ -174,7 +180,7 @@ abstract class JumpToon :
             .addQueryParameter("key", LOGIN_KEY)
             .build()
 
-        token = client.post(url, RefreshRequestBody("refresh_token", refreshToken).toJsonRequestBody()).parseAs<TokenResponse>().idToken
+        token = client.post(url, Fetch.XHR, RefreshRequestBody("refresh_token", refreshToken).toJsonRequestBody()).parseAs<TokenResponse>().idToken
         tokenSource = refreshToken
         tokenExpires = System.currentTimeMillis() + 50.minutes.inWholeMilliseconds
         token

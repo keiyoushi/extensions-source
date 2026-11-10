@@ -7,9 +7,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.aesEncrypt
+import keiyoushi.utils.aesGcm
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
@@ -20,9 +23,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import okio.ByteString.Companion.toByteString
 import java.security.SecureRandom
-import javax.crypto.Cipher
-import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.SecretKeySpec
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -34,7 +34,7 @@ abstract class Mangacix : KeiSource() {
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$baseUrl/secure/titles?onlyStreamable=true&page=$page&perPage=16&order=popularity")
+        val response = client.get("$baseUrl/secure/titles?onlyStreamable=true&page=$page&perPage=16&order=popularity", Fetch.XHR)
         val dto = response.parseAs<TitlesResponseDto>()
         return MangasPage(dto.pagination.data.map { it.toSManga() }, dto.pagination.currentPage < dto.pagination.lastPage)
     }
@@ -42,7 +42,7 @@ abstract class Mangacix : KeiSource() {
     // =============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val response = client.get("$baseUrl/secure/last-episodes?page=$page")
+        val response = client.get("$baseUrl/secure/last-episodes?page=$page", Fetch.XHR)
         val dto = response.parseAs<LastEpisodesResponseDto>()
         val mangas = dto.data.distinctBy { it.titleId }.map { it.toSManga() }
         return MangasPage(mangas, dto.currentPage < dto.lastPage)
@@ -72,7 +72,7 @@ abstract class Mangacix : KeiSource() {
             }
         }.build()
 
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         val dto = response.parseAs<TitlesResponseDto>()
         return MangasPage(dto.pagination.data.map { it.toSManga() }, dto.pagination.currentPage < dto.pagination.lastPage)
     }
@@ -100,7 +100,7 @@ abstract class Mangacix : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get("$baseUrl/secure/titles/${manga.url}?titleId=${manga.url}")
+        val response = client.get("$baseUrl/secure/titles/${manga.url}?titleId=${manga.url}", Fetch.XHR)
         val dto = response.parseAs<TitleDetailsResponseDto>()
         val updatedManga = dto.title.toSManga()
         val chapterList = dto.title.episodes
@@ -126,7 +126,7 @@ abstract class Mangacix : KeiSource() {
         val titleId = segments[0]
         val episodeNumber = segments.getOrNull(1) ?: return emptyList()
 
-        val response = client.get("$baseUrl/secure/titles/$titleId?titleId=$titleId&episodeNumber=$episodeNumber")
+        val response = client.get("$baseUrl/secure/titles/$titleId?titleId=$titleId&episodeNumber=$episodeNumber", Fetch.XHR)
         val dto = response.parseAs<TitleDetailsResponseDto>()
         val images = dto.title.episodeImages ?: return emptyList()
 
@@ -139,7 +139,6 @@ abstract class Mangacix : KeiSource() {
 
     private class MangacixAuthInterceptor : Interceptor {
         private val keyBytes = ("i4C7R2fXGocdYg" + "FLzCbDlsJ" + "jukf8G58b").toByteArray(Charsets.UTF_8)
-        private val secretKey = SecretKeySpec(keyBytes, "AES")
         private val random = SecureRandom()
 
         override fun intercept(chain: Interceptor.Chain): Response {
@@ -158,10 +157,8 @@ abstract class Mangacix : KeiSource() {
 
         private fun generateXeh(queryString: String): String {
             val iv = ByteArray(12).apply { random.nextBytes(this) }
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey, GCMParameterSpec(128, iv))
             val plaintext = ("{version}" + queryString).toByteArray(Charsets.UTF_8)
-            val ciphertext = cipher.doFinal(plaintext)
+            val ciphertext = plaintext.aesEncrypt(aesGcm(keyBytes, iv, encrypt = true))
             return "${ciphertext.toByteString().base64()}.${iv.toByteString().base64()}"
         }
     }

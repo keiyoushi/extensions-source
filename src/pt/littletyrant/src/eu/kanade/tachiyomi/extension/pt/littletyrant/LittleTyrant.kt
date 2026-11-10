@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -12,7 +13,6 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import okhttp3.Cookie
 import okhttp3.FormBody
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -33,12 +33,6 @@ abstract class LittleTyrant : Madara() {
     override fun OkHttpClient.Builder.configureClient() = apply {
         addNetworkInterceptor(ImageDecoderInterceptor())
         rateLimit(3, 1.seconds)
-    }
-
-    override fun Headers.Builder.configureHeaders() = apply {
-        set("Sec-Fetch-Mode", "cors")
-        set("Sec-Fetch-Dest", "empty")
-        set("Sec-Fetch-Site", "same-origin")
     }
 
     // =============================== Popular =================================
@@ -73,7 +67,7 @@ abstract class LittleTyrant : Madara() {
                 .add("offset", offset.toString())
                 .build()
             offset += 12
-            val dto = client.post(url, form).parseAs<ChapterDto>()
+            val dto = client.post(url, Fetch.XHR.from(mangaPath), form).parseAs<ChapterDto>()
             val chapterElements = dto.toJsoup(baseUrl).select(chapterListSelector())
             chapters += chapterElements.mapNotNull { chapterFromElement(it, mangaPath) }
         } while (!dto.isEmpty())
@@ -84,7 +78,7 @@ abstract class LittleTyrant : Madara() {
     // =============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         val script = document.selectFirst("script:containsData(_proxyUrls)")?.data()
             ?: return emptyList()
@@ -121,15 +115,13 @@ abstract class LittleTyrant : Madara() {
             .addQueryParameter("browser_nonce", nonce)
             .build()
         client.cookieJar.saveFromResponse(url, listOf(Cookie.parse(url, "lt_browser_nonce=$nonce; path=/")!!))
-        return client.get(url, pageHeaders).body.string()
+        return client.get(url, pageHeaders, Fetch.XHR).body.string()
     }
 
     // =============================== Images =================================
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val imageHeaders = headers.newBuilder()
-            .set("Accept", "image/webp,image/*,*/*")
-            .set("Referer", "$baseUrl/")
             .set("X-Reader-Sec", "tiraninha-web")
             .build()
         return GET(page.imageUrl!!, imageHeaders)

@@ -24,6 +24,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -49,7 +50,6 @@ import java.util.Locale
 abstract class Mehgazone :
     KeiSource(),
     ConfigurableSource {
-
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(TextInterceptor())
@@ -80,7 +80,7 @@ abstract class Mehgazone :
     }
 
     override suspend fun getPopularManga(page: Int) = MangasPage(
-        client.get(baseUrl).asJsoup()
+        client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
             .selectFirst("#main aside.primary-sidebar .sidebar-group")!!
             .select("h2")
             .filter { el -> el.text().contains("Latest", true) }
@@ -114,7 +114,7 @@ abstract class Mehgazone :
     }
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
-        val html = client.get(manga.url).asJsoup()
+        val html = client.get(manga.url, Fetch.DOCUMENT).asJsoup()
 
         return manga.apply {
             title = html.head().selectFirst("title")!!.text().unescape()
@@ -144,7 +144,7 @@ abstract class Mehgazone :
         var page = 0
         do {
             page++
-            val response = client.get(chapterListUrl(mangaUrl, page))
+            val response = client.get(chapterListUrl(mangaUrl, page), Fetch.XHR)
             val headers = response.headers
             val pageResponse = response.parseAs<List<ChapterListDto>>()
 
@@ -173,7 +173,7 @@ abstract class Mehgazone :
             .setQueryParameter("include", chapterUrl.queryParameter("p"))
             .build()
 
-        val apiResponse: PageListDto = client.get(pageListUrl).parseAs<List<PageListDto>>().first()
+        val apiResponse: PageListDto = client.get(pageListUrl, Fetch.XHR).parseAs<List<PageListDto>>().first()
 
         val content = Jsoup.parseBodyFragment(apiResponse.content.rendered, apiResponse.link)
 

@@ -1,10 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.olympusscanlation
 
 import android.content.SharedPreferences
-import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -26,48 +23,34 @@ import kotlinx.serialization.SerializationException
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Instant
 
 @Source
-abstract class OlympusScanlation :
-    KeiSource(),
-    ConfigurableSource {
-
-    private fun fetchedDomainUrl() {
-        if (!preferences.fetchDomainPref()) return
-        try {
-            val initClient = network.client
-            val document = initClient.newCall(GET("https://olympus.pages.dev", headers)).execute().asJsoup()
-            val domain = document.selectFirst("meta[property=og:url]")?.attr("content")
-                ?: return
-            val host = initClient.newCall(GET(domain, headers)).execute().request.url.host
-            val newDomain = "https://$host"
-            preferences.edit().putString(BASE_URL_PREF, newDomain).apply()
-        } catch (_: Exception) {
-            return
-        }
-    }
+abstract class OlympusScanlation : KeiSource() {
 
     private val preferences = getPreferences()
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder {
-        fetchedDomainUrl()
-        return this
+    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> {
+        val domain = client.get(DOMAIN_URL, Fetch.DOCUMENT).asJsoup().selectFirst("meta[property=og:url]")!!.attr("content")
+        return listOf(client.get(domain, Fetch.DOCUMENT).use { it.request.url.toString() })
     }
 
     private var seriesList: List<MangaDto> = emptyList()
 
-    private var lastFetchTime: Long = 0L
+    private var lastFetchTime = Instant.DISTANT_PAST
 
     private val seriesListMutex = Mutex()
 
     private suspend fun fetchSeriesList() = seriesListMutex.withLock {
-        val now = System.currentTimeMillis()
+        val now = Clock.System.now()
 
-        if (seriesList.isNotEmpty() && (now - lastFetchTime) < CACHE_DURATION_MS) {
+        if (seriesList.isNotEmpty() && (now - lastFetchTime) < CACHE_DURATION) {
             return@withLock
         }
 
-        val series = client.get("$baseUrl/api/series/list").parseAs<PayloadMangaDto>()
+        val series = client.get("$baseUrl/api/series/list", Fetch.XHR).parseAs<PayloadMangaDto>()
 
         val comics = series.data.asSequence()
             .filter { it.type == "comic" }
@@ -83,7 +66,7 @@ abstract class OlympusScanlation :
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         fetchSeriesList()
-        val result = client.get("$baseUrl/api/rankings?page=$page&period=total_ranking").parseAs<RankingDto>()
+        val result = client.get("$baseUrl/api/rankings?page=$page&period=total_ranking", Fetch.XHR).parseAs<RankingDto>()
         val slugMap = preferences.slugMap.toMutableMap()
         val mangaList = result.data
             .filter { it.type == "comic" }
@@ -97,7 +80,7 @@ abstract class OlympusScanlation :
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         fetchSeriesList()
-        val result = client.get("$baseUrl/api/new-chapters?page=$page").parseAs<NewChaptersDto>()
+        val result = client.get("$baseUrl/api/new-chapters?page=$page", Fetch.XHR).parseAs<NewChaptersDto>()
         val slugMap = preferences.slugMap.toMutableMap()
         val mangaList = result.data.filter { it.type == "comic" }
             .map {
@@ -125,7 +108,7 @@ abstract class OlympusScanlation :
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "series") return null
         val series = url.pathSegments.getOrNull(1)?.takeIf { it.startsWith("comic-") } ?: return null
         val slug = series.removePrefix("comic-").takeIf(String::isNotBlank) ?: return null
-        val manga = client.get("$baseUrl/api/series/$slug?type=comic").parseAs<MangaDetailDto>().data
+        val manga = client.get("$baseUrl/api/series/$slug?type=comic", Fetch.XHR).parseAs<MangaDetailDto>().data
         preferences.slugMap += manga.id to manga.slug
         return manga.toSMangaDetails()
     }
@@ -143,7 +126,7 @@ abstract class OlympusScanlation :
         return coroutineScope {
             val details = async {
                 if (fetchDetails) {
-                    client.get("$baseUrl/api/series/$slug?type=comic")
+                    client.get("$baseUrl/api/series/$slug?type=comic", Fetch.XHR)
                         .parseAs<MangaDetailDto>().data.toSMangaDetails()
                 } else {
                     manga
@@ -168,7 +151,7 @@ abstract class OlympusScanlation :
         return result.map { it.toSChapter(mangaId) }
     }
 
-    private suspend fun fetchChapterPage(mangaSlug: String, page: Int): PayloadChapterDto = client.get("$baseUrl/api/series/$mangaSlug/chapters?page=$page&direction=desc&type=comic")
+    private suspend fun fetchChapterPage(mangaSlug: String, page: Int): PayloadChapterDto = client.get("$baseUrl/api/series/$mangaSlug/chapters?page=$page&direction=desc&type=comic", Fetch.XHR)
         .parseAs<PayloadChapterDto>()
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -178,20 +161,9 @@ abstract class OlympusScanlation :
         return "$baseUrl/capitulo/$chapterId/comic-$mangaSlug"
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select("main.strip div.panel > img")
         .mapIndexed { index, img -> Page(index, imageUrl = img.absUrl("src")) }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = FETCH_DOMAIN_PREF
-            title = "Buscar dominio automáticamente"
-            summary = "Intenta buscar el dominio automáticamente al abrir la fuente."
-            setDefaultValue(true)
-        }.also { screen.addPreference(it) }
-    }
-
-    private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, true)
 
     private var slugMapCache: Map<Int, String>? = null
     private var SharedPreferences.slugMap: Map<Int, String>
@@ -211,11 +183,10 @@ abstract class OlympusScanlation :
         }
 
     companion object {
-        private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val FETCH_DOMAIN_PREF = "fetchDomain"
+        private const val DOMAIN_URL = "https://olympus.pages.dev"
 
         private const val SLUG_MAP = "slugMap"
 
-        private const val CACHE_DURATION_MS = 60 * 60 * 1000L // 1 hour
+        private val CACHE_DURATION = 1.hours
     }
 }

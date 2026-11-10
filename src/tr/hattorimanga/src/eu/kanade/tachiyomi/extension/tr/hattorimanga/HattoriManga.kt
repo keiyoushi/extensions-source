@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -28,12 +29,11 @@ import java.time.format.DateTimeFormatter
 
 @Source
 abstract class HattoriManga : KeiSource() {
-
     override fun OkHttpClient.Builder.configureClient() = rateLimit(4)
 
     // Latest
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val dto = client.get("$baseUrl/latest-chapters?page=$page").parseAs<HMLatestUpdateDto>()
+        val dto = client.get("$baseUrl/latest-chapters?page=$page", Fetch.XHR).parseAs<HMLatestUpdateDto>()
 
         val mangas = dto.chapters.map { chapter ->
             SManga.create().apply {
@@ -47,7 +47,7 @@ abstract class HattoriManga : KeiSource() {
     }
 
     // Popular
-    override suspend fun getPopularManga(page: Int) = parsePopular(client.get("$baseUrl/manga?page=$page"))
+    override suspend fun getPopularManga(page: Int) = parsePopular(client.get("$baseUrl/manga?page=$page", Fetch.DOCUMENT))
 
     private fun parsePopular(response: Response) = response.asJsoup().let {
         val mangas = it.select(".product-card.grow-box").map { it ->
@@ -98,7 +98,7 @@ abstract class HattoriManga : KeiSource() {
                 url.addQueryParameter("genres[]", genre.name)
             }
         }
-        parsePopular(client.get(url.build()))
+        parsePopular(client.get(url.build(), Fetch.DOCUMENT))
     }
 
     // Details + Chapters
@@ -115,7 +115,7 @@ abstract class HattoriManga : KeiSource() {
     }
 
     private suspend fun getDetails(manga: SManga) = SManga.create().apply {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         with(doc) {
             title = selectFirst("h3")!!.text()
             thumbnail_url = selectFirst(".set-bg")?.absUrl("data-setbg")
@@ -148,6 +148,7 @@ abstract class HattoriManga : KeiSource() {
         do {
             val dto = client.get(
                 "$baseUrl/load-more-chapters/$slug?page=$page",
+                Fetch.XHR,
             ).parseAs<HMChapterDto>()
 
             chapters += dto.chapters.map {
@@ -164,7 +165,7 @@ abstract class HattoriManga : KeiSource() {
     }
 
     // Pages
-    override suspend fun getPageList(chapter: SChapter) = client.get(getChapterUrl(chapter))
+    override suspend fun getPageList(chapter: SChapter) = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         .asJsoup().select(".image-wrapper img").mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("data-src"))
         }.takeIf { it.isNotEmpty() } ?: throw Exception("Oturum açmanız, WebView'ı açmanız ve oturum açmanız gerekir")
@@ -172,7 +173,7 @@ abstract class HattoriManga : KeiSource() {
     // Filters
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData() = client.get("$baseUrl/manga-index").asJsoup()
+    override suspend fun fetchFilterData() = client.get("$baseUrl/manga-index", Fetch.DOCUMENT).asJsoup()
         .select(".tags-blog a").map { it.text() }
         .toJsonElement()
 
@@ -199,6 +200,7 @@ abstract class HattoriManga : KeiSource() {
 
     private suspend fun getCsrftoken() = csrfToken ?: client.get(
         baseUrl,
+        Fetch.DOCUMENT,
     ).asJsoup().selectFirst("meta[name=csrf-token]")!!.attr("content")
         .also { csrfToken = it }
 
@@ -212,12 +214,12 @@ abstract class HattoriManga : KeiSource() {
             .set("X-Requested-With", "XMLHttpRequest")
             .build()
 
-        var response = client.post("$baseUrl/manga/search", headers, searchForm(query), ensureSuccess = false)
+        var response = client.post("$baseUrl/manga/search", headers, Fetch.XHR, searchForm(query), ensureSuccess = false)
 
         if (response.isPageExpired()) {
             response.close()
             csrfToken = null
-            response = client.post("$baseUrl/manga/search", headers, searchForm(query))
+            response = client.post("$baseUrl/manga/search", headers, Fetch.XHR, searchForm(query))
         }
 
         return response

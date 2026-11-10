@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Mangabz"
-    versionCode = 1
+    versionCode = 3
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
@@ -14,9 +14,10 @@ keiyoushi {
         lang = "zh"
         baseUrl {
             mirrors(
-                "https://mangabz.com",
-                "https://xmanhua.com",
-                "https://yymanhua.com",
+                "mangabz.com" to "https://mangabz.com",
+                "xmanhua.com" to "https://xmanhua.com",
+                "yymanhua.com" to "https://yymanhua.com",
+                "yymanhua.com (HTTP, 中国大陆)" to "http://yymanhua.com",
             )
         }
     }

@@ -7,14 +7,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.aesDecrypt
-import keiyoushi.utils.aesGcm
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.decodeHex
+import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
@@ -22,19 +21,15 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.security.MessageDigest
 
 @Source
 abstract class MangaTek : KeiSource() {
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(SpeechBubblePainterInterceptor({ baseUrl }, id))
         rateLimit(3)
@@ -45,7 +40,7 @@ abstract class MangaTek : KeiSource() {
 
         val mangas = document.select(".flex-grow .grid a").map { element ->
             SManga.create().apply {
-                title = element.select("h3").attr("title")
+                title = element.selectFirst("h3")!!.attr("title")
                 setUrlWithoutDomain(element.attr("abs:href"))
                 thumbnail_url = element.selectFirst("img")?.imgAttr()
             }
@@ -59,14 +54,14 @@ abstract class MangaTek : KeiSource() {
     // ============================== Popular ==============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$baseUrl/manga-list?sort=views&page=$page")
+        val response = client.get("$baseUrl/manga-list?sort=views&page=$page", Fetch.DOCUMENT)
         return response.toMangasPage()
     }
 
     // ============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val response = client.get("$baseUrl/manga-list?page=$page")
+        val response = client.get("$baseUrl/manga-list?page=$page", Fetch.DOCUMENT)
         return response.toMangasPage()
     }
 
@@ -82,7 +77,7 @@ abstract class MangaTek : KeiSource() {
                 it.addUrlParameter(this)
             }
         }.build()
-        return client.get(url).toMangasPage()
+        return client.get(url, Fetch.DOCUMENT).toMangasPage()
     }
 
     // ============================== Filters ==============================
@@ -90,7 +85,7 @@ abstract class MangaTek : KeiSource() {
     override val supportsFilterFetching: Boolean get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val response = client.get("$API_BASE/api/tags?limit=500")
+        val response = client.get("$API_BASE/api/tags?limit=500", Fetch.XHR)
         return response.parseAs<JsonElement>()
     }
 
@@ -112,14 +107,12 @@ abstract class MangaTek : KeiSource() {
     // ========================= Details & Chapters  =========================
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        check(url.pathSegments.size >= 2) { "Unsupported URL" }
-        val slug = url.pathSegments[1]
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.first() !in setOf("manga", "reader")) return null
+        val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
         val manga = SManga.create().apply {
             this.url = "/manga/$slug"
         }
-        return fetchMangaUpdate(manga, emptyList(), true, false).manga.apply {
-            initialized = true
-        }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun fetchMangaUpdate(
@@ -128,8 +121,8 @@ abstract class MangaTek : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val url = "$baseUrl${manga.url}".toHttpUrl()
-        val data: MangaDto = client.get(url).asJsoup().extractAstroProp("manga")
+        val url = getMangaUrl(manga).toHttpUrl()
+        val data: MangaDto = client.get(url, Fetch.DOCUMENT).asJsoup().extractAstroProp("manga")
         val slug = url.pathSegments[1]
 
         return SMangaUpdate(
@@ -158,39 +151,29 @@ abstract class MangaTek : KeiSource() {
     //  ============================== Page ==============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val props: ChapterProps = document.extractAstroProp("imageUrls")
 
-        val (overlayData, apiOffset) = props.overlayBlob?.let { blob ->
-            decrypt(blob) to props.overlayPageOffset
-        } ?: run {
-            val chapterId = props.chapterId
-            val unlockToken = props.unlockToken
-            if (chapterId != null && unlockToken != null) {
-                unlockOverlay(chapterId, unlockToken)
-            } else {
-                null
-            }
-        } ?: (null to null)
+        val embedded = props.imageUrls.toReaderImages()
+        val images = if (embedded.any { it.pending }) fetchReaderImages(document, props) else embedded
+        val imageUrls = images.filterNot { it.isTrap }.map { it.url }
 
-        val offset = apiOffset ?: props.overlayPageOffset ?: 0
-        val overlaysByPageNumber: Map<Int, OverlayPage> = overlayData?.pages
-            ?.associateBy { it.pageNumber } ?: emptyMap()
+        val overlayData = props.overlayBlob?.let { OverlayCrypto.decryptHexBlob(it).parseAs<OverlayData>() }
+            ?: unlockOverlay(document, props)
 
-        return props.imageUrls.mapIndexed { index, imageUrl ->
-            val overlayPage = if (overlaysByPageNumber.isNotEmpty()) {
-                overlaysByPageNumber[index - offset + 1]
-                    ?: overlaysByPageNumber[index - offset]
-                    ?: overlaysByPageNumber[index]
-            } else {
-                null
-            }
+        // page_number counts from 1 after the overlayPageOffset images
+        val firstOverlayImage = props.overlayPageOffset ?: 0
+        val overlaysByImage = overlayData?.pages.orEmpty()
+            .associate { firstOverlayImage + it.pageNumber - 1 to it.overlays }
 
-            if (overlayPage == null || overlayPage.overlays.isEmpty()) {
+        return imageUrls.mapIndexed { index, imageUrl ->
+            val overlays = overlaysByImage[index]
+
+            if (overlays.isNullOrEmpty()) {
                 Page(index, imageUrl = imageUrl)
             } else {
                 val url = imageUrl.toHttpUrl().newBuilder()
-                    .fragment(overlayPage.overlays.toJsonString())
+                    .fragment(overlays.toJsonString())
                     .build().toString()
 
                 Page(index, imageUrl = url)
@@ -198,27 +181,58 @@ abstract class MangaTek : KeiSource() {
         }
     }
 
-    private suspend fun unlockOverlay(chapterId: Long, unlockToken: String): Pair<OverlayData, Int?>? {
-        val proof = "$UNLOCK_PROOF_SALT|$unlockToken|$chapterId".sha256Hex()
-        val payload = buildJsonObject {
-            put("chapterId", chapterId)
-            put("token", unlockToken)
-            put("proof", proof)
-        }
-        val response = client.post(
-            url = UNLOCK_API_URL,
-            body = payload.toJsonRequestBody(),
-        )
-        val unlockResponse = response.parseAs<UnlockResponse>()
-        val overlay = unlockResponse.overlay ?: return null
-        val key = unlockResponse.key ?: KEY
-        val overlayData = decrypt(overlay, key)
-        return overlayData to unlockResponse.overlayPageOffset
+    // Pending pages leave the embedded list incomplete, the pages call returns the whole chapter
+    private suspend fun fetchReaderImages(document: Document, props: ChapterProps): List<ReaderImage> {
+        val chapterId = props.chapterId!!
+        val token = props.unlockToken!!
+        val proof = OverlayCrypto.proof(readerSeeds(document).proofSalt, token, chapterId)
+        val request = PagesRequest(chapterId, props.mangaSlug!!, props.chapterRef!!, token, proof)
+        return client.post(PAGES_API_URL, fingerprint.headers, Fetch.XHR, request.toJsonRequestBody())
+            .parseAs<PagesResponse>().data.toReaderImages()
     }
 
-    private fun String.sha256Hex(): String = MessageDigest.getInstance("SHA-256")
-        .digest(toByteArray(Charsets.UTF_8))
-        .joinToString("") { "%02x".format(it) }
+    private suspend fun unlockOverlay(document: Document, props: ChapterProps): OverlayData? {
+        if (props.textMode != "overlay") return null
+        val chapterId = props.chapterId ?: return null
+        val token = props.unlockToken ?: return null
+        val seeds = readerSeeds(document)
+        val proof = OverlayCrypto.proof(seeds.proofSalt, token, chapterId)
+        val esid = OverlayCrypto.esid(seeds.readerSeed)
+        val request = UnlockRequest(chapterId, token, proof, esid, fingerprint.fpc)
+
+        var response = client.post(UNLOCK_API_URL, fingerprint.headers, Fetch.XHR, request.toJsonRequestBody()).parseAs<UnlockResponse>()
+        if (response.needsChallenge) {
+            val nonce = response.nonce
+            val pow = if (nonce != null) response.powBits?.let { OverlayCrypto.pow(nonce, it) } else null
+            val turnstileToken = if (response.turnstileRequired) getTurnstileToken(document.location(), TURNSTILE_SITE_KEY) else null
+            val retry = UnlockRequest(chapterId, token, proof, esid, fingerprint.fpc, nonce, pow, turnstileToken)
+            response = client.post(UNLOCK_API_URL, fingerprint.headers, Fetch.XHR, retry.toJsonRequestBody()).parseAs<UnlockResponse>()
+        }
+
+        check(!response.denied) { "The site refused this chapter's translated text" }
+        val overlay = response.overlay ?: return null
+        return OverlayCrypto.decryptOverlay(seeds.readerSeed, overlay, response.ks, response.key, token, chapterId)
+            ?.parseAs<OverlayData>()
+    }
+
+    // Kept for the session, as the site's reader keeps its fingerprint in localStorage
+    private val fingerprint by lazy { Fingerprint(headers) }
+
+    @Volatile
+    private var cachedSeeds: Pair<String, BundleSeeds.Seeds>? = null
+
+    // The reader's seeds rotate with each build of its bundle
+    private suspend fun readerSeeds(document: Document): BundleSeeds.Seeds {
+        val bundleUrl = document.selectFirst("astro-island[component-url*=ChapterImageViewer]")
+            ?.attr("abs:component-url")
+            ?: throw Exception("Unable to find the reader script")
+        cachedSeeds?.takeIf { it.first == bundleUrl }?.let { return it.second }
+
+        val script = client.get(bundleUrl, Fetch.SCRIPT).body.string()
+        val seeds = BundleSeeds.extract(script)
+        cachedSeeds = bundleUrl to seeds
+        return seeds
+    }
 
     private fun Element.imgAttr(): String = when {
         hasAttr("data-src") -> attr("abs:data-src")
@@ -229,28 +243,11 @@ abstract class MangaTek : KeiSource() {
         else -> attr("abs:src")
     }
 
-    // decrypt
-
-    private fun decrypt(blob: String, keyHex: String = KEY): OverlayData {
-        val (ivHex, ctHex, tagHex) = blob.split(":").also {
-            require(it.size == 3) { "unexpected overlayBlob format" }
-        }
-
-        val iv = ivHex.decodeHex()
-        val ciphertext = ctHex.decodeHex()
-        val tag = tagHex.decodeHex()
-
-        return (ciphertext + tag)
-            .aesDecrypt(aesGcm(keyHex.decodeHex(), iv, tagLength = tag.size * 8))
-            .decodeToString()
-            .parseAs<OverlayData>()
-    }
-
     companion object {
         val PAGE_REGEX = Regex(""".*?\.(webp|png|jpg|jpeg)(?:\?[^#]*)?#\[.*?]""", RegexOption.IGNORE_CASE)
-        private const val KEY = "ff453871399fe268588a0936b45376022d85ed0fd1292001d5102f6a30291dc1"
-        private const val UNLOCK_PROOF_SALT = "80c55d2d1f1432551b82f5304b60e1aced87f823a6ed309d"
         private const val API_BASE = "https://api.mangatek.com"
+        private const val PAGES_API_URL = "$API_BASE/api/reader/pages"
         private const val UNLOCK_API_URL = "$API_BASE/api/reader/unlock"
+        private const val TURNSTILE_SITE_KEY = "0x4AAAAAABegcsrB2MhtDccs"
     }
 }

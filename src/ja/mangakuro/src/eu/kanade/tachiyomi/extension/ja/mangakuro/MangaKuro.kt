@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -20,7 +21,6 @@ import java.util.Calendar
 
 @Source
 abstract class MangaKuro : KeiSource() {
-
     private val chapterIdRegex = Regex("""CHAPTER_ID\s*=\s*(\d+);""")
     private val dateRegex = Regex("""(\d+)""")
 
@@ -44,7 +44,7 @@ abstract class MangaKuro : KeiSource() {
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotBlank() } ?: return null
         val mangaUrl = "/manga/$slug"
 
-        return mangaDetailsParse(client.get(baseUrl + mangaUrl).asJsoup(), SManga.create())
+        return mangaDetailsParse(client.get(baseUrl + mangaUrl, Fetch.DOCUMENT).asJsoup(), SManga.create())
             .apply { this.url = mangaUrl }
     }
 
@@ -55,7 +55,7 @@ abstract class MangaKuro : KeiSource() {
             .addQueryParameter(param, value)
             .build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div.story_item").mapNotNull { element ->
             val anchor = element.selectFirst("div.mg_name a") ?: return@mapNotNull null
             SManga.create().apply {
@@ -77,7 +77,7 @@ abstract class MangaKuro : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(
             manga = mangaDetailsParse(document, manga),
@@ -121,7 +121,7 @@ abstract class MangaKuro : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
-        val document = client.get(chapterUrl).asJsoup()
+        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
 
         val chapterId = document.select("script:containsData(CHAPTER_ID)")
             .firstNotNullOfOrNull { chapterIdRegex.find(it.data())?.groupValues?.get(1) }
@@ -132,7 +132,7 @@ abstract class MangaKuro : KeiSource() {
             .set("Referer", chapterUrl)
             .build()
 
-        return client.get("$baseUrl/ajax/image/list/chap/$chapterId", pageHeaders)
+        return client.get("$baseUrl/ajax/image/list/chap/$chapterId", pageHeaders, Fetch.XHR)
             .parseAs<PageListResponseDto>()
             .toPageList(chapterUrl)
     }

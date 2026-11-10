@@ -1,13 +1,10 @@
 import com.diffplug.gradle.spotless.SpotlessExtension
-import com.diffplug.spotless.FormatterFunc
-import com.diffplug.spotless.FormatterStep
 import io.github.keiyoushi.gradle.internal.extensions.alias
 import io.github.keiyoushi.gradle.internal.extensions.libs
 import io.github.keiyoushi.gradle.internal.extensions.plugins
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
-import java.io.Serializable
 
 @Suppress("UNUSED")
 class SpotlessPlugin : Plugin<Project> {
@@ -29,7 +26,6 @@ class SpotlessPlugin : Plugin<Project> {
                     )
                 trimTrailingWhitespace()
                 endWithNewline()
-                addStep(RandomUAChecker.toFormatterStep())
             }
 
             java {
@@ -57,27 +53,4 @@ class SpotlessPlugin : Plugin<Project> {
 
 private fun Project.spotless(block: SpotlessExtension.() -> Unit) {
     extensions.configure(block)
-}
-
-private class RandomUAChecker : Serializable {
-
-    fun getFormatter() = FormatterFunc { content ->
-        if ("package keiyoushi.lib.randomua" !in content &&
-            "keiyoushi.lib.randomua" in content &&
-            "override fun getMangaUrl(" !in content
-        ) {
-            throw AssertionError(
-                "usage of :lib:randomua requires override of getMangaUrl()",
-            )
-        }
-        content
-    }
-
-    companion object {
-        fun toFormatterStep(): FormatterStep = FormatterStep.create(
-            "randomua-requires-getMangaUrl",
-            RandomUAChecker(),
-            RandomUAChecker::getFormatter,
-        )
-    }
 }

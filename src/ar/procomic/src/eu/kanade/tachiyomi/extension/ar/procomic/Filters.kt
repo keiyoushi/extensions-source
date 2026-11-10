@@ -29,16 +29,14 @@ class StatusFilter :
             "مستمر" to "مستمر",
             "مكتمل" to "مكتمل",
             "متوقف" to "متوقف",
+            "متوقف من الراو" to "متوقف من الراو",
         ),
     )
 
 class YearFilter :
     SelectFilter<String?>(
         "السنة",
-        buildList {
-            add("الكل" to null)
-            (Year.now().value downTo 1970).forEach { add(it.toString() to it.toString()) }
-        },
+        listOf("الكل" to null) + (Year.now().value downTo 1970).map { "$it" to "$it" },
     )
 
 class SortFilter :
@@ -54,3 +52,12 @@ class SortFilter :
             "أبجدي (ي-أ)" to "za",
         ),
     )
+
+class GenreFilter(genres: List<GenreDto>) : Filter.Group<GenreOption>("التصنيفات", genres.map(::GenreOption)) {
+    val included get() = state.filter { it.isIncluded() }.map { it.value }
+    val excluded get() = state.filter { it.isExcluded() }.map { it.value }
+}
+
+class GenreOption(genre: GenreDto) : Filter.TriState(genre.ar ?: genre.en) {
+    val value = genre.en
+}

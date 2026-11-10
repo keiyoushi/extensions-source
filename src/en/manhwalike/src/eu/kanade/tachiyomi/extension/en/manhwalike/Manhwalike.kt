@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -30,7 +31,7 @@ abstract class Manhwalike : KeiSource() {
 
     // popular
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("ul.list-hot div.visual").map { element ->
             SManga.create().apply {
                 element.selectFirst("h3.title a")?.text()?.also { title = it }
@@ -43,7 +44,7 @@ abstract class Manhwalike : KeiSource() {
 
     // latest
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("ul.slick_item div.visual").map { element ->
             SManga.create().apply {
                 element.selectFirst("h3.title a")?.text()?.also { title = it }
@@ -59,7 +60,7 @@ abstract class Manhwalike : KeiSource() {
         val response = if (query.isNotEmpty()) {
             val requestBody = query.toFormRequestBody()
             val requestHeaders = headers.newBuilder().buildApiHeaders(requestBody)
-            client.post("$baseUrl/search/html/1", requestHeaders, requestBody)
+            client.post("$baseUrl/search/html/1", requestHeaders, Fetch.DOCUMENT, requestBody)
         } else {
             val url = baseUrl.toHttpUrl().newBuilder()
             filters.forEach { filter ->
@@ -69,7 +70,7 @@ abstract class Manhwalike : KeiSource() {
                 }
             }
             url.addQueryParameter("page", page.toString())
-            client.get(url.build())
+            client.get(url.build(), Fetch.DOCUMENT)
         }
 
         val document = response.asJsoup()
@@ -98,7 +99,7 @@ abstract class Manhwalike : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = manga.apply {
             author = document.selectFirst("div.author a")?.text()
@@ -121,7 +122,7 @@ abstract class Manhwalike : KeiSource() {
 
     // pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(".chapter-content .page-chapter img").mapIndexed { i, img ->
             Page(i, imageUrl = img.absUrl("src"))
         }

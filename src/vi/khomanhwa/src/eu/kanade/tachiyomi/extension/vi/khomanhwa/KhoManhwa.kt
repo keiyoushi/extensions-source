@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -36,11 +37,11 @@ abstract class KhoManhwa : KeiSource() {
 
     // ============================== Popular ===============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/popular?page=$page"))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/popular?page=$page", Fetch.DOCUMENT))
 
     // ============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/latest?page=$page"))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/latest?page=$page", Fetch.DOCUMENT))
 
     private fun parseMangaList(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -75,18 +76,18 @@ abstract class KhoManhwa : KeiSource() {
                 addQueryParameter("page", page.toString())
                 addQueryParameter("q", query)
             }.build()
-            return parseMangaList(client.get(url))
+            return parseMangaList(client.get(url, Fetch.DOCUMENT))
         }
 
         if (categoryPath != null) {
-            return parseMangaList(client.get("$baseUrl/$categoryPath?page=$page"))
+            return parseMangaList(client.get("$baseUrl/$categoryPath?page=$page", Fetch.DOCUMENT))
         }
 
         val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
         }.build()
 
-        return parseMangaList(client.get(url))
+        return parseMangaList(client.get(url, Fetch.DOCUMENT))
     }
 
     // ============================== Details ===============================
@@ -107,7 +108,7 @@ abstract class KhoManhwa : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get("$baseUrl${manga.url}")
+        val response = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT)
         val document = response.asJsoup()
 
         return SMangaUpdate(
@@ -148,7 +149,7 @@ abstract class KhoManhwa : KeiSource() {
     // ============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$baseUrl${chapter.url}", ensureSuccess = false)
+        val response = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT, ensureSuccess = false)
         if (!response.isSuccessful) {
             val code = response.code
             response.close()
@@ -170,7 +171,7 @@ abstract class KhoManhwa : KeiSource() {
     override val supportsFilterFetching: Boolean get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/search").asJsoup()
+        val document = client.get("$baseUrl/search", Fetch.DOCUMENT).asJsoup()
         val genres = document.select("select[name=\"genre\"] option")
             .filterNot { it.attr("value").isEmpty() }
             .map { FilterOption(it.text(), it.attr("value")) }
@@ -194,7 +195,7 @@ abstract class KhoManhwa : KeiSource() {
     override val supportsRelatedMangas: Boolean = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         return document.select(".similar-series a.series-card").map { el ->
             SManga.create().apply {
                 title = el.selectFirst("strong")!!.text()

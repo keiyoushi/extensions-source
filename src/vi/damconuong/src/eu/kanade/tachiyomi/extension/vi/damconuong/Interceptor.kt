@@ -5,6 +5,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
+import keiyoushi.utils.aesDecrypt
+import keiyoushi.utils.aesGcm
+import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.rc4
 import keiyoushi.utils.readIntBigEndian
@@ -18,9 +21,7 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.nio.charset.StandardCharsets
-import javax.crypto.Cipher
 import javax.crypto.Mac
-import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 private fun OkHttpClient.getString(url: String): String {
@@ -274,14 +275,14 @@ object PagesCrypto {
         val secretBytes = decodeBase64Url(config.secret, config.tokenAlphabet)
             ?: error("bad decoder secret")
         alphabet = config.tokenAlphabet
-        tokKey = hmac(secretBytes, "tok".toByteArray(StandardCharsets.UTF_8))
-        encKey = hmac(secretBytes, "enc".toByteArray(StandardCharsets.UTF_8))
+        tokKey = "tok".hmacSha256(secretBytes)
+        encKey = "enc".hmacSha256(secretBytes)
     }
 
     fun token(mangaSlug: String, chapterSlug: String): String {
         val tok = checkNotNull(tokKey) { "PagesCrypto not loaded" }
         val path = "$mangaSlug/$chapterSlug"
-        val mac = hmac(tok, path.toByteArray(StandardCharsets.UTF_8)).copyOf(16)
+        val mac = path.hmacSha256(tok).copyOf(16)
         val bytes = ByteArray(17)
         bytes[0] = 1
         mac.copyInto(bytes, 1)
@@ -295,22 +296,10 @@ object PagesCrypto {
         val iv = raw.copyOfRange(0, 12)
         val cipherBytes = raw.copyOfRange(12, raw.size)
 
-        val aesKey = hmac(enc, token.toByteArray(StandardCharsets.UTF_8))
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(
-            Cipher.DECRYPT_MODE,
-            SecretKeySpec(aesKey, "AES"),
-            GCMParameterSpec(128, iv),
-        )
-        cipher.updateAAD(path.toByteArray(StandardCharsets.UTF_8))
-        val plain = cipher.doFinal(cipherBytes)
+        val aesKey = token.hmacSha256(enc)
+        val cipher = aesGcm(aesKey, iv).apply { updateAAD(path.toByteArray(StandardCharsets.UTF_8)) }
+        val plain = cipherBytes.aesDecrypt(cipher)
         return String(plain, StandardCharsets.UTF_8).parseAs()
-    }
-
-    private fun hmac(key: ByteArray, data: ByteArray): ByteArray {
-        val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(key, "HmacSHA256"))
-        return mac.doFinal(data)
     }
 
     private fun encodeBase64Url(input: ByteArray): String {

@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Doujindesu"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
@@ -22,8 +22,4 @@ keiyoushi {
         path("/manga/..*")
         path("/reader/..*")
     }
-}
-
-dependencies {
-    implementation(project(":lib:randomua"))
 }

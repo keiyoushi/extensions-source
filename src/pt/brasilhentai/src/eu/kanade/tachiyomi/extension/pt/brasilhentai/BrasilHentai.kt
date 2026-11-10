@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -24,12 +25,11 @@ import kotlin.time.Instant
 
 @Source
 abstract class BrasilHentai : KeiSource() {
-
     override val supportsLatest = false
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(4)
 
-    override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get("$baseUrl/page/$page").asJsoup())
+    override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get("$baseUrl/page/$page", Fetch.DOCUMENT).asJsoup())
 
     private fun popularMangaParse(document: Document): MangasPage {
         val mangas = document.select(".content-area article").map { element ->
@@ -57,7 +57,7 @@ abstract class BrasilHentai : KeiSource() {
             "$baseUrl/category/$category/page/$page/".toHttpUrl()
         }
 
-        return popularMangaParse(client.get(url).asJsoup())
+        return popularMangaParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -76,7 +76,7 @@ abstract class BrasilHentai : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(
             SManga.create().apply {
@@ -102,7 +102,7 @@ abstract class BrasilHentai : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(".entry-content p > img").mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("src"))
         }
@@ -110,7 +110,7 @@ abstract class BrasilHentai : KeiSource() {
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData() = client.get(baseUrl).asJsoup().select("#categories-2 li a").associate { element ->
+    override suspend fun fetchFilterData() = client.get(baseUrl, Fetch.DOCUMENT).asJsoup().select("#categories-2 li a").associate { element ->
         val url = element.absUrl("href")
         val category = url.split("/").filter { it.isNotBlank() }.last()
         element.ownText() to category

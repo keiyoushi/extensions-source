@@ -10,7 +10,7 @@ import org.jsoup.nodes.Document
 abstract class TraducoesDoLipe : ZeistManga() {
     override val supportsLatest = false
 
-    override val mangaCategory = "Projeto"
+    override val includedCategories = listOf("Projeto")
     override val chapterCategory = "Capítulo"
 
     override val hasFilters = true

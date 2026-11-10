@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -34,7 +35,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Toonz : KeiSource() {
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 2, period = 1.seconds)
         .addNetworkInterceptor { chain ->
             val request = chain.request()
@@ -54,9 +54,20 @@ abstract class Toonz : KeiSource() {
 
     private val isToonx get() = name == "Toonx"
 
-    override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(listingUrl("comics", "popular", page), page)
+    private val isLewdManhwa get() = name == "LewdManhwa"
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList(listingUrl("comics", "latest", page), page)
+    private val catalogPath get() = if (isLewdManhwa) "webtoons" else "comics"
+
+    private val types
+        get() = when {
+            isToonx -> TOONX_TYPES
+            isLewdManhwa -> LEWDMANHWA_TYPES
+            else -> TOONZ_TYPES
+        }
+
+    override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(listingUrl(catalogPath, "popular", page), page)
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList(listingUrl(catalogPath, "latest", page), page)
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
@@ -75,14 +86,14 @@ abstract class Toonz : KeiSource() {
             return getMangaList(listingUrl("genre/$genre", sort, page), page)
         }
 
-        val catalog = filters.firstInstanceOrNull<CatalogFilter>()?.getValue() ?: "comics"
+        val catalog = filters.firstInstanceOrNull<CatalogFilter>()?.getValue() ?: catalogPath
         return getMangaList(listingUrl(catalog, sort, page), page)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val type = url.pathSegments.firstOrNull() ?: return null
-        if (type !in (if (isToonx) TOONX_TYPES else TOONZ_TYPES)) return null
+        if (type !in types) return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
         val manga = SManga.create().apply {
             this.url = mangaPath(type, slug)
@@ -119,7 +130,7 @@ abstract class Toonz : KeiSource() {
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
         val mangaUrl = getMangaUrl(manga)
-        val document = client.get(mangaUrl).asJsoup()
+        val document = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
         val comicId = manga.memo.getStringOrNull("comicId") ?: document.select("script").firstNotNullOfOrNull { script ->
             COMIC_ID_REGEX.find(script.data())?.groupValues?.get(1)
         } ?: throw Exception("Could not find comic ID for ${manga.title}")
@@ -134,7 +145,10 @@ abstract class Toonz : KeiSource() {
             author = document.select("a[href^=/author/]").joinToString { it.text() }.takeIf { it.isNotBlank() }
             artist = author
             genre = document.select("a[href^=/genre/]").joinToString { it.text() }.takeIf { it.isNotBlank() }
-            status = parseStatus(document.selectFirst("dt:contains(Status) + dd")?.text())
+            status = parseStatus(
+                document.selectFirst("dt:contains(Status) + dd")?.text()
+                    ?: document.selectFirst("span[data-slot=badge]:has(> svg.lucide-clock)")?.text(),
+            )
             memo = buildJsonObject {
                 put("comicId", comicId)
             }
@@ -142,7 +156,7 @@ abstract class Toonz : KeiSource() {
     }
 
     private suspend fun fetchChapters(manga: SManga, comicId: String): List<SChapter> {
-        val chaptersResponse = client.get("$baseUrl/api/comics/$comicId/chapters")
+        val chaptersResponse = client.get("$baseUrl/api/comics/$comicId/chapters", Fetch.XHR)
         val chapterListDto = chaptersResponse.parseAs<ChapterListDto>()
         return chapterListDto.chapters.map { it.toSChapter(manga.url) }
     }
@@ -156,7 +170,7 @@ abstract class Toonz : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
-        val images = client.get(chapterUrl, rscHeaders).extractNextJs<ChapterImagesDto>()?.images
+        val images = client.get(chapterUrl, rscHeaders, Fetch.XHR).extractNextJs<ChapterImagesDto>()?.images
             ?: return emptyList()
 
         return images.mapIndexed { index, image ->
@@ -167,7 +181,7 @@ abstract class Toonz : KeiSource() {
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/genres").parseAs()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/genres", Fetch.XHR).parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data?.parseAs<List<GenreDto>>()
@@ -178,7 +192,7 @@ abstract class Toonz : KeiSource() {
 
         return FilterList(
             listOfNotNull(
-                CatalogFilter().takeUnless { isToonx },
+                CatalogFilter().takeUnless { isToonx || isLewdManhwa },
                 SortFilter(),
                 Filter.Separator(),
                 GenreFilter(genreOptions),
@@ -193,7 +207,7 @@ abstract class Toonz : KeiSource() {
         .build()
 
     private suspend fun getMangaList(url: HttpUrl, page: Int): MangasPage {
-        val document = client.get(url).asDocument()
+        val document = client.get(url, Fetch.DOCUMENT).asDocument()
         val mangas = document.select("img[data-cover]").map { img ->
             SManga.create().apply {
                 val link = img.closest("a[href], :has(> a[href])")!!.selectFirst("a[href]")!!.absUrl("href").toHttpUrl()
@@ -234,6 +248,7 @@ abstract class Toonz : KeiSource() {
     companion object {
         private val TOONZ_TYPES = setOf("manhwa", "manhua", "manga", "western")
         private val TOONX_TYPES = setOf("comic", "adult")
+        private val LEWDMANHWA_TYPES = setOf("webtoon")
         private val COMIC_ID_REGEX = Regex("""comicId[^:]*:(\d+)""")
     }
 }

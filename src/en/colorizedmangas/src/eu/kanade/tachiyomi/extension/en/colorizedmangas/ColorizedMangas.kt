@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -21,7 +22,7 @@ abstract class ColorizedMangas : KeiSource() {
     override val supportsLatest = false
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = parseMangaList(document)
         return MangasPage(mangas, false)
     }
@@ -29,7 +30,7 @@ abstract class ColorizedMangas : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = getPopularManga(page)
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val allMangas = parseMangaList(document)
 
         val filtered = if (query.isNotBlank()) {
@@ -47,7 +48,7 @@ abstract class ColorizedMangas : KeiSource() {
 
         val slug = url.pathSegments.firstOrNull { it.isNotEmpty() } ?: return null
 
-        val document = client.get("$baseUrl/$slug").asJsoup()
+        val document = client.get("$baseUrl/$slug", Fetch.DOCUMENT).asJsoup()
 
         return SManga.create().apply {
             this.url = "/$slug"
@@ -60,7 +61,7 @@ abstract class ColorizedMangas : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = parseMangaDetails(document, manga)
         val chapterList = parseChapterList(document)
@@ -129,7 +130,7 @@ abstract class ColorizedMangas : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = "$baseUrl${chapter.url}"
-        val document = client.get(chapterUrl).asJsoup()
+        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
 
         return document.select("main img[src*=pages]").mapIndexed { index, img ->
             Page(index, imageUrl = img.absUrl("src"))

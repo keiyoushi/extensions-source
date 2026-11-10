@@ -6,10 +6,9 @@ plugins {
 
 keiyoushi {
     name = "Mahouirexnohentaikarte"
-    versionCode = 0
+    versionCode = 57
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
-    theme = "madara"
 
     source {
         lang = "en"

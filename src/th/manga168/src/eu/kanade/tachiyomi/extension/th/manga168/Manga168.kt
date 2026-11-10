@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -42,12 +43,12 @@ abstract class Manga168 : KeiSource() {
     // The popular ranking is a fixed 15-item list, no pagination.
     override suspend fun getPopularManga(page: Int): MangasPage {
         if (page > 1) return MangasPage(emptyList(), false)
-        val dto = client.get("$baseUrl/api/manga/daily-popular?period=weekly").parseAs<PopularDto>()
+        val dto = client.get("$baseUrl/api/manga/daily-popular?period=weekly", Fetch.XHR).parseAs<PopularDto>()
         return MangasPage(dto.data.map { it.toSManga() }, false)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val dto = client.get("$baseUrl/api/manga/mangas?page=$page").parseAs<MangaListDto>()
+        val dto = client.get("$baseUrl/api/manga/mangas?page=$page", Fetch.XHR).parseAs<MangaListDto>()
         val hasNext = page < (dto.pagecount.toIntOrNull() ?: page)
         return MangasPage(dto.data.map { it.toSManga() }, hasNext)
     }
@@ -88,7 +89,7 @@ abstract class Manga168 : KeiSource() {
     }
 
     private suspend fun getCatalog(): List<SeriesDto> {
-        val doc = client.get("$baseUrl/manga").asJsoup()
+        val doc = client.get("$baseUrl/manga", Fetch.DOCUMENT).asJsoup()
         return doc.extractNextJs<SeriesPageDto> { it is JsonObject && "series" in it }
             ?.series.orEmpty()
     }
@@ -109,7 +110,7 @@ abstract class Manga168 : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.url.substringAfter("/manga/").substringBefore("/")
-        val doc = client.get("$baseUrl/manga/$slug").asJsoup()
+        val doc = client.get("$baseUrl/manga/$slug", Fetch.DOCUMENT).asJsoup()
         val series = doc.extractNextJs<SeriesPageDto> { it is JsonObject && "series" in it }
             ?.series?.firstOrNull { it.slug == slug }
             ?: return SMangaUpdate(manga, chapters)
@@ -154,7 +155,7 @@ abstract class Manga168 : KeiSource() {
         val number = chapter.memo["number"]?.jsonPrimitive?.doubleOrNull
             ?: error("Refresh chapter list")
 
-        val imageUrls = client.get("$baseUrl/api/manga/mangas/$mangaId/${number.toDisplayString()}/images")
+        val imageUrls = client.get("$baseUrl/api/manga/mangas/$mangaId/${number.toDisplayString()}/images", Fetch.XHR)
             .parseAs<ImagesDto>()
             .data
             .filter { it.isNotBlank() }

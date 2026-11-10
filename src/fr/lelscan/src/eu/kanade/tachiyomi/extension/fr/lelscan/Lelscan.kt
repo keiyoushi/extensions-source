@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -21,14 +22,14 @@ abstract class Lelscan : KeiSource() {
     // Popular
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(catalogPage).asJsoup()
+        val document = client.get(catalogPage, Fetch.DOCUMENT).asJsoup()
         return MangasPage(document.catalogMangas(), false)
     }
 
     // Latest
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get(catalogPage).asJsoup()
+        val document = client.get(catalogPage, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("#main_hot_ul li").mapNotNull { li ->
             val a = li.selectFirst("a.hot_manga_img") ?: return@mapNotNull null
             SManga.create().apply {
@@ -44,7 +45,7 @@ abstract class Lelscan : KeiSource() {
 
     // No server-side search: filter the catalog list client-side.
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val document = client.get(catalogPage).asJsoup()
+        val document = client.get(catalogPage, Fetch.DOCUMENT).asJsoup()
         val mangas = document.catalogMangas().filter { it.title.contains(query.trim(), ignoreCase = true) }
         return MangasPage(mangas, false)
     }
@@ -68,7 +69,7 @@ abstract class Lelscan : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         // The second breadcrumb div holds "Lecture en ligne {Title}".
         val breadcrumb = document.select("#header-image h2 div").getOrNull(1)
@@ -99,7 +100,7 @@ abstract class Lelscan : KeiSource() {
     // Pages
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}/1").asJsoup()
+        val document = client.get("$baseUrl${chapter.url}/1", Fetch.DOCUMENT).asJsoup()
         return document.select("#navigation select").getOrNull(2)
             ?.select("option")
             ?.mapIndexed { index, option ->
@@ -108,7 +109,7 @@ abstract class Lelscan : KeiSource() {
             .orEmpty()
     }
 
-    override suspend fun getImageUrl(page: Page): String = client.get(page.url).asJsoup().selectFirst("#image img")?.attr("abs:src").orEmpty()
+    override suspend fun getImageUrl(page: Page): String = client.get(page.url, Fetch.DOCUMENT).asJsoup().selectFirst("#image img")?.attr("abs:src").orEmpty()
 
     // Helpers
 

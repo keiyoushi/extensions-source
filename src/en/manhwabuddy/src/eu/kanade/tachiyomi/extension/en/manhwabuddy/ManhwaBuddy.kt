@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.yiimanga.Yiimanga
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 
@@ -16,7 +17,7 @@ abstract class ManhwaBuddy : Yiimanga() {
     override val supportsFilterFetching = true
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val mangas = client.get(baseUrl).asJsoup().select(".item-move").map { element ->
+        val mangas = client.get(baseUrl, Fetch.DOCUMENT).asJsoup().select(".item-move").map { element ->
             SManga.create().apply {
                 val link = element.selectFirst(".name a")!!
                 setUrlWithoutDomain(link.absUrl("href"))

@@ -1,5 +1,6 @@
 package keiyoushi.utils
 
+import android.util.Base64
 import okhttp3.MediaType
 import okhttp3.Response
 import okhttp3.ResponseBody
@@ -9,8 +10,10 @@ import okio.ForwardingSource
 import okio.Source
 import okio.buffer
 import okio.cipherSource
+import java.security.MessageDigest
 import java.security.spec.AlgorithmParameterSpec
 import javax.crypto.Cipher
+import javax.crypto.Mac
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -43,6 +46,69 @@ private fun decodeHexDigit(c: Char): Int = when (c) {
     in 'A'..'F' -> c - 'A' + 10
     else -> throw IllegalArgumentException("Unexpected hex digit: $c")
 }
+
+/**
+ * Computes the MD5 digest of this [ByteArray].
+ *
+ * Use [toHexString] on the result for the usual lowercase hex form.
+ *
+ * @return the MD5 digest bytes
+ */
+fun ByteArray.md5(): ByteArray = MessageDigest.getInstance("MD5").digest(this)
+
+/**
+ * Computes the MD5 digest of this string's UTF-8 bytes.
+ *
+ * @return the MD5 digest bytes
+ */
+fun String.md5(): ByteArray = encodeToByteArray().md5()
+
+/**
+ * Computes the SHA-256 digest of this [ByteArray].
+ *
+ * @return the SHA-256 digest bytes
+ */
+fun ByteArray.sha256(): ByteArray = MessageDigest.getInstance("SHA-256").digest(this)
+
+/**
+ * Computes the SHA-256 digest of this string's UTF-8 bytes.
+ *
+ * @return the SHA-256 digest bytes
+ */
+fun String.sha256(): ByteArray = encodeToByteArray().sha256()
+
+/**
+ * Computes the SHA-512 digest of this [ByteArray].
+ *
+ * @return the SHA-512 digest bytes
+ */
+fun ByteArray.sha512(): ByteArray = MessageDigest.getInstance("SHA-512").digest(this)
+
+/**
+ * Computes the SHA-512 digest of this string's UTF-8 bytes.
+ *
+ * @return the SHA-512 digest bytes
+ */
+fun String.sha512(): ByteArray = encodeToByteArray().sha512()
+
+/**
+ * Computes the HMAC-SHA256 of this [ByteArray] with [key].
+ *
+ * @param key the HMAC key bytes
+ * @return the HMAC-SHA256 bytes
+ */
+fun ByteArray.hmacSha256(key: ByteArray): ByteArray = Mac.getInstance("HmacSHA256").run {
+    init(SecretKeySpec(key, "HmacSHA256"))
+    doFinal(this@hmacSha256)
+}
+
+/**
+ * Computes the HMAC-SHA256 of this string's UTF-8 bytes with [key].
+ *
+ * @param key the HMAC key bytes
+ * @return the HMAC-SHA256 bytes
+ */
+fun String.hmacSha256(key: ByteArray): ByteArray = encodeToByteArray().hmacSha256(key)
 
 /**
  * Encrypts or decrypts this [ByteArray] using the RC4 stream cipher with [key].
@@ -473,3 +539,56 @@ fun Response.aesDecryptWithPrependedIv(
 ): Response = aesDecryptWithPrependedIv(ivSize, contentType) { iv ->
     aesCbc(key, iv, padding)
 }
+
+/**
+ * Derives a key and IV from [password] and [salt] using OpenSSL's `EVP_BytesToKey` with MD5 and a single iteration.
+ *
+ * @param password the password bytes
+ * @param salt the salt bytes, or null for no salt
+ * @param keyLen the length of the derived key in bytes, defaults to 32
+ * @param ivLen the length of the derived IV in bytes, defaults to 16
+ * @return the derived key and IV
+ */
+fun evpBytesToKey(
+    password: ByteArray,
+    salt: ByteArray?,
+    keyLen: Int = 32,
+    ivLen: Int = 16,
+): Pair<ByteArray, ByteArray> {
+    val md = MessageDigest.getInstance("MD5")
+    val derived = Buffer()
+    var block = ByteArray(0)
+    while (derived.size < keyLen + ivLen) {
+        md.update(block)
+        md.update(password)
+        if (salt != null) md.update(salt)
+        block = md.digest()
+        derived.write(block)
+    }
+    return derived.readByteArray(keyLen.toLong()) to derived.readByteArray(ivLen.toLong())
+}
+
+/**
+ * Decrypts an OpenSSL-formatted (`Salted__` + 8-byte salt + ciphertext) payload with a [passphrase],
+ * matching `CryptoJS.AES.decrypt(ciphertext, passphrase)`.
+ *
+ * @param passphrase the passphrase, used as UTF-8 bytes
+ * @return the decrypted bytes
+ * @throws IllegalArgumentException if the payload is missing the `Salted__` header
+ */
+fun ByteArray.cryptoJsDecrypt(passphrase: String): ByteArray {
+    require(size >= 16 && copyOfRange(0, 8).contentEquals(SALTED_HEADER)) { "Missing Salted__ header" }
+    val (key, iv) = evpBytesToKey(passphrase.encodeToByteArray(), copyOfRange(8, 16))
+    return copyOfRange(16, size).aesDecrypt(aesCbc(key, iv))
+}
+
+/**
+ * Decrypts a Base64-encoded OpenSSL-formatted payload with a [passphrase],
+ * matching `CryptoJS.AES.decrypt(ciphertext, passphrase).toString(CryptoJS.enc.Utf8)`.
+ *
+ * @param passphrase the passphrase, used as UTF-8 bytes
+ * @return the decrypted UTF-8 string
+ */
+fun String.cryptoJsDecrypt(passphrase: String): String = Base64.decode(this, Base64.DEFAULT).cryptoJsDecrypt(passphrase).decodeToString()
+
+private val SALTED_HEADER = "Salted__".encodeToByteArray()

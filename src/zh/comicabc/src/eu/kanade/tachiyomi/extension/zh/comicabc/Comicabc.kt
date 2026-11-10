@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -21,7 +22,7 @@ abstract class Comicabc : KeiSource() {
     // ============================== Popular ==============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/comic/h-$page.html").asJsoup()
+        val document = client.get("$baseUrl/comic/h-$page.html", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".container .row a.comicpic_col6").map { element ->
             SManga.create().apply {
                 title = element.selectFirst("li.nowraphide")!!.text()
@@ -36,7 +37,7 @@ abstract class Comicabc : KeiSource() {
     // ============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/comic/u-$page.html").asJsoup()
+        val document = client.get("$baseUrl/comic/u-$page.html", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".container .row .cat2_list a").map { element ->
             SManga.create().apply {
                 title = element.selectFirst("li.nowraphide")!!.text()
@@ -57,7 +58,7 @@ abstract class Comicabc : KeiSource() {
             .addQueryParameter("key", query)
             .addQueryParameter("page", page.toString())
             .build()
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".container .row a.comicpic_col6").map { element ->
             SManga.create().apply {
                 title = element.selectFirst("li.nowraphide")!!.text()
@@ -72,7 +73,7 @@ abstract class Comicabc : KeiSource() {
                     .addQueryParameter("key", converted)
                     .addQueryParameter("page", "1")
                     .build()
-                val retryDocument = client.get(retryUrl).asJsoup()
+                val retryDocument = client.get(retryUrl, Fetch.DOCUMENT).asJsoup()
                 val retryMangas = retryDocument.select(".container .row a.comicpic_col6").map { element ->
                     SManga.create().apply {
                         title = element.selectFirst("li.nowraphide")!!.text()
@@ -96,7 +97,7 @@ abstract class Comicabc : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         manga.apply {
             title = document.selectFirst(".item_content_box .h2")!!.text()
@@ -139,7 +140,7 @@ abstract class Comicabc : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(chapter.url)
+        val response = client.get(chapter.url, Fetch.DOCUMENT)
         val pageUrl = response.request.url.toString()
         val html = response.use { it.body.string() }
 
@@ -179,7 +180,7 @@ abstract class Comicabc : KeiSource() {
         return emptyList()
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("Referer", "$chaptersBaseUrl/")
         .build()
 

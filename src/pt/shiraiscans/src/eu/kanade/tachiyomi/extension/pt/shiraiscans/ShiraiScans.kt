@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -28,7 +29,7 @@ abstract class ShiraiScans : KeiSource() {
 
     // ============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int) = parseLatest(client.get(baseUrl))
+    override suspend fun getLatestUpdates(page: Int) = parseLatest(client.get(baseUrl, Fetch.DOCUMENT))
 
     private fun parseLatest(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -59,7 +60,7 @@ abstract class ShiraiScans : KeiSource() {
             addQueryParameter("offset", offset.toString())
         }.build()
 
-        return parseSearch(client.get(url))
+        return parseSearch(client.get(url, Fetch.DOCUMENT))
     }
 
     private fun parseSearch(response: Response): MangasPage {
@@ -86,7 +87,7 @@ abstract class ShiraiScans : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             parseDetails(doc),
             parseChapters(doc),
@@ -126,7 +127,7 @@ abstract class ShiraiScans : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val script = document.selectFirst("script:containsData(pagesData)")?.data()
             ?: throw Exception("Script com dados das páginas não encontrado")
 

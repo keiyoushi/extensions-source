@@ -14,18 +14,6 @@ class ResponseDto<T>(
 )
 
 @Serializable
-class TopSeriesDto(
-    @SerialName("mensual") val topMonthly: List<List<PayloadSeriesDto>>,
-    @SerialName("semanal") val topWeekly: List<List<PayloadSeriesDto>>,
-    @SerialName("diario") val topDaily: List<List<PayloadSeriesDto>>,
-)
-
-@Serializable
-class PayloadSeriesDto(
-    @SerialName("project") val data: SeriesDto,
-)
-
-@Serializable
 class SeriesDto(
     val name: String,
     val alternativeName: String? = null,
@@ -40,7 +28,10 @@ class SeriesDto(
     val trending: TrendingDto? = null,
     @SerialName("autors") private val authors: List<AuthorDto> = emptyList(),
     private val artists: List<ArtistDto> = emptyList(),
+    private val type: String? = null,
 ) {
+    val isNovel: Boolean get() = type == "novela"
+
     fun toSManga(seriesPath: String): SManga = SManga.create().apply {
         title = name
         thumbnail_url = thumbnail
@@ -64,6 +55,7 @@ class SeriesDto(
 @Serializable
 class TrendingDto(
     @SerialName("visitas") val views: Int? = 0,
+    @SerialName("mensual") val monthlyViews: Int? = 0,
 )
 
 @Serializable

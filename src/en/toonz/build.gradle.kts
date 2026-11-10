@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Toonz/Toonx"
-    versionCode = 4
+    versionCode = 7
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -22,6 +22,12 @@ keiyoushi {
         lang = "en"
     }
 
+    source {
+        name = "LewdManhwa"
+        baseUrl = "https://lewdmanhwa.com"
+        lang = "en"
+    }
+
     deeplink {
         host("toonz.to")
         path("/manhwa/..*")
@@ -34,5 +40,10 @@ keiyoushi {
         host("toonx.to")
         path("/comic/..*")
         path("/adult/..*")
+    }
+
+    deeplink {
+        host("lewdmanhwa.com")
+        path("/webtoon/..*")
     }
 }

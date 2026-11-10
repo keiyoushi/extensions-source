@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Tower Of God Manga Online"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "mangacatalog"
 
     source {
         lang = "en"
-        baseUrl = "https://w82.thetowerofgod.com"
+        baseUrl = "https://w85.thetowerofgod.com"
     }
 }

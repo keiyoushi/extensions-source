@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.simplyhentai
 
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -10,12 +11,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.time.Instant
 
@@ -54,7 +57,7 @@ abstract class SimplyHentai :
             sort?.let { addQueryParameter("sort", it) }
         }.build()
 
-        return client.get(url).parseAs<SHList<SHDataAlbum>>().run {
+        return client.get(url, Fetch.XHR).parseAs<SHList<SHDataAlbum>>().run {
             MangasPage(
                 data.albums.map(SHObject::toSManga),
                 pagination.next != null,
@@ -99,7 +102,7 @@ abstract class SimplyHentai :
             }
         }.build()
 
-        return client.get(url).parseAs<SHList<List<SHWrapper>>>().run {
+        return client.get(url, Fetch.XHR).parseAs<SHList<List<SHWrapper>>>().run {
             MangasPage(
                 data.map { it.`object`.toSManga() },
                 pagination.next != null,
@@ -107,29 +110,33 @@ abstract class SimplyHentai :
         }
     }
 
+    // Doujin.sexy shows the same albums under the same paths
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val segments = url.pathSegments
+        if (url.host.removePrefix("www.") !in linkHosts || segments.size < 2) return null
+        val response = client.get("$apiUrl/manga/${segments[1]}", Fetch.XHR, ensureSuccess = false)
+        if (!response.isSuccessful) {
+            response.close()
+            // Paths that aren't albums get a 404
+            if (response.code == 404) return null
+            throw HttpException(response.code)
+        }
+        val album = response.parseAs<SHAlbum>().data
+        // Section links such as /language/english also have two segments
+        return album.takeIf { it.series.slug == segments[0] }?.toSManga()?.apply { initialized = true }
+    }
+
+    private val linkHosts get() = setOf(baseUrl.toHttpUrl().host.removePrefix("www."), "doujin.sexy")
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val album = client.get("$apiUrl/manga/${manga.url.split('/')[2]}").parseAs<SHAlbum>().data
+        val album = client.get("$apiUrl/manga/${manga.url.split('/')[2]}", Fetch.XHR).parseAs<SHAlbum>().data
 
-        val updatedManga = manga.apply {
-            url = album.path
-            title = album.title
-            description = buildString {
-                if (!album.description.isNullOrEmpty()) {
-                    append(album.description, "\n\n")
-                }
-                append("Series: ", album.series.title, "\n")
-                album.characters.joinTo(this, prefix = "Characters: ") { it.title }
-            }
-            thumbnail_url = album.preview.sizes.thumb
-            genre = album.tags.joinToString { it.title }
-            artist = album.artists.joinToString { it.title }
-            author = artist
-        }
+        val updatedManga = album.toSManga()
 
         val chapter = SChapter.create().apply {
             name = "Chapter"
@@ -141,7 +148,7 @@ abstract class SimplyHentai :
         return SMangaUpdate(updatedManga, listOf(chapter))
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/manga/${chapter.url.split('/')[2]}/pages")
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/manga/${chapter.url.split('/')[2]}/pages", Fetch.XHR)
         .parseAs<SHAlbumPages>().data.pages.map {
             Page(it.pageNum, "", it.sizes.full)
         }

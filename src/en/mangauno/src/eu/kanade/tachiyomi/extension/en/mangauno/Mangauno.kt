@@ -12,11 +12,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
@@ -35,14 +37,14 @@ abstract class Mangauno :
     override val supportsFilterFetching = true
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$apiUrl/list/popular?page=$page&limit=$PAGE_SIZE")
+        val response = client.get("$apiUrl/list/popular?page=$page&limit=$PAGE_SIZE", Fetch.XHR)
         val data = response.parseAs<ListResponse>()
         val mangas = data.toSMangaList(useEnglishTitle)
         return MangasPage(mangas, mangas.size >= PAGE_SIZE)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val response = client.get("$apiUrl/list/latest?page=$page&limit=$PAGE_SIZE")
+        val response = client.get("$apiUrl/list/latest?page=$page&limit=$PAGE_SIZE", Fetch.XHR)
         val data = response.parseAs<ListResponse>()
         val mangas = data.toSMangaList(useEnglishTitle)
         return MangasPage(mangas, mangas.size >= PAGE_SIZE)
@@ -81,10 +83,18 @@ abstract class Mangauno :
             }
         }
 
-        val response = client.get(url.build())
+        val response = client.get(url.build(), Fetch.XHR)
         val data = response.parseAs<ListResponse>()
         val mangas = data.toSMangaList(useEnglishTitle)
         return MangasPage(mangas, mangas.size >= PAGE_SIZE)
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        if (url.pathSegments.firstOrNull() !in setOf("m", "r")) return null
+        val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
+        val manga = SManga.create().apply { this.url = slug }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun fetchMangaUpdate(
@@ -93,7 +103,7 @@ abstract class Mangauno :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get("$apiUrl/manga/${manga.url}")
+        val response = client.get("$apiUrl/manga/${manga.url}", Fetch.XHR)
         val data = response.parseAs<DetailsResponse>()
         return SMangaUpdate(
             data.toSManga(useEnglishTitle),
@@ -103,10 +113,10 @@ abstract class Mangauno :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.url.substringAfterLast("/")
-        val response = client.get("$apiUrl/chapter/$chapterId")
+        val response = client.get("$apiUrl/chapter/$chapterId", Fetch.XHR.from(getChapterUrl(chapter)))
         val data = response.parseAs<PageListResponse>()
-        return data.pages.mapIndexed { index, url ->
-            Page(index, imageUrl = url)
+        return List(data.chapter.pageCount) { index ->
+            Page(index, imageUrl = "$apiUrl/chapter/$chapterId/page/${index + 1}")
         }
     }
 
@@ -114,7 +124,7 @@ abstract class Mangauno :
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/r/${chapter.url}"
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/search/facets").parseAs()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/search/facets", Fetch.XHR).parseAs()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val filters = mutableListOf<Filter<*>>(

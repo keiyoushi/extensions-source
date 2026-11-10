@@ -8,9 +8,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
@@ -29,7 +31,6 @@ import java.util.Calendar
 
 @Source
 abstract class MangaBahcesi : KeiSource() {
-
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(::decryptInterceptor)
 
     // Manga Bahçesi encrypts their image URLs (both covers and pages).
@@ -78,32 +79,34 @@ abstract class MangaBahcesi : KeiSource() {
     override suspend fun getPopularManga(page: Int) = parseMangas(
         client.get(
             "$baseUrl/Tr/PopulerMangalar?page=$page",
+            Fetch.DOCUMENT,
         ),
     )
 
     override suspend fun getLatestUpdates(page: Int) = parseMangas(
         client.get(
             "$baseUrl/Tr/YeniMangalar?page=$page",
+            Fetch.DOCUMENT,
         ),
     )
 
     private fun parseMangas(response: Response): MangasPage {
         val doc = response.asJsoup()
-        val mangas = doc.select("div.zaman.boyut").map { element ->
+        val mangas = doc.select("article.series-card").map { element ->
             SManga.create().apply {
-                val a = element.selectFirst("a")!!
-                setUrlWithoutDomain(a.attr("abs:href"))
-                title = a.attr("title").trim()
+                setUrlWithoutDomain(element.selectFirst("a.series-card__link")!!.attr("abs:href"))
+                title = element.selectFirst(".series-card__title")!!.text()
 
-                val script = element.selectFirst("script:containsData(SifreCoz)")?.data()
-                val id = script?.substringAfter("\"id\": '")?.substringBefore("'")
-                if (!id.isNullOrEmpty()) {
+                val id = element.selectFirst("img.series-card__image")?.attrOrNull("data-cover-id")
+                if (id != null) {
                     thumbnail_url = "$baseUrl/decrypt?id=${URLEncoder.encode(id, "UTF-8")}"
                 }
             }
         }
 
-        val hasNextPage = doc.selectFirst("ul.pagination li.active + li > a") != null
+        // the "next" arrow stays on the last page, just with a javascript:void(0) href
+        val hasNextPage = doc.selectFirst("ul.pagination a.lastpage")
+            ?.attr("href")?.startsWith("javascript") == false
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -144,7 +147,13 @@ abstract class MangaBahcesi : KeiSource() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        return parseMangas(client.get(url))
+        val response = client.get(url, Fetch.DOCUMENT)
+        // a single exact match redirects straight to the manga page
+        if (response.request.url.pathSegments.getOrNull(1) == "Manga") {
+            return MangasPage(listOf(parseDetails(response.asJsoup())), false)
+        }
+
+        return parseMangas(response)
     }
 
     override val supportRelatedMangasBySearch = true
@@ -155,13 +164,14 @@ abstract class MangaBahcesi : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        val details = parseDetails(doc)
 
-        return SMangaUpdate(parseDetails(doc), parseChapters(doc))
+        return SMangaUpdate(details, parseChapters(doc, details.title))
     }
 
     private fun parseDetails(document: Document) = SManga.create().apply {
-        title = document.selectFirst("div.details-title h2")?.text()!!
+        title = document.selectFirst("h1.manga-detail__title")!!.text()
         setUrlWithoutDomain(document.location())
         description = document.select("div.details-dectiontion p").text()
 
@@ -171,50 +181,37 @@ abstract class MangaBahcesi : KeiSource() {
             thumbnail_url = "$baseUrl/decrypt?id=${URLEncoder.encode(id, "UTF-8")}"
         }
 
-        val metadataElements = document.select("div.dec-review-meta ul li")
-        for (element in metadataElements) {
-            val label = element.selectFirst("span.left")?.text().orEmpty()
-            val value = element.select("div.left a, a").text().trim()
+        author = document.selectFirst("dl.manga-detail__facts dt:contains(Yazar) + dd")?.text()
 
-            when {
-                label.contains("Yazar", true) -> author = value
-                label.contains("Durum", true) -> status = when {
-                    value.contains("Devam Ediyor", true) -> SManga.ONGOING
-                    value.contains("Tamamlandı", true) -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-            }
+        val badges = document.select("div.manga-detail__badges span").text().lowercase()
+        status = when {
+            badges.contains("devam ediyor") -> SManga.ONGOING
+            badges.contains("tamamlandı") -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
         }
 
-        val genres = document.select("div.dec-review-meta ul li:contains(Kategori) a").map { it.text().trim() }
+        val genres = document.select("div.manga-detail__genres a").map { it.text() }
         if (genres.isNotEmpty()) {
-            genre = genres.joinToString(", ")
+            genre = genres.joinToString()
         }
     }
 
-    private fun parseChapters(document: Document): List<SChapter> = document.select("div.plylist-single").mapNotNull { element ->
+    private fun parseChapters(document: Document, mangaTitle: String): List<SChapter> = document.select("div.plylist-single").mapNotNull { element ->
         SChapter.create().apply {
-            val a = element.selectFirst(".plylist-single-content > a")
-            val href = a?.attr("onclick")?.substringAfter("location.href='")?.substringBefore("'")
-                ?: a?.attr("href") ?: return@mapNotNull null
-            setUrlWithoutDomain(href)
+            val a = element.selectFirst(".plylist-single-content > a") ?: return@mapNotNull null
+            setUrlWithoutDomain(a.attr("abs:href"))
 
-            val chapterName = a?.text()?.trim() ?: "Bölüm"
+            val chapterName = a.text().removePrefix(mangaTitle).trim()
             val isVip = element.select("span:contains(VIP)").isNotEmpty()
             name = if (isVip) "[VIP] $chapterName" else chapterName
 
-            date_upload = element.selectFirst("li.movie-time a")?.text()?.let { parseDate(it) } ?: 0L
+            date_upload = element.selectFirst(".manga-detail__chapter-date")?.text()?.let { parseDate(it) } ?: 0L
         }
     }
 
+    // VIP chapters come back without any page scripts unless logged in as a VIP member
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        // Enforce the site's mandatory login rule to view page images.
-        val cookies = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
-        if (cookies.none { it.name == ".ASPXAUTH" }) {
-            throw Exception("Bölümleri okumak için WebView üzerinden giriş yapmalısınız.")
-        }
-
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val pages = mutableListOf<Page>()
         var i = 0
 
@@ -227,8 +224,8 @@ abstract class MangaBahcesi : KeiSource() {
 
         document.select("div.reading-content img#mangaOkuResim, div.reading-content-manga img#mangaOkuResim").forEach { img ->
             val src = img.attr("abs:src")
-            // Ensure placeholder dummy images injected by the source aren't fetched
-            if (!src.contains("readingcontent.jpg", true)) {
+            // site assets like the end-of-chapter banner (son2.jpg) and the readingcontent.jpg placeholder
+            if (!src.contains("/Content/img/", true)) {
                 pages.add(Page(i++, imageUrl = src))
             }
         }
@@ -238,10 +235,10 @@ abstract class MangaBahcesi : KeiSource() {
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData() = client.get("$baseUrl/Tr/Mangalar")
+    override suspend fun fetchFilterData() = client.get("$baseUrl/Tr/Mangalar", Fetch.DOCUMENT)
         .asJsoup()
-        .select("select[name=kategori] option")
-        .associate { it.text() to it.attr("value") }
+        .select("label.catalog-search__option:has(input[name=kategori])")
+        .associate { it.text() to it.selectFirst("input")!!.attr("value") }
         .toJsonElement()
 
     override fun getFilterList(data: JsonElement?) = FilterList(

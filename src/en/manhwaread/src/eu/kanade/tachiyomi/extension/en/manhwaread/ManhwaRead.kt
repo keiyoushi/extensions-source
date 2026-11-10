@@ -8,10 +8,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.ratingStars
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -85,7 +87,7 @@ abstract class ManhwaRead : KeiSource() {
             }
         }
 
-        val document = client.get(urlBuilder.build()).asJsoup()
+        val document = client.get(urlBuilder.build(), Fetch.DOCUMENT).asJsoup()
         val mangas = document
             .select(".main-container .manga-item")
             .map(::searchMangaFromElement)
@@ -107,7 +109,7 @@ abstract class ManhwaRead : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val updatedManga = manga.apply {
             title = document.selectFirst("#mangaSummary .manga-titles h1")!!.text()
             artist = document.select("#mangaSummary .text-primary:contains(Artist:) + .flex a span:first-child").joinToString { it.text() }
@@ -196,7 +198,7 @@ abstract class ManhwaRead : KeiSource() {
 
     // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterDataString = client.get(getChapterUrl(chapter)).use { it.body.string() }
+        val chapterDataString = client.get(getChapterUrl(chapter), Fetch.XHR).use { it.body.string() }
             .let { PATTERN_CHAPTER_DATA.find(it)?.groupValues?.get(1) }
             ?: throw Exception("Chapter data not found")
 
@@ -214,22 +216,9 @@ abstract class ManhwaRead : KeiSource() {
 
     private fun getRatingString(rate: String, rateCount: Int): String {
         val ratingValue = rate.toDoubleOrNull() ?: 0.0
-        val ratingStar = when {
-            ratingValue >= 4.75 -> "★★★★★"
-            ratingValue >= 4.25 -> "★★★★✬"
-            ratingValue >= 3.75 -> "★★★★☆"
-            ratingValue >= 3.25 -> "★★★✬☆"
-            ratingValue >= 2.75 -> "★★★☆☆"
-            ratingValue >= 2.25 -> "★★✬☆☆"
-            ratingValue >= 1.75 -> "★★☆☆☆"
-            ratingValue >= 1.25 -> "★✬☆☆☆"
-            ratingValue >= 0.75 -> "★☆☆☆☆"
-            ratingValue >= 0.25 -> "✬☆☆☆☆"
-            else -> "☆☆☆☆☆"
-        }
         return if (ratingValue > 0.0) {
             buildString {
-                append(ratingStar, " ", rate)
+                append(ratingStars(ratingValue, max = 5), " ", rate)
                 if (rateCount > 0) {
                     append(" (", rateCount, ")")
                 }

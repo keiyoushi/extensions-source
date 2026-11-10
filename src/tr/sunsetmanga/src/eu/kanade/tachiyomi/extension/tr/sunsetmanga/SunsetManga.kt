@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
@@ -35,7 +36,7 @@ abstract class SunsetManga : KeiSource() {
 
     private suspend fun getNonce(): String {
         nonce?.let { return it }
-        val scriptData = client.get(baseUrl).asJsoup()
+        val scriptData = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
             .select("script")
             .firstOrNull { it.data().contains("sunsetGlobalData") }
             ?.data().orEmpty()
@@ -65,7 +66,7 @@ abstract class SunsetManga : KeiSource() {
             .add("filters", filters)
             .add("nonce", getNonce())
             .build()
-        val response = client.post(ajaxUrl, body = body).parseJson<CatalogResponse>()
+        val response = client.post(ajaxUrl, fetch = Fetch.DOCUMENT, body = body).parseJson<CatalogResponse>()
         val data = response.data?.takeIf { response.success } ?: return MangasPage(emptyList(), false)
         val document = Jsoup.parseBodyFragment(data.html)
         val mangas = document.select("div.group.relative > a[href*=/manga/]").mapNotNull(::parseCard)
@@ -89,7 +90,7 @@ abstract class SunsetManga : KeiSource() {
             .add("search_term", query)
             .add("nonce", getNonce())
             .build()
-        val results = client.post(ajaxUrl, body = body).parseJson<List<SearchResult>>()
+        val results = client.post(ajaxUrl, fetch = Fetch.XHR, body = body).parseJson<List<SearchResult>>()
         val mangas = results.mapNotNull { result ->
             val title = result.title.takeIf { it.isNotBlank() } ?: return@mapNotNull null
             SManga.create().apply {
@@ -107,7 +108,7 @@ abstract class SunsetManga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(parseDetails(document, manga), parseChapters(document))
     }
 
@@ -141,7 +142,7 @@ abstract class SunsetManga : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val pages = document.select(".protected-image-container[data-token]").mapIndexedNotNull { index, element ->
             val token = element.attr("data-token").takeIf { it.isNotBlank() }
                 ?: return@mapIndexedNotNull null
@@ -153,7 +154,7 @@ abstract class SunsetManga : KeiSource() {
         return pages
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val body = FormBody.Builder()
             .add("action", "get_protected_image")
             .add("token", page.imageUrl!!)
@@ -162,6 +163,7 @@ abstract class SunsetManga : KeiSource() {
             .url(ajaxUrl)
             .post(body)
             .headers(headers)
+            .header("Origin", baseUrl)
             .build()
     }
 }

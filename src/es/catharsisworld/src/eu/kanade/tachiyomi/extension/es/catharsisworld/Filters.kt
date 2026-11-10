@@ -29,7 +29,16 @@ class StatusFilter : Filter.Select<String>("Estado", STATUSES.map { it.first }.t
             "En emisión" to "curso",
             "Hiatus" to "pausado",
             "Terminado" to "terminado",
+            "Abandonado" to "abandonado",
         )
+    }
+}
+
+class LetterFilter : Filter.Select<String>("Letra", LETTERS.toTypedArray()) {
+    val value get() = LETTERS[state].takeIf { state > 0 }
+
+    companion object {
+        private val LETTERS = listOf("Todas", "#") + ('A'..'Z').map(Char::toString)
     }
 }
 

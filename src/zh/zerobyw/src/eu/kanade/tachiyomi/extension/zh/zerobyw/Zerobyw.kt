@@ -7,10 +7,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.getPreferences
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -23,9 +23,7 @@ abstract class Zerobyw : KeiSource() {
 
     override val supportsLatest = false
 
-    private val preferences = getPreferences()
-
-    override fun OkHttpClient.Builder.configureClient() = addInterceptor(UpdateUrlInterceptor(preferences))
+    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = listOf(client.get(LATEST_DOMAIN_URL, Fetch.DOCUMENT).body.string())
 
     override fun Headers.Builder.configureHeaders() = set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0")
 
@@ -40,7 +38,7 @@ abstract class Zerobyw : KeiSource() {
     }
 
     private suspend fun fetchMangaList(url: HttpUrl): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("a[href*=/details/?kuid=]").map { element: Element ->
             parseMangaFromCard(element)
         }
@@ -51,7 +49,7 @@ abstract class Zerobyw : KeiSource() {
     private fun parseMangaFromCard(element: Element): SManga = SManga.create().apply {
         title = getTitle(element.selectFirst("h3")!!.text())
         setUrlWithoutDomain(element.absUrl("href"))
-        thumbnail_url = element.selectFirst("img")!!.absUrl("src")
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
     // Latest
@@ -83,15 +81,15 @@ abstract class Zerobyw : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val labs = document
             .select("main div.flex-wrap.text-sm > span")
             .eachText()
         val details = SManga.create().apply {
             title = getTitle(document.selectFirst("main h1")!!.text())
-            thumbnail_url = document.selectFirst("main img.object-contain")!!.absUrl("src")
+            thumbnail_url = document.selectFirst("main img.object-contain")?.absUrl("src")
             author = labs.firstOrNull()?.removePrefix("作者: ")
-            genre = labs.joinToString(", ")
+            genre = labs.joinToString()
             description = document.selectFirst("p[x-ref=summaryText]")?.html()?.replace("<br>", "")
             status = when {
                 labs.any { it == "连载中" } -> SManga.ONGOING
@@ -111,7 +109,7 @@ abstract class Zerobyw : KeiSource() {
     // Pages
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val images = document.select("#image-container img.manga-image")
         if (images.isEmpty()) {
             var message = document.select("div#messagetext > p")
@@ -140,6 +138,7 @@ abstract class Zerobyw : KeiSource() {
     // Helpers
 
     private companion object {
+        const val LATEST_DOMAIN_URL = "https://stevenyomi.github.io/source-domains/zerobyw.txt"
         val commentRegex = Regex("【\\d+")
     }
 

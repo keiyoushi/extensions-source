@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -50,7 +51,7 @@ abstract class YuriNeko : KeiSource() {
             .addQueryParameter("limit", popularLimit.toString())
             .addQueryParameter("sort", "views")
             .build()
-        val payload = client.get(url).parseAs<MangaListDto>()
+        val payload = client.get(url, Fetch.XHR).parseAs<MangaListDto>()
         return MangasPage(
             mangas = payload.data.map(::mangaFromDto),
             hasNextPage = false,
@@ -64,7 +65,7 @@ abstract class YuriNeko : KeiSource() {
             .addQueryParameter("limit", latestLimit.toString())
             .addQueryParameter("sort", "latest")
             .build()
-        val payload = client.get(url).parseAs<MangaListDto>()
+        val payload = client.get(url, Fetch.XHR).parseAs<MangaListDto>()
         return MangasPage(
             mangas = payload.data.map(::mangaFromDto),
             hasNextPage = payload.page < payload.lastPage,
@@ -96,7 +97,7 @@ abstract class YuriNeko : KeiSource() {
                 addQueryParameter("originalStoryId", it)
             }
         }.build()
-        val payload = client.get(url).parseAs<MangaListDto>()
+        val payload = client.get(url, Fetch.XHR).parseAs<MangaListDto>()
         return MangasPage(
             mangas = payload.data.map(::mangaFromDto),
             hasNextPage = payload.page < payload.lastPage,
@@ -147,7 +148,7 @@ abstract class YuriNeko : KeiSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", filterLimit.toString())
             .build()
-        return client.get(url).parseAs()
+        return client.get(url, Fetch.XHR).parseAs()
     }
 
     private suspend fun fetchDoujinOptions(): List<FilterOption> = coroutineScope {
@@ -171,7 +172,7 @@ abstract class YuriNeko : KeiSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", filterLimit.toString())
             .build()
-        return client.get(url).parseAs()
+        return client.get(url, Fetch.XHR).parseAs()
     }
 
     private suspend fun fetchGroupOptions(): List<FilterOption> = coroutineScope {
@@ -195,7 +196,7 @@ abstract class YuriNeko : KeiSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", filterLimit.toString())
             .build()
-        return client.get(url).parseAs()
+        return client.get(url, Fetch.XHR).parseAs()
     }
 
     // ============================== Details ===============================
@@ -204,7 +205,7 @@ abstract class YuriNeko : KeiSource() {
         mangaUrl: String,
         existingMemo: JsonObject = JsonObject(emptyMap()),
     ): SManga {
-        val details = client.get("$apiUrl/mangas/$mangaId").parseAs<MangaDetailsDto>()
+        val details = client.get("$apiUrl/mangas/$mangaId", Fetch.XHR).parseAs<MangaDetailsDto>()
 
         val authors = details.linkedAuthors.map(LinkedPersonDto::name).joinToString()
         val artists = details.linkedArtists.map(LinkedPersonDto::name).joinToString()
@@ -226,7 +227,7 @@ abstract class YuriNeko : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "manga") return null
 
-        val mangaId = url.mangaIdOrNull() ?: extractMangaIdFromDocument(client.get(url).asJsoup()) ?: return null
+        val mangaId = url.mangaIdOrNull() ?: extractMangaIdFromDocument(client.get(url, Fetch.DOCUMENT).asJsoup()) ?: return null
         return fetchMangaDetails(mangaId, "/manga/$mangaId")
     }
 
@@ -239,7 +240,7 @@ abstract class YuriNeko : KeiSource() {
         val cachedMangaId = manga.memo["mangaId"]?.stringOrNull
         val mangaId = cachedMangaId
             ?: "$baseUrl${manga.url}".toHttpUrl().mangaIdOrNull()
-            ?: extractMangaIdFromDocument(client.get("$baseUrl${manga.url}").asJsoup())
+            ?: extractMangaIdFromDocument(client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup())
             ?: throw IllegalArgumentException("Không tìm thấy manga id từ URL: ${manga.url}")
         return coroutineScope {
             val updatedManga = async {
@@ -302,7 +303,7 @@ abstract class YuriNeko : KeiSource() {
             .addQueryParameter("limit", chapterListLimit.toString())
             .addQueryParameter("sort", "desc")
             .build()
-        return client.get(url).parseAs()
+        return client.get(url, Fetch.XHR).parseAs()
     }
 
     private fun chapterSortValue(chapter: ChapterDto): Double {
@@ -335,7 +336,7 @@ abstract class YuriNeko : KeiSource() {
 
     // ============================== Pages =================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
         val imageUrls = parsePageUrls(document)
 
         return imageUrls.mapIndexed { index, imageUrl ->
@@ -384,7 +385,7 @@ abstract class YuriNeko : KeiSource() {
             ?: normalizeChapterImageUrl(value)
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val imageUrl = page.imageUrl!!
         val xIk = ImageDecryptor.extractKey(imageUrl)
 
@@ -466,7 +467,7 @@ abstract class YuriNeko : KeiSource() {
         val mangaId = manga.memo["mangaId"]?.stringOrNull
             ?: "$baseUrl${manga.url}".toHttpUrl().mangaIdOrNull()
             ?: throw IllegalArgumentException("Không tìm thấy manga id từ URL: ${manga.url}")
-        val related = client.get("$apiUrl/mangas/$mangaId/related").parseAs<List<MangaDto>>()
+        val related = client.get("$apiUrl/mangas/$mangaId/related", Fetch.XHR).parseAs<List<MangaDto>>()
         return related.map(::mangaFromDto)
     }
 

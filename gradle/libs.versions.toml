@@ -1,5 +1,5 @@
 [versions]
-android-gradle = "9.4.1"
+android-gradle = "9.5.1"
 coroutines = "1.11.0"
 serialization = "1.11.0"
 junit = "4.13.2"
@@ -44,6 +44,9 @@ jspecify = { module = "org.jspecify:jspecify", version = "1.0.1" }
 
 # app provides it as transitive dependency of okhttp-zstd
 zstd-kmp-okio = { module = "com.squareup.zstd:zstd-kmp-okio", version = "0.4.0" }
+
+# Core unit tests only, to check the WebView glue against it (kept current by Renovate); the app doesn't ship it
+androidx-webkit = { module = "androidx.webkit:webkit", version = "1.18.0" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "android-gradle" }

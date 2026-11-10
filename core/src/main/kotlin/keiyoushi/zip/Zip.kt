@@ -1,11 +1,8 @@
 package keiyoushi.zip
 
-import eu.kanade.tachiyomi.network.GET
 import keiyoushi.utils.readLongLittleEndian
 import keiyoushi.utils.readUIntLittleEndian
 import keiyoushi.utils.readUShortLittleEndian
-import okhttp3.Headers
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okio.Buffer
 import okio.BufferedSource
@@ -14,8 +11,10 @@ import okio.InflaterSource
 import okio.Source
 import okio.buffer
 import java.io.EOFException
-import java.io.IOException
+import java.nio.charset.Charset
+import java.util.zip.CRC32
 import java.util.zip.Inflater
+import java.util.zip.ZipException
 
 private const val EOCD_SIG = 0x06054b50L
 private const val EOCD64_SIG = 0x06064b50L
@@ -23,6 +22,7 @@ private const val CDH_SIG = 0x02014b50L
 private const val LFH_SIG = 0x04034b50L
 private const val EOCD_MIN_LEN = 22
 private const val EOCD64_MIN_LEN = 56
+private const val EOCD64_LOCATOR_LEN = 20
 private const val CDH_MIN_LEN = 46
 private const val LFH_MIN_LEN = 30
 private const val METHOD_STORED = 0
@@ -32,10 +32,54 @@ private const val METHOD_DEFLATE = 8
 private const val ZIP64_SENTINEL = 0xFFFFFFFFL
 private const val ZIP64_EXTRA_ID = 0x0001
 
+// General purpose bits 0 and 11: the entry is encrypted, the name is UTF-8
+private const val FLAG_ENCRYPTED = 0x0001
+private const val FLAG_UTF8 = 0x0800
+
+// Info-ZIP Unicode Path extra field: a UTF-8 copy of a name stored in another charset
+private const val UNICODE_PATH_EXTRA_ID = 0x7075
+private const val UNICODE_PATH_VERSION = 1
+
+// Offsets of the fields within each record, from APPNOTE.TXT section 4.3
+private const val EOCD_CD_SIZE_OFFSET = 12
+private const val EOCD_CD_START_OFFSET = 16
+private const val EOCD_COMMENT_LEN_OFFSET = 20
+
+// The ZIP64 record gives the size of the rest of it, which can carry extensible data
+private const val EOCD64_RECORD_SIZE_OFFSET = 4
+private const val EOCD64_CD_SIZE_OFFSET = 40
+private const val EOCD64_CD_START_OFFSET = 48
+
+private const val CDH_FLAGS_OFFSET = 8
+private const val CDH_METHOD_OFFSET = 10
+private const val CDH_COMPRESSED_SIZE_OFFSET = 20
+private const val CDH_UNCOMPRESSED_SIZE_OFFSET = 24
+private const val CDH_NAME_LEN_OFFSET = 28
+private const val CDH_EXTRA_LEN_OFFSET = 30
+private const val CDH_COMMENT_LEN_OFFSET = 32
+private const val CDH_LOCAL_HEADER_START_OFFSET = 42
+
+private const val LFH_FLAGS_OFFSET = 6
+private const val LFH_NAME_LEN_OFFSET = 26
+private const val LFH_EXTRA_LEN_OFFSET = 28
+
+// Extra field: a 2-byte id and a 2-byte data size, then the data
+private const val EXTRA_ID_OFFSET = 0
+private const val EXTRA_SIZE_OFFSET = 2
+private const val EXTRA_HEADER_LEN = 4
+
+// Unicode Path data: a 1-byte version and the 4-byte CRC-32 of the stored name, then the UTF-8 name
+private const val UNICODE_PATH_VERSION_OFFSET = 0
+private const val UNICODE_PATH_NAME_CRC_OFFSET = 1
+private const val UNICODE_PATH_NAME_OFFSET = 5
+
 /** Maximum trailing bytes to scan for the End Of Central Directory record (22-byte record + 65 535-byte max comment). */
 const val MAX_EOCD_SEARCH = EOCD_MIN_LEN + 0xFFFF + 1 // 65558
 
-/** Bytes to over-fetch ahead of an entry's data to capture its local file header in one range request. */
+/**
+ * Bytes to fetch ahead of an entry's data for its local file header when only the entry's offset and size are known.
+ * [parseCentralDirectory] adds the entry's name and extra field to it, since the local ones can be longer.
+ */
 const val MAX_LOCAL_FILE_HEADER = 512
 
 /**
@@ -54,32 +98,39 @@ class Eocd(
 /**
  * A single central-directory entry.
  *
- * @property name the entry path as stored in the archive
+ * @property name the entry path, decoded as UTF-8 when the archive flags it so, else with the charset given to [parseCentralDirectory]
  * @property method the compression method (STORED or DEFLATE)
  * @property compressedSize the on-disk size of the entry's data, in bytes
- * @property localHeaderOffset offset of the entry's local file header; ZIP-relative from [parseCentralDirectory], absolute from [readZipDirectory]
+ * @property localHeaderOffset offset of the entry's local file header; ZIP-relative from [parseCentralDirectory], absolute from [zipDirectory]
+ * @property localHeaderAllowance bytes to fetch ahead of the data for the local file header, see [dataRange]
  */
 class Entry(
     val name: String,
     val method: Int,
     val compressedSize: Long,
     val localHeaderOffset: Long,
+    val localHeaderAllowance: Int = MAX_LOCAL_FILE_HEADER,
 )
 
 /**
- * Byte range to range-fetch to read an entry: its data plus [MAX_LOCAL_FILE_HEADER] bytes of headroom
- * for the local file header. The offset must be absolute, as resolved by [readZipDirectory]. Useful
- * when only the raw offset and size are on hand rather than an [Entry].
+ * Byte range to range-fetch to read an entry: its data plus [localHeaderAllowance] bytes ahead of it for the local file
+ * header. The offset must be absolute, as resolved by [zipDirectory]. Useful when only the raw fields are on hand rather
+ * than an [Entry]; keep [Entry.localHeaderAllowance] with them for entries with long names.
  *
  * @param localHeaderOffset absolute offset of the entry's local file header
  * @param compressedSize the entry's on-disk data size
+ * @param localHeaderAllowance bytes to fetch for the local file header, from [Entry.localHeaderAllowance]
  * @return the inclusive range covering the local header and the entry's data
  */
-fun dataRange(localHeaderOffset: Long, compressedSize: Long): LongRange = localHeaderOffset..localHeaderOffset + MAX_LOCAL_FILE_HEADER + compressedSize
+fun dataRange(
+    localHeaderOffset: Long,
+    compressedSize: Long,
+    localHeaderAllowance: Int = MAX_LOCAL_FILE_HEADER,
+): LongRange = localHeaderOffset..localHeaderOffset + localHeaderAllowance + compressedSize
 
-/** Byte range to range-fetch to read this entry, via [dataRange]; assumes an absolute offset, as from [readZipDirectory]. */
+/** Byte range to range-fetch to read this entry, via [dataRange]; assumes an absolute offset, as from [zipDirectory]. */
 val Entry.dataRange: LongRange
-    get() = dataRange(localHeaderOffset, compressedSize)
+    get() = dataRange(localHeaderOffset, compressedSize, localHeaderAllowance)
 
 /**
  * A parsed central directory with absolute file offsets.
@@ -98,122 +149,119 @@ class ZipDirectory(
  *
  * @param tail the final bytes of the archive, ending exactly at its end and long enough to contain the End Of Central Directory record
  * @return the parsed [Eocd]
- * @throws IllegalStateException if no valid EOCD record is present in [tail]
+ * @throws ZipException if no valid EOCD record is present in [tail], or a ZIP64 one it points to is missing
  */
 fun findEocd(tail: ByteArray): Eocd {
     for (i in tail.size - EOCD_MIN_LEN downTo 0) {
         if (tail.readUIntLittleEndian(i) != EOCD_SIG) continue
-        val commentLen = tail.readUShortLittleEndian(i + 20)
+        val commentLen = tail.readUShortLittleEndian(i + EOCD_COMMENT_LEN_OFFSET)
         if (i + EOCD_MIN_LEN + commentLen != tail.size) continue
 
-        var cdSize = tail.readUIntLittleEndian(i + 12)
-        var cdOffset = tail.readUIntLittleEndian(i + 16)
+        var cdSize = tail.readUIntLittleEndian(i + EOCD_CD_SIZE_OFFSET)
+        var cdOffset = tail.readUIntLittleEndian(i + EOCD_CD_START_OFFSET)
         var recordOffset = i
 
         if (cdOffset == ZIP64_SENTINEL || cdSize == ZIP64_SENTINEL) {
-            for (j in i - EOCD64_MIN_LEN downTo 0) {
-                if (tail.readUIntLittleEndian(j) != EOCD64_SIG) continue
-                cdSize = tail.readLongLittleEndian(j + 40)
-                cdOffset = tail.readLongLittleEndian(j + 48)
-                recordOffset = j
-                break
-            }
+            // The ZIP64 record ends where its 20-byte locator, just before this record, starts
+            val j = findZip64Record(tail, end = i - EOCD64_LOCATOR_LEN) ?: throw ZipException("ZIP64 end of central directory record not found")
+            cdSize = tail.readLongLittleEndian(j + EOCD64_CD_SIZE_OFFSET)
+            cdOffset = tail.readLongLittleEndian(j + EOCD64_CD_START_OFFSET)
+            recordOffset = j
         }
         return Eocd(cdOffset, cdSize, recordOffset)
     }
-    throw IllegalStateException("EOCD record not found")
+    throw ZipException("End of central directory record not found")
+}
+
+/** Returns the offset in [tail] of the ZIP64 record whose size says it ends at [end], or null if there is none. */
+private fun findZip64Record(tail: ByteArray, end: Int): Int? = (end - EOCD64_MIN_LEN downTo 0).firstOrNull { j ->
+    tail.readUIntLittleEndian(j) == EOCD64_SIG &&
+        j + EOCD64_RECORD_SIZE_OFFSET + Long.SIZE_BYTES + tail.readLongLittleEndian(j + EOCD64_RECORD_SIZE_OFFSET) == end.toLong()
 }
 
 /**
  * Parses central-directory bytes into their [Entry], resolving ZIP64 sizes and offsets from each entry's extra field.
  *
+ * Names flagged as UTF-8 (general purpose bit 11), or carrying an Info-ZIP Unicode Path extra field that matches them,
+ * are read as UTF-8 whatever [charset] is.
+ *
  * @param cd the central-directory bytes, as located by [findEocd]
+ * @param charset the charset of names not flagged as UTF-8, e.g. `Charset.forName("MS932")` for archives made by Japanese tools
  * @return the entries in directory order, with ZIP-relative offsets
+ * @throws ZipException if a header runs past the end of [cd]
  */
-fun parseCentralDirectory(cd: ByteArray): List<Entry> {
+fun parseCentralDirectory(cd: ByteArray, charset: Charset = Charsets.UTF_8): List<Entry> {
     val entries = ArrayList<Entry>()
     var p = 0
     while (p + CDH_MIN_LEN <= cd.size && cd.readUIntLittleEndian(p) == CDH_SIG) {
-        val nameLen = cd.readUShortLittleEndian(p + 28)
-        val extraLen = cd.readUShortLittleEndian(p + 30)
-        val commentLen = cd.readUShortLittleEndian(p + 32)
+        val flags = cd.readUShortLittleEndian(p + CDH_FLAGS_OFFSET)
+        val nameLen = cd.readUShortLittleEndian(p + CDH_NAME_LEN_OFFSET)
+        val extraLen = cd.readUShortLittleEndian(p + CDH_EXTRA_LEN_OFFSET)
+        val commentLen = cd.readUShortLittleEndian(p + CDH_COMMENT_LEN_OFFSET)
+        val nameStart = p + CDH_MIN_LEN
+        val headerEnd = nameStart + nameLen + extraLen + commentLen
+        if (headerEnd > cd.size) throw ZipException("Truncated central directory")
+        val storedName = cd.copyOfRange(nameStart, nameStart + nameLen)
+        val extra = cd.copyOfRange(nameStart + nameLen, nameStart + nameLen + extraLen)
 
-        var compressedSize = cd.readUIntLittleEndian(p + 20)
-        val uncompressedSize = cd.readUIntLittleEndian(p + 24)
-        var localHeaderOffset = cd.readUIntLittleEndian(p + 42)
+        var compressedSize = cd.readUIntLittleEndian(p + CDH_COMPRESSED_SIZE_OFFSET)
+        val uncompressedSize = cd.readUIntLittleEndian(p + CDH_UNCOMPRESSED_SIZE_OFFSET)
+        var localHeaderOffset = cd.readUIntLittleEndian(p + CDH_LOCAL_HEADER_START_OFFSET)
 
         if (compressedSize == ZIP64_SENTINEL || localHeaderOffset == ZIP64_SENTINEL || uncompressedSize == ZIP64_SENTINEL) {
-            var z = zip64ExtraOffset(cd, p + CDH_MIN_LEN + nameLen, extraLen)
-            if (z >= 0) {
-                if (uncompressedSize == ZIP64_SENTINEL) z += 8
+            // The ZIP64 field holds, in order, only the sizes and offset whose 32-bit field is the sentinel
+            val zip64 = extra.extraField(ZIP64_EXTRA_ID)
+            if (zip64 != null) {
+                var z = 0
+                if (uncompressedSize == ZIP64_SENTINEL) z += Long.SIZE_BYTES
                 if (compressedSize == ZIP64_SENTINEL) {
-                    compressedSize = cd.readLongLittleEndian(z)
-                    z += 8
+                    compressedSize = zip64.readLongLittleEndian(z)
+                    z += Long.SIZE_BYTES
                 }
                 if (localHeaderOffset == ZIP64_SENTINEL) {
-                    localHeaderOffset = cd.readLongLittleEndian(z)
+                    localHeaderOffset = zip64.readLongLittleEndian(z)
                 }
             }
         }
 
         entries += Entry(
-            name = String(cd, p + CDH_MIN_LEN, nameLen, Charsets.UTF_8),
-            method = cd.readUShortLittleEndian(p + 10),
+            name = if (flags and FLAG_UTF8 != 0) {
+                String(storedName, Charsets.UTF_8)
+            } else {
+                extra.extraField(UNICODE_PATH_EXTRA_ID)?.let { unicodePath(it, storedName) } ?: String(storedName, charset)
+            },
+            method = cd.readUShortLittleEndian(p + CDH_METHOD_OFFSET),
             compressedSize = compressedSize,
             localHeaderOffset = localHeaderOffset,
+            localHeaderAllowance = LFH_MIN_LEN + nameLen + extraLen + MAX_LOCAL_FILE_HEADER,
         )
-        p += CDH_MIN_LEN + nameLen + extraLen + commentLen
+        p = headerEnd
     }
     return entries
 }
 
-/** Returns the byte offset of the ZIP64 extra field's data within [cd], or -1 if not present. */
-private fun zip64ExtraOffset(cd: ByteArray, extraStart: Int, extraLen: Int): Int {
-    var q = extraStart
-    val end = extraStart + extraLen
-    while (q + 4 <= end) {
-        val id = cd.readUShortLittleEndian(q)
-        val size = cd.readUShortLittleEndian(q + 2)
-        if (id == ZIP64_EXTRA_ID) return q + 4
-        q += 4 + size
+/** Returns the data of the extra field [id] in this extra block, or null if the block has no such field. */
+private fun ByteArray.extraField(id: Int): ByteArray? {
+    var p = 0
+    while (p + EXTRA_HEADER_LEN <= size) {
+        val dataStart = p + EXTRA_HEADER_LEN
+        val dataEnd = dataStart + readUShortLittleEndian(p + EXTRA_SIZE_OFFSET)
+        if (dataEnd > size) return null
+        if (readUShortLittleEndian(p + EXTRA_ID_OFFSET) == id) return copyOfRange(dataStart, dataEnd)
+        p = dataEnd
     }
-    return -1
+    return null
 }
 
 /**
- * Fetches and parses an archive's central directory, resolving every entry offset to an absolute file position.
- *
- * Reads the tail with a plain `bytes=start-end` request derived from [totalSize]. Use this when the size is
- * known up front and the host does not serve `bytes=-N` suffix ranges.
- *
- * See also [zipDirectory], which gets the size and tail in a single request.
- *
- * @param totalSize the total size of the resource, in bytes
- * @param fetch returns the bytes of a given inclusive byte range; read fully and closed by this function
- * @return the parsed [ZipDirectory]
- * @throws IllegalStateException if the archive has no valid EOCD record
+ * The UTF-8 name in an Info-ZIP Unicode Path [field]. Null when the field's CRC-32 doesn't match [storedName], which
+ * means the stored name was changed after the field was written.
  */
-fun readZipDirectory(totalSize: Long, fetch: (LongRange) -> BufferedSource): ZipDirectory {
-    val tailStart = maxOf(0L, totalSize - MAX_EOCD_SEARCH)
-    val tail = fetch(tailStart..<totalSize).use { it.readByteArray() }
-    return readZipDirectory(tail, totalSize, fetch)
-}
-
-/**
- * Parses the central directory from an already-fetched [tail], the final bytes of the archive ending
- * exactly at its end. Useful with a `bytes=-N` suffix range, which returns the size and tail together
- * in one request; [fetch] is then called only when the directory falls outside [tail].
- *
- * @param tail the final bytes of the archive
- * @param totalSize the resource's total size
- * @param fetch returns the bytes of an inclusive byte range; read fully and closed by this function
- * @return the parsed [ZipDirectory]
- * @throws IllegalStateException if [tail] holds no valid EOCD record
- */
-fun readZipDirectory(tail: ByteArray, totalSize: Long, fetch: (LongRange) -> BufferedSource): ZipDirectory {
-    val location = locateCentralDirectory(tail, totalSize)
-    val cd = location.bytes ?: fetch(location.range).use { it.readByteArray() }
-    return location.parse(cd)
+private fun unicodePath(field: ByteArray, storedName: ByteArray): String? {
+    if (field.size < UNICODE_PATH_NAME_OFFSET || field[UNICODE_PATH_VERSION_OFFSET].toInt() != UNICODE_PATH_VERSION) return null
+    val storedNameCrc = CRC32().apply { update(storedName) }.value
+    if (field.readUIntLittleEndian(UNICODE_PATH_NAME_CRC_OFFSET) != storedNameCrc) return null
+    return String(field, UNICODE_PATH_NAME_OFFSET, field.size - UNICODE_PATH_NAME_OFFSET, Charsets.UTF_8)
 }
 
 /**
@@ -228,10 +276,10 @@ internal class CentralDirectory(
     private val zipStart: Long,
     private val cdOffset: Long,
 ) {
-    /** Parses [cd] into a [ZipDirectory] with absolute offsets. */
-    fun parse(cd: ByteArray): ZipDirectory {
-        val entries = parseCentralDirectory(cd).let { list ->
-            if (zipStart == 0L) list else list.map { Entry(it.name, it.method, it.compressedSize, zipStart + it.localHeaderOffset) }
+    /** Parses [cd] into a [ZipDirectory] with absolute offsets, decoding names not flagged as UTF-8 with [charset]. */
+    fun parse(cd: ByteArray, charset: Charset): ZipDirectory {
+        val entries = parseCentralDirectory(cd, charset).let { list ->
+            if (zipStart == 0L) list else list.map { Entry(it.name, it.method, it.compressedSize, zipStart + it.localHeaderOffset, it.localHeaderAllowance) }
         }
         return ZipDirectory(entries, zipStart + cdOffset)
     }
@@ -264,7 +312,7 @@ internal fun locateCentralDirectory(tail: ByteArray, totalSize: Long): CentralDi
  * @param method the compression method, from [Entry.method]
  * @param decode transform applied to the bounded raw payload before inflation; defaults to identity
  * @return a [Source] yielding the entry's decompressed bytes
- * @throws IllegalArgumentException if [method] is unsupported or the local header signature is missing
+ * @throws ZipException if [method] is unsupported, the local header signature is missing or the entry is encrypted
  */
 fun readEntry(
     source: BufferedSource,
@@ -272,31 +320,17 @@ fun readEntry(
     method: Int,
     decode: (BufferedSource) -> Source = { it },
 ): Source {
-    require(method == METHOD_STORED || method == METHOD_DEFLATE) { "Unsupported ZIP method: $method" }
+    if (method != METHOD_STORED && method != METHOD_DEFLATE) throw ZipException("Unsupported ZIP method: $method")
     skipLocalHeader(source)
     val payload = decode(source.fixedLength(compressedSize).buffer())
     return if (method == METHOD_DEFLATE) InflaterSource(payload, Inflater(true)) else payload
 }
 
-/**
- * Range-fetches and reads an [entry] already in hand; a convenience over [readEntry].
- * The result is lazy and closing it closes the fetched source.
- *
- * @param entry the entry to read, with an absolute offset
- * @param decode transform applied to the raw payload before inflation; defaults to identity
- * @param fetch returns the bytes of the entry's [Entry.dataRange]
- * @return a [Source] yielding the entry's decompressed bytes
- */
-fun readZipEntry(
-    entry: Entry,
-    decode: (BufferedSource) -> Source = { it },
-    fetch: (LongRange) -> BufferedSource,
-): Source = readEntry(fetch(entry.dataRange), entry.compressedSize, entry.method, decode)
-
 private fun skipLocalHeader(source: BufferedSource) {
     val header = source.readByteArray(LFH_MIN_LEN.toLong())
-    require(header.readUIntLittleEndian(0) == LFH_SIG) { "Not a local file header" }
-    source.skip((header.readUShortLittleEndian(26) + header.readUShortLittleEndian(28)).toLong())
+    if (header.readUIntLittleEndian(0) != LFH_SIG) throw ZipException("Not a local file header")
+    if (header.readUShortLittleEndian(LFH_FLAGS_OFFSET) and FLAG_ENCRYPTED != 0) throw ZipException("Encrypted ZIP entries aren't supported")
+    source.skip((header.readUShortLittleEndian(LFH_NAME_LEN_OFFSET) + header.readUShortLittleEndian(LFH_EXTRA_LEN_OFFSET)).toLong())
 }
 
 /**
@@ -323,40 +357,3 @@ private class FixedLengthSource(
 
 /** Sets the `Range` header to the inclusive byte [range]. */
 fun Request.Builder.range(range: LongRange): Request.Builder = header("Range", "bytes=${range.first}-${range.last}")
-
-/**
- * Fetches and parses a remote ZIP's central directory over HTTP range requests.
- *
- * A single `bytes=-N` suffix request yields both the total size from Content-Range and the trailing
- * bytes, so the directory is read in one request unless it lies outside that tail.
- *
- * @param url the archive URL
- * @param headers headers to send with every request
- * @return the parsed [ZipDirectory], with absolute offsets
- * @throws IOException if the total size cannot be read from the Content-Range
- * @throws IllegalStateException if the archive has no valid EOCD record
- */
-fun OkHttpClient.zipDirectory(url: String, headers: Headers): ZipDirectory {
-    val response = newCall(GET(url, headers).newBuilder().header("Range", "bytes=-$MAX_EOCD_SEARCH").build()).execute()
-    val total = response.header("Content-Range")?.substringAfterLast("/")?.toLongOrNull() ?: throw IOException("Missing or invalid Content-Range")
-    return readZipDirectory(response.body.bytes(), total) { rangeSource(url, headers, it) }
-}
-
-/**
- * Reads one [entry] from [url] over a range request.
- * The result is lazy and closing it closes the underlying response.
- *
- * @param url the archive URL
- * @param entry the entry to read, from [zipDirectory]
- * @param headers headers to send
- * @param decode transform applied to the raw payload before inflation; identity by default
- * @return a [Source] yielding the entry's decompressed bytes
- */
-fun OkHttpClient.readZipEntry(
-    url: String,
-    entry: Entry,
-    headers: Headers,
-    decode: (BufferedSource) -> Source = { it },
-): Source = readZipEntry(entry, decode) { rangeSource(url, headers, it) }
-
-private fun OkHttpClient.rangeSource(url: String, headers: Headers, range: LongRange): BufferedSource = newCall(GET(url, headers).newBuilder().range(range).build()).execute().body.source()

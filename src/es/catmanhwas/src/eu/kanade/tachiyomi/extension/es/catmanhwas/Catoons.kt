@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -44,7 +45,7 @@ abstract class Catoons : KeiSource() {
             .addQueryParameter("payload", "[$page]".toBase64())
             .build()
 
-        val result = client.get(url).parseAs<SvelteResultDto>().getResult()
+        val result = client.get(url, Fetch.XHR).parseAs<SvelteResultDto>().getResult()
         val data = decodeSvelte(result.jsonArray).parseAs<LatestChaptersDto>()
 
         val mangas = data.data.map { it.toSManga() }.distinctBy { it.url }
@@ -66,7 +67,7 @@ abstract class Catoons : KeiSource() {
 
         url.addQueryParameter("x-sveltekit-invalidated", "001")
 
-        val dataNode = client.get(url.build()).parseAs<SvelteDataDto>().getDataNode()
+        val dataNode = client.get(url.build(), Fetch.XHR).parseAs<SvelteDataDto>().getDataNode()
         val data = decodeSvelte(dataNode).parseAs<BrowseDto>()
         return MangasPage(data.series.map { it.toSManga() }, data.hasNextPage())
     }
@@ -117,7 +118,7 @@ abstract class Catoons : KeiSource() {
             .addQueryParameter("x-sveltekit-invalidated", "001")
             .build()
 
-        val dataNode = client.get(url).parseAs<SvelteDataDto>().getDataNode()
+        val dataNode = client.get(url, Fetch.XHR).parseAs<SvelteDataDto>().getDataNode()
         return decodeSvelte(dataNode).parseAs<SeriesPageDto>()
     }
 
@@ -126,7 +127,7 @@ abstract class Catoons : KeiSource() {
             .addQueryParameter("payload", """["$slug"]""".toBase64())
             .build()
 
-        val result = client.get(url).parseAs<SvelteResultDto>().getResult()
+        val result = client.get(url, Fetch.XHR).parseAs<SvelteResultDto>().getResult()
         return decodeSvelte(result.jsonArray).parseAs<DetailsDto>()
     }
 
@@ -149,7 +150,7 @@ abstract class Catoons : KeiSource() {
             .addQueryParameter("payload", getChapterPayload(slug, page))
             .build()
 
-        val result = client.get(url).parseAs<SvelteResultDto>().getResult()
+        val result = client.get(url, Fetch.XHR).parseAs<SvelteResultDto>().getResult()
         return decodeSvelte(result.jsonArray).parseAs<ChapterDataDto>()
     }
 
@@ -163,7 +164,7 @@ abstract class Catoons : KeiSource() {
             .addQueryParameter("x-sveltekit-invalidated", "001")
             .build()
 
-        val dataNode = client.get(url).parseAs<SvelteDataDto>().getDataNode()
+        val dataNode = client.get(url, Fetch.XHR).parseAs<SvelteDataDto>().getDataNode()
         return decodeSvelte(dataNode).parseAs<ChapterPageDto>().toPages()
     }
 

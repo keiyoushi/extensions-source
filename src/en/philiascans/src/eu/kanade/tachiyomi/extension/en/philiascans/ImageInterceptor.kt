@@ -6,6 +6,9 @@ import android.graphics.Canvas
 import android.graphics.Rect
 import keiyoushi.utils.aesCtr
 import keiyoushi.utils.decodeHex
+import keiyoushi.utils.hmacSha256
+import keiyoushi.utils.readIntLittleEndian
+import keiyoushi.utils.writeIntLittleEndian
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
@@ -104,7 +107,7 @@ class ImageInterceptor : Interceptor {
         val c = IntArray(gridSizeSq) { it }
 
         if (gridSizeSq >= 2) {
-            val tilesSig = initMac(chapterKey).doFinal("tiles:$pageIndex".toByteArray(Charsets.UTF_8))
+            val tilesSig = "tiles:$pageIndex".hmacSha256(chapterKey)
             val mac = initMac(tilesSig)
             var nCounter = 0
             var rBuf = ByteBuffer.allocate(0)
@@ -152,7 +155,7 @@ class ImageInterceptor : Interceptor {
     }
 
     private fun aesCtrCipher(chapterKey: ByteArray, pageIndex: Int, prefix: String): Cipher {
-        val derivedKey = initMac(chapterKey).doFinal("$prefix$pageIndex".toByteArray(Charsets.UTF_8))
+        val derivedKey = "$prefix$pageIndex".hmacSha256(chapterKey)
         return aesCtr(derivedKey, ByteArray(16))
     }
 
@@ -164,10 +167,6 @@ class ImageInterceptor : Interceptor {
         fun initMac(key: ByteArray): Mac = Mac.getInstance("HmacSHA256").also { it.init(SecretKeySpec(key, "HmacSHA256")) }
     }
 }
-
-// -------------------------------------------------------------
-// Stream Wrappers to avoid ByteArray Memory limits
-// -------------------------------------------------------------
 
 private class XorKeystreamSource(
     private val upstream: Source,
@@ -207,7 +206,7 @@ private class ChaCha20Source(
     chapterKey: ByteArray,
     pageIndex: Int,
 ) : Source {
-    private val key = ImageInterceptor.initMac(chapterKey).doFinal("cc:$pageIndex".toByteArray(Charsets.UTF_8))
+    private val key = "cc:$pageIndex".hmacSha256(chapterKey)
     private val nonce = ByteArray(12)
     private var counter = 0
     private var blockOffset = 0
@@ -242,12 +241,12 @@ private class ChaCha20Source(
         state[2] = 0x79622d32
         state[3] = 0x6b206574
         for (i in 0 until 8) {
-            state[4 + i] = key.readLittleEndianInt(i * 4)
+            state[4 + i] = key.readIntLittleEndian(i * 4)
         }
         state[12] = counter
-        state[13] = nonce.readLittleEndianInt(0)
-        state[14] = nonce.readLittleEndianInt(4)
-        state[15] = nonce.readLittleEndianInt(8)
+        state[13] = nonce.readIntLittleEndian(0)
+        state[14] = nonce.readIntLittleEndian(4)
+        state[15] = nonce.readIntLittleEndian(8)
 
         val working = state.copyOf()
         repeat(10) {
@@ -263,7 +262,7 @@ private class ChaCha20Source(
 
         val block = ByteArray(64)
         for (i in 0 until 16) {
-            block.writeLittleEndianInt(i * 4, working[i] + state[i])
+            block.writeIntLittleEndian(i * 4, working[i] + state[i])
         }
         return block
     }
@@ -278,16 +277,4 @@ private class ChaCha20Source(
         state[c] += state[d]
         state[b] = Integer.rotateLeft(state[b] xor state[c], 7)
     }
-}
-
-private fun ByteArray.readLittleEndianInt(offset: Int): Int = (this[offset].toInt() and 0xFF) or
-    ((this[offset + 1].toInt() and 0xFF) shl 8) or
-    ((this[offset + 2].toInt() and 0xFF) shl 16) or
-    ((this[offset + 3].toInt() and 0xFF) shl 24)
-
-private fun ByteArray.writeLittleEndianInt(offset: Int, value: Int) {
-    this[offset] = value.toByte()
-    this[offset + 1] = (value ushr 8).toByte()
-    this[offset + 2] = (value ushr 16).toByte()
-    this[offset + 3] = (value ushr 24).toByte()
 }

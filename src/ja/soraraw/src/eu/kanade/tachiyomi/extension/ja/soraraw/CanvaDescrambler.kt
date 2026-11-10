@@ -1,8 +1,7 @@
 package eu.kanade.tachiyomi.extension.ja.soraraw
 
 import keiyoushi.utils.SeedRandom
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
+import keiyoushi.utils.hmacSha256
 import kotlin.math.floor
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -22,10 +21,7 @@ object CanvaDescrambler {
     private class Move(val src: Int, val transform: Transform)
 
     fun descramble(pixels: IntArray, width: Int, height: Int, chapterId: String, token: String): IntArray {
-        val key = Mac.getInstance("HmacSHA256").run {
-            init(SecretKeySpec(token.toByteArray(), "HmacSHA256"))
-            doFinal(chapterId.toByteArray()).toHexString()
-        }
+        val key = chapterId.hmacSha256(token.encodeToByteArray()).toHexString()
 
         val splitRng = SeedRandom(key)
         val cols = split(width, splitRng)

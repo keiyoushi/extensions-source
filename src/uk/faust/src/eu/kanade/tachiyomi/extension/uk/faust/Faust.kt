@@ -12,12 +12,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
@@ -36,13 +38,13 @@ abstract class Faust :
     KeiSource(),
     ConfigurableSource {
 
-    private val domain get() = baseUrl.toHttpUrl().host
-    private val apiUrl get() = "https://$domain/api"
+    private val domain get() = baseUrl.toHttpUrl()
+    private val apiUrl get() = "https://${domain.host}/api"
 
     private val preferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        rateLimit(10) { it.host == domain }
+        rateLimit(10) { it.host == domain.host }
         addInterceptor(AuthInterceptor({ client }, { baseUrl }))
     }
 
@@ -107,7 +109,7 @@ abstract class Faust :
 
         val body = requestBodyData.toJsonRequestBody()
 
-        client.post(url, body).use { response ->
+        client.post(url, Fetch.XHR, body).use { response ->
             val data = response.parseAs<SearchResponseDto>()
             val mangas = data.titles.map { it.toSManga() }
             return MangasPage(mangas, (data.totalPages > data.page))
@@ -135,7 +137,7 @@ abstract class Faust :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val url = "$apiUrl/titles/${manga.url}"
-        client.get(url).use { response ->
+        client.get(url, Fetch.XHR).use { response ->
             val data = response.parseAs<SMangaDto>()
             val manga = data.toSManga()
             val chapters = data.makeSChapters(manga.url).reversed()
@@ -153,12 +155,15 @@ abstract class Faust :
 
     // ============================== Images ===============================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
+        if (chapter.memo["age"]?.stringOrNull == "AdultsOnly" && !client.cookieJar.loadForRequest(domain).any { it.name == "refresh_token" }) {
+            throw Exception("Для перегляду розділів 18+ необхідно увійти до облікового запису у WebView.")
+        }
         val (chapterSlug, seriesSlug) = chapter.url.split("/", limit = 2)
         val url = "$apiUrl/chapters/$chapterSlug?titleSlug=$seriesSlug"
-        val data = client.get(url, ensureSuccess = false).use { response ->
+        val data = client.get(url, Fetch.XHR, ensureSuccess = false).use { response ->
             if (!response.isSuccessful) {
                 if (response.code == 403 && response.body.string().contains("необхідно увійти")) {
-                    throw Exception("Для перегляду розділів 18+ необхідно увійти до облікового запису у WebView. \nАбо повторно увійдіть, щоб оновити інформацію.")
+                    throw Exception("Для перегляду розділів 18+ необхідно увійти до облікового запису у WebView.")
                 } else {
                     throw HttpException(response.code)
                 }
@@ -175,12 +180,12 @@ abstract class Faust :
 
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
         val genres = async {
-            client.get("$apiUrl/genres/paged?page=1&pageSize=100").use { genres ->
+            client.get("$apiUrl/genres/paged?page=1&pageSize=100", Fetch.XHR).use { genres ->
                 genres.parseAs<GenreListPageDto>().items.map { it.name to it.id }
             }
         }
         val tags = async {
-            client.get("$apiUrl/tags/paged?page=1&pageSize=150").use { tags ->
+            client.get("$apiUrl/tags/paged?page=1&pageSize=150", Fetch.XHR).use { tags ->
                 tags.parseAs<GenreListPageDto>().items.map { it.name to it.id }
             }
         }
@@ -192,27 +197,33 @@ abstract class Faust :
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        data?.let {
-            val dto = it.parseAs<FiltersDto>()
-            GenresFilter.options = dto.genres
-            TagsFilter.options = dto.tags
+        val filters = mutableListOf<Filter<*>>()
+        filters.add(OrderBy())
+        data?.parseAs<FiltersDto>()?.let {
+            if (it.genres?.isNotEmpty() == true) {
+                val ignoredGenres = ignoreGenres()
+                GenresFilter.options = it.genres
+                filters.add(Filter.Separator())
+                filters.add(GenresFilter(ignoredGenres))
+            }
+            if (it.tags?.isNotEmpty() == true) {
+                TagsFilter.options = it.tags
+                filters.add(Filter.Separator())
+                filters.add(TagsFilter())
+            }
         }
-        val ignoredGenres = ignoreGenres()
-        val filters = mutableListOf(
-            OrderBy(),
-            Filter.Separator(),
-            GenresFilter(ignoredGenres),
-            Filter.Separator(),
-            TagsFilter(),
-            Filter.Separator(),
-            CategoriesFilter(),
-            TranslationStatusFilter(),
-            PublicationStatusFilter(),
-            AgeStatusFilter(),
-            Filter.Separator(),
-            ChaptersRangeFilter(),
-            Filter.Separator(),
-            YearRangeFilter(),
+        filters.addAll(
+            listOf(
+                Filter.Separator(),
+                CategoriesFilter(),
+                TranslationStatusFilter(),
+                PublicationStatusFilter(),
+                AgeStatusFilter(),
+                Filter.Separator(),
+                ChaptersRangeFilter(),
+                Filter.Separator(),
+                YearRangeFilter(),
+            ),
         )
         return FilterList(filters)
     }

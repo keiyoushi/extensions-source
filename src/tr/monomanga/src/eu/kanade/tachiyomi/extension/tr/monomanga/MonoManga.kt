@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -35,7 +36,7 @@ abstract class MonoManga : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList("$baseUrl/manga?page=$page&sort=most_chapters".toHttpUrl())
 
     private suspend fun parseMangaList(url: HttpUrl): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("article.manga-card")
             .filterNot { element ->
                 element.select("span").any { it.text().lowercase(Locale.ROOT) == "novel" }
@@ -95,7 +96,7 @@ abstract class MonoManga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val dto = client.get(baseUrl + manga.url, rscHeaders).extractNextJs<MangaPageDto> {
+        val dto = client.get(baseUrl + manga.url, rscHeaders, Fetch.XHR).extractNextJs<MangaPageDto> {
             it is JsonObject && "manga" in it && "initialChapters" in it
         } ?: throw Exception("Manga detayları ayıklanamadı (Failed to extract manga details)")
 
@@ -146,7 +147,7 @@ abstract class MonoManga : KeiSource() {
                 for (volume in dto.manga.volumes.reversed()) {
                     val minCh = volume.startChapter.toString().removeSuffix(".0")
                     val maxCh = volume.endChapter.toString().removeSuffix(".0")
-                    val apiDto = client.get("$baseUrl/api/manga/${dto.manga.id}/chapters?sort=desc&minChapter=$minCh&maxChapter=$maxCh")
+                    val apiDto = client.get("$baseUrl/api/manga/${dto.manga.id}/chapters?sort=desc&minChapter=$minCh&maxChapter=$maxCh", Fetch.XHR)
                         .parseAs<ChapterListResponseDto>()
                     for (ch in apiDto.data) {
                         val sChapter = ch.toSChapter(dto.manga.slug)
@@ -160,7 +161,7 @@ abstract class MonoManga : KeiSource() {
                 var offset = chapters.size
                 var hasMore = true
                 while (hasMore) {
-                    val apiDto = client.get("$baseUrl/api/manga/${dto.manga.id}/chapters?sort=desc&limit=100&offset=$offset")
+                    val apiDto = client.get("$baseUrl/api/manga/${dto.manga.id}/chapters?sort=desc&limit=100&offset=$offset", Fetch.XHR)
                         .parseAs<ChapterListResponseDto>()
                     for (ch in apiDto.data) {
                         val sChapter = ch.toSChapter(dto.manga.slug)
@@ -179,7 +180,7 @@ abstract class MonoManga : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val dto = client.get(baseUrl + chapter.url, rscHeaders).extractNextJs<ChapterPageDto> {
+        val dto = client.get(baseUrl + chapter.url, rscHeaders, Fetch.XHR).extractNextJs<ChapterPageDto> {
             it is JsonObject && (it["chapter"] as? JsonObject)?.containsKey("content") == true
         } ?: throw Exception("Sayfa listesi ayıklanamadı (Failed to extract page list)")
 

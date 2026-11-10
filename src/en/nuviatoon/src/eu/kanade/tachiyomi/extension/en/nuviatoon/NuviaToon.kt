@@ -12,12 +12,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
+import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -27,7 +29,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 abstract class NuviaToon :
     KeiSource(),
     ConfigurableSource {
-
     private val preferences by getPreferencesLazy()
 
     override fun Headers.Builder.configureHeaders() = add("Accept", "application/json")
@@ -50,7 +51,7 @@ abstract class NuviaToon :
             addQueryParameter("sort", sort)
         }.build()
 
-        return client.get(url).parseAs<ComicsResponse>().toMangasPage()
+        return client.get(url, Fetch.XHR).parseAs<ComicsResponse>().toMangasPage()
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -71,13 +72,13 @@ abstract class NuviaToon :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val detail = client.get("$baseUrl/api/comics/${manga.url}").parseAs<DetailResponse>().data
+        val detail = client.get("$baseUrl/api/comics/${manga.url}", Fetch.XHR).parseAs<DetailResponse>().data
         return SMangaUpdate(detail.toSManga(), detail.toSChapterList(preferences.hideLockedChapters()))
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val id = chapter.memo["chapterId"]?.stringOrNull ?: return emptyList()
-        val response = client.get("$baseUrl/api/comic-chapters/$id/content", ensureSuccess = false)
+        val response = client.get("$baseUrl/api/comic-chapters/$id/content", Fetch.XHR, ensureSuccess = false)
         if (!response.isSuccessful) {
             response.close()
             throw when (response.code) {
@@ -88,13 +89,26 @@ abstract class NuviaToon :
         return response.parseAs<ContentResponse>().data.toPageList()
     }
 
-    override fun getFilterList(data: JsonElement?) = FilterList(
-        SortFilter(),
-        StatusFilter(),
-        GenreFilter(),
-        TypeFilter(),
-        RatingFilter(),
-    )
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/genres", Fetch.XHR)
+        .parseAs<GenresResponse>().data
+        .map { it.name.toTitleCase() to it.slug }
+        .toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.parseAs<List<Pair<String, String>>>().orEmpty()
+
+        return FilterList(
+            buildList {
+                add(SortFilter())
+                add(StatusFilter())
+                if (genres.isNotEmpty()) add(GenreFilter(genres))
+                add(TypeFilter())
+                add(RatingFilter())
+            },
+        )
+    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {

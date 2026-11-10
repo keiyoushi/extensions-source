@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.WebViewTimeoutException
@@ -71,7 +72,7 @@ abstract class GolgeBahcesi : KeiSource() {
             }
         }.build()
 
-        val result = client.get(url).parseAs<SeriesListResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<SeriesListResponse>()
         val mangas = result.data.map { it.toSManga() }
         val hasNextPage = result.pagination?.let { it.currentPage < it.totalPages } ?: false
         return MangasPage(mangas, hasNextPage)
@@ -83,6 +84,7 @@ abstract class GolgeBahcesi : KeiSource() {
 
     override suspend fun fetchRelatedMangaList(manga: SManga) = client.get(
         "$apiBaseUrl/recommendations/series/${manga.url}/similar",
+        Fetch.XHR,
     ).parseAs<Recommended>().recommendations.map { it.toSManga() }
 
     override suspend fun fetchMangaUpdate(
@@ -93,14 +95,14 @@ abstract class GolgeBahcesi : KeiSource() {
     ): SMangaUpdate = coroutineScope {
         val updatedManga = async {
             if (fetchDetails) {
-                client.get("$apiBaseUrl/series/${manga.url}").parseAs<SeriesDto>().toSManga()
+                client.get("$apiBaseUrl/series/${manga.url}", Fetch.XHR).parseAs<SeriesDto>().toSManga()
             } else {
                 manga
             }
         }
         val updatedChapters = async {
             if (fetchChapters) {
-                client.get("$apiBaseUrl/series/${manga.url}/chapters").parseAs<List<ChapterDto>>().map { chapter ->
+                client.get("$apiBaseUrl/series/${manga.url}/chapters", Fetch.XHR).parseAs<List<ChapterDto>>().map { chapter ->
                     SChapter.create().apply {
                         url = "/${chapter.id}/${chapter.seriesSlug}/${chapter.slug}"
                         name = chapter.title
@@ -123,7 +125,7 @@ abstract class GolgeBahcesi : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = "$baseUrl${chapter.url}".toHttpUrl().pathSegments[0]
-        val dto = client.get("$apiBaseUrl/chapters/$chapterId").parseAs<ChapterDto>()
+        val dto = client.get("$apiBaseUrl/chapters/$chapterId", Fetch.XHR).parseAs<ChapterDto>()
         if (dto.isLocked) return emptyList()
         if (dto.deliverySystem != "secure") {
             return dto.pages.orEmpty().map { Page(it.index, imageUrl = it.url) }
@@ -208,7 +210,7 @@ abstract class GolgeBahcesi : KeiSource() {
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData() = client.get("$apiBaseUrl/genres")
+    override suspend fun fetchFilterData() = client.get("$apiBaseUrl/genres", Fetch.XHR)
         .parseAs<List<Genre>>()
         .toJsonElement()
 

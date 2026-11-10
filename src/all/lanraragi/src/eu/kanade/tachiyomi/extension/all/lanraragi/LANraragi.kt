@@ -6,7 +6,6 @@ import android.text.InputType
 import android.util.Base64
 import android.widget.Toast
 import androidx.preference.ListPreference
-import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.UnmeteredSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -17,6 +16,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.call
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -54,6 +56,14 @@ class LANraragi(
         get() = (INSTANCE_IDS.indexOf(id) + 1).coerceAtLeast(1)
 
     private val apiKey by lazy { getPrefAPIKey() }
+
+    private val artistNamespaces by lazy {
+        buildNamespaceCandidates(ARTIST_NAMESPACE, getPrefArtistNamespaces())
+    }
+
+    private val authorNamespaces by lazy {
+        buildNamespaceCandidates(AUTHOR_NAMESPACE, getPrefAuthorNamespaces())
+    }
 
     private val latestNamespacePref by lazy { getPrefLatestNS() }
 
@@ -152,7 +162,7 @@ class LANraragi(
         }
 
         val searchUrl = uri.toString().toHttpUrl()
-        val jsonResult = client.get(searchUrl, headers, CacheControl.FORCE_NETWORK).parseAs<ArchiveSearchResult>()
+        val jsonResult = client.get(searchUrl, headers, Fetch.XHR, CacheControl.FORCE_NETWORK).parseAs<ArchiveSearchResult>()
         val archives = arrayListOf<SManga>()
 
         lastResultCount = jsonResult.data.size
@@ -189,14 +199,20 @@ class LANraragi(
     }
 
     private fun archiveToSManga(archive: Archive, isRandom: Boolean = false) = SManga.create().apply {
+        val (artistName, authorName) = parseMangaCredits(
+            archive.tags,
+            artistNamespaces,
+            authorNamespaces,
+        )
+
         url = "/reader?id=${archive.arcid}"
         if (isRandom && preferences.getBoolean(REDUPE_KEY, REDUPE_DEFAULT)) url += "&ts" + System.currentTimeMillis()
         title = archive.title
         description = if (archive.summary.isNullOrBlank()) archive.title else archive.summary
         thumbnail_url = getThumbnailUri(archive.arcid)
         genre = archive.tags?.replace(",", ", ")
-        artist = getNSTag(archive.tags, "artist")?.joinToString()
-        author = getNSTag(archive.tags, "group")?.joinToString() ?: artist
+        artist = artistName
+        author = authorName
         status = SManga.COMPLETED
     }
 
@@ -208,7 +224,7 @@ class LANraragi(
     ): SMangaUpdate {
         val id = if (manga.url.startsWith("/api/search/random")) randomArchiveID else getIDFromURL(manga.url)
 
-        val response = client.get(apiTypeByID(id).toString())
+        val response = client.get(apiTypeByID(id).toString(), Fetch.XHR)
 
         val (archive, archives) = if (!id.startsWith("TANK_")) {
             val archive = response.parseAs<Archive>()
@@ -264,7 +280,7 @@ class LANraragi(
                 .delete()
                 .build()
 
-            client.newCall(clearNew).await().close()
+            client.call(clearNew.newBuilder().fetch(Fetch.XHR).build(), ensureSuccess = false).close()
         }
 
         var baseChapter = 0F
@@ -318,7 +334,7 @@ class LANraragi(
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = chapter.url.toHttpUrl()
-        val archivePage = client.get(url).parseAs<ArchivePage>()
+        val archivePage = client.get(url, Fetch.XHR).parseAs<ArchivePage>()
         val range = url.fragment?.split("-")?.map { it.toInt() } ?: listOf(0, archivePage.pages.size)
 
         return archivePage.pages.subList(range.first(), range.last()).mapIndexed { index, url ->
@@ -343,7 +359,7 @@ class LANraragi(
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/categories")
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/categories", Fetch.XHR)
         .parseAs<List<Category>>()
         .toJsonElement()
 
@@ -369,6 +385,8 @@ class LANraragi(
     private fun getPrefLatestSortOrder(): String = preferences.getString(SORT_ORDER_KEY, SORT_ORDER_DEFAULT)!!
     private fun getPrefRandomPageSize(): String = preferences.getString(RANDOM_SIZE_KEY, RANDOM_SIZE_DEFAULT)!!
     private fun getPrefCustomLabel(): String = preferences.getString(CUSTOM_LABEL_KEY, "")!!
+    private fun getPrefArtistNamespaces(): String = preferences.getString(ARTIST_NAMESPACES_KEY, ADDITIONAL_NAMESPACES_DEFAULT)!!
+    private fun getPrefAuthorNamespaces(): String = preferences.getString(AUTHOR_NAMESPACES_KEY, ADDITIONAL_NAMESPACES_DEFAULT)!!
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
         val randomPageSize = ListPreference(screen.context).apply {
@@ -409,6 +427,28 @@ class LANraragi(
         screen.addPreference(latestSortOrder)
         screen.addPreference(randomPageSize)
         screen.addPreference(screen.checkBoxPreference(REDUPE_KEY, "Random Sort - Ignore dedupe", REDUPE_DEFAULT, "If enabled, ignores app's enforced deduping at the cost of spamming its database and library functionality. If disabled, there will only be one request of the pagination amount."))
+        screen.addPreference(
+            screen.editTextPreference(
+                ARTIST_NAMESPACES_KEY,
+                "Artist namespaces",
+                ADDITIONAL_NAMESPACES_DEFAULT,
+                "The built-in \"artist\" namespace is always used. Add other namespace names separated by commas, e.g. 艺术家, 画家.",
+                inputType = InputType.TYPE_CLASS_TEXT,
+            ).apply {
+                dialogMessage = "Enter additional namespace names without the trailing colon, separated by commas."
+            },
+        )
+        screen.addPreference(
+            screen.editTextPreference(
+                AUTHOR_NAMESPACES_KEY,
+                "Author namespaces (group)",
+                ADDITIONAL_NAMESPACES_DEFAULT,
+                "The built-in \"group\" namespace is always used. Add other namespace names separated by commas, e.g. 团队, 社团.",
+                inputType = InputType.TYPE_CLASS_TEXT,
+            ).apply {
+                dialogMessage = "Enter additional namespace names without the trailing colon, separated by commas."
+            },
+        )
         screen.addPreference(screen.editTextPreference(URL_TAG_PREFIX_KEY, "Set tag prefix to get WebView URL", URL_TAG_PREFIX_DEFAULT, "Example: 'source:' will try to get the URL from the first tag starting with 'source:' and it will open it in the WebView. Leave empty for the default behavior."))
     }
 
@@ -423,12 +463,20 @@ class LANraragi(
         }
     }
 
-    private fun androidx.preference.PreferenceScreen.editTextPreference(key: String, title: String, default: String, summary: String, isPassword: Boolean = false, refreshSummary: Boolean = false): androidx.preference.EditTextPreference = androidx.preference.EditTextPreference(context).apply {
+    private fun androidx.preference.PreferenceScreen.editTextPreference(
+        key: String,
+        title: String,
+        default: String,
+        summary: String,
+        isPassword: Boolean = false,
+        refreshSummary: Boolean = false,
+        inputType: Int = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI,
+    ): androidx.preference.EditTextPreference = androidx.preference.EditTextPreference(context).apply {
         this.key = key
         this.title = title
         this.summary = summary
         this.setDefaultValue(default)
-        setOnBindEditTextListener { it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI }
+        setOnBindEditTextListener { it.inputType = inputType }
 
         if (isPassword) {
             setOnBindEditTextListener {
@@ -466,7 +514,7 @@ class LANraragi(
     ).build()
 
     private suspend fun getRandomID(query: String): String {
-        val searchRandom = client.get("$baseUrl/api/search/random?count=1&$query", headers, CacheControl.FORCE_NETWORK)
+        val searchRandom = client.get("$baseUrl/api/search/random?count=1&$query", headers, Fetch.XHR, CacheControl.FORCE_NETWORK)
         val result = searchRandom.parseAs<ArchiveSearchResult>() // Intermittent empty data[] on parse, but not from manual API testing
         return result.data.firstOrNull()?.arcid ?: randomArchiveID
     }
@@ -505,11 +553,7 @@ class LANraragi(
 
     private fun getIDFromURL(url: String): String = REGEX_ID_FROM_URL.find(url)?.groupValues?.get(1) ?: ""
 
-    private fun getNSTag(tags: String?, tag: String): List<String>? = tags?.split(',')
-        ?.filter { it.startsWith("$tag:") }
-        ?.map { it.split(":", limit = 2).last() }
-        ?.distinct()
-        ?.takeIf { it.isNotEmpty() }
+    private fun getNSTag(tags: String?, tag: String): List<String>? = namespaceTagValues(tags, listOf(tag))
 
     companion object {
 
@@ -519,6 +563,11 @@ class LANraragi(
         private const val HOSTNAME_KEY = "hostname"
         private const val APIKEY_KEY = "apiKey"
         private const val CUSTOM_LABEL_KEY = "customLabel"
+        private const val ARTIST_NAMESPACE = "artist"
+        private const val AUTHOR_NAMESPACE = "group"
+        private const val ARTIST_NAMESPACES_KEY = "artistNamespacePref"
+        private const val AUTHOR_NAMESPACES_KEY = "authorNamespacePref"
+        private const val ADDITIONAL_NAMESPACES_DEFAULT = ""
 
         // Order must match the source { } blocks in build.gradle.kts (used to label factory instances).
         private val INSTANCE_IDS = listOf(4482480338677079857L, 6188058704030343819L)
@@ -541,4 +590,51 @@ class LANraragi(
         private const val URL_TAG_PREFIX_KEY = "urlTagPrefix"
         private const val URL_TAG_PREFIX_DEFAULT = ""
     }
+}
+
+private fun buildNamespaceCandidates(
+    builtInNamespace: String,
+    configuredNamespaces: String?,
+): List<String> = buildList {
+    add(builtInNamespace)
+
+    configuredNamespaces
+        ?.split(',', '，')
+        ?.forEach { value ->
+            val namespace = value.trim().trimEnd(':', '：').trim()
+            if (namespace.isNotEmpty()) add(namespace)
+        }
+}.distinctBy { it.lowercase() }
+
+private fun namespaceTagValues(
+    tags: String?,
+    namespaces: Collection<String>,
+): List<String>? {
+    if (tags.isNullOrBlank() || namespaces.isEmpty()) return null
+
+    val normalizedNamespaces = namespaces.map { it.lowercase() }.toSet()
+
+    return tags.split(',')
+        .mapNotNull { rawTag ->
+            val tag = rawTag.trim()
+            val separator = tag.indexOf(':')
+            if (separator <= 0) return@mapNotNull null
+
+            val namespace = tag.substring(0, separator).trim()
+            if (namespace.lowercase() !in normalizedNamespaces) return@mapNotNull null
+
+            tag.substring(separator + 1).trim().takeIf { it.isNotEmpty() }
+        }
+        .distinctBy { it.lowercase() }
+        .takeIf { it.isNotEmpty() }
+}
+
+private fun parseMangaCredits(
+    tags: String?,
+    artistNamespaces: Collection<String>,
+    authorNamespaces: Collection<String>,
+): Pair<String?, String?> {
+    val artist = namespaceTagValues(tags, artistNamespaces)?.joinToString()
+    val author = namespaceTagValues(tags, authorNamespaces)?.joinToString() ?: artist
+    return artist to author
 }

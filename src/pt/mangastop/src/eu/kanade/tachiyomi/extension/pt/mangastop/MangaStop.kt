@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -45,7 +46,7 @@ abstract class MangaStop : KeiSource() {
                 .addQueryParameter("pagina", page.toString())
                 .addQueryParameter("por_pagina", PER_PAGE)
                 .build()
-            return client.get(url).parseAs<BuscaDto>().toMangasPage()
+            return client.get(url, Fetch.XHR).parseAs<BuscaDto>().toMangasPage()
         }
 
         val type = filters.firstInstanceOrNull<TypeFilter>()?.selected.orEmpty()
@@ -71,7 +72,7 @@ abstract class MangaStop : KeiSource() {
             .addQueryParameter("por_pagina", PER_PAGE)
             .apply { if (type.isNotEmpty()) addQueryParameter("tipo", type) }
             .build()
-        return client.get(url).parseAs<MangaListDto>().toMangasPage()
+        return client.get(url, Fetch.XHR).parseAs<MangaListDto>().toMangasPage()
     }
 
     // Also accepts site links pasted without the scheme, e.g. "mangastop.net/obra/123" or "/manga/slug/"
@@ -110,7 +111,7 @@ abstract class MangaStop : KeiSource() {
         return SMangaUpdate(obra.toSManga(), obra.toSChapterList())
     }
 
-    private suspend fun fetchObra(id: String) = client.get(apiUrl.newBuilder().addPathSegment("obra").addPathSegment(id).build())
+    private suspend fun fetchObra(id: String) = client.get(apiUrl.newBuilder().addPathSegment("obra").addPathSegment(id).build(), Fetch.XHR)
         .parseAs<ObraDto>()
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -118,7 +119,7 @@ abstract class MangaStop : KeiSource() {
         return fetchLeitor(id).imagens.mapIndexed { index, imagem -> Page(index, imageUrl = imagem.url) }
     }
 
-    private suspend fun fetchLeitor(id: String) = client.get(apiUrl.newBuilder().addPathSegment("leitor").addPathSegment(id).build())
+    private suspend fun fetchLeitor(id: String) = client.get(apiUrl.newBuilder().addPathSegment("leitor").addPathSegment(id).build(), Fetch.XHR)
         .parseAs<LeitorDto>()
 
     /**
@@ -140,7 +141,7 @@ abstract class MangaStop : KeiSource() {
             .addQueryParameter("slug", slug)
             .addQueryParameter("_fields", "id")
             .build()
-        return client.get(url).parseAs<List<PostIdDto>>().firstOrNull()?.id?.toString()
+        return client.get(url, Fetch.XHR).parseAs<List<PostIdDto>>().firstOrNull()?.id?.toString()
     }
 
     private fun String.isId() = isNotEmpty() && all { it in '0'..'9' }
@@ -159,7 +160,7 @@ abstract class MangaStop : KeiSource() {
                 .addQueryParameter("hide_empty", "true")
                 .addQueryParameter("_fields", "name,slug")
                 .build()
-            val response = client.get(url)
+            val response = client.get(url, Fetch.XHR)
             val totalPages = response.header("X-WP-TotalPages")?.toIntOrNull() ?: 1
             genres += response.parseAs<List<GenreDto>>()
         } while (page++ < totalPages)

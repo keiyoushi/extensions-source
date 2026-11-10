@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.mangadotnet
 
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -13,7 +14,6 @@ import kotlinx.serialization.json.JsonTransformingSerializer
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.serializer
-import kotlin.math.roundToInt
 
 @Serializable
 class Data<T>(
@@ -150,7 +150,6 @@ class Manga(
     private val tags: List<TagCategory> = emptyList(),
     private val description: String? = null,
     private val photo: String? = null,
-    private val hiatus: String? = null,
     private val status: String? = null,
     @SerialName("source_url")
     private val sourceUrl: String? = null,
@@ -230,79 +229,52 @@ class Manga(
             }
         }.joinToString()
         status = when {
-            "One Shot" in this@Manga.genres -> SManga.COMPLETED
-            this@Manga.hiatus == "Yes" -> SManga.ON_HIATUS
             else -> when (this@Manga.status?.lowercase()) {
                 "ongoing" -> SManga.ONGOING
                 "completed" -> SManga.COMPLETED
+                "hiatus" -> SManga.ON_HIATUS
+                "cancelled" -> SManga.CANCELLED
                 else -> SManga.UNKNOWN
             }
         }
-        description = buildString {
-            val rating = this@Manga.rating
-            if (rating != null) {
-                val stars = (rating / 2).roundToInt().coerceIn(0, 5)
-                append("${"★".repeat(stars)}${"☆".repeat(5 - stars)} $rating\n\n")
-            }
-
-            val metaInfo = buildList {
-                year?.let { add("**Year:** $it") }
-                chapterCount?.let { add("**Chapters:** $it") }
-                extraVolumeCount?.let { add("**Volumes:** $it") }
-                trackedCount?.let { add("**Tracked:** $it") }
-                contentRating?.let {
-                    add("**Content Rating:** ${it.replaceFirstChar { c -> c.uppercase() }}")
-                }
-                ratingCount?.takeIf { it > 0 }?.let { add("$it ratings") }
-            }
-            if (metaInfo.isNotEmpty()) {
-                append(metaInfo.joinToString(" · "), "\n\n")
-            }
-
-            if (isNotEmpty()) {
-                append("---\n\n")
-            }
-
-            this@Manga.description?.let {
-                append(
-                    it.replace("\r\n", "\n")
-                        .replace(multipleNewlinesRegex, "\n\n")
-                        .replace(listRegex, "\n$1")
-                        .trim(),
-                    "\n\n",
-                )
-            }
-
-            listOfNotNull(
-                anilistID?.let { "[AniList](https://anilist.co/manga/$it)" },
-                mangaupdatesID?.let { "[MangaUpdates](https://www.mangaupdates.com/series/$it)" },
-                mangabakaID?.let { "[MangaBaka](https://mangabaka.org/$it)" },
-                malID?.let { "[MyAnimeList](https://myanimelist.net/manga/$it)" },
-                kitsuID?.let { "[Kitsu](https://kitsu.app/manga/$it)" },
-                animePlanetId?.let { "[AnimePlanet](https://www.anime-planet.com/manga/$it)" },
-                shikimoriId?.let { "[Shikimori](https://shikimori.io/mangas/$it)" },
-                animeNewsNetworkId?.let { "[AnimeNewsNetwork](https://www.animenewsnetwork.com/encyclopedia/manga.php?id=$it)" },
-                mangadexID?.let { "[MangaDex](https://mangadex.org/title/$it)" },
-                sourceUrl?.let { "[Source]($it)" },
-            ).also { links ->
-                if (links.isNotEmpty()) {
-                    append("\n**Links:**\n")
-                    links.forEach { link ->
-                        append("- ", link, "\n")
-                    }
-                }
-            }
-
-            if (altTitles.isNotEmpty()) {
-                append("\n**Alternative Names:**\n")
-                altTitles.forEach { altTitle ->
-                    append("- ", altTitle.trim(), "\n")
-                }
-            }
-        }.trim()
+        description = MarkdownDescription.Builder().apply {
+            rating(this@Manga.rating, votes = ratingCount?.takeIf { it > 0 })
+            field("Year", year?.toString())
+            field("Chapters", chapterCount?.toString())
+            field("Volumes", extraVolumeCount?.takeIf { it > 0 }?.toString())
+            field("Tracked", trackedCount?.toString())
+            field("Content Rating", contentRating?.replaceFirstChar { it.uppercase() })
+            separator()
+            markdown(
+                this@Manga.description?.replace("\r\n", "\n")
+                    ?.replace(multipleNewlinesRegex, "\n\n")
+                    ?.replace(listRegex, "\n$1"),
+            )
+            links(
+                listOf(
+                    "AniList" to anilistID?.let { "https://anilist.co/manga/$it" },
+                    "MangaUpdates" to mangaupdatesID?.let { "https://www.mangaupdates.com/series/$it" },
+                    "MangaBaka" to mangabakaID?.let { "https://mangabaka.org/$it" },
+                    "MyAnimeList" to malID?.let { "https://myanimelist.net/manga/$it" },
+                    "Kitsu" to kitsuID?.let { "https://kitsu.app/manga/$it" },
+                    "AnimePlanet" to animePlanetId?.let { "https://www.anime-planet.com/manga/$it" },
+                    "Shikimori" to shikimoriId?.let { "https://shikimori.io/mangas/$it" },
+                    "AnimeNewsNetwork" to animeNewsNetworkId?.let { "https://www.animenewsnetwork.com/encyclopedia/manga.php?id=$it" },
+                    "MangaDex" to mangadexID?.let { "https://mangadex.org/title/$it" },
+                    "Source" to sourceUrl,
+                ),
+            )
+            altTitles(altTitles)
+        }.build()
         initialized = true
     }
 }
+
+@Serializable
+class Group(
+    val id: Int,
+    val name: String,
+)
 
 @Serializable
 class Chapter(
@@ -326,13 +298,7 @@ class Chapter(
     val pageCount: Int? = null,
     val source: String = "user",
     val groups: List<Group> = emptyList(),
-) {
-    @Serializable
-    class Group(
-        val id: Int,
-        val name: String,
-    )
-}
+)
 
 @Serializable
 class Volume(
@@ -347,6 +313,7 @@ class Volume(
     val date: String? = null,
     val source: String = "user",
     val language: String? = null,
+    val groups: List<Group> = emptyList(),
 )
 
 @Serializable

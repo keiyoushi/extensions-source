@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
@@ -27,7 +28,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class KomikIndoID : KeiSource() {
-
     private val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)
     private val chapterRegex = Regex("""Chapter\s+([0-9]+(?:\.[0-9]+)?)""", RegexOption.IGNORE_CASE)
 
@@ -37,13 +37,13 @@ abstract class KomikIndoID : KeiSource() {
 
     // ============================== Popular ===============================
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/daftar-manga/${pagePath(page)}?order=popular").asJsoup()
+        val document = client.get("$baseUrl/daftar-manga/${pagePath(page)}?order=popular", Fetch.DOCUMENT).asJsoup()
         return mangaListParse(document)
     }
 
     // =============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/daftar-manga/${pagePath(page)}?order=update").asJsoup()
+        val document = client.get("$baseUrl/daftar-manga/${pagePath(page)}?order=update", Fetch.DOCUMENT).asJsoup()
         return mangaListParse(document)
     }
 
@@ -69,31 +69,25 @@ abstract class KomikIndoID : KeiSource() {
                     is SortFilter -> {
                         addQueryParameter("order", filter.toUriPart())
                     }
+                    is StatusFilter -> {
+                        filter.toUriPart().takeIf { it.isNotEmpty() }?.let {
+                            addQueryParameter("status", it)
+                        }
+                    }
                     is OriginalLanguageFilter -> {
-                        filter.state.forEach { lang ->
-                            if (lang.state) {
-                                addQueryParameter("type[]", lang.id)
-                            }
+                        filter.toUriPart().takeIf { it.isNotEmpty() }?.let {
+                            addQueryParameter("type", it)
                         }
                     }
                     is FormatFilter -> {
-                        filter.state.forEach { format ->
-                            if (format.state) {
-                                addQueryParameter("format[]", format.id)
-                            }
+                        filter.toUriPart().takeIf { it.isNotEmpty() }?.let {
+                            addQueryParameter("format", it)
                         }
                     }
                     is DemographicFilter -> {
                         filter.state.forEach { demographic ->
                             if (demographic.state) {
                                 addQueryParameter("demografis[]", demographic.id)
-                            }
-                        }
-                    }
-                    is StatusFilter -> {
-                        filter.state.forEach { status ->
-                            if (status.state) {
-                                addQueryParameter("status[]", status.id)
                             }
                         }
                     }
@@ -123,7 +117,7 @@ abstract class KomikIndoID : KeiSource() {
             }
         }.build()
 
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         return mangaListParse(document)
     }
 
@@ -132,7 +126,7 @@ abstract class KomikIndoID : KeiSource() {
         if (url.pathSegments.firstOrNull() != "komik") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
         val targetUrl = "$baseUrl/komik/$slug/".toHttpUrl()
-        val document = client.get(targetUrl).asJsoup()
+        val document = client.get(targetUrl, Fetch.DOCUMENT).asJsoup()
         val manga = SManga.create().apply {
             setUrlWithoutDomain(targetUrl.toString())
         }
@@ -146,7 +140,7 @@ abstract class KomikIndoID : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseDetails(document, manga),
             chapters = parseChapters(document),
@@ -234,7 +228,7 @@ abstract class KomikIndoID : KeiSource() {
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = baseUrl + chapter.url
-        val document = client.get(chapterUrl).asJsoup()
+        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
         return document.select("div.img-landmine img")
             .mapNotNull { element ->
                 val onerror = element.attr("onError")
@@ -252,14 +246,13 @@ abstract class KomikIndoID : KeiSource() {
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         SortFilter(),
-        Filter.Header("NOTE: Ignored if using text search!"),
+        StatusFilter(),
+        OriginalLanguageFilter(),
+        FormatFilter(),
         AuthorFilter(),
         YearFilter(),
         Filter.Separator(),
-        OriginalLanguageFilter(getOriginalLanguage()),
-        FormatFilter(getFormat()),
         DemographicFilter(getDemographic()),
-        StatusFilter(getStatus()),
         ContentRatingFilter(getContentRating()),
         ThemeFilter(getTheme()),
         GenreFilter(getGenre()),

@@ -7,16 +7,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import okhttp3.Request
 import kotlin.time.Instant
-
-private const val ACCEPT_IMAGE = "image/avif,image/webp,image/*,*/*"
 
 private const val ARCHIVE_URL = "https://sas.ewanb.me"
 
@@ -68,7 +66,7 @@ abstract class SolarAndSundry : KeiSource() {
         val details = if (fetchDetails) createManga() else manga
         if (!fetchChapters) return SMangaUpdate(details, chapters)
 
-        val pages = client.get(baseUrl + manga.url).parseAs<List<SasPage>>()
+        val pages = client.get(baseUrl + manga.url, Fetch.XHR).parseAs<List<SasPage>>()
         val chapterList = pages.map { page ->
             SChapter.create().apply {
                 name = page.name
@@ -86,12 +84,8 @@ abstract class SolarAndSundry : KeiSource() {
     // Pages
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val page = client.get(baseUrl + chapter.url).parseAs<SasPage>()
+        val page = client.get(baseUrl + chapter.url, Fetch.XHR).parseAs<SasPage>()
 
         return listOf(Page(0, "", page.imageUrl))
     }
-
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
-        .header("Accept", ACCEPT_IMAGE)
-        .build()
 }

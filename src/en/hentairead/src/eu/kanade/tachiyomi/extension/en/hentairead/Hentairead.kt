@@ -1,6 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.hentairead
 
+import android.content.SharedPreferences
 import android.util.Base64
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,20 +13,28 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.time.format.DateTimeFormatterBuilder
 import java.util.Locale
 
 @Source
-abstract class Hentairead : KeiSource() {
+abstract class Hentairead :
+    KeiSource(),
+    ConfigurableSource {
+
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override suspend fun getPopularManga(page: Int): MangasPage = mangasPage("$baseUrl/hentai/${searchPage(page)}?sortby=views")
 
@@ -31,7 +43,7 @@ abstract class Hentairead : KeiSource() {
     private fun searchPage(page: Int): String = if (page == 1) "" else "page/$page/"
 
     private suspend fun mangasPage(url: String): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select(".manga-item").map(::mangaFromElement)
         return MangasPage(mangas, document.selectFirst("a[rel=next]") != null)
     }
@@ -102,7 +114,7 @@ abstract class Hentairead : KeiSource() {
 
     private suspend fun getTagId(tag: String, type: String): Int? {
         val url = "$baseUrl/wp-admin/admin-ajax.php?action=search_manga_terms&search=$tag&taxonomy=$type".replace("artist", "manga_artist")
-        return client.get(url).parseAs<Results>().results
+        return client.get(url, Fetch.XHR).parseAs<Results>().results
             .firstOrNull { it.text.lowercase() == tag.lowercase() }
             ?.id
     }
@@ -132,10 +144,15 @@ abstract class Hentairead : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.size < 2) return null
         val mangaUrl = "$baseUrl/hentai/${url.pathSegments[1]}/"
-        return mangaDetailsParse(client.get(mangaUrl).asJsoup()).apply {
+        return mangaDetailsParse(client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()).apply {
             setUrlWithoutDomain(mangaUrl)
         }
     }
+
+    private val dateFormat = DateTimeFormatterBuilder()
+        .parseCaseInsensitive()
+        .appendPattern("MMMM d, yyyy h:mm a")
+        .toFormatter(Locale.ENGLISH)
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -143,19 +160,45 @@ abstract class Hentairead : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = if (fetchDetails) {
-            mangaDetailsParse(client.get(getMangaUrl(manga)).asJsoup()).apply { url = manga.url }
-        } else {
-            manga
-        }
-        val chapter = SChapter.create().apply {
-            name = "Chapter"
-            url = manga.url
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        val collection = document.selectFirst("div.collection-listing > div")
+        val details = mangaDetailsParse(document).apply { url = manga.url }
+
+        fun createChapter(chapNum: Float = -1f, chapUrl: String = "", chapTitle: String = ""): SChapter = SChapter.create().apply {
+            val titleText = chapTitle.ifEmpty { document.selectFirst("div.manga-titles h1")!!.text() }
+            chapter_number = if (chapNum == -1f) 1f else chapNum
+            if (showCollections()) {
+                name = "${if (chapter_number % 1f == 0f) chapter_number.toInt() else chapter_number} - $titleText"
+            } else {
+                name = "Chapter"
+            }
+            url = chapUrl.ifEmpty { manga.url }
             if (details.description?.contains("Scanlators") == true) {
                 scanlator = details.description?.substringAfter("Scanlators: ")?.substringBefore("\n")
             }
+            if (details.description?.contains("Uploaded") == true) {
+                date_upload = dateFormat.tryParseDateTime(details.description?.substringAfter("Uploaded: ")?.substringBefore("\n"))
+            }
         }
-        return SMangaUpdate(details, listOf(chapter))
+
+        val allChapters = mutableListOf<SChapter>()
+
+        if (collection == null || !showCollections()) {
+            allChapters.add(createChapter())
+        } else if (fetchChapters) {
+            for (element: Element in collection.select("div.manga-item")) {
+                val chapNum = element.selectFirst("div.collection-badge")!!.text().toFloat()
+                val chapUrl = element.selectFirst("a.manga-item__link")!!.absUrl("href")
+                val chapTitle = element.selectFirst("a.manga-item__link")!!.text()
+                allChapters.add(createChapter(chapNum, chapUrl, chapTitle))
+            }
+        } else {
+            return SMangaUpdate(details, chapters)
+        }
+
+        allChapters.sortByDescending { it.chapter_number } // Fixes some chapters being out of place
+
+        return SMangaUpdate(details, allChapters)
     }
 
     private fun mangaDetailsParse(document: Document): SManga {
@@ -194,6 +237,9 @@ abstract class Hentairead : KeiSource() {
                     val titles = it.split("|").joinToString("\n") { "- ${it.trim()}" }
                     append("Alternative Titles: ", "\n", titles, "\n\n")
                 }
+                document.selectFirst(".text-primary:contains(uploaded:) + div")?.text()?.ifEmpty { null }?.let {
+                    append("Uploaded: ", it, "\n\n")
+                }
                 append(document.select(".items-center:contains(pages:)").text(), "\n")
             }
             status = SManga.COMPLETED
@@ -210,7 +256,7 @@ abstract class Hentairead : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         // There's like 2 non-English entries where this breaks
         val url = "${chapter.url}english/p/1/".let { if (it.startsWith("http")) it else baseUrl + it }
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val pageBaseUrl = document.selectFirst("[id=single-chapter-js-extra]")?.data()
             ?.let { chapterExtraDataRegex.find(it)?.groups }?.get(1)?.value
@@ -224,5 +270,20 @@ abstract class Hentairead : KeiSource() {
         return pages.data.chapter.images.mapIndexed { idx, page ->
             Page(idx, imageUrl = "$pageBaseUrl/${page.src}")
         }
+    }
+
+    private fun showCollections() = preferences.getBoolean(PREF_SHOW_COLLECTIONS, true)
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_SHOW_COLLECTIONS
+            title = "Show Collections"
+            summary = "Show collection of related chapters"
+            setDefaultValue(true)
+        }.let(screen::addPreference)
+    }
+
+    companion object {
+        private const val PREF_SHOW_COLLECTIONS = "pref_show_collections"
     }
 }
