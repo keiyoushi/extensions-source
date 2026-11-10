@@ -40,7 +40,7 @@ abstract class Xkcd :
 
     override val supportsLatest = false
 
-    override fun OkHttpClient.Builder.configureClient() = addInterceptor(TextInterceptor())
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(TextInterceptor("/assets/fonts/noto_sans_symbols_script.ttf"))
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url
