@@ -6,20 +6,16 @@ plugins {
 
 keiyoushi {
     name = "Lector Hentai"
-    versionCode = 1
+    versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
+    theme = "mangathemesia"
 
     listOf("es", "en", "pt-BR", "fr", "ru").forEach {
         source {
             lang = it
             baseUrl = "https://lectorhentai.com"
         }
-    }
-
-    deeplink {
-        path("/manga/..*")
-        path("/read/..*")
     }
 }
 
