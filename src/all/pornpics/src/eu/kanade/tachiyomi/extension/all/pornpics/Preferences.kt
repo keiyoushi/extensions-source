@@ -40,15 +40,13 @@ object Preferences {
             ListPreference(content).apply {
                 key = PS_KEY_CATEGORY
                 title = intl["config-category-title"]
-                summary = intl["config-category-summary"]
+                summary = "${intl["config-category-summary"]}\n%s"
                 entries = options.keys.toTypedArray()
                 entryValues = options.values.toTypedArray()
+                setDefaultValue(DEFAULT_CATEGORY_OPTION)
             },
         )
     }
 
-    fun getCategoryOption(sharedPreferences: SharedPreferences): String? {
-        val option = sharedPreferences.getString(PS_KEY_CATEGORY, DEFAULT_CATEGORY_OPTION)
-        return if (DEFAULT_CATEGORY_OPTION == option) DEFAULT_CATEGORY_OPTION else option
-    }
+    fun getCategoryOption(sharedPreferences: SharedPreferences): String = sharedPreferences.getString(PS_KEY_CATEGORY, DEFAULT_CATEGORY_OPTION)!!
 }
