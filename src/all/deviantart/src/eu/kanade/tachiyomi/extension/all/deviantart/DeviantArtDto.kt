@@ -26,9 +26,9 @@ class DeviationState(
     // val type: String, // "image", "film"
     val url: String, // "https://www.deviantart.com/shw67/art/Beach-58-1007661685"
     val title: String,
-    // val isVideo: Boolean,
+    val isVideo: Boolean = false,
     // val publishedTime: String, // "2024-01-03T03:17:25-0800"
-    // val isMature: Boolean,
+    val isMature: Boolean = false,
     val author: Int,
     val media: DeviationMedia,
 )
@@ -57,6 +57,29 @@ class DeviationMedia(
         return "$uri${getPreviewPath()}?token=$jwt"
     }
 
+    fun getFullViewUrl(): String? {
+        val uri = baseUri ?: return null
+        val jwt = fullViewOrBiggestType?.let { token?.getOrNull(it.r) } ?: return uri
+        return "$uri${getFullViewPath()}?token=$jwt"
+    }
+
+    // Only a type without `c` points at the original file, and only its `file.download` token opens it.
+    // Resized types' tokens get 403 there, so there is no original URL when every type has a `c`
+    fun getOriginalUrl(): String? {
+        val uri = baseUri ?: return getFullViewUrl()
+        if (token.isNullOrEmpty()) return uri
+        val jwt = types?.firstNotNullOfOrNull { type ->
+            token.getOrNull(type.r)?.takeIf { type.c == null }
+        } ?: return getFullViewUrl()
+        return "$uri?token=$jwt"
+    }
+
+    // A video art lists one `video` type per quality, each with its mp4 in `b`
+    fun getVideoUrl(): String? = types?.filter { it.t == "video" && it.b != null }?.maxByOrNull { it.w * it.h }?.b
+
+    private fun getFullViewPath() = fullViewOrBiggestType
+        ?.c?.replace("<prettyName>", prettyName.orEmpty()).orEmpty()
+
     // No `c` means the preview is the original file ($uri?token=$jwt instead of $uri/v1/fill/...-pre.jpg?token=$jwt)
     // Return: /v1/fill/w_...-pre.jpg
     private fun getPreviewPath(): String = coverType
@@ -67,8 +90,11 @@ class DeviationMedia(
 
     private val previewType get() = types?.firstOrNull { it.t == "preview" }
     private val thumbnailType get() = types?.firstOrNull { it.t == "400T" } // 400px height
+    private val fullViewType get() = types?.firstOrNull { it.t == "fullview" }
+    private val fullViewOrBiggestType get() = fullViewType ?: biggestType
     private val coverType get() = thumbnailType ?: previewType ?: smallestType
     private val smallestType get() = types?.filter { it.w > 0 && it.h > 0 }?.minByOrNull { it.w * it.h }
+    private val biggestType get() = types?.maxByOrNull { it.w * it.h }
 }
 
 @Serializable
@@ -78,6 +104,7 @@ class DeviationMediaType(
     val r: Int = 0, // index into `token`
     val h: Int = 0, // height
     val w: Int = 0, // width
+    val b: String? = null, // mp4 URL of a `video` type
 )
 
 @Serializable
