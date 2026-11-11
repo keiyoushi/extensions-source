@@ -76,15 +76,26 @@ class CatalogEntry(
     fun toSManga() = SManga.create().apply {
         title = this@CatalogEntry.title
         thumbnail_url = img.takeIf { it.isNotBlank() }
-        url = "/detail.html?slug=$slug"
+        url = "/series/$slug"
     }
 }
 
 @Serializable
-class FirestoreMap(val fields: Map<String, FirestoreValue> = emptyMap())
+class ApiChaptersResponse(val chapters: List<ApiChapter> = emptyList())
 
 @Serializable
-class FirestoreListResponse(val documents: List<FirestoreDoc> = emptyList())
+class ApiChapter(
+    val num: String = "",
+    val title: String = "",
+    val url: String = "",
+    val images: List<String> = emptyList(),
+    val thumbnail: String = "",
+    val createdAt: String = "",
+    val source: String = "",
+)
+
+@Serializable
+class FirestoreMap(val fields: Map<String, FirestoreValue> = emptyMap())
 
 @Serializable
 class FirestoreDoc(
@@ -105,10 +116,6 @@ class FirestoreValue(
 class FirestoreArray(val values: List<FirestoreValue> = emptyList())
 
 internal fun Map<String, FirestoreValue>.getString(key: String): String? = get(key)?.stringValue
-
-internal fun Map<String, FirestoreValue>.getLong(key: String): Long? = get(key)?.integerValue?.toLongOrNull()
-
-internal fun Map<String, FirestoreValue>.getBoolean(key: String): Boolean? = get(key)?.booleanValue
 
 internal fun Map<String, FirestoreValue>.getStringList(key: String): List<String> = get(key)?.arrayValue?.values?.mapNotNull { it.stringValue }.orEmpty()
 
