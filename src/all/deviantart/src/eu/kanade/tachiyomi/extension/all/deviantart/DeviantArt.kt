@@ -173,6 +173,7 @@ abstract class DeviantArt :
     }
 
     private fun orderChapterList(chapterList: MutableList<SChapter>) {
+        if (chapterList.isEmpty()) return
         // In Mihon's updates tab, chapters are ordered by source instead
         // of chapter number, so to avoid updates being shown in reverse,
         // disregard source order and order chronologically instead
