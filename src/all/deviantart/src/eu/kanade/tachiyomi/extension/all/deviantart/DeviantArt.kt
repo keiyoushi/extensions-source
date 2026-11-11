@@ -26,6 +26,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
 import java.time.DateTimeException
 import java.time.ZonedDateTime
@@ -119,7 +120,8 @@ abstract class DeviantArt :
         // "{artist}'s Gallery on DeviantArt" or "{folder} by {artist} on DeviantArt"
         val pageTitle = document.title().removeSuffix(" on DeviantArt")
         val isAllGallery = link.toHttpUrl().pathSegments[2] == "all"
-        val artistName = pageTitle.removeSuffix("'s Gallery").substringAfterLast(" by ")
+        val artistName = pageTitle.removeSuffix("'s Gallery")
+            .substringAfterLast(" by ").takeIf(String::isNotBlank)
         val galleryName = if (isAllGallery) "All" else pageTitle.substringBeforeLast(" by ")
         val artistInTitle = (preferences.artistInTitle == ArtistInTitle.ALWAYS.name) ||
             ((preferences.artistInTitle == ArtistInTitle.ONLY_ALL_GALLERIES.name) && isAllGallery)
@@ -128,11 +130,13 @@ abstract class DeviantArt :
             setUrlWithoutDomain(link)
             author = artistName
             title = when {
-                artistInTitle -> "$artistName - $galleryName"
+                artistInTitle && artistName != null -> "$artistName - $galleryName"
                 else -> galleryName
             }
             description = gallery?.selectFirst(".legacy-journal")?.wholeText()
-            thumbnail_url = gallery?.selectFirst("img[property=contentUrl]")?.absUrl("src")
+            thumbnail_url = gallery?.selectFirst("img[property=contentUrl]")?.getImgAttr()
+                ?: document.selectFirst("#background-container + div a[data-icon]")?.attr("abs:data-icon")
+            status = SManga.ONGOING
         }
     }
 
@@ -198,6 +202,13 @@ abstract class DeviantArt :
         .build()
 
     private fun Response.asJsoupXml(): Document = Jsoup.parse(body.string(), request.url.toString(), Parser.xmlParser())
+
+    private fun Element.getImgAttr(): String? = when {
+        hasAttr("url") -> attr("abs:url")
+        hasAttr("src") -> attr("abs:src")
+        hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
+        else -> null
+    }
 
     // ============================== Settings ===================================
 
