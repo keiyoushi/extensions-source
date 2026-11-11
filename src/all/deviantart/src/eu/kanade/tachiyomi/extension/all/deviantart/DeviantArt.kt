@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
@@ -30,6 +31,7 @@ import java.time.DateTimeException
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.time.Duration.Companion.minutes
 
 @Source
 abstract class DeviantArt :
@@ -44,7 +46,14 @@ abstract class DeviantArt :
 
     private val dateFormat by lazy { DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.ENGLISH) }
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(OriginalImageInterceptor())
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        rateLimit(30, 1.minutes) { it.host == baseUrlHost }
+        rateLimit(30, 5.minutes) { it.host == backendBaseUrlHost }
+        addInterceptor(OriginalImageInterceptor())
+    }
+
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
+    private val backendBaseUrlHost by lazy { backendBaseUrl.toHttpUrl().host }
 
     override suspend fun getPopularManga(page: Int): MangasPage = throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
