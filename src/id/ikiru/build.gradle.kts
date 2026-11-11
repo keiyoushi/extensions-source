@@ -7,13 +7,13 @@ plugins {
 keiyoushi {
     name = "Ikiru"
     pkgName = "id.mangatale"
-    versionCode = 63
+    versionCode = 64
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
     source {
         lang = "id"
-        baseUrl = "https://09.ikiru.wtf"
+        baseUrl = "https://10.ikiru.wtf"
         versionId = 2
     }
 }
