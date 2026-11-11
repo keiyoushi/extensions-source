@@ -68,10 +68,14 @@ abstract class MangaThemesia : KeiSource() {
     // Search
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
-        return getMangaDetails(
-            SManga.create()
-                .apply { this.url = url.encodedPath },
-        ).takeIf { it.title.isNotEmpty() }
+        val page = client.get(url.newBuilder().query(null).fragment(null).build(), Fetch.DOCUMENT).asJsoup()
+        // A chapter page links to its series
+        val document = page.selectFirst(".allc a[href]")
+            ?.let { client.get(it.absUrl("href"), Fetch.DOCUMENT.from(page.location())).asJsoup() }
+            ?: page
+        // Other pages, like the home page, have no series title
+        document.selectFirst(seriesDetailsSelector)?.selectFirst(seriesTitleSelector) ?: return null
+        return mangaDetailsParse(document).apply { initialized = true }
     }
 
     open fun searchMangaUrl(page: Int, query: String) = baseUrl.toHttpUrl().newBuilder().apply {
