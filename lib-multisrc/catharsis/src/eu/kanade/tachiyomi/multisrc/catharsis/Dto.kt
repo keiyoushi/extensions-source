@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.multisrc.catharsis
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -38,15 +39,11 @@ class MangaDto(
             addAll(generos.map { it.genre.nombre })
             if (nsfw) add("+18")
         }.distinct().joinToString().takeIf { it.isNotEmpty() }
-        description = buildString {
+        description = MarkdownDescription.Builder()
             // The site prints "None" for series without a synopsis
-            descripcion?.takeUnless { it.isBlank() || it == "None" }?.let { append(it.trim()) }
-            val altNames = listOfNotNull(nombreAlt1, nombreAlt2).filter(String::isNotBlank)
-            if (altNames.isNotEmpty()) {
-                if (isNotEmpty()) append("\n\n")
-                append("**Nombres alternativos:**\n", altNames.joinToString("\n") { "- $it" })
-            }
-        }.takeIf { it.isNotEmpty() }
+            .description(descripcion?.takeUnless { it == "None" })
+            .altTitles(listOfNotNull(nombreAlt1, nombreAlt2), "Nombres alternativos")
+            .build()
         status = when (estado?.lowercase()) {
             "curso", "ongoing" -> SManga.ONGOING
             "pausado" -> SManga.ON_HIATUS
