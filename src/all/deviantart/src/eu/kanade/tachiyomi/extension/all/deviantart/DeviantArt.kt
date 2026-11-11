@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -101,10 +102,13 @@ abstract class DeviantArt :
             val creator = item.selectFirst("media|credit")?.text()
             val artName = item.selectFirst("title")!!.text()
             val link = item.selectFirst("link")!!.text()
+            val id = link.removeSuffix("/")
+                .substringAfterLast('/')
+                .substringAfterLast('-')
 
             SManga.create().apply {
                 setUrlWithoutDomain(link)
-                title = artName
+                title = artTitle(artName, id)
                 author = creator
                 thumbnail_url = item.selectFirst("media|content")?.getImgAttr()
                 author?.let { genre = "gallery:$it, by:$it" }
@@ -264,12 +268,16 @@ abstract class DeviantArt :
 
     private fun parseToChapterList(document: Document): List<SChapter> = document.select("item").map {
         val artName = it.selectFirst("title")!!.text()
+        val link = it.selectFirst("link")!!.text()
+        val id = link.removeSuffix("/")
+            .substringAfterLast('/')
+            .substringAfterLast('-')
         // The feed gives a video only thumbnails, no media:content
         val isVideo = it.selectFirst("media|content") == null
 
         SChapter.create().apply {
-            setUrlWithoutDomain(it.selectFirst("link")!!.text())
-            name = if (isVideo) "$artName (video)" else artName
+            setUrlWithoutDomain(link)
+            name = artTitle(if (isVideo) "$artName (video)" else artName, id)
             date_upload = it.selectFirst("pubDate")?.text()?.let(dateFormat::tryParse) ?: 0L
             scanlator = it.selectFirst("media|credit")?.text()
         }
@@ -304,7 +312,7 @@ abstract class DeviantArt :
         setUrlWithoutDomain(link)
         val deviationId = link.substringAfterLast('-')
         // "{title} by {artist} on DeviantArt"
-        title = document.title().removeSuffix(" on DeviantArt").substringBeforeLast(" by ")
+        title = artTitle(document.title().removeSuffix(" on DeviantArt").substringBeforeLast(" by "), deviationId)
 
         try {
             val entities = document.parseScriptJson<StateContent>(INITIAL_STATE_REGEX)?.entities ?: return@apply
@@ -312,7 +320,7 @@ abstract class DeviantArt :
             val user = entities.user.getObjectOrNull(deviation.author.toString())?.parseAs<Author>()
             val author = user?.username
             setUrlWithoutDomain(deviation.url)
-            title = deviation.title
+            title = artTitle(deviation.title, deviationId)
             deviation.media.getCoverUrl()?.let { thumbnail_url = it }
             author?.let {
                 this.author = it
@@ -434,7 +442,7 @@ abstract class DeviantArt :
                     ?.map { deviation ->
                         SManga.create().apply {
                             setUrlWithoutDomain(deviation.url)
-                            title = deviation.title
+                            title = artTitle(deviation.title, deviation.url.substringAfterLast('-'))
                             thumbnail_url = deviation.media.getCoverUrl()
                             author = deviation.author.username
                             author?.let { genre = "gallery:$it, by:$it" }
@@ -491,6 +499,8 @@ abstract class DeviantArt :
         else -> null
     }
 
+    private fun artTitle(name: String, id: String): String = if (preferences.includeArtIdInChapterName) "$name [$id]" else name
+
     // ============================== Settings ===================================
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -507,6 +517,14 @@ abstract class DeviantArt :
         }
 
         screen.addPreference(artistInTitlePref)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = CHAPTER_NAME_PREF
+            title = "Include Art ID in art titles and chapter names (avoids duplicate download names)"
+            summaryOff = "Title only"
+            summaryOn = "Title [ID]"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
 
         EditTextPreference(screen.context).apply {
             key = CATALOG_SEARCH_QUERY_PREF
@@ -535,6 +553,9 @@ abstract class DeviantArt :
     private val SharedPreferences.artistInTitle
         get() = getString(ArtistInTitle.PREF_KEY, ArtistInTitle.defaultValue.name)
 
+    private val SharedPreferences.includeArtIdInChapterName
+        get() = getBoolean(CHAPTER_NAME_PREF, false)
+
     private val catalogSearchQuery
         get() = preferences.getString(CATALOG_SEARCH_QUERY_PREF, "") ?: ""
 
@@ -554,6 +575,8 @@ abstract class DeviantArt :
         private const val CATALOG_FORMAT_MSG = "Show Popular with:"
         private const val CATALOG_SEARCH_QUERY = "search query of: "
         private const val CATALOG_SEARCH_QUERY_PREF = "catalog_search_query_pref"
+
+        private const val CHAPTER_NAME_PREF = "includeArtIdAsChapterNamePref"
 
         private val GALLERY_QUERY_REGEX = Regex("""gallery:([\w-]+)(?:/(\d+))?""")
         private val ART_LINK_REGEX = Regex("""(.+/art/[^/?#]+)""")
