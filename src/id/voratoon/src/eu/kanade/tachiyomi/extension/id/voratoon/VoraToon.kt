@@ -77,15 +77,28 @@ abstract class VoraToon : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
+        if (!fetchDetails && !fetchChapters) {
+            return SMangaUpdate(manga, chapters)
+        }
+
         val slug = manga.getSlug(baseUrl)
         val dto = client.get("$baseUrl/series/$slug", rscHeaders, Fetch.XHR).extractNextJs<SeriesDetailsDto> {
             it is JsonObject && "series" in it && "chapters" in it
         } ?: return SMangaUpdate(manga, chapters)
 
-        return SMangaUpdate(
-            dto.series.firstOrNull()?.toSManga() ?: manga,
-            dto.chapters.map { it.toSChapter(slug) },
-        )
+        val updatedManga = if (fetchDetails) {
+            dto.series.firstOrNull()?.toSManga() ?: manga
+        } else {
+            manga
+        }
+
+        val updatedChapters = if (fetchChapters) {
+            dto.chapters.map { it.toSChapter(slug) }
+        } else {
+            chapters
+        }
+
+        return SMangaUpdate(updatedManga, updatedChapters)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {

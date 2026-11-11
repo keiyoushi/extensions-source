@@ -11,19 +11,19 @@ import kotlin.time.Instant
 
 @Serializable
 class BrowseDto(
-    val series: List<SeriesItem> = emptyList(),
+    val series: List<SeriesItem>,
     val seriesMeta: Meta? = null,
 )
 
 @Serializable
 class FilterPayloadDto(
-    val genres: List<GenreItem> = emptyList(),
+    val genres: List<GenreItem>,
 )
 
 @Serializable
 class SeriesDetailsDto(
-    val series: List<SeriesItem> = emptyList(),
-    val chapters: List<ChapterItem> = emptyList(),
+    val series: List<SeriesItem>,
+    val chapters: List<ChapterItem>,
 )
 
 @Serializable
