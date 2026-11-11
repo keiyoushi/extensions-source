@@ -107,6 +107,8 @@ abstract class DeviantArt :
                 title = artName
                 author = creator
                 thumbnail_url = item.selectFirst("media|content")?.getImgAttr()
+                author?.let { genre = "gallery:$it, by:$it" }
+                description = DESCRIPTION_GUIDE
                 update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             }
         }
@@ -211,9 +213,13 @@ abstract class DeviantArt :
                 artistInTitle && artistName != null -> "$artistName - $galleryName"
                 else -> galleryName
             }
-            description = gallery?.selectFirst(".legacy-journal")?.wholeText()
+            description = listOfNotNull(
+                gallery?.selectFirst(".legacy-journal")?.wholeText(),
+                DESCRIPTION_GUIDE,
+            ).joinToString("\n\n")
             thumbnail_url = gallery?.selectFirst("img[property=contentUrl]")?.getImgAttr()
                 ?: document.selectFirst("#background-container + div a[data-icon]")?.attr("abs:data-icon")
+            artistName?.let { genre = "gallery:$it, by:$it" }
             status = SManga.ONGOING
         }
     }
@@ -273,6 +279,7 @@ abstract class DeviantArt :
 
         // Update higher resolution thumbnail
         thumbnail_url = document.selectFirst("img[property=contentUrl]")?.getImgAttr()
+        description = DESCRIPTION_GUIDE
 
         // The canonical link stays clean even when the page was opened through an encoded one, which DeviantArt
         // serves without a redirect: …/art/Eye-Contact%2D1367064967 would otherwise give the ID "Contact%2D1367064967"
@@ -292,7 +299,10 @@ abstract class DeviantArt :
             setUrlWithoutDomain(deviation.url)
             title = deviation.title
             deviation.media.getCoverUrl()?.let { thumbnail_url = it }
-            author?.let { this.author = it }
+            author?.let {
+                this.author = it
+                genre = "gallery:$it, by:$it"
+            }
         } catch (e: SerializationException) {
             Log.w("DeviantArt", "Error parsing JSON", e)
         }
@@ -395,6 +405,7 @@ abstract class DeviantArt :
     companion object {
         private const val SEARCH_FORMAT_MSG = "Browse user's gallery by searching for `gallery:{username}` or `gallery:{username}/{folderId}`\n" +
             "Or search for an artist's individual arts with `by:{username}`"
+        private const val DESCRIPTION_GUIDE = "Click tag to show artist's gallery"
 
         private const val CATALOG_FORMAT_MSG = "Show Popular with:"
         private const val CATALOG_SEARCH_QUERY = "search query of: "
