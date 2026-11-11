@@ -33,11 +33,11 @@ class ChapterPageDto(
 
 @Serializable
 class SeriesItem(
-    private val id: Int? = null,
+    private val id: Int,
     private val data: SeriesData,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
-        url = "/series/${data.slug ?: id}"
+        url = "/series/${data.slug}"
         title = data.title
         thumbnail_url = data.coverImage
         author = data.author
@@ -56,7 +56,7 @@ class SeriesItem(
 
 @Serializable
 class SeriesData(
-    val slug: String? = null,
+    val slug: String,
     val title: String,
     val author: String? = null,
     val status: String? = null,
