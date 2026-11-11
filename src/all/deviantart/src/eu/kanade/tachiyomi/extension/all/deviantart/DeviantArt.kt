@@ -546,7 +546,7 @@ abstract class DeviantArt :
 
         companion object {
             const val PREF_KEY = "artistInTitlePref"
-            val defaultValue = ONLY_ALL_GALLERIES
+            val defaultValue = ALWAYS
         }
     }
 
