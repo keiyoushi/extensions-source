@@ -697,7 +697,7 @@ private val FONT_EXTENSIONS = listOf(".woff2", ".woff", ".ttf", ".otf")
  */
 suspend fun <T> runWebView(
     timeout: Duration = 30.seconds,
-    configure: WebViewScope<T>.() -> Unit,
+    configure: suspend WebViewScope<T>.() -> Unit,
 ): T = withContext(Dispatchers.Main) {
     val deferred = CompletableDeferred<T>()
     val webView = WebView(applicationContext)
@@ -736,7 +736,7 @@ suspend fun <T> runWebView(
 fun <T> runWebViewBlocking(
     call: Call,
     timeout: Duration = 30.seconds,
-    configure: WebViewScope<T>.() -> Unit,
+    configure: suspend WebViewScope<T>.() -> Unit,
 ): T {
     check(Looper.myLooper() != Looper.getMainLooper()) {
         "runWebViewBlocking must not be called on the main thread"
