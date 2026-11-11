@@ -19,5 +19,6 @@ keiyoushi {
         host("www.deviantart.com")
         host("deviantart.com")
         path("/..*/gallery/..*")
+        path("/..*/art/..*")
     }
 }

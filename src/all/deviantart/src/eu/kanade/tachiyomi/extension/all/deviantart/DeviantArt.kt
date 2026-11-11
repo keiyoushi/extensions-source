@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.deviantart
 
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -10,15 +11,19 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.getObjectOrNull
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.SerializationException
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -62,7 +67,7 @@ abstract class DeviantArt :
     // ============================== Search ===================================
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        val path = url.toGalleryPath(baseUrl) ?: return null
+        val path = url.toGalleryPath(baseUrl) ?: return getArtByUrl(url)
         val link = "$baseUrl$path"
         val document = client.get(link, Fetch.DOCUMENT).asJsoup()
 
@@ -81,6 +86,17 @@ abstract class DeviantArt :
         return MangasPage(listOf(parseGalleryDetails(document, link)), false)
     }
 
+    private suspend fun getArtByUrl(url: HttpUrl): SManga? {
+        if (url.host.removePrefix("www.") != baseUrlHost.removePrefix("www.")) return null
+        if (url.pathSegments.getOrNull(1) != "art") return null
+
+        val username = url.pathSegments[0]
+        val artId = url.encodedPathSegments.getOrNull(2) ?: return null
+        val document = client.get("$baseUrl/$username/art/$artId", Fetch.DOCUMENT).asJsoup()
+
+        return parseArtDetails(document)
+    }
+
     // ============================== Details + Chapters =======================
 
     override suspend fun fetchMangaUpdate(
@@ -90,6 +106,14 @@ abstract class DeviantArt :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val link = getMangaUrl(manga)
+
+        if (!manga.url.contains("/gallery/")) {
+            val document = client.get(link, Fetch.DOCUMENT).asJsoup()
+            return SMangaUpdate(
+                manga = parseArtDetails(document),
+                chapters = parseArtChapterList(document, link),
+            )
+        }
 
         var updatedManga = manga
         var updatedChapters = chapters
@@ -189,6 +213,48 @@ abstract class DeviantArt :
         }
     }
 
+    private fun parseArtDetails(document: Document): SManga = SManga.create().apply {
+        status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+
+        // Update higher resolution thumbnail
+        thumbnail_url = document.selectFirst("img[property=contentUrl]")?.getImgAttr()
+
+        // The canonical link stays clean even when the page was opened through an encoded one, which DeviantArt
+        // serves without a redirect: …/art/Eye-Contact%2D1367064967 would otherwise give the ID "Contact%2D1367064967"
+        val link = document.selectFirst("link[rel=canonical]")?.attr("abs:href")
+            ?: ART_LINK_REGEX.find(document.location())?.groupValues?.get(1)
+            ?: document.location()
+        setUrlWithoutDomain(link)
+        val deviationId = link.substringAfterLast('-')
+        // "{title} by {artist} on DeviantArt"
+        title = document.title().removeSuffix(" on DeviantArt").substringBeforeLast(" by ")
+
+        try {
+            val entities = document.parseScriptJson<StateContent>(INITIAL_STATE_REGEX)?.entities ?: return@apply
+            val deviation = entities.deviation.getObjectOrNull(deviationId)?.parseAs<DeviationState>() ?: return@apply
+            val user = entities.user.getObjectOrNull(deviation.author.toString())?.parseAs<Author>()
+            val author = user?.username
+            setUrlWithoutDomain(deviation.url)
+            title = deviation.title
+            deviation.media.getCoverUrl()?.let { thumbnail_url = it }
+            author?.let { this.author = it }
+        } catch (e: SerializationException) {
+            Log.w("DeviantArt", "Error parsing JSON", e)
+        }
+    }
+
+    private fun parseArtChapterList(document: Document, link: String): List<SChapter> {
+        val time = document.selectFirst("span:contains(Published) time")?.attr("datetime")
+        return listOf(
+            SChapter.create().apply {
+                setUrlWithoutDomain(link)
+                name = "Art"
+                time?.let { date_upload = DateTimeFormatter.ISO_OFFSET_DATE_TIME.tryParse(it) }
+            },
+        )
+    }
+
     // ============================== Pages =====================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -202,6 +268,13 @@ abstract class DeviantArt :
         .build()
 
     private fun Response.asJsoupXml(): Document = Jsoup.parse(body.string(), request.url.toString(), Parser.xmlParser())
+
+    // The JSON is embedded as a JS string literal, which may contain `\'` (valid JS, invalid JSON)
+    private inline fun <reified T> Document.parseScriptJson(regex: Regex): T? {
+        val literal = select("script").firstNotNullOfOrNull { regex.find(it.data()) }
+            ?.groupValues?.get(1) ?: return null
+        return literal.replace("\\'", "'").parseAs<String>().parseAs<T>()
+    }
 
     private fun Element.getImgAttr(): String? = when {
         hasAttr("url") -> attr("abs:url")
@@ -246,6 +319,8 @@ abstract class DeviantArt :
     companion object {
         private const val SEARCH_FORMAT_MSG = "Please enter a DeviantArt gallery URL, gallery:{username} or gallery:{username}/{folderId}"
         private val GALLERY_QUERY_REGEX = Regex("""gallery:([\w-]+)(?:/(\d+))?""")
+        private val ART_LINK_REGEX = Regex("""(.+/art/[^/?#]+)""")
+        private val INITIAL_STATE_REGEX = Regex("""window\.__INITIAL_STATE__ = JSON\.parse\(("\{.+?\}")\);""")
     }
 }
 
