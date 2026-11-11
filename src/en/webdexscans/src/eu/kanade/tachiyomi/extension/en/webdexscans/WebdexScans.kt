@@ -50,6 +50,7 @@ abstract class WebdexScans :
         val url = "$supabaseUrl/series".toHttpUrl().newBuilder()
             .addQueryParameter("select", "id,title,slug,cover_url")
             .addQueryParameter("order", "view_count.desc")
+            .addQueryParameter("status", "neq.draft")
             .addQueryParameter("offset", offset.toString())
             .addQueryParameter("limit", "24")
             .build()
@@ -65,15 +66,20 @@ abstract class WebdexScans :
     // ============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val offset = (page - 1) * 24
         val url = "$supabaseUrl/series".toHttpUrl().newBuilder()
-            .addQueryParameter("select", "id,title,slug,cover_url")
-            .addQueryParameter("order", "updated_at.desc")
-            .addQueryParameter("offset", offset.toString())
-            .addQueryParameter("limit", "24")
+            .addQueryParameter("select", "id,title,slug,cover_url,chapters(created_at)")
+            .addQueryParameter("chapters.order", "created_at.desc")
+            .addQueryParameter("chapters.limit", "1")
+            .addQueryParameter("status", "neq.draft")
             .build()
 
-        return mangaListParse(client.get(url, supabaseHeaders, Fetch.XHR))
+        // The site orders Latest by newest chapter, but PostgREST cannot order a to-many
+        // embed (PGRST118), so the whole series list is sorted and paged here.
+        val sorted = client.get(url, supabaseHeaders, Fetch.XHR).parseAs<List<SearchSeriesDto>>()
+            .sortedByDescending { it.latestChapterTimestamp }
+        val offset = (page - 1) * 24
+        val pageItems = sorted.drop(offset).take(24)
+        return MangasPage(pageItems.map { it.toSManga(baseUrl) }, offset + pageItems.size < sorted.size)
     }
 
     // ============================== Search ===============================
@@ -101,6 +107,8 @@ abstract class WebdexScans :
         filters.firstInstanceOrNull<StatusFilter>()?.selected?.let {
             url.addQueryParameter("status", "eq.$it")
         }
+
+        url.addQueryParameter("status", "neq.draft")
 
         when (filters.firstInstanceOrNull<SortFilter>()?.selected) {
             "popular" -> url.addQueryParameter("order", "view_count.desc")
