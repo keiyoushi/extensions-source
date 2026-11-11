@@ -279,7 +279,6 @@ abstract class DeviantArt :
             setUrlWithoutDomain(link)
             name = artTitle(if (isVideo) "$artName (video)" else artName, id)
             date_upload = it.selectFirst("pubDate")?.text()?.let(dateFormat::tryParse) ?: 0L
-            scanlator = it.selectFirst("media|credit")?.text()
         }
     }
 
