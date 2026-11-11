@@ -39,17 +39,14 @@ import kotlin.time.Instant
 @Source
 abstract class MikoRoku : KeiSource() {
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder =
-        rateLimit(10, 1.seconds, 300.milliseconds)
-            .readTimeout(30, TimeUnit.SECONDS)
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(10, 1.seconds, 300.milliseconds)
+        .readTimeout(30, TimeUnit.SECONDS)
 
     private val chapterImages = ConcurrentHashMap<String, List<String>>()
 
-    override suspend fun getPopularManga(page: Int): MangasPage =
-        fetchCatalog().sortedByDescending { it.rating }.toMangasPage()
+    override suspend fun getPopularManga(page: Int): MangasPage = fetchCatalog().sortedByDescending { it.rating }.toMangasPage()
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage =
-        fetchCatalog().toMangasPage()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = fetchCatalog().toMangasPage()
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val normalizedQuery = query.normalize()
@@ -81,8 +78,7 @@ abstract class MikoRoku : KeiSource() {
 
     private fun List<CatalogEntry>.toMangasPage() = MangasPage(map { it.toSManga() }, false)
 
-    override fun getFilterList(data: JsonElement?): FilterList =
-        FilterList(SortFilter(), GenreFilter())
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(SortFilter(), GenreFilter())
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host.removePrefix("www.")) return null
@@ -394,11 +390,9 @@ abstract class MikoRoku : KeiSource() {
         return sb.toString()
     }
 
-    private fun fsStr(f: JSONObject, name: String): String =
-        f.optJSONObject(name)?.optString("stringValue") ?: ""
+    private fun fsStr(f: JSONObject, name: String): String = f.optJSONObject(name)?.optString("stringValue") ?: ""
 
-    private fun fsBool(f: JSONObject, name: String): Boolean =
-        f.optJSONObject(name)?.optBoolean("booleanValue") ?: false
+    private fun fsBool(f: JSONObject, name: String): Boolean = f.optJSONObject(name)?.optBoolean("booleanValue") ?: false
 
     private fun fsStrList(f: JSONObject, name: String): List<String> {
         val values = f.optJSONObject(name)?.optJSONObject("arrayValue")
@@ -536,10 +530,11 @@ abstract class MikoRoku : KeiSource() {
 
     private fun String?.nonBlank(): String? = this?.takeIf { it.isNotBlank() }
 
-    private class SortFilter : Filter.Select<String>(
-        "Order By",
-        arrayOf("Populer", "A-Z", "Z-A", "Terbaru"),
-    )
+    private class SortFilter :
+        Filter.Select<String>(
+            "Order By",
+            arrayOf("Populer", "A-Z", "Z-A", "Terbaru"),
+        )
 
     private class GenreFilter : Filter.Select<String>("Genre", GENRES.toTypedArray())
 
