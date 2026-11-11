@@ -124,10 +124,10 @@ abstract class CatharsisWorld : Catharsis() {
         val descrambled = descramble(bitmap, ticket.scrambleKey)
         bitmap.recycle()
         val out = Buffer()
-        descrambled.compress(Bitmap.CompressFormat.PNG, 100, out.outputStream())
+        descrambled.compress(Bitmap.CompressFormat.JPEG, 90, out.outputStream())
         descrambled.recycle()
         return response.newBuilder()
-            .body(out.asResponseBody("image/png".toMediaType(), out.size))
+            .body(out.asResponseBody("image/jpeg".toMediaType(), out.size))
             .build()
     }
 
