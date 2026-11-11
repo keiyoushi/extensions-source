@@ -17,6 +17,8 @@ class TokenDto(
     val success: Boolean = false,
     val token: String? = null,
     @SerialName("chapter_id") val chapterId: String? = null,
+    val error: String? = null,
+    val message: String? = null,
 )
 
 @Serializable
@@ -27,7 +29,7 @@ class ChallengeDto(
 )
 
 @Serializable
-class AnchorDto(
-    val success: Boolean = false,
-    val v: String? = null,
+class AdTicketDto(
+    val chapter: String,
+    val nonce: String,
 )
