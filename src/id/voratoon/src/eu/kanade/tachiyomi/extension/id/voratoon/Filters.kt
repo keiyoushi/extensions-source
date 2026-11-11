@@ -77,6 +77,28 @@ class TypeFilter :
         ),
     )
 
+class AdaptationFilter :
+    UriPartFilter(
+        "Adaptasi",
+        "anime",
+        arrayOf(
+            Pair("Semua", ""),
+            Pair("Animated", "yes"),
+            Pair("Yet Animated", "no"),
+        ),
+    )
+
+class MinChapterFilter :
+    Filter.Text("Minimum Chapter"),
+    UriQueryFilter {
+    override fun addToQuery(builder: HttpUrl.Builder) {
+        val value = state.trim().toIntOrNull()?.takeIf { it > 0 }
+        if (value != null) {
+            builder.addQueryParameter("min", value.toString())
+        }
+    }
+}
+
 class GenreOption(name: String, val value: String) : Filter.CheckBox(name)
 
 class GenreFilter(genres: Array<Pair<String, String>>) :

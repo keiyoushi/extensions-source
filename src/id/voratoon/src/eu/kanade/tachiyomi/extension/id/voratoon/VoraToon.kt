@@ -151,6 +151,8 @@ abstract class VoraToon : KeiSource() {
                 add(StatusFilter())
                 add(FormatFilter())
                 add(TypeFilter())
+                add(AdaptationFilter())
+                add(MinChapterFilter())
                 if (!genres.isNullOrEmpty()) {
                     add(GenreFilter(genres.toTypedArray()))
                 }
