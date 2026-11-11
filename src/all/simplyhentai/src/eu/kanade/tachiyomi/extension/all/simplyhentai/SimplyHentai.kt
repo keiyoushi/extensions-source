@@ -54,6 +54,9 @@ abstract class SimplyHentai :
         val url = "$apiUrl/tag/$langName".toHttpUrl().newBuilder().apply {
             addQueryParameter("type", "language")
             addQueryParameter("page", page.toString())
+            if (blacklist.isNotBlank()) {
+                addQueryParameter("blacklist", blacklist)
+            }
             sort?.let { addQueryParameter("sort", it) }
         }.build()
 
@@ -69,8 +72,8 @@ abstract class SimplyHentai :
         val url = "$apiUrl/search/complex".toHttpUrl().newBuilder().apply {
             addQueryParameter("query", query)
             addQueryParameter("page", page.toString())
-            addQueryParameter("blacklist", blacklist)
             addQueryParameter("filter[language][0]", langName.replaceFirstChar(Char::uppercase))
+            var filterBlacklist: List<String>? = null
             filters.forEach { filter ->
                 when (filter) {
                     is SortFilter -> {
@@ -83,6 +86,10 @@ abstract class SimplyHentai :
 
                     is TagsFilter -> filter.value?.forEachIndexed { idx, tag ->
                         addQueryParameter("filter[tags][$idx]", tag.trim())
+                    }
+
+                    is BlacklistFilter -> {
+                        filterBlacklist = filter.value
                     }
 
                     is ArtistsFilter -> filter.value?.forEachIndexed { idx, tag ->
@@ -99,6 +106,15 @@ abstract class SimplyHentai :
 
                     else -> {}
                 }
+            }
+
+            val combinedBlacklist = (blacklist.split(',') + (filterBlacklist ?: emptyList()))
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .joinToString(",")
+
+            if (combinedBlacklist.isNotBlank()) {
+                addQueryParameter("blacklist", combinedBlacklist)
             }
         }.build()
 
@@ -158,6 +174,8 @@ abstract class SimplyHentai :
         SeriesFilter(),
         Note("tags"),
         TagsFilter(),
+        Note("blacklist tags"),
+        BlacklistFilter(),
         Note("artists"),
         ArtistsFilter(),
         Note("translators"),

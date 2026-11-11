@@ -20,6 +20,11 @@ class TagsFilter : Filter.Text("Tags") {
         get() = if (state.isBlank()) null else state.split(',')
 }
 
+class BlacklistFilter : Filter.Text("Blacklist tags") {
+    inline val value: List<String>?
+        get() = if (state.isBlank()) null else state.split(',')
+}
+
 class ArtistsFilter : Filter.Text("Artists") {
     inline val value: List<String>?
         get() = if (state.isBlank()) null else state.split(',')
