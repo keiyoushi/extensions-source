@@ -227,9 +227,20 @@ abstract class DeviantArt :
     private suspend fun fetchGalleryChapterList(manga: SManga): List<SChapter> {
         val pathSegments = getMangaUrl(manga).toHttpUrl().pathSegments
         val username = pathSegments[0]
-        val query = when (val folderId = pathSegments[2]) {
-            "all" -> "gallery:$username"
-            else -> "gallery:$username/$folderId"
+        val folderId = pathSegments[2]
+        val query = when {
+            folderId == "all" -> "gallery:$username"
+            (folderId.toLongOrNull() ?: 0) > 0 -> "gallery:$username/$folderId"
+            // A DeviantArt folder other than "All" is linked by name, e.g. "Scraps" at /{username}/gallery/scraps,
+            // and the feed has no query for it: gallery:{username}/scraps and gallery:{username}/-2 both return
+            // the whole gallery, so listing it from the feed would show the wrong arts.
+            // TODO: list it from the folder page's state instead. Its stream (`folder-deviations-gallery-{ID}`,
+            //  e.g. `folder-deviations-gallery--2`, read with StateContent.folderDeviationIds) only holds the first
+            //  items, see FolderDeviationStream.hasMore
+            //  or use DeviantArt's internal gallery API (/_puppy/dashared/gallection/contents, folder -2) for the scraps chapter list.
+            // Until then, no chapters rather than an error, so the gallery's details still refresh:
+            // Chapters of the "{folderId}" folder are not implemented: DeviantArt's feed has no query for it
+            else -> return emptyList()
         }
 
         val url = backendBuilder()
@@ -317,6 +328,115 @@ abstract class DeviantArt :
                 time?.let { date_upload = DateTimeFormatter.ISO_OFFSET_DATE_TIME.tryParse(it) }
             },
         )
+    }
+
+    // ============================== Related ===================================
+
+    override val supportsRelatedMangas = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val link = getMangaUrl(manga)
+        val document = client.get(link, Fetch.DOCUMENT).asJsoup()
+
+        if (manga.url.contains("/gallery/")) {
+            // Return other galleries of this user, from the page's state
+            val artistName = document.title().removeSuffix(" on DeviantArt").removeSuffix("'s Gallery")
+                .substringAfterLast(" by ").takeIf(String::isNotBlank)
+            val username = link.toHttpUrl().pathSegments[0]
+            return try {
+                val state = document.parseScriptJson<StateContent>(INITIAL_STATE_REGEX) ?: return emptyList()
+                val folders = state.entities.galleryFolder
+                state.galleryFolderIds?.items.orEmpty().mapNotNull { folders[it.toString()] }.map { folder ->
+                    val isAllGallery = folder.specialType == "all"
+                    val artistInTitle = preferences.artistInTitle == ArtistInTitle.ALWAYS.name ||
+                        (preferences.artistInTitle == ArtistInTitle.ONLY_ALL_GALLERIES.name && isAllGallery)
+                    // DeviantArt's own folders have negative IDs, and their links use the lowercased name
+                    // instead of the ID: "All" (-1) is /{username}/gallery/all and "Scraps" (-2) is
+                    // /{username}/gallery/scraps. Going by the sign rather than a list of names covers any other one
+                    // Example: https://www.deviantart.com/arven92/gallery/scraps
+                    val folderPath = if (folder.folderId < 0) folder.name.lowercase() else folder.folderId.toString()
+
+                    SManga.create().apply {
+                        url = "/$username/gallery/$folderPath"
+                        title = when {
+                            artistInTitle && !artistName.isNullOrBlank() -> "$artistName - ${folder.name}"
+                            else -> folder.name
+                        }
+                        // Decode each cover on its own, so one that doesn't decode only costs that folder its cover
+                        thumbnail_url = folder.thumb?.let { state.entities.deviation.getObjectOrNull(it.toString()) }
+                            ?.let { thumb ->
+                                try {
+                                    thumb.parseAs<DeviationState>().media.getCoverUrl()
+                                } catch (e: SerializationException) {
+                                    Log.w("DeviantArt", "Error parsing the cover of folder ${folder.folderId}", e)
+                                    null
+                                }
+                            }
+                        author = artistName
+                        author?.let { genre = "gallery:$it, by:$it" }
+                        description = DESCRIPTION_GUIDE
+                    }
+                }
+            } catch (e: SerializationException) {
+                Log.e("DeviantArt", "Error parsing JSON", e)
+                emptyList()
+            }
+        } else {
+            // Art
+            return try {
+                document.parseScriptJson<RCacheContent>(RCACHE_REGEX)?.relatedContent?.relatedContent
+                    ?.mapNotNull { element ->
+                        // Parse each entry on its own so one unexpected entry doesn't drop the rest
+                        val related = try {
+                            element.parseAs<Related>()
+                        } catch (e: SerializationException) {
+                            Log.e("DeviantArt", "Error parsing related content", e)
+                            return@mapNotNull null
+                        }
+                        val contentType = related.contentType
+                            ?: return@mapNotNull null
+
+                        when (contentType) {
+                            "gallery", "boosted", "recommended",
+                            "monetization_promotion_tier_thirdparty",
+                            "monetization_promotion_dreamup_thirdparty",
+                            "monetization_promotion_pcp_firstparty",
+                            -> {
+                                related.deviations
+                            }
+                            "users" -> {
+                                related.users
+                                    ?.flatMap { user -> user.deviations }
+                            }
+                            "collections" -> {
+                                related.collections
+                                    ?.flatMap { collection -> collection.deviations }
+                            }
+                            // Group profiles only, no deviations to show
+                            "groups" -> null
+                            else -> {
+                                Log.w("DeviantArt", "contentType: $contentType")
+                                null
+                            }
+                        }
+                    }?.flatten()
+                    ?.map { deviation ->
+                        SManga.create().apply {
+                            setUrlWithoutDomain(deviation.url)
+                            title = deviation.title
+                            thumbnail_url = deviation.media.getCoverUrl()
+                            author = deviation.author.username
+                            author?.let { genre = "gallery:$it, by:$it" }
+                            description = DESCRIPTION_GUIDE
+                            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+                        }
+                    }
+                    ?: emptyList()
+            } catch (e: SerializationException) {
+                Log.e("DeviantArt", "Error parsing JSON", e)
+                emptyList()
+            }
+        }
     }
 
     // ============================== Pages =====================================
@@ -413,6 +533,7 @@ abstract class DeviantArt :
 
         private val GALLERY_QUERY_REGEX = Regex("""gallery:([\w-]+)(?:/(\d+))?""")
         private val ART_LINK_REGEX = Regex("""(.+/art/[^/?#]+)""")
+        private val RCACHE_REGEX = Regex("""window\.__RCACHE__ = JSON\.parse\(("\{.+?\}")\);""")
         private val INITIAL_STATE_REGEX = Regex("""window\.__INITIAL_STATE__ = JSON\.parse\(("\{.+?\}")\);""")
     }
 }
