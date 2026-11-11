@@ -1,0 +1,242 @@
+package keiyoushi.lint.detectors
+
+import com.android.tools.lint.client.api.UElementHandler
+import com.android.tools.lint.detector.api.Detector
+import com.android.tools.lint.detector.api.JavaContext
+import com.android.tools.lint.detector.api.LintFix
+import com.android.tools.lint.detector.api.SourceCodeScanner
+import com.intellij.psi.PsiMember
+import com.intellij.psi.PsiMethod
+import keiyoushi.lint.HTTP_SOURCE
+import keiyoushi.lint.KEI_SOURCE
+import keiyoushi.lint.SCHAPTER
+import keiyoushi.lint.SMANGA
+import keiyoushi.lint.issue
+import keiyoushi.lint.loc
+import org.jetbrains.kotlin.psi.KtClassOrObject
+import org.jetbrains.kotlin.psi.KtIfExpression
+import org.jetbrains.kotlin.psi.KtObjectDeclaration
+import org.jetbrains.kotlin.psi.KtProperty
+import org.jetbrains.kotlin.psi.KtStringTemplateExpression
+import org.jetbrains.uast.UBinaryExpression
+import org.jetbrains.uast.UCallExpression
+import org.jetbrains.uast.UClass
+import org.jetbrains.uast.UElement
+import org.jetbrains.uast.UIfExpression
+import org.jetbrains.uast.UMethod
+import org.jetbrains.uast.UPolyadicExpression
+import org.jetbrains.uast.UastBinaryOperator
+import org.jetbrains.uast.getParentOfType
+import org.jetbrains.uast.tryResolve
+
+class SourceDetector :
+    Detector(),
+    SourceCodeScanner {
+
+    override fun getApplicableUastTypes(): List<Class<out UElement>> = listOf(
+        UClass::class.java,
+        UBinaryExpression::class.java,
+        UIfExpression::class.java,
+        UPolyadicExpression::class.java,
+    )
+
+    override fun createUastHandler(context: JavaContext): UElementHandler = object : UElementHandler() {
+        override fun visitClass(node: UClass) {
+            val ktClass = node.sourcePsi as? KtClassOrObject ?: return
+            if (ktClass is KtObjectDeclaration) return
+            if (!context.evaluator.extendsClass(node.javaPsi, HTTP_SOURCE, false)) return
+
+            ktClass.body?.properties.orEmpty().forEach { property -> checkClassProperty(context, node, property) }
+        }
+
+        override fun visitBinaryExpression(node: UBinaryExpression) {
+            if (node.operator == UastBinaryOperator.ASSIGN) {
+                checkMandatoryField(context, node)
+                return
+            }
+            if (node.operator == UastBinaryOperator.PLUS) {
+                checkBaseUrlConcat(context, node, node.sourcePsi?.text ?: return)
+                return
+            }
+            if (node.operator == UastBinaryOperator.LOGICAL_AND) {
+                val text = node.sourcePsi?.text?.replace(WHITESPACE, "") ?: return
+                if (text == "!fetchDetails&&!fetchChapters" || text == "!fetchChapters&&!fetchDetails") {
+                    context.report(
+                        IMPOSSIBLE_FLAGS,
+                        node,
+                        context.loc(node),
+                        "`fetchMangaUpdate` is never called with both flags false",
+                    )
+                }
+            }
+        }
+
+        // String templates: `"$baseUrl${manga.url}"`
+        override fun visitPolyadicExpression(node: UPolyadicExpression) {
+            val template = node.sourcePsi as? KtStringTemplateExpression ?: return
+            checkBaseUrlConcat(context, node, template.text)
+        }
+
+        override fun visitIfExpression(node: UIfExpression) {
+            val method = node.getParentOfType<UMethod>(true) ?: return
+            if (method.name != "fetchMangaUpdate") return
+            val ifPsi = node.sourcePsi as? KtIfExpression ?: return
+            val condition = ifPsi.condition?.text ?: return
+            if (condition.trim() != "fetchChapters") return
+            val elseText = ifPsi.`else`?.text?.replace(WHITESPACE, "") ?: return
+            if (elseText == "emptyList()" || elseText == "listOf()") {
+                context.report(
+                    EMPTY_CHAPTERS,
+                    node,
+                    context.getLocation(ifPsi.`else`!!),
+                    "Return the passed `chapters` when `fetchChapters` is false; an empty list can wipe the chapter list",
+                )
+            }
+        }
+    }
+
+    private fun checkBaseUrlConcat(context: JavaContext, node: UElement, text: String) {
+        val match = BASE_URL_CONCAT.find(text) ?: return
+        val helper = if (match.groupValues[1] == "manga") "getMangaUrl(manga)" else "getChapterUrl(chapter)"
+        context.report(
+            BASE_URL_CONCAT_ISSUE,
+            node,
+            context.loc(node),
+            "Use `$helper` instead of rebuilding the URL from `baseUrl`",
+        )
+    }
+
+    private fun checkClassProperty(context: JavaContext, cls: UClass, property: KtProperty) {
+        val name = property.name ?: return
+
+        if (name == "supportsLatest" && property.hasModifier(org.jetbrains.kotlin.lexer.KtTokens.OVERRIDE_KEYWORD)) {
+            val value = (property.initializer ?: property.getter?.bodyExpression)?.text
+            val superClass = cls.javaPsi.superClass?.qualifiedName
+            if (value == "true" && superClass == KEI_SOURCE) {
+                context.report(
+                    DEFAULT_OVERRIDE,
+                    property,
+                    context.getLocation(property),
+                    "`supportsLatest` is already `true` on `KeiSource`",
+                    LintFix.create().replace().range(context.getLocation(property)).all().with("").reformat(true).build(),
+                )
+            }
+        }
+
+        if (property.getter != null || property.isLocal) return
+        val initializer = property.initializer ?: property.delegateExpression ?: return
+        val reference = DYNAMIC_REFERENCE.find(initializer.text)?.value ?: return
+        val isLazy = property.delegateExpression != null
+        context.report(
+            STORED_BASE_URL,
+            property,
+            context.getLocation(property.nameIdentifier ?: property),
+            "`$name` is computed once from `$reference`${if (isLazy) " by `lazy`" else ""}; `baseUrl` can change at runtime " +
+                "(mirrors, custom URL, `fetchBaseUrls`), so make it a `get()` property",
+        )
+    }
+
+    private fun checkMandatoryField(context: JavaContext, node: UBinaryExpression) {
+        val target = node.leftOperand.tryResolve() as? PsiMember ?: return
+        val owner = target.containingClass?.qualifiedName ?: return
+        val field = target.name?.removePrefix("set")?.replaceFirstChar { it.lowercase() } ?: return
+        val mandatory = when (owner) {
+            SMANGA -> field == "title" || field == "url"
+            SCHAPTER -> field == "name" || field == "url"
+            else -> false
+        }
+        if (!mandatory) return
+        val value = node.rightOperand.sourcePsi?.text ?: return
+        if (EMPTY_FALLBACK.containsMatchIn(value)) {
+            context.report(
+                MANDATORY_FALLBACK,
+                node,
+                context.loc(node),
+                "`$field` is mandatory: fail (`!!`, throw, or skip the entry) instead of falling back to a placeholder",
+            )
+        }
+    }
+
+    override fun getApplicableMethodNames(): List<String> = listOf("sortedByDescending", "sortedBy", "sortByDescending", "sortBy")
+
+    override fun visitMethodCall(context: JavaContext, node: UCallExpression, method: PsiMethod) {
+        val lambda = node.valueArguments.lastOrNull()?.sourcePsi?.text ?: return
+        if ("chapter_number" in lambda || "chapterNumber" in lambda) {
+            context.report(
+                CHAPTER_SORT,
+                node,
+                context.loc(node),
+                "Return chapters in the site's order (`reversed()` if needed) instead of sorting by number",
+            )
+        }
+    }
+
+    companion object {
+        private val WHITESPACE = Regex("""\s+""")
+        private val BASE_URL_CONCAT = Regex("""\$?\{?baseUrl}?\s*\+?\s*\$?\{?(manga|chapter)\.url\b""")
+        private val DYNAMIC_REFERENCE = Regex("""\bbaseUrl\b|\bheaders\b(?!Builder)""")
+        private val EMPTY_FALLBACK = Regex("""\?:\s*"(|Untitled|Unknown|No title|Chapter|Sem título|Sin título)"\s*$|\.orEmpty\(\)\s*$""", RegexOption.IGNORE_CASE)
+
+        val DEFAULT_OVERRIDE = issue<SourceDetector>(
+            "KeiDefaultOverride",
+            "Override restates the default",
+            "`KeiSource.supportsLatest` is already `true`.",
+        )
+
+        val IMPOSSIBLE_FLAGS = issue<SourceDetector>(
+            "KeiImpossibleFlags",
+            "Guard for both `fetchMangaUpdate` flags being false",
+            "The app never calls `fetchMangaUpdate` with both `fetchDetails` and `fetchChapters` false.",
+        )
+
+        val EMPTY_CHAPTERS = issue<SourceDetector>(
+            "KeiEmptyChaptersWhenSkipped",
+            "Empty chapter list returned when `fetchChapters` is false",
+            """
+            When chapters aren't fetched, return the `chapters` passed in: the app may apply the returned list \
+            regardless of the flags. If details and chapters come from the same response, return both unconditionally.
+            """,
+        )
+
+        val BASE_URL_CONCAT_ISSUE = issue<SourceDetector>(
+            "KeiBaseUrlConcat",
+            "URL rebuilt from `baseUrl` instead of `getMangaUrl`/`getChapterUrl`",
+            "`getMangaUrl(manga)` and `getChapterUrl(chapter)` are the single place that maps a stored URL to the site.",
+        )
+
+        val STORED_BASE_URL = issue<SourceDetector>(
+            "KeiStoredBaseUrl",
+            "Value derived from `baseUrl`/`headers` stored once",
+            """
+            `baseUrl` can change while the source is alive (mirror and custom-URL preferences, `fetchBaseUrls`). \
+            Properties derived from it, or from `headers`, must be `get()` properties or functions, not stored \
+            values or `lazy` delegates. Interceptors that need it should take a `{ baseUrl }` lambda.
+            """,
+        )
+
+        val MANDATORY_FALLBACK = issue<SourceDetector>(
+            "KeiMandatoryFallback",
+            "Placeholder for a mandatory field",
+            """
+            `SManga.title`, `SManga.url`, `SChapter.name` and `SChapter.url` are mandatory. Fail loudly (`!!`, \
+            throw) or skip the entry with `mapNotNull` instead of falling back to `""` or a generic placeholder.
+            """,
+        )
+
+        val CHAPTER_SORT = issue<SourceDetector>(
+            "KeiChapterSort",
+            "Chapters sorted by number",
+            "Return chapters in the site's order, newest first (`reversed()` if the site lists them oldest first).",
+        )
+
+        val ISSUES = listOf(
+            DEFAULT_OVERRIDE,
+            IMPOSSIBLE_FLAGS,
+            EMPTY_CHAPTERS,
+            BASE_URL_CONCAT_ISSUE,
+            STORED_BASE_URL,
+            MANDATORY_FALLBACK,
+            CHAPTER_SORT,
+        )
+    }
+}
