@@ -45,7 +45,27 @@ class DetectorsTest {
             """
             package test.pkg
             import okhttp3.*
-            fun f(client: OkHttpClient) = client.newCall(Request.Builder().build()).execute()
+            suspend fun f(client: OkHttpClient) = client.newCall(Request.Builder().build()).execute()
+            fun blocking(client: OkHttpClient) = client.newCall(Request.Builder().build()).execute()
+            suspend fun fireAndForget(client: OkHttpClient) = client.newCall(Request.Builder().build()).enqueue(Any())
+            """,
+        ).count(1)
+    }
+
+    @Test
+    fun toast() {
+        check(
+            NetworkDetector.TOAST,
+            """
+            package test.pkg
+            import android.content.Context
+            import android.widget.Toast
+            class Pref { fun setOnPreferenceChangeListener(l: () -> Boolean) {} }
+            fun parse(context: Context) { Toast.makeText(context, "x", Toast.LENGTH_SHORT).show() }
+            fun prefs(context: Context, p: Pref) = p.setOnPreferenceChangeListener {
+                Toast.makeText(context, "Restart the app", Toast.LENGTH_SHORT).show()
+                true
+            }
             """,
         ).count(1)
     }

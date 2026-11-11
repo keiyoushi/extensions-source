@@ -155,7 +155,7 @@ class BuildScriptDetector :
 
         private val IMPLEMENTATION = Implementation(BuildScriptDetector::class.java, Scope.GRADLE_SCOPE)
 
-        private fun gradleIssue(id: String, brief: String, explanation: String) = Issue.create(
+        private fun gradleIssue(id: String, brief: String, explanation: String, enabledByDefault: Boolean = true) = Issue.create(
             id = id,
             briefDescription = brief,
             explanation = explanation,
@@ -163,6 +163,7 @@ class BuildScriptDetector :
             priority = 5,
             severity = com.android.tools.lint.detector.api.Severity.WARNING,
             implementation = IMPLEMENTATION,
+            enabledByDefault = enabledByDefault,
         )
 
         val LANGUAGE_SUFFIX = gradleIssue(
@@ -189,7 +190,10 @@ class BuildScriptDetector :
             """
             Set `id` only to keep the old id of a source that was renamed or changed language. A new source, or \
             one whose URLs changed incompatibly (bump `versionId` instead), must not set it.
+
+            Off by default: lint can't tell a new source from a renamed one. Enable it when reviewing a new source.
             """.trimIndent(),
+            enabledByDefault = false,
         )
 
         val ISSUES = listOf(LANGUAGE_SUFFIX, REDUNDANT_SOURCE_NAME, REDUNDANT_DEEPLINK_HOST, EXPLICIT_ID)

@@ -1,5 +1,6 @@
 package keiyoushi.lint
 
+import com.android.tools.lint.checks.infrastructure.LintDetectorTest.java
 import com.android.tools.lint.checks.infrastructure.LintDetectorTest.kotlin
 import com.android.tools.lint.checks.infrastructure.TestFile
 
@@ -31,7 +32,7 @@ object Stubs {
         }
         abstract class ResponseBody { fun string(): String = "" }
         class Response { val body: ResponseBody get() = TODO() }
-        interface Call { fun execute(): Response }
+        interface Call { fun execute(): Response; fun enqueue(callback: Any) }
         class OkHttpClient { fun newCall(request: Request): Call = TODO() }
         fun interface Interceptor {
             fun intercept(chain: Chain): Response
@@ -172,5 +173,26 @@ object Stubs {
         """,
     ).indented()
 
-    val all = arrayOf(okhttp, jsoup, jsoupElements, jsoupParser, serialization, json, model, source, keiSource, network, android)
+    // Java, like the real class: makeText is a static of android.widget.Toast
+    val androidExtra: TestFile = java(
+        """
+        package android.widget;
+
+        public class Toast {
+            public static final int LENGTH_SHORT = 0;
+            public static Toast makeText(android.content.Context context, CharSequence text, int duration) { return new Toast(); }
+            public void show() {}
+        }
+        """,
+    ).indented()
+
+    val androidContext: TestFile = kotlin(
+        """
+        package android.content
+
+        open class Context { fun getSharedPreferences(name: String, mode: Int): Any = TODO() }
+        """,
+    ).indented()
+
+    val all = arrayOf(androidExtra, androidContext, okhttp, jsoup, jsoupElements, jsoupParser, serialization, json, model, source, keiSource, network, android)
 }

@@ -107,8 +107,14 @@ class IconDetector :
             context.report(LEFTOVER_HI_RES, Location.create(it), "Remove `$HI_RES`; only the mipmap icons are used")
         }
 
+        // A themed extension without icons uses its theme's, which the theme library merges in
+        val theme = THEME.find(buildFile.readText())?.groupValues?.get(1)
+        val root = generateSequence(context.project.dir) { it.parentFile }.firstOrNull { File(it, "lib-multisrc").isDirectory }
+        val themeRes = if (theme != null && root != null) File(root, "lib-multisrc/$theme/res") else null
+        val hasOwnIcons = SIZES.keys.any { File(res, "mipmap-$it/$ICON").isFile }
         val missing = SIZES.keys.filter { !File(res, "mipmap-$it/$ICON").isFile }
-        if (missing.isNotEmpty()) {
+        val inherited = !hasOwnIcons && themeRes != null && SIZES.keys.all { File(themeRes, "mipmap-$it/$ICON").isFile }
+        if (missing.isNotEmpty() && !inherited) {
             context.report(
                 ICON_SIZE,
                 Location.create(buildFile),
@@ -123,6 +129,7 @@ class IconDetector :
 
         // The generator's outer shadow reaches about alpha 45 below the square
         private const val MAX_SHADOW_ALPHA = 100
+        private val THEME = Regex("""\btheme\s*=\s*"(\w+)"""")
         private val SIZES = mapOf("mdpi" to 48, "hdpi" to 72, "xhdpi" to 96, "xxhdpi" to 144, "xxxhdpi" to 192)
 
         private val IMPLEMENTATION = Implementation(IconDetector::class.java, Scope.BINARY_RESOURCE_FILE_SCOPE)

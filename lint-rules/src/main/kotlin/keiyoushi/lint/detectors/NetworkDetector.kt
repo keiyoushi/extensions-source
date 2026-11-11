@@ -16,9 +16,12 @@ import keiyoushi.lint.loc
 import keiyoushi.lint.stringValue
 import org.jetbrains.uast.UCallExpression
 import org.jetbrains.uast.UElement
+import org.jetbrains.uast.ULambdaExpression
 import org.jetbrains.uast.ULiteralExpression
+import org.jetbrains.uast.UMethod
 import org.jetbrains.uast.UQualifiedReferenceExpression
 import org.jetbrains.uast.UReferenceExpression
+import org.jetbrains.uast.getParentOfType
 
 class NetworkDetector :
     Detector(),
@@ -35,7 +38,8 @@ class NetworkDetector :
 
     override fun visitMethodCall(context: JavaContext, node: UCallExpression, method: PsiMethod) {
         when (method.name) {
-            "newCall" -> if (method.inClass("okhttp3.OkHttpClient", "okhttp3.Call.Factory")) {
+            // Interceptors, Dns and other blocking code, and fire-and-forget `enqueue`, have no suspend helper
+            "newCall" -> if (method.inClass("okhttp3.OkHttpClient", "okhttp3.Call.Factory") && node.inSuspendFunction(context) && !node.isEnqueued()) {
                 context.report(
                     NEW_CALL,
                     node,
@@ -60,7 +64,7 @@ class NetworkDetector :
 
             "toString" -> checkHttpUrlToString(context, node, method)
 
-            "makeText" -> if (method.inClass("android.widget.Toast")) {
+            "makeText" -> if (method.inClass("android.widget.Toast") && !node.onUiThread()) {
                 context.report(
                     TOAST,
                     node,
@@ -69,6 +73,32 @@ class NetworkDetector :
                 )
             }
         }
+    }
+
+    private fun UCallExpression.inSuspendFunction(context: JavaContext): Boolean {
+        val method = getParentOfType<UMethod>(true) ?: return false
+        return context.evaluator.isSuspend(method)
+    }
+
+    private fun UCallExpression.isEnqueued(): Boolean {
+        var parent = uastParent
+        while (parent is UQualifiedReferenceExpression) {
+            if ((parent.selector as? UCallExpression)?.methodName == "enqueue") return true
+            parent = parent.uastParent
+        }
+        return false
+    }
+
+    /** Preference listeners and `post`/`runOnUiThread` blocks run on the UI thread, where a toast does show. */
+    private fun UCallExpression.onUiThread(): Boolean {
+        if (getParentOfType<UMethod>(true)?.name == "setupPreferenceScreen") return true
+        var lambda = getParentOfType<ULambdaExpression>(true)
+        while (lambda != null) {
+            val name = (lambda.uastParent as? UCallExpression)?.methodName
+            if (name != null && (name.startsWith("setOn") || name in UI_THREAD_RUNNERS)) return true
+            lambda = lambda.getParentOfType<ULambdaExpression>(true)
+        }
+        return false
     }
 
     private fun checkHeader(context: JavaContext, node: UCallExpression, method: PsiMethod) {
@@ -177,6 +207,7 @@ class NetworkDetector :
     }
 
     companion object {
+        private val UI_THREAD_RUNNERS = setOf("post", "postDelayed", "runOnUiThread", "launchUI")
         private val SETTERS = setOf("set", "add", "header", "addHeader")
         private val ADDERS = setOf("add", "addHeader")
         private val SINGLE_VALUED = setOf(

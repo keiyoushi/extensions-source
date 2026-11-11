@@ -142,6 +142,20 @@ class ResourcesTest {
     }
 
     @Test
+    fun themedExtensionInheritsIcons() {
+        val themed = arrayOf(
+            kts("src/xx/themed/build.gradle.kts", "plugins { alias(kei.plugins.extension) }\nkeiyoushi { theme = \"madara\" }"),
+            image("lib-multisrc/madara/res/mipmap-mdpi/ic_launcher.png", 48, 48).fill(BLUE),
+            image("lib-multisrc/madara/res/mipmap-hdpi/ic_launcher.png", 72, 72).fill(BLUE),
+            image("lib-multisrc/madara/res/mipmap-xhdpi/ic_launcher.png", 96, 96).fill(BLUE),
+            image("lib-multisrc/madara/res/mipmap-xxhdpi/ic_launcher.png", 144, 144).fill(BLUE),
+            image("lib-multisrc/madara/res/mipmap-xxxhdpi/ic_launcher.png", 192, 192).fill(BLUE),
+        )
+        icon(IconDetector.ICON_SIZE, *themed).expectClean()
+        icon(IconDetector.ICON_SIZE, buildFile).expectWarningCount(1)
+    }
+
+    @Test
     fun wrongSize() {
         icon(IconDetector.ICON_SIZE, *icons(square("xxxhdpi", 192), hdpiSize = 64)).expectWarningCount(1)
     }
