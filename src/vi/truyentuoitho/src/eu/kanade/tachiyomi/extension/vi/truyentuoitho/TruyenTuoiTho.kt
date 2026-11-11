@@ -26,6 +26,9 @@ abstract class TruyenTuoiTho : Madara() {
 
     override val chapterMode = ChapterMode.MangaAjaxPaginated
 
+    // Plain chapters put every page image in one .text-left block, so select the images themselves.
+    override val pageListParseSelector = "div.page-break, li.blocks-gallery-item, .reading-content .text-left:not(:has(.blocks-gallery-item)) img"
+
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
         val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
@@ -49,20 +52,15 @@ abstract class TruyenTuoiTho : Madara() {
     }
 
     private fun decodeProtectedPayload(script: String): String {
-        if (!script.contains("split('').reverse().join('')") || !script.contains("JSON[atob('cGFyc2U=')]")) {
+        if (!script.contains("split('').reverse().join('')")) {
             error("Not a protected payload script")
         }
 
         val match = protectedPayloadRegex.find(script) ?: error("Protected payload not found")
-        val key = buildString {
-            append(match.groupValues[1].decodeBase64())
-            append(match.groupValues[2].decodeBase64())
-            append(match.groupValues[3].decodeBase64())
-            append(match.groupValues[4].decodeBase64())
-        }
+        val key = atobRegex.findAll(match.groupValues[1]).joinToString("") { it.groupValues[1].decodeBase64() }
         if (key.isEmpty()) error("Protected payload key is empty")
 
-        val encrypted = match.groupValues[5]
+        val encrypted = match.groupValues[2]
         return encrypted.reversed().decodeBase64().xorWithKey(key)
     }
 
@@ -82,9 +80,9 @@ abstract class TruyenTuoiTho : Madara() {
     )
 
     companion object {
-        private val protectedPayloadRegex = Regex(
-            """const\s+[^;]+?=atob\('([^']+)'\),[^;]+?=atob\('([^']+)'\),[^;]+?=atob\('([^']+)'\),[^;]+?=atob\('([^']+)'\),[^;]+?='([^']+)'""",
-            RegexOption.DOT_MATCHES_ALL,
-        )
+        // The key is every atob() piece in the const, either "a=atob(..),b=atob(..)" or "d=atob(..)+atob(..)",
+        // and the payload is the string assigned right after them.
+        private val protectedPayloadRegex = Regex("""const\s+((?:\w+=)?(?:atob\('[^']+'\)[+,]\s*(?:\w+=)?)+)'([^']+)'""")
+        private val atobRegex = Regex("""atob\('([^']+)'\)""")
     }
 }
