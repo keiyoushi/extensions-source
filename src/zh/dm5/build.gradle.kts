@@ -9,6 +9,7 @@ keiyoushi {
     versionCode = 3
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
+    theme = "dm5"
 
     source {
         lang = "zh"
@@ -26,10 +27,6 @@ keiyoushi {
         host("www.dm5.com")
         host("www.dm5.cn")
         host("m.dm5.com")
-        path("/manhua-..*")
+        path("/m..*")
     }
-}
-
-dependencies {
-    implementation(project(":lib:unpacker"))
 }

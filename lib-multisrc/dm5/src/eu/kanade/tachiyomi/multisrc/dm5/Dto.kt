@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.zh.dm5
+package eu.kanade.tachiyomi.multisrc.dm5
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

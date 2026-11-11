@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "PornPics"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
@@ -19,6 +19,7 @@ keiyoushi {
     }
 
     deeplink {
+        path("/galleries/..*")
         path("/.*/galleries/..*")
     }
 }

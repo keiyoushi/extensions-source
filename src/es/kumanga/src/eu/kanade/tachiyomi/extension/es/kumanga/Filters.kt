@@ -9,7 +9,7 @@ open class CheckBoxGroup(name: String, val param: String, options: List<Pair<Str
 class TypeFilter :
     CheckBoxGroup(
         "Tipo",
-        "type_filter",
+        "types",
         listOf(
             "Manga" to "1",
             "Manhwa" to "2",
@@ -22,7 +22,7 @@ class TypeFilter :
 class StatusFilter :
     CheckBoxGroup(
         "Estado",
-        "status_filter",
+        "status",
         listOf(
             "Activo" to "1",
             "Finalizado" to "2",
@@ -33,7 +33,7 @@ class StatusFilter :
 class GenreFilter :
     CheckBoxGroup(
         "Géneros",
-        "category_filter",
+        "categories",
         listOf(
             "Acción" to "1",
             "Artes marciales" to "2",

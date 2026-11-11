@@ -1,99 +1,173 @@
 package eu.kanade.tachiyomi.extension.all.onisaga
 
 import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
+import java.text.Normalizer
 
-open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-    fun toUriPart() = vals[state].second
+fun getFilters() = FilterList(
+    SortFilter(),
+    TypeFilter(),
+    FormatFilter(),
+    StatusFilter(),
+    DemographicFilter(),
+    RatingFilter(),
+    GenreFilter(),
+    Filter.Separator(),
+    Filter.Header("Themes and tags: names separated by commas, with - before a name to exclude it"),
+    ThemeFilter(),
+    TagFilter(),
+    YearFromFilter(),
+    YearToFilter(),
+)
+
+class SortFilter : Filter.Select<String>("Sort by", SORTS.map { it.first }.toTypedArray()) {
+    val value get() = SORTS[state].second
 }
 
-open class TextFilter(name: String) : Filter.Text(name)
+class Option(name: String, val value: String) : Filter.CheckBox(name)
+
+open class OptionsFilter(name: String, options: List<Pair<String, String>>) : Filter.Group<Option>(name, options.map { Option(it.first, it.second) }) {
+    val checked get() = state.filter { it.state }.map { it.value }.ifEmpty { null }
+}
 
 class TypeFilter :
-    UriPartFilter(
+    OptionsFilter(
         "Type",
-        arrayOf(
-            "All" to "",
-            "Manga" to "MANGA",
-            "Manhwa" to "MANHWA",
-            "Manhua" to "MANHUA",
-            "Novel" to "NOVEL",
-            "One-Shot" to "ONE-SHOT",
-            "Doujinshi" to "DOUJINSHI",
+        listOf(
+            "Manga" to "manga",
+            "Manhwa" to "manhwa",
+            "Manhua" to "manhua",
+            "Comic" to "comic",
+            "Other Asian" to "other_asian",
+            "OEL" to "oel",
+            "Other" to "other",
+        ),
+    )
+
+class FormatFilter :
+    OptionsFilter(
+        "Format",
+        listOf(
+            "Serial" to "serial",
+            "Oneshot" to "oneshot",
+            "Anthology" to "anthology",
+            "Doujinshi" to "doujinshi",
+            "Artbook" to "artbook",
         ),
     )
 
 class StatusFilter :
-    UriPartFilter(
+    OptionsFilter(
         "Status",
-        arrayOf(
-            "All" to "",
-            "Ongoing" to "ongoing",
+        listOf(
+            "Ongoing" to "releasing",
             "Completed" to "completed",
             "Hiatus" to "hiatus",
-            "Releasing" to "releasing",
+            "Cancelled" to "cancelled",
+            "Announced" to "announced",
+            "Unknown" to "unknown",
         ),
     )
 
-class MinChaptersFilter :
-    UriPartFilter(
-        "Min Chapters",
-        arrayOf(
-            "Any" to "",
-            "10+" to "10",
-            "50+" to "50",
-            "100+" to "100",
-            "200+" to "200",
+class DemographicFilter :
+    OptionsFilter(
+        "Demographic",
+        listOf(
+            "Shounen" to "shounen",
+            "Shoujo" to "shoujo",
+            "Seinen" to "seinen",
+            "Josei" to "josei",
+            "Kodomo" to "kodomo",
         ),
     )
 
-class SortFilter :
-    UriPartFilter(
-        "Sort",
-        arrayOf(
-            "Newest" to "created_at",
-            "Most Viewed" to "view",
-            "Release Date" to "release_date",
-            "Top Rated (Likes)" to "like_count",
-            "Name A-Z" to "title",
-            "Top Rated (Score)" to "vote_average",
-            "Fan Favorites" to "fan_favorites",
+class RatingFilter :
+    OptionsFilter(
+        "Content rating",
+        listOf(
+            "Safe" to "safe",
+            "Suggestive" to "suggestive",
+            "Mature" to "mature",
+            "Explicit" to "explicit",
         ),
-    ) {
-    init {
-        state = 1
-    }
+    )
+
+class Genre(name: String, val slug: String) : Filter.TriState(name)
+
+class GenreFilter : Filter.Group<Genre>("Genres", GENRES.map { Genre(it.first, it.second) }) {
+    val terms get() = terms(state.filter { it.isIncluded() }.map { it.slug }, state.filter { it.isExcluded() }.map { it.slug })
 }
 
-class GroupFilter : TextFilter("Group")
-class ReleaseStartFilter : TextFilter("Release Start Date (YYYY-MM-DD)")
-class ReleaseEndFilter : TextFilter("Release End Date (YYYY-MM-DD)")
+open class TermsFilter(name: String) : Filter.Text(name) {
+    val terms: Terms?
+        get() {
+            val (exclude, include) = state.split(',').map { it.trim() }.filter { it.isNotEmpty() }.partition { it.startsWith('-') }
+            return terms(include.map { it.toSlug() }, exclude.map { it.removePrefix("-").toSlug() })
+        }
+}
 
-class GenreTriState(name: String, val id: String) : Filter.TriState(name)
-class GenreFilter(genres: List<GenreTriState>) : Filter.Group<GenreTriState>("Genres", genres)
+class ThemeFilter : TermsFilter("Themes")
 
-val genreList = listOf(
-    Pair("Action", "1"), Pair("Adaptation", "61"), Pair("Adult", "67"), Pair("Adventure", "6"),
-    Pair("Aliens", "84"), Pair("Avant Garde", "43"), Pair("Award Winning", "78"), Pair("Boys Love", "31"),
-    Pair("Comedy", "2"), Pair("Comics", "90"), Pair("Crazy MC", "59"), Pair("Crime", "98"),
-    Pair("Demon", "57"), Pair("Demons", "5"), Pair("Doujinshi", "79"), Pair("Drama", "15"),
-    Pair("Dungeons", "56"), Pair("Ecchi", "29"), Pair("Erotica", "68"), Pair("Fantasy", "7"),
-    Pair("Full Color", "62"), Pair("Game", "46"), Pair("Gender Bender", "75"), Pair("Genderswap", "63"),
-    Pair("Genius MC", "49"), Pair("Girls Love", "28"), Pair("Gore", "80"), Pair("Gourmet", "42"),
-    Pair("Harem", "37"), Pair("Hentai", "76"), Pair("Historical", "66"), Pair("Horror", "16"),
-    Pair("Isekai", "3"), Pair("Iyashikei", "34"), Pair("Josei", "35"), Pair("Kids", "38"),
-    Pair("Lolicon", "70"), Pair("Long Strip", "64"), Pair("Magic", "8"), Pair("Magical Girls", "99"),
-    Pair("Mahou Shoujo", "41"), Pair("Martial Arts", "11"), Pair("Mature", "45"), Pair("Mecha", "36"),
-    Pair("Medical", "101"), Pair("Military", "17"), Pair("Monster Girls", "88"), Pair("Monsters", "81"),
-    Pair("Murim", "47"), Pair("Music", "30"), Pair("Mystery", "19"), Pair("Necromancer", "54"),
-    Pair("Overpowered", "55"), Pair("Parody", "12"), Pair("Philosophical", "100"), Pair("Post-Apocalyptic", "85"),
-    Pair("Psychological", "18"), Pair("Regression", "52"), Pair("Reincarnation", "48"), Pair("Revenge", "51"),
-    Pair("Reverse Harem", "44"), Pair("Romance", "20"), Pair("Samurai", "86"), Pair("School", "21"),
-    Pair("School Life", "24"), Pair("Sci-Fi", "13"), Pair("Seinen", "14"), Pair("Self-Published", "82"),
-    Pair("Shotacon", "77"), Pair("Shoujo", "27"), Pair("Shoujo Ai", "73"), Pair("Shounen", "4"),
-    Pair("Shounen Ai", "72"), Pair("Slice of Life", "26"), Pair("Smut", "69"), Pair("Space", "22"),
-    Pair("Sports", "32"), Pair("Super Power", "9"), Pair("Superhero", "89"), Pair("Supernatural", "10"),
-    Pair("Survival", "87"), Pair("Suspense", "39"), Pair("System", "50"), Pair("Thriller", "40"),
-    Pair("Time Travel", "23"), Pair("Tower", "58"), Pair("Tragedy", "25"), Pair("Vampire", "33"),
-    Pair("Villain", "53"), Pair("Violence", "60"), Pair("Web Comic", "65"), Pair("Wuxia", "113"),
-    Pair("Yaoi", "74"), Pair("Yuri", "71"),
+class TagFilter : TermsFilter("Tags")
+
+open class YearFilter(name: String) : Filter.Text(name) {
+    val year get() = state.trim().toIntOrNull()
+}
+
+class YearFromFilter : YearFilter("From year")
+
+class YearToFilter : YearFilter("To year")
+
+private fun terms(include: List<String>, exclude: List<String>) = if (include.isEmpty() && exclude.isEmpty()) null else Terms(include, exclude)
+
+// The site's slugs are its names without accents, in lowercase, with dashes
+private fun String.toSlug() = Normalizer.normalize(this, Normalizer.Form.NFD)
+    .replace(DIACRITICS_REGEX, "")
+    .lowercase()
+    .replace(NON_SLUG_REGEX, "-")
+    .trim('-')
+
+private val DIACRITICS_REGEX = Regex("\\p{Mn}+")
+private val NON_SLUG_REGEX = Regex("[^a-z0-9]+")
+
+private val SORTS = listOf(
+    "Relevance" to "relevance",
+    "Latest update" to "updated",
+    "Newest" to "new",
+    "First published" to "published",
+    "Title" to "title",
+)
+
+private val GENRES = listOf(
+    "Action" to "action",
+    "Adventure" to "adventure",
+    "Boys' Love" to "boys-love",
+    "Comedy" to "comedy",
+    "Cooking" to "cooking",
+    "Crime" to "crime",
+    "Drama" to "drama",
+    "Fantasy" to "fantasy",
+    "Gender Bender" to "gender-bender",
+    "Girls' Love" to "girls-love",
+    "Harem" to "harem",
+    "Historical" to "historical",
+    "Horror" to "horror",
+    "Isekai" to "isekai",
+    "Magical Girls" to "magical-girls",
+    "Martial Arts" to "martial-arts",
+    "Mecha" to "mecha",
+    "Medical" to "medical",
+    "Music" to "music",
+    "Mystery" to "mystery",
+    "Philosophical" to "philosophical",
+    "Psychological" to "psychological",
+    "Romance" to "romance",
+    "Science Fiction" to "science-fiction",
+    "Slice of Life" to "slice-of-life",
+    "Sports" to "sports",
+    "Superhero" to "superhero",
+    "Supernatural" to "supernatural",
+    "Thriller" to "thriller",
+    "Tragedy" to "tragedy",
+    "Wuxia" to "wuxia",
 )

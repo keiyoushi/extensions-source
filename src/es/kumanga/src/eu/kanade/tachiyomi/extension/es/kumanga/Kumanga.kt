@@ -10,7 +10,6 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
-import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -18,7 +17,6 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.xor
 import kotlinx.serialization.json.JsonElement
-import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -44,18 +42,25 @@ abstract class Kumanga : KeiSource() {
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val body = FormBody.Builder().apply {
-            add("contentType", "manga")
-            add("page", page.toString())
-            add("perPage", PER_PAGE.toString())
-            if (query.isNotBlank()) add("keywords", query)
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("mangalist")
             filters.filterIsInstance<CheckBoxGroup>().forEach { group ->
-                group.state.filter { it.state }.forEach { add("${group.param}[${it.value}]", it.value) }
+                val values = group.state.filter { it.state }.joinToString("-") { it.value }
+                if (values.isNotEmpty()) addQueryParameter(group.param, values)
             }
+            if (query.isNotBlank()) addQueryParameter("keywords", query.trim())
+            addQueryParameter("page", page.toString())
         }.build()
-        val result = client.post("$baseUrl/backend/ajax/searchengine2.php", Fetch.XHR, body)
-            .parseAs<SearchResponseDto>()
-        return MangasPage(result.contents.map { it.toSManga() }, page * PER_PAGE < result.totalContents)
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
+        val mangas = document.select("li.km-li-crd").map { element ->
+            SManga.create().apply {
+                setUrlWithoutDomain(element.attr("onclick").substringAfter("'").substringBefore("'"))
+                title = element.selectFirst(".km-title-p-card")!!.text()
+                thumbnail_url = element.selectFirst("img.km-img-crd")?.absUrl("src")
+            }
+        }
+        val hasNextPage = document.selectFirst(".section-nav-pagination a[href]:has(.fa-chevron-right)") != null
+        return MangasPage(mangas, hasNextPage)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -138,7 +143,9 @@ abstract class Kumanga : KeiSource() {
                 .build()
                 .toString()
         }
-        val scripts = client.get(readerUrl, Fetch.DOCUMENT).asJsoup().select("script").joinToString("\n") { it.data() }
+        val document = client.get(readerUrl, Fetch.DOCUMENT).asJsoup()
+        // Decoy page lists are declared inside blocks, out of the reader's scope
+        val scripts = document.select("script").joinToString("\n") { it.data().withoutBlocks() }
         val name = RPICS_REGEX.find(scripts)!!.groupValues[1]
         val encoded = STRING_CONST_REGEX.findAll(scripts).first { it.groupValues[1] == name }.groupValues[2]
         val paths = Base64.decode(encoded, Base64.DEFAULT).xor(PAGES_KEY).decodeToString().parseAs<List<String>>()
@@ -154,13 +161,17 @@ abstract class Kumanga : KeiSource() {
 
     private fun String.toMangaId() = "$baseUrl$this".toHttpUrl().pathSegments[1].toInt()
 
-    companion object {
-        private const val PER_PAGE = 24
+    private tailrec fun String.withoutBlocks(): String {
+        val outer = BLOCK_REGEX.replace(this, "")
+        return if (outer == this) this else outer.withoutBlocks()
+    }
 
+    companion object {
         // XOR key from the site's kx.reader.js
         private val PAGES_KEY = "Jr54VwepF4La".toByteArray()
         private val OTHER_CHAPTERS_REGEX = Regex("""OTHER_CHAPTERS\s*=\s*(\[.*])\s*;""", RegexOption.DOT_MATCHES_ALL)
         private val RPICS_REGEX = Regex("""const\s+rpics\s*=\s*(\w+)\s*;""")
         private val STRING_CONST_REGEX = Regex("""const\s+(\w+)\s*=\s*"([^"]*)"""")
+        private val BLOCK_REGEX = Regex("""\{[^{}]*\}""")
     }
 }

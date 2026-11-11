@@ -253,7 +253,8 @@ abstract class KillSixBillionDemons :
         return imageUrls.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
 
-    private fun Document.comicImageUrls(): List<String> = select("#comic img").map { it.absUrl("src").replace(wordpressThumbnailRegex, "") }
+    // some posts have <img> without src, and file names with a control char that absUrl() strips
+    private fun Document.comicImageUrls(): List<String> = select("#comic img[src]").map { it.attr("src").replace(wordpressThumbnailRegex, "") }
 
     // ========================= Search =========================
     override suspend fun getSearchMangaList(
