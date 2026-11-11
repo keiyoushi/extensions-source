@@ -34,6 +34,7 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import java.io.IOException
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
@@ -52,14 +53,20 @@ abstract class Webnex :
     // "Opening series" page: sets wnx_series from a script, then reloads
     private fun seriesCookieInterceptor(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
-        val url = response.request.url
-        if (url.pathSegments[0] != "manga") return response
-        val cookie = SERIES_COOKIE_REGEX.find(response.peekBody(4096).string())?.groupValues?.get(1)
-            ?.let { Cookie.parse(url, it) }
-            ?: return response
+        if (response.body.contentType()?.subtype != "html") return response
+        val body = response.peekBody(4096).string()
+        if ("<title>Opening series</title>" !in body) return response
         response.close()
-        client.cookieJar.saveFromResponse(url, listOf(cookie))
+        if (!saveScriptCookie(response.request.url, body)) throw IOException("Open in WebView to load the series")
         return chain.proceed(chain.request())
+    }
+
+    // Either "name=value; Path=..." or ["name=value", "Path=...", ...].join("; ")
+    private fun saveScriptCookie(url: HttpUrl, html: String): Boolean {
+        val match = SCRIPT_COOKIE_REGEX.find(html) ?: return false
+        val cookie = Cookie.parse(url, STRING_LITERAL_REGEX.findAll(match.value).joinToString("; ") { it.groupValues[1] }) ?: return false
+        client.cookieJar.saveFromResponse(url, listOf(cookie))
+        return true
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchManga(page, "", FilterList(SortFilter("coverage"), RatingFilter(preferences.rating)))
@@ -112,9 +119,8 @@ abstract class Webnex :
         if (url.host != baseUrl.toHttpUrl().host) return null
         val slug = when (url.pathSegments[0]) {
             "manga" -> url.pathSegments.getOrNull(1) ?: return null
-            "read" -> client.get(url.newBuilder().query(null).build(), Fetch.DOCUMENT).extractNextJs<ReaderPropsDto> {
-                it is JsonObject && "chapter" in it && "series" in it
-            }?.series?.href?.let { baseUrl.toHttpUrl().resolve(it)!!.pathSegments[1] } ?: return null
+            "read" -> client.get(url.newBuilder().query(null).build(), Fetch.DOCUMENT).asJsoup().readerProps()
+                ?.series?.href?.let { baseUrl.toHttpUrl().resolve(it)!!.pathSegments[1] } ?: return null
             else -> return null
         }
 
@@ -245,17 +251,22 @@ abstract class Webnex :
         return (Clock.System.now() - (unit * count + upper) / 2).toEpochMilliseconds()
     }
 
+    private fun Document.readerProps() = extractNextJs<ReaderPropsDto> { it is JsonObject && "chapter" in it && "series" in it }
+
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/read/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterUrl = getChapterUrl(chapter).toHttpUrl()
-        // The page list needs the cookie the reader page sets, on its final url after redirects
-        val readerUrl = client.get(chapterUrl, Fetch.DOCUMENT).use { it.request.url }
-        val reader = client.get(readerUrl.newBuilder().addPathSegment("pages").build(), Fetch.XHR.from(readerUrl)).parseAs<ReaderDto>()
+        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
+        // The page list needs the cookie the reader page sets from a script, on its final url after redirects
+        val readerUrl = response.request.url
+        val html = response.body.string()
+        saveScriptCookie(readerUrl, html)
+        val props = html.asJsoup(readerUrl.toString()).readerProps()!!
+        val reader = client.get(readerUrl.resolve(props.pagesUrl)!!, Fetch.XHR.from(readerUrl)).parseAs<ReaderDto>()
 
         // Relative /api/image/ paths or absolute CDN urls
         return reader.pages.mapIndexed { index, url ->
-            Page(index, imageUrl = chapterUrl.resolve(url)!!.toString())
+            Page(index, imageUrl = readerUrl.resolve(url)!!.toString())
         }
     }
 
@@ -352,7 +363,8 @@ abstract class Webnex :
         // Groups the site marks as official translations
         private const val DEFAULT_PREFERRED_GROUPS = "Webtoon, Tapas, Tappytoon"
 
-        private val SERIES_COOKIE_REGEX = Regex("""<title>Opening series</title>.*?document\.cookie\s*=\s*"([^"]+)"""", RegexOption.DOT_MATCHES_ALL)
+        private val SCRIPT_COOKIE_REGEX = Regex(""""wnx_\w+=[^"]+"(?:\s*,\s*"[^"]*")*""")
+        private val STRING_LITERAL_REGEX = Regex(""""([^"]*)"""")
 
         private val TIME_AGO_REGEX = Regex("""(\d+)(mo|y|w|d|h|m) ago""")
 
