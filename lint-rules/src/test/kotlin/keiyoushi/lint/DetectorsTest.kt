@@ -5,7 +5,9 @@ import com.android.tools.lint.checks.infrastructure.TestLintResult
 import com.android.tools.lint.checks.infrastructure.TestLintTask.lint
 import com.android.tools.lint.checks.infrastructure.TestMode
 import com.android.tools.lint.detector.api.Issue
+import keiyoushi.lint.detectors.ContentDetector
 import keiyoushi.lint.detectors.DateTimeDetector
+import keiyoushi.lint.detectors.FlowDetector
 import keiyoushi.lint.detectors.JsonDetector
 import keiyoushi.lint.detectors.JsoupDetector
 import keiyoushi.lint.detectors.KotlinIdiomDetector
@@ -614,6 +616,219 @@ class DetectorsTest {
             package test.pkg
             import eu.kanade.tachiyomi.source.model.SChapter
             fun f(l: List<SChapter>) = l.sortedByDescending { it.chapter_number }
+            """,
+        ).count(1)
+    }
+
+    // endregion
+
+    // region Flow
+
+    private val sourceHeader = """
+        package test.pkg
+        import eu.kanade.tachiyomi.source.model.*
+        import keiyoushi.network.get
+        import keiyoushi.source.KeiSource
+        import okhttp3.HttpUrl
+    """.trimIndent()
+
+    @Test
+    fun urlLookupNotInitialized() {
+        check(
+            FlowDetector.INITIALIZED,
+            sourceHeader + """
+
+            abstract class A : KeiSource() {
+                private fun parseDetails(s: String): SManga = TODO()
+                override suspend fun getMangaByUrl(url: HttpUrl): SManga? = parseDetails("x")
+            }
+            abstract class B : KeiSource() {
+                private fun parseDetails(s: String): SManga = TODO()
+                override suspend fun getMangaByUrl(url: HttpUrl): SManga? = parseDetails("x").apply { initialized = true }
+            }
+            """,
+        ).count(1)
+    }
+
+    @Test
+    fun singleMangaByUrl() {
+        check(
+            FlowDetector.SINGLE_MANGA_BY_URL,
+            sourceHeader + """
+
+            abstract class A : KeiSource() {
+                private fun lookup(url: HttpUrl): SManga = TODO()
+                override suspend fun getMangasByUrl(url: HttpUrl, page: Int): MangasPage = MangasPage(listOf(lookup(url)), false)
+            }
+            """,
+        ).count(1)
+    }
+
+    @Test
+    fun requestPerItemAndListingRules() {
+        check(
+            FlowDetector.REQUEST_PER_ITEM,
+            sourceHeader + """
+
+            abstract class A : KeiSource() {
+                suspend fun getPopularManga(page: Int): MangasPage {
+                    val ids = listOf("a", "b")
+                    ids.map { client.get("/cover/${'$'}it") }
+                    client.get("/list")
+                    return MangasPage(emptyList(), false)
+                }
+            }
+            """,
+        ).count(1)
+        check(
+            FlowDetector.CLIENT_SIDE_PAGING,
+            sourceHeader + """
+
+            fun getSearchMangaList(all: List<SManga>, page: Int) = MangasPage(all.subList(0, 10), true)
+            fun other(all: List<SManga>) = all.subList(0, 1)
+            """,
+        ).count(1)
+        check(
+            FlowDetector.RANDOM_LISTING,
+            sourceHeader + """
+
+            fun getPopularManga(all: List<SManga>) = MangasPage(all.shuffled(), false)
+            """,
+        ).count(1)
+    }
+
+    @Test
+    fun defaultHeadersArgument() {
+        check(
+            FlowDetector.DEFAULT_HEADERS_ARGUMENT,
+            sourceHeader + """
+
+            abstract class A : KeiSource() {
+                suspend fun f() = client.get("/a", headers)
+                suspend fun g() = client.get("/a")
+            }
+            """,
+        ).count(1)
+    }
+
+    @Test
+    fun emptyPagesThrow() {
+        check(
+            FlowDetector.EMPTY_PAGES_THROW,
+            sourceHeader + """
+
+            abstract class A : KeiSource() {
+                override suspend fun getPageList(chapter: SChapter): List<Page> {
+                    val pages = listOf<Page>()
+                    if (pages.isEmpty()) throw Exception("No pages")
+                    return pages
+                }
+            }
+            abstract class KeiSourcePageList { abstract suspend fun getPageList(chapter: SChapter): List<Page> }
+            """,
+        ).count(1)
+    }
+
+    // endregion
+
+    // region Content
+
+    @Test
+    fun absoluteAndFragmentUrls() {
+        check(
+            ContentDetector.ABSOLUTE_URL,
+            """
+            package test.pkg
+            import eu.kanade.tachiyomi.source.model.*
+            import org.jsoup.nodes.Element
+            fun f(baseUrl: String, slug: String, e: Element) {
+                SManga.create().apply { url = "${'$'}baseUrl/manga/${'$'}slug" }
+                SManga.create().apply { url = e.absUrl("href") }
+                SManga.create().apply { url = "/manga/${'$'}slug" }
+            }
+            """,
+        ).count(2)
+        check(
+            ContentDetector.URL_FRAGMENT,
+            """
+            package test.pkg
+            import eu.kanade.tachiyomi.source.model.*
+            fun f(slug: String, id: Int) {
+                SChapter.create().apply { url = "/read/${'$'}slug#${'$'}id" }
+            }
+            """,
+        ).count(1)
+    }
+
+    @Test
+    fun hardcodedHost() {
+        check(
+            ContentDetector.HARDCODED_HOST,
+            """
+            package test.pkg
+            import okhttp3.HttpUrl
+            val HttpUrl.host: String get() = ""
+            fun f(url: HttpUrl, base: String) = url.host == "example.com" || url.host == base
+            """,
+        ).count(1)
+    }
+
+    @Test
+    fun urlStringSplit() {
+        check(
+            ContentDetector.URL_STRING_SPLIT,
+            """
+            package test.pkg
+            fun f(url: String, name: String) = url.substringAfterLast("/") + name.substringAfterLast("/")
+            """,
+        ).count(1)
+    }
+
+    @Test
+    fun collapsedTextAndDescription() {
+        check(
+            ContentDetector.COLLAPSED_TEXT,
+            """
+            package test.pkg
+            fun f(html: String) = org.jsoup.Jsoup.parseBodyFragment(html).text()
+            """,
+        ).count(1)
+        check(
+            ContentDetector.MANUAL_DESCRIPTION,
+            """
+            package test.pkg
+            fun f(n: Int) = "**Tracked:** ${'$'}n"
+            """,
+        ).count(1)
+    }
+
+    @Test
+    fun stripMangaTitle() {
+        check(
+            ContentDetector.STRIP_MANGA_TITLE,
+            """
+            package test.pkg
+            import eu.kanade.tachiyomi.source.model.*
+            fun f(text: String, mangaTitle: String) = SChapter.create().apply { name = text.removePrefix(mangaTitle).trim() }
+            """,
+        ).count(1)
+    }
+
+    @Test
+    fun turnstileAndZip() {
+        check(
+            ContentDetector.CUSTOM_TURNSTILE,
+            """
+            package test.pkg
+            class LunarTurnstileSolver
+            class TurnstileToken(val token: String)
+            """,
+        ).count(1)
+        check(
+            ContentDetector.ZIP_INPUT_STREAM,
+            """
+            package test.pkg
+            fun f(input: java.io.InputStream) = java.util.zip.ZipInputStream(input)
             """,
         ).count(1)
     }

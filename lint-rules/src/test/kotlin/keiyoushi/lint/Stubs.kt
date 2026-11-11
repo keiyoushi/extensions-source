@@ -76,7 +76,10 @@ object Stubs {
         """
         package org.jsoup
 
-        object Jsoup { @JvmStatic fun parse(html: String): org.jsoup.nodes.Document = TODO() }
+        object Jsoup {
+            @JvmStatic fun parse(html: String): org.jsoup.nodes.Document = TODO()
+            @JvmStatic fun parseBodyFragment(html: String): org.jsoup.nodes.Document = TODO()
+        }
         """,
     ).indented()
 
@@ -109,6 +112,7 @@ object Stubs {
         interface SManga {
             var url: String
             var title: String
+            var initialized: Boolean
             var thumbnail_url: String?
             companion object { fun create(): SManga = TODO() }
         }
@@ -119,6 +123,7 @@ object Stubs {
             companion object { fun create(): SChapter = TODO() }
         }
         class Page(val index: Int, val url: String = "", var imageUrl: String? = null)
+        class MangasPage(val mangas: List<SManga>, val hasNextPage: Boolean)
         """,
     ).indented()
 
@@ -154,7 +159,7 @@ object Stubs {
         import okhttp3.OkHttpClient
         import okhttp3.Response
 
-        suspend fun OkHttpClient.get(url: String): Response = TODO()
+        suspend fun OkHttpClient.get(url: String, headers: okhttp3.Headers? = null): Response = TODO()
         suspend fun OkHttpClient.get(url: HttpUrl): Response = TODO()
         """,
     ).indented()

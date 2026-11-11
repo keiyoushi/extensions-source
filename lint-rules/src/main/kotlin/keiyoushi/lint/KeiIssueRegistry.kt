@@ -5,7 +5,9 @@ import com.android.tools.lint.client.api.Vendor
 import com.android.tools.lint.detector.api.CURRENT_API
 import com.android.tools.lint.detector.api.Issue
 import keiyoushi.lint.detectors.BuildScriptDetector
+import keiyoushi.lint.detectors.ContentDetector
 import keiyoushi.lint.detectors.DateTimeDetector
+import keiyoushi.lint.detectors.FlowDetector
 import keiyoushi.lint.detectors.IconDetector
 import keiyoushi.lint.detectors.JsonDetector
 import keiyoushi.lint.detectors.JsoupDetector
@@ -21,6 +23,8 @@ class KeiIssueRegistry : IssueRegistry() {
             DateTimeDetector.ISSUES +
             KotlinIdiomDetector.ISSUES +
             SourceDetector.ISSUES +
+            FlowDetector.ISSUES +
+            ContentDetector.ISSUES +
             BuildScriptDetector.ISSUES +
             IconDetector.ISSUES
 
