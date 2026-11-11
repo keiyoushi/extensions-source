@@ -2,9 +2,11 @@ package eu.kanade.tachiyomi.extension.all.deviantart
 
 import android.content.SharedPreferences
 import android.util.Log
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -24,6 +26,7 @@ import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -61,8 +64,53 @@ abstract class DeviantArt :
     private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
     private val backendBaseUrlHost by lazy { backendBaseUrl.toHttpUrl().host }
 
-    override suspend fun getPopularManga(page: Int): MangasPage = throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
+    private fun queryBuilder(page: Int): HttpUrl.Builder = backendBuilder()
+        .addPathSegment("rss.xml")
+        .addQueryParameter("type", "deviation")
+        .apply {
+            if (page > 1) {
+                addQueryParameter("offset", ((page - 1) * 60).toString())
+            }
+        }
+
+    // ============================== Popular ================================
+
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = queryBuilder(page)
+            .apply {
+                catalogSearchQuery.takeIf { it.isNotBlank() }?.let { addEncodedQueryParameter("q", it) }
+            }
+            .build()
+
+        return parseMangaListPage(client.get(url, Fetch.XHR))
+    }
+
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
+
+    private fun parseMangaListPage(response: Response): MangasPage {
+        val document = response.asJsoupXml()
+        val mangaList = parseToMangaList(document)
+        val nextUrl = document.selectFirst("[rel=next]")?.absUrl("href")
+
+        return MangasPage(mangaList, nextUrl != null)
+    }
+
+    private fun parseToMangaList(document: Document): List<SManga> {
+        val items = document.select("item")
+        return items.map { item ->
+            val creator = item.selectFirst("media|credit")?.text()
+            val artName = item.selectFirst("title")!!.text()
+            val link = item.selectFirst("link")!!.text()
+
+            SManga.create().apply {
+                setUrlWithoutDomain(link)
+                title = artName
+                author = creator
+                thumbnail_url = item.selectFirst("media|content")?.getImgAttr()
+                update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            }
+        }
+    }
 
     // ============================== Search ===================================
 
@@ -75,15 +123,21 @@ abstract class DeviantArt :
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val matchGroups = requireNotNull(
-            GALLERY_QUERY_REGEX.matchEntire(query)?.groupValues,
-        ) { SEARCH_FORMAT_MSG }
-        val username = matchGroups[1]
-        val folderId = matchGroups[2].ifEmpty { "all" }
-        val link = "$baseUrl/$username/gallery/$folderId"
-        val document = client.get(link, Fetch.DOCUMENT).asJsoup()
+        val matchGroups = GALLERY_QUERY_REGEX.matchEntire(query.trim())?.groupValues
+        if (matchGroups != null) {
+            val username = matchGroups[1]
+            val folderId = matchGroups[2].ifEmpty { "all" }
+            val link = "$baseUrl/$username/gallery/$folderId"
+            val document = client.get(link, Fetch.DOCUMENT).asJsoup()
 
-        return MangasPage(listOf(parseGalleryDetails(document, link)), false)
+            return MangasPage(listOf(parseGalleryDetails(document, link)), false)
+        }
+
+        val url = queryBuilder(page)
+            .addEncodedQueryParameter("q", query.trim())
+            .build()
+
+        return parseMangaListPage(client.get(url, Fetch.XHR))
     }
 
     private suspend fun getArtByUrl(url: HttpUrl): SManga? {
@@ -299,6 +353,17 @@ abstract class DeviantArt :
         }
 
         screen.addPreference(artistInTitlePref)
+
+        EditTextPreference(screen.context).apply {
+            key = CATALOG_SEARCH_QUERY_PREF
+            title = CATALOG_FORMAT_MSG
+            summary = CATALOG_SEARCH_QUERY + (preferences.getString(CATALOG_SEARCH_QUERY_PREF, "") ?: "")
+            setDefaultValue("")
+            setOnPreferenceChangeListener { _, newValue ->
+                summary = CATALOG_SEARCH_QUERY + newValue
+                true
+            }
+        }.also(screen::addPreference)
     }
 
     private enum class ArtistInTitle(val text: String) {
@@ -316,8 +381,25 @@ abstract class DeviantArt :
     private val SharedPreferences.artistInTitle
         get() = getString(ArtistInTitle.PREF_KEY, ArtistInTitle.defaultValue.name)
 
+    private val catalogSearchQuery
+        get() = preferences.getString(CATALOG_SEARCH_QUERY_PREF, "") ?: ""
+
+    // ============================== Filters =====================================
+
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
+        Filter.Header(SEARCH_FORMAT_MSG),
+        Filter.Separator(),
+        Filter.Header("Paste full URL into search bar to open gallery/art."),
+    )
+
     companion object {
-        private const val SEARCH_FORMAT_MSG = "Please enter a DeviantArt gallery URL, gallery:{username} or gallery:{username}/{folderId}"
+        private const val SEARCH_FORMAT_MSG = "Browse user's gallery by searching for `gallery:{username}` or `gallery:{username}/{folderId}`\n" +
+            "Or search for an artist's individual arts with `by:{username}`"
+
+        private const val CATALOG_FORMAT_MSG = "Show Popular with:"
+        private const val CATALOG_SEARCH_QUERY = "search query of: "
+        private const val CATALOG_SEARCH_QUERY_PREF = "catalog_search_query_pref"
+
         private val GALLERY_QUERY_REGEX = Regex("""gallery:([\w-]+)(?:/(\d+))?""")
         private val ART_LINK_REGEX = Regex("""(.+/art/[^/?#]+)""")
         private val INITIAL_STATE_REGEX = Regex("""window\.__INITIAL_STATE__ = JSON\.parse\(("\{.+?\}")\);""")
