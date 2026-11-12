@@ -164,10 +164,16 @@ abstract class CatharsisWorld : Catharsis() {
             val response = chain.proceed(pageRequest)
             when (response.code) {
                 401, 403, 409 -> {
-                    // A stale live token is minted again once, like the site's reader
-                    if (response.apiError()?.code != "LIVE_REQUIRED" || liveRetried) return null
-                    liveRetried = true
-                    session.liveToken = null
+                    val code = response.apiError()?.code
+                    when {
+                        // A stale live token is minted again once, like the site's reader
+                        code == "LIVE_REQUIRED" && !liveRetried -> {
+                            liveRetried = true
+                            session.liveToken = null
+                        }
+                        response.code == 403 -> throw response.siteError(code)
+                        else -> return null
+                    }
                 }
                 // Waits out READING_TOO_FAST like the site's reader
                 429 -> {
@@ -324,5 +330,30 @@ abstract class CatharsisWorld : Catharsis() {
         private const val DEFAULT_XOR_KEY = 67
         private const val PASS_COOKIE = "cw_rp"
         private const val PAGE_HOST = "catharsisworld.invalid"
+    }
+}
+
+// The reader's page shuffle generator, keyed by X-Page-Key
+private fun pageShuffle(key: String): () -> Double {
+    var fnv = 0x811c9dc5.toInt()
+    var murmur = 0x12B9B0A5
+    for (char in key) {
+        val code = char.code
+        fnv = (fnv xor code) * 0x01000193
+        murmur = (murmur xor ((code shl 5) or (code ushr 27))) * 0x5BD1E995
+    }
+    val increment = (murmur xor 0x6D2B79F5) or 1
+    val firstShift = 13 + (fnv ushr 3).mod(5)
+    val secondShift = 6 + (murmur ushr 5).mod(4)
+    val thirdShift = 12 + ((fnv xor murmur) ushr 7).mod(5)
+    val firstMultiplier = ((murmur ushr 2) and 14) or 1
+    val secondMultiplier = ((fnv ushr 4) and 126) or 1
+    var state = fnv xor (murmur ushr 16)
+    return {
+        state += increment
+        var value = state
+        value = (value xor (value ushr firstShift)) * (value or firstMultiplier)
+        value = value xor (value + (value xor (value ushr secondShift)) * (value or secondMultiplier))
+        (value xor (value ushr thirdShift)).toUInt().toDouble() / 4294967296.0
     }
 }
