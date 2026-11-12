@@ -53,7 +53,7 @@ abstract class Catharsis : KeiSource() {
 
     // The backend rejects non-browser TLS with CLIENT_NOT_ALLOWED
     final override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addReaderInterceptors()
-        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host && it.pathSegments.first() != "assets" }
+        .rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host && it.pathSegments.first() != "assets" && !it.encodedPath.startsWith("/lector/p/") }
         .cronet()
 
     override suspend fun getPopularManga(page: Int) = searchMangas(page, "", "-n_visitas", null, null, null, emptyList())

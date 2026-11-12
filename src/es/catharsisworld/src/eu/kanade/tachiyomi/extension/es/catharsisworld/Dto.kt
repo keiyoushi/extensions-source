@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.catharsisworld
 
+import eu.kanade.tachiyomi.multisrc.catharsis.TilePlan
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -25,6 +26,8 @@ class HeartbeatDto(
 class TilePlanDto(
     @SerialName("X") val cols: List<Int>,
     @SerialName("Y") val rows: List<Int>,
-    @SerialName("colPerm") val colOrder: List<Int>,
-    @SerialName("rowPerm") val rowOrder: List<Int>,
+    val colPerm: List<Int>,
+    val rowPerm: List<Int>,
 )
+
+fun TilePlanDto.toTilePlan() = TilePlan(cols.toIntArray(), rows.toIntArray(), colPerm.toIntArray(), rowPerm.toIntArray())

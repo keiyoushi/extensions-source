@@ -35,11 +35,15 @@ internal class ReaderSecret private constructor(secret: String, private val shuf
         return bytes.copyOfRange(IV_SIZE, bytes.size).aesDecrypt(aesGcm(loaderKey, bytes.copyOf(IV_SIZE))).decodeToString()
     }
 
-    // The reader's 8x8 tile plan for a page, from its own code
+    // The reader's 8x8 tile plan for a page, from its own code; any failure there means the code changed
     fun tilePlan(key: String, width: Int, height: Int): TilePlan {
         val call = "JSON.stringify($shuffleFunction(${key.toJsonString()},$width,$height,8,8))"
-        val plan = QuickJs.create().use { it.evaluate(shuffleScript + call) as String }.parseAs<TilePlanDto>()
-        return TilePlan(plan.cols.toIntArray(), plan.rows.toIntArray(), plan.colOrder.toIntArray(), plan.rowOrder.toIntArray())
+        val plan = try {
+            QuickJs.create().use { it.evaluate(shuffleScript + call) as String }.parseAs<TilePlanDto>()
+        } catch (e: Exception) {
+            throw ReaderChangedException(e)
+        }
+        return plan.toTilePlan()
     }
 
     companion object {
@@ -54,10 +58,10 @@ internal class ReaderSecret private constructor(secret: String, private val shuf
         private val ALIAS_REGEX = Regex("""(?:const|let|var|,)\s*([\w$]+)\s*=\s*([\w$]+)(?![\w$(])""")
         private val FUNCTION_NAME_REGEX = Regex("""^function ([\w$]+)\(([\w$]+)""")
         private val CALL_REGEX = Regex("""=\s*([\w$]+)\(\s*([\w$]+)\s*\)""")
-        private val OFFSET_MAP_REGEX = Regex("""(?:const|let|var|,)\s*([\w$]+)\s*=\s*\{((?:\s*_0x[0-9a-f]+\s*:\s*-?\d+\s*,?)+)\}""")
-        private val OFFSET_ENTRY_REGEX = Regex("""(_0x[0-9a-f]+)\s*:\s*(-?\d+)""")
-        private val OFFSET_LOOKUP_REGEX = Regex("""([\w$]+)\.(_0x[0-9a-f]+)""")
-        private val LOOKUP_REGEX = Regex("""(?<![\w$.])([\w$]+)\((-?\d+)\)""")
+        private val OFFSET_MAP_REGEX = Regex("""(?:const|let|var|,)\s*[\w$]+\s*=\s*\{((?:\s*_0x[0-9a-f]+\s*:\s*-?(?:0x[0-9a-fA-F]+|\d+)\s*,?)+)\}""")
+        private val OFFSET_ENTRY_REGEX = Regex("""(_0x[0-9a-f]+)\s*:\s*(-?(?:0x[0-9a-fA-F]+|\d+))""")
+        private val OFFSET_LOOKUP_REGEX = Regex("""[\w$]+\.(_0x[0-9a-f]+)""")
+        private val LOOKUP_REGEX = Regex("""(?<![\w$.])([\w$]+)\((-?(?:0x[0-9a-fA-F]+|\d+))\)""")
 
         // The one 64-hex join of string-table lookups and hex literals, over every rotation of the obfuscator's table;
         // the shuffle code is the plan function returning {cols, colPerm, slices} and its generator, with lookups inlined
@@ -82,32 +86,34 @@ internal class ReaderSecret private constructor(secret: String, private val shuf
                 ?: throw ReaderChangedException()
 
             val decoder = DECODER_REGEX.find(bundle)?.groupValues?.get(1) ?: throw ReaderChangedException()
-            val lookups = mutableSetOf(decoder)
-            do {
-                val added = ALIAS_REGEX.findAll(bundle).count { it.groupValues[2] in lookups && lookups.add(it.groupValues[1]) }
-            } while (added > 0)
-
             val planIndex = bundle.indexOf("return{cols:").takeIf { it >= 0 } ?: throw ReaderChangedException()
             val plan = functionAt(bundle, bundle.lastIndexOf("function ", planIndex))
             val (planName, planKey) = FUNCTION_NAME_REGEX.find(plan)?.destructured ?: throw ReaderChangedException()
             val generatorName = CALL_REGEX.findAll(plan).firstOrNull { it.groupValues[2] == planKey }?.groupValues?.get(1)
                 ?: throw ReaderChangedException()
             val generator = functionAt(bundle, bundle.indexOf("function $generatorName("))
+            val code = generator + "\n" + plan + "\n"
 
-            fun inline(code: String): String {
-                val offsets = OFFSET_MAP_REGEX.findAll(code).associate { map ->
-                    map.groupValues[1] to OFFSET_ENTRY_REGEX.findAll(map.groupValues[2]).associate { it.groupValues[1] to it.groupValues[2] }
-                }
-                return code
-                    .replace(OFFSET_LOOKUP_REGEX) { offsets[it.groupValues[1]]?.get(it.groupValues[2]) ?: it.value }
-                    .replace(LOOKUP_REGEX) {
-                        if (it.groupValues[1] !in lookups) return@replace it.value
-                        decodeEntry(table[(it.groupValues[2].toInt() + rotation).mod(table.size)]).toJsonString()
-                    }
+            // The decoder's module aliases, then the copied functions' own aliases of those
+            val lookups = ALIAS_REGEX.findAll(bundle).filter { it.groupValues[2] == decoder }.mapTo(mutableSetOf(decoder)) { it.groupValues[1] }
+            do {
+                val added = ALIAS_REGEX.findAll(code).count { it.groupValues[2] in lookups && lookups.add(it.groupValues[1]) }
+            } while (added > 0)
+            // Offset map keys are unique across the functions, whatever the map's name
+            val offsets = mutableMapOf<String, String>()
+            OFFSET_MAP_REGEX.findAll(code).flatMap { OFFSET_ENTRY_REGEX.findAll(it.groupValues[1]) }.forEach {
+                val previous = offsets.put(it.groupValues[1], it.groupValues[2])
+                if (previous != null && previous != it.groupValues[2]) throw ReaderChangedException()
             }
-            // Leftover lookup aliases in the copied functions must still resolve
-            val stubs = (lookups - planName - generatorName).joinToString("") { "var $it=function(){return\"\"};" }
-            return ReaderSecret(secret, stubs + inline(generator) + "\n" + inline(plan) + "\n", planName)
+            val inlined = code
+                .replace(OFFSET_LOOKUP_REGEX) { offsets[it.groupValues[1]] ?: it.value }
+                .replace(LOOKUP_REGEX) {
+                    if (it.groupValues[1] !in lookups) return@replace it.value
+                    decodeEntry(table[(jsInt(it.groupValues[2]) + rotation).mod(table.size)]).toJsonString()
+                }
+            // Aliases left in the copied functions; calling one means a lookup wasn't inlined
+            val stubs = (lookups - planName - generatorName).joinToString("") { "var $it=function(){throw Error(\"unresolved lookup\")};" }
+            return ReaderSecret(secret, stubs + inlined, planName)
         }
 
         // The function source starting at [start], up to its closing brace
@@ -123,6 +129,12 @@ internal class ReaderSecret private constructor(secret: String, private val shuf
             throw ReaderChangedException()
         }
 
+        private fun jsInt(literal: String): Int {
+            val digits = literal.removePrefix("-")
+            val value = if (digits.startsWith("0x")) digits.substring(2).toInt(16) else digits.toInt()
+            return if (literal.startsWith("-")) -value else value
+        }
+
         // Base64 with the lowercase letters first
         private fun decodeEntry(entry: String): String {
             val standard = String(CharArray(entry.length) { entry[it].let { char -> if (char.isLowerCase()) char.uppercaseChar() else char.lowercaseChar() } })
@@ -131,4 +143,4 @@ internal class ReaderSecret private constructor(secret: String, private val shuf
     }
 }
 
-internal class ReaderChangedException : IOException("The site's reader changed, update the extension")
+internal class ReaderChangedException(cause: Throwable? = null) : IOException("The site's reader changed, update the extension", cause)

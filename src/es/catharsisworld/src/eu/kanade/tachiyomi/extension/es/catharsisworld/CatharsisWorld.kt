@@ -104,22 +104,12 @@ abstract class CatharsisWorld : Catharsis() {
         if (request.url.host != PAGE_HOST) return chain.proceed(request)
         val chapterUrl = request.url.encodedPath.removePrefix("/")
         val pageIndex = request.url.queryParameter("page")!!.toInt()
-        var response: Response? = null
-        try {
-            var session = runBlocking { chapterSession(chapterUrl) }
-            response = fetchPage(chain, request, session, pageIndex)
-                ?: run {
-                    val rejected = session
-                    session = runBlocking { chapterSession(chapterUrl, rejected) }
-                    fetchPage(chain, request, session, pageIndex)
-                }
+        return try {
+            val session = runBlocking { chapterSession(chapterUrl) }
+            fetchPage(chain, request, session, pageIndex)
+                ?: fetchPage(chain, request, runBlocking { chapterSession(chapterUrl, rejected = session) }, pageIndex)
                 ?: throw HttpException(401)
-            val scrambleKey = response.header("X-Page-Key")
-            if (!response.isSuccessful || scrambleKey == null) return response
-            val gutter = response.header("X-Tile-Gutter")?.toIntOrNull()?.takeIf { it in 1..63 } ?: 0
-            return response.descrambled(session.secret, scrambleKey, gutter)
         } catch (e: Exception) {
-            response?.close()
             throw e as? IOException ?: IOException(e.message, e)
         }
     }
@@ -145,7 +135,7 @@ abstract class CatharsisWorld : Catharsis() {
             .build()
     }
 
-    // The page without its XOR mask; null when the site wants a new reader pass
+    // The page as the site's reader draws it; null when the site wants a new reader pass
     private fun fetchPage(chain: Interceptor.Chain, request: Request, session: ChapterSession, pageIndex: Int): Response? {
         val token = session.pageTokens[pageIndex]
         val url = baseUrl.toHttpUrl().newBuilder()
@@ -175,6 +165,7 @@ abstract class CatharsisWorld : Catharsis() {
                             liveRetried = true
                             session.liveToken = null
                         }
+                        // The site's other 403s refuse the client or its IP
                         response.code == 403 -> throw response.siteError(code)
                         else -> return null
                     }
@@ -192,7 +183,10 @@ abstract class CatharsisWorld : Catharsis() {
                     // Like the site's reader, a missing or invalid X-Page-Xor keeps the chapter's last one
                     val xorKey = response.header("X-Page-Xor")?.toIntOrNull()?.takeIf { it in 1..255 } ?: session.xorKey
                     session.xorKey = xorKey
-                    return response.xor(xorKey)
+                    val plain = response.xor(xorKey)
+                    val scrambleKey = response.header("X-Page-Key") ?: return plain
+                    val gutter = response.header("X-Tile-Gutter")?.toIntOrNull()?.takeIf { it in 1..63 } ?: 0
+                    return plain.descrambled(session.secret, scrambleKey, gutter)
                 }
             }
         }

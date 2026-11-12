@@ -2,8 +2,8 @@ package eu.kanade.tachiyomi.extension.es.aedex
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import eu.kanade.tachiyomi.multisrc.catharsis.TilePlan
 import eu.kanade.tachiyomi.multisrc.catharsis.descramble
-import eu.kanade.tachiyomi.multisrc.catharsis.tilePlan
 import keiyoushi.utils.xor
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -11,6 +11,7 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import java.io.IOException
+import kotlin.math.roundToInt
 
 // Free-mode pages: XOR-masked, and shuffled over an 8x8 grid when the page has a data-k
 class ImageInterceptor : Interceptor {
@@ -63,3 +64,35 @@ private fun mulberry32(seed: Int): () -> Double {
         (t xor (t ushr 14)).toUInt().toDouble() / 4294967296.0
     }
 }
+
+// The reader's 8x8 plan drawn from [random]
+private fun tilePlan(random: () -> Double, width: Int, height: Int): TilePlan {
+    val cols = boundaries(random, width)
+    val rows = boundaries(random, height)
+    return TilePlan(cols, rows, permutation(random), permutation(random))
+}
+
+private fun boundaries(random: () -> Double, total: Int): IntArray {
+    val bounds = IntArray(GRID + 1)
+    bounds[GRID] = total
+    val base = total / GRID
+    var position = 0
+    for (i in 0 until GRID - 1) {
+        val max = total - position - (GRID - 1 - i) * MIN_TILE
+        position += (base + ((random() * 0.7 - 0.35) * base).roundToInt()).coerceIn(MIN_TILE, maxOf(MIN_TILE, max))
+        bounds[i + 1] = position
+    }
+    return bounds
+}
+
+private fun permutation(random: () -> Double): IntArray {
+    val order = IntArray(GRID) { it }
+    for (i in GRID - 1 downTo 1) {
+        val j = (random() * (i + 1)).toInt()
+        order[i] = order[j].also { order[j] = order[i] }
+    }
+    return order
+}
+
+private const val GRID = 8
+private const val MIN_TILE = 16
