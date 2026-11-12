@@ -24,10 +24,14 @@ import org.jetbrains.uast.UCallExpression
 import org.jetbrains.uast.UClass
 import org.jetbrains.uast.UElement
 import org.jetbrains.uast.UIfExpression
+import org.jetbrains.uast.ULambdaExpression
 import org.jetbrains.uast.UMethod
+import org.jetbrains.uast.USimpleNameReferenceExpression
 import org.jetbrains.uast.UastBinaryOperator
 import org.jetbrains.uast.getParentOfType
+import org.jetbrains.uast.toUElement
 import org.jetbrains.uast.tryResolve
+import org.jetbrains.uast.visitor.AbstractUastVisitor
 
 class SourceDetector :
     Detector(),
@@ -105,9 +109,9 @@ class SourceDetector :
         // A static baseUrl is a constant getter, so only mirrors/custom URLs, fetchBaseUrls and themes can change it
         val overridesFetch = (cls.sourcePsi as? KtClassOrObject)?.body?.functions?.any { it.name == "fetchBaseUrls" } == true
         if (!context.isTheme() && !context.hasDynamicBaseUrl() && !overridesFetch) return
-        val initializer = property.initializer ?: property.delegateExpression ?: return
-        val reference = DYNAMIC_REFERENCE.find(initializer.text)?.value ?: return
+        val initializer = (property.initializer ?: property.delegateExpression).toUElement() ?: return
         val isLazy = property.delegateExpression != null
+        val reference = context.eagerReference(initializer, isLazy) ?: return
         context.report(
             STORED_BASE_URL,
             property,
@@ -115,6 +119,39 @@ class SourceDetector :
             "`$name` is computed once from `$reference`${if (isLazy) " by `lazy`" else ""}; `baseUrl` can change at runtime " +
                 "(mirrors, custom URL, `fetchBaseUrls`), so make it a `get()` property",
         )
+    }
+
+    /** The first `baseUrl`/`headers` read while [root] runs, skipping lambdas and objects that are only stored. */
+    private fun JavaContext.eagerReference(root: UElement, delegated: Boolean): String? {
+        var found: String? = null
+        root.accept(
+            object : AbstractUastVisitor() {
+                override fun visitSimpleNameReferenceExpression(node: USimpleNameReferenceExpression): Boolean {
+                    if (found == null && node.identifier in DYNAMIC_NAMES && !isDeferred(node, root, delegated)) found = node.identifier
+                    return false
+                }
+            },
+        )
+        return found
+    }
+
+    // A lambda runs right away when an inline function (`run`, `let`, `buildString`) or the `lazy` delegate takes it
+    private fun JavaContext.isDeferred(node: UElement, root: UElement, delegated: Boolean): Boolean {
+        var element = node.uastParent
+        while (element != null) {
+            when (element) {
+                is UMethod, is UClass -> return true
+                is ULambdaExpression -> {
+                    val call = element.uastParent as? UCallExpression ?: return true
+                    val inline = call.methodName in STDLIB_INLINE || evaluator.isInline(call.resolve())
+                    val runsNow = inline || (delegated && call.sourcePsi == root.sourcePsi)
+                    if (!runsNow) return true
+                }
+            }
+            if (element.sourcePsi == root.sourcePsi) return false
+            element = element.uastParent
+        }
+        return false
     }
 
     private fun checkMandatoryField(context: JavaContext, node: UBinaryExpression) {
@@ -154,7 +191,14 @@ class SourceDetector :
 
     companion object {
         private val WHITESPACE = Regex("""\s+""")
-        private val DYNAMIC_REFERENCE = Regex("""\bbaseUrl\b|\bheaders\b(?!Builder)""")
+        private val DYNAMIC_NAMES = setOf("baseUrl", "headers")
+
+        // The inline modifier of compiled stdlib functions doesn't always resolve
+        private val STDLIB_INLINE = setOf(
+            "run", "let", "also", "apply", "with", "takeIf", "takeUnless",
+            "buildString", "buildList", "buildMap", "buildSet",
+            "map", "mapNotNull", "filter", "associate", "associateWith", "flatMap", "forEach",
+        )
         private val EMPTY_FALLBACK = Regex("""\?:\s*"(|Untitled|Unknown|No title|Chapter|Sem título|Sin título)"\s*$|\.orEmpty\(\)\s*$""", RegexOption.IGNORE_CASE)
 
         val DEFAULT_OVERRIDE = issue<SourceDetector>(

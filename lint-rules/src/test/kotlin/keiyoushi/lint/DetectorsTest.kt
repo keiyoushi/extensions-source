@@ -687,11 +687,17 @@ class DetectorsTest {
                 private val ok get() = "${'$'}baseUrl/api"
                 private val okHeaders get() = headersBuilder().build()
                 private val constant = "https://cdn.example.com"
+                private val apiRoot = run { "${'$'}baseUrl/api" }
+                private val helper = Helper { baseUrl }
+                private val interceptor = okhttp3.Interceptor { chain -> chain.proceed(chain.request()).also { println(baseUrl) } }
+                private val urlOf: (String) -> String = { slug -> "${'$'}baseUrl/${'$'}slug" }
+                private val headersBuilderCopy get() = headersBuilder()
                 companion object { const val X = "y" }
             }
+            class Helper(val baseUrl: () -> String)
             """,
             source("build.gradle.kts", "keiyoushi { source { baseUrl { mirrors(\"https://a.com\", \"https://b.com\") } } }"),
-        ).count(2)
+        ).count(3)
         check(
             SourceDetector.STORED_BASE_URL,
             """
