@@ -173,7 +173,10 @@ class KotlinIdiomDetector :
                 }
             }
 
-            "toString" -> if (node.receiverType?.canonicalText == "byte[]" && node.valueArguments.size == 1) {
+            "toString" -> if (node.receiverType?.canonicalText == "byte[]" &&
+                node.valueArguments.size == 1 &&
+                node.valueArguments[0].sourcePsi?.text?.endsWith("UTF_8") == true
+            ) {
                 context.report(
                     STDLIB_ENCODING,
                     node,

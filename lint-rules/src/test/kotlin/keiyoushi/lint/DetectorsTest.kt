@@ -517,14 +517,21 @@ class DetectorsTest {
             fun b(b: ByteArray) = String(b, Charsets.UTF_8)
             fun c(b: ByteArray) = b.joinToString("") { "%02x".format(it) }
             fun d(s: String) = s.encodeToByteArray()
+            fun e(b: ByteArray) = b.toString(Charsets.UTF_8)
+            fun f(b: ByteArray) = b.toString(Charsets.ISO_8859_1)
+            fun g(b: ByteArray) = b.toString(java.nio.charset.Charset.forName("windows-1251"))
             """,
-        ).count(3)
+        ).count(4)
             .expectFixDiffs(
                 """
                 Fix for src/test/pkg/Test.kt line 2: Replace with encodeToByteArray():
                 @@ -2 +2 @@
                 -fun a(s: String) = s.toByteArray(Charsets.UTF_8)
                 +fun a(s: String) = s.encodeToByteArray()
+                Fix for src/test/pkg/Test.kt line 6: Replace with decodeToString():
+                @@ -6 +6 @@
+                -fun e(b: ByteArray) = b.toString(Charsets.UTF_8)
+                +fun e(b: ByteArray) = b.decodeToString()
                 """,
             )
     }
