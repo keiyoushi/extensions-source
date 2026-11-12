@@ -34,9 +34,9 @@ class ReaderSecret(secret: String) {
     companion object {
         private const val IV_SIZE = 12
 
-        private val STRING_TABLE_REGEX = Regex("""function ([\w$]+)\(\)\{const ([\w$]+)=\[([^\]]*)]; ?return \1=function\(\)\{return \2}""")
+        private val STRING_TABLE_REGEX = Regex("""function ([\w$]+)\(\)\{const ([\w$]+)=\[([^\]]*)\]; ?return \1=function\(\)\{return \2\}""")
         private val STRING_REGEX = Regex(""""([^"]*)"""")
-        private val HEADER_NAME_REGEX = Regex(""""x-"\+([\w$]+)\[[^\]]+]\(7,15\)""")
+        private val HEADER_NAME_REGEX = Regex(""""x-"\+([\w$]+)\[[^\]]+\]\(7,15\)""")
         private val CONCAT_REGEX = Regex("""(?<![\w$.])([\w$]+)=((?:[\w$]+\(\d+\)|"[0-9a-f]*")(?:\+(?:[\w$]+\(\d+\)|"[0-9a-f]*"))+)[,;]""")
         private val PART_REGEX = Regex("""([\w$]+)\((\d+)\)|"([0-9a-f]*)"""")
         private val SECRET_REGEX = Regex("""[0-9a-f]{64}""")
