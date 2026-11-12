@@ -107,8 +107,10 @@ abstract class CatharsisWorld : Catharsis() {
         return try {
             val session = runBlocking { chapterSession(chapterUrl) }
             fetchPage(chain, request, session, pageIndex)
-                ?: fetchPage(chain, request, runBlocking { chapterSession(chapterUrl, rejected = session) }, pageIndex)
-                ?: throw HttpException(401)
+                ?: runBlocking { chapterSession(chapterUrl, rejected = session) }.let { reopened ->
+                    fetchPage(chain, request, reopened, pageIndex)
+                        ?: throw if (reopened.passSpent) Exception("The site refuses the reader pass") else HttpException(401)
+                }
         } catch (e: Exception) {
             throw e as? IOException ?: IOException(e.message, e)
         }
@@ -173,7 +175,12 @@ abstract class CatharsisWorld : Catharsis() {
                 // Waits out READING_TOO_FAST like the site's reader
                 429 -> {
                     val error = response.apiError()
-                    val delay = error?.retryAfterMs?.takeIf { it > 0 && error.code == "READING_TOO_FAST" }?.plus(150) ?: throw HttpException(429)
+                    if (error?.code != "READING_TOO_FAST") throw HttpException(429)
+                    // Without a wait to honour, the site has spent the reader pass
+                    val delay = error.retryAfterMs?.takeIf { it > 0 }?.plus(150) ?: run {
+                        session.passSpent = true
+                        return null
+                    }
                     if (waited + delay > PACE_WAIT.inWholeMilliseconds) throw HttpException(429)
                     Thread.sleep(delay)
                     waited += delay
@@ -228,6 +235,8 @@ abstract class CatharsisWorld : Catharsis() {
         @Volatile var liveToken: LiveToken? = null
 
         @Volatile var xorKey = DEFAULT_XOR_KEY
+
+        @Volatile var passSpent = false
     }
 
     private class FailedOpen(val chapterUrl: String, val failedAt: Instant, val error: Exception)
@@ -246,7 +255,7 @@ abstract class CatharsisWorld : Catharsis() {
             ?.takeIf { it.chapterUrl == chapterUrl && now - it.failedAt < 10.seconds }
             ?.let { throw it.error }
         try {
-            openChapter(chapterUrl)
+            openChapter(chapterUrl, renewPass = rejected?.passSpent == true)
         } catch (e: Exception) {
             failedOpen = FailedOpen(chapterUrl, now, e)
             throw e
@@ -254,10 +263,10 @@ abstract class CatharsisWorld : Catharsis() {
     }
 
     // Caller holds sessionMutex
-    private suspend fun openChapter(chapterUrl: String): ChapterSession {
+    private suspend fun openChapter(chapterUrl: String, renewPass: Boolean = false): ChapterSession {
         val fetch = Fetch.XHR.from(chapterPageUrl(chapterUrl))
         val secret = readerSecret(chapterUrl)
-        readerPass(fetch)
+        readerPass(fetch, renew = renewPass)
         val blob = loadChapter(chapterUrl, secret, fetch)
             ?: run {
                 readerPass(fetch, renew = true)
@@ -284,8 +293,9 @@ abstract class CatharsisWorld : Catharsis() {
                 throw response.siteError(stream.turboStreamValue("code")?.stringOrNull, status ?: response.code)
             }
         }
-        return stream.turboStreamValue(secret.loaderField)?.stringOrNull
-            ?: throw Exception("Chapter unavailable: $state")
+        val blob = stream.turboStreamValue(secret.loaderField)?.stringOrNull
+        if (blob == null && state == "ok") throw ReaderChangedException()
+        return blob ?: throw Exception("Chapter unavailable: $state")
     }
 
     private var readerSecret: Pair<String, ReaderSecret>? = null

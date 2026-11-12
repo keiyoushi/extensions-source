@@ -12,10 +12,7 @@ import keiyoushi.utils.toJsonString
 import java.io.IOException
 import kotlin.time.Clock
 
-// The reader build's 64-hex secret, whose slices name its headers, heartbeat path and loader field, and its page shuffle code.
-// The secret and the shuffle are both computed by evaluating the reader's own code (with its string decoder) in QuickJS, so a
-// change to how either is expressed (an inline concat, a wrapper function, an int array, a DOM guard, reordered return keys)
-// is absorbed without a code change; only a change to the few structural anchors below needs an update.
+// The reader build's 64-hex secret and page shuffle, both computed by the reader's own code in QuickJS
 internal class ReaderSecret private constructor(secret: String, private val shuffleScript: String, private val shuffleFunction: String) {
     val loaderField = "_" + secret.substring(0, 7)
     val signatureHeader = "x-" + secret.substring(7, 15)
@@ -38,152 +35,175 @@ internal class ReaderSecret private constructor(secret: String, private val shuf
         return bytes.copyOfRange(IV_SIZE, bytes.size).aesDecrypt(aesGcm(loaderKey, bytes.copyOf(IV_SIZE))).decodeToString()
     }
 
-    // The reader's 8x8 tile plan for a page, from its own code; any failure there means the code changed
-    fun tilePlan(key: String, width: Int, height: Int): TilePlan {
-        val call = "JSON.stringify($shuffleFunction(${key.toJsonString()},$width,$height,8,8))"
-        val plan = try {
-            QuickJs.create().use { it.evaluate(shuffleScript + call) as String }.parseAs<TilePlanDto>()
-        } catch (e: Exception) {
-            throw ReaderChangedException(e)
-        }
-        return plan.toTilePlan()
-    }
+    // The reader's 8x8 tile plan for a page
+    fun tilePlan(key: String, width: Int, height: Int): TilePlan = evaluate(shuffleScript + "JSON.stringify($shuffleFunction(${key.toJsonString()},$width,$height,8,8))") {
+        it.parseAs<TilePlanDto>()
+    }.toTilePlan()
 
     companion object {
         private const val IV_SIZE = 12
 
-        // The obfuscator's string table function, decoder, and its rotation IIFE, run as-is in QuickJS so every f(123) lookup resolves
-        private val TABLE_REGEX = Regex("""function ([\w$]+)\(\)\{const [\w$]+=\[""")
+        private val TABLE_REGEX = Regex("""function ([\w$]+)\(\)\{const [\w$]+=\[[\s\S]*?\];return \1=function""")
         private val DECODER_REGEX = Regex("""function ([\w$]+)\(([\w$]+),[\w$]+\)\{\2=\2-""")
-        private val ALIAS_REGEX = Regex("""(?:const|,)\s*([\w$]+)=(NAME)(?![\w$(])""")
-
-        // The secret: the variable feeding the "x-<name>" headers, whatever expression defines it (inline concat, v_(), ...)
         private val SECRET_VAR_REGEX = Regex("""["']x-["']\s*\+\s*([\w$]+)[.\[]""")
-        private val IDENTIFIER_REGEX = Regex("""[A-Za-z_$][\w$]*""")
-        private val CALL_REGEX = Regex("""([\w$]+)\(""")
+        private val PLAN_CALL_REGEX = Regex("""(?<![\w$.])[\w$]+=([\w$]+)\([^()]*,8,8\)""")
         private val SECRET_REGEX = Regex("""[0-9a-f]{64}""")
 
-        // The shuffle: the function returning {..colPerm..slices..} (any key order), and its per-key generator
-        private val PLAN_REGEX = Regex("""return\{[^}]*\bcolPerm:[^}]*\bslices:|return\{[^}]*\bslices:[^}]*\bcolPerm:""")
-        private val FUNCTION_NAME_REGEX = Regex("""^function ([\w$]+)\(([\w$]+)""")
-        private val GENERATOR_REGEX = Regex("""=\s*([\w$]+)\(\s*(KEY)\s*\)""")
+        private val MODULE_FUNCTION_REGEX = Regex("""(?<![\w$])function ([\w$]+)\(""")
+        private val MODULE_DECLARATION_REGEX = Regex("""(?:(?<![\w$])(?:var|const|let)\s+|,)([\w$]+)\s*=(?![=>])""")
+        private val IDENTIFIER_REGEX = Regex("""(?<![\w$])[A-Za-z_$][\w$]*""")
+        private val STRING_REGEX = Regex(""""(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`""")
+        private val LOCAL_REGEX = Regex("""(?<![\w$])(?:var|const|let)\s+([\w$]+)|,\s*([\w$]+)\s*=(?![=>])|([\w$]+)\s*=>""")
+        private val PARAMETERS_REGEX = Regex("""function\s*[\w$]*\s*\(([^)]*)\)|\(([^()]*)\)\s*=>|catch\s*\(([\w$]+)\)""")
+        private val PARAMETER_NAME_REGEX = Regex("""^\s*([A-Za-z_$][\w$]*)""")
 
-        // Window/document exist only so a DOM-presence guard in the plan passes; the plan never uses them to compute
-        private const val DOM_STUB = "var Ze,window={},document={createElement:function(){return{}}};"
+        // Pass the reader's presence check on window, document and document.createElement; any real use throws
+        private const val DOM_STUB = "var window=new Proxy({},{get:function(){throw Error(\"dom\")},has:function(){throw Error(\"dom\")}})," +
+            "document=new Proxy({},{get:function(t,p){if(p===\"createElement\")return function(){return window};throw Error(\"dom\")}," +
+            "has:function(){throw Error(\"dom\")}});"
 
         fun fromBundle(bundle: String): ReaderSecret {
-            val preamble = decoderPreamble(bundle)
-            val secret = evaluate(preamble + secretScript(bundle))
-                .takeIf(SECRET_REGEX::matches) ?: throw ReaderChangedException()
-            val (shuffleBody, planName) = shuffleScript(bundle)
-            return ReaderSecret(secret, preamble + shuffleBody, planName)
-        }
-
-        // arrayFn + decoder + rotation IIFE + their module aliases + DOM stubs: a scope where every table lookup works
-        private fun decoderPreamble(bundle: String): String {
+            val module = Module(bundle)
             val tableName = TABLE_REGEX.find(bundle)?.groupValues?.get(1) ?: throw ReaderChangedException()
-            val tableFn = functionAt(bundle, bundle.indexOf("function $tableName(){const"))
             val decoder = DECODER_REGEX.find(bundle)?.groupValues?.get(1) ?: throw ReaderChangedException()
-            val decoderFn = functionAt(bundle, bundle.indexOf("function $decoder("))
-            val iife = iifeAt(bundle, tableName)
-            val aliases = Regex(ALIAS_REGEX.pattern.replace("NAME", Regex.escape(decoder))).findAll(bundle)
-                .map { it.groupValues[1] }.toSet()
-            val aliasDecls = (aliases + decoder).joinToString("") { "var $it=$decoder;" }
-            return "$tableFn;$decoderFn;$iife;$aliasDecls$DOM_STUB"
-        }
+            val aliases = module.aliasesOf(decoder)
+            val preamble = functionAt(bundle, bundle.indexOf("function $tableName(){const")) + ";" +
+                functionAt(bundle, bundle.indexOf("function $decoder(")) + ";" +
+                iifeAt(bundle, tableName) + ";" +
+                aliases.joinToString("") { "var $it=$decoder;" } +
+                DOM_STUB
+            val provided = aliases + decoder + tableName + "window" + "document"
 
-        // Evaluate String(<secret expression>): follows the assignment of the header variable, pulling any function it calls and arrays those use
-        private fun secretScript(bundle: String): String {
             val secretVar = SECRET_VAR_REGEX.find(bundle)?.groupValues?.get(1) ?: throw ReaderChangedException()
-            var expression = assignmentOf(bundle, secretVar) ?: throw ReaderChangedException()
-            while (expression.matches(Regex("""[\w$]+"""))) {
-                expression = assignmentOf(bundle, expression)?.takeIf { it != expression } ?: break
-            }
-            val dependencies = StringBuilder()
-            for (match in CALL_REGEX.findAll(expression)) {
-                val name = match.groupValues[1]
-                val start = bundle.indexOf("function $name(").takeIf { it >= 0 } ?: continue
-                val source = functionAt(bundle, start)
-                dependencies.append(source).append(';')
-                for (id in IDENTIFIER_REGEX.findAll(source).map { it.value }.toSet()) {
-                    arrayAt(bundle, id)?.let { dependencies.append(it) }
-                }
-            }
-            return "$dependencies;var __s=String($expression);"
+            val secret = evaluate(preamble + module.definitions(secretVar, provided) + "String($secretVar)") { it }
+                .takeIf(SECRET_REGEX::matches) ?: throw ReaderChangedException()
+
+            val planName = PLAN_CALL_REGEX.findAll(bundle).map { it.groupValues[1] }.distinct().singleOrNull()
+                ?: throw ReaderChangedException()
+            return ReaderSecret(secret, preamble + module.definitions(planName, provided), planName)
         }
 
-        // Plan function (any return key order) + its generator, as a scope to call per page
-        private fun shuffleScript(bundle: String): Pair<String, String> {
-            val planMatch = PLAN_REGEX.find(bundle) ?: throw ReaderChangedException()
-            val plan = functionAt(bundle, bundle.lastIndexOf("function ", planMatch.range.first))
-            val (planName, planKey) = FUNCTION_NAME_REGEX.find(plan)?.destructured ?: throw ReaderChangedException()
-            val generatorName = Regex(GENERATOR_REGEX.pattern.replace("KEY", Regex.escape(planKey)))
-                .find(plan)?.groupValues?.get(1) ?: throw ReaderChangedException()
-            val generator = functionAt(bundle, bundle.indexOf("function $generatorName("))
-            return "$generator;$plan;" to planName
-        }
-
-        private fun evaluate(script: String): String = try {
-            QuickJs.create().use { it.evaluate(script + "__s") as String }
+        // Runs the reader's code; any failure there means the code changed
+        private fun <T> evaluate(script: String, read: (String) -> T): T = try {
+            read(QuickJs.create().use { it.evaluate(script) as String })
         } catch (e: Exception) {
             throw ReaderChangedException(e)
         }
 
-        // The right-hand side of `name = <expr>`, up to the first top-level , or ; (quote and bracket aware)
-        private fun assignmentOf(bundle: String, name: String): String? {
-            val match = Regex("""(?<![\w$.])${Regex.escape(name)}\s*=\s*(?!=)""").find(bundle) ?: return null
-            var depth = 0
-            var i = match.range.last + 1
-            var quote = ' '
-            var inString = false
-            val start = i
-            while (i < bundle.length) {
-                val c = bundle[i]
-                when {
-                    inString -> if (c == '\\') {
-                        i++
-                    } else if (c == quote) {
-                        inString = false
-                    }
-                    c == '"' || c == '\'' -> {
-                        inString = true
-                        quote = c
-                    }
-                    c == '(' || c == '[' || c == '{' -> depth++
-                    c == ')' || c == ']' || c == '}' -> depth--
-                    (c == ',' || c == ';') && depth == 0 -> return bundle.substring(start, i).trim()
+        // The bundle's module-level functions and declarations, found by bracket depth 0
+        private class Module(private val bundle: String) {
+            private val depths = bracketDepths(bundle)
+            private val functions = MODULE_FUNCTION_REGEX.findAll(bundle).filter { depths[it.range.first] == 0 }
+                .associateBy({ it.groupValues[1] }, { it.range.first })
+            private val declarations = MODULE_DECLARATION_REGEX.findAll(bundle).filter { depths[it.range.first] == 0 }
+                .groupBy({ it.groupValues[1] }, { it })
+
+            fun aliasesOf(name: String): Set<String> = declarations.filterValues { matches ->
+                matches.any { declarationAt(it).substringAfter('=') == name }
+            }.keys
+
+            // The module-level definitions [name] needs, dependencies first, skipping [provided] and locals
+            fun definitions(name: String, provided: Set<String>): String = buildString {
+                val seen = provided.toMutableSet()
+                fun define(identifier: String) {
+                    if (!seen.add(identifier)) return
+                    val source = functions[identifier]?.let { functionAt(bundle, it) }
+                        ?: declarations[identifier]?.first()?.let { declarationAt(it) }
+                        ?: return
+                    freeIdentifiers(source).forEach(::define)
+                    append(source).append(";\n")
                 }
-                i++
+                define(name)
             }
-            return null
+
+            // "var <name>=<initializer>" up to the declaration's top-level , or ;
+            private fun declarationAt(match: MatchResult): String {
+                val start = match.range.last + 1
+                var i = start
+                while (i < bundle.length && !(depths[i] == 0 && (bundle[i] == ',' || bundle[i] == ';'))) i++
+                return "var ${match.groupValues[1]}=" + bundle.substring(start, i).trim()
+            }
         }
 
-        // A top-level `var/const/let name=[ ... ]` declaration (quote and bracket aware), or null
-        private fun arrayAt(bundle: String, name: String): String? {
-            val match = Regex("""(?:var|const|let)\s+${Regex.escape(name)}\s*=\s*\[""").find(bundle) ?: return null
-            val open = match.range.last
+        // Identifiers [code] reads that it doesn't declare, outside strings, member names and object keys
+        private fun freeIdentifiers(code: String): Set<String> {
+            val bare = code.replace(STRING_REGEX, "\"\"")
+            val locals = LOCAL_REGEX.findAll(bare).mapNotNull { match -> match.groupValues.drop(1).firstOrNull { it.isNotEmpty() } } +
+                PARAMETERS_REGEX.findAll(bare).flatMap { match ->
+                    match.groupValues.drop(1).filter { it.isNotEmpty() }.flatMap { it.split(',') }
+                        .mapNotNull { PARAMETER_NAME_REGEX.find(it)?.groupValues?.get(1) }
+                }
+            val localSet = locals.toSet()
+            return IDENTIFIER_REGEX.findAll(bare)
+                .filterNot { match ->
+                    val before = bare.getOrNull(match.range.first - 1)
+                    var next = match.range.last + 1
+                    while (next < bare.length && bare[next].isWhitespace()) next++
+                    before == '.' || (bare.getOrNull(next) == ':' && (before == '{' || before == ','))
+                }
+                .map { it.value }
+                .filterNot { it in localSet }
+                .toSet()
+        }
+
+        // Bracket depth at each index, skipping strings and regex literals
+        private fun bracketDepths(bundle: String): IntArray {
+            val depths = IntArray(bundle.length)
             var depth = 0
-            var i = open
-            var quote = ' '
-            var inString = false
+            var last = ' '
+            var i = 0
             while (i < bundle.length) {
+                depths[i] = depth
                 val c = bundle[i]
                 when {
-                    inString -> if (c == '\\') {
-                        i++
-                    } else if (c == quote) {
-                        inString = false
-                    }
                     c == '"' || c == '\'' || c == '`' -> {
-                        inString = true
-                        quote = c
+                        i = skipQuoted(bundle, i, depths, depth)
+                        last = c
                     }
-                    c == '[' -> depth++
-                    c == ']' -> if (--depth == 0) return "var $name=" + bundle.substring(open, i + 1) + ";"
+                    c == '/' && (last in REGEX_PRECEDERS || bundle.startsWith("return", i - 6)) -> {
+                        i = skipRegex(bundle, i, depths, depth)
+                        last = c
+                    }
+                    else -> {
+                        if (c == '(' || c == '[' || c == '{') depth++
+                        if (c == ')' || c == ']' || c == '}') depth--
+                        if (!c.isWhitespace()) last = c
+                    }
                 }
                 i++
             }
-            return null
+            return depths
+        }
+
+        private const val REGEX_PRECEDERS = "(,=:[!&|?{};+-*%~^<> "
+
+        // Index of the closing quote of the literal opening at [start]
+        private fun skipQuoted(bundle: String, start: Int, depths: IntArray, depth: Int): Int {
+            var i = start + 1
+            while (i < bundle.length && bundle[i] != bundle[start]) {
+                if (bundle[i] == '\\') i++
+                if (i < bundle.length) depths[i] = depth
+                i++
+            }
+            if (i < bundle.length) depths[i] = depth
+            return i
+        }
+
+        // Index of the closing slash of the regex literal opening at [start]
+        private fun skipRegex(bundle: String, start: Int, depths: IntArray, depth: Int): Int {
+            var i = start + 1
+            var inClass = false
+            while (i < bundle.length) {
+                depths[i] = depth
+                when (bundle[i]) {
+                    '\\' -> i++
+                    '[' -> inClass = true
+                    ']' -> inClass = false
+                    '/' -> if (!inClass) return i
+                }
+                i++
+            }
+            return i
         }
 
         // The IIFE `(function(..){..})(tableName, <checksum>)` that rotates the table into place
