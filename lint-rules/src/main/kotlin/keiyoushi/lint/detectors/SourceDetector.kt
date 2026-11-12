@@ -19,14 +19,12 @@ import org.jetbrains.kotlin.psi.KtClassOrObject
 import org.jetbrains.kotlin.psi.KtIfExpression
 import org.jetbrains.kotlin.psi.KtObjectDeclaration
 import org.jetbrains.kotlin.psi.KtProperty
-import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 import org.jetbrains.uast.UBinaryExpression
 import org.jetbrains.uast.UCallExpression
 import org.jetbrains.uast.UClass
 import org.jetbrains.uast.UElement
 import org.jetbrains.uast.UIfExpression
 import org.jetbrains.uast.UMethod
-import org.jetbrains.uast.UPolyadicExpression
 import org.jetbrains.uast.UastBinaryOperator
 import org.jetbrains.uast.getParentOfType
 import org.jetbrains.uast.tryResolve
@@ -39,7 +37,6 @@ class SourceDetector :
         UClass::class.java,
         UBinaryExpression::class.java,
         UIfExpression::class.java,
-        UPolyadicExpression::class.java,
     )
 
     override fun createUastHandler(context: JavaContext): UElementHandler = object : UElementHandler() {
@@ -56,16 +53,6 @@ class SourceDetector :
                 checkMandatoryField(context, node)
                 return
             }
-            if (node.operator == UastBinaryOperator.PLUS) {
-                // Exactly `baseUrl + manga.url`: a suffix or a transformed url builds another URL
-                val parent = node.uastParent as? UBinaryExpression
-                if (parent?.operator == UastBinaryOperator.PLUS) return
-                val left = node.leftOperand.sourcePsi?.text?.trim()
-                val right = node.rightOperand.sourcePsi?.text?.trim() ?: return
-                val target = STORED_URL.matchEntire(right)?.groupValues?.get(1) ?: return
-                if (left == "baseUrl") checkBaseUrlConcat(context, node, target)
-                return
-            }
             if (node.operator == UastBinaryOperator.LOGICAL_AND) {
                 val text = node.sourcePsi?.text?.replace(WHITESPACE, "") ?: return
                 if (text == "!fetchDetails&&!fetchChapters" || text == "!fetchChapters&&!fetchDetails") {
@@ -77,13 +64,6 @@ class SourceDetector :
                     )
                 }
             }
-        }
-
-        // String templates: `"$baseUrl${manga.url}"`
-        override fun visitPolyadicExpression(node: UPolyadicExpression) {
-            val template = node.sourcePsi as? KtStringTemplateExpression ?: return
-            val target = BASE_URL_TEMPLATE.matchEntire(template.text)?.groupValues?.get(1) ?: return
-            checkBaseUrlConcat(context, node, target)
         }
 
         override fun visitIfExpression(node: UIfExpression) {
@@ -102,18 +82,6 @@ class SourceDetector :
                 )
             }
         }
-    }
-
-    private fun checkBaseUrlConcat(context: JavaContext, node: UElement, target: String) {
-        // These overrides are where the URL is defined; calling the helper there would recurse
-        if (node.getParentOfType<UMethod>(true)?.name in URL_HELPERS) return
-        val helper = if (target == "manga") "getMangaUrl(manga)" else "getChapterUrl(chapter)"
-        context.report(
-            BASE_URL_CONCAT_ISSUE,
-            node,
-            context.loc(node),
-            "Use `$helper` instead of rebuilding the URL from `baseUrl`",
-        )
     }
 
     private fun checkClassProperty(context: JavaContext, cls: UClass, property: KtProperty) {
@@ -186,9 +154,6 @@ class SourceDetector :
 
     companion object {
         private val WHITESPACE = Regex("""\s+""")
-        private val STORED_URL = Regex("""(manga|chapter)\.url""")
-        private val BASE_URL_TEMPLATE = Regex("""^"\$\{?baseUrl}?\$\{(manga|chapter)\.url}"$""")
-        private val URL_HELPERS = setOf("getMangaUrl", "getChapterUrl")
         private val DYNAMIC_REFERENCE = Regex("""\bbaseUrl\b|\bheaders\b(?!Builder)""")
         private val EMPTY_FALLBACK = Regex("""\?:\s*"(|Untitled|Unknown|No title|Chapter|Sem título|Sin título)"\s*$|\.orEmpty\(\)\s*$""", RegexOption.IGNORE_CASE)
 
@@ -211,12 +176,6 @@ class SourceDetector :
             When chapters aren't fetched, return the `chapters` passed in: the app may apply the returned list \
             regardless of the flags. If details and chapters come from the same response, return both unconditionally.
             """,
-        )
-
-        val BASE_URL_CONCAT_ISSUE = issue<SourceDetector>(
-            "KeiBaseUrlConcat",
-            "URL rebuilt from `baseUrl` instead of `getMangaUrl`/`getChapterUrl`",
-            "`getMangaUrl(manga)` and `getChapterUrl(chapter)` are the single place that maps a stored URL to the site.",
         )
 
         val STORED_BASE_URL = issue<SourceDetector>(
@@ -248,7 +207,6 @@ class SourceDetector :
             DEFAULT_OVERRIDE,
             IMPOSSIBLE_FLAGS,
             EMPTY_CHAPTERS,
-            BASE_URL_CONCAT_ISSUE,
             STORED_BASE_URL,
             MANDATORY_FALLBACK,
             CHAPTER_SORT,

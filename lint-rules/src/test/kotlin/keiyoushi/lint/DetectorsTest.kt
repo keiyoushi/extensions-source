@@ -685,23 +685,6 @@ class DetectorsTest {
     }
 
     @Test
-    fun baseUrlConcat() {
-        check(
-            SourceDetector.BASE_URL_CONCAT_ISSUE,
-            """
-            package test.pkg
-            import eu.kanade.tachiyomi.source.model.*
-            fun a(baseUrl: String, manga: SManga) = baseUrl + manga.url
-            fun b(baseUrl: String, chapter: SChapter) = "${'$'}baseUrl${'$'}{chapter.url}"
-            fun c(baseUrl: String, manga: SManga) = "${'$'}baseUrl/manga/${'$'}{manga.url}"
-            fun getMangaUrl(baseUrl: String, manga: SManga) = baseUrl + manga.url
-            fun d(baseUrl: String, chapter: SChapter) = baseUrl + chapter.url + "/images"
-            fun e(baseUrl: String, chapter: SChapter) = baseUrl + chapter.url.replace("/manga/", "/online/")
-            """,
-        ).count(2)
-    }
-
-    @Test
     fun mandatoryFallback() {
         check(
             SourceDetector.MANDATORY_FALLBACK,
