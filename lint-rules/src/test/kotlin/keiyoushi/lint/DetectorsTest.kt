@@ -359,6 +359,7 @@ class DetectorsTest {
             import org.jsoup.nodes.Element
             fun f(e: Element) = e.text().trim()
             fun g(s: String) = s.trim()
+            fun h(e: Element) = e.select("span").text().trim()
             """,
         ).count(1)
             .expectFixDiffs(

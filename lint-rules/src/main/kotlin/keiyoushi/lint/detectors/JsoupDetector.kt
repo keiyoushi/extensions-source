@@ -40,7 +40,9 @@ class JsoupDetector :
 
             "trim" -> {
                 val inner = node.receiver.asCall() ?: return
-                if (inner.methodName in TEXT_METHODS && inner.isJsoup() && node.valueArguments.isEmpty()) {
+                // Only Element trims: Elements.text() keeps the separators of empty elements, TextNode.text() its edges
+                val owner = inner.resolve()?.containingClass?.qualifiedName
+                if (inner.methodName in TEXT_METHODS && owner == "org.jsoup.nodes.Element" && node.valueArguments.isEmpty()) {
                     context.report(
                         TEXT_TRIM,
                         node,
@@ -119,7 +121,7 @@ class JsoupDetector :
         val TEXT_TRIM = issue<JsoupDetector>(
             "KeiTextTrim",
             "`text().trim()` is redundant",
-            "Jsoup's `text()` and `ownText()` already normalize and trim whitespace.",
+            "Jsoup's `Element.text()` and `Element.ownText()` already normalize and trim whitespace.",
         )
 
         val RELATIVE_HREF = issue<JsoupDetector>(
