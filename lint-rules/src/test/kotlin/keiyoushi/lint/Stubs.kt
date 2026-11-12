@@ -115,6 +115,7 @@ object Stubs {
             var title: String
             var initialized: Boolean
             var thumbnail_url: String?
+            var description: String?
             companion object { fun create(): SManga = TODO() }
         }
         interface SChapter {

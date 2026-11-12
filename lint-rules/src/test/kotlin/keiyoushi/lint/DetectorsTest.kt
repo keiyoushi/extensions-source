@@ -603,9 +603,13 @@ class DetectorsTest {
             KotlinIdiomDetector.MARKDOWN_BULLET,
             """
             package test.pkg
-            fun f(l: List<String>) = l.joinToString("\n") { "• ${'$'}it" }
+            import eu.kanade.tachiyomi.source.model.SManga
+            fun f(m: SManga, l: List<String>) = m.apply { description = buildString { append(l.joinToString("\n") { "• ${'$'}it" }) } }
+            fun g(l: List<String>): String { val altTitlesDesc = l.joinToString("\n• "); return altTitlesDesc }
+            fun h(l: List<String>) = l.joinToString(" • ")
+            fun header(l: List<String>) = l.map { "• ${'$'}it" }
             """,
-        ).count(1)
+        ).count(2)
     }
 
     @Test

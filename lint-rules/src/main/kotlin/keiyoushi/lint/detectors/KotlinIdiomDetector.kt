@@ -6,7 +6,9 @@ import com.android.tools.lint.detector.api.JavaContext
 import com.android.tools.lint.detector.api.LintFix
 import com.android.tools.lint.detector.api.Severity
 import com.android.tools.lint.detector.api.SourceCodeScanner
+import com.intellij.psi.PsiMember
 import com.intellij.psi.PsiMethod
+import keiyoushi.lint.SMANGA
 import keiyoushi.lint.argument
 import keiyoushi.lint.asCall
 import keiyoushi.lint.inClass
@@ -15,6 +17,7 @@ import keiyoushi.lint.loc
 import keiyoushi.lint.stringValue
 import org.jetbrains.kotlin.psi.KtClass
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
+import org.jetbrains.uast.UBinaryExpression
 import org.jetbrains.uast.UBlockExpression
 import org.jetbrains.uast.UCallExpression
 import org.jetbrains.uast.UCatchClause
@@ -25,7 +28,10 @@ import org.jetbrains.uast.ULiteralExpression
 import org.jetbrains.uast.UMethod
 import org.jetbrains.uast.UQualifiedReferenceExpression
 import org.jetbrains.uast.UThrowExpression
+import org.jetbrains.uast.UVariable
+import org.jetbrains.uast.UastBinaryOperator
 import org.jetbrains.uast.getParentOfType
+import org.jetbrains.uast.tryResolve
 
 class KotlinIdiomDetector :
     Detector(),
@@ -232,6 +238,23 @@ class KotlinIdiomDetector :
         }
     }
 
+    /** Inside a `description = ...` assignment, or a declaration named after the description. */
+    private fun UElement.inDescription(): Boolean {
+        var element: UElement? = uastParent
+        while (element != null) {
+            when (element) {
+                is UBinaryExpression -> if (element.operator == UastBinaryOperator.ASSIGN) {
+                    val target = element.leftOperand.tryResolve() as? PsiMember
+                    if (target?.containingClass?.qualifiedName == SMANGA && target.name in DESCRIPTION_MEMBERS) return true
+                }
+                is UVariable -> if (element.name?.contains("desc", ignoreCase = true) == true) return true
+                is UMethod -> return element.name.contains("desc", ignoreCase = true)
+            }
+            element = element.uastParent
+        }
+        return false
+    }
+
     override fun getApplicableUastTypes(): List<Class<out UElement>> = listOf(
         ULiteralExpression::class.java,
         UCatchClause::class.java,
@@ -243,7 +266,7 @@ class KotlinIdiomDetector :
     override fun createUastHandler(context: JavaContext): UElementHandler = object : UElementHandler() {
         override fun visitLiteralExpression(node: ULiteralExpression) {
             val value = node.value as? String ?: return
-            if ("• " in value) {
+            if (BULLET_ITEM.containsMatchIn(value) && node.inDescription()) {
                 context.report(
                     MARKDOWN_BULLET,
                     node,
@@ -308,6 +331,9 @@ class KotlinIdiomDetector :
     }
 
     companion object {
+        // A list item: the bullet starts a line, unlike a `" • "` separator
+        private val BULLET_ITEM = Regex("""(^|\n)• """)
+        private val DESCRIPTION_MEMBERS = setOf("description", "setDescription", "getDescription")
         private val RESULT_FALLBACKS = setOf("getOrNull", "getOrDefault", "getOrElse")
         private val HEX_FORMAT = Regex("%0?2[xX]")
         private val HTTP_MESSAGE = Regex("""^"HTTP (error )?\$\{?[\w.]*code""", RegexOption.IGNORE_CASE)
