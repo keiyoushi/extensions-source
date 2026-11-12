@@ -1,29 +1,21 @@
 package eu.kanade.tachiyomi.extension.es.catharsisworld
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
 
+// The chapter loader's encrypted field
 @Serializable
-class PagesDto(
-    val paginas: List<JsonElement>,
-    val chapterSessionToken: String,
+class ReaderDataDto(
+    @SerialName("p") val pageTokens: List<String>,
+    @SerialName("r") val heartbeat: String,
 )
 
 @Serializable
-class PageTicketRequest(
-    private val pageIndex: Int,
-    private val sessionToken: String,
+class HeartbeatRequest(
+    @SerialName("h") private val heartbeat: String,
 )
 
 @Serializable
-class PageTicketResponse(
-    val signedToken: String,
-    val scrambleKey: String? = null,
-    val xorByte: Int,
-)
-
-@Serializable
-class ChapterTokenPayload(
-    val cid: Int,
-    val exp: Long,
+class HeartbeatDto(
+    @SerialName("l") val liveToken: String,
 )

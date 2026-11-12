@@ -165,15 +165,17 @@ abstract class Catharsis : KeiSource() {
         ).parseAs<CapRedeemResponse>()
         val capToken = redeemed.token?.takeIf { redeemed.success }
             ?: throw Exception("Reader verification failed")
-        val response = client.post(
-            "$apiUrl/mangas/reader-pass",
-            headers,
-            fetch,
-            ReaderPassRequest(capToken, system.capSitekey).toJsonRequestBody(),
-            ensureSuccess = false,
-        ).ensureSiteSuccess()
-        response.parseAs<ReaderPassDto>().also { currentReaderPass = it }
+        redeemReaderPass(capToken, system.capSitekey, headers, fetch).also { currentReaderPass = it }
     }
+
+    // Trades the solved Cap token for the site's reader pass
+    protected open suspend fun redeemReaderPass(capToken: String, sitekey: String, headers: Headers, fetch: Fetch): ReaderPassDto = client.post(
+        "$apiUrl/mangas/reader-pass",
+        headers,
+        fetch,
+        ReaderPassRequest(capToken, sitekey).toJsonRequestBody(),
+        ensureSuccess = false,
+    ).ensureSiteSuccess().parseAs()
 
     // FNV-1a seeded xorshift32, as hex
     private fun capPrng(seed: String, length: Int): String {

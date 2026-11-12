@@ -6,25 +6,31 @@ import android.graphics.Paint
 import android.graphics.Rect
 import kotlin.math.roundToInt
 
-// Undoes the reader's 8x8 row/column shuffle keyed by the page's scramble key
-fun descramble(bitmap: Bitmap, key: String): Bitmap {
+// Undoes the reader's 8x8 row/column shuffle keyed by the page's scramble key; shuffled tiles may sit [gutter] px apart
+fun descramble(bitmap: Bitmap, key: String, gutter: Int = 0): Bitmap {
+    // The reader drops a gutter that would leave less than 200 px
+    val tileGutter = gutter.takeIf { minOf(bitmap.width, bitmap.height) - 2 * GRID * it >= MIN_GUTTERED_SIZE } ?: 0
+    val outputWidth = bitmap.width - 2 * GRID * tileGutter
+    val outputHeight = bitmap.height - 2 * GRID * tileGutter
     val random = mulberry32(key.hashCode())
-    val cols = boundaries(random, bitmap.width)
-    val rows = boundaries(random, bitmap.height)
+    val cols = boundaries(random, outputWidth)
+    val rows = boundaries(random, outputHeight)
     val colOrder = permutation(random)
     val rowOrder = permutation(random)
     val srcCols = offsets(cols, colOrder)
     val srcRows = offsets(rows, rowOrder)
 
-    val output = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+    val output = Bitmap.createBitmap(outputWidth, outputHeight, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(output)
     val paint = Paint().apply { isFilterBitmap = false }
     for (row in 0 until GRID) {
         for (col in 0 until GRID) {
             val width = cols[col + 1] - cols[col]
             val height = rows[row + 1] - rows[row]
-            val srcX = srcCols[colOrder.indexOf(col)]
-            val srcY = srcRows[rowOrder.indexOf(row)]
+            val colPosition = colOrder.indexOf(col)
+            val rowPosition = rowOrder.indexOf(row)
+            val srcX = srcCols[colPosition] + tileGutter * (2 * colPosition + 1)
+            val srcY = srcRows[rowPosition] + tileGutter * (2 * rowPosition + 1)
             canvas.drawBitmap(
                 bitmap,
                 Rect(srcX, srcY, srcX + width, srcY + height),
@@ -79,3 +85,4 @@ private fun offsets(bounds: IntArray, order: IntArray): IntArray {
 
 private const val GRID = 8
 private const val MIN_TILE = 16
+private const val MIN_GUTTERED_SIZE = 200
