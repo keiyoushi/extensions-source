@@ -51,6 +51,7 @@ internal class ReaderSecret private constructor(secret: String, private val shuf
 
         private val MODULE_FUNCTION_REGEX = Regex("""(?<![\w$])function ([\w$]+)\(""")
         private val MODULE_DECLARATION_REGEX = Regex("""(?:(?<![\w$])(?:var|const|let)\s+|,)([\w$]+)\s*=(?![=>])""")
+        private val ASSIGNMENT_REGEX = Regex("""(?<![\w$.])([\w$]+)\s*(?:[-+*/%&|^]|\*\*|<<|>>>?|&&|\|\||\?\?)?=(?![=>])|(?<![\w$.])([\w$]+)\s*(?:\+\+|--)|(?:\+\+|--)\s*([\w$]+)""")
         private val IDENTIFIER_REGEX = Regex("""(?<![\w$])[A-Za-z_$][\w$]*""")
         private val STRING_REGEX = Regex(""""(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`""")
         private val LOCAL_REGEX = Regex("""(?<![\w$])(?:var|const|let)\s+([\w$]+)|,\s*([\w$]+)\s*=(?![=>])|([\w$]+)\s*=>""")
@@ -97,6 +98,9 @@ internal class ReaderSecret private constructor(secret: String, private val shuf
                 .associateBy({ it.groupValues[1] }, { it.range.first })
             private val declarations = MODULE_DECLARATION_REGEX.findAll(bundle).filter { depths[it.range.first] == 0 }
                 .groupBy({ it.groupValues[1] }, { it })
+            private val assignments = ASSIGNMENT_REGEX.findAll(bundle)
+                .groupingBy { match -> match.groupValues.drop(1).first { it.isNotEmpty() } }
+                .eachCount()
 
             fun aliasesOf(name: String): Set<String> = declarations.filterValues { matches ->
                 matches.any { declarationAt(it).substringAfter('=') == name }
@@ -107,9 +111,12 @@ internal class ReaderSecret private constructor(secret: String, private val shuf
                 val seen = provided.toMutableSet()
                 fun define(identifier: String) {
                     if (!seen.add(identifier)) return
-                    val source = functions[identifier]?.let { functionAt(bundle, it) }
+                    val function = functions[identifier]
+                    val source = function?.let { functionAt(bundle, it) }
                         ?: declarations[identifier]?.first()?.let { declarationAt(it) }
                         ?: return
+                    // A definition assigned again elsewhere may not hold the value it starts with
+                    if ((assignments[identifier] ?: 0) > (if (function == null) 1 else 0)) throw ReaderChangedException()
                     freeIdentifiers(source).forEach(::define)
                     append(source).append(";\n")
                 }

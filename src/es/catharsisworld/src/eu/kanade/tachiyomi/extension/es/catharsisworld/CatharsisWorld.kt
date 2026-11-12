@@ -106,10 +106,14 @@ abstract class CatharsisWorld : Catharsis() {
         val pageIndex = request.url.queryParameter("page")!!.toInt()
         return try {
             val session = runBlocking { chapterSession(chapterUrl) }
+            if (session.passRefused) throw Exception(PASS_REFUSED)
             fetchPage(chain, request, session, pageIndex)
                 ?: runBlocking { chapterSession(chapterUrl, rejected = session) }.let { reopened ->
-                    fetchPage(chain, request, reopened, pageIndex)
-                        ?: throw if (reopened.passSpent) Exception("The site refuses the reader pass") else HttpException(401)
+                    fetchPage(chain, request, reopened, pageIndex) ?: run {
+                        if (!reopened.passSpent) throw HttpException(401)
+                        reopened.passRefused = true
+                        throw Exception(PASS_REFUSED)
+                    }
                 }
         } catch (e: Exception) {
             throw e as? IOException ?: IOException(e.message, e)
@@ -237,6 +241,9 @@ abstract class CatharsisWorld : Catharsis() {
         @Volatile var xorKey = DEFAULT_XOR_KEY
 
         @Volatile var passSpent = false
+
+        // A renewed pass was spent too; the chapter's other pages fail without asking again
+        @Volatile var passRefused = false
     }
 
     private class FailedOpen(val chapterUrl: String, val failedAt: Instant, val error: Exception)
@@ -337,6 +344,7 @@ abstract class CatharsisWorld : Catharsis() {
         private val LIVE_REFRESH = 20.seconds
         private const val DEFAULT_XOR_KEY = 67
         private const val PASS_COOKIE = "cw_rp"
+        private const val PASS_REFUSED = "The site refuses the reader pass"
         private const val PAGE_HOST = "catharsisworld.invalid"
     }
 }
