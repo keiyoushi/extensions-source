@@ -131,6 +131,14 @@ class DetectorsTest {
             fun f(b: Headers.Builder) = b.add("Accept", "application/json").add("X-Custom", "1").set("Authorization", "x")
             """,
         ).count(1)
+            .expectFixDiffs(
+                """
+                Fix for src/test/pkg/Test.kt line 3: Replace with set:
+                @@ -3 +3 @@
+                -fun f(b: Headers.Builder) = b.add("Accept", "application/json").add("X-Custom", "1").set("Authorization", "x")
+                +fun f(b: Headers.Builder) = b.set("Accept", "application/json").add("X-Custom", "1").set("Authorization", "x")
+                """,
+            )
     }
 
     @Test
@@ -224,6 +232,14 @@ class DetectorsTest {
             data class C(val id: Int)
             """,
         ).count(1)
+            .expectFixDiffs(
+                """
+                Fix for src/test/pkg/Test.kt line 3: Delete "data ":
+                @@ -3 +3
+                - @Serializable data class A(val id: Int)
+                + @Serializable class A(val id: Int)
+                """,
+            )
     }
 
     @Test
@@ -236,6 +252,14 @@ class DetectorsTest {
             @Serializable class A(@SerialName("title") val title: String, @SerialName("cover_img") val coverImg: String)
             """,
         ).count(1)
+            .expectFixDiffs(
+                """
+                Fix for src/test/pkg/Test.kt line 3: Delete:
+                @@ -3 +3 @@
+                -@Serializable class A(@SerialName("title") val title: String, @SerialName("cover_img") val coverImg: String)
+                +@Serializable class A(val title: String, @SerialName("cover_img") val coverImg: String)
+                """,
+            )
     }
 
     @Test
@@ -261,6 +285,14 @@ class DetectorsTest {
             class NotDto(val a: String? = null)
             """,
         ).count(1)
+            .expectFixDiffs(
+                """
+                Fix for src/test/pkg/Test.kt line 3: Delete:
+                @@ -3 +3 @@
+                -@Serializable class A(val a: String? = null, val b: String?, val c: Int = 0)
+                +@Serializable class A(val a: String?, val b: String?, val c: Int = 0)
+                """,
+            )
     }
 
     @Test
@@ -315,6 +347,14 @@ class DetectorsTest {
             fun g(s: String) = s.trim()
             """,
         ).count(1)
+            .expectFixDiffs(
+                """
+                Fix for src/test/pkg/Test.kt line 3: Delete:
+                @@ -3 +3 @@
+                -fun f(e: Element) = e.text().trim()
+                +fun f(e: Element) = e.text()
+                """,
+            )
     }
 
     @Test
@@ -331,6 +371,14 @@ class DetectorsTest {
             }
             """,
         ).count(1)
+            .expectFixDiffs(
+                """
+                Fix for src/test/pkg/Test.kt line 5: Replace with "abs:href":
+                @@ -5 +5 @@
+                -    setUrlWithoutDomain(e.attr("href"))
+                +    setUrlWithoutDomain(e.attr("abs:href"))
+                """,
+            )
     }
 
     @Test
@@ -460,6 +508,14 @@ class DetectorsTest {
             fun d(s: String) = s.encodeToByteArray()
             """,
         ).count(3)
+            .expectFixDiffs(
+                """
+                Fix for src/test/pkg/Test.kt line 2: Replace with encodeToByteArray():
+                @@ -2 +2 @@
+                -fun a(s: String) = s.toByteArray(Charsets.UTF_8)
+                +fun a(s: String) = s.encodeToByteArray()
+                """,
+            )
     }
 
     @Test
@@ -508,6 +564,14 @@ class DetectorsTest {
             val b = Page(0, imageUrl = "https://img")
             """,
         ).count(1)
+            .expectFixDiffs(
+                """
+                Fix for src/test/pkg/Test.kt line 3: Replace with Page(0, imageUrl = "https://img"):
+                @@ -3 +3 @@
+                -val a = Page(0, "", "https://img")
+                +val a = Page(0, imageUrl = "https://img")
+                """,
+            )
     }
 
     @Test
@@ -573,6 +637,14 @@ class DetectorsTest {
             abstract class B : Theme() { override val supportsLatest = true }
             """,
         ).count(1)
+            .expectFixDiffs(
+                """
+                Fix for src/test/pkg/Test.kt line 3: Delete:
+                @@ -3 +3 @@
+                -abstract class A : KeiSource() { override val supportsLatest = true }
+                +abstract class A : KeiSource() {  }
+                """,
+            )
     }
 
     @Test

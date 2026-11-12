@@ -44,7 +44,8 @@ class JsonDetector :
                     node,
                     context.getLocation(dataKeyword ?: ktClass.nameIdentifier ?: ktClass),
                     "Use a regular `class` for `@Serializable` DTOs; `data class` generates code that's never used",
-                    dataKeyword?.let { LintFix.create().replace().range(context.getLocation(it)).text("data ").with("").build() },
+                    // The range must contain the replaced text: the keyword alone stops before its trailing space
+                    LintFix.create().replace().range(context.getLocation(ktClass as PsiElement)).text("data ").with("").build(),
                 )
             }
 
@@ -81,7 +82,8 @@ class JsonDetector :
                 serialName,
                 context.getLocation(serialName as PsiElement),
                 "`@SerialName(\"$name\")` matches the property name and can be removed",
-                LintFix.create().replace().range(context.getLocation(serialName as PsiElement)).all().with("").reformat(true).build(),
+                // Also drop the whitespace after the annotation, which a range of the annotation alone leaves behind
+                LintFix.create().replace().range(context.getLocation(declaration as PsiElement)).pattern("""(@SerialName\(\s*"$name"\s*\)\s*)""").with("").build(),
             )
         }
 
