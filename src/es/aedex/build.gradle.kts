@@ -6,7 +6,8 @@ plugins {
 
 keiyoushi {
     name = "Aedex"
-    versionCode = 0
+    pkgName = "es.templescanesp"
+    versionCode = 74
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     theme = "catharsis"
