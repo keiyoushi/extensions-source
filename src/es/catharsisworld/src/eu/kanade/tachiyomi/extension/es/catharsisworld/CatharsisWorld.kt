@@ -62,9 +62,9 @@ abstract class CatharsisWorld : Catharsis() {
 
     override fun mangaKey(manga: MangaDto) = manga.id.toString()
 
-    // The site's reader loads two pages at a time
+    // Page budget the site allows a guest reader
     override fun OkHttpClient.Builder.addReaderInterceptors(): OkHttpClient.Builder = addInterceptor(::pageInterceptor)
-        .rateLimit(2, 1.seconds) { it.encodedPath.startsWith("/lector/p/") }
+        .rateLimit(10, 25.seconds) { it.encodedPath.startsWith("/lector/p/") }
 
     override fun getChapterUrl(chapter: SChapter) = chapterPageUrl(chapter.url).toString()
 
@@ -163,7 +163,7 @@ abstract class CatharsisWorld : Catharsis() {
                 .build()
             val response = chain.proceed(pageRequest)
             when (response.code) {
-                401, 409 -> {
+                401, 403, 409 -> {
                     // A stale live token is minted again once, like the site's reader
                     if (response.apiError()?.code != "LIVE_REQUIRED" || liveRetried) return null
                     liveRetried = true
