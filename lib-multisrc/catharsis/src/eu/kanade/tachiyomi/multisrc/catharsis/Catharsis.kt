@@ -25,7 +25,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -126,8 +125,7 @@ abstract class Catharsis : KeiSource() {
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        // Older versions cached a bare genre array
-        val filterData = (data as? JsonObject)?.parseAs<FilterDataDto>()
+        val filterData = data?.parseAs<FilterDataDto>()
         return FilterList(
             buildList {
                 add(SortFilter())
