@@ -4,6 +4,7 @@ import io.github.keiyoushi.gradle.internal.extensions.compileOnly
 import io.github.keiyoushi.gradle.internal.extensions.implementation
 import io.github.keiyoushi.gradle.internal.extensions.kei
 import io.github.keiyoushi.gradle.internal.extensions.libs
+import io.github.keiyoushi.gradle.internal.extensions.lintChecks
 import io.github.keiyoushi.gradle.internal.extensions.plugins
 import org.gradle.api.Plugin
 import org.gradle.api.Project
@@ -36,12 +37,18 @@ class LibraryPlugin : Plugin<Project> {
             }
 
             androidResources.enable = false
+
+            lint {
+                // Lint's HTML syntax highlighter crashes on a raw string ending in a quote followed by a backtick in a string (`"""x"""" + "`"`)
+                htmlReport = false
+            }
         }
 
         dependencies {
             compileOnly(libs.bundles.common)
             compileOnly(libs.tachiyomi.lib.v16)
             implementation(project(":core"))
+            lintChecks(project(":lint-rules"))
         }
     }
 }

@@ -6,6 +6,7 @@ import io.github.keiyoushi.gradle.internal.extensions.compileOnly
 import io.github.keiyoushi.gradle.internal.extensions.implementation
 import io.github.keiyoushi.gradle.internal.extensions.kei
 import io.github.keiyoushi.gradle.internal.extensions.libs
+import io.github.keiyoushi.gradle.internal.extensions.lintChecks
 import io.github.keiyoushi.gradle.internal.extensions.plugins
 import io.github.keiyoushi.gradle.internal.extensionsLib
 import org.gradle.api.Plugin
@@ -41,12 +42,18 @@ class ThemePlugin : Plugin<Project> {
                     assets.directories.add("assets")
                 }
             }
+
+            lint {
+                // Lint's HTML syntax highlighter crashes on a raw string ending in a quote followed by a backtick in a string (`"""x"""" + "`"`)
+                htmlReport = false
+            }
         }
 
         dependencies {
             compileOnly(libs.bundles.common)
             compileOnly(keiyoushi.libVersion.flatMap { libs.extensionsLib(it) })
             implementation(project(":core"))
+            lintChecks(project(":lint-rules"))
         }
 
         afterEvaluate {

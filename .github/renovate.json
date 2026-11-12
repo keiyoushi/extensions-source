@@ -28,6 +28,17 @@
       ],
       "draftPR": true,
       "enabled": true
+    },
+    {
+      "matchPackageNames": [
+        "com.android.tools.build:gradle",
+        "com.android.tools.lint:lint-api",
+        "com.android.tools.lint:lint-checks",
+        "com.android.tools.lint:lint-tests"
+      ],
+      "groupName": "Android Gradle Plugin and Lint",
+      "draftPR": true,
+      "enabled": true
     }
   ]
 }

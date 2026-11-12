@@ -19,6 +19,7 @@ import io.github.keiyoushi.gradle.internal.extensions.implementation
 import io.github.keiyoushi.gradle.internal.extensions.kei
 import io.github.keiyoushi.gradle.internal.extensions.ksp
 import io.github.keiyoushi.gradle.internal.extensions.libs
+import io.github.keiyoushi.gradle.internal.extensions.lintChecks
 import io.github.keiyoushi.gradle.internal.extensions.plugins
 import io.github.keiyoushi.gradle.internal.extensionsLib
 import io.github.keiyoushi.gradle.internal.toMetadata
@@ -74,6 +75,8 @@ class ExtensionPlugin : Plugin<Project> {
 
             lint {
                 checkReleaseBuilds = false
+                // Lint's HTML syntax highlighter crashes on a raw string ending in a quote followed by a backtick in a string (`"""x"""" + "`"`)
+                htmlReport = false
             }
 
             signingConfigs {
@@ -258,6 +261,7 @@ class ExtensionPlugin : Plugin<Project> {
             compileOnly(libs.bundles.common)
             compileOnly(keiyoushi.libVersion.flatMap { libs.extensionsLib(it) })
             ksp(project(":compiler"))
+            lintChecks(project(":lint-rules"))
         }
 
         afterEvaluate {
