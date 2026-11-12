@@ -7,12 +7,12 @@ plugins {
 keiyoushi {
     name = "Hentai Teca"
     theme = "madara"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
     source {
-        baseUrl = "https://hentaiteca.online"
+        baseUrl = "https://hentaiteca.net"
         lang = "pt-BR"
     }
 }
