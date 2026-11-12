@@ -76,7 +76,7 @@ class CatalogEntry(
     fun toSManga() = SManga.create().apply {
         title = this@CatalogEntry.title
         thumbnail_url = img.takeIf { it.isNotBlank() }
-        url = "/series/$slug"
+        url = slug
     }
 }
 
@@ -85,13 +85,54 @@ class ApiChaptersResponse(val chapters: List<ApiChapter> = emptyList())
 
 @Serializable
 class ApiChapter(
-    val num: String = "",
-    val title: String = "",
-    val url: String = "",
-    val images: List<String> = emptyList(),
-    val thumbnail: String = "",
-    val createdAt: String = "",
-    val source: String = "",
+    val num: String,
+    val title: String,
+    val url: String,
+    val images: List<String>,
+    val thumbnail: String,
+    val createdAt: String,
+    val source: String,
+)
+
+// Firestore WebChannel Listen request, as sent by the site's own Firebase SDK.
+@Serializable
+class ListenRequest(
+    val database: String,
+    val addTarget: ListenAddTarget,
+    val targetId: Int,
+)
+
+@Serializable
+class ListenAddTarget(
+    val query: ListenQuery,
+    val parent: String,
+)
+
+@Serializable
+class ListenQuery(
+    val structuredQuery: ListenStructuredQuery,
+)
+
+@Serializable
+class ListenStructuredQuery(
+    val from: List<ListenCollectionRef>,
+    val orderBy: List<ListenOrderBy>,
+)
+
+@Serializable
+class ListenCollectionRef(
+    val collectionId: String,
+)
+
+@Serializable
+class ListenOrderBy(
+    val field: ListenFieldRef,
+    val direction: String,
+)
+
+@Serializable
+class ListenFieldRef(
+    val fieldPath: String,
 )
 
 @Serializable
