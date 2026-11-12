@@ -155,12 +155,13 @@ class NetworkDetector :
         }
 
         if (methodName in ADDERS && lower in SINGLE_VALUED) {
+            val setter = if (method.inClass("okhttp3.Request.Builder")) "header" else "set"
             context.report(
                 HEADER_ADD,
                 node,
                 context.loc(node),
-                "Use `set` for `$name`; `add` keeps any existing value and sends the header twice",
-                LintFix.create().replace().text(methodName).with("set").build(),
+                "Use `$setter` for `$name`; `$methodName` keeps any existing value and sends the header twice",
+                LintFix.create().replace().text(methodName).with(setter).build(),
             )
         }
     }

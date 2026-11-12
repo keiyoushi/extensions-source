@@ -131,14 +131,19 @@ class DetectorsTest {
             package test.pkg
             import okhttp3.*
             fun f(b: Headers.Builder) = b.add("Accept", "application/json").add("X-Custom", "1").set("Authorization", "x")
+            fun g() = Request.Builder().addHeader("User-Agent", "x").header("Referer", "y")
             """,
-        ).count(1)
+        ).count(2)
             .expectFixDiffs(
                 """
                 Fix for src/test/pkg/Test.kt line 3: Replace with set:
                 @@ -3 +3 @@
                 -fun f(b: Headers.Builder) = b.add("Accept", "application/json").add("X-Custom", "1").set("Authorization", "x")
                 +fun f(b: Headers.Builder) = b.set("Accept", "application/json").add("X-Custom", "1").set("Authorization", "x")
+                Fix for src/test/pkg/Test.kt line 4: Replace with header:
+                @@ -4 +4 @@
+                -fun g() = Request.Builder().addHeader("User-Agent", "x").header("Referer", "y")
+                +fun g() = Request.Builder().header("User-Agent", "x").header("Referer", "y")
                 """,
             )
     }
