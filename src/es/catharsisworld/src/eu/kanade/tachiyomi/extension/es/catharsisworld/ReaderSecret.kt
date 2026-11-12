@@ -34,30 +34,47 @@ class ReaderSecret(secret: String) {
     companion object {
         private const val IV_SIZE = 12
 
+        // The obfuscator's string table: function f(){const t=[ "..",.. ];return f=function(){return t}...}
         private val STRING_TABLE_REGEX = Regex("""function ([\w$]+)\(\)\{const ([\w$]+)=\[([^\]]*)\]; ?return \1=function\(\)\{return \2\}""")
         private val STRING_REGEX = Regex(""""([^"]*)"""")
-        private val HEADER_NAME_REGEX = Regex(""""x-"\+([\w$]+)\[[^\]]+\]\(7,15\)""")
+
+        // Any "<name> = <concat>" where every operand is a table lookup f(123) or a lowercase-hex literal.
+        // The secret is built this way in every build; the number of operands and the literal positions vary.
         private val CONCAT_REGEX = Regex("""(?<![\w$.])([\w$]+)=((?:[\w$]+\(\d+\)|"[0-9a-f]*")(?:\+(?:[\w$]+\(\d+\)|"[0-9a-f]*"))+)[,;]""")
         private val PART_REGEX = Regex("""([\w$]+)\((\d+)\)|"([0-9a-f]*)"""")
         private val SECRET_REGEX = Regex("""[0-9a-f]{64}""")
 
-        // The secret is hex literals joined with lookups into the obfuscator's rotated string table:
-        // the one rotation that makes the join 64 hex digits
+        // Build-agnostic extraction. The obfuscator rotates its string table by an amount proven only by a
+        // checksum we do not evaluate; the index offset inside the decoder is a constant we also fold in.
+        // So for each candidate concat we try every table rotation and keep the join that is exactly 64 hex.
+        // We never anchor on a specific concat shape or on the literal slice args (those differ per build and
+        // may be obfuscated arithmetic): the only invariants used are the table-function shape, the decoder's
+        // base64 (lowercase-first) alphabet, a concat of lookups + hex literals, the secret variable feeding
+        // the "x-<name>" header derivations, and the result being 64 hex under exactly one rotation.
         fun fromBundle(bundle: String): ReaderSecret {
             val table = STRING_TABLE_REGEX.find(bundle)?.groupValues?.get(3)
                 ?.let { STRING_REGEX.findAll(it).map { entry -> entry.groupValues[1] }.toList() }
                 ?.takeIf { it.isNotEmpty() }
                 ?: throw ReaderChangedException()
-            // The first header name is slice (7, 15) of the secret
-            val name = HEADER_NAME_REGEX.find(bundle)?.groupValues?.get(1) ?: throw ReaderChangedException()
-            val concat = CONCAT_REGEX.findAll(bundle).firstOrNull { it.groupValues[1] == name }?.groupValues?.get(2)
-                ?: throw ReaderChangedException()
-            val parts = PART_REGEX.findAll(concat).toList()
-            val secret = table.indices.mapNotNull { rotation ->
+
+            val candidates = CONCAT_REGEX.findAll(bundle)
+                .map { it.groupValues[1] to PART_REGEX.findAll(it.groupValues[2]).toList() }
+                .filter { (_, parts) -> parts.any { it.groups[3] != null } } // must embed at least one hex literal
+                .toList()
+
+            fun secretsOf(parts: List<MatchResult>): List<String> = table.indices.mapNotNull { rotation ->
                 parts.joinToString("") { part ->
-                    part.groups[2]?.let { decodeEntry(table[(it.value.toInt() + rotation) % table.size]) } ?: part.groupValues[3]
+                    part.groups[2]?.let { decodeEntry(table[(it.value.toInt() + rotation) % table.size]) }
+                        ?: part.groupValues[3]
                 }.takeIf(SECRET_REGEX::matches)
-            }.distinct().singleOrNull() ?: throw ReaderChangedException()
+            }
+
+            // Prefer the variable whose name feeds the "x-<name>" header derivations; fall back to all candidates.
+            val preferred = candidates.filter { (name, _) -> bundle.contains("\"x-\"+$name") }
+            val secret = (preferred.ifEmpty { candidates })
+                .flatMap { (_, parts) -> secretsOf(parts) }
+                .distinct().singleOrNull()
+                ?: throw ReaderChangedException()
             return ReaderSecret(secret)
         }
 
