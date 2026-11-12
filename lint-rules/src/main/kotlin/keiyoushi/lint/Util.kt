@@ -21,6 +21,7 @@ import org.jetbrains.uast.UPolyadicExpression
 import org.jetbrains.uast.UQualifiedReferenceExpression
 import org.jetbrains.uast.evaluateString
 import org.jetbrains.uast.getParentOfType
+import java.io.File
 
 val KEIYOUSHI: Category = Category.create("Keiyoushi", 75)
 
@@ -84,7 +85,8 @@ fun JavaContext.inInterceptor(element: UElement): Boolean {
     return false
 }
 
-private val INTERCEPTOR_ADDERS = setOf("addInterceptor", "addNetworkInterceptor")
+// `addInterceptor { }` and the `Interceptor { chain -> }` SAM constructor
+private val INTERCEPTOR_ADDERS = setOf("addInterceptor", "addNetworkInterceptor", "Interceptor")
 
 fun UElement.enclosingMethodName(): String? = getParentOfType<UMethod>(true)?.name
 
@@ -100,3 +102,18 @@ fun JavaContext.argument(node: UCallExpression, method: PsiMethod, parameter: St
 
 /** For a call, just the call (name and arguments) rather than the whole receiver chain. */
 fun JavaContext.loc(node: UElement): Location = if (node is UCallExpression) getCallLocation(node, includeReceiver = false, includeArguments = true) else getLocation(node)
+
+/** The module's `build.gradle.kts`, which holds the `source {}` blocks: the nearest one above the file. */
+fun JavaContext.buildScriptFile(): File? = generateSequence(file.parentFile) { it.parentFile }.map { File(it, "build.gradle.kts") }.firstOrNull { it.isFile }
+
+fun JavaContext.buildScript(): String? = buildScriptFile()?.readText()
+
+fun JavaContext.isTheme(): Boolean = buildScriptFile()?.parentFile?.parentFile?.name == "lib-multisrc"
+
+/** `baseUrl` can change while the source runs: a mirror or custom-URL preference. */
+fun JavaContext.hasDynamicBaseUrl(): Boolean = buildScript()?.let { "mirrors(" in it || "custom(" in it } == true
+
+/** Hosts of every URL in the module's build script (the `baseUrl`s and mirrors). */
+fun JavaContext.baseUrlHosts(): Set<String> = URL_HOST.findAll(buildScript().orEmpty()).map { it.groupValues[1].lowercase().removePrefix("www.") }.toSet()
+
+private val URL_HOST = Regex("""https?://([^/"\s:]+)""")

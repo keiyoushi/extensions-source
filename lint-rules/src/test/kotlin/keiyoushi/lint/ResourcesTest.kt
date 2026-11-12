@@ -43,6 +43,11 @@ class ResourcesTest {
                     lang = "es"
                     baseUrl = "https://example.es"
                 }
+                source {
+                    name = "Sushiscan.fr"
+                    lang = "fr"
+                    baseUrl = "https://example.fr"
+                }
             }
             """,
         ).expectWarningCount(2)

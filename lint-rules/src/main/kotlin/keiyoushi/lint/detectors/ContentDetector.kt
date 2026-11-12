@@ -10,6 +10,7 @@ import com.intellij.psi.PsiMethod
 import keiyoushi.lint.SCHAPTER
 import keiyoushi.lint.SMANGA
 import keiyoushi.lint.asCall
+import keiyoushi.lint.baseUrlHosts
 import keiyoushi.lint.issue
 import keiyoushi.lint.loc
 import keiyoushi.lint.stringValue
@@ -124,7 +125,8 @@ class ContentDetector :
         val sides = listOf(node.leftOperand, node.rightOperand)
         val literal = sides.firstNotNullOfOrNull { it.stringValue() } ?: return
         val other = sides.firstOrNull { it.stringValue() == null }?.sourcePsi?.text ?: return
-        if (other.endsWith(".host") && '.' in literal) {
+        // Only the source's own host: CDN and API hosts are fixed
+        if (other.endsWith(".host") && literal.lowercase().removePrefix("www.") in context.baseUrlHosts()) {
             context.report(
                 HARDCODED_HOST,
                 node,
@@ -154,7 +156,9 @@ class ContentDetector :
                 val separator = node.valueArguments.firstOrNull().stringValue() ?: return
                 if (separator != "/" && separator != "?") return
                 val receiver = node.receiver?.sourcePsi?.text ?: return
-                if (URL_RECEIVER.containsMatchIn(receiver)) {
+                // Stored SManga/SChapter urls are relative paths or slugs, which HttpUrl can't parse
+                val storedUrl = (node.receiver?.tryResolve() as? PsiMember)?.containingClass?.qualifiedName in setOf(SMANGA, SCHAPTER)
+                if (!storedUrl && URL_RECEIVER.containsMatchIn(receiver)) {
                     context.report(
                         URL_STRING_SPLIT,
                         node,
@@ -180,7 +184,9 @@ class ContentDetector :
     companion object {
         private val MARKDOWN_LABEL = Regex("""^\*\*[^*\n]{1,40}:?\*\*:?\s""")
         private val ABSOLUTE = Regex("""^"(https?://|\$\{?baseUrl\b)""")
-        private val FRAGMENT = Regex("""^"[^"]*#""")
+
+        // `#/viewer/...` is the site's own hash routing, not hidden data
+        private val FRAGMENT = Regex("""^"[^"]*#(?!/)""")
         private val TITLE_STRIP = Regex("""removePrefix\([^)]*[Tt]itle""")
         private val URL_RECEIVER = Regex("""(?i)(url|href)\)?$""")
         private val SOLVER_NAME = Regex("""Turnstile\w*(Solver|Helper|Interceptor|Bypass)""")

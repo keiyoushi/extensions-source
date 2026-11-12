@@ -143,7 +143,9 @@ class BuildScriptDetector :
 
     companion object {
         private val BLOCK_TYPES = setOf("KtBlockExpression", "GrClosableBlock")
-        private val SUFFIX = Regex("""\s*[-(\[]?\s*\b([A-Za-z]{2}(?:-[A-Za-z]{2})?|English|French|Spanish|Portuguese|Indonesian|Turkish|Arabic|Russian|Vietnamese|Thai|Chinese|Japanese|Korean)\b\s*[)\]]?\s*$""")
+
+        // After a space or in brackets: "Site EN", "Site (pt-BR)"; not "Site.fr" or "Manga-TR", which are brand names
+        private val SUFFIX = Regex("""(?:\s+[-(\[]?\s*|\s*[(\[]\s*)\b([A-Za-z]{2}(?:-[A-Za-z]{2})?|English|French|Spanish|Portuguese|Indonesian|Turkish|Arabic|Russian|Vietnamese|Thai|Chinese|Japanese|Korean)\b\s*[)\]]?\s*$""")
         private val LANGUAGE_WORDS = setOf(
             "english", "french", "spanish", "portuguese", "indonesian", "turkish", "arabic", "russian",
             "vietnamese", "thai", "chinese", "japanese", "korean",

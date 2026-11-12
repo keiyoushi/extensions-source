@@ -53,7 +53,8 @@ class NetworkDetector :
 
             "newBuilder" -> checkHeadersNewBuilder(context, node, method)
 
-            "string" -> if (method.inClass("okhttp3.ResponseBody") && !context.inInterceptor(node)) {
+            // Reading raw text for a regex is fine; flag it only when the string goes straight into a parser
+            "string" -> if (method.inClass("okhttp3.ResponseBody") && !context.inInterceptor(node) && node.isParsedRightAway()) {
                 context.report(
                     BODY_STRING,
                     node,
@@ -73,6 +74,19 @@ class NetworkDetector :
                 )
             }
         }
+    }
+
+    private fun UCallExpression.isParsedRightAway(): Boolean {
+        var expression: UElement = this
+        while (true) {
+            val parent = expression.uastParent
+            if (parent is UQualifiedReferenceExpression && parent.selector == expression) expression = parent else break
+        }
+        val parent = expression.uastParent
+        if (parent is UQualifiedReferenceExpression && parent.receiver == expression) {
+            return (parent.selector as? UCallExpression)?.methodName in PARSERS
+        }
+        return (parent as? UCallExpression)?.methodName in PARSERS
     }
 
     private fun UCallExpression.inSuspendFunction(context: JavaContext): Boolean {
@@ -207,6 +221,7 @@ class NetworkDetector :
     }
 
     companion object {
+        private val PARSERS = setOf("parseAs", "parse", "parseBodyFragment", "decodeFromString", "parseToJsonElement")
         private val UI_THREAD_RUNNERS = setOf("post", "postDelayed", "runOnUiThread", "launchUI")
         private val SETTERS = setOf("set", "add", "header", "addHeader")
         private val ADDERS = setOf("add", "addHeader")

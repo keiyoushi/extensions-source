@@ -11,6 +11,8 @@ import keiyoushi.lint.HTTP_SOURCE
 import keiyoushi.lint.KEI_SOURCE
 import keiyoushi.lint.SCHAPTER
 import keiyoushi.lint.SMANGA
+import keiyoushi.lint.hasDynamicBaseUrl
+import keiyoushi.lint.isTheme
 import keiyoushi.lint.issue
 import keiyoushi.lint.loc
 import org.jetbrains.kotlin.psi.KtClassOrObject
@@ -55,7 +57,13 @@ class SourceDetector :
                 return
             }
             if (node.operator == UastBinaryOperator.PLUS) {
-                checkBaseUrlConcat(context, node, node.sourcePsi?.text ?: return)
+                // Exactly `baseUrl + manga.url`: a suffix or a transformed url builds another URL
+                val parent = node.uastParent as? UBinaryExpression
+                if (parent?.operator == UastBinaryOperator.PLUS) return
+                val left = node.leftOperand.sourcePsi?.text?.trim()
+                val right = node.rightOperand.sourcePsi?.text?.trim() ?: return
+                val target = STORED_URL.matchEntire(right)?.groupValues?.get(1) ?: return
+                if (left == "baseUrl") checkBaseUrlConcat(context, node, target)
                 return
             }
             if (node.operator == UastBinaryOperator.LOGICAL_AND) {
@@ -74,7 +82,8 @@ class SourceDetector :
         // String templates: `"$baseUrl${manga.url}"`
         override fun visitPolyadicExpression(node: UPolyadicExpression) {
             val template = node.sourcePsi as? KtStringTemplateExpression ?: return
-            checkBaseUrlConcat(context, node, template.text)
+            val target = BASE_URL_TEMPLATE.matchEntire(template.text)?.groupValues?.get(1) ?: return
+            checkBaseUrlConcat(context, node, target)
         }
 
         override fun visitIfExpression(node: UIfExpression) {
@@ -95,9 +104,10 @@ class SourceDetector :
         }
     }
 
-    private fun checkBaseUrlConcat(context: JavaContext, node: UElement, text: String) {
-        val match = BASE_URL_CONCAT.find(text) ?: return
-        val helper = if (match.groupValues[1] == "manga") "getMangaUrl(manga)" else "getChapterUrl(chapter)"
+    private fun checkBaseUrlConcat(context: JavaContext, node: UElement, target: String) {
+        // These overrides are where the URL is defined; calling the helper there would recurse
+        if (node.getParentOfType<UMethod>(true)?.name in URL_HELPERS) return
+        val helper = if (target == "manga") "getMangaUrl(manga)" else "getChapterUrl(chapter)"
         context.report(
             BASE_URL_CONCAT_ISSUE,
             node,
@@ -124,6 +134,9 @@ class SourceDetector :
         }
 
         if (property.getter != null || property.isLocal) return
+        // A static baseUrl is a constant getter, so only mirrors/custom URLs, fetchBaseUrls and themes can change it
+        val overridesFetch = (cls.sourcePsi as? KtClassOrObject)?.body?.functions?.any { it.name == "fetchBaseUrls" } == true
+        if (!context.isTheme() && !context.hasDynamicBaseUrl() && !overridesFetch) return
         val initializer = property.initializer ?: property.delegateExpression ?: return
         val reference = DYNAMIC_REFERENCE.find(initializer.text)?.value ?: return
         val isLazy = property.delegateExpression != null
@@ -173,7 +186,9 @@ class SourceDetector :
 
     companion object {
         private val WHITESPACE = Regex("""\s+""")
-        private val BASE_URL_CONCAT = Regex("""\$?\{?baseUrl}?\s*\+?\s*\$?\{?(manga|chapter)\.url\b""")
+        private val STORED_URL = Regex("""(manga|chapter)\.url""")
+        private val BASE_URL_TEMPLATE = Regex("""^"\$\{?baseUrl}?\$\{(manga|chapter)\.url}"$""")
+        private val URL_HELPERS = setOf("getMangaUrl", "getChapterUrl")
         private val DYNAMIC_REFERENCE = Regex("""\bbaseUrl\b|\bheaders\b(?!Builder)""")
         private val EMPTY_FALLBACK = Regex("""\?:\s*"(|Untitled|Unknown|No title|Chapter|Sem título|Sin título)"\s*$|\.orEmpty\(\)\s*$""", RegexOption.IGNORE_CASE)
 

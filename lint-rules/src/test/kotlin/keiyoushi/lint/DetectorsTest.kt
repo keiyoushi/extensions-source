@@ -1,6 +1,8 @@
 package keiyoushi.lint
 
 import com.android.tools.lint.checks.infrastructure.LintDetectorTest.kotlin
+import com.android.tools.lint.checks.infrastructure.LintDetectorTest.source
+import com.android.tools.lint.checks.infrastructure.TestFile
 import com.android.tools.lint.checks.infrastructure.TestLintResult
 import com.android.tools.lint.checks.infrastructure.TestLintTask.lint
 import com.android.tools.lint.checks.infrastructure.TestMode
@@ -17,8 +19,8 @@ import org.junit.Test
 
 class DetectorsTest {
 
-    private fun check(issue: Issue, code: String): TestLintResult = lint()
-        .files(*Stubs.all, kotlin("src/test/pkg/Test.kt", code).indented())
+    private fun check(issue: Issue, code: String, vararg extra: TestFile): TestLintResult = lint()
+        .files(*Stubs.all, *extra, kotlin("src/test/pkg/Test.kt", code).indented())
         .issues(issue)
         .allowMissingSdk()
         // Sources are ktlint-formatted, so the whitespace and parenthesis variants don't occur
@@ -175,7 +177,10 @@ class DetectorsTest {
             """
             package test.pkg
             import okhttp3.*
-            fun parse(response: Response) = response.body.string()
+            fun <T> String.parseAs(): T = TODO()
+            fun parse(response: Response): Int = response.body.string().parseAs()
+            fun raw(response: Response) = Regex("x").find(response.body.string())
+            val sam = Interceptor { chain -> chain.proceed(chain.request()).also { it.body.string().parseAs<Int>() } }
             class I : Interceptor {
                 override fun intercept(chain: Interceptor.Chain): Response {
                     val r = chain.proceed(chain.request())
@@ -392,6 +397,7 @@ class DetectorsTest {
                 e.select("div.styles_Card__jN8og a")
                 e.select("div.css-1x2y3z4")
                 e.select("div.card > a.title")
+                e.select(".preview-card__title, .main-content__tumba")
             }
             """,
         ).count(2)
@@ -663,7 +669,19 @@ class DetectorsTest {
                 companion object { const val X = "y" }
             }
             """,
+            source("build.gradle.kts", "keiyoushi { source { baseUrl { mirrors(\"https://a.com\", \"https://b.com\") } } }"),
         ).count(2)
+        check(
+            SourceDetector.STORED_BASE_URL,
+            """
+            package test.pkg
+            import keiyoushi.source.KeiSource
+            abstract class A : KeiSource() {
+                private val apiUrl = "${'$'}baseUrl/api"
+            }
+            """,
+            source("build.gradle.kts", "keiyoushi { source { baseUrl = \"https://a.com\" } }"),
+        ).count(0)
     }
 
     @Test
@@ -676,6 +694,9 @@ class DetectorsTest {
             fun a(baseUrl: String, manga: SManga) = baseUrl + manga.url
             fun b(baseUrl: String, chapter: SChapter) = "${'$'}baseUrl${'$'}{chapter.url}"
             fun c(baseUrl: String, manga: SManga) = "${'$'}baseUrl/manga/${'$'}{manga.url}"
+            fun getMangaUrl(baseUrl: String, manga: SManga) = baseUrl + manga.url
+            fun d(baseUrl: String, chapter: SChapter) = baseUrl + chapter.url + "/images"
+            fun e(baseUrl: String, chapter: SChapter) = baseUrl + chapter.url.replace("/manga/", "/online/")
             """,
         ).count(2)
     }
@@ -764,6 +785,10 @@ class DetectorsTest {
             abstract class B : KeiSource() {
                 private fun parseDetails(s: String): SManga = TODO()
                 override suspend fun getMangaByUrl(url: HttpUrl): SManga? = parseDetails("x").apply { initialized = true }
+            }
+            abstract class C : KeiSource() {
+                private fun parseDetails(s: String): SManga = SManga.create().apply { initialized = true }
+                override suspend fun getMangaByUrl(url: HttpUrl): SManga? = parseDetails("x")
             }
             """,
         ).count(1)
@@ -874,6 +899,7 @@ class DetectorsTest {
             import eu.kanade.tachiyomi.source.model.*
             fun f(slug: String, id: Int) {
                 SChapter.create().apply { url = "/read/${'$'}slug#${'$'}id" }
+                SChapter.create().apply { url = "#/viewer/${'$'}id" }
             }
             """,
         ).count(1)
@@ -887,8 +913,9 @@ class DetectorsTest {
             package test.pkg
             import okhttp3.HttpUrl
             val HttpUrl.host: String get() = ""
-            fun f(url: HttpUrl, base: String) = url.host == "example.com" || url.host == base
+            fun f(url: HttpUrl, base: String) = url.host == "www.example.com" || url.host == base || url.host == "cdn.example.org"
             """,
+            source("build.gradle.kts", "keiyoushi { source { baseUrl = \"https://example.com\" } }"),
         ).count(1)
     }
 
@@ -898,7 +925,9 @@ class DetectorsTest {
             ContentDetector.URL_STRING_SPLIT,
             """
             package test.pkg
+            import eu.kanade.tachiyomi.source.model.SManga
             fun f(url: String, name: String) = url.substringAfterLast("/") + name.substringAfterLast("/")
+            fun g(manga: SManga) = manga.url.substringAfterLast("/")
             """,
         ).count(1)
     }

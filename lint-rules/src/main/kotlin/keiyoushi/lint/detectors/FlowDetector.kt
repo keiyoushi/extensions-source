@@ -4,6 +4,7 @@ import com.android.tools.lint.client.api.UElementHandler
 import com.android.tools.lint.detector.api.Detector
 import com.android.tools.lint.detector.api.JavaContext
 import com.android.tools.lint.detector.api.SourceCodeScanner
+import com.intellij.psi.PsiCompiledElement
 import com.intellij.psi.PsiMethod
 import keiyoushi.lint.HTTP_SOURCE
 import keiyoushi.lint.issue
@@ -16,6 +17,7 @@ import org.jetbrains.uast.UMethod
 import org.jetbrains.uast.UReferenceExpression
 import org.jetbrains.uast.getParentOfType
 import org.jetbrains.uast.skipParenthesizedExprDown
+import org.jetbrains.uast.visitor.AbstractUastVisitor
 
 /** Rules about what each `KeiSource` entry point does. */
 class FlowDetector :
@@ -32,7 +34,7 @@ class FlowDetector :
             val anchor = context.getNameLocation(node)
 
             when (node.name) {
-                "getMangaByUrl" -> if (DETAILS_CALL.containsMatchIn(body) && "initialized" !in body) {
+                "getMangaByUrl" -> if (DETAILS_CALL.containsMatchIn(body) && "initialized" !in body && !node.callsInitializingParser()) {
                     context.report(
                         INITIALIZED,
                         node,
@@ -78,6 +80,23 @@ class FlowDetector :
                 }
             }
         }
+    }
+
+    /** A details parser called here that sets `initialized` itself. */
+    private fun UMethod.callsInitializingParser(): Boolean {
+        var found = false
+        accept(
+            object : AbstractUastVisitor() {
+                override fun visitCallExpression(node: UCallExpression): Boolean {
+                    val name = node.methodName.orEmpty()
+                    // Only source methods: a compiled one (a theme from another module) would need decompiling, which crashes lint
+                    val method = node.resolve()?.takeIf { it !is PsiCompiledElement }
+                    if (DETAILS_NAME.containsMatchIn(name) && method?.navigationElement?.text?.contains("initialized") == true) found = true
+                    return super.visitCallExpression(node)
+                }
+            },
+        )
+        return found
     }
 
     override fun getApplicableMethodNames(): List<String> = listOf("get", "post", "subList", "shuffled", "shuffle", "nextInt", "random")
@@ -146,6 +165,7 @@ class FlowDetector :
     companion object {
         private val LISTINGS = setOf("getPopularManga", "getLatestUpdates", "getSearchMangaList")
         private val ITERATORS = setOf("map", "mapNotNull", "mapIndexed", "forEach", "forEachIndexed", "flatMap", "associate", "associateWith")
+        private val DETAILS_NAME = Regex("""(?i)details""")
         private val DETAILS_CALL = Regex("""(?i)details\w*\(""")
         private val SINGLE_ITEM_PAGE = Regex("""MangasPage\(\s*(mangas\s*=\s*)?listOf(NotNull)?\(|\bmangas\s*=\s*listOf(NotNull)?\(""")
         private val EMPTY_THROW = Regex("""isEmpty\(\)\)?\s*\{?\s*throw\b|\?:\s*throw\s+\w*Exception\("[^"]*(?i:no pages|not found|pages not)""")
