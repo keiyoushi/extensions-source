@@ -19,3 +19,12 @@ class HeartbeatRequest(
 class HeartbeatDto(
     @SerialName("l") val liveToken: String,
 )
+
+// What the reader's tile plan function returns
+@Serializable
+class TilePlanDto(
+    @SerialName("X") val cols: List<Int>,
+    @SerialName("Y") val rows: List<Int>,
+    @SerialName("colPerm") val colOrder: List<Int>,
+    @SerialName("rowPerm") val rowOrder: List<Int>,
+)

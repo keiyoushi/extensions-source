@@ -6,16 +6,27 @@ import android.graphics.Paint
 import android.graphics.Rect
 import kotlin.math.roundToInt
 
-// Undoes the reader's 8x8 row/column shuffle drawn from [random]; shuffled tiles may sit [gutter] px apart
-fun descramble(bitmap: Bitmap, random: () -> Double, gutter: Int = 0): Bitmap {
+// Tile boundaries, with the order the reader shuffled the columns and rows into
+class TilePlan(val cols: IntArray, val rows: IntArray, val colOrder: IntArray, val rowOrder: IntArray)
+
+// The reader's 8x8 plan drawn from [random]
+fun tilePlan(random: () -> Double, width: Int, height: Int): TilePlan {
+    val cols = boundaries(random, width)
+    val rows = boundaries(random, height)
+    return TilePlan(cols, rows, permutation(random), permutation(random))
+}
+
+// Undoes the reader's 8x8 row/column shuffle, planned for the image without gutters; shuffled tiles may sit [gutter] px apart
+fun descramble(bitmap: Bitmap, gutter: Int = 0, plan: (width: Int, height: Int) -> TilePlan): Bitmap {
     // The reader drops a gutter that would leave less than 200 px
     val tileGutter = gutter.takeIf { minOf(bitmap.width, bitmap.height) - 2 * GRID * it >= MIN_GUTTERED_SIZE } ?: 0
     val outputWidth = bitmap.width - 2 * GRID * tileGutter
     val outputHeight = bitmap.height - 2 * GRID * tileGutter
-    val cols = boundaries(random, outputWidth)
-    val rows = boundaries(random, outputHeight)
-    val colOrder = permutation(random)
-    val rowOrder = permutation(random)
+    val tiles = plan(outputWidth, outputHeight)
+    val cols = tiles.cols
+    val rows = tiles.rows
+    val colOrder = tiles.colOrder
+    val rowOrder = tiles.rowOrder
     val srcCols = offsets(cols, colOrder)
     val srcRows = offsets(rows, rowOrder)
 

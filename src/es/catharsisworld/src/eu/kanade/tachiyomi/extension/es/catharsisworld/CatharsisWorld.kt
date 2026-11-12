@@ -106,21 +106,25 @@ abstract class CatharsisWorld : Catharsis() {
         val pageIndex = request.url.queryParameter("page")!!.toInt()
         var response: Response? = null
         try {
-            val session = runBlocking { chapterSession(chapterUrl) }
+            var session = runBlocking { chapterSession(chapterUrl) }
             response = fetchPage(chain, request, session, pageIndex)
-                ?: fetchPage(chain, request, runBlocking { chapterSession(chapterUrl, rejected = session) }, pageIndex)
+                ?: run {
+                    val rejected = session
+                    session = runBlocking { chapterSession(chapterUrl, rejected) }
+                    fetchPage(chain, request, session, pageIndex)
+                }
                 ?: throw HttpException(401)
             val scrambleKey = response.header("X-Page-Key")
             if (!response.isSuccessful || scrambleKey == null) return response
             val gutter = response.header("X-Tile-Gutter")?.toIntOrNull()?.takeIf { it in 1..63 } ?: 0
-            return response.descrambled(scrambleKey, gutter)
+            return response.descrambled(session.secret, scrambleKey, gutter)
         } catch (e: Exception) {
             response?.close()
             throw e as? IOException ?: IOException(e.message, e)
         }
     }
 
-    private fun Response.descrambled(scrambleKey: String, gutter: Int): Response {
+    private fun Response.descrambled(secret: ReaderSecret, scrambleKey: String, gutter: Int): Response {
         val image = Buffer()
         body.source().use(image::writeAll)
         val bitmap = BitmapFactory.decodeStream(image.peek().inputStream())
@@ -131,7 +135,7 @@ abstract class CatharsisWorld : Catharsis() {
                 .body(image.asResponseBody(body.contentType(), image.size))
                 .build()
         }
-        val descrambled = descramble(bitmap, pageShuffle(scrambleKey), gutter)
+        val descrambled = descramble(bitmap, gutter) { width, height -> secret.tilePlan(scrambleKey, width, height) }
         bitmap.recycle()
         val out = Buffer()
         descrambled.compress(Bitmap.CompressFormat.JPEG, 90, out.outputStream())
@@ -330,30 +334,5 @@ abstract class CatharsisWorld : Catharsis() {
         private const val DEFAULT_XOR_KEY = 67
         private const val PASS_COOKIE = "cw_rp"
         private const val PAGE_HOST = "catharsisworld.invalid"
-    }
-}
-
-// The reader's page shuffle generator, keyed by X-Page-Key
-private fun pageShuffle(key: String): () -> Double {
-    var fnv = 0x811c9dc5.toInt()
-    var murmur = 0x12B9B0A5
-    for (char in key) {
-        val code = char.code
-        fnv = (fnv xor code) * 0x01000193
-        murmur = (murmur xor ((code shl 5) or (code ushr 27))) * 0x5BD1E995
-    }
-    val increment = (murmur xor 0x6D2B79F5) or 1
-    val firstShift = 13 + (fnv ushr 3).mod(5)
-    val secondShift = 6 + (murmur ushr 5).mod(4)
-    val thirdShift = 12 + ((fnv xor murmur) ushr 7).mod(5)
-    val firstMultiplier = ((murmur ushr 2) and 14) or 1
-    val secondMultiplier = ((fnv ushr 4) and 126) or 1
-    var state = fnv xor (murmur ushr 16)
-    return {
-        state += increment
-        var value = state
-        value = (value xor (value ushr firstShift)) * (value or firstMultiplier)
-        value = value xor (value + (value xor (value ushr secondShift)) * (value or secondMultiplier))
-        (value xor (value ushr thirdShift)).toUInt().toDouble() / 4294967296.0
     }
 }
