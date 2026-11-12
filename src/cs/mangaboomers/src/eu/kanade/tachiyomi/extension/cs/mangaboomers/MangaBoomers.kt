@@ -30,7 +30,7 @@ abstract class MangaBoomers : KeiSource() {
 
     override val supportsFilterFetching = true
 
-    private val baseHttpUrl by lazy { baseUrl.toHttpUrl() }
+    private val baseHttpUrl get() = baseUrl.toHttpUrl()
 
     private fun api(endpoint: String): HttpUrl.Builder = baseHttpUrl.newBuilder()
         .addPathSegment("api")
