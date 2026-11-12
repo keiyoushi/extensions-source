@@ -37,6 +37,12 @@ class LelCall(
 )
 
 @Serializable
+class LelReply(
+    val status: Int,
+    val body: String,
+)
+
+@Serializable
 class MangaSearchDto(
     val title: List<MangaItemDto>?,
 )
