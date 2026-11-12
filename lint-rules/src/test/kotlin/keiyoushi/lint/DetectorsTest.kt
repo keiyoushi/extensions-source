@@ -71,6 +71,33 @@ class DetectorsTest {
     }
 
     @Test
+    fun errorsForHardRules() {
+        lint()
+            .files(
+                *Stubs.all,
+                kotlin(
+                    "src/test/pkg/Test.kt",
+                    """
+                    package test.pkg
+                    import android.content.Context
+                    import kotlinx.serialization.json.Json
+                    import uy.kohesive.injekt.injectLazy
+                    class A(context: Context) {
+                        private val json: Json by injectLazy()
+                        private val prefs = context.getSharedPreferences("source_1", 0)
+                        private val key = "show_nsfw_source"
+                    }
+                    """,
+                ).indented(),
+            )
+            .issues(JsonDetector.LOCAL_JSON, KotlinIdiomDetector.SHARED_PREFERENCES, ContentDetector.APP_PREFERENCE)
+            .allowMissingSdk()
+            .skipTestModes(TestMode.SUPPRESSIBLE, TestMode.TYPE_ALIAS, TestMode.IMPORT_ALIAS, TestMode.FULLY_QUALIFIED, TestMode.WHITESPACE, TestMode.PARENTHESIZED)
+            .run()
+            .expectErrorCount(3)
+    }
+
+    @Test
     fun manualReferer() {
         check(
             NetworkDetector.MANUAL_REFERER,

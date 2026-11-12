@@ -4,6 +4,7 @@ import com.android.tools.lint.client.api.UElementHandler
 import com.android.tools.lint.detector.api.Detector
 import com.android.tools.lint.detector.api.JavaContext
 import com.android.tools.lint.detector.api.LintFix
+import com.android.tools.lint.detector.api.Severity
 import com.android.tools.lint.detector.api.SourceCodeScanner
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiMember
@@ -191,6 +192,7 @@ class JsonDetector :
             "KeiLocalJsonInstance",
             "Local `Json`/`ProtoBuf` instance",
             "Use the `keiyoushi.utils` helpers (`parseAs`, `toJsonString`, `toJsonRequestBody`, `parseAsProto`), which use the shared instances.",
+            severity = Severity.ERROR,
         )
 
         val DECODE_FROM_STRING = issue<JsonDetector>(

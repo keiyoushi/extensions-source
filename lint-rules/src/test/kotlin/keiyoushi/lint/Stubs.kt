@@ -194,5 +194,13 @@ object Stubs {
         """,
     ).indented()
 
-    val all = arrayOf(androidExtra, androidContext, okhttp, jsoup, jsoupElements, jsoupParser, serialization, json, model, source, keiSource, network, android)
+    val injekt: TestFile = kotlin(
+        """
+        package uy.kohesive.injekt
+
+        fun <T> injectLazy(): Lazy<T> = TODO()
+        """,
+    ).indented()
+
+    val all = arrayOf(androidExtra, androidContext, injekt, okhttp, jsoup, jsoupElements, jsoupParser, serialization, json, model, source, keiSource, network, android)
 }

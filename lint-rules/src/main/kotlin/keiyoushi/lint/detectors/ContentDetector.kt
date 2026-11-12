@@ -3,6 +3,7 @@ package keiyoushi.lint.detectors
 import com.android.tools.lint.client.api.UElementHandler
 import com.android.tools.lint.detector.api.Detector
 import com.android.tools.lint.detector.api.JavaContext
+import com.android.tools.lint.detector.api.Severity
 import com.android.tools.lint.detector.api.SourceCodeScanner
 import com.intellij.psi.PsiMember
 import com.intellij.psi.PsiMethod
@@ -230,6 +231,7 @@ class ContentDetector :
             "KeiAppPreference",
             "App preference read by the extension",
             "Extensions keep their own preferences; don't depend on the host app's.",
+            severity = Severity.ERROR,
         )
 
         val NEXT_FLIGHT_REGEX = issue<ContentDetector>(

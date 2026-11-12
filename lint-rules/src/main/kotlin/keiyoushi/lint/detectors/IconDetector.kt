@@ -134,13 +134,13 @@ class IconDetector :
 
         private val IMPLEMENTATION = Implementation(IconDetector::class.java, Scope.BINARY_RESOURCE_FILE_SCOPE)
 
-        private fun iconIssue(id: String, brief: String, explanation: String) = Issue.create(
+        private fun iconIssue(id: String, brief: String, explanation: String, severity: Severity = Severity.WARNING) = Issue.create(
             id = id,
             briefDescription = brief,
             explanation = explanation,
             category = KEIYOUSHI,
             priority = 4,
-            severity = Severity.WARNING,
+            severity = severity,
             implementation = IMPLEMENTATION,
         )
 
@@ -161,6 +161,7 @@ class IconDetector :
             "KeiLeftoverHiResIcon",
             "`web_hi_res_512.png` left in",
             "The Icon Generator also produces `web_hi_res_512.png`, which extensions don't use; remove it.",
+            Severity.ERROR,
         )
 
         val ISSUES = listOf(ICON_SIZE, ICON_SHAPE, LEFTOVER_HI_RES)

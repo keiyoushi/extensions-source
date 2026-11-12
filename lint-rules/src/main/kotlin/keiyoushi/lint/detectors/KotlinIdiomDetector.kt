@@ -4,6 +4,7 @@ import com.android.tools.lint.client.api.UElementHandler
 import com.android.tools.lint.detector.api.Detector
 import com.android.tools.lint.detector.api.JavaContext
 import com.android.tools.lint.detector.api.LintFix
+import com.android.tools.lint.detector.api.Severity
 import com.android.tools.lint.detector.api.SourceCodeScanner
 import com.intellij.psi.PsiMethod
 import keiyoushi.lint.argument
@@ -381,6 +382,7 @@ class KotlinIdiomDetector :
             "KeiSharedPreferences",
             "SharedPreferences opened by hand",
             "Use `getPreferences()`/`getPreferencesLazy()` from `keiyoushi.utils`, keyed on the source id.",
+            severity = Severity.ERROR,
         )
 
         val MARKDOWN_BULLET = issue<KotlinIdiomDetector>(

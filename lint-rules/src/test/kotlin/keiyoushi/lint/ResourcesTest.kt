@@ -156,6 +156,12 @@ class ResourcesTest {
     }
 
     @Test
+    fun leftoverHiResIsAnError() {
+        val hiRes = image("res/web_hi_res_512.png", 512, 512).fill(BLUE)
+        icon(IconDetector.LEFTOVER_HI_RES, *icons(square("xxxhdpi", 192)), hiRes).expectErrorCount(1)
+    }
+
+    @Test
     fun wrongSize() {
         icon(IconDetector.ICON_SIZE, *icons(square("xxxhdpi", 192), hdpiSize = 64)).expectWarningCount(1)
     }
