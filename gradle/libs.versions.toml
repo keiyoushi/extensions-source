@@ -5,7 +5,7 @@ serialization = "1.11.0"
 junit = "4.13.2"
 kotlin-gradle = "2.4.10"
 ksp = "2.3.9"
-# Must stay AGP + 23.0.0 (lint-api 32.x for AGP 9.x)
+# AGP + 23.0.0; Renovate bumps both together
 lint = "32.5.1"
 kotlinpoet = "2.3.0"
 ktlint = "1.8.0"
