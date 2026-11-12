@@ -42,6 +42,11 @@ class ThemePlugin : Plugin<Project> {
                     assets.directories.add("assets")
                 }
             }
+
+            lint {
+                // Lint's HTML syntax highlighter crashes on a raw string ending in a quote followed by a backtick in a string (`"""x"""" + "`"`)
+                htmlReport = false
+            }
         }
 
         dependencies {

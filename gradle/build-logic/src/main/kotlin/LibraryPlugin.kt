@@ -37,6 +37,11 @@ class LibraryPlugin : Plugin<Project> {
             }
 
             androidResources.enable = false
+
+            lint {
+                // Lint's HTML syntax highlighter crashes on a raw string ending in a quote followed by a backtick in a string (`"""x"""" + "`"`)
+                htmlReport = false
+            }
         }
 
         dependencies {
