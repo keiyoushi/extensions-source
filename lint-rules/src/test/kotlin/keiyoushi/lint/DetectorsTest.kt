@@ -849,6 +849,18 @@ class DetectorsTest {
             fun getPopularManga(all: List<SManga>) = MangasPage(all.shuffled(), false)
             """,
         ).count(1)
+        check(
+            FlowDetector.RANDOM_LISTING,
+            sourceHeader + """
+
+            abstract class A : KeiSource() {
+                suspend fun getPopularManga(page: Int) = randomListing(page)
+                private fun randomListing(page: Int) = pick(page)
+                private fun pick(page: Int) = MangasPage(emptyList<SManga>().shuffled(), false)
+                private fun unrelated() = listOf(1).shuffled()
+            }
+            """,
+        ).count(1)
     }
 
     @Test

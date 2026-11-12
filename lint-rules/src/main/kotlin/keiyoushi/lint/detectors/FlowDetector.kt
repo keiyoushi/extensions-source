@@ -15,8 +15,10 @@ import org.jetbrains.uast.UElement
 import org.jetbrains.uast.ULambdaExpression
 import org.jetbrains.uast.UMethod
 import org.jetbrains.uast.UReferenceExpression
+import org.jetbrains.uast.getContainingUClass
 import org.jetbrains.uast.getParentOfType
 import org.jetbrains.uast.skipParenthesizedExprDown
+import org.jetbrains.uast.toUElementOfType
 import org.jetbrains.uast.visitor.AbstractUastVisitor
 
 /** Rules about what each `KeiSource` entry point does. */
@@ -126,7 +128,7 @@ class FlowDetector :
                 )
             }
 
-            "shuffled", "shuffle", "nextInt", "random" -> if (listing) {
+            "shuffled", "shuffle", "nextInt", "random" -> if (node.getParentOfType<UMethod>(true)?.isReachedFromListing() == true) {
                 context.report(
                     RANDOM_LISTING,
                     node,
@@ -150,6 +152,29 @@ class FlowDetector :
                 )
             }
         }
+    }
+
+    /** A listing itself, or a method of the same class that a listing calls, directly or not. */
+    private fun UMethod.isReachedFromListing(): Boolean {
+        if (name in LISTINGS) return true
+        val owner = getContainingUClass() ?: return false
+        val seen = mutableSetOf<PsiMethod>()
+        val queue = ArrayDeque(owner.methods.filter { it.name in LISTINGS })
+        while (queue.isNotEmpty()) {
+            val method = queue.removeFirst()
+            if (!seen.add(method.javaPsi)) continue
+            if (method.javaPsi == javaPsi) return true
+            method.accept(
+                object : AbstractUastVisitor() {
+                    override fun visitCallExpression(node: UCallExpression): Boolean {
+                        val target = node.resolve()?.takeIf { it !is PsiCompiledElement && it.containingClass == owner.javaPsi }
+                        target?.toUElementOfType<UMethod>()?.let(queue::add)
+                        return super.visitCallExpression(node)
+                    }
+                },
+            )
+        }
+        return false
     }
 
     private fun UElement.isInsideIteration(): Boolean {
