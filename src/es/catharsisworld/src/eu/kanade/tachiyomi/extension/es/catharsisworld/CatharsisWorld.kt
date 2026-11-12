@@ -64,7 +64,7 @@ abstract class CatharsisWorld : Catharsis() {
 
     // Page budget the site allows a guest reader
     override fun OkHttpClient.Builder.addReaderInterceptors(): OkHttpClient.Builder = addInterceptor(::pageInterceptor)
-        .rateLimit(10, 25.seconds) { it.encodedPath.startsWith("/lector/p/") }
+        .rateLimit(2, 5.seconds) { it.encodedPath.startsWith("/lector/p/") }
 
     override fun getChapterUrl(chapter: SChapter) = chapterPageUrl(chapter.url).toString()
 
