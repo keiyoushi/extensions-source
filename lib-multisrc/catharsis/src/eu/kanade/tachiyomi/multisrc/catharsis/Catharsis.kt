@@ -145,11 +145,13 @@ abstract class Catharsis : KeiSource() {
     private var currentReaderPass: ReaderPassDto? = null
 
     // Reader pass from the site's Cap proof-of-work
-    protected suspend fun readerPass(headers: Headers, fetch: Fetch, renew: Boolean = false): ReaderPassDto = readerPassMutex.withLock {
-        currentReaderPass
-            ?.takeIf { !renew && Instant.fromEpochMilliseconds(it.expiresAt) > Clock.System.now() + 1.minutes }
-            ?.let { return@withLock it }
-        val system = client.get("$apiUrl/system", headers, fetch).parseAs<SystemDto>()
+    protected suspend fun readerPass(fetch: Fetch, renew: Boolean = false): ReaderPassDto = readerPassMutex.withLock {
+        if (!renew) {
+            (currentReaderPass ?: storedReaderPass())
+                ?.takeIf { Instant.fromEpochMilliseconds(it.expiresAt) > Clock.System.now() + 1.minutes }
+                ?.let { return@withLock it.also { currentReaderPass = it } }
+        }
+        val system = client.get("$apiUrl/system", apiHeaders, fetch).parseAs<SystemDto>()
         val capUrl = system.capApiEndpoint.toHttpUrl()
         val challenge = client.post(capUrl.resolve("challenge")!!, Fetch.XHR, RequestBody.EMPTY).parseAs<CapChallengeResponse>()
         val solutions = (1..challenge.challenge.count).map { i ->
@@ -165,13 +167,16 @@ abstract class Catharsis : KeiSource() {
         ).parseAs<CapRedeemResponse>()
         val capToken = redeemed.token?.takeIf { redeemed.success }
             ?: throw Exception("Reader verification failed")
-        redeemReaderPass(capToken, system.capSitekey, headers, fetch).also { currentReaderPass = it }
+        redeemReaderPass(capToken, system.capSitekey, fetch).also { currentReaderPass = it }
     }
 
+    // A pass the site gave in an earlier session, used before solving a new one
+    protected open fun storedReaderPass(): ReaderPassDto? = null
+
     // Trades the solved Cap token for the site's reader pass
-    protected open suspend fun redeemReaderPass(capToken: String, sitekey: String, headers: Headers, fetch: Fetch): ReaderPassDto = client.post(
+    protected open suspend fun redeemReaderPass(capToken: String, sitekey: String, fetch: Fetch): ReaderPassDto = client.post(
         "$apiUrl/mangas/reader-pass",
-        headers,
+        apiHeaders,
         fetch,
         ReaderPassRequest(capToken, sitekey).toJsonRequestBody(),
         ensureSuccess = false,
@@ -207,7 +212,7 @@ abstract class Catharsis : KeiSource() {
     }
 
     // Site error codes with a message for the user
-    protected fun Response.siteError(apiCode: String?): Exception = when (apiCode) {
+    protected fun Response.siteError(apiCode: String?, status: Int = code): Exception = when (apiCode) {
         "CLIENT_NOT_ALLOWED" -> if (isCronet) {
             Exception("The site refused the app's connection")
         } else {
@@ -215,7 +220,7 @@ abstract class Catharsis : KeiSource() {
         }
         "DATACENTER_BLOCKED" -> Exception("Turn off your VPN or proxy to read on this site")
         "EARLY_ACCESS" -> Exception("This chapter is still in early access on the site")
-        else -> HttpException(code)
+        else -> HttpException(status)
     }
 
     companion object {

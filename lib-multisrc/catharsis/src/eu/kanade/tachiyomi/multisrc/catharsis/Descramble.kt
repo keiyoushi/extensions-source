@@ -29,6 +29,7 @@ fun descramble(bitmap: Bitmap, key: String, gutter: Int = 0): Bitmap {
             val height = rows[row + 1] - rows[row]
             val colPosition = colOrder.indexOf(col)
             val rowPosition = rowOrder.indexOf(row)
+            // Each shuffled strip has a gutter on both sides
             val srcX = srcCols[colPosition] + tileGutter * (2 * colPosition + 1)
             val srcY = srcRows[rowPosition] + tileGutter * (2 * rowPosition + 1)
             canvas.drawBitmap(

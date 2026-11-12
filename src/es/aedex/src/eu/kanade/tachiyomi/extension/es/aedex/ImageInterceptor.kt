@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.es.aedex
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import eu.kanade.tachiyomi.multisrc.catharsis.descramble
-import eu.kanade.tachiyomi.multisrc.catharsis.isImageHeader
 import keiyoushi.utils.xor
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType

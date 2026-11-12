@@ -5,6 +5,7 @@ import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.aesGcm
 import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.sha256
+import java.io.IOException
 import kotlin.time.Clock
 
 // The reader build's 64-hex secret; its header names, heartbeat path and loader field are slices of it
@@ -42,17 +43,22 @@ class ReaderSecret(secret: String) {
 
         // The secret is hex literals joined with lookups into the obfuscator's rotated string table:
         // the one rotation that makes the join 64 hex digits
-        fun extract(bundle: String): String {
-            val table = STRING_TABLE_REGEX.find(bundle)!!.groupValues[3].let { STRING_REGEX.findAll(it).map { entry -> entry.groupValues[1] }.toList() }
+        fun fromBundle(bundle: String): ReaderSecret {
+            val table = STRING_TABLE_REGEX.find(bundle)?.groupValues?.get(3)
+                ?.let { STRING_REGEX.findAll(it).map { entry -> entry.groupValues[1] }.toList() }
+                ?.takeIf { it.isNotEmpty() }
+                ?: throw ReaderChangedException()
             // The first header name is slice (7, 15) of the secret
-            val name = HEADER_NAME_REGEX.find(bundle)!!.groupValues[1]
-            val concat = CONCAT_REGEX.findAll(bundle).first { it.groupValues[1] == name }.groupValues[2]
+            val name = HEADER_NAME_REGEX.find(bundle)?.groupValues?.get(1) ?: throw ReaderChangedException()
+            val concat = CONCAT_REGEX.findAll(bundle).firstOrNull { it.groupValues[1] == name }?.groupValues?.get(2)
+                ?: throw ReaderChangedException()
             val parts = PART_REGEX.findAll(concat).toList()
-            return table.indices.mapNotNull { rotation ->
+            val secret = table.indices.mapNotNull { rotation ->
                 parts.joinToString("") { part ->
                     part.groups[2]?.let { decodeEntry(table[(it.value.toInt() + rotation) % table.size]) } ?: part.groupValues[3]
                 }.takeIf(SECRET_REGEX::matches)
-            }.distinct().singleOrNull() ?: throw Exception("Reader secret not found")
+            }.distinct().singleOrNull() ?: throw ReaderChangedException()
+            return ReaderSecret(secret)
         }
 
         // Base64 with the lowercase letters first
@@ -62,3 +68,5 @@ class ReaderSecret(secret: String) {
         }
     }
 }
+
+class ReaderChangedException : IOException("The site's reader changed, update the extension")

@@ -44,7 +44,7 @@ abstract class Aedex : Catharsis() {
         val fetch = Fetch.XHR.from(getChapterUrl(chapter))
         val freeReader = FreeReader()
         val readerHeaders = apiHeaders.newBuilder()
-            .set("X-Catharsis-Reader-Pass", readerPass(apiHeaders, fetch).pass)
+            .set("X-Catharsis-Reader-Pass", readerPass(fetch).pass)
             .set("X-Catharsis-Ws-Pub", freeReader.publicKey)
             .build()
         val chapterUrl = "$apiUrl/mangas/${chapter.url}".toHttpUrl().newBuilder()

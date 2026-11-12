@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.catharsis
+package eu.kanade.tachiyomi.extension.es.aedex
 
 // RIFF (WebP), PNG, JPEG, GIF or an ISO-BMFF ftyp box (AVIF/HEIF)
 fun isImageHeader(bytes: ByteArray): Boolean {
