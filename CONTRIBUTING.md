@@ -1388,7 +1388,7 @@ Optional overrides (each has a working default; override only when your source n
 | `fun getFilterList(data: JsonElement?): FilterList`                   | Returns an empty `FilterList`.                                   | The source has any filters at all, fetched or static.                                                                                                                                                    |
 | `suspend fun fetchBaseUrls(client: OkHttpClient): List<String>`       | Returns an empty list.                                           | The site publishes its current domain and the source uses `mirrors` or `custom` - see [baseUrl modes](#baseurl-modes).                                                                                  |
 | `fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder`    | No changes.                                                      | Timeouts, extra interceptors, cookie/cache/DNS config - `client` itself is `final` on `KeiSource`.                                                                                                       |
-| `fun Headers.Builder.configureHeaders(): Headers.Builder`             | No changes.                                                      | Extra default headers beyond the `Referer`/`Origin` `KeiSource` already sets - `headersBuilder()` itself is `final`.                                                                                     |
+| `fun Headers.Builder.configureHeaders(): Headers.Builder`             | No changes.                                                      | Extra default headers beyond the `Referer` `KeiSource` already sets - `headersBuilder()` itself is `final`.                                                                                              |
 
 **`fetchMangaUpdate`:** if manga details and the chapter list come from the same page or the same
 API response, fetch and parse it once and return both the updated `SManga` and the full chapter
@@ -1406,8 +1406,9 @@ Behavior `KeiSource` gives you for free:
 - **Automatic URL search:** `getSearchManga` inspects the query; if it parses as an `HttpUrl`, it
   calls `getMangasByUrl`/`getMangaByUrl` instead of `getSearchMangaList`. You do not need to handle
   this manually.
-- **Headers:** `headersBuilder()` already sets `Referer` to `"$baseUrl/"` (with trailing slash) and `Origin` to
-  `baseUrl`; override `Headers.Builder.configureHeaders()` instead of `headersBuilder()` to add more.
+- **Headers:** `headersBuilder()` already sets `Referer` to `"$baseUrl/"` (with trailing slash); `Origin` is added per
+  request by [browser headers](#browser-headers). Override `Headers.Builder.configureHeaders()` instead of
+  `headersBuilder()` to add more.
 - <a id="browser-headers"></a>**Browser headers:** a request with a `Fetch` other than `Fetch.NONE` (see
   [HTTP requests](#http-requests---okhttpclientget--post--put--head)), with a `User-Agent` identifying Chrome, Firefox, Safari or WKWebView, gets the headers
   that browser sends for that kind of request: client hints, `Accept-Language`, fetch metadata, `Accept`, `Priority`,
