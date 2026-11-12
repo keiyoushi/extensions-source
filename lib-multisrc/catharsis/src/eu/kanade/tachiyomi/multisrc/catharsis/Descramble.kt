@@ -6,13 +6,12 @@ import android.graphics.Paint
 import android.graphics.Rect
 import kotlin.math.roundToInt
 
-// Undoes the reader's 8x8 row/column shuffle keyed by the page's scramble key; shuffled tiles may sit [gutter] px apart
-fun descramble(bitmap: Bitmap, key: String, gutter: Int = 0): Bitmap {
+// Undoes the reader's 8x8 row/column shuffle drawn from [random]; shuffled tiles may sit [gutter] px apart
+fun descramble(bitmap: Bitmap, random: () -> Double, gutter: Int = 0): Bitmap {
     // The reader drops a gutter that would leave less than 200 px
     val tileGutter = gutter.takeIf { minOf(bitmap.width, bitmap.height) - 2 * GRID * it >= MIN_GUTTERED_SIZE } ?: 0
     val outputWidth = bitmap.width - 2 * GRID * tileGutter
     val outputHeight = bitmap.height - 2 * GRID * tileGutter
-    val random = mulberry32(key.hashCode())
     val cols = boundaries(random, outputWidth)
     val rows = boundaries(random, outputHeight)
     val colOrder = permutation(random)
@@ -41,17 +40,6 @@ fun descramble(bitmap: Bitmap, key: String, gutter: Int = 0): Bitmap {
         }
     }
     return output
-}
-
-private fun mulberry32(seed: Int): () -> Double {
-    var state = seed
-    return {
-        state += 0x6d2b79f5
-        var t = state
-        t = (t xor (t ushr 15)) * (t or 1)
-        t = t xor (t + (t xor (t ushr 7)) * (t or 61))
-        (t xor (t ushr 14)).toUInt().toDouble() / 4294967296.0
-    }
 }
 
 private fun boundaries(random: () -> Double, total: Int): IntArray {

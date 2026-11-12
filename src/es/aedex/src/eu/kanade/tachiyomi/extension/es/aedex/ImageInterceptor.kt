@@ -33,7 +33,7 @@ class ImageInterceptor : Interceptor {
         if (scrambleKey.isBlank()) return plain
         val image = plain.body.use { BitmapFactory.decodeStream(it.byteStream()) }
             ?: throw IOException("Undecodable page image")
-        val result = descramble(image, scrambleKey)
+        val result = descramble(image, mulberry32(scrambleKey.hashCode()))
         image.recycle()
 
         val buffer = Buffer()
@@ -48,5 +48,17 @@ class ImageInterceptor : Interceptor {
         private const val LEGACY_XOR_KEY = 0x43
         private const val HEADER_SIZE = 12L
         private val MEDIA_TYPE = "image/jpeg".toMediaType()
+    }
+}
+
+// The reader's page shuffle generator
+private fun mulberry32(seed: Int): () -> Double {
+    var state = seed
+    return {
+        state += 0x6d2b79f5
+        var t = state
+        t = (t xor (t ushr 15)) * (t or 1)
+        t = t xor (t + (t xor (t ushr 7)) * (t or 61))
+        (t xor (t ushr 14)).toUInt().toDouble() / 4294967296.0
     }
 }

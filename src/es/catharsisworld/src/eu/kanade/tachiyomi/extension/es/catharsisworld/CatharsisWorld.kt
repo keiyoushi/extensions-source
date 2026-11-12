@@ -131,7 +131,7 @@ abstract class CatharsisWorld : Catharsis() {
                 .body(image.asResponseBody(body.contentType(), image.size))
                 .build()
         }
-        val descrambled = descramble(bitmap, scrambleKey, gutter)
+        val descrambled = descramble(bitmap, pageShuffle(scrambleKey), gutter)
         bitmap.recycle()
         val out = Buffer()
         descrambled.compress(Bitmap.CompressFormat.JPEG, 90, out.outputStream())
