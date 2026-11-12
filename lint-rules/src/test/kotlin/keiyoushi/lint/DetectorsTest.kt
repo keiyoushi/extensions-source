@@ -119,6 +119,9 @@ class DetectorsTest {
             package test.pkg
             import okhttp3.*
             fun Headers.Builder.configureHeaders(baseUrl: String) = set("Referer", "${'$'}baseUrl/").set("X-Api", "1")
+                .set("Referer", "${'$'}baseUrl/catalogo")
+                .set("Referer", "https://m.example.com")
+                .set("Origin", "https://www.example.com")
             """,
         ).count(1)
     }

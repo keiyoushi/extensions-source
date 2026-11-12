@@ -121,16 +121,18 @@ class NetworkDetector :
         val methodName = node.methodName ?: return
 
         when {
-            lower == "referer" || lower == "origin" -> if (node.enclosingMethodName() == "configureHeaders") {
-                if (methodName in SETTERS) {
+            // A different default Referer, or an Origin, set in configureHeaders is deliberate
+            lower == "referer" -> if (node.enclosingMethodName() == "configureHeaders") {
+                val value = context.argument(node, method, "value")?.sourcePsi?.text
+                if (methodName in SETTERS && value in DEFAULT_REFERER_VALUES) {
                     context.report(
                         DEFAULT_REFERER,
                         node,
                         context.loc(node),
-                        "`KeiSource` already sets `Referer` to `\$baseUrl/` and `Origin` to `baseUrl`",
+                        "`KeiSource` already sets `Referer` to `\$baseUrl/`",
                     )
                 }
-            } else if (lower == "referer" && methodName in SETTERS) {
+            } else if (methodName in SETTERS) {
                 context.report(
                     MANUAL_REFERER,
                     node,
@@ -226,6 +228,7 @@ class NetworkDetector :
         private val UI_THREAD_RUNNERS = setOf("post", "postDelayed", "runOnUiThread", "launchUI")
         private val SETTERS = setOf("set", "add", "header", "addHeader")
         private val ADDERS = setOf("add", "addHeader")
+        private val DEFAULT_REFERER_VALUES = setOf("\"\$baseUrl/\"", "\"\${baseUrl}/\"")
         private val SINGLE_VALUED = setOf(
             "user-agent",
             "referer",
@@ -258,8 +261,8 @@ class NetworkDetector :
 
         val DEFAULT_REFERER = issue<NetworkDetector>(
             "KeiDefaultReferer",
-            "`Referer`/`Origin` restated in `configureHeaders`",
-            "`KeiSource.headersBuilder()` already sets `Referer` to `\"\$baseUrl/\"` and `Origin` to `baseUrl`.",
+            "`Referer` restated in `configureHeaders`",
+            "`KeiSource.headersBuilder()` already sets `Referer` to `\"\$baseUrl/\"`.",
         )
 
         val COOKIE_HEADER = issue<NetworkDetector>(
