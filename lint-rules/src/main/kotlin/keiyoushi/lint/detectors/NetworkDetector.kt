@@ -6,6 +6,7 @@ import com.android.tools.lint.detector.api.JavaContext
 import com.android.tools.lint.detector.api.LintFix
 import com.android.tools.lint.detector.api.SourceCodeScanner
 import com.intellij.psi.PsiMethod
+import com.intellij.psi.util.PsiTreeUtil
 import keiyoushi.lint.HTTP_SOURCE
 import keiyoushi.lint.argument
 import keiyoushi.lint.enclosingMethodName
@@ -14,6 +15,7 @@ import keiyoushi.lint.inInterceptor
 import keiyoushi.lint.issue
 import keiyoushi.lint.loc
 import keiyoushi.lint.stringValue
+import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 import org.jetbrains.uast.UCallExpression
 import org.jetbrains.uast.UElement
 import org.jetbrains.uast.ULambdaExpression
@@ -204,7 +206,9 @@ class NetworkDetector :
     override fun createUastHandler(context: JavaContext): UElementHandler = object : UElementHandler() {
         override fun visitLiteralExpression(node: ULiteralExpression) {
             val value = node.value as? String ?: return
-            if (value.startsWith("Mozilla/5.0")) {
+            // A template interpolates a version, which is how a derived User-Agent is built
+            val template = PsiTreeUtil.getParentOfType(node.sourcePsi, KtStringTemplateExpression::class.java, false)
+            if (value.startsWith("Mozilla/5.0") && template?.hasInterpolation() != true) {
                 context.report(
                     HARDCODED_USER_AGENT,
                     node,

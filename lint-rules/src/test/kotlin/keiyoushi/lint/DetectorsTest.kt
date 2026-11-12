@@ -225,6 +225,7 @@ class DetectorsTest {
             """
             package test.pkg
             const val UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            fun ua(version: String) = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${'$'}version.0.0.0 Safari/537.36"
             """,
         ).count(1)
     }
