@@ -19,6 +19,7 @@ import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
 import keiyoushi.utils.ui.askPassword
 import kotlinx.serialization.json.JsonElement
+import okhttp3.CacheControl
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -270,7 +271,8 @@ abstract class TeamLanhLung : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
-        val response = client.get(chapterUrl, Fetch.DOCUMENT)
+        // Locked pages are cacheable (max-age, no Vary: Cookie) — skip disk cache.
+        val response = client.get(chapterUrl, Fetch.DOCUMENT, CacheControl.FORCE_NETWORK)
         var html = response.body.string()
         var document = Jsoup.parse(html, chapterUrl)
 
@@ -295,15 +297,8 @@ abstract class TeamLanhLung : KeiSource() {
                 .set("Referer", chapterUrl)
                 .build()
 
-            val postResponse = client.post(postAction, postHeaders, Fetch.DOCUMENT, formBody, ensureSuccess = false)
-            val responseUrl = postResponse.request.url.toString()
-            val responseBody = postResponse.body.string()
-
-            html = if (postResponse.isSuccessful && !responseUrl.contains("wp-login.php")) {
-                responseBody
-            } else {
-                client.get(chapterUrl, Fetch.DOCUMENT).body.string()
-            }
+            client.post(postAction, postHeaders, Fetch.DOCUMENT, formBody, ensureSuccess = false).close()
+            html = client.get(chapterUrl, Fetch.DOCUMENT, CacheControl.FORCE_NETWORK).body.string()
 
             document = Jsoup.parse(html, chapterUrl)
             if (document.selectFirst("form.post-password-form") != null) {
