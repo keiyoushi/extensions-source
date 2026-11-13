@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "ReadManga"
-    versionCode = 49
+    versionCode = 48
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "grouple"
