@@ -81,6 +81,7 @@ data class EZManhwaChapterDto(
     val title: String? = null,
     val requiresPurchase: Boolean? = null,
     val createdAt: String? = null,
+    val becameFreeAt: String? = null,
 ) {
     fun toSChapter(seriesSlug: String) = SChapter.create().apply {
         // Unified URL format: series/{seriesSlug}/chapters/{chapterSlug}
@@ -107,7 +108,7 @@ data class EZManhwaChapterDto(
 
         name = prefix + chapterName
         chapter_number = number?.toFloat() ?: -1f
-        date_upload = EZMANHWA_DATE_FORMAT.tryParse(createdAt)
+        date_upload = EZMANHWA_DATE_FORMAT.tryParse(becameFreeAt ?: createdAt)
     }
 
     private fun isChapterTitle(title: String, numStr: String): Boolean = title.contains(numStr) && CHAPTER_PREFIX_REGEX.matches(title)

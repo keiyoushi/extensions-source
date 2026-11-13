@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -30,6 +31,7 @@ import keiyoushi.utils.tryParseDateTime
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -49,6 +51,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
+import kotlin.time.Duration.Companion.milliseconds
 
 abstract class InitManga :
     KeiSource(),
@@ -243,11 +246,11 @@ abstract class InitManga :
 
         val payload = scripts.firstOrNull { "\"ciphertext\"" in it }?.objectLiteral()?.parseAs<EncryptedPayloadDto>()
             ?: return document.select("div#chapter-content > img").toPages()
+        val initMangaData = scripts.first { "\"decryption_key\"" in it }.objectLiteral().parseAs<InitMangaDataDto>()
         val key = if (payload.salt != null) {
-            val initMangaData = scripts.first { "\"decryption_key\"" in it }.objectLiteral().parseAs<InitMangaDataDto>()
             passphraseKey(initMangaData.decryptionKey, payload.salt)
         } else {
-            fetchChapterKey(payload, chapterUrl)
+            fetchChapterKey(payload, initMangaData.nonce, chapterUrl)
         }
         val content = Base64.decode(payload.ciphertext, Base64.DEFAULT)
             .aesDecrypt(aesCbc(key, payload.iv.decodeHex()))
@@ -300,10 +303,57 @@ abstract class InitManga :
         return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA512").generateSecret(spec).encoded
     }
 
-    private suspend fun fetchChapterKey(payload: EncryptedPayloadDto, chapterUrl: String): ByteArray {
-        val body = ChapterKeyRequestDto(payload.cid!!, payload.e!!, payload.g!!).toJsonRequestBody()
-        return client.post("$baseUrl/wp-json/initmanga/v1/chapter-key", Fetch.XHR.from(chapterUrl), body)
-            .parseAs<ChapterKeyResponseDto>().key.decodeHex()
+    private suspend fun fetchChapterKey(payload: EncryptedPayloadDto, nonce: String?, chapterUrl: String): ByteArray {
+        var response = postChapterKey(payload, nonce, chapterUrl)
+        // Site reader resends with the token after its "Load chapter" button, which takes clicks 300 ms after it shows
+        val token = response.data?.token
+        if (response.code == "imc_challenge_required" && token != null) {
+            delay(500.milliseconds)
+            response = postChapterKey(payload, nonce, chapterUrl, token)
+        }
+        val key = response.key ?: throw Exception(
+            when (response.code) {
+                "imc_rate_limited" -> "Loading too quickly, wait a bit and retry"
+                else -> "Open the chapter in WebView" + response.code?.let { " ($it)" }.orEmpty()
+            },
+        )
+        return key.decodeHex()
+    }
+
+    private suspend fun postChapterKey(
+        payload: EncryptedPayloadDto,
+        nonce: String?,
+        chapterUrl: String,
+        challengeToken: String = "",
+    ): ChapterKeyResponseDto {
+        val keyHeaders = headers.newBuilder().apply {
+            if (!nonce.isNullOrEmpty()) set("X-WP-Nonce", nonce)
+        }.build()
+        val body = ChapterKeyRequestDto(
+            chapterId = payload.cid!!,
+            epoch = payload.e!!,
+            grant = payload.g!!,
+            // Site's headless check report for a clean browser
+            verdict = "pass",
+            score = 0,
+            codes = emptyList(),
+            challengeToken = challengeToken,
+        ).toJsonRequestBody()
+        val response = client.post(
+            "$baseUrl/wp-json/initmanga/v1/chapter-key",
+            keyHeaders,
+            Fetch.XHR.from(chapterUrl),
+            body,
+            ensureSuccess = false,
+        )
+        if (response.body.contentType()?.subtype != "json") {
+            response.close()
+            throw HttpException(response.code)
+        }
+        val result = response.parseAs<ChapterKeyResponseDto>()
+        // Site reader retries without the nonce when it has expired
+        if (nonce.isNullOrEmpty() || result.code != "rest_cookie_invalid_nonce") return result
+        return postChapterKey(payload, nonce = null, chapterUrl, challengeToken)
     }
 
     private fun Elements.toPages(): List<Page> = mapNotNull { element ->

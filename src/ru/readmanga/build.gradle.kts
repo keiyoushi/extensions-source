@@ -6,14 +6,14 @@ plugins {
 
 keiyoushi {
     name = "ReadManga"
-    versionCode = 48
+    versionCode = 49
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "grouple"
 
     source {
         baseUrl {
-            custom("https://a.zazaza.me")
+            custom("https://b.zazaza.me")
         }
         lang = "ru"
         id = 5L
