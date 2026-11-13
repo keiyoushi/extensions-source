@@ -30,7 +30,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import kotlin.text.isNotBlank
@@ -208,8 +207,10 @@ abstract class GocTruyenTranhVui :
 
         // Chế độ 1: Tải bằng WebView Loader (Nếu công tắc BẬT) - Không fallback về API
         if (useWebViewLoader) {
+            val script = asset("goctruyentranhvui_reader.js")
             val imageUrls = runWebView(timeout = 30.seconds) {
                 loadUrl(chapterPageUrl)
+                headers["User-Agent"]!!
 
                 var lastCount = 0
                 var stableCount = 0
@@ -217,7 +218,7 @@ abstract class GocTruyenTranhVui :
 
                 poll(1.seconds) {
                     pollAttempts++
-                    evaluateJs(readerScript) { jsonResult ->
+                    evaluateJs(script) { jsonResult ->
                         val rawJson = runCatching {
                             jsonResult.parseAs<String>()
                         }.getOrElse { jsonResult }
@@ -304,17 +305,7 @@ abstract class GocTruyenTranhVui :
         return pages ?: throw Exception("Không thể tải danh sách ảnh bằng API. Vui lòng kiểm tra đăng nhập hoặc bật lại WebView Loader!")
     }
 
-    override fun getImageRequest(page: Page): Request {
-        val requestHeaders = headers.newBuilder()
-            .removeAll("Origin")
-            .build()
-        return super.getImageRequest(page).newBuilder().headers(requestHeaders).build()
-    }
-
-    private val readerScript by lazy {
-        javaClass.getResource("/assets/goctruyentranhvui_reader.js")?.readText()
-            ?: throw IllegalStateException("goctruyentranhvui_reader.js not found in assets")
-    }
+    private fun asset(name: String): String = javaClass.getResource("/assets/$name")!!.readText()
 
     private var tokenCache: String? = null
     private var tokenChecked = false
