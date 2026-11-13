@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "DocTruyen3Q"
-    versionCode = 32
+    versionCode = 33
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "wpcomics"
@@ -14,7 +14,7 @@ keiyoushi {
     source {
         lang = "vi"
         baseUrl {
-            custom("https://doctruyen3qhub.fit")
+            custom("https://doctruyen3qhub.club")
         }
     }
 }
