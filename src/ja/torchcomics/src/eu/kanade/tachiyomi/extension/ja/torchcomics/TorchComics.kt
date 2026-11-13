@@ -13,6 +13,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
+import keiyoushi.utils.textOrNull
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
@@ -20,12 +21,11 @@ import org.jsoup.nodes.Document
 @Source
 abstract class TorchComics : KeiSource() {
 
-    /** `/product` is the site's only listing, so "Latest" would just repeat "Popular". */
-    override val supportsLatest: Boolean get() = false
+    override val supportsLatest = false
 
     override suspend fun getPopularManga(page: Int): MangasPage = fetchListing(page)
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = fetchListing(page)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isBlank()) return MangasPage(emptyList(), false)
@@ -81,8 +81,7 @@ abstract class TorchComics : KeiSource() {
         return document.select(".manga_page:not(.info_page) span[img-url]")
             .mapNotNull { element ->
                 val raw = element.attrOrNull("abs:img-url") ?: return@mapNotNull null
-                val absolute = if (raw.startsWith("http")) raw else baseUrl + raw
-                absolute.replaceFirst("http://", "https://").takeUnless(::isAdvertisement)
+                raw.replaceFirst("http://", "https://").takeUnless(::isAdvertisement)
             }
             .mapIndexed { index, url -> Page(index, imageUrl = url) }
     }
@@ -93,7 +92,7 @@ abstract class TorchComics : KeiSource() {
      * counts those tens — so the second screen is `_page=3`, not 2.
      */
     private suspend fun fetchListing(page: Int): MangasPage {
-        val url = if (page <= 1) "$baseUrl/product" else "$baseUrl/product_paging?_page=${page + 1}"
+        val url = if (page == 1) "$baseUrl/product" else "$baseUrl/product_paging?_page=${page + 1}"
         val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = parseMangas(document)
         return MangasPage(mangas, mangas.isNotEmpty())
@@ -110,15 +109,14 @@ abstract class TorchComics : KeiSource() {
         val slug = anchor.attr("abs:href").substringAfterLast("/product/").trim('/')
         val title = element.selectFirst("h3")?.text()
             ?.removeSurrounding("「", "」")
-            ?.takeIf { it.isNotBlank() }
-            ?: return@mapNotNull null
+            ?: throw IllegalStateException("Missing title")
         if (slug.isBlank() || slug == STORE_INFO_SLUG) return@mapNotNull null
 
         SManga.create().apply {
             url = slug
             this.title = title
             thumbnail_url = element.selectFirst("img")?.attrOrNull("abs:src")
-            description = element.select("p").lastOrNull()?.text()?.takeIf { it.isNotBlank() }
+            description = element.select("p").lastOrNull()?.text()
         }
     }
 
@@ -134,19 +132,18 @@ abstract class TorchComics : KeiSource() {
             header?.selectFirst("img")?.attrOrNull("abs:src")
                 ?.let { thumbnail_url = it }
 
-            document.selectFirst(".profile p.name")?.text()
-                ?.takeIf { it.isNotBlank() }
+            document.selectFirst(".profile p.name")?.textOrNull()
                 ?.let { author = it }
 
             document.selectFirst(".work_detail > .description")?.let { element ->
                 MarkdownDescription.Builder()
                     .description(element)
                     .build()
-                    ?.takeIf { it.isNotBlank() }
                     ?.let { description = it }
             }
 
             status = SManga.ONGOING
+            initialized = true
         }
     }
 
@@ -156,17 +153,17 @@ abstract class TorchComics : KeiSource() {
         if (episodes.isEmpty()) return parseSingleChapter(document)
 
         return episodes
-            .mapIndexedNotNull { index, element ->
+            .map { element ->
                 val slug = element.attr("abs:href").substringAfterLast("/story/").trim('/')
-                val name = element.selectFirst("span")?.text()?.takeIf { it.isNotBlank() }
-                    ?: return@mapIndexedNotNull null
-                if (slug.isBlank()) return@mapIndexedNotNull null
+                    .takeIf { it.isNotBlank() }
+                    ?: throw IllegalStateException("Missing chapter slug")
+                val name = element.selectFirst("span")?.textOrNull()
+                    ?: throw IllegalStateException("Missing chapter name")
 
                 SChapter.create().apply {
                     url = slug
                     this.name = name
-                    chapter_number = CHAPTER_NUMBER.find(name)?.value?.toFloatOrNull()
-                        ?: (index + 1).toFloat()
+                    chapter_number = CHAPTER_NUMBER.find(name)?.value?.toFloatOrNull() ?: 0f
                     date_upload = 0L
                 }
             }
