@@ -6,7 +6,8 @@ import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.text.Normalizer
 import kotlin.time.Instant
 
@@ -38,12 +39,13 @@ class WorkCard(
     fun hasGenre(name: String) = workGenres.any { it.genre.name == name }
 
     fun toSManga() = SManga.create().apply {
-        url = "/obras/$id-$slug"
+        url = id.toString()
+        memo = buildJsonObject { put("slug", slug) }
         title = this@WorkCard.title
         thumbnail_url = (
             workImages.firstOrNull { it.imageType.code == "card" && it.imageUrl.isNotBlank() }
                 ?: workImages.firstOrNull { it.imageType.code == "cover" && it.imageUrl.isNotBlank() }
-            )?.imageUrl?.withWorkId(id)
+            )?.imageUrl
         description = synopsis
         genre = (listOf(type.name) + workGenres.map { it.genre.name } + workContentWarnings.map { it.contentWarning.name }).distinct().joinToString()
         status = publicationStatus.toStatus()
@@ -73,16 +75,14 @@ class WorkDetails(
     private val workImages: List<DetailImage>,
     private val workContentWarnings: List<ContentWarning>,
 ) {
-    val coverUrl: String?
-        get() = (
+    fun toSManga(genres: List<NamedValue>, alternatives: List<AlternativeName>, groups: List<String>) = SManga.create().apply {
+        url = id.toString()
+        memo = buildJsonObject { put("slug", slug) }
+        title = this@WorkDetails.title
+        thumbnail_url = (
             workImages.firstOrNull { it.imageTypeCode == "card" && it.imageUrl.isNotBlank() }
                 ?: workImages.firstOrNull { it.imageTypeCode == "cover" && it.imageUrl.isNotBlank() }
             )?.imageUrl
-
-    fun toSManga(genres: List<NamedValue>, alternatives: List<AlternativeName>, groups: List<String>) = SManga.create().apply {
-        url = "/obras/$id-$slug"
-        title = this@WorkDetails.title
-        thumbnail_url = coverUrl?.withWorkId(id)
         status = publicationStatus.toStatus()
         genre = (listOf(type.name) + genres.map { it.name } + workContentWarnings.map { it.name }).distinct().joinToString()
         description = MarkdownDescription.Builder()
@@ -118,10 +118,10 @@ class Joint(val scan: Scan)
 
 @Serializable
 class WorkContent(private val chapters: List<Chapter>?, private val volumes: List<Volume>?) {
-    fun toChapters(mangaUrl: String, scanlator: String): List<SChapter> = (
-        chapters.orEmpty().filter { it.needLectorImages }.sortedBy { it.orderIndex }.map { it.toSChapter(mangaUrl, scanlator) } +
+    fun toChapters(workId: String, workSlug: String, scanlator: String): List<SChapter> = (
+        chapters.orEmpty().filter { it.needLectorImages }.sortedBy { it.orderIndex }.map { it.toSChapter(workId, workSlug, scanlator) } +
             volumes.orEmpty().sortedBy { it.orderIndex }.flatMap { volume ->
-                volume.chapters.filter { it.needLectorImages }.sortedBy { it.orderIndex }.map { it.toSChapter(mangaUrl, scanlator, volume.displayNumber) }
+                volume.chapters.filter { it.needLectorImages }.sortedBy { it.orderIndex }.map { it.toSChapter(workId, workSlug, scanlator, volume.displayNumber) }
             }
         ).distinctBy { it.url }.reversed()
 }
@@ -138,8 +138,13 @@ class Chapter(
     private val createdAt: String?,
     val needLectorImages: Boolean,
 ) {
-    fun toSChapter(mangaUrl: String, group: String, volume: String? = null) = SChapter.create().apply {
-        url = "$mangaUrl/capitulo/$id-${Normalizer.normalize(title.lowercase(), Normalizer.Form.NFD).replace(accents, "").replace(nonAlphanumeric, "-").trim('-')}"
+    fun toSChapter(workId: String, workSlug: String, group: String, volume: String? = null) = SChapter.create().apply {
+        url = id.toString()
+        memo = buildJsonObject {
+            put("workId", workId)
+            put("workSlug", workSlug)
+            put("slug", Normalizer.normalize(title.lowercase(), Normalizer.Form.NFD).replace(accents, "").replace(nonAlphanumeric, "-").trim('-'))
+        }
         name = listOfNotNull(volume?.let { "Vol. $it" }, "Cap. $displayNumber", title).joinToString(" - ")
         scanlator = group.takeIf { it.isNotBlank() }
         date_upload = Instant.tryParse(createdAt)
@@ -147,7 +152,7 @@ class Chapter(
     }
 
     companion object {
-        private val accents = Regex("\\p{M}+")
+        private val accents = Regex("""\p{M}+""")
         private val nonAlphanumeric = Regex("[^a-z0-9]+")
     }
 }
@@ -166,5 +171,3 @@ class Home(val newChaptersMangas: List<UpdatedChapter>)
 
 @Serializable
 class UpdatedChapter(val workId: Int)
-
-private fun String.withWorkId(id: Int) = toHttpUrl().newBuilder().fragment(id.toString()).build().toString()

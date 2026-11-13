@@ -12,6 +12,7 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getString
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
@@ -33,19 +34,15 @@ abstract class Ichijou : KeiSource() {
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
-            val imageIds = request.url.fragment?.split('/')?.mapNotNull { it.toIntOrNull() }
-            if (response.code != 403 || imageIds == null || imageIds.size !in listOf(1, 3) || request.url.host != storageHost) return@addInterceptor response
+            val ids = request.url.fragment?.split('/')?.mapNotNull { it.toIntOrNull() }
+            if (response.code != 403 || request.url.host != storageHost || ids?.size != 3) return@addInterceptor response
 
-            // Image signatures expire after an hour; the app can retain covers and chapter pages longer.
+            // Page signatures expire after an hour.
+            val (workId, chapterId, pageIndex) = ids
             val imageUrl = try {
                 runBlocking {
-                    val workId = imageIds[0]
-                    if (imageIds.size == 1) {
-                        client.get("$apiUrl/home/works/$workId", Fetch.XHR).parseAs<ApiResponse<WorkDetails>>().data.coverUrl
-                    } else {
-                        client.get("$apiUrl/home/works/$workId/chapters/${imageIds[1]}", Fetch.XHR)
-                            .parseAs<ApiResponse<Reader>>().data.chapter.images.firstOrNull { it.pageIndex == imageIds[2] }?.imageUrl
-                    }
+                    client.get("$apiUrl/home/works/$workId/chapters/$chapterId", Fetch.XHR)
+                        .parseAs<ApiResponse<Reader>>().data.chapter.images.firstOrNull { it.pageIndex == pageIndex }?.imageUrl
                 }
             } catch (exception: Exception) {
                 response.close()
@@ -84,7 +81,7 @@ abstract class Ichijou : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "obras") return null
-        val id = url.pathSegments.getOrNull(1)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: return null
+        val id = url.pathSegments.getOrNull(1)?.substringBefore('-')?.toIntOrNull() ?: return null
         val details = client.get("$apiUrl/home/works/$id", Fetch.XHR).parseAs<ApiResponse<WorkDetails>>().data
         if (details.type.code !in listOf("manga", "manhwa", "manhua", "one_shot")) return null
         val manga = details.toSManga(emptyList(), emptyList(), emptyList())
@@ -97,7 +94,7 @@ abstract class Ichijou : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
-        val id = getMangaUrl(manga).toHttpUrl().pathSegments[1].takeWhile { it.isDigit() }
+        val id = manga.url
         val scan = async { client.get("$apiUrl/home/scans/work/$id", Fetch.XHR).parseAs<ApiResponse<Scan?>>().data }
         val joints = async { client.get("$apiUrl/home/getWorkJoints/work/$id", Fetch.XHR).parseAs<ApiResponse<List<Joint>>>().data }
         val groups = async { (listOfNotNull(scan.await()?.name) + joints.await().map { it.scan.name }).distinct() }
@@ -116,7 +113,7 @@ abstract class Ichijou : KeiSource() {
         val chapterList = if (fetchChapters) {
             async {
                 client.get("$apiUrl/home/getContentWork/work/$id", Fetch.XHR).parseAs<ApiResponse<WorkContent>>().data
-                    .toChapters(manga.url, groups.await().joinToString(" & "))
+                    .toChapters(id, manga.memo.getString("slug"), groups.await().joinToString(" & "))
             }
         } else {
             null
@@ -124,10 +121,18 @@ abstract class Ichijou : KeiSource() {
         SMangaUpdate(details?.await() ?: manga, chapterList?.await() ?: chapters)
     }
 
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/obras/${manga.url}-${manga.memo.getString("slug")}"
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val workId = chapter.memo.getString("workId")
+        val workSlug = chapter.memo.getString("workSlug")
+        val slug = chapter.memo.getString("slug")
+        return "$baseUrl/obras/$workId-$workSlug/capitulo/${chapter.url}-$slug"
+    }
+
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val segments = getChapterUrl(chapter).toHttpUrl().pathSegments
-        val workId = segments[1].takeWhile { it.isDigit() }
-        val chapterId = segments[3].takeWhile { it.isDigit() }
+        val workId = chapter.memo.getString("workId")
+        val chapterId = chapter.url
         return client.get("$apiUrl/home/works/$workId/chapters/$chapterId", Fetch.XHR)
             .parseAs<ApiResponse<Reader>>().data.chapter.images.sortedBy { it.pageIndex }
             .mapIndexed { index, image ->
