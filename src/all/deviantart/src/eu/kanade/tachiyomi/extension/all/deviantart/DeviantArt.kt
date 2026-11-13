@@ -62,8 +62,8 @@ abstract class DeviantArt :
         addInterceptor(OriginalImageInterceptor())
     }
 
-    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
-    private val backendBaseUrlHost by lazy { backendBaseUrl.toHttpUrl().host }
+    private val baseUrlHost get() = baseUrl.toHttpUrl().host
+    private val backendBaseUrlHost get() = backendBaseUrl.toHttpUrl().host
 
     private fun queryBuilder(page: Int): HttpUrl.Builder = backendBuilder()
         .addPathSegment("rss.xml")
