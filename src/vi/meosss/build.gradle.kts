@@ -6,9 +6,10 @@ plugins {
 
 keiyoushi {
     name = "MeoSSS"
-    versionCode = 3
+    versionCode = 0
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
+    theme = "initmanga"
 
     source {
         lang = "vi"
