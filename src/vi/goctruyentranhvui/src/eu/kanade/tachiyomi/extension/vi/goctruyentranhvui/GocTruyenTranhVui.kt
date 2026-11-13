@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.vi.goctruyentranhvui
 import android.text.InputType
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -20,6 +21,7 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -28,9 +30,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import kotlin.text.isNotBlank
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class GocTruyenTranhVui :
@@ -42,7 +46,9 @@ abstract class GocTruyenTranhVui :
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(::authInterceptor)
-        rateLimit(3)
+        rateLimit(1, 2.seconds) {
+            it.host == baseUrl.toHttpUrl().host && it.encodedPath.startsWith("/api/")
+        }
     }
 
     private val xhrHeaders: Headers
@@ -192,12 +198,76 @@ abstract class GocTruyenTranhVui :
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        getToken()
         val url = chapter.url
         val slug = url.substringAfter("/truyen/").substringBefore("/chuong-")
         val numberChapter = url.substringAfter("/chuong-").substringBefore("#")
         val comicId = url.substringAfter("#")
+        val chapterPageUrl = "$baseUrl/truyen/$slug/chuong-$numberChapter"
 
+        val useWebViewLoader = preferences.getBoolean(USE_WEBVIEW_LOADER, USE_WEBVIEW_LOADER_DEFAULT)
+
+        // Chế độ 1: Tải bằng WebView Loader (Nếu công tắc BẬT) - Không fallback về API
+        if (useWebViewLoader) {
+            val imageUrls = runWebView(timeout = 30.seconds) {
+                loadUrl(chapterPageUrl)
+
+                var lastCount = 0
+                var stableCount = 0
+                var pollAttempts = 0
+
+                poll(1.seconds) {
+                    pollAttempts++
+                    evaluateJs(readerScript) { jsonResult ->
+                        val rawJson = runCatching {
+                            jsonResult.parseAs<String>()
+                        }.getOrElse { jsonResult }
+
+                        val res = runCatching {
+                            rawJson.parseAs<WebViewResultDto>()
+                        }.getOrNull()
+
+                        if (res == null) {
+                            if (pollAttempts >= 12) {
+                                reject(Exception("Không thể giải mã dữ liệu từ WebView!"))
+                            }
+                            return@evaluateJs
+                        }
+
+                        if (res.needLogin) {
+                            reject(Exception("Để đọc chương này bạn cần đăng nhập trong WebView!"))
+                        } else if (res.urls.isNotEmpty()) {
+                            if (res.urls.size == lastCount) {
+                                stableCount++
+                                if (stableCount >= 2) {
+                                    resolve(res.urls)
+                                }
+                            } else {
+                                lastCount = res.urls.size
+                                stableCount = 0
+                            }
+                        } else if (pollAttempts >= 12) {
+                            reject(Exception("Chương này không có ảnh hoặc yêu cầu đăng nhập trong WebView!"))
+                        }
+                    }
+                }
+            }
+
+            if (imageUrls.isEmpty()) {
+                throw Exception("WebView không trích xuất được danh sách ảnh nào!")
+            }
+
+            return imageUrls.mapIndexed { i, imgUrl ->
+                val finalUrl = if (imgUrl.startsWith("/image/")) {
+                    baseUrl + imgUrl
+                } else {
+                    imgUrl
+                }
+                Page(i, imageUrl = finalUrl)
+            }
+        }
+
+        // Chế độ 2: Tải bằng API trực tiếp (Nếu công tắc TẮT)
+        getToken()
         val body = FormBody.Builder()
             .add("comicId", comicId)
             .add("chapterNumber", numberChapter)
@@ -219,6 +289,7 @@ abstract class GocTruyenTranhVui :
                 }
             }
         }
+
         // Thử lần 1
         var pages = requestImages()
         // Nếu thất bại (do hết hạn cookie/phiên làm việc)
@@ -230,7 +301,19 @@ abstract class GocTruyenTranhVui :
             pages = requestImages()
         }
 
-        return pages ?: throw Exception("Chưa đăng nhập trong WebView. Hoặc không có ảnh!")
+        return pages ?: throw Exception("Không thể tải danh sách ảnh bằng API. Vui lòng kiểm tra đăng nhập hoặc bật lại WebView Loader!")
+    }
+
+    override fun getImageRequest(page: Page): Request {
+        val requestHeaders = headers.newBuilder()
+            .removeAll("Origin")
+            .build()
+        return super.getImageRequest(page).newBuilder().headers(requestHeaders).build()
+    }
+
+    private val readerScript by lazy {
+        javaClass.getResource("/assets/goctruyentranhvui_reader.js")?.readText()
+            ?: throw IllegalStateException("goctruyentranhvui_reader.js not found in assets")
     }
 
     private var tokenCache: String? = null
@@ -281,11 +364,12 @@ abstract class GocTruyenTranhVui :
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
+        val tokenPref = EditTextPreference(screen.context).apply {
             key = CUSTOM_TOKEN
             title = "Authorization Token"
             summary = "Enter token manually"
             dialogTitle = "Authorization Token"
+            setEnabled(!preferences.getBoolean(USE_WEBVIEW_LOADER, USE_WEBVIEW_LOADER_DEFAULT))
             setOnBindEditTextListener {
                 it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             }
@@ -295,10 +379,26 @@ abstract class GocTruyenTranhVui :
                 tokenChecked = true
                 true
             }
+        }
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = USE_WEBVIEW_LOADER
+            title = "Sử dụng WebView loader"
+            summary = "Tự động mở WebView để lấy danh sách ảnh và làm mới phiên làm việc. Tắt nếu muốn gọi API trực tiếp."
+            setDefaultValue(USE_WEBVIEW_LOADER_DEFAULT)
+            setOnPreferenceChangeListener { _, newValue ->
+                val isWebViewEnabled = newValue as Boolean
+                tokenPref.setEnabled(!isWebViewEnabled)
+                true
+            }
         }.also(screen::addPreference)
+
+        screen.addPreference(tokenPref)
     }
 
     companion object {
+        private const val USE_WEBVIEW_LOADER = "use_webview_loader"
+        private const val USE_WEBVIEW_LOADER_DEFAULT = true
         private const val CUSTOM_TOKEN = "custom_token"
         private val COMIC_ID_REGEX = Regex("""id:\s*"([^"]+)"""")
         private val COMIC_NAME_EN_REGEX = Regex("""nameEn:\s*`([^`]+)`""")
