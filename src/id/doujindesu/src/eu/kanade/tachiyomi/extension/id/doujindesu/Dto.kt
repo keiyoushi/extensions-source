@@ -213,18 +213,9 @@ class Chapter(
 
 @Serializable
 class PageList(
-    @SerialName("content_urls") private val contentUrls: List<String>,
+    @SerialName("content_urls") val pages: List<String>,
     @SerialName("manga_slug") val mangaSlug: String? = null,
-) {
-    val pages: List<String>
-        get() = contentUrls.map { page ->
-            when {
-                page.contains("/uploads/") && !page.contains("/storage/uploads/") -> page.replace("/uploads/", "/storage/uploads/")
-                page.contains("/upload/") && !page.contains("/storage/upload/") -> page.replace("/upload/", "/storage/upload/")
-                else -> page
-            }
-        }
-}
+)
 
 @Serializable
 class EncryptedDto(
