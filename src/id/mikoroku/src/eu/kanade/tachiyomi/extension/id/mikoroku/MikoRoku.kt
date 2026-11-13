@@ -17,17 +17,19 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 import okhttp3.CacheControl
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONArray
-import org.json.JSONObject
 import org.jsoup.Jsoup
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
@@ -41,8 +43,10 @@ abstract class MikoRoku : KeiSource() {
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(10, 1.seconds, 300.milliseconds)
         .readTimeout(30, TimeUnit.SECONDS)
 
-    // WebChannel Listen goes out exactly as built, no browser headers.
-    private val listenHeaders = Headers.headersOf("X-Client-Protocol", "webchannel")
+    // WebChannel Listen carries the app's headers (including its user
+    // agent) plus the WebChannel protocol header. No referer is set
+    // anywhere on this path.
+    private val listenHeaders get() = headersBuilder().set("X-Client-Protocol", "webchannel").build()
 
     override suspend fun getPopularManga(page: Int): MangasPage = fetchCatalog().sortedByDescending { it.rating }.toMangasPage()
 
@@ -117,6 +121,8 @@ abstract class MikoRoku : KeiSource() {
         if (url.startsWith("/series/")) {
             return url.removePrefix("/series/").substringBefore("/").takeIf { it.isNotBlank() }
         }
+        // Library entries stored by the previous release use this path,
+        // so it must keep resolving even though nothing creates it now.
         if (url.startsWith("/detail.html")) {
             return "$baseUrl$url".toHttpUrlOrNull()?.queryParameter("slug")
         }
@@ -154,11 +160,12 @@ abstract class MikoRoku : KeiSource() {
         else -> SManga.UNKNOWN
     }
 
-    // Chapter sources, in order: the site API has no chapters for
-    // Firestore-only titles, Listen covers those, and the Blogger feeds
-    // cover titles whose chapters only exist as blog posts. Each step runs
-    // only when the previous one found nothing. Images are returned
-    // alongside the chapters; nothing is cached in memory.
+    // Chapter sources, in order: the site API, then Listen for the
+    // Firestore-only titles the site API returns nothing for. Each step
+    // runs only when the previous one found nothing. The Blogger feeds
+    // used to be a third step, but they return exactly what the site
+    // API already returns, so they added no chapters. Images are
+    // returned alongside the chapters; nothing is cached in memory.
     private suspend fun fetchChapterList(
         slug: String,
         title: String,
@@ -172,12 +179,6 @@ abstract class MikoRoku : KeiSource() {
             if (short.length >= 4 && short != title) addFromSiteApi(slug, short, byNum, imagesByNum)
         }
         if (byNum.isEmpty()) addFromListen(slug, byNum, imagesByNum)
-        if (byNum.isEmpty()) {
-            addFromBloggerFeed(BLOGGER_SV1, slug, title, byNum)
-        }
-        if (byNum.isEmpty()) {
-            addFromBloggerFeed(BLOGGER_SV2, slug, title, byNum)
-        }
         return byNum.values.toList() to imagesByNum
     }
 
@@ -217,42 +218,27 @@ abstract class MikoRoku : KeiSource() {
         val parent = "$FIRESTORE_DB/documents/manga/$slug"
         val docs = firestoreListenDocs(parent, "chapters")
         for (doc in docs) {
-            val f = doc.optJSONObject("fields") ?: continue
-            if (fsBool(f, "isDraft")) continue
-            val docId = doc.optString("name").substringAfterLast("/")
-            val numRaw = fsStr(f, "num").ifBlank { fsStr(f, "chapter") }
-                .ifBlank { docId }.ifBlank { fsStr(f, "order") }
-                .ifBlank { fsStr(f, "title") }
+            val f = doc.fields
+            if (f["isDraft"]?.booleanValue == true) continue
+            val docId = doc.name.substringAfterLast("/")
+            val title = f.getString("title").orEmpty()
+            val numRaw = f.getString("num").orEmpty().ifBlank { f.getString("chapter").orEmpty() }
+                .ifBlank { docId }.ifBlank { f.getString("order").orEmpty() }
+                .ifBlank { title }
             val num = numRaw.toFloatOrNull()
-                ?: fsStr(f, "title").chapterNumber().toFloat().takeIf { it >= 0 } ?: continue
-            val images = fsStrList(f, "images").map { it.replace("/s1600/", "/s0/") }
+                ?: title.chapterNumber().toFloat().takeIf { it >= 0 } ?: continue
+            val images = f.getStringList("images").map { it.replace("/s1600/", "/s0/") }
             if (images.isNotEmpty()) imagesByNum[num] = images
             if (!byNum.containsKey(num)) {
-                val dateMillis = f.optJSONObject("date")?.optString("integerValue")
-                    ?.toLongOrNull() ?: 0L
+                val dateMillis = f["date"]?.integerValue?.toLongOrNull() ?: 0L
                 byNum[num] = SChapter.create().apply {
                     url = "/series/$slug/chapter/$num"
-                    name = fsStr(f, "title").ifBlank { "Chapter $num" }
+                    name = title.ifBlank { "Chapter $num" }
                     chapter_number = num
                     date_upload = dateMillis
                 }
             }
         }
-    }
-
-    private suspend fun addFromBloggerFeed(
-        feedBase: String,
-        slug: String,
-        title: String,
-        byNum: MutableMap<Float, SChapter>,
-    ) {
-        searchBlogger("$feedBase/feeds/posts/default", title, 500)
-            .mapNotNull { it.toSChapter(slug, title) }
-            .forEach { ch ->
-                val num = ch.name.chapterNumber().toFloat().takeIf { it >= 0 } ?: return@forEach
-                ch.chapter_number = num
-                if (!byNum.containsKey(num)) byNum[num] = ch
-            }
     }
 
     // Firestore WebChannel Listen: the same transport the site's own Firebase
@@ -263,8 +249,8 @@ abstract class MikoRoku : KeiSource() {
     private suspend fun firestoreListenDocs(
         parent: String,
         collectionId: String,
-    ): List<JSONObject> {
-        val docs = mutableListOf<JSONObject>()
+    ): List<FirestoreDoc> {
+        val docs = mutableListOf<FirestoreDoc>()
         try {
             val dbEnc = URLEncoder.encode(FIRESTORE_DB, "UTF-8")
             val reqJson = ListenRequest(
@@ -338,33 +324,34 @@ abstract class MikoRoku : KeiSource() {
                         break
                     }
                     try {
-                        val arr = JSONArray(frame)
-                        for (i in 0 until arr.length()) {
-                            val msg = arr.optJSONArray(i) ?: continue
-                            if (msg.length() < 2) continue
-                            val payload = msg.opt(1) ?: continue
+                        val arr = frame.parseAs<JsonArray>()
+                        for (msg in arr) {
+                            val payload = (msg as? JsonArray)?.getOrNull(1) ?: continue
                             val items = when (payload) {
-                                is JSONArray -> payload
-                                is JSONObject -> JSONArray().put(payload)
+                                is JsonArray -> payload
+                                is JsonObject -> listOf(payload)
                                 else -> continue
                             }
-                            for (j in 0 until items.length()) {
-                                val item = items.optJSONObject(j) ?: continue
-                                if (item.has("documentChange")) {
-                                    val doc = item.optJSONObject("documentChange")
-                                        ?.optJSONObject("document")
-                                    if (doc != null) docs += doc
-                                } else if (item.has("targetChange")) {
-                                    val tc = item.optJSONObject("targetChange")
-                                    if (tc?.optString("targetChangeType") == "CURRENT") {
-                                        val ids = tc.optJSONArray("targetIds")
+                            for (item in items) {
+                                val obj = item as? JsonObject ?: continue
+                                if ("documentChange" in obj) {
+                                    val document = (obj["documentChange"] as? JsonObject)?.get("document")
+                                    if (document != null) {
+                                        runCatching { document.parseAs<FirestoreDoc>() }
+                                            .getOrNull()?.let { docs += it }
+                                    }
+                                } else if ("targetChange" in obj) {
+                                    val tc = obj["targetChange"] as? JsonObject
+                                    val changeType = (tc?.get("targetChangeType") as? JsonPrimitive)?.contentOrNull
+                                    if (changeType == "CURRENT") {
+                                        val ids = tc?.get("targetIds") as? JsonArray
                                         if (ids != null) {
-                                            for (k in 0 until ids.length()) {
-                                                if (ids.optInt(k) == 2) done = true
+                                            for (id in ids) {
+                                                if ((id as? JsonPrimitive)?.intOrNull == 2) done = true
                                             }
                                         }
                                     }
-                                } else if (item.has("__sm__")) {
+                                } else if ("__sm__" in obj) {
                                     done = true
                                 }
                             }
@@ -375,7 +362,7 @@ abstract class MikoRoku : KeiSource() {
                 }
             }
         } catch (e: Exception) {
-            // Listen failed: the caller falls back to the Blogger feed.
+            // Listen failed: no chapters from this source.
         }
         return docs
     }
@@ -385,21 +372,6 @@ abstract class MikoRoku : KeiSource() {
         val sb = StringBuilder()
         repeat(n) { sb.append(chars[(Math.random() * chars.length).toInt()]) }
         return sb.toString()
-    }
-
-    private fun fsStr(f: JSONObject, name: String): String = f.optJSONObject(name)?.optString("stringValue") ?: ""
-
-    private fun fsBool(f: JSONObject, name: String): Boolean = f.optJSONObject(name)?.optBoolean("booleanValue") ?: false
-
-    private fun fsStrList(f: JSONObject, name: String): List<String> {
-        val values = f.optJSONObject(name)?.optJSONObject("arrayValue")
-            ?.optJSONArray("values") ?: return emptyList()
-        val out = mutableListOf<String>()
-        for (i in 0 until values.length()) {
-            val s = values.getJSONObject(i).optString("stringValue")
-            if (s.isNotBlank()) out += s
-        }
-        return out
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -432,10 +404,10 @@ abstract class MikoRoku : KeiSource() {
         val parent = "$FIRESTORE_DB/documents/manga/$slug"
         val docs = firestoreListenDocs(parent, "chapters")
         for (doc in docs) {
-            if (doc.optString("name").substringAfterLast("/") != key) continue
-            val f = doc.optJSONObject("fields") ?: continue
-            if (fsBool(f, "isDraft")) continue
-            val images = fsStrList(f, "images").map { it.replace("/s1600/", "/s0/") }
+            if (doc.name.substringAfterLast("/") != key) continue
+            val f = doc.fields
+            if (f["isDraft"]?.booleanValue == true) continue
+            val images = f.getStringList("images").map { it.replace("/s1600/", "/s0/") }
             if (images.isNotEmpty()) return images
         }
         return null
@@ -497,7 +469,7 @@ abstract class MikoRoku : KeiSource() {
         }
 
         // For conversion mismatches (e.g. "konten" vs "tamashiten"),
-        // trying progressively shorter queries. The titleWordsMatch filter in toSChapter will reject false positives.
+        // trying progressively shorter queries. The titleWordsMatch filter in chapterLabel will reject false positives.
         val words = query.split(Regex("\\s+")).filter { it.isNotBlank() }
         for (n in listOf(4, 3)) {
             if (words.size > n) {
@@ -538,9 +510,6 @@ abstract class MikoRoku : KeiSource() {
         private const val FIRESTORE_DB = "projects/mikoroku/databases/(default)"
         private const val FIRESTORE_LISTEN =
             "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel"
-
-        private const val BLOGGER_SV1 = "https://www.mikodrive.my.id"
-        private const val BLOGGER_SV2 = "https://www.yomidays.my.id"
 
         private val GENRES = listOf(
             "Semua", "Action", "Adult", "Adventure", "Cheating", "Comedy",

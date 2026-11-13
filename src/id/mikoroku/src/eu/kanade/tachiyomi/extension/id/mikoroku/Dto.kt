@@ -1,15 +1,11 @@
 package eu.kanade.tachiyomi.extension.id.mikoroku
 
-import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
-import kotlin.time.Instant
 
 private val CHAPTER_REGEX = """Chapter\s+(\d+(?:\.\d+)?)""".toRegex(RegexOption.IGNORE_CASE)
-private val POST_ID_REGEX = """post-(\d+)""".toRegex()
 
 internal fun String.chapterLabel(): String? = CHAPTER_REGEX.find(this)?.value
 
@@ -187,17 +183,6 @@ class BloggerEntry(
         // Fallback: word overlap for conversion variants (e.g. "konten" vs "tamashiten")
         if (titleWordsMatch(title.text, mangaTitle)) return title.text.chapterLabel()
         return null
-    }
-
-    fun toSChapter(slug: String, mangaTitle: String): SChapter? {
-        val label = chapterLabel(mangaTitle) ?: return null
-        val postId = POST_ID_REGEX.find(id.text)?.groupValues?.get(1) ?: return null
-
-        return SChapter.create().apply {
-            name = label
-            date_upload = Instant.tryParse(published?.text)
-            url = "/manga/$slug/post/$postId"
-        }
     }
 
     fun imageUrls(): List<String> = Jsoup.parseBodyFragment(content?.text.orEmpty())
