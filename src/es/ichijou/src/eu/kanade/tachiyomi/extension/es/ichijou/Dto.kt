@@ -41,8 +41,8 @@ class WorkCard(
         url = "/obras/$id-$slug"
         title = this@WorkCard.title
         thumbnail_url = (
-            workImages.firstOrNull { it.imageType.code == "cover" && it.imageUrl.isNotBlank() }
-                ?: workImages.firstOrNull { it.imageType.code == "card" && it.imageUrl.isNotBlank() }
+            workImages.firstOrNull { it.imageType.code == "card" && it.imageUrl.isNotBlank() }
+                ?: workImages.firstOrNull { it.imageType.code == "cover" && it.imageUrl.isNotBlank() }
             )?.imageUrl?.withWorkId(id)
         description = synopsis
         genre = (listOf(type.name) + workGenres.map { it.genre.name } + workContentWarnings.map { it.contentWarning.name }).distinct().joinToString()
@@ -75,8 +75,8 @@ class WorkDetails(
 ) {
     val coverUrl: String?
         get() = (
-            workImages.firstOrNull { it.imageTypeCode == "cover" && it.imageUrl.isNotBlank() }
-                ?: workImages.firstOrNull { it.imageTypeCode == "card" && it.imageUrl.isNotBlank() }
+            workImages.firstOrNull { it.imageTypeCode == "card" && it.imageUrl.isNotBlank() }
+                ?: workImages.firstOrNull { it.imageTypeCode == "cover" && it.imageUrl.isNotBlank() }
             )?.imageUrl
 
     fun toSManga(genres: List<NamedValue>, alternatives: List<AlternativeName>, groups: List<String>) = SManga.create().apply {
