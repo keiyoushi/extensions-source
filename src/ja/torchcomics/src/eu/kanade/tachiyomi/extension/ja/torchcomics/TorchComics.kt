@@ -39,13 +39,6 @@ abstract class TorchComics : KeiSource() {
         return MangasPage(parseMangas(document), false)
     }
 
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) return null
-        if (url.pathSegments.firstOrNull() != "product") return null
-        val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotBlank() } ?: return null
-        return fetchManga(slug)
-    }
-
     override suspend fun getMangasByUrl(url: HttpUrl, page: Int): MangasPage {
         if (url.host != baseUrl.toHttpUrl().host) return MangasPage(emptyList(), false)
         val segments = url.pathSegments
@@ -65,14 +58,14 @@ abstract class TorchComics : KeiSource() {
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
-        chapters: List<SChapter>,
-        fetchDetails: Boolean,
-        fetchChapters: Boolean,
+        _chapters: List<SChapter>,
+        _fetchDetails: Boolean,
+        _fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
-            manga = if (fetchDetails) parseDetails(manga, document) else manga,
-            chapters = if (fetchChapters) parseChapters(document) else chapters,
+            manga = parseDetails(manga, document),
+            chapters = parseChapters(document),
         )
     }
 
