@@ -5,17 +5,19 @@ plugins {
 }
 
 keiyoushi {
-    name = "Temple Scan"
-    versionCode = 16
+    name = "Aedex"
+    pkgName = "es.templescanesp"
+    versionCode = 74
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
-    theme = "madara"
+    theme = "catharsis"
 
     source {
         lang = "es"
-        baseUrl {
-            custom("https://aedexnox.syakaihoken-web.com")
-        }
-        versionId = 4
+        baseUrl = "https://aedexnox.com"
+    }
+
+    deeplink {
+        path("/comic/..*")
     }
 }
