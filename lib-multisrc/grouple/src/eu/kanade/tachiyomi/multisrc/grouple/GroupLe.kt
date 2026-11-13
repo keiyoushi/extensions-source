@@ -59,11 +59,17 @@ abstract class GroupLe :
             val originalRequest = chain.request()
             val response = chain.proceed(originalRequest)
             if (originalRequest.url.toString().contains(baseUrl) && (
-                    originalRequest.url.toString().contains("internal/redirect") || response.code == 301
+                    response.isRedirect || originalRequest.url.toString().contains("internal/redirect")
                     )
             ) {
                 if (originalRequest.url.toString().contains("api/catalog")) {
-                    throw IOException("Смените домен: Поисковик > Расширения > $name > ⚙\uFE0F")
+                    val location = response.header("Location")
+                    val newHost = location?.let { originalRequest.url.resolve(it)?.host }
+                    if (newHost != null) {
+                        throw IOException("Смените домен: Поисковик > Расширения > $name > ⚙️\nНовый домен: $newHost")
+                    } else {
+                        throw IOException("Смените домен: Поисковик > Расширения > $name > ⚙️")
+                    }
                 }
                 throw IOException(
                     "URL серии изменился. Перенесите/мигрируйте с $name на $name (или смежный с GroupLe), чтобы список глав обновился",
