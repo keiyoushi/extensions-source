@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.pam
 
-import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -10,49 +9,43 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import keiyoushi.lib.ece.Ece
 import keiyoushi.lib.i18n.Intl
-import keiyoushi.lib.secretstream.SecretStream
-import keiyoushi.lib.secretstream.State
-import keiyoushi.lib.secretstream.X25519
-import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.WebViewScope
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParseDateTime
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import okhttp3.Headers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
-import okhttp3.ResponseBody.Companion.toResponseBody
-import okio.Buffer
-import okio.Timeout
 import okio.buffer
+import okio.source
+import java.io.File
 import java.io.IOException
-import java.security.MessageDigest
-import java.security.SecureRandom
-import java.time.format.DateTimeFormatter
-import java.util.Locale
-import java.util.TimeZone
-import java.util.concurrent.ConcurrentHashMap
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
-import kotlin.math.abs
-import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 
 abstract class Pam :
     KeiSource(),
     ConfigurableSource {
 
-    protected val baseHttpUrl get() = baseUrl.toHttpUrl()
-
-    private val preferences by getPreferencesLazy()
+    private val preferences by getPreferencesLazy {
+        if (contains(OLD_HIDE_PREMIUM_PREF)) edit().remove(OLD_HIDE_PREMIUM_PREF).apply()
+    }
 
     protected val intl = Intl(
         language = lang,
@@ -62,9 +55,10 @@ abstract class Pam :
     )
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
-        addInterceptor(::imageInterceptor)
-        rateLimit(1, 2.seconds) { it.fragment != THUMBNAIL_FRAGMENT }
+        addInterceptor(::pageInterceptor)
     }
+
+    private val siteView = SiteView(baseUrl) { headers["User-Agent"]!! }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", popularFilters)
 
@@ -74,407 +68,233 @@ abstract class Pam :
     protected abstract val latestFilters: FilterList
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        if (query.isNotEmpty()) {
-            val search = baseHttpUrl.newBuilder().apply {
-                addPathSegments("api/v1/search/series")
-                addQueryParameter("q", query)
-            }.build()
-
-            val data = sitePages.load("$baseUrl/library", SiteRequest(fetch = search.toString())).fetched().parseAs<SearchResponse>().data
-
-            return MangasPage(
-                mangas = data.map { it.toSManga(::createThumbnailUrl) },
-                hasNextPage = false,
-            )
-        }
-
-        val url = baseHttpUrl.newBuilder().apply {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("library")
+            if (query.isNotBlank()) addQueryParameter("search", query.trim())
 
             filters.filterIsInstance<TriStateGroupFilter>().forEach { group ->
-                when (group.name) {
-                    "Genres", "Genres/Thèmes" -> {
-                        group.included.takeIf { it.isNotEmpty() }?.also { addQueryParameter("include_genres", it.joinToString(",")) }
-                        group.excluded.takeIf { it.isNotEmpty() }?.also { addQueryParameter("exclude_genres", it.joinToString(",")) }
-                    }
-                    "Types" -> {
-                        group.included.takeIf { it.isNotEmpty() }?.also { addQueryParameter("include_types", it.joinToString(",")) }
-                        group.excluded.takeIf { it.isNotEmpty() }?.also { addQueryParameter("exclude_types", it.joinToString(",")) }
-                    }
-                }
+                val kind = if (group is TypeGroupFilter) "types" else "genres"
+                group.included.takeIf { it.isNotEmpty() }?.also { addQueryParameter("include_$kind", it.joinToString(",")) }
+                group.excluded.takeIf { it.isNotEmpty() }?.also { addQueryParameter("exclude_$kind", it.joinToString(",")) }
             }
-
             filters.firstInstanceOrNull<CheckBoxGroup>()?.also { status ->
-                if (status.checked.isNotEmpty()) {
-                    addQueryParameter("status", status.checked.joinToString(","))
-                }
+                if (status.checked.isNotEmpty()) addQueryParameter("status", status.checked.joinToString(","))
+            }
+            filters.filterIsInstance<NumberFilter>().forEach { number ->
+                number.value?.also { addQueryParameter(number.parameter, it.toString()) }
             }
             filters.firstInstanceOrNull<SortFilter>()?.also { sort ->
                 addQueryParameter("orderby", sort.sort)
-                if (sort.ascending) {
-                    addQueryParameter("order", "asc")
-                }
+                if (sort.ascending) addQueryParameter("order", "asc")
             }
+            if (page > 1) addQueryParameter("page", page.toString())
         }.build()
 
-        // Later pages are loaded by the library page itself, as it does when scrolled.
-        val data = if (page > 1) {
-            val next = url.newBuilder().addQueryParameter("page", page.toString()).build()
-            sitePages.load(url.toString(), SiteRequest(fetch = next.toString())).fetched().parseAs<LibraryResponse>().series
-        } else {
-            sitePages.load(url.toString()).page.parseAs<LibraryPage>().props.series
+        val library = siteView.drive(url.toString(), "(${siteView.asset("library.js")})($SETTLE_MS)") { _, result ->
+            Step.Done(result.parseAs<LibraryPage>())
         }
-
         return MangasPage(
-            mangas = data.data.map { it.toSManga(::createThumbnailUrl) },
-            hasNextPage = data.meta?.let { it.current < it.last } ?: false,
+            mangas = library.items.map { it.toSManga(COVER_FRAGMENT) },
+            hasNextPage = library.hasNextPage,
         )
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/serie/${manga.url}"
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val segments = url.pathSegments
+        if (segments.size < 2 || segments[0] != "serie") return null
+        val manga = SManga.create().apply { this.url = segments[1] }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val sitePage = sitePages.load(getMangaUrl(manga), SiteRequest(chapters = fetchChapters))
-        val data = sitePage.page.parseAs<MangaResponse>().props.serie
+    ): SMangaUpdate = readSerie(manga, chapters, fetchChapters)
 
-        val sourceChapters = data.chapters ?: sitePage.chapters?.let(::apiChapters)
+    /** Reads the series page: its details from both tabs, then each page of its chapter list through the site's pager. */
+    private suspend fun readSerie(manga: SManga, known: List<SChapter>, withChapters: Boolean): SMangaUpdate {
+        var synopsis: String? = null
+        val rows = linkedMapOf<String, SeriePage.Row>()
+        var lastFirst: String? = null
+        var tappedFor = 0
 
-        return SMangaUpdate(
-            manga = mangaDetailsParse(data),
-            chapters = sourceChapters?.let { chapterListParse(data, it) } ?: chapters,
-        )
-    }
-
-    private fun mangaDetailsParse(data: MangaResponse.Props.Manga): SManga = SManga.create().apply {
-        url = data.slug
-        title = data.title
-        thumbnail_url = createThumbnailUrl(data.image)
-        author = data.author
-        artist = data.artist
-        description = buildString {
-            data.description?.also {
-                append(it.trim(), "\n\n")
+        val serie = siteView.drive(getMangaUrl(manga), "(${siteView.asset("serie.js")})()") { _, result ->
+            val page = result.parseAs<SeriePage>()
+            if (page.synopsis != null) synopsis = page.synopsis
+            // Status, year and alternative titles are on the Information tab
+            page.infoTab?.let { return@drive touch(page, it) }
+            if (page.info == null || !withChapters) return@drive if (page.info != null) Step.Done(page) else Step.Wait
+            if (page.chapterCount == 0) return@drive Step.Done(page)
+            val first = page.chapters.firstOrNull()?.path ?: return@drive Step.Wait
+            if (first != lastFirst && page.page > tappedFor) {
+                lastFirst = first
+                tappedFor = page.page
+                page.chapters.forEach { rows[it.path] = it }
             }
-            data.releaseYear?.also {
-                append(intl["release_year"], ": ", it, "\n\n")
+            when {
+                page.next != null && tappedFor == page.page -> touch(page, page.next)
+                page.next == null && tappedFor == page.page -> Step.Done(page)
+                else -> Step.Wait
             }
-            data.alternativeName?.also {
-                append(intl["alternative_names"], ": ", it)
-            }
-        }.trim()
-        genre = buildList {
-            data.type?.name?.also(::add)
-            data.genres.mapTo(this) { it.name }
-        }.joinToString()
-        status = when (data.status?.lowercase()) {
-            "ongoing", "upcoming" -> SManga.ONGOING
-            "finished" -> SManga.COMPLETED
-            "dropped" -> SManga.CANCELLED
-            "onhold" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
         }
-    }
 
-    protected open fun createThumbnailUrl(imagePath: String?): String? {
-        if (imagePath == null) return null
-        return "$baseUrl$imagePath#$THUMBNAIL_FRAGMENT"
-    }
+        val details = SManga.create().apply {
+            url = manga.url
+            title = serie.title
+            thumbnail_url = serie.cover?.let { "$it#$COVER_FRAGMENT" }
+            val info = serie.info!!
+            author = info.author.joinToString().ifEmpty { null }
+            artist = info.artist.joinToString().ifEmpty { null }
+            genre = (serie.types + info.genres).distinct().joinToString().ifEmpty { null }
+            status = when (info.status) {
+                "ongoing", "upcoming" -> SManga.ONGOING
+                "finished" -> SManga.COMPLETED
+                "dropped" -> SManga.CANCELLED
+                "onhold" -> SManga.ON_HIATUS
+                else -> SManga.UNKNOWN
+            }
+            description = MarkdownDescription.Builder().apply {
+                rating(serie.rating?.substringBefore("/")?.toFloatOrNull())
+                info(info.year?.let { "${intl["release_year"]}: $it" })
+                description(synopsis)
+                field(intl["translated_by"], serie.teams)
+                altTitles(info.altTitles, intl["alternative_names"])
+            }.build()
+        }
+        if (!withChapters) return SMangaUpdate(details, known)
 
-    private fun chapterListParse(data: MangaResponse.Props.Manga, chapters: List<MangaResponse.Props.Chapter>): List<SChapter> {
-        val hidePremium = preferences.getBoolean(HIDE_PREMIUM_PREF, false)
-
-        return chapters
-            .filter { !(it.isPremium && hidePremium) }
-            .map {
-                SChapter.create().apply {
-                    url = "/serie/${data.slug}/chapter/${it.slug}"
-                    name = buildString {
-                        if (it.isPremium) {
-                            append("\uD83D\uDD12 ")
-                        }
-                        append(it.title)
-                    }
-                    date_upload = it.createdAt.substringBefore(".").let { dateStr ->
-                        dateFormat.tryParseDateTime(dateStr)
-                    }
-                }
-            }.asReversed()
-    }
-
-    /** Oldest first, like the inline list. */
-    private fun apiChapters(items: List<ChapterListItem>): List<MangaResponse.Props.Chapter> {
+        // Ages are rounded down to days, weeks, months or years, so a chapter keeps the date it was first stored with
+        val stored = known.associate { it.url to it.date_upload }
         val now = System.currentTimeMillis()
-        val isFree = { freeAt: String -> dateFormat.tryParseDateTime(freeAt.substringBefore(".")) in 1..now }
-        return items.map { it.toChapter(isFree) }
-    }
-
-    private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT)
-        .withZone(TimeZone.getTimeZone("UTC").toZoneId())
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = HIDE_PREMIUM_PREF
-            title = intl["pref_hide_premium_title"]
-            setDefaultValue(false)
-        }.also(screen::addPreference)
-    }
-
-    private val sitePages = SitePages(baseUrl, { client }) { headers["User-Agent"]!! }
-
-    private val secureRandom = SecureRandom()
-
-    private sealed interface ChapterSession
-
-    /** Reader v1: pages signed with the chapter token, streams keyed by the key exchange. */
-    private class SignedSession(
-        val chapterToken: String,
-        val sharedSecret: ByteArray,
-        val clientPubkeyB64: String,
-    ) : ChapterSession
-
-    /** Reader v2: encrypted pages under the manifest's page ticket. */
-    private class EncryptedSession(
-        val contentKey: ByteArray,
-        val siteHeaders: Headers,
-    ) : ChapterSession
-
-    private val sessions = ConcurrentHashMap<String, ChapterSession>()
-    private val sessionMutexes = ConcurrentHashMap<String, Mutex>()
-
-    private fun sessionKey(serieSlug: String, chapterSlug: String) = "${name.take(3).lowercase()}-$serieSlug--$chapterSlug"
-
-    private fun openSignedSession(props: PageListResponse.Props): SignedSession {
-        val serverPub = Base64.decode(props.serverPubkey, Base64.DEFAULT)
-        require(serverPub.size == 32) { "server pubkey must be 32 bytes" }
-
-        val priv = ByteArray(32).also(secureRandom::nextBytes)
-        try {
-            val clientPub = X25519.publicKey(priv)
-            val shared = X25519.scalarMult(priv, serverPub)
-            val token = props.chapterToken ?: throw IOException("Chapter token missing")
-            return SignedSession(token, shared, Base64.encodeToString(clientPub, Base64.NO_WRAP))
-        } finally {
-            priv.fill(0)
-        }
-    }
-
-    /** The reader v2 session and manifest from a chapter page loaded with the reader. */
-    private fun encryptedSession(site: SitePage): Pair<EncryptedSession, ReaderResult.Manifest> {
-        val result = site.reader!!
-
-        // Used in page URLs and headers
-        val manifest = result.manifest.takeIf { MANIFEST_BASE_REGEX.matches(it.base) && it.count > 0 }
-        val contentKey = runCatching { Base64.decode(result.contentKey, Base64.DEFAULT) }.getOrNull()?.takeIf { it.size == 32 }
-        if (manifest == null || contentKey == null) throw IOException("Unexpected reader result")
-        // The site's X- headers on page requests, less the WebView's X-Requested-With
-        val siteHeaders = Headers.Builder().apply {
-            site.pageHeaders
-                .filter { (name, value) ->
-                    SITE_HEADER_REGEX.matches(name) &&
-                        !name.equals("X-Requested-With", ignoreCase = true) &&
-                        HEADER_VALUE_REGEX.matches(value)
+        val showPremium = preferences.getBoolean(SHOW_PREMIUM_PREF, false)
+        val chapters = rows.values
+            .filter { showPremium || !it.premium }
+            .map { row ->
+                SChapter.create().apply {
+                    url = row.path
+                    name = buildString {
+                        if (row.premium || row.account) append("🔒 ")
+                        append(row.name)
+                        row.title?.takeIf { it != row.name }?.let { append(" - ", it) }
+                    }
+                    date_upload = stored[row.path]?.takeIf { it > 0 } ?: row.age?.let { ageMillis(it) }?.let { now - it } ?: 0L
                 }
-                .forEach { (name, value) -> add(name, value) }
-        }.build()
-
-        return EncryptedSession(contentKey, siteHeaders) to manifest
+            }
+        return SMangaUpdate(details, chapters)
     }
 
-    private suspend fun ensureSession(serieSlug: String, chapterSlug: String): SignedSession {
-        val id = sessionKey(serieSlug, chapterSlug)
-        (sessions[id] as? SignedSession)?.let { return it }
-
-        return sessionMutexes.getOrPut(id) { Mutex() }.withLock {
-            (sessions[id] as? SignedSession)?.let { return@withLock it }
-
-            val props = sitePages.load("$baseUrl/serie/$serieSlug/chapter/$chapterSlug").page.parseAs<PageListResponse>().props
-
-            openSignedSession(props).also { sessions[id] = it }
+    /** Taps [point] once nothing covers it, scrolling it to the upper part of the screen first. */
+    private fun WebViewScope<SeriePage>.touch(page: SeriePage, point: Point): Step<SeriePage> {
+        val height = page.viewport.height
+        return Step.Act { done ->
+            if (point.clear) {
+                tap(page.scale, point.x, point.y)
+                later(TAP_WAIT_MS, done)
+            } else {
+                val travel = (point.y - height * 0.3f).coerceIn(-height * 0.7f, height * 0.7f)
+                val from = if (travel > 0) height * 0.85f else height * 0.15f
+                swipe(page.scale, page.viewport.width * 0.2f, from, page.viewport.width * 0.2f, from - travel)
+                later(SWIPE_WAIT_MS, done)
+            }
         }
+    }
+
+    /** The age the site's chapter list shows, in any of its languages, as milliseconds. */
+    private fun ageMillis(age: String): Long? {
+        if (age in NOW_WORDS) return 0
+        if (age in YESTERDAY_WORDS) return 1.days.inWholeMilliseconds
+        val match = AGE_REGEX.matchEntire(age) ?: return null
+        val count = match.groupValues[1].toLong()
+        val unit = AGE_UNITS[match.groupValues[2]] ?: return null
+        return count * unit.inWholeMilliseconds
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val site = sitePages.load("$baseUrl${chapter.url}", reader = true)
-        val props = site.page.parseAs<PageListResponse>().props
-        val id = sessionKey(props.data.serie.slug, props.data.slug)
-
-        // Reader v1 pages are signed right before they are loaded, see getImageUrl.
-        if (!props.readerV2) {
-            sessions[id] = openSignedSession(props)
-            return (1..props.pageCount).map { idx ->
-                Page(
-                    index = idx - 1,
-                    url = "/serie/${props.data.serie.slug}/chapter/${props.data.slug}/page/$idx",
-                )
-            }
-        }
-
-        val (session, manifest) = encryptedSession(site)
-        sessions[id] = session
-
-        // Some sites list oversized variants they never serve.
-        val variant = manifest.variants.minByOrNull { abs(it - MAX_VARIANT_WIDTH) }?.let { "-$it" }.orEmpty()
-
-        return (1..manifest.count).map { idx ->
-            Page(
-                index = idx - 1,
-                url = "$id#$idx",
-                imageUrl = "$baseUrl${manifest.base}$idx$variant.ece#$id",
-            )
+        val capture = capture(getChapterUrl(chapter).toHttpUrl().encodedPath, 0)
+        val count = capture.pageCount.await()
+        return List(count) { index ->
+            Page(index, imageUrl = "${getChapterUrl(chapter)}#$PAGE_FRAGMENT$index")
         }
     }
 
-    private fun hexNonce(byteCount: Int = 16): String {
-        val b = ByteArray(byteCount).also(secureRandom::nextBytes)
-        return b.joinToString("") { "%02x".format(it) }
+    private val captureScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val captures = linkedMapOf<String, ChapterCapture>()
+
+    /** The chapter's open reader that can still deliver page [index], or a new one starting there. */
+    @Synchronized
+    private fun capture(chapterPath: String, index: Int): ChapterCapture {
+        captures[chapterPath]?.takeIf { it.covers(index) }?.let { return it }
+        captures.remove(chapterPath)?.close()
+        while (captures.size >= MAX_CAPTURES) captures.remove(captures.keys.first())?.close()
+        val dir = File(applicationContext.cacheDir, "pam-pages/${chapterPath.hashCode().toUInt()}-$index")
+        return ChapterCapture("$baseUrl$chapterPath", index, siteView, dir, captureScope).also { captures[chapterPath] = it }
     }
 
-    private fun hmacSha256Hex(key: String, msg: String): String = hmacSha256Hex(key, msg.toByteArray(Charsets.US_ASCII))
+    private val covers = Covers(baseUrl, File(applicationContext.cacheDir, "pam-covers/$id"), captureScope) { headers["User-Agent"]!! }
 
-    private fun hmacSha256Hex(key: String, msg: ByteArray): String {
-        val mac = Mac.getInstance("HmacSHA256").apply {
-            init(SecretKeySpec(key.toByteArray(), "HmacSHA256"))
-        }
-        return mac.doFinal(msg).joinToString("") { "%02x".format(it) }
-    }
-
-    override suspend fun getImageUrl(page: Page): String {
-        val seg = "$baseUrl${page.url}".toHttpUrl().pathSegments
-        require(seg.size >= 6 && seg[0] == "serie" && seg[2] == "chapter" && seg[4] == "page") {
-            "unexpected page URL shape: ${page.url}"
-        }
-        val serieSlug = seg[1]
-        val chapterSlug = seg[3]
-        val pageIndex = seg[5].toInt()
-
-        val session = ensureSession(serieSlug, chapterSlug)
-        val sessionId = sessionKey(serieSlug, chapterSlug)
-
-        val ts = (System.currentTimeMillis() / 1000).toString()
-        val nonce = hexNonce()
-        val sig = hmacSha256Hex(session.chapterToken, "$pageIndex$ts$nonce")
-
-        return baseHttpUrl.newBuilder()
-            .addPathSegment("serie").addPathSegment(serieSlug)
-            .addPathSegment("chapter").addPathSegment(chapterSlug)
-            .addPathSegment("page").addPathSegment(pageIndex.toString())
-            .addQueryParameter("token", session.chapterToken)
-            .addQueryParameter("ts", ts)
-            .addQueryParameter("nonce", nonce)
-            .addQueryParameter("sig", sig)
-            .fragment(sessionId)
-            .build()
-            .toString()
-    }
-
-    private fun imageInterceptor(chain: Interceptor.Chain): Response {
+    /** Pages and covers come from the WebViews, never from the network. */
+    private fun pageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val session = request.url.fragment?.let(sessions::get) ?: return chain.proceed(request)
-
-        return when (session) {
-            is EncryptedSession -> encryptedPage(chain, session)
-            is SignedSession -> signedPage(chain, session)
+        if (request.url.fragment == COVER_FRAGMENT) {
+            val url = request.url.newBuilder().fragment(null).build().toString()
+            val cover = awaitFile { covers.get(url).await() }
+            return fileResponse(request, cover.file, cover.type)
         }
+        val index = request.url.fragment?.takeIf { it.startsWith(PAGE_FRAGMENT) }?.removePrefix(PAGE_FRAGMENT)?.toIntOrNull()
+            ?: return chain.proceed(request)
+        val file = awaitFile { capture(request.url.encodedPath, index).page(index).await() }
+        return fileResponse(request, file, "image/jpeg")
     }
 
-    private fun encryptedPage(chain: Interceptor.Chain, session: EncryptedSession): Response {
-        val request = chain.request()
-        val response = chain.proceed(
-            request.newBuilder().apply { session.siteHeaders.forEach { (name, value) -> header(name, value) } }.build(),
-        )
-        if (!response.isSuccessful) return response
-
-        return response.newBuilder()
-            .body(
-                Ece.decrypt(response.body.bytes(), session.contentKey)
-                    .toResponseBody("image/webp".toMediaType()),
-            )
-            .build()
+    private fun <T> awaitFile(block: suspend () -> T): T = try {
+        runBlocking { withTimeout(PAGE_TIMEOUT) { block() } }
+    } catch (e: Throwable) {
+        throw e as? IOException ?: IOException(e.message ?: "The site's page did not load", e)
     }
 
-    private fun signedPage(chain: Interceptor.Chain, session: SignedSession): Response {
-        val request = chain.request()
-        val response = chain.proceed(
-            request.newBuilder().header("X-Client-Pubkey", session.clientPubkeyB64).build(),
-        )
-        val pageNameRaw = response.header("X-Page-Name") ?: return response
-        val keyHintB64 = response.header("X-Key-Hint") ?: return response
-        val keyHint = Base64.decode(keyHintB64, Base64.DEFAULT)
-        require(keyHint.size >= 32) { "X-Key-Hint must decode to >= 32 bytes" }
+    private fun fileResponse(request: Request, file: File, type: String) = Response.Builder()
+        .request(request)
+        .protocol(Protocol.HTTP_1_1)
+        .code(200)
+        .message("OK")
+        .body(file.source().buffer().asResponseBody(type.toMediaType(), file.length()))
+        .build()
 
-        val streamKey = run {
-            val sha = MessageDigest.getInstance("SHA-256").run {
-                update(session.sharedSecret)
-                update(pageNameRaw.toByteArray(Charsets.UTF_8))
-                digest()
-            }
-            ByteArray(32) { i -> (sha[i].toInt() xor keyHint[i].toInt()).toByte() }
-        }
-
-        val networkSource = response.body.source()
-        networkSource.skip(PREFIX_LENGTH.toLong())
-        val ssHeader = networkSource.readByteArray(STREAM_HEADER_LENGTH.toLong())
-
-        val decryptedSource = object : okio.Source {
-            private val secretStream = SecretStream()
-            private val state = State().apply {
-                secretStream.initPull(this, ssHeader, streamKey)
-            }
-            private val decryptedBuffer = Buffer()
-            private var isFinished = false
-
-            override fun read(sink: Buffer, byteCount: Long): Long {
-                if (decryptedBuffer.size == 0L) {
-                    if (isFinished) return -1
-
-                    networkSource.request(CHUNK_SIZE.toLong())
-
-                    val chunkSize = minOf(CHUNK_SIZE.toLong(), networkSource.buffer.size)
-
-                    if (chunkSize == 0L) {
-                        isFinished = true
-                        return -1
-                    }
-
-                    val encryptedData = Buffer().apply {
-                        networkSource.read(this, chunkSize)
-                    }.readByteArray()
-
-                    val result = secretStream.pull(state, encryptedData, encryptedData.size)
-                        ?: throw IOException("Decryption failed")
-
-                    decryptedBuffer.write(result.message)
-
-                    if (result.tag.toInt() == SecretStream.TAG_FINAL) {
-                        isFinished = true
-                    }
-                }
-
-                return decryptedBuffer.read(sink, byteCount)
-            }
-
-            override fun timeout(): Timeout = networkSource.timeout()
-
-            override fun close() = networkSource.close()
-        }.buffer()
-
-        return response.newBuilder()
-            .body(decryptedSource.asResponseBody("image/jpg".toMediaType()))
-            .build()
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_PREMIUM_PREF
+            title = intl["pref_show_premium_title"]
+            summary = intl["pref_show_premium_summary"]
+            setDefaultValue(false)
+        }.also(screen::addPreference)
     }
 }
 
-private const val THUMBNAIL_FRAGMENT = "thumbnail"
-private val MANIFEST_BASE_REGEX = Regex("""/p/[\w-]+/\d+/[\w-]+/""")
-private val HEADER_VALUE_REGEX = Regex("""[!-~]+""")
-private val SITE_HEADER_REGEX = Regex("""X-[\w-]+""", RegexOption.IGNORE_CASE)
-private const val MAX_VARIANT_WIDTH = 2160
-private const val HIDE_PREMIUM_PREF = "pref_hide_premium_chapters"
-private const val CHUNK_SIZE = 65536 + 17 // libsodium secretstream chunk + ABYTES
-private const val PREFIX_LENGTH = 192
-private const val STREAM_HEADER_LENGTH = 24
+private const val SETTLE_MS = 4000
+private const val PAGE_FRAGMENT = "pam-page-"
+private const val COVER_FRAGMENT = "pam-cover"
+private const val MAX_CAPTURES = 2
+private val PAGE_TIMEOUT = 5.minutes
+private const val TAP_WAIT_MS = 1200L
+private const val SWIPE_WAIT_MS = 900L
+private const val SHOW_PREMIUM_PREF = "pref_show_premium_chapters"
+private const val OLD_HIDE_PREMIUM_PREF = "pref_hide_premium_chapters"
+
+// The site's age formats, in the device's language: en "3 d", fr "3 j / 1 sem.", es "1 mes", de "3 T."; " min" and " h" in all
+private val AGE_REGEX = Regex("""(\d+) (\S+)""")
+private val NOW_WORDS = setOf("just now", "à l’instant", "ahora", "gerade eben")
+private val YESTERDAY_WORDS = setOf("yesterday", "hier", "ayer", "gestern")
+private val AGE_UNITS = mapOf(
+    "min" to 1.minutes,
+    "h" to 1.hours,
+    "d" to 1.days, "j" to 1.days, "T." to 1.days,
+    "w" to 7.days, "sem." to 7.days, "Wo." to 7.days,
+    "mo" to 30.days, "mois" to 30.days, "mes" to 30.days, "meses" to 30.days, "Mon." to 30.days,
+    "y" to 365.days, "an" to 365.days, "ans" to 365.days, "año" to 365.days, "años" to 365.days, "J." to 365.days,
+)
