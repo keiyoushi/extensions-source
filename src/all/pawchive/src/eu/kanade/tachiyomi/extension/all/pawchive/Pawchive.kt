@@ -183,6 +183,7 @@ abstract class Pawchive :
         val sorted = when (sort.first) {
             "pop" -> if (sort.second == "desc") mangas.sortedByDescending { it.favorited } else mangas.sortedBy { it.favorited }
             "tit" -> if (sort.second == "desc") mangas.sortedByDescending { it.name.lowercase() } else mangas.sortedBy { it.name.lowercase() }
+            "serv" -> if (sort.second == "desc") mangas.sortedByDescending { it.service } else mangas.sortedBy { it.service }
             "new" -> if (sort.second == "desc") mangas.sortedByDescending { it.id.toLongOrNull() ?: 0L } else mangas.sortedBy { it.id.toLongOrNull() ?: 0L }
             "fav" -> {
                 if (fav != true) throw Exception("Please check 'Favorites Only' Filter")
