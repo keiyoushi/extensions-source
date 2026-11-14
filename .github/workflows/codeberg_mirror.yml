@@ -2,8 +2,10 @@
 name: Mirror Sync
 
 on:
-  push:
-    branches: [ "main" ]
+  workflow_call:
+    secrets:
+      CODEBERG_SSH:
+        required: true
   workflow_dispatch: # Manual dispatch
   schedule:
     - cron: "0 */8 * * *"
