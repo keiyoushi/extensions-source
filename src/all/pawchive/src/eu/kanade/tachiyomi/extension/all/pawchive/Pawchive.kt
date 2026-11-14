@@ -4,6 +4,7 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.all.pawchive.PawchiveCreatorDto.Companion.serviceName
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -205,29 +206,23 @@ abstract class Pawchive :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) {
-            return null
-        }
+        if (url.host != baseUrl.toHttpUrl().host) return null
 
-        if (url.pathSegments.firstOrNull() != "creators" || url.pathSegments.size < 2) {
-            return null
-        }
+        val segments = url.pathSegments
+        if (segments.size < 3 || segments[0] !in services || segments[1] != "user" || segments[2].isBlank()) return null
 
-        val id = url.pathSegments[1]
-        if (id.isBlank()) {
-            return null
-        }
+        val profileUrl = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments(apiPath)
+            .addPathSegment(segments[0])
+            .addPathSegment("user")
+            .addPathSegment(segments[2])
+            .addPathSegment("profile")
+            .build()
 
-        val cache = CacheControl.Builder().maxStale(30.minutes).build()
-        val url = "$baseUrl/$apiPath/creators"
-
-        return apiClient.get(url, Fetch.XHR, cache, ensureSuccess = false).use { response ->
-            if (!response.isSuccessful) {
-                return null
-            }
-            val allCreators = response.parseAs<List<PawchiveCreatorDto>>()
-            val creator = allCreators.find { it.id == id } ?: return null
-            creator.toSManga(baseUrl)
+        return apiClient.get(profileUrl, Fetch.XHR, ensureSuccess = false).use { response ->
+            if (response.code == 404) return null
+            if (!response.isSuccessful) throw HttpException(response.code)
+            response.parseAs<PawchiveCreatorDto>().toSManga(baseUrl)
         }
     }
 
@@ -354,6 +349,8 @@ abstract class Pawchive :
     }
 
     companion object {
+        private val services = setOf("patreon", "fanbox")
+
         private const val PAGE_POST_LIMIT = 50
         private const val PAGE_CREATORS_LIMIT = 50
         const val PROMPT = "You can change how many posts to load in the extension preferences."
