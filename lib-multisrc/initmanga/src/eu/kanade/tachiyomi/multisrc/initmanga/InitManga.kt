@@ -79,7 +79,9 @@ abstract class InitManga :
 
     protected open val siteZone: ZoneId = ZoneId.of("Europe/Istanbul")
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::decryptImage)
+    protected fun OkHttpClient.Builder.addImageDecryptInterceptor(): OkHttpClient.Builder = addInterceptor(::decryptImage)
+
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addImageDecryptInterceptor()
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(baseUrl.toHttpUrl().newBuilder().addPathSegment(popularUrlSlug), page)
 

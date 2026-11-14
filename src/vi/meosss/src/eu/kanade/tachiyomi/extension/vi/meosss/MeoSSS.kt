@@ -7,12 +7,14 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import java.time.ZoneId
 import java.time.ZoneOffset
 
@@ -34,6 +36,8 @@ abstract class MeoSSS : InitManga() {
     override val altTitleLabel = "Tên khác"
 
     override val siteZone: ZoneId = ZoneOffset.ofHours(7)
+
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addImageDecryptInterceptor().rateLimit(3)
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) return super.getSearchMangaList(page, query, filters)
