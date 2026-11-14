@@ -6,10 +6,9 @@ plugins {
 
 keiyoushi {
     name = "ManhwaOnline"
-    versionCode = 2
+    versionCode = 61
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
-    theme = "madara"
 
     source {
         lang = "es"
