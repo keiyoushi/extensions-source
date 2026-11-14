@@ -110,6 +110,15 @@ class PageItemDto(
     val token: String,
 )
 
+@Serializable
+class Genres(
+    val pageKey: String,
+    val genres: List<GenreItem>,
+) {
+    @Serializable
+    class GenreItem(val name: String, val slug: String)
+}
+
 private fun buildCoverUrl(cover: String?): String? {
     if (cover.isNullOrBlank()) return null
     if (cover.startsWith("http://") || cover.startsWith("https://")) return cover
