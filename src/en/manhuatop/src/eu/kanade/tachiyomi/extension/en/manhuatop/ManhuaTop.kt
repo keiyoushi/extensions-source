@@ -141,17 +141,12 @@ abstract class ManhuaTop : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter).toHttpUrl()
-        val images = buildList {
-            var page = 1
-            do {
-                val content = chapterUrl.newBuilder().apply { if (page > 1) addQueryParameter("content_page", page.toString()) }.build()
-                val response = client.get(apiUrl("reader", content, "content"), Fetch.XHR).parseAs<ContentDto>()
-                addAll(response.images)
-                page++
-            } while (response.hasMore)
-        }
+        val response = client.get(
+            apiUrl("reader", chapterUrl, "content"),
+            Fetch.XHR,
+        ).parseAs<ContentDto>()
 
-        return images.mapIndexed { index, image -> Page(index, imageUrl = image.url) }
+        return response.images.mapIndexed { index, image -> Page(index, imageUrl = image.url) }
     }
 
     override val supportsRelatedMangas = true
