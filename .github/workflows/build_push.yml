@@ -172,7 +172,7 @@ jobs:
   mirror:
     name: Mirror Sync
     needs: build-extensions
-    if: always()
+    if: ${{ !cancelled() }}
     uses: $/.github/workflows/codeberg_mirror.yml
     secrets:
       CODEBERG_SSH: ${{ secrets.CODEBERG_SSH }}
