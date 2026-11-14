@@ -38,6 +38,7 @@ import org.gradle.kotlin.dsl.findByType
 import org.gradle.kotlin.dsl.property
 import org.gradle.kotlin.dsl.register
 import org.gradle.kotlin.dsl.withType
+import kotlin.io.encoding.Base64
 
 @Suppress("UNUSED")
 class ExtensionPlugin : Plugin<Project> {
@@ -76,22 +77,25 @@ class ExtensionPlugin : Plugin<Project> {
                 checkReleaseBuilds = false
             }
 
-            signingConfigs {
-                create("release") {
-                    storeFile = rootProject.file("signingkey.jks")
-                    storePassword = providers.environmentVariable("KEY_STORE_PASSWORD").orNull
-                    keyAlias = providers.environmentVariable("ALIAS").orNull
-                    keyPassword = providers.environmentVariable("KEY_PASSWORD").orNull
+            if (System.getenv("KEI_CI").toBoolean()) {
+                val tempStoreFile = file(System.getenv("RUNNER_TEMP")).resolve("signingkey.jks")
+
+                val storeFileBytes = System.getenv("storeFileBase64").let(Base64::decode)
+                tempStoreFile.outputStream().use { it.write(storeFileBytes) }
+
+                signingConfigs {
+                    named("debug") {
+                        storeFile = tempStoreFile
+                        storePassword = System.getenv("storePassword")
+                        keyAlias = System.getenv("keyAlias")
+                        keyPassword = System.getenv("keyPassword")
+                    }
                 }
             }
 
             buildTypes {
                 named("release") {
-                    signingConfig = if (rootProject.file("signingkey.jks").exists()) {
-                        signingConfigs.getByName("release")
-                    } else {
-                        signingConfigs.getByName("debug")
-                    }
+                    signingConfig = getByName("debug").signingConfig
                     isMinifyEnabled = true
                     proguardFiles(rootProject.file("common/proguard-rules.pro"))
                     @Suppress("UnstableApiUsage")
