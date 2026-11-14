@@ -65,7 +65,7 @@ class PawchivePostDto(
         get() = (listOfNotNull(file) + attachments)
             .filter { it.path.isNotBlank() && it.path.substringAfterLast('.').lowercase() in validImageExtensions }
             .distinctBy { it.path }
-            .map { it.toString() }
+            .map { "${it.server}/data${it.path}" }
 
     fun toSChapter(serviceName: String?, datePref: String) = SChapter.create().apply {
         val dateStr = when (datePref) {
@@ -103,6 +103,4 @@ class PawchivePostDto(
 }
 
 @Serializable
-class PawchiveFileDto(val path: String = "") {
-    override fun toString() = path
-}
+class PawchiveFileDto(val path: String = "", val server: String = "")

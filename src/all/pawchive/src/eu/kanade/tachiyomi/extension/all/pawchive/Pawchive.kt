@@ -37,10 +37,6 @@ abstract class Pawchive :
 
     private val apiPath = "api/v1"
 
-    private val dataPath = "data"
-
-    private val fileUrl = baseUrl.replace("//", "//file.")
-
     private val imgUrl = baseUrl.replace("//", "//img.")
 
     override fun OkHttpClient.Builder.configureClient() = apply {
@@ -57,7 +53,7 @@ abstract class Pawchive :
 
             var response = chain.proceed(modifiedRequest)
 
-            if (response.code == 404 && request.url.toString().startsWith(fileUrl)) {
+            if (response.code == 404 && request.url.pathSegments.firstOrNull() == "data") {
                 if (preferences.getBoolean(FALLBACK_LOW_RES_IMG, true)) {
                     response.close()
 
@@ -250,9 +246,8 @@ abstract class Pawchive :
         val postData = apiClient.get(url, Fetch.XHR).parseAs<PawchivePostDto>()
         val useLowRes = preferences.getBoolean(USE_LOW_RES_IMG, false)
 
-        return postData.images.mapIndexed { i, path ->
-            val originalUrl = "$fileUrl/$dataPath$path"
-            Page(i, imageUrl = if (useLowRes) originalUrl.toThumbnailUrl() else originalUrl)
+        return postData.images.mapIndexed { i, url ->
+            Page(i, imageUrl = if (useLowRes) url.toThumbnailUrl() else url)
         }
     }
 
