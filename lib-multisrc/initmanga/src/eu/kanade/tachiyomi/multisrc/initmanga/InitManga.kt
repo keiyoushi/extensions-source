@@ -79,7 +79,9 @@ abstract class InitManga :
 
     protected open val siteZone: ZoneId = ZoneId.of("Europe/Istanbul")
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::decryptImage)
+    protected fun OkHttpClient.Builder.addImageDecryptInterceptor(): OkHttpClient.Builder = addInterceptor(::decryptImage)
+
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addImageDecryptInterceptor()
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(baseUrl.toHttpUrl().newBuilder().addPathSegment(popularUrlSlug), page)
 
@@ -180,10 +182,11 @@ abstract class InitManga :
         ?.nextElementSibling()
         ?.textOrNull()
 
-    // Ribbon class key, or the label on sites without a ribbon
+    // Ribbon class key, else the same key from the JSON-LD, else the label
     private fun parseStatus(document: Document): Int {
         val key = document.selectFirst("div.story-cover-wrap span.manga-status-ribbon")
             ?.classNames()?.firstOrNull { it.startsWith("ribbon-") }?.removePrefix("ribbon-")
+            ?: document.select("script[type=application/ld+json]").firstNotNullOfOrNull { LD_STATUS_REGEX.find(it.data())?.groupValues?.get(1) }
             ?: document.selectFirst("#manga-status")?.text()?.lowercase()?.replace(' ', '_')
         return when (key) {
             "ongoing", "caught_up" -> SManga.ONGOING
@@ -400,6 +403,7 @@ abstract class InitManga :
         private const val SEARCH_PAGE_SIZE = 10
         private const val IMAGE_KEY_FRAGMENT = "imip="
         private val POST_ID_REGEX = Regex("""postid-(\d+)""")
+        private val LD_STATUS_REGEX = Regex(""""name":"status","value":"([a-z_]+)"""")
         private val chapterDateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
     }
 }
