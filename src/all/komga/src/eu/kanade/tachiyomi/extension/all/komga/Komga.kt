@@ -75,8 +75,6 @@ class Komga(
     private val instanceSuffix: String
         get() = INSTANCE_IDS.indexOf(id).let { if (it > 0) "${it + 1}" else "" }
 
-    override val supportsLatest = true
-
     override val supportsFilterFetching = true
 
     override val baseUrl

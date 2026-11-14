@@ -51,7 +51,7 @@ class SeriesDto(
             metadata.status == "HIATUS" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
-        genre = (metadata.genres + metadata.tags + booksMetadata.tags).sorted().distinct().joinToString(", ")
+        genre = (metadata.genres + metadata.tags + booksMetadata.tags).sorted().distinct().joinToString()
         description = metadata.summary.ifBlank { booksMetadata.summary }
         booksMetadata.authors.groupBy({ it.role }, { it.name }).let { map ->
             author = map["writer"]?.distinct()?.joinToString()
@@ -140,7 +140,7 @@ class BookDto(
         url = "$baseUrl/api/v1/books/$id"
         thumbnail_url = "$url/thumbnail"
         status = SManga.UNKNOWN
-        genre = metadata.tags.distinct().joinToString(", ")
+        genre = metadata.tags.distinct().joinToString()
         description = metadata.summary
         author = metadata.authors.joinToString { it.name }
         artist = author
