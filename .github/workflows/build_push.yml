@@ -169,6 +169,14 @@ jobs:
         if: always()
         run: rm signingkey.jks
 
+  mirror:
+    name: Mirror Sync
+    needs: build-extensions
+    if: always()
+    uses: $/.github/workflows/codeberg_mirror.yml
+    secrets:
+      CODEBERG_SSH: ${{ secrets.CODEBERG_SSH }}
+
   publish:
     name: Publish extension repo
     needs: [prepare, build-extensions]
