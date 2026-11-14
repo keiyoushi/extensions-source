@@ -53,6 +53,9 @@ fun Request.Builder.fetch(fetch: Fetch): Request.Builder = kind(fetch.kind).tag(
 
 internal fun Request.Builder.kind(kind: Fetch.Kind): Request.Builder = tag(Fetch.Kind::class.java, kind)
 
+/** Marks a request a browser built, headers and all, such as one the WebView proxy forwards. */
+internal object SentByBrowser
+
 /** The page a request comes from, see [Fetch.from]. */
 internal class FromPage(val page: String)
 

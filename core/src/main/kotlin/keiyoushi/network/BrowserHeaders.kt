@@ -101,6 +101,11 @@ internal fun BrowserCall.hop(request: Request): Request {
     fun fill(name: String, value: String?) {
         if (value != null && request.header(name) == null) builder.header(name, value)
     }
+    // A request WebView made has its headers already, but none of the HTTP/2 Priority, as it came over HTTP/1.1
+    if (request.tag(SentByBrowser::class.java) != null) {
+        fill("Priority", browser.priority(kind))
+        return builder.build()
+    }
 
     // Browsers send fetch metadata and client hints to secure origins only
     val secure = url.isSecure()
@@ -157,22 +162,28 @@ internal fun Request.inWireOrder(http2: Boolean): Request {
     val navigation = kind == Fetch.Kind.DOCUMENT
     val order = if (navigation) browser.documentOrder else browser.subresourceOrder
     val rank = { name: String -> order.indexOfFirst { it.equals(name, ignoreCase = true) }.takeIf { it >= 0 } ?: order.indexOf(SITE) }
-    val sorted = headers
-        .filterNot { (name, value) -> name.equals("Cache-Control", ignoreCase = true) && value.isAppCacheDirective() }
+    val sent = headers
         .filter { (name) -> http2 || browser.priorityOnHttp1 || !name.equals("Priority", ignoreCase = true) }
-        .map { (name, value) ->
-            // Pages send application/json without a charset (axios, fetch with the type set)
-            val json = body != null && name.equals("Content-Type", ignoreCase = true)
-            name to if (json) value.replace(JSON_CHARSET, "") else value
-        }
         .plus(if (http2 && browser.sendsTeTrailers) listOf("te" to "trailers") else emptyList())
-        .let { list ->
-            val formSubmit = browser.formSubmitCacheControl?.takeIf { navigation && method == "POST" }
-            val hasCacheControl = list.any { (name) -> name.equals("Cache-Control", ignoreCase = true) }
-            if (formSubmit != null && !hasCacheControl) list + ("Cache-Control" to formSubmit) else list
-        }
-        // Stable: a site's own headers keep the order they were added in
-        .sortedBy { (name) -> rank(name) }
+    // A request a browser made goes as it made it
+    val edited = if (tag(SentByBrowser::class.java) != null) {
+        sent
+    } else {
+        sent
+            .filterNot { (name, value) -> name.equals("Cache-Control", ignoreCase = true) && value.isAppCacheDirective() }
+            .map { (name, value) ->
+                // Pages send application/json without a charset (axios, fetch with the type set)
+                val json = body != null && name.equals("Content-Type", ignoreCase = true)
+                name to if (json) value.replace(JSON_CHARSET, "") else value
+            }
+            .let { list ->
+                val formSubmit = browser.formSubmitCacheControl?.takeIf { navigation && method == "POST" }
+                val hasCacheControl = list.any { (name) -> name.equals("Cache-Control", ignoreCase = true) }
+                if (formSubmit != null && !hasCacheControl) list + ("Cache-Control" to formSubmit) else list
+            }
+    }
+    // Stable: a site's own headers keep the order they were added in
+    val sorted = edited.sortedBy { (name) -> rank(name) }
     return newBuilder().headers(Headers.Builder().apply { sorted.forEach { (name, value) -> add(name, value) } }.build()).build()
 }
 
