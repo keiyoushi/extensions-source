@@ -3,6 +3,8 @@ package keiyoushi.utils
 import android.annotation.SuppressLint
 import android.content.res.Resources
 import android.graphics.Bitmap
+import android.graphics.Point
+import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -24,16 +26,16 @@ import keiyoushi.webview.internal.WebViewGlueBridge
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Call
 import okhttp3.Headers.Companion.toHeaders
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -47,7 +49,10 @@ import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 /** Thrown when the WebView's render process crashes or is killed mid-run. */
 class RenderProcessGoneException internal constructor(
@@ -127,6 +132,16 @@ class WebViewScope<T> internal constructor(
 
     @Volatile
     internal var interceptHook: ((WebResourceRequest) -> WebResourceResponse?)? = null
+
+    // Shown by showToUser, dismissed when the run ends; main thread only
+    internal var overlay: CaptchaOverlayDialog? = null
+
+    // The host of the page last started, for showToUser's cooldown after the user dismisses it
+    @Volatile
+    internal var pageHost: String? = null
+
+    // Counts showToUser and hideFromUser calls, so an area measured for an earlier call isn't shown; main thread only
+    private var overlayCall = 0
 
     @Volatile
     internal var destroyed = false
@@ -332,6 +347,59 @@ class WebViewScope<T> internal constructor(
             kept,
             body.byteStream(),
         )
+    }
+
+    /**
+     * Shows the run's WebView to the user over the app, for a check that wants a tap, such as a Turnstile checkbox;
+     * [hideFromUser] hides it again, and the run's end does too. With an [area], a CSS selector, only the first element
+     * it matches is shown, scrolled into view, e.g. [TURNSTILE_AREA] for a Turnstile widget; the whole page shows while
+     * it matches nothing. Calling it again while shown measures the area again.
+     *
+     * Show it once the check hasn't passed by itself for a few seconds: most pass without a tap. The run's timeout
+     * waits while it's shown and the user is in the app, for at most three minutes after it was first shown. The run
+     * fails with "Captcha cancelled" when the user dismisses it, and for a few minutes after, showing the same site's
+     * page again returns false. When the app's screen goes away, such as on a rotation, it is hidden until the next call.
+     * Returns false, leaving the WebView hidden, when the app isn't in the foreground. Call it on the main thread, where
+     * [poll] and [onPageFinished] run.
+     */
+    fun showToUser(area: String? = null): Boolean {
+        check(Looper.myLooper() == Looper.getMainLooper()) { "showToUser must be called on the main thread" }
+        if (destroyed || deferred.isCompleted || foregroundActivity() == null) return false
+        val host = pageHost
+        if (host != null) {
+            if (dismissedUntil[host]?.hasNotPassedNow() == true) return false
+            dismissedUntil.remove(host)
+        }
+        runOnMain {
+            if (destroyed) return@runOnMain
+            val call = ++overlayCall
+            val dialog = overlay ?: CaptchaOverlayDialog(
+                webView = webView,
+                transparent = false,
+                onCancel = {
+                    if (host != null) dismissedUntil[host] = TimeSource.Monotonic.markNow() + DISMISSED_COOLDOWN
+                    reject(IOException("Captcha cancelled"))
+                },
+                // Hidden, for a later call to show again
+                onNoActivity = {},
+                onScreenGone = {},
+                onFailure = ::reject,
+            ).also { overlay = it }
+            if (area == null) return@runOnMain dialog.show()
+            evaluateJs(measureAreaScript(area)) { json ->
+                if (destroyed || call != overlayCall) return@evaluateJs
+                dialog.show(json.parseAs<List<Int>?>()?.let { (left, top, right, bottom) -> Rect(left, top, right, bottom) })
+            }
+        }
+        return true
+    }
+
+    /** Hides the WebView [showToUser] showed. */
+    fun hideFromUser() {
+        runOnMain {
+            overlayCall++
+            overlay?.dismiss()
+        }
     }
 
     /**
@@ -595,6 +663,7 @@ private class ScopeWebViewClient(
 
     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
         if (scope.destroyed || url in scope.refreshPages) return
+        url?.toHttpUrlOrNull()?.host?.let { scope.pageHost = it }
         scope.pageStartedHooks.forEach { it(url.orEmpty()) }
     }
 
@@ -662,16 +731,35 @@ private fun setupWebView(webView: WebView) {
 
     WebViewGlueBridge.setAudioMuted(webView, true)
 
+    layOutOffscreen(webView)
+}
+
+/** The size a run's WebView has while it isn't shown: the screen's. */
+internal fun offscreenSize(): Point = Resources.getSystem().displayMetrics.let { Point(it.widthPixels, it.heightPixels) }
+
+/** Gives [webView] its [offscreenSize], as no window lays it out. */
+internal fun layOutOffscreen(webView: WebView) {
     runCatching {
-        val metrics = Resources.getSystem().displayMetrics
-        webView.layoutParams = ViewGroup.LayoutParams(metrics.widthPixels, metrics.heightPixels)
+        val size = offscreenSize()
+        webView.layoutParams = ViewGroup.LayoutParams(size.x, size.y)
         webView.measure(
-            View.MeasureSpec.makeMeasureSpec(metrics.widthPixels, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(metrics.heightPixels, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(size.x, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(size.y, View.MeasureSpec.EXACTLY),
         )
-        webView.layout(0, 0, metrics.widthPixels, metrics.heightPixels)
+        webView.layout(0, 0, size.x, size.y)
     }
 }
+
+// Scrolls the first element [selector] matches to the middle and returns its edges in device pixels, or null
+private fun measureAreaScript(selector: String) = """
+    (() => {
+        const area = document.querySelector(${selector.toJsonString()});
+        if (!area) return null;
+        area.scrollIntoView({ block: 'center', behavior: 'instant' });
+        const box = area.getBoundingClientRect();
+        return [box.left, box.top, box.right, box.bottom].map((value) => Math.round(value * devicePixelRatio));
+    })()
+""".trimIndent()
 
 /** The [Fetch] a proxied WebView request goes out as, or null for one proxyRequest leaves to the WebView. */
 internal fun proxyFetch(method: String, path: String, accept: String, isForMainFrame: Boolean): Fetch? {
@@ -690,6 +778,14 @@ internal fun proxyFetch(method: String, path: String, accept: String, isForMainF
 private val SCRIPT_EXTENSIONS = listOf(".js", ".mjs")
 
 private val FONT_EXTENSIONS = listOf(".woff2", ".woff", ".ttf", ".otf")
+
+// Until when showToUser stays hidden for each site the user dismissed it on
+private val dismissedUntil = ConcurrentHashMap<String, TimeMark>()
+private val DISMISSED_COOLDOWN = 5.minutes
+
+// How often a run rechecks whether its WebView is shown, and how long after it was first shown the run may last
+private val SHOWN_RECHECK = 1.seconds
+private val SHOWN_TIME_LIMIT = 3.minutes
 
 /**
  * Runs a WebView with [configure], suspending until it calls `resolve`/`reject` or [timeout]
@@ -711,15 +807,25 @@ suspend fun <T> runWebView(
         } catch (t: Throwable) {
             deferred.completeExceptionally(t)
         }
-        try {
-            withTimeout(timeout) {
-                deferred.await()
+        // The timeout waits while the user sees the WebView, until SHOWN_TIME_LIMIT after it was first shown
+        var deadline = TimeSource.Monotonic.markNow() + timeout
+        var limit: TimeSource.Monotonic.ValueTimeMark? = null
+        var checked = TimeSource.Monotonic.markNow()
+        while (!deferred.isCompleted) {
+            val left = -deadline.elapsedNow()
+            if (!left.isPositive()) throw WebViewTimeoutException(timeout)
+            withTimeoutOrNull(minOf(left, SHOWN_RECHECK)) { deferred.join() }
+            val now = TimeSource.Monotonic.markNow()
+            if (scope.overlay?.isInFront == true) {
+                val end = limit ?: (now + SHOWN_TIME_LIMIT).also { limit = it }
+                deadline = maxOf(deadline, minOf(deadline + (now - checked), end))
             }
-        } catch (_: TimeoutCancellationException) {
-            throw WebViewTimeoutException(timeout)
+            checked = now
         }
+        deferred.await()
     } finally {
         scope.destroyed = true
+        scope.overlay?.dismiss()
         runCatching { (webView.parent as? ViewGroup)?.removeView(webView) }
         webView.stopLoading()
         webView.destroy()
