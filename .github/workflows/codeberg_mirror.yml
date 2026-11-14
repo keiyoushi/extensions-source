@@ -2,7 +2,9 @@
 name: Mirror Sync
 
 on:
-  push:
+  workflow_run:
+    workflows: [ "CI" ]
+    types: [ completed ]
     branches: [ "main" ]
   workflow_dispatch: # Manual dispatch
   schedule:
