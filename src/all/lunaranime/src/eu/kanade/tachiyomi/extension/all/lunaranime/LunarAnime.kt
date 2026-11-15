@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.lunaranime
 
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -18,9 +19,12 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Clock
@@ -29,11 +33,13 @@ import kotlin.time.Instant
 
 @Source
 abstract class LunarAnime : KeiSource() {
-    private val serenity by lazy { LunarSerenity(API_URL, id) }
+    private val serenity by lazy { LunarSerenity(API_HOST, id) }
 
     private class Clearance(val thumbprint: String, val expiresAt: Instant)
 
     private val clearances = ConcurrentHashMap<String, Clearance>()
+
+    private val pageListMutex = Mutex()
 
     private fun hasClearance(slug: String): Boolean {
         val clearance = clearances[slug] ?: return false
@@ -232,19 +238,23 @@ abstract class LunarAnime : KeiSource() {
             .build()
         client.get(chapterLockUrl, Fetch.XHR, ensureSuccess = false).close()
 
-        var result = fetchChapter(seeds, slug, chapterNumber, language, withTurnstile = !hasClearance(slug))
+        // One key in play at a time: a retry replaces the key other page lists are signed with
+        val result = pageListMutex.withLock {
+            var result = fetchChapter(seeds, slug, chapterNumber, language, withTurnstile = !hasClearance(slug))
 
-        if (result.needsRevalidation()) {
-            clearances.remove(slug)
-            serenity.reset()
-            result = fetchChapter(seeds, slug, chapterNumber, language, withTurnstile = true)
+            if (result.needsRevalidation()) {
+                clearances.remove(slug)
+                serenity.reset()
+                result = fetchChapter(seeds, slug, chapterNumber, language, withTurnstile = true)
+            }
+
+            if (result.needsRevalidation()) {
+                error("Could not load images. Open in WebView and try again.")
+            }
+
+            markCleared(slug, result.cacheTtl)
+            result
         }
-
-        if (result.needsRevalidation()) {
-            error("Could not load images. Open in WebView and try again.")
-        }
-
-        markCleared(slug, result.cacheTtl)
 
         val viewUrl = API_URL.toHttpUrl().newBuilder().addPathSegments("api/manga/chapter/view").build()
         val viewBody = ViewRequestBody(slug, chapterNumber, language).toJsonRequestBody()
@@ -262,12 +272,13 @@ abstract class LunarAnime : KeiSource() {
         language: String,
         withTurnstile: Boolean,
     ): LunarPageListDecrypted {
-        val minted = crypto.mint(seeds, slug, chapterNumber)
-        val turnstileToken = if (withTurnstile) solveTurnstile(minted.nonce) else null
+        val nonce = crypto.newNonce()
+        val turnstileToken = if (withTurnstile) solveTurnstile(nonce) else null
 
         val url = API_URL.toHttpUrl().newBuilder()
             .addPathSegments("api/manga/r")
-            .addPathSegment(minted.token)
+            // Minted after the solve: a token minted long before the request gets decoys
+            .addPathSegment(crypto.mint(seeds, slug, chapterNumber, nonce))
             .apply { if (language != "en") addQueryParameter("language", language) }
             .build()
 
@@ -278,16 +289,24 @@ abstract class LunarAnime : KeiSource() {
             }
         }.build()
 
-        val sessionData = client.get(url, requestHeaders, Fetch.XHR).parseAs<LunarPageListResponse>().data.sessionData
+        val response = client.get(url, requestHeaders, Fetch.XHR, ensureSuccess = false)
+        if (!response.isSuccessful) {
+            if (response.code == 403 && response.body.contentType()?.subtype == "json" && response.parseAs<LunarLockedChapterDto>().isPointsLocked) {
+                error("This chapter is unlocked with ad points. Log in and unlock it in WebView.")
+            }
+            response.close()
+            throw HttpException(response.code)
+        }
+        val sessionData = response.parseAs<LunarPageListResponse>().data.sessionData
 
-        return crypto.unpack(sessionData, seeds, minted.nonce).parseAs<LunarPageListDecrypted>()
+        return crypto.unpack(sessionData, seeds, nonce).parseAs<LunarPageListDecrypted>()
     }
 
     private fun LunarPageListDecrypted.needsRevalidation(): Boolean {
         val images = data.images
         return cacheStatus == "revalidate" ||
             images.isEmpty() ||
-            images.all { it.contains(DECOY_PATH) }
+            images.any { it.toHttpUrlOrNull()?.host != CDN_HOST }
     }
 
     // ============================== Filters ===============================
@@ -316,7 +335,6 @@ abstract class LunarAnime : KeiSource() {
         private const val API_HOST = "api.lunarx.to"
         private const val API_URL = "https://$API_HOST"
         private const val CDN_HOST = "vault.lunarx.to"
-        private const val DECOY_PATH = "/api/cdn/p/"
         private const val DEFAULT_CLEARANCE_TTL_S = 300L
         private const val CLEARANCE_MARGIN_S = 30L
     }

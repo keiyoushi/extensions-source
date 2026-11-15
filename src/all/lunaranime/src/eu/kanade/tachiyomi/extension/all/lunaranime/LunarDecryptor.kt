@@ -9,8 +9,6 @@ import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import kotlin.random.Random
 
-class LunarMintedToken(val token: String, val nonce: String)
-
 class LunarDecryptor(private val serenity: LunarSerenity) {
 
     // ============================== Seeds ==============================
@@ -20,16 +18,17 @@ class LunarDecryptor(private val serenity: LunarSerenity) {
 
     // ============================== Token ==============================
 
+    fun newNonce(): String = randomString(NONCE_LENGTH)
+
     /**
      * `mint()` in the site's bundle: a timestamped payload naming the chapter, stream-encrypted
      * with a key blended from both seeds. The nonce is folded into the response key, so it has
      * to be kept around for [unpack].
      */
-    fun mint(seeds: LunarSeeds, slug: String, chapter: String): LunarMintedToken {
+    fun mint(seeds: LunarSeeds, slug: String, chapter: String, nonce: String): String {
         val key = blend(seeds.axis, seeds.pitch)
         require(key.isNotEmpty()) { "Failed to derive chapter key" }
 
-        val nonce = randomString(NONCE_LENGTH)
         val timestamp = (System.currentTimeMillis() / 1000).toString(16)
         val payload = "$timestamp|$nonce|$slug|$chapter|${randomString(6)}"
 
@@ -40,7 +39,7 @@ class LunarDecryptor(private val serenity: LunarSerenity) {
             out.add(char.code xor key[(i + offset) % key.size] xor (offset + 83 * i and 0xFF) and 0xFF)
         }
 
-        return LunarMintedToken(out.toByteArray().base64Url(), nonce)
+        return out.toByteArray().base64Url()
     }
 
     private fun blend(axis: String, pitch: String): IntArray {

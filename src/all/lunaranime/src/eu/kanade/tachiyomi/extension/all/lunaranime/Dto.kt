@@ -292,6 +292,11 @@ class LunarPageListResponse(
 )
 
 @Serializable
+class LunarLockedChapterDto(
+    @SerialName("is_points_locked") val isPointsLocked: Boolean = false,
+)
+
+@Serializable
 class LunarSessionDto(
     @SerialName("session_data") val sessionData: String,
 )

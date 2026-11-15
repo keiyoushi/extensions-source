@@ -19,10 +19,11 @@ import java.util.UUID
  * The site's "Serenity" proof is a plain DPoP JWT. The browser generates its own P-256 key
  * pair, keeps it in IndexedDB and signs `<header>.<payload>` with ES256, sending the result in
  * the `cant-catch-this-monkey` header. The key pair is never issued or acknowledged by the
- * server, so one generated here is just as valid.
+ * server, so one generated here is just as valid. Like the site's reader, only the page-list
+ * request carries it: a key that signed other requests gets decoy pages.
  */
 class LunarSerenity(
-    private val apiUrl: String,
+    private val apiHost: String,
     private val sourceId: Long,
 ) {
 
@@ -72,6 +73,7 @@ class LunarSerenity(
         private const val KEY_PUBLIC = "ec_public_key"
         private const val PROOF_HEADER = "cant-catch-this-monkey"
         private const val COORDINATE_SIZE = 32
+        private val PAGE_LIST_PATH = listOf("api", "manga", "r")
     }
 
     private val publicPoint get() = (keyPair.public as ECPublicKey).w
@@ -106,7 +108,7 @@ class LunarSerenity(
 
     fun interceptor() = Interceptor { chain ->
         val request = chain.request()
-        if (!request.url.toString().startsWith(apiUrl)) {
+        if (request.url.host != apiHost || request.url.pathSegments.take(3) != PAGE_LIST_PATH) {
             return@Interceptor chain.proceed(request)
         }
 
