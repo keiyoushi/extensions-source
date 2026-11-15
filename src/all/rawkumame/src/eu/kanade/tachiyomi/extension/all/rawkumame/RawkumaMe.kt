@@ -58,7 +58,7 @@ abstract class RawkumaMe : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) return null
+        if (url.host !in DOMAINS) return null
         val index = url.pathSegments.indexOf("manga")
         if (index == -1) return null
         val slug = url.pathSegments.getOrNull(index + 1)?.takeIf { it.isNotEmpty() } ?: return null
@@ -110,4 +110,8 @@ abstract class RawkumaMe : KeiSource() {
         TypeFilter(),
         GenreFilter(),
     )
+
+    companion object {
+        private val DOMAINS = setOf("mangamachina.com", "rawkuma.me")
+    }
 }
