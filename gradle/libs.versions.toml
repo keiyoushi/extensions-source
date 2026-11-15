@@ -31,6 +31,7 @@ tapmoc-gradle = { module = "com.gradleup.tapmoc:tapmoc-gradle-plugin", version.r
 
 coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 injekt-core = { module = "com.github.null2264.injekt:injekt-core", version = "4135455a2a" }
 jsoup = { module = "org.jsoup:jsoup", version = "1.22.2" }
 kotlin-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }

@@ -35,4 +35,5 @@ android {
 dependencies {
     implementation(project(":lib:runtime"))
     implementation(project(":lib:webviewpatch"))
+    testImplementation(libs.coroutines.test)
 }
