@@ -57,8 +57,8 @@ def main() -> None:
         ]
         langs = {s["lang"] for s in sources}
         top_lang = next(iter(langs)) if len(langs) == 1 else "all"
-        cw = str(info.get("contentWarning", "SAFE")).upper()
-        nsfw = 0 if "SAFE" in cw or cw in ("0", "FALSE", "NONE", "") else 1
+        cw = str(info.get("contentWarning", "1")).upper()
+        nsfw = 1 if cw in ("2", "3", "CONTENT_WARNING_MIXED", "CONTENT_WARNING_NSFW", "NSFW", "MIXED", "TRUE") else 0
 
         existing[pkg] = {
             "name": f"Tachiyomi: {info['name']}",
