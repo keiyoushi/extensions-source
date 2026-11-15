@@ -74,11 +74,7 @@ abstract class LunarAnime : KeiSource() {
 
     private val crypto by lazy { LunarDecryptor(serenity) }
 
-    // ============================== Popular ===============================
-
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", SortFilter.POPULAR)
-
-    // =============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = API_URL.toHttpUrl().newBuilder().apply {
@@ -97,8 +93,6 @@ abstract class LunarAnime : KeiSource() {
             hasNextPage = (result.page * result.limit) < result.totalCount,
         )
     }
-
-    // =============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = API_URL.toHttpUrl().newBuilder().apply {
@@ -141,8 +135,6 @@ abstract class LunarAnime : KeiSource() {
             hasNextPage = result.page < result.totalPages,
         )
     }
-
-    // =========================== Manga Details ============================
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
@@ -189,12 +181,10 @@ abstract class LunarAnime : KeiSource() {
         return client.get(url, Fetch.XHR).parseAs<LunarSimilarResponse>().data.map { it.toSManga() }
     }
 
-    // ============================== Chapters ==============================
-
-    override fun getChapterUrl(chapter: SChapter): String {
-        val url = chapter.url.substringBefore("?")
-        return baseUrl + url
-    }
+    override fun getChapterUrl(chapter: SChapter): String = (baseUrl + chapter.url).toHttpUrl().newBuilder()
+        .query(null)
+        .build()
+        .toString()
 
     private suspend fun fetchChapterList(slug: String): List<SChapter> {
         val passwordUrl = API_URL.toHttpUrl().newBuilder()
@@ -222,8 +212,6 @@ abstract class LunarAnime : KeiSource() {
         }.reversed()
     }
 
-    // =============================== Pages ================================
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = (baseUrl + chapter.url).toHttpUrl()
         val language = chapterUrl.queryParameter("lang") ?: "en"
@@ -240,20 +228,20 @@ abstract class LunarAnime : KeiSource() {
 
         // One key in play at a time: a retry replaces the key other page lists are signed with
         val result = pageListMutex.withLock {
-            var result = fetchChapter(seeds, slug, chapterNumber, language, withTurnstile = !hasClearance(slug))
+            var attempt = fetchChapter(seeds, slug, chapterNumber, language, withTurnstile = !hasClearance(slug))
 
-            if (result.needsRevalidation()) {
+            if (attempt.needsRevalidation()) {
                 clearances.remove(slug)
                 serenity.reset()
-                result = fetchChapter(seeds, slug, chapterNumber, language, withTurnstile = true)
+                attempt = fetchChapter(seeds, slug, chapterNumber, language, withTurnstile = true)
             }
 
-            if (result.needsRevalidation()) {
+            if (attempt.needsRevalidation()) {
                 error("Could not load images. Open in WebView and try again.")
             }
 
-            markCleared(slug, result.cacheTtl)
-            result
+            markCleared(slug, attempt.cacheTtl)
+            attempt
         }
 
         val viewUrl = API_URL.toHttpUrl().newBuilder().addPathSegments("api/manga/chapter/view").build()
@@ -308,8 +296,6 @@ abstract class LunarAnime : KeiSource() {
             images.isEmpty() ||
             images.any { it.toHttpUrlOrNull()?.host != CDN_HOST }
     }
-
-    // ============================== Filters ===============================
 
     override val supportsFilterFetching = true
 
