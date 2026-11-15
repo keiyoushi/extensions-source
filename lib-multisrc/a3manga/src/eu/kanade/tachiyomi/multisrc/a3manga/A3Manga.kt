@@ -177,9 +177,9 @@ abstract class A3Manga : KeiSource() {
             .joinToString { it.text() }
             .ifEmpty { null }
         status = parseStatus(document.selectFirst("span.comic-stt")?.text())
-        val synopsis = document.selectFirst(".intro-container .hide-long-text")
-        // The "Xem Thêm" toggle sits inside the synopsis block
-        synopsis?.select(".hide-long-text-shadow")?.remove()
+        // Only long synopses get the "Xem Thêm" wrapper, short ones sit bare next to the follow button
+        val synopsis = document.selectFirst(".intro-container")
+        synopsis?.select(".follow-container, .hide-long-text-shadow")?.remove()
         description = MarkdownDescription.Builder()
             .description(synopsis?.takeUnless { isPlaceholder(it.text()) })
             .build()
