@@ -93,7 +93,8 @@ abstract class MeDamTruyen : A3Manga() {
         thumbnail_url = document.selectFirst("div.comic-desc-list meta[itemprop=image]")
             ?.absUrl("content")
             ?.takeIf { it.isNotEmpty() }
-            ?: document.selectFirst("div.comic-info-img img, div.chapter-item-img img")?.absUrl("src")
+            ?.toCoverUrl()
+            ?: document.selectFirst("div.comic-info-img img, div.chapter-item-img img")?.coverUrl()
         author = extractInfoValue(infoRows, "Tác giả")
         genre = document.select("div.comic-desc-list a[href*=/the-loai/]")
             .joinToString { it.text() }

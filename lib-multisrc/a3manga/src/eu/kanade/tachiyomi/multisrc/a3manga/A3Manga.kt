@@ -320,33 +320,37 @@ abstract class A3Manga : KeiSource() {
         .takeUnless { it.isEmpty() || it.startsWith("data:") }
         ?.toCoverUrl()
 
-    // List pages only link the 150x150 thumbnail. Ask for the original, and keep the
-    // 720x970 size in the fragment for uploads whose original is gone.
+    // Pages link small WordPress thumbnails: ask for the original and keep the thumbnail in the fragment for coverFallback
     protected fun String.toCoverUrl(): String {
-        if (THUMBNAIL_SIZE !in this) return this
-        val original = replace(THUMBNAIL_SIZE, "").toHttpUrlOrNull() ?: return this
-        return original.newBuilder()
-            .fragment(COVER_FALLBACK_PREFIX + replace(THUMBNAIL_SIZE, "-720x970"))
-            .build()
-            .toString()
+        val original = replace(thumbnailSizeRegex, "")
+        if (original == this) return this
+        return original.toHttpUrlOrNull()?.newBuilder()
+            ?.fragment(COVER_FALLBACK_PREFIX + this)
+            ?.build()
+            ?.toString()
+            ?: this
     }
 
+    // Not every upload keeps its original: try the 720x970 size next, then the thumbnail itself
     private fun coverFallback(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val response = chain.proceed(request)
-        val fallbackUrl = request.url.fragment
+        var response = chain.proceed(request)
+        val thumbnail = request.url.fragment
             ?.takeIf { it.startsWith(COVER_FALLBACK_PREFIX) }
             ?.removePrefix(COVER_FALLBACK_PREFIX)
             ?: return response
-        if (response.code != 401 && response.code != 404) return response
 
-        response.close()
-        return chain.proceed(request.newBuilder().url(fallbackUrl).build())
+        for (fallbackUrl in listOf(thumbnail.replace(thumbnailSizeRegex, "-720x970"), thumbnail).distinct()) {
+            if (response.code != 401 && response.code != 404) break
+            response.close()
+            response = chain.proceed(request.newBuilder().url(fallbackUrl).build())
+        }
+        return response
     }
 
     companion object {
-        private const val THUMBNAIL_SIZE = "-150x150"
         private const val COVER_FALLBACK_PREFIX = "fallback-url:"
+        private val thumbnailSizeRegex = Regex("""-\d+x\d+(?=\.[a-zA-Z]+$)""")
 
         private const val LOGIN_NOTICE = "đăng nhập</strong> để xem nội dung chương này"
         private val placeholders = listOf("Đang cập nhật", "Đang cập nhật...", "Không có")
