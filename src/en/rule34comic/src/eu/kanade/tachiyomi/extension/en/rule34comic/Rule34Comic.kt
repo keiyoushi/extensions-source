@@ -13,6 +13,7 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstance
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -63,10 +64,12 @@ abstract class Rule34Comic : KeiSource() {
             SManga.create().apply {
                 setUrlWithoutDomain(link.absUrl("href"))
                 title = link.selectFirst(".thumb_title")!!.text()
-                thumbnail_url = link.selectFirst("img")?.absUrl("src")
+                // Past the first few cards, the image waits in data-original behind a blank placeholder
+                thumbnail_url = link.selectFirst("img")?.let { it.attrOrNull("abs:data-original") ?: it.absUrl("src") }
             }
         }
-        return MangasPage(mangas, document.selectFirst(".pagination .item.active ~ .item") != null)
+        // The pager's last item is its jump form, which follows the current page even on the last one
+        return MangasPage(mangas, document.selectFirst(".pagination .item.next") != null)
     }
 
     // The newest albums (/comic/<page>/), and the tag, category, artist and search pages
@@ -111,7 +114,7 @@ abstract class Rule34Comic : KeiSource() {
                 .info(rows["Pages"]?.text()?.let { "$it pages" })
                 .field("Categories", rows["Categories"]?.select("a")?.map { it.ownText() }.orEmpty())
                 .build()
-            thumbnail_url = manga.thumbnail_url ?: document.selectFirst("img.thumb:not(.lazy-load)")?.absUrl("src")
+            thumbnail_url = document.selectFirst("img.thumb:not(.lazy-load)")?.absUrl("src") ?: manga.thumbnail_url
             status = SManga.COMPLETED
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
