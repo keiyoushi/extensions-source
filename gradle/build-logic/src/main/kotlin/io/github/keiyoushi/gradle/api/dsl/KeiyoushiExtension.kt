@@ -21,7 +21,18 @@ abstract class KeiyoushiExtension @Inject constructor(
     abstract val deeplinks: ListProperty<ExtensionDeeplink>
     abstract val sources: ListProperty<ExtensionSource>
 
+    /** Set only by the Keiyoushi Runtime extension, see [runtime]. */
+    abstract val runtimeHost: Property<RuntimeHostSpec>
+
     fun deeplink(block: ExtensionDeeplink.() -> Unit) = addDeeplink(objects, deeplinks, block)
+
+    /**
+     * Makes this module the Keiyoushi Runtime. Its entry point is a generated factory with no sources
+     * that registers the modules it [RuntimeHostSpec.provides] for other extensions.
+     */
+    fun runtime(block: RuntimeHostSpec.() -> Unit) {
+        runtimeHost.set(objects.newInstance<RuntimeHostSpec>().apply(block))
+    }
 
     fun source(block: ExtensionSource.() -> Unit) {
         sources.add(objects.newInstance<ExtensionSource>().apply(block))

@@ -56,3 +56,9 @@
 
 # dont obfuscate chromium boundry interfaces, needed for reflections; used by runWebView
 -keepnames interface org.chromium.support_lib_boundary.** { *; }
+
+# Keiyoushi Runtime: lib:runtime matches contract methods to the runtime's methods by name. Keeping
+# them on the interface keeps them on the runtime's implementation too.
+-keep interface * extends keiyoushi.lib.runtime.RuntimeContract { <methods>; }
+# Their @Throws: a proxy wraps checked exceptions its method doesn't declare
+-keepattributes Exceptions
