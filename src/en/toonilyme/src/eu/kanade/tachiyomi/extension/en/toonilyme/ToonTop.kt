@@ -4,4 +4,4 @@ import eu.kanade.tachiyomi.multisrc.mangak.MangaKSource
 import keiyoushi.annotation.Source
 
 @Source
-abstract class ToonilyMe : MangaKSource()
+abstract class ToonTop : MangaKSource()
