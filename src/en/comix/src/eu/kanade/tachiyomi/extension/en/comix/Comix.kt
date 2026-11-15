@@ -1,11 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.comix
 
-import android.app.Application
 import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
 import android.webkit.WebResourceResponse
-import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
@@ -60,10 +56,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okio.Buffer
 import org.json.JSONObject
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.random.Random
@@ -78,22 +71,6 @@ abstract class Comix :
     ConfigurableSource {
 
     private val preferences: SharedPreferences by getPreferencesLazy()
-
-    // A full chapter walk pages through the whole list at a paced rate, so warn once per session
-    private val chapterListHintShown = AtomicBoolean(false)
-
-    private fun showChapterListHint() {
-        if (!chapterListHintShown.compareAndSet(false, true)) return
-        Handler(Looper.getMainLooper()).post {
-            runCatching {
-                Toast.makeText(
-                    Injekt.get<Application>(),
-                    "Chapter List loading takes time for first time",
-                    Toast.LENGTH_LONG,
-                ).show()
-            }
-        }
-    }
 
     // Reader captures by chapter url, LRU; only finished ones are dropped
     private val captureScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -187,7 +164,7 @@ abstract class Comix :
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("browse")
-            addQueryParameter("order[score]", "desc")
+            addQueryParameter("sort", "score:desc")
             addQueryParameter("page", page.toString())
             applyPreferenceFilters()
         }.build()
@@ -196,7 +173,7 @@ abstract class Comix :
 
     private suspend fun getMangaListFromBrowse(url: HttpUrl): MangasPage {
         val searchResponse = runInWebView(
-            url = url.toString(),
+            url = url.joinListParameters().toString(),
             buildScript = { passPayloadName ->
                 """
                 (function () {
@@ -238,7 +215,7 @@ abstract class Comix :
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("browse")
-            addQueryParameter("order[chapter_updated_at]", "desc")
+            addQueryParameter("sort", "chapter_updated_at:desc")
             addQueryParameter("page", page.toString())
             applyPreferenceFilters()
         }.build()
@@ -270,12 +247,12 @@ abstract class Comix :
                         }
                     }
 
-                authorIds.forEach { addQueryParameter("authors[]", it) }
-                artistIds.forEach { addQueryParameter("artists[]", it) }
-                tagIds.forEach { addQueryParameter("genres_in[]", it) }
+                authorIds.forEach { addQueryParameter("authors", it) }
+                artistIds.forEach { addQueryParameter("artists", it) }
+                tagIds.forEach { addQueryParameter("genres_in", it) }
 
                 if (query.isNotBlank()) {
-                    addQueryParameter("keyword", query)
+                    addQueryParameter("q", query)
                 }
 
                 addQueryParameter("page", page.toString())
@@ -497,7 +474,6 @@ abstract class Comix :
         manga: SManga,
         knownIds: List<Int>,
     ): ChapterList {
-        if (knownIds.isEmpty()) showChapterListHint()
         val mangaId = manga.url.removePrefix("/").substringBefore('-')
         val payload = runInWebView(getMangaUrl(manga), { it.isChapterListRequest() }) { passPayloadName, _, touchName ->
             """
@@ -898,6 +874,13 @@ abstract class Comix :
     private fun randomName() = (1..(10..20).random())
         .map { (('a'..'z') + ('A'..'Z')).random() }
         .joinToString("")
+
+    // The site reads list filters as one comma-separated value
+    private fun HttpUrl.joinListParameters(): HttpUrl = newBuilder().query(null).apply {
+        queryParameterNames.forEach { name ->
+            addQueryParameter(name, queryParameterValues(name).joinToString(","))
+        }
+    }.build()
 
     private fun asset(name: String) = javaClass.getResource("/assets/$name")!!.readText()
 
