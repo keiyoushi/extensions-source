@@ -90,8 +90,8 @@ abstract class RawkumaMe : KeiSource() {
     private val siteUrl get() = if (lang == "es") "$baseUrl/es" else baseUrl
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        // images are cleaned scans, the translated text for every language is an svg string in the chapter's rsc payload
-        val reader = client.get("$baseUrl/manga/${chapter.url}", Fetch.DOCUMENT).asJsoup().extractNextJs<ReaderChapterDto>()
+        // images are cleaned scans, the chapter's rsc payload carries the source language's text as an svg string
+        val reader = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup().extractNextJs<ReaderChapterDto>()
             ?: return emptyList()
         return reader.pages.mapIndexed { index, page ->
             val svg = page.text[lang]
