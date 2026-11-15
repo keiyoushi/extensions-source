@@ -12,11 +12,11 @@ import java.security.MessageDigest
 
 /**
  * Keeps the pure-Kotlin XRW locator regression-tested inside the runtime module. The locator must reproduce the
- * Python oracle bit-for-bit on every corpus `.so` (both ABIs, every era), each build claimed by at
+ * Python oracle bit-for-bit on every WebView-build `.so` (both ABIs, every era), each build claimed by at
  * most one [LocateStrategy], and must fail closed on anything else.
  *
- * The corpus `.so` files are far too large to commit, so the full-matrix tests read them from the
- * directory named by `-Dxrw.corpus=<dir>` (skipped when unset); the oracle values themselves are
+ * The WebView-build `.so` files are far too large to commit, so the full-matrix tests read them from the
+ * directory named by `-Dxrw.webview-builds=<dir>` (skipped when unset); the oracle values themselves are
  * committed in `test-resources/xrw/oracle.tsv`. The fail-closed tests always run.
  */
 class XrwLocatorTest {
@@ -121,11 +121,11 @@ class XrwLocatorTest {
     }
 
     @Test
-    fun reproducesOracleOnCorpus() {
-        val corpus = corpusDir() ?: return
+    fun reproducesOracleOnWebViewBuilds() {
+        val webViewBuilds = webViewBuildsDir() ?: return
 
         val divergences = oracleRows().mapNotNull { row ->
-            val so = File(File(corpus, row.build), row.file)
+            val so = File(File(webViewBuilds, row.build), row.file)
             if (!so.isFile) return@mapNotNull "${row.build}/${row.file}: missing"
             val bytes = so.readBytes()
             val r = XrwLocator.locate(bytes)
@@ -142,16 +142,16 @@ class XrwLocatorTest {
     }
 
     /**
-     * Every strategy is tried against every corpus build. At most one may emit (disjointness), and the
+     * Every strategy is tried against every WebView build. At most one may emit (disjointness), and the
      * one that does must be the era the oracle names, with its offset/verify/patch. A no-match build must
      * be claimed by none, so it falls back to the header.
      */
     @Test
     fun strategiesAreDisjointAndClaimTheOracleEra() {
-        val corpus = corpusDir() ?: return
+        val webViewBuilds = webViewBuildsDir() ?: return
 
         val divergences = oracleRows().mapNotNull { row ->
-            val so = File(File(corpus, row.build), row.file)
+            val so = File(File(webViewBuilds, row.build), row.file)
             if (!so.isFile) return@mapNotNull "${row.build}/${row.file}: missing"
             val bytes = so.readBytes()
             val elf = Elf(bytes)
@@ -173,8 +173,8 @@ class XrwLocatorTest {
         assertEquals(emptyList<String>(), divergences)
     }
 
-    private fun corpusDir(): File? = System.getProperty("xrw.corpus")?.takeIf { it.isNotBlank() }?.let(::File)?.takeIf { it.isDirectory }
-        .also { assumeTrue("set -Dxrw.corpus=<dir> to run the full locator matrix", it != null) }
+    private fun webViewBuildsDir(): File? = System.getProperty("xrw.webview-builds")?.takeIf { it.isNotBlank() }?.let(::File)?.takeIf { it.isDirectory }
+        .also { assumeTrue("set -Dxrw.webview-builds=<dir> to run the full locator matrix", it != null) }
 
     private fun sha256Hex(bytes: ByteArray): String =
         MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
@@ -262,7 +262,7 @@ class XrwLocatorTest {
     private fun oracleRows(): List<Row> = javaClass.getResourceAsStream("/xrw/oracle.tsv")!!.bufferedReader().readLines()
         .filter { it.isNotBlank() }
         .map { it.split('\t') }
-        // Column 2 is the corpus build's ABI: it documents the fixture, and the strategy column plus the
+        // Column 2 is the WebView build's ABI: it documents the fixture, and the strategy column plus the
         // adder/patch geometry pin the same fact.
         .map { Row(it[0], it[1], it[3], it[4], it[5], it[6], it[7], it[8]) }
 }
