@@ -6,13 +6,19 @@ plugins {
 
 keiyoushi {
     name = "Manga Online"
-    versionCode = 58
+    versionCode = 59
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
         lang = "pt-BR"
-        baseUrl = "https://mangaonline.green"
-        versionId = 2
+        baseUrl = "https://mangaonline.love"
+        versionId = 3
+    }
+
+    deeplink {
+        path("/manga/..*")
+        path("/capitulo/..*")
+        path("/genre/..*")
     }
 }

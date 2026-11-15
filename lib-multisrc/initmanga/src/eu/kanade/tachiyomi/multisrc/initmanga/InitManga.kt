@@ -39,7 +39,6 @@ import okhttp3.Interceptor
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -264,17 +263,22 @@ abstract class InitManga :
 
     private suspend fun getProtectedPages(gallery: Element, scripts: List<String>, chapterUrl: String): List<Page> {
         val vault = scripts.first { "admin-ajax" in it && "\"nonce\"" in it }.objectLiteral().parseAs<ImageVaultDto>()
+        val chapterId = gallery.attr("data-cid")
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart("action", "imip_gate_unlock")
-            .addFormDataPart("cid", gallery.attr("data-cid"))
+            .addFormDataPart("cid", chapterId)
             .addFormDataPart("nonce", vault.nonce)
+            .addFormDataPart("tok", vault.tok)
+            .addFormDataPart("p", ImageProtector.proof(vault.tok, chapterId))
+            .addFormDataPart("e", gallery.attrOrNull("data-e") ?: "0")
+            .addFormDataPart("g", gallery.attr("data-g"))
             .build()
-        val key = client.post(vault.url, Fetch.XHR.from(chapterUrl), body).parseAs<ImageKeyResponseDto>().data.k
+        val gate = client.post(vault.url, Fetch.XHR.from(chapterUrl), body).parseAs<ImageKeyResponseDto>().data
+        val (key, imageUrls) = ImageProtector.unlock(gate, vault.tok, chapterId)
 
-        return gallery.select("div.imip-page[data-bin]").mapIndexed { i, element ->
-            val imageUrl = element.absUrl("data-bin").toHttpUrl().newBuilder().fragment("$IMAGE_KEY_FRAGMENT$key").build().toString()
-            Page(i, imageUrl = imageUrl)
+        return imageUrls.mapIndexed { i, url ->
+            Page(i, imageUrl = url.toHttpUrl().newBuilder().fragment("$IMAGE_KEY_FRAGMENT$key").build().toString())
         }
     }
 
@@ -287,8 +291,8 @@ abstract class InitManga :
 
         // The real image header sits at the end of the file, so the whole body is needed
         val data = response.body.use { body -> Buffer().apply { writeAll(body.source()) } }
-        val image = ImageProtector.decrypt(data, key) ?: throw IOException("Failed to decrypt image")
-        return response.newBuilder().body(image.asResponseBody(response.body.contentType(), image.size)).build()
+        val image = ImageProtector.decrypt(data, key, response.body.contentType()) ?: throw IOException("Failed to decrypt image")
+        return response.newBuilder().body(image).build()
     }
 
     // Reader data is in inline scripts or base64 data: scripts

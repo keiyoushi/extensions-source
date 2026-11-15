@@ -6,13 +6,20 @@ plugins {
 
 keiyoushi {
     name = "BookLive"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
         lang = "ja"
         baseUrl = "https://booklive.jp"
+    }
+
+    deeplink {
+        host("booklive.jp")
+        host("sp.handycomic.jp")
+        path("/product/..*")
+        path("/bviewer/.*")
     }
 }
 

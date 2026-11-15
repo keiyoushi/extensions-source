@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
@@ -17,16 +18,21 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.time.Duration.Companion.minutes
 
 @Source
 abstract class GoComics : KeiSource() {
 
     private val rscHeaders get() = headersBuilder().set("RSC", "1").build()
+
+    // The site's CDN answers 429 for minutes past about 20 requests a minute; images are on other hosts
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 15, period = 1.minutes) { it.host == baseUrl.toHttpUrl().host }
 
     override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(fetchFeatures().map { it.toSManga() }, false)
 

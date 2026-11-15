@@ -1,12 +1,12 @@
 package eu.kanade.tachiyomi.extension.all.komga
 
-import eu.kanade.tachiyomi.extension.all.komga.AuthorDto
-import eu.kanade.tachiyomi.extension.all.komga.LibraryDto
 import eu.kanade.tachiyomi.source.model.Filter
-import okhttp3.HttpUrl
 
-interface UriFilter {
-    fun addToUri(builder: HttpUrl.Builder)
+// Filters with the same key are OR-ed
+internal interface ConditionFilter {
+    val key: String
+    val appliesToBooks: Boolean get() = true
+    fun alternatives(): List<ConditionDto>
 }
 
 internal class TypeSelect :
@@ -26,71 +26,44 @@ internal class SeriesSort(selection: Selection? = null) :
         selection ?: Selection(0, true),
     )
 
-internal class UnreadFilter :
-    Filter.CheckBox("Unread", false),
-    UriFilter {
-    override fun addToUri(builder: HttpUrl.Builder) {
-        if (!state) {
-            return
-        }
-
-        builder.addQueryParameter("read_status", "UNREAD")
-        builder.addQueryParameter("read_status", "IN_PROGRESS")
-    }
+internal abstract class ReadStatusFilter(name: String, private val statuses: List<String>) :
+    Filter.CheckBox(name, false),
+    ConditionFilter {
+    override val key = "readStatus"
+    override fun alternatives() = if (state) statuses.map { ConditionDto(readStatus = OperatorDto("is", it)) } else emptyList()
 }
 
-internal class InProgressFilter :
-    Filter.CheckBox("In Progress", false),
-    UriFilter {
-    override fun addToUri(builder: HttpUrl.Builder) {
-        if (!state) {
-            return
-        }
+internal class UnreadFilter : ReadStatusFilter("Unread", listOf("UNREAD", "IN_PROGRESS"))
 
-        builder.addQueryParameter("read_status", "IN_PROGRESS")
-    }
-}
+internal class InProgressFilter : ReadStatusFilter("In Progress", listOf("IN_PROGRESS"))
 
-internal class ReadFilter :
-    Filter.CheckBox("Read", false),
-    UriFilter {
-    override fun addToUri(builder: HttpUrl.Builder) {
-        if (!state) {
-            return
-        }
-
-        builder.addQueryParameter("read_status", "READ")
-    }
-}
+internal class ReadFilter : ReadStatusFilter("Read", listOf("READ"))
 
 internal class LibraryFilter(
     libraries: List<LibraryDto>,
     defaultLibraries: Set<String>,
-) : UriMultiSelectFilter(
+) : MultiSelectFilter(
     "Libraries",
-    "library_id",
     libraries.map {
-        UriMultiSelectOption(it.name, it.id).apply {
+        MultiSelectOption(it.name, it.id).apply {
             state = defaultLibraries.contains(it.id)
         }
     },
+    toCondition = { ConditionDto(libraryId = OperatorDto("is", it)) },
 )
 
-internal class UriMultiSelectOption(name: String, val id: String = name) : Filter.CheckBox(name, false)
+internal class MultiSelectOption(name: String, val id: String = name) : Filter.CheckBox(name, false)
 
-internal open class UriMultiSelectFilter(
+internal open class MultiSelectFilter(
     name: String,
-    private val param: String,
-    genres: List<UriMultiSelectOption>,
-) : Filter.Group<UriMultiSelectOption>(name, genres),
-    UriFilter {
-    override fun addToUri(builder: HttpUrl.Builder) {
-        val whatToInclude = state.filter { it.state }.map { it.id }
-
-        if (whatToInclude.isNotEmpty()) {
-            builder.addQueryParameter(param, whatToInclude.joinToString(","))
-        }
-    }
+    options: List<MultiSelectOption>,
+    override val appliesToBooks: Boolean = true,
+    private val toCondition: (String) -> ConditionDto,
+) : Filter.Group<MultiSelectOption>(name, options),
+    ConditionFilter {
+    override val key = name
+    val selectedIds get() = state.filter { it.state }.map { it.id }
+    override fun alternatives() = selectedIds.map(toCondition)
 }
 
 internal class AuthorFilter(val author: AuthorDto) : Filter.CheckBox(author.name, false)
@@ -99,13 +72,10 @@ internal class AuthorGroup(
     role: String,
     authors: List<AuthorFilter>,
 ) : Filter.Group<AuthorFilter>(role.replaceFirstChar { it.titlecase() }, authors),
-    UriFilter {
-    override fun addToUri(builder: HttpUrl.Builder) {
-        val authorToInclude = state.filter { it.state }.map { it.author }
-
-        authorToInclude.forEach {
-            builder.addQueryParameter("author", "${it.name},${it.role}")
-        }
+    ConditionFilter {
+    override val key = "author"
+    override fun alternatives() = state.filter { it.state }.map {
+        ConditionDto(author = OperatorDto("is", AuthorMatchDto(it.author.name, it.author.role)))
     }
 }
 
@@ -113,4 +83,4 @@ internal class CollectionSelect(
     val collections: List<CollectionFilterEntry>,
 ) : Filter.Select<String>("Collection", collections.map { it.name }.toTypedArray())
 
-internal data class CollectionFilterEntry(val name: String, val id: String? = null)
+internal data class CollectionFilterEntry(val name: String, val id: String? = null, val ordered: Boolean = false)

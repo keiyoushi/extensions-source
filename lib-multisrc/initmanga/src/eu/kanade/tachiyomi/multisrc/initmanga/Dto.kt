@@ -85,6 +85,7 @@ class GenreData(
 class ImageVaultDto(
     val url: String,
     val nonce: String,
+    val tok: String,
 )
 
 @Serializable
@@ -95,4 +96,6 @@ class ImageKeyResponseDto(
 @Serializable
 class ImageKeyDto(
     val k: String,
+    val s: String? = null,
+    val u: String,
 )

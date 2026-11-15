@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Bbato"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -20,7 +20,15 @@ keiyoushi {
     deeplink {
         host("bato1.com")
         host("bbato.com")
+        host("xbato.co.uk")
+        host("www.xbato.co.uk")
         path("/manga/..*")
         path("/read/..*")
+    }
+
+    deeplink {
+        host("mangabuddy1.co.uk")
+        host("www.mangabuddy1.co.uk")
+        path("/series/..*")
     }
 }
