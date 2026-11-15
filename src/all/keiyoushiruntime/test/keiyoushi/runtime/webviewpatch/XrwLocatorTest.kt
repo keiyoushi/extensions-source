@@ -173,7 +173,7 @@ class XrwLocatorTest {
         assertEquals(emptyList<String>(), divergences)
     }
 
-    private fun corpusDir(): File? = System.getProperty("xrw.corpus")?.let(::File)?.takeIf { it.isDirectory }
+    private fun corpusDir(): File? = System.getProperty("xrw.corpus")?.takeIf { it.isNotBlank() }?.let(::File)?.takeIf { it.isDirectory }
         .also { assumeTrue("set -Dxrw.corpus=<dir> to run the full locator matrix", it != null) }
 
     private fun sha256Hex(bytes: ByteArray): String =

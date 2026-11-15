@@ -23,9 +23,12 @@ keiyoushi {
 android {
     testOptions {
         // Forward `-Dxrw.corpus=<dir>` from the Gradle command line into the test JVM, as the corpus-gated
-        // locator tests' assumeTrue instructs. Unset, they get "" and skip; the corpus (real WebView builds,
-        // ~150 MB each) is never committed.
-        unitTests.all { it.systemProperty("xrw.corpus", System.getProperty("xrw.corpus") ?: "") }
+        // locator tests' assumeTrue instructs. When it is not set, leave the property unset on the test JVM
+        // (never forward a blank) so those tests skip; the corpus (real WebView builds, ~150 MB each) is
+        // never committed.
+        unitTests.all { test ->
+            System.getProperty("xrw.corpus")?.takeIf { it.isNotBlank() }?.let { test.systemProperty("xrw.corpus", it) }
+        }
     }
 }
 
