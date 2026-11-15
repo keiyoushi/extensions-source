@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "XXX Yaoi"
-    versionCode = 7
+    versionCode = 8
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     theme = "madara"
@@ -14,5 +14,6 @@ keiyoushi {
     source {
         lang = "pt-BR"
         baseUrl = "https://3xyaoi.com"
+        versionId = 2
     }
 }
