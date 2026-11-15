@@ -1,0 +1,23 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "ZetTruyen"
+    versionCode = 17
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
+
+    source {
+        lang = "vi"
+        baseUrl {
+            custom("https://www.zettruyen5.com")
+        }
+    }
+
+    deeplink {
+        path("/truyen-tranh/..*")
+    }
+}

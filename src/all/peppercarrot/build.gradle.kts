@@ -1,0 +1,17 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "Pepper&Carrot"
+    versionCode = 1
+    contentWarning = ContentWarning.SAFE
+    libVersion = "1.6"
+
+    source {
+        lang = "all"
+        baseUrl = "https://www.peppercarrot.com"
+    }
+}

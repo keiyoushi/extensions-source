@@ -1,0 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "Hentai.cat"
+    versionCode = 0
+    contentWarning = ContentWarning.NSFW
+    libVersion = "1.6"
+    theme = "fansubscat"
+
+    source {
+        lang = "ca"
+        baseUrl = "https://manga.hentai.cat"
+        id = 7575385310756416449L
+    }
+}

@@ -1,0 +1,343 @@
+package eu.kanade.tachiyomi.extension.ru.wamanga
+
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.intOrNull
+import okhttp3.Response
+import kotlin.time.Instant
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SvelteKit `__data.json`
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Serializable
+class SvelteResponseDto(
+    private val nodes: List<SvelteNodeDto>,
+) {
+    /** The page's own payload is the last `data` node; earlier ones belong to layouts. */
+    fun getDataNode(): JsonArray = nodes.lastOrNull { it.type == "data" }?.data
+        ?: throw IllegalStateException("Data node not found in SvelteKit response (manga likely removed or url changed)")
+}
+
+@Serializable
+class SvelteNodeDto(
+    val type: String,
+    val data: JsonArray? = null,
+)
+
+@Serializable
+class SvelteChunkDto(
+    val id: Int = -1,
+    val data: JsonArray? = null,
+)
+
+/**
+ * Expands SvelteKit's `devalue` array into a plain JSON tree.
+ * In that format every object/array value is an integer index pointing back
+ * into the flat pool, and negative indices are placeholders (`-1` = undefined).
+ */
+internal fun JsonArray.decodeSvelte(): JsonElement {
+    if (isEmpty()) throw IllegalStateException("Empty data array in SvelteKit response")
+    return resolve(this, this[0])
+}
+
+private fun resolve(pool: JsonArray, element: JsonElement): JsonElement = when (element) {
+    is JsonArray -> JsonArray(element.map { resolveRef(pool, it) })
+    is JsonObject -> buildJsonObject {
+        element.forEach { (key, value) -> put(key, resolveRef(pool, value)) }
+    }
+    else -> element
+}
+
+private fun resolveRef(pool: JsonArray, element: JsonElement): JsonElement {
+    val index = (element as? JsonPrimitive)?.takeIf { !it.isString }?.intOrNull
+        ?: return resolve(pool, element)
+
+    if (index < 0) return JsonNull
+    if (index !in pool.indices) return element
+
+    return when (val value = pool[index]) {
+        is JsonArray, is JsonObject -> resolve(pool, value)
+        else -> value
+    }
+}
+
+internal inline fun <reified T> Response.parseSvelte(): T {
+    // SvelteKit streams `data` + `chunk` objects newline-separated.
+    // Only the first line holds the page payload; the rest resolves lazy Promises.
+    val raw = use { it.body.string() }
+    val first = raw.lineSequence().first { it.isNotBlank() }
+    return first.parseAs<SvelteResponseDto>().getDataNode().decodeSvelte().parseAs<T>()
+}
+
+/**
+ * Reads manga details and the lazy `sameMangas` list from a single details response.
+ * Related is null when it couldn't be resolved.
+ */
+internal fun Response.parseMangaDetails(): Pair<MangaDetailsDto, List<MangaDetailsDto>?> {
+    val raw = use { it.body.string() }
+    val lines = raw.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+    if (lines.isEmpty()) throw IllegalStateException("Empty response")
+
+    val details = lines.first().parseAs<SvelteResponseDto>().getDataNode().decodeSvelte().parseAs<DetailsDto>()
+    // Related is auxiliary: a failure here must not break details and chapters, so it's skipped (null).
+    val related = runCatching { resolveRelated(details, lines) }.getOrNull()
+    return details.manga to related
+}
+
+private fun resolveRelated(details: DetailsDto, lines: List<String>): List<MangaDetailsDto> {
+    val inline = details.inlineRelated()
+    if (inline.isNotEmpty()) return inline
+
+    // No lazy placeholder, so there is nothing to resolve in the chunk lines.
+    val promiseId = details.relatedPromiseId() ?: return emptyList()
+
+    val chunks = lines.drop(1).map { it.parseAs<SvelteChunkDto>() }
+    val chunk = chunks.firstOrNull { it.id == promiseId }
+        ?: throw IllegalStateException("Related chunk $promiseId not found")
+
+    val data = chunk.data ?: throw IllegalStateException("Related chunk $promiseId has no data")
+    return data.decodeSvelte().parseAs<List<MangaDetailsDto>>()
+}
+
+/** Resolves lazy `sameMangas` from the streamed chunk lines. */
+internal fun Response.parseRelatedMangas(): List<MangaDetailsDto> = parseMangaDetails().second ?: throw IllegalStateException("Related manga list unavailable")
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Catalog
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Serializable
+class CatalogDto(
+    val initialMangas: List<MangaDto>,
+)
+
+@Serializable
+class MangaDto(
+    private val slug: String,
+    private val title: String,
+    private val type: String,
+    private val coverUrl: String? = null,
+) {
+    fun toSManga(baseUrl: String) = SManga.create().apply {
+        url = "$type/$slug"
+        title = this@MangaDto.title
+        thumbnail_url = coverUrl.toAbsoluteUrl(baseUrl)
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Details + chapters
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Serializable
+class DetailsDto(
+    val manga: MangaDetailsDto,
+    private val sameMangas: JsonElement? = null,
+) {
+    /**
+     * Only the lazy `["Promise", id]` placeholder maps to empty here;
+     * the real list then lives in the chunk lines. Anything else parses
+     * strictly so shape errors stay visible.
+     */
+    fun inlineRelated(): List<MangaDetailsDto> {
+        if (sameMangas == null || sameMangas is JsonNull) return emptyList()
+        if (relatedPromiseId() != null) return emptyList()
+        return sameMangas.parseAs<List<MangaDetailsDto>>()
+    }
+
+    /** Chunk id from the lazy `["Promise", id]` placeholder, or null when the list is inline/absent. */
+    fun relatedPromiseId(): Int? {
+        val arr = sameMangas as? JsonArray ?: return null
+        if (arr.size != 2) return null
+        if ((arr[0] as? JsonPrimitive)?.takeIf { it.isString }?.content != "Promise") return null
+        return (arr[1] as? JsonPrimitive)?.intOrNull
+    }
+}
+
+@Serializable
+class MangaDetailsDto(
+    private val slug: String,
+    private val title: String,
+    private val titleEnglish: String? = null,
+    private val type: String,
+    private val year: Int? = null,
+    private val coverUrl: String? = null,
+    private val description: String? = null,
+    private val alternateTitles: List<String> = emptyList(),
+    private val genres: List<String> = emptyList(),
+    private val authors: List<String>? = null,
+    private val artists: List<String>? = null,
+    private val statusTitle: String? = null,
+    private val pegiRating: String? = null,
+    private val likes: Int? = null,
+    private val views: Int? = null,
+    val chapters: List<ChapterDto> = emptyList(),
+) {
+    val mangaUrl get() = "$type/$slug"
+
+    fun toSManga(baseUrl: String): SManga {
+        val fullDescription = buildDescription()
+
+        return SManga.create().apply {
+            url = mangaUrl
+            title = this@MangaDetailsDto.title
+            thumbnail_url = coverUrl.toAbsoluteUrl(baseUrl)
+            author = authors.toCreditString()
+            artist = artists.toCreditString()
+            genre = genres.joinToString()
+            status = when (statusTitle?.lowercase()) {
+                "ongoing" -> SManga.ONGOING
+                "completed" -> SManga.COMPLETED
+                "paused", "on hiatus", "hiatus" -> SManga.ON_HIATUS
+                "discontinued", "cancelled", "abandoned" -> SManga.CANCELLED
+                else -> SManga.UNKNOWN
+            }
+            description = fullDescription
+        }
+    }
+
+    /**
+     * The site stores the slug among [alternateTitles], so drop it along with
+     * anything already shown as the main title. Entries are filled in by hand,
+     * so they may also carry stray whitespace or be left blank.
+     */
+    private fun cleanAlternateTitles(): List<String> {
+        val excluded = setOf(slug, title.trim())
+
+        return (alternateTitles + listOfNotNull(titleEnglish))
+            .map { it.trim() }
+            .filter { it.isNotBlank() && it !in excluded }
+            .distinct()
+    }
+
+    private fun buildDescription() = buildString {
+        if (description != null && description.isNotBlank()) {
+            append(description.trim())
+        }
+
+        val stats = listOfNotNull(
+            views?.let { "Просмотров: ${formatCount(it)}" },
+            likes?.let { "Лайков: ${formatCount(it)}" },
+            year?.let { "Год выпуска: $it" },
+            pegiRating?.takeIf { it.isNotBlank() }?.let { "Возрастное ограничение: $it" },
+        )
+        if (stats.isNotEmpty()) {
+            append("\n\n")
+            append(stats.joinToString("\n"))
+        }
+
+        val altTitles = cleanAlternateTitles()
+        if (altTitles.isNotEmpty()) {
+            append("\n\nАльтернативные названия:")
+            altTitles.forEach { append("\n• $it") }
+        }
+    }.trim()
+}
+
+@Serializable
+class RelatedMangaDto(
+    val url: String,
+    val title: String,
+    val thumbnail: String? = null,
+) {
+    fun toSManga() = SManga.create().apply {
+        url = this@RelatedMangaDto.url
+        title = this@RelatedMangaDto.title
+        thumbnail_url = this@RelatedMangaDto.thumbnail
+    }
+}
+
+@Serializable
+class ChapterDto(
+    private val position: JsonPrimitive,
+    private val createdAt: String? = null,
+) {
+    fun toSChapter(mangaUrl: String) = SChapter.create().apply {
+        url = "$mangaUrl/${position.content}"
+        name = "Глава ${position.content}"
+        chapter_number = position.content.toFloatOrNull() ?: -1f
+        date_upload = Instant.tryParse(createdAt)
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pages
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Serializable
+class PagesDto(
+    val chapter: ChapterPagesDto,
+)
+
+@Serializable
+class ChapterPagesDto(
+    val files: List<FileDto>,
+)
+
+@Serializable
+class FileDto(
+    private val diskFile: String,
+    private val position: JsonPrimitive,
+) {
+    /** Comes through as a string like `"1.000000000"`. */
+    val order get() = position.content.toDoubleOrNull() ?: 0.0
+
+    fun toPage(index: Int, baseUrl: String) = Page(index, imageUrl = "$baseUrl$diskFile")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Placeholder the site uses for unknown authors/artists. */
+private const val NOT_AVAILABLE = "N/A"
+
+/**
+ * Paths come back with a leading slash, e.g. `/app/uploads/.../cover.webp`,
+ * but strip it before joining anyway in case the API ever stops sending it.
+ */
+private fun String?.toAbsoluteUrl(baseUrl: String): String? = this?.takeIf { it.isNotBlank() }?.let { "$baseUrl/${it.removePrefix("/")}" }
+
+private fun List<String>?.toCreditString(): String? = this
+    ?.filter { it != NOT_AVAILABLE }
+    ?.joinToString()
+    ?.takeIf { it.isNotBlank() }
+
+private fun formatCount(count: Int): String = when {
+    count >= 1_000_000 -> {
+        val m = count / 1_000_000
+        val d = (count % 1_000_000) / 100_000
+        if (d == 0) "${m}M" else "$m.${d}M"
+    }
+    count >= 1_000 -> {
+        val k = count / 1_000
+        val d = (count % 1_000) / 100
+        if (d == 0) "${k}K" else "$k.${d}K"
+    }
+    else -> count.toString()
+}
+
+/** Caches the related list on the manga so opening it doesn't refetch the same details response. */
+internal fun List<SManga>.toMemo(): JsonObject = buildJsonObject {
+    put("related", map { RelatedMangaDto(it.url, it.title, it.thumbnail_url) }.toJsonElement())
+}
+
+/** Cached related list, or null when absent or unreadable. Falls back to a network fetch then, never poisons the cache. */
+internal fun SManga.relatedFromMemo(): List<SManga>? {
+    val element = memo["related"] ?: return null
+    return runCatching {
+        element.parseAs<List<RelatedMangaDto>>().map { it.toSManga() }
+    }.getOrNull()
+}

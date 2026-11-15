@@ -1,0 +1,269 @@
+package eu.kanade.tachiyomi.extension.fr.poseidonscans
+
+import android.content.SharedPreferences
+import androidx.preference.CheckBoxPreference
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
+import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.extractNextJsRsc
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import okhttp3.CacheControl
+import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import java.net.URLDecoder
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+@Source
+abstract class PoseidonScans :
+    KeiSource(),
+    ConfigurableSource {
+
+    val rscHeaders: Headers get() = headers.newBuilder().add("RSC", "1").build()
+
+    private val preferences: SharedPreferences by getPreferencesLazy()
+
+    private fun String.toAbsoluteUrl(): String = if (this.startsWith("http")) this else baseUrl + this
+
+    private fun String.toApiCoverUrl(): String {
+        if (this.startsWith("http")) return this
+        if (this.contains("storage/covers/")) return "$baseUrl/api/covers/${this.substringAfter("storage/covers/")}"
+        if (this.startsWith("/api/covers/")) return baseUrl + this
+        if (this.startsWith("/")) return baseUrl + this
+        return "$baseUrl/api/covers/$this"
+    }
+
+    // found /manga/all too
+
+    // =============================== Latest ===============================
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val apiResponse = client.get("$baseUrl/api/manga/lastchapters?limit=16&page=$page", Fetch.XHR).parseAs<LatestApiResponse>()
+
+        val mangas = apiResponse.data.map { apiManga ->
+            SManga.create().apply {
+                title = apiManga.title
+                url = "/serie/${apiManga.slug}"
+                thumbnail_url = apiManga.slug.toApiCoverUrl() + ".webp"
+            }
+        }
+        val hasNextPage = mangas.size == 16
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    // ============================== Popular ===============================
+
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val mangaDtos = client.get(baseUrl, rscHeaders, Fetch.XHR).extractNextJs<List<PopularMangaData>>() ?: throw Exception("Cant scape data from Next.js")
+
+        val mangas = mangaDtos.map { mangaDto ->
+            SManga.create().apply {
+                title = mangaDto.title
+                url = "/serie/${mangaDto.slug}"
+                thumbnail_url = mangaDto.slug.toApiCoverUrl() + ".webp"
+            }
+        }
+        return MangasPage(mangas, false)
+    }
+
+    // =========================== Manga Details ============================
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = if (fetchDetails) async { fetchDetails(manga) } else null
+        val chapterList = if (fetchChapters) async { fetchChapterList(manga) } else null
+
+        SMangaUpdate(details?.await() ?: manga, chapterList?.await() ?: chapters)
+    }
+
+    private suspend fun fetchDetails(manga: SManga): SManga {
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        val mangaDto = document.extractNextJs<MangaDetailsData>() ?: throw Exception("Cant scape data from Next.js")
+
+        return SManga.create().apply {
+            title = mangaDto.title
+            thumbnail_url = "$baseUrl/api/covers/${mangaDto.slug}.webp"
+            author = mangaDto.author
+            artist = mangaDto.artist
+
+            genre = mangaDto.categories.mapNotNull { it.name.trim().takeIf { name -> name.isNotBlank() } }.joinToString {
+                it.replaceFirstChar { char -> char.titlecase(Locale.FRENCH) }
+            }
+
+            status = parseStatus(mangaDto.status)
+
+            description = mangaDto.description.trim().takeIf { it.isNotEmpty() }
+
+            setUrlWithoutDomain("/serie/${mangaDto.slug}")
+        }
+    }
+
+    private fun parseStatus(statusString: String?): Int = when (statusString?.trim()?.lowercase(Locale.FRENCH)) {
+        "en cours" -> SManga.ONGOING
+        "terminé" -> SManga.COMPLETED
+        "en pause", "hiatus" -> SManga.ON_HIATUS
+        "annulé", "abandonné" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
+    }
+
+    // ============================== Chapters ==============================
+
+    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
+        val url = getMangaUrl(manga).toHttpUrl()
+        val rscBody = client.get(url, rscHeaders, Fetch.XHR).use { it.body.string() }
+        val chapters = chapterListRsc(rscBody)
+        if (chapters.isNotEmpty()) return chapters
+
+        // RSC data can be partial on first load; retry with cache-busting
+        val retryUrl = url.newBuilder().addQueryParameter("_", System.currentTimeMillis().toString()).build()
+        val retryBody = client.get(retryUrl, rscHeaders, Fetch.XHR, CacheControl.Builder().noCache().build(), ensureSuccess = false)
+            .use { it.body.string() }
+        return chapterListRsc(retryBody)
+    }
+
+    fun chapterListRsc(rscBody: String): List<SChapter> {
+        val mangaPageDto = rscBody.extractNextJsRsc<MangaPageDetailsData>() ?: throw Exception("Cant scape data from Next.js")
+
+        val showPremium = preferences.getBoolean(
+            SHOW_PREMIUM_KEY,
+            SHOW_PREMIUM_DEFAULT,
+        )
+        return mangaPageDto.manga.chapters.mapNotNull { ch ->
+            val isLocked = ch.isLocked && mangaPageDto.isPremiumUser != true
+
+            if (isLocked && !showPremium) return@mapNotNull null
+            SChapter.create().apply {
+                val chapterNumberString = ch.number.toString().removeSuffix(".0")
+                val isVolume = ch.isVolume == true || (ch.number % 1 == 0f && ch.title?.contains("volume", ignoreCase = true) == true)
+
+                val baseName = if (isVolume) {
+                    "Volume $chapterNumberString"
+                } else {
+                    "Chapitre $chapterNumberString"
+                }
+                val title = ch.title?.trim()?.takeIf { it.isNotBlank() }
+
+                name = buildString {
+                    if (isLocked) append("🔒 ")
+
+                    append(
+                        if (title != null) {
+                            "$baseName - $title"
+                        } else {
+                            baseName
+                        },
+                    )
+
+                    if (isLocked) {
+                        val dateParts = formatTimestamp(
+                            ch.premiumUntil?.toEpochMilliseconds() ?: 0L,
+                        ).split(" ")
+                        // formatTimestamp gives: [dd, MMMM, HH:mm]
+                        append(
+                            " - Free the ${dateParts.take(2).joinToString(" ")} at ${dateParts.getOrNull(2) ?: ""}",
+                        )
+                    }
+                }.trim()
+                setUrlWithoutDomain(
+                    "/serie/${mangaPageDto.manga.slug}/chapter/$chapterNumberString",
+                )
+                date_upload = ch.createdAt.toEpochMilliseconds()
+                chapter_number = ch.number
+            }
+        }.sortedByDescending { it.chapter_number }
+    }
+
+    fun formatTimestamp(timestamp: Long): String = DateTimeFormatter.ofPattern("dd MMMM HH:mm", Locale.getDefault())
+        .format(Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()))
+
+    // =============================== Pages ================================
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val pageDataDto = client.get(getChapterUrl(chapter), rscHeaders, Fetch.XHR).extractNextJs<PageData>() ?: throw Exception("Cant scape data from Next.js")
+        if (pageDataDto.currentChapter.isLocked) {
+            if (pageDataDto.sessionStatus == "unauthenticated") {
+                throw Exception("This chapter is premium. Please connect via the WebView to view.")
+            }
+            if (!pageDataDto.isPremiumUser) {
+                throw Exception("This chapter is premium. You are not a premium user.")
+            }
+        }
+        return pageDataDto.initialData.images.map { pageDto ->
+            Page(
+                index = pageDto.order,
+                imageUrl = pageDto.originalUrl.toAbsoluteUrl(),
+            )
+        }.sortedBy { it.index }
+    }
+
+    // =============================== Search ===============================
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("series")
+            if (query.isNotBlank()) {
+                addQueryParameter("search", query)
+            }
+            if (page > 1) {
+                addQueryParameter("page", page.toString())
+            }
+        }.build()
+
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
+
+        val mangas = document.select("div.grid a.block.group").map { element ->
+            val url = element.attr("href")
+            val title = element.selectFirst("h2")?.text()!!
+
+            val thumbnailUrlPath = element.selectFirst("img[alt]")?.attr("srcset")?.substringBefore(" ")?.let {
+                URLDecoder.decode(it, "UTF-8").substringAfter("url=").substringBefore("&")
+            }
+
+            SManga.create().apply {
+                this.setUrlWithoutDomain(url)
+                this.title = title
+                this.thumbnail_url = thumbnailUrlPath?.takeIf { it.isNotBlank() }?.toApiCoverUrl()
+            }
+        }
+
+        val hasNextPage = document.select("nav[aria-label=Pagination] a:contains(Suivant)").isNotEmpty()
+
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    // ========================== Preference =============================
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        CheckBoxPreference(screen.context).apply {
+            key = SHOW_PREMIUM_KEY
+            title = "Show premium chapters"
+            summary = "Show paid chapters (identified by 🔒) in the list."
+            setDefaultValue(SHOW_PREMIUM_DEFAULT)
+        }.also(screen::addPreference)
+    }
+
+    companion object {
+        private const val SHOW_PREMIUM_KEY = "show_premium_chapters"
+        private const val SHOW_PREMIUM_DEFAULT = false
+    }
+}

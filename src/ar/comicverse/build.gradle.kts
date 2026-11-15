@@ -1,0 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "Comic Verse"
+    versionCode = 3
+    contentWarning = ContentWarning.SAFE
+    libVersion = "1.6"
+    theme = "zeistmanga"
+
+    source {
+        lang = "ar"
+        baseUrl = "https://arcomixverse.blogspot.com"
+    }
+}

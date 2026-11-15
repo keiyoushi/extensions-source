@@ -1,0 +1,25 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "MANGA Plus Creators by SHUEISHA"
+    versionCode = 1
+    contentWarning = ContentWarning.SAFE
+    libVersion = "1.6"
+
+    listOf("en", "es").forEach {
+        source {
+            lang = it
+            baseUrl = "https://mangaplus-creators.jp"
+        }
+    }
+
+    deeplink {
+        host("mangaplus-creators.jp")
+        host("medibang.com")
+        path("/titles/..*")
+    }
+}

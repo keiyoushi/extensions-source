@@ -1,0 +1,328 @@
+package eu.kanade.tachiyomi.extension.es.ikigaimangas
+
+import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.addCookie
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
+import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.OkHttpClient
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.jsoup.nodes.Element
+import java.text.Normalizer
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
+
+@Source
+abstract class IkigaiMangas : KeiSource() {
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addCookie("is-adult-enabled" to "true")
+        .rateLimit(1, 2.seconds) { it.host == baseUrl.toHttpUrl().host }
+
+    private val imageCdnUrl: String = "https://image2.ikigaimangas.cloud"
+
+    private val dateFormat = DateTimeFormatter.ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'Z", Locale.ENGLISH)
+
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val document = client.get("$baseUrl/clasificacion/", Fetch.DOCUMENT).asJsoup()
+
+        val mangaList = document.select("div.grid > div.card").map { element ->
+            SManga.create().apply {
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+                title = element.selectFirst(".card-body .card-title")!!.text()
+                url = element.selectFirst(".card-actions > a.btn[href]")!!.seriesSlug()
+            }
+        }
+        return MangasPage(mangaList, false)
+    }
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val latestUrl = baseUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("pagina", page.toString())
+            .build()
+        val document = client.get(latestUrl, Fetch.DOCUMENT).asJsoup()
+
+        val mangaList = document.select("section[aria-labelledby=new-chapters-heading] > ul.grid:last-of-type a.card").map { element ->
+            SManga.create().apply {
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+                title = element.selectFirst(".card-body .card-title")!!.text()
+                url = element.seriesSlug()
+            }
+        }
+        val hasNextPage = document.selectFirst("nav[aria-label=pagination] > a:last-child:not([class*=btn-disabled])") != null
+        return MangasPage(mangaList, hasNextPage)
+    }
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (query.isNotEmpty()) {
+            return qwikDataParse(query, filters.firstInstance<ContentFilter>(), getQuerySeriesList(), page)
+        }
+
+        val searchUrl = "$baseUrl/series/".toHttpUrl().newBuilder()
+            .addQueryParameter("tipos[]", "comic")
+
+        filters.forEach { filter ->
+            when (filter) {
+                is GenreFilter -> {
+                    filter.state.forEach { genre ->
+                        if (genre.state) {
+                            searchUrl.addQueryParameter("generos[]", genre.id.toString())
+                        }
+                    }
+                }
+                is StatusFilter -> {
+                    filter.state.forEach { status ->
+                        if (status.state) {
+                            searchUrl.addQueryParameter("estados[]", status.id.toString())
+                        }
+                    }
+                }
+                is SortByFilter -> {
+                    searchUrl.addQueryParameter("ordenar", filter.selected)
+                    searchUrl.addQueryParameter("direccion", if (filter.state?.ascending == true) "asc" else "desc")
+                }
+                else -> {}
+            }
+        }
+
+        searchUrl.addQueryParameter("pagina", page.toString())
+
+        val document = client.get(searchUrl.build(), Fetch.DOCUMENT).asJsoup()
+
+        val mangaList = document.select("section[aria-labelledby=archive-heading] > ul.grid a.card").map { element ->
+            SManga.create().apply {
+                thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+                title = element.selectFirst("h3")!!.text()
+                url = element.seriesSlug()
+            }
+        }
+        val hasNextPage = document.selectFirst("nav[aria-label=pagination] > a:last-child:not([class*=btn-disabled])") != null
+        return MangasPage(mangaList, hasNextPage)
+    }
+
+    private val seriesMutex = Mutex()
+    private var seriesCache: List<QwikSeriesDto>? = null
+
+    private suspend fun getQuerySeriesList(): List<QwikSeriesDto> = seriesMutex.withLock {
+        seriesCache ?: fetchQuerySeriesList().also { seriesCache = it }
+    }
+
+    private suspend fun fetchQuerySeriesList(): List<QwikSeriesDto> {
+        // The WebView skips the client's base url lookup
+        val homeUrl = client.get(baseUrl, Fetch.DOCUMENT).use { it.request.url.toString() }
+        val url = getQfuncUrlFromWebView(homeUrl, headers)
+        val qfunc = url.queryParameter("qfunc")!!
+        val payload = """{"_entry":"1","_objs":["\u0002_#s_$qfunc",["0"]]}"""
+        val body = payload.toRequestBody()
+        val headers = headersBuilder()
+            .set("X-QRL", qfunc)
+            .set("Content-Type", "application/qwik-json")
+            .build()
+        return client.post(url, headers, Fetch.XHR, body).parseAs<QwikData>().parseAsList<QwikSeriesDto>()
+    }
+
+    private fun qwikDataParse(query: String, contentFilter: ContentFilter, seriesList: List<QwikSeriesDto>, page: Int): MangasPage {
+        val searchTerm = query.toSearchTerm()
+
+        val filteredSeries = seriesList
+            .filter { it.type == "comic" && contentFilter.matches(it.isMature) }
+            .filter { series -> series.titles.any { it.toSearchTerm().contains(searchTerm) } }
+
+        val pagedSeries = filteredSeries
+            .drop((page - 1) * PAGE_SIZE)
+            .take(PAGE_SIZE)
+            .map { it.toSManga(imageCdnUrl) }
+
+        return MangasPage(pagedSeries, filteredSeries.size > page * PAGE_SIZE)
+    }
+
+    private fun String.toSearchTerm() = Normalizer.normalize(this, Normalizer.Form.NFD)
+        .replace(DIACRITICS_REGEX, "")
+        .lowercase()
+
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/series/${manga.url}/"
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        val mainContent = document.selectFirst("main")!!
+        val updatedManga = SManga.create().apply {
+            title = mainContent.selectFirst(".card-body .card-title")!!.text()
+            thumbnail_url = mainContent.selectFirst("article.card figure > img")?.attr("abs:src")
+            description = mainContent.selectFirst(".card-body > p")?.text()
+            status = parseStatus(mainContent.selectFirst("figure > ul a[href*=?estados]")?.text())
+            genre = mainContent.select(".card-body > ul > li > a[href*=?generos]").joinToString { it.text() }
+        }
+
+        if (!fetchChapters) {
+            return SMangaUpdate(
+                manga = updatedManga,
+                chapters = chapters,
+            )
+        }
+
+        val firstPageChapters = document
+            .select("section.card > ul.grid a.card")
+            .map(::chapterFromElement)
+
+        val lastPage = document.select("nav[aria-label=pagination] > a[q:key^=page-]").lastOrNull()
+            ?.attr("q:key")?.let {
+                it.substringAfter("-").toIntOrNull()
+            } ?: 1
+
+        val remainingChapters = coroutineScope {
+            (2..lastPage).map { page ->
+                async {
+                    val url = getMangaUrl(manga)
+                        .toHttpUrl()
+                        .newBuilder()
+                        .addQueryParameter("pagina", page.toString())
+                        .build()
+
+                    client.get(url, Fetch.DOCUMENT).asJsoup()
+                        .select("section.card > ul.grid a.card")
+                        .map(::chapterFromElement)
+                }
+            }.awaitAll()
+        }.flatten()
+
+        val chapterList = firstPageChapters + remainingChapters
+
+        return SMangaUpdate(
+            manga = updatedManga,
+            chapters = chapterList,
+        )
+    }
+
+    private fun parseStatus(status: String?): Int = when (status?.lowercase()) {
+        "cancelada" -> SManga.CANCELLED
+        "completa" -> SManga.COMPLETED
+        "en curso" -> SManga.ONGOING
+        "hiatus" -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
+    }
+
+    private fun Element.seriesSlug() = absUrl("href").toHttpUrl().pathSegments[1]
+
+    private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.attr("abs:href"))
+        name = element.selectFirst(".card-body .card-title")!!.text()
+        val dateString = element.selectFirst("time")?.attr("datetime")?.substringBeforeLast("(")?.trim()
+        date_upload = dateFormat.tryParseDate(dateString)
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
+        return document.select("section div > img").mapIndexed { i, element ->
+            Page(i, imageUrl = element.attr("abs:src"))
+        }
+    }
+
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        ContentFilter(),
+        Filter.Header("Nota: Al buscar por texto solo se aplica el filtro de contenido."),
+        Filter.Separator(),
+        SortByFilter("Ordenar por", getSortProperties()),
+        StatusFilter("Estados", getStatusFilters()),
+        GenreFilter("Géneros", getGenreFilters()),
+    )
+
+    private suspend fun getQfuncUrlFromWebView(
+        url: String,
+        headers: Headers,
+    ): HttpUrl = runWebView(timeout = 20.seconds) {
+        val pool = ('a'..'z') + ('A'..'Z')
+        val interfaceName = (1..(10..20).random())
+            .map { pool.random() }
+            .joinToString("")
+
+        javaScriptEnabled = true
+        domStorageEnabled = true
+        blockImages = true
+        userAgent = headers["User-Agent"].orEmpty()
+
+        webMessageBridge(interfaceName) { message, replyProxy ->
+            val qfuncUrl = message.toHttpUrlOrNull() ?: return@webMessageBridge
+            val originHost = replyProxy.sourceOrigin?.toHttpUrlOrNull()?.host
+            if (replyProxy.isMainFrame != false && (originHost == null || originHost == qfuncUrl.host)) {
+                resolve(qfuncUrl)
+            }
+        }
+
+        injectAtDocumentStart(
+            """
+                (function () {
+                    const originalFetch = window.fetch;
+                    window.fetch = function (resource, options) {
+                        const url = typeof resource === "string" ? resource : resource?.url ?? "";
+                        if (/[?&]qfunc=/.test(url)) {
+                            window.$interfaceName.postMessage(new URL(url, location.href).href);
+                            return new Promise(() => {});
+                        }
+                        return originalFetch.apply(this, arguments);
+                    };
+
+                    const clickSearch = () => {
+                        const interval = setInterval(() => {
+                            const button = [...document.querySelectorAll("button")]
+                                .find((button) => [...button.querySelectorAll("span")]
+                                    .some((span) => span.textContent?.trim().includes("Buscar...")));
+                            if (button) {
+                                clearInterval(interval);
+                                button.click();
+                            }
+                        }, 500);
+                    };
+                    if (document.readyState === "loading") {
+                        document.addEventListener("DOMContentLoaded", clickSearch);
+                    } else {
+                        clickSearch();
+                    }
+                })();
+            """.trimIndent(),
+        )
+
+        loadUrl(url)
+    }
+
+    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> {
+        val document = client.get(DOMAIN_URL, Fetch.DOCUMENT).asJsoup()
+        val scriptUrl = document.selectFirst("button[on:click]:containsOwn(Ir al sitio)")!!.attr("on:click")
+        val script = client.get("$DOMAIN_URL/build/$scriptUrl", Fetch.SCRIPT).body.string()
+        val domain = script.substringAfter("i(\"").substringBefore("\"")
+        return listOf(client.get(domain, Fetch.DOCUMENT).use { it.request.url.toString() })
+    }
+
+    companion object {
+        private const val DOMAIN_URL = "https://ikigaimangas.com"
+        private const val PAGE_SIZE = 20
+        private val DIACRITICS_REGEX = Regex("""\p{Mn}+""")
+    }
+}

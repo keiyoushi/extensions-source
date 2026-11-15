@@ -1,0 +1,197 @@
+package eu.kanade.tachiyomi.multisrc.vinetheme
+
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.booleanOrNull
+import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
+import keiyoushi.utils.toJsonElement
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+
+abstract class VineTheme :
+    KeiSource(),
+    ConfigurableSource {
+
+    private val preferences by getPreferencesLazy()
+
+    private val rscHeaders: Headers get() = headersBuilder().set("rsc", "1").build()
+
+    override suspend fun getPopularManga(page: Int): MangasPage = getApiMangasPage(page, "popular")
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getApiMangasPage(page, "updated")
+
+    private suspend fun getApiMangasPage(page: Int, sort: String): MangasPage {
+        val url = "$baseUrl/api/series".toHttpUrl().newBuilder()
+            .addQueryParameter("sort", sort)
+            .addQueryParameter("contentMode", "comics")
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("limit", "24")
+            .build()
+        val data = client.get(url, Fetch.XHR).parseAs<ApiSeriesResponse>()
+        return MangasPage(data.data.map { it.toSManga(baseUrl) }, data.meta?.hasMore == true)
+    }
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "$baseUrl/api/series".toHttpUrl().newBuilder()
+            .apply {
+                addQueryParameter("limit", "24")
+                addQueryParameter("contentMode", "comics")
+                if (query.isNotEmpty()) {
+                    addQueryParameter("q", query)
+                }
+                filters.filterIsInstance<UriQueryFilter>().forEach { it.addToQuery(this) }
+                addQueryParameter("page", page.toString())
+            }
+            .build()
+        val data = client.get(url, Fetch.XHR).parseAs<ApiSeriesResponse>()
+        return MangasPage(data.data.map { it.toSManga(baseUrl) }, data.meta?.hasMore == true)
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val segments = url.pathSegments
+        if (segments.getOrNull(0) != "series" || segments.getOrNull(1) != "comic") return null
+        val slug = segments.getOrNull(2)?.takeIf { it.isNotEmpty() } ?: return null
+        if (segments.getOrNull(3) == "chapter") return null
+        val detail = client.get("$baseUrl/series/comic/$slug", rscHeaders, Fetch.XHR)
+            .extractNextJs<DetailDto>(DetailDto::nextJsFilter)
+            ?: return null
+        return detail.series.toSManga(baseUrl, fallbackSlug = slug)
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val details = client.get(getDetailsUrl(manga), rscHeaders, Fetch.XHR).extractNextJs<DetailDto>(DetailDto::nextJsFilter)
+
+        val updatedManga = details?.series?.toSManga(baseUrl, manga) ?: manga
+        val updatedChapters = if (fetchChapters) fetchAllChapters(manga, details, chapters) else chapters
+
+        return SMangaUpdate(updatedManga, updatedChapters)
+    }
+
+    override val supportsRelatedMangas: Boolean get() = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getDetailsUrl(manga), rscHeaders, Fetch.XHR)
+        .extractNextJs<RelatedDto>(RelatedDto::nextJsFilter)
+        ?.similarSeries
+        .orEmpty()
+        .map { it.toSManga(baseUrl) }
+
+    private fun getDetailsUrl(manga: SManga): HttpUrl = getMangaUrl(manga).toHttpUrl().newBuilder()
+        .addQueryParameter("sort", "desc")
+        .build()
+
+    private suspend fun fetchAllChapters(manga: SManga, details: DetailDto?, existing: List<SChapter>): List<SChapter> {
+        if (details == null) return emptyList()
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF, true)
+        val allChapters = if (existing.isEmpty() && details.totalPages > 1) {
+            details.chapters + coroutineScope {
+                (2..details.totalPages).map { page ->
+                    async {
+                        client.get(
+                            getDetailsUrl(manga).newBuilder()
+                                .addQueryParameter("page", page.toString())
+                                .build(),
+                            rscHeaders,
+                            Fetch.XHR,
+                        ).extractNextJs<DetailDto>(DetailDto::nextJsFilter)
+                            ?.chapters.orEmpty()
+                    }
+                }.awaitAll().flatten()
+            }
+        } else {
+            details.chapters
+        }
+        val fetched = allChapters
+            .filter { !(it.isLocked && hideLocked) }
+            .map { it.toSChapter(manga) }
+        val retained = existing.filter {
+            !(hideLocked && it.memo["isLocked"]?.booleanOrNull == true)
+        }
+        return (fetched + retained)
+            .distinctBy { it.url }
+            .sortedByDescending { it.chapter_number }
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        if (chapter.memo["isLocked"]?.booleanOrNull == true) return emptyList()
+        val response = client.get(getChapterUrl(chapter), rscHeaders, Fetch.XHR)
+        val dto = response.extractNextJs<ChapterDetailDto>(ChapterDetailDto::nextJsFilter)
+        return dto?.chapter?.pages.orEmpty().mapIndexedNotNull { index, pageDto ->
+            pageDto.imageUrl?.toAbsoluteUrl(baseUrl)?.let { Page(index, imageUrl = it) }
+        }
+    }
+
+    override val supportsFilterFetching: Boolean get() = true
+
+    override suspend fun fetchFilterData(): JsonElement = client
+        .get("$baseUrl/series", Fetch.DOCUMENT)
+        .extractNextJs<GenreTagListDto>(GenreTagListDto::nextJsFilter)
+        ?.toFilterData()
+        .toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filterData = data?.parseAs<FilterData>()?.apply {
+            if (outdated) throw Exception("Filter data outdated")
+        }
+
+        return FilterList(
+            listOfNotNull(
+                filterData?.genres?.takeIf { it.isNotEmpty() }?.let(::GenreFilter),
+                filterData?.tags?.takeIf { it.isNotEmpty() }?.let(::TagFilter),
+                TypeFilter(),
+                StatusFilter(),
+                OriginFilter(),
+                SaleFilter(),
+                ChapterFilter(),
+                SortFilter(),
+            ),
+        )
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_LOCKED_PREF
+            title = "Hide locked chapters"
+            summary = "Hide chapters that require coins to read"
+            setDefaultValue(true)
+        }.also(screen::addPreference)
+    }
+
+    override fun getMangaUrl(manga: SManga): String {
+        val slug = manga.memo["slug"]?.string.orEmpty()
+        return "$baseUrl/series/comic/$slug"
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val slug = chapter.memo["slug"]!!.string
+        val number = chapter.memo["number"]!!.string
+        return "$baseUrl/series/comic/$slug/chapter/$number"
+    }
+
+    companion object {
+        private const val HIDE_LOCKED_PREF = "pref_hide_locked_chapters"
+    }
+}

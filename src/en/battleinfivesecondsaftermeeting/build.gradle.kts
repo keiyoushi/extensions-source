@@ -1,0 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "Battle In 5 Seconds After Meeting"
+    versionCode = 1
+    contentWarning = ContentWarning.SAFE
+    libVersion = "1.6"
+    theme = "madara"
+
+    source {
+        lang = "en"
+        baseUrl = "https://www.deatte5.com"
+    }
+}

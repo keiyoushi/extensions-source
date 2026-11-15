@@ -1,0 +1,20 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "HentaiRox"
+    versionCode = 2
+    contentWarning = ContentWarning.NSFW
+    libVersion = "1.6"
+    theme = "galleryadults"
+
+    listOf("en", "ja", "all").forEach { language ->
+        source {
+            lang = language
+            baseUrl = "https://hentairox.com"
+        }
+    }
+}

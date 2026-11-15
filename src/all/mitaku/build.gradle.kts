@@ -1,0 +1,23 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "Mitaku"
+    versionCode = 5
+    contentWarning = ContentWarning.NSFW
+    libVersion = "1.6"
+
+    source {
+        lang = "all"
+        baseUrl = "https://mitaku.net"
+    }
+
+    deeplink {
+        host("mitaku.net")
+        path("/..*")
+        path("/.*/..*")
+    }
+}

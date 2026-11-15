@@ -1,0 +1,522 @@
+package eu.kanade.tachiyomi.multisrc.fmreader
+
+import android.util.Base64
+import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
+import org.jsoup.select.Elements
+import java.nio.charset.Charset
+import java.time.format.DateTimeFormatter
+import java.util.Calendar
+import java.util.Locale
+
+/**
+ * For sites based on the Flat-Manga CMS
+ */
+abstract class FMReader : KeiSource() {
+
+    protected open val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("d/M/yyyy", Locale.ENGLISH)
+
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0")
+
+    protected fun Elements.imgAttr(): String? = getImgAttr(this.firstOrNull())
+
+    private fun Element.imgAttr(): String? = getImgAttr(this)
+
+    open fun getImgAttr(element: Element?): String? = when {
+        element == null -> null
+        element.hasAttr("data-original") -> element.attr("abs:data-original")
+        element.hasAttr("data-src") -> element.attr("abs:data-src")
+        element.hasAttr("data-bg") -> element.attr("abs:data-bg")
+        element.hasAttr("data-srcset") -> element.attr("abs:data-srcset")
+        element.hasAttr("style") -> element.attr("style").substringAfter("(").substringBefore(")")
+        else -> element.attr("abs:src")
+    }
+
+    open val requestPath = "manga-list.html"
+
+    open val popularSort = "sort=views"
+
+    protected open fun popularMangaUrl(page: Int) = "$baseUrl/$requestPath?listType=pagination&page=$page&$popularSort&sort_type=DESC"
+
+    override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get(popularMangaUrl(page), Fetch.DOCUMENT).asJsoup())
+
+    protected open fun searchMangaUrl(page: Int, query: String, filters: FilterList): HttpUrl {
+        val url = "$baseUrl/$requestPath?".toHttpUrl().newBuilder()
+            .addQueryParameter("name", query)
+            .addQueryParameter("page", page.toString())
+        filters.forEach { filter ->
+            when (filter) {
+                is Status -> {
+                    val status = arrayOf("", "1", "2")[filter.state]
+                    url.addQueryParameter("m_status", status)
+                }
+
+                is TextField -> url.addQueryParameter(filter.key, filter.state)
+
+                is GenreList -> {
+                    val included = filter.state.filter { it.isIncluded() }.joinToString(",") { it.name }
+                    val excluded = filter.state.filter { it.isExcluded() }.joinToString(",") { it.name }
+                    url.addQueryParameter("genre", included)
+                    url.addQueryParameter("ungenre", excluded)
+                }
+
+                is SortBy -> {
+                    url.addQueryParameter(
+                        "sort",
+                        when (filter.state?.index) {
+                            0 -> "name"
+                            1 -> "views"
+                            else -> "last_update"
+                        },
+                    )
+                    if (filter.state?.ascending == true) {
+                        url.addQueryParameter("sort_type", "ASC")
+                    }
+                }
+
+                else -> {}
+            }
+        }
+        return url.build()
+    }
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = popularMangaParse(client.get(searchMangaUrl(page, query, filters), Fetch.DOCUMENT).asJsoup())
+
+    protected open fun latestUpdatesUrl(page: Int) = "$baseUrl/$requestPath?listType=pagination&page=$page&sort=last_update&sort_type=DESC"
+
+    override suspend fun getLatestUpdates(page: Int) = popularMangaParse(client.get(latestUpdatesUrl(page), Fetch.DOCUMENT).asJsoup())
+
+    open fun popularMangaParse(document: Document): MangasPage {
+        val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
+
+        // check if there's a next page
+        val hasNextPage = (document.select(popularMangaNextPageSelector()).first()?.text() ?: "").let {
+            if (it.contains(Regex("""\w*\s\d*\s\w*\s\d*"""))) {
+                it.split(" ").let { pageOf -> pageOf[1] != pageOf[3] } // current page not last page
+            } else {
+                it.isNotEmpty() // standard next page check
+            }
+        }
+
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    open fun popularMangaSelector() = "div.media, .thumb-item-flow"
+
+    open fun latestUpdatesSelector() = popularMangaSelector()
+
+    open fun searchMangaSelector() = popularMangaSelector()
+
+    open val headerSelector = "h3 a, .series-title a"
+
+    open fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        element.select(headerSelector).let {
+            setUrlWithoutDomain(it.attr("abs:href"))
+            title = it.text()
+        }
+        thumbnail_url = element.select("img, .thumb-wrapper .img-in-ratio").imgAttr()
+    }
+
+    open fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
+
+    open fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
+
+    /**
+     * can select one of 2 different types of elements
+     * one is an element with text "page x of y", must be the first element if it's part of a collection
+     * the other choice is the standard "next page" element (but most FMReader sources don't have this one)
+     */
+    open fun popularMangaNextPageSelector() = "div.col-lg-9 button.btn-info, .pagination a:contains(»):not(.disabled)"
+
+    open fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+
+    open fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
+        val mangaTitle = parseMangaTitle(document) ?: return null
+        return mangaDetailsParse(document).apply {
+            setUrlWithoutDomain(url.toString())
+            title = mangaTitle
+        }
+    }
+
+    protected open fun parseMangaTitle(document: Document): String? = document.selectFirst(".manga-info h1, .manga-info h3")?.text()
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        val details = mangaDetailsParse(document).apply { title = manga.title }
+        return SMangaUpdate(details, fetchChapterList(manga, document))
+    }
+
+    // Manga Details Selector
+    open val infoElementSelector = "div.row"
+    open val mangaDetailsSelectorAuthor = "li a.btn-info"
+    open val mangaDetailsSelectorGenre = "li a.btn-danger"
+    open val mangaDetailsSelectorStatus = "li a.btn-success"
+    open val mangaDetailsSelectorDescription = "div.detail .content, div.row ~ div.row:has(h3:first-child) p, .summary-content p"
+    open val mangaDetailsSelectorThumbnail = "img.thumbnail"
+
+    open val altNameSelector = "li:contains(Other names)"
+    open val altName = "Alternative Name" // the alt name already contains ": " eg. ": alt name1, alt name2"
+
+    open fun mangaDetailsParse(document: Document): SManga {
+        val infoElement = document.select(infoElementSelector).first()!!
+
+        return SManga.create().apply {
+            author = infoElement.select(mangaDetailsSelectorAuthor).eachText().filter {
+                it.equals("Updating", true).not()
+            }.joinToString().takeIf { it.isNotBlank() }
+            genre = infoElement.select(mangaDetailsSelectorGenre).joinToString { it.text() }
+            status = parseStatus(infoElement.select(mangaDetailsSelectorStatus).first()?.text())
+            description = document.select(mangaDetailsSelectorDescription).text().trim()
+            thumbnail_url = infoElement.select(mangaDetailsSelectorThumbnail).imgAttr()
+
+            // add alternative name to manga description
+            infoElement.select(altNameSelector).firstOrNull()?.ownText()?.let {
+                if (it.isBlank().not() && it.contains("Updating", true).not()) {
+                    description = when {
+                        description.isNullOrBlank() -> altName + it
+                        else -> description + "\n\n$altName" + it
+                    }
+                }
+            }
+        }
+    }
+
+    // languages: en, vi, tr
+    fun parseStatus(status: String?): Int {
+        val completedWords = setOf(
+            "completed",
+            "complete",
+            "đã hoàn thành",
+            "hoàn thành",
+            "tamamlandı",
+        )
+        val ongoingWords = setOf(
+            "ongoing", "on going", "updating", "incomplete",
+            "chưa hoàn thành", "đang cập nhật", "Đang tiến hành",
+            "devam ediyor", "Çevirisi Bırakıldı", "Çevirisi Yok",
+        )
+        return when {
+            status == null -> SManga.UNKNOWN
+            completedWords.any { it.equals(status, ignoreCase = true) } -> SManga.COMPLETED
+            ongoingWords.any { it.equals(status, ignoreCase = true) } -> SManga.ONGOING
+            else -> SManga.UNKNOWN
+        }
+    }
+
+    protected open suspend fun fetchChapterList(manga: SManga, mangaPage: Document): List<SChapter> = chapterListParse(mangaPage)
+
+    open fun chapterListParse(document: Document): List<SChapter> {
+        val mangaTitle = document.select(".manga-info h1, .manga-info h3").text()
+        return document.select(chapterListSelector()).map { chapterFromElement(it, mangaTitle) }.distinctBy { it.url }
+    }
+
+    open fun chapterFromElement(element: Element): SChapter = chapterFromElement(element, "")
+
+    open fun chapterListSelector() = "div#list-chapters p, table.table tr, .list-chapters > a"
+
+    open val chapterUrlSelector = "a"
+
+    open val chapterTimeSelector = "time, .chapter-time, .publishedDate"
+
+    open val chapterNameAttrSelector = "title"
+
+    open fun chapterFromElement(element: Element, mangaTitle: String = ""): SChapter = SChapter.create().apply {
+        if (chapterUrlSelector != "") {
+            element.select(chapterUrlSelector).first()!!.let {
+                setUrlWithoutDomain(it.attr("abs:href"))
+                name = it.text().substringAfter("$mangaTitle ")
+            }
+        } else {
+            element.let {
+                setUrlWithoutDomain(it.attr("abs:href"))
+                name = element.attr(chapterNameAttrSelector).substringAfter("$mangaTitle ")
+            }
+        }
+        date_upload = element.select(chapterTimeSelector).let { dateElement ->
+            if (dateElement.hasText()) {
+                parseRelativeDate(dateElement.text()).takeIf { it != 0L } ?: parseAbsoluteDate(dateElement.text())
+            } else {
+                0L
+            }
+        }
+    }
+
+    // gets the number from "1 day ago"
+    open val dateValueIndex = 0
+
+    // gets the unit of time (day, week hour) from "1 day ago"
+    open val dateWordIndex = 1
+
+    open fun parseRelativeDate(date: String): Long {
+        try {
+            val value = date.split(' ')[dateValueIndex].toInt()
+            val dateWord = date.split(' ')[dateWordIndex].let {
+                if (it.contains("(")) {
+                    it.substringBefore("(")
+                } else {
+                    it.substringBefore("s")
+                }
+            }
+
+            // languages: en, vi, es, tr
+            return when (dateWord) {
+                "min", "minute", "phút", "minuto", "dakika" -> Calendar.getInstance().apply {
+                    add(Calendar.MINUTE, -value)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+
+                "hour", "giờ", "hora", "saat" -> Calendar.getInstance().apply {
+                    add(Calendar.HOUR_OF_DAY, -value)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+
+                "day", "ngày", "día", "gün" -> Calendar.getInstance().apply {
+                    add(Calendar.DATE, -value)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+
+                "week", "tuần", "semana", "hafta" -> Calendar.getInstance().apply {
+                    add(Calendar.DATE, -value * 7)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+
+                "month", "tháng", "mes", "ay" -> Calendar.getInstance().apply {
+                    add(Calendar.MONTH, -value)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+
+                "year", "năm", "año", "yıl" -> Calendar.getInstance().apply {
+                    add(Calendar.YEAR, -value)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+
+                else -> {
+                    return 0L
+                }
+            }
+        } catch (_: Exception) {
+            return 0L
+        }
+    }
+
+    open fun parseAbsoluteDate(dateStr: String): Long = dateFormat.tryParseDate(dateStr)
+
+    open val pageListImageSelector = "img.chapter-img"
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup())
+
+    open fun pageListParse(document: Document): List<Page> = document.select(pageListImageSelector).mapIndexed { i, img ->
+        Page(i, document.location(), img.imgAttr())
+    }
+
+    protected fun base64PageListParse(document: Document): List<Page> {
+        fun Element.decoded(): String {
+            val attr =
+                when {
+                    this.hasAttr("data-img") -> "data-img"
+                    this.hasAttr("data-original") -> "data-original"
+                    this.hasAttr("data-src") -> "data-src"
+                    this.hasAttr("data-srcset") -> "data-srcset"
+                    this.hasAttr("data-aload") -> "data-aload"
+                    else -> "src"
+                }
+            return if (!this.attr(attr).contains(".")) {
+                Base64.decode(this.attr(attr), Base64.DEFAULT).toString(Charset.defaultCharset())
+            } else {
+                this.attr("abs:$attr")
+            }
+        }
+
+        return document.select(pageListImageSelector).mapIndexed { i, img ->
+            Page(i, document.location(), img.decoded())
+        }
+    }
+
+    private class TextField(name: String, val key: String) : Filter.Text(name)
+    private class Status : Filter.Select<String>("Status", arrayOf("Any", "Completed", "Ongoing"))
+    class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genre", genres)
+    class Genre(name: String, val id: String = name.replace(' ', '+')) : Filter.TriState(name)
+    private class SortBy : Filter.Sort("Sorted By", arrayOf("A-Z", "Most vỉews", "Last updated"), Selection(1, false))
+
+    // TODO: Country (leftover from original LHTranslation)
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        TextField("Author", "author"),
+        TextField("Group", "group"),
+        Status(),
+        SortBy(),
+        GenreList(getGenreList()),
+    )
+
+    // [...document.querySelectorAll("div.panel-body a")].map((el,i) => `Genre("${el.innerText.trim()}")`).join(',\n')
+    //  on https://lhtranslation.net/search
+    open fun getGenreList() = listOf(
+        Genre("Action"),
+        Genre("18+"),
+        Genre("Adult"),
+        Genre("Anime"),
+        Genre("Comedy"),
+        Genre("Comic"),
+        Genre("Doujinshi"),
+        Genre("Drama"),
+        Genre("Ecchi"),
+        Genre("Fantasy"),
+        Genre("Gender Bender"),
+        Genre("Harem"),
+        Genre("Historical"),
+        Genre("Horror"),
+        Genre("Josei"),
+        Genre("Live action"),
+        Genre("Manhua"),
+        Genre("Manhwa"),
+        Genre("Martial Art"),
+        Genre("Mature"),
+        Genre("Mecha"),
+        Genre("Mystery"),
+        Genre("One shot"),
+        Genre("Psychological"),
+        Genre("Romance"),
+        Genre("School Life"),
+        Genre("Sci-fi"),
+        Genre("Seinen"),
+        Genre("Shoujo"),
+        Genre("Shojou Ai"),
+        Genre("Shounen"),
+        Genre("Shounen Ai"),
+        Genre("Slice of Life"),
+        Genre("Smut"),
+        Genre("Sports"),
+        Genre("Supernatural"),
+        Genre("Tragedy"),
+        Genre("Adventure"),
+        Genre("Yaoi"),
+    )
+
+    // from manhwa18.com/search, removed a few that didn't return results/wouldn't be terribly useful
+    fun getAdultGenreList() = listOf(
+        Genre("18"),
+        Genre("Action"),
+        Genre("Adult"),
+        Genre("Adventure"),
+        Genre("Anime"),
+        Genre("Comedy"),
+        Genre("Comic"),
+        Genre("Doujinshi"),
+        Genre("Drama"),
+        Genre("Ecchi"),
+        Genre("Fantasy"),
+        Genre("Gender Bender"),
+        Genre("Harem"),
+        Genre("Historical"),
+        Genre("Horror"),
+        Genre("Josei"),
+        Genre("Live action"),
+        Genre("Magic"),
+        Genre("Manhua"),
+        Genre("Manhwa"),
+        Genre("Martial Arts"),
+        Genre("Mature"),
+        Genre("Mecha"),
+        Genre("Mystery"),
+        Genre("Oneshot"),
+        Genre("Psychological"),
+        Genre("Romance"),
+        Genre("School Life"),
+        Genre("Sci-fi"),
+        Genre("Seinen"),
+        Genre("Shoujo"),
+        Genre("Shoujo Ai"),
+        Genre("Shounen"),
+        Genre("Shounen Ai"),
+        Genre("Slice of life"),
+        Genre("Smut"),
+        Genre("Soft Yaoi"),
+        Genre("Soft Yuri"),
+        Genre("Sports"),
+        Genre("Supernatural"),
+        Genre("Tragedy"),
+        Genre("VnComic"),
+        Genre("Webtoon"),
+    )
+
+    // taken from readcomiconline.org/search
+    fun getComicsGenreList() = listOf(
+        Genre("Action"),
+        Genre("Adventure"),
+        Genre("Anthology"),
+        Genre("Anthropomorphic"),
+        Genre("Biography"),
+        Genre("Children"),
+        Genre("Comedy"),
+        Genre("Crime"),
+        Genre("Drama"),
+        Genre("Family"),
+        Genre("Fantasy"),
+        Genre("Fighting"),
+        Genre("GraphicNovels"),
+        Genre("Historical"),
+        Genre("Horror"),
+        Genre("LeadingLadies"),
+        Genre("LGBTQ"),
+        Genre("Literature"),
+        Genre("Manga"),
+        Genre("MartialArts"),
+        Genre("Mature"),
+        Genre("Military"),
+        Genre("Mystery"),
+        Genre("Mythology"),
+        Genre("Personal"),
+        Genre("Political"),
+        Genre("Post-Apocalyptic"),
+        Genre("Psychological"),
+        Genre("Pulp"),
+        Genre("Religious"),
+        Genre("Robots"),
+        Genre("Romance"),
+        Genre("Schoollife"),
+        Genre("Sci-Fi"),
+        Genre("Sliceoflife"),
+        Genre("Sport"),
+        Genre("Spy"),
+        Genre("Superhero"),
+        Genre("Supernatural"),
+        Genre("Suspense"),
+        Genre("Thriller"),
+        Genre("Vampires"),
+        Genre("VideoGames"),
+        Genre("War"),
+        Genre("Western"),
+        Genre("Zombies"),
+    )
+}

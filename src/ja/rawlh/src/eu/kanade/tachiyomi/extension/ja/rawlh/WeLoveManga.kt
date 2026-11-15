@@ -1,0 +1,37 @@
+package eu.kanade.tachiyomi.extension.ja.rawlh
+
+import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.annotation.Source
+import okhttp3.Request
+import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
+
+@Source
+abstract class WeLoveManga : FMReader() {
+
+    override val chapterUrlSelector = ""
+
+    override fun pageListParse(document: Document): List<Page> = base64PageListParse(document)
+
+    // Referer needs to be chapter URL
+    override fun getImageRequest(page: Page): Request = GET(page.imageUrl!!, headersBuilder().set("Referer", page.url).build())
+
+    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
+        element.select(headerSelector).let {
+            setUrlWithoutDomain(it.attr("abs:href"))
+            title = it.text()
+        }
+        thumbnail_url = element
+            .select("div.content.img-in-ratio")
+            .first()!!
+            .attr("style")
+            .let { BACKGROUND_IMAGE_REGEX.find(it)?.groups?.get(1)?.value }
+    }
+
+    companion object {
+        val BACKGROUND_IMAGE_REGEX = Regex("""url\(['"]?(.*?)['"]?\)""")
+    }
+}

@@ -1,0 +1,294 @@
+package eu.kanade.tachiyomi.extension.en.comix
+
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import okhttp3.HttpUrl
+import java.util.Calendar
+
+const val MANGA_ID_MEMO = "mangaId"
+const val CHAPTER_ID_MEMO = "chapterId"
+const val CHAPTER_VOTES_MEMO = "votes"
+const val CHAPTER_OFFICIAL_MEMO = "official"
+const val CHAPTER_GROUP_ID_MEMO = "groupId"
+const val CHAPTER_LIST_DEDUPLICATED_MEMO = "chapterListDeduplicated"
+const val CHAPTER_LIST_BLACKLIST_MEMO = "chapterListBlacklist"
+const val CHAPTER_LIST_COMPLETE_MEMO = "chapterListComplete"
+const val CHAPTER_LIST_FETCHED_AT_MEMO = "chapterListFetchedAt"
+const val CHAPTER_DATA_VERSION_MEMO = "chapterDataVersion"
+
+@Serializable
+class Term(
+    val title: String,
+)
+
+@Serializable
+class TagSearchResponse(
+    val result: List<TagSearchHit> = emptyList(),
+)
+
+@Serializable
+class TagSearchHit(val id: Int, val label: String)
+
+@Serializable
+class Manga(
+    val hid: String,
+    private val title: String,
+    private val altTitles: List<String> = emptyList(),
+    @SerialName("alt_titles") private val altTitlesOld: List<String> = emptyList(),
+    private val synopsis: String? = null,
+    private val type: String = "",
+    private val poster: Poster? = null,
+    private val status: String = "",
+    private val contentRating: String = "safe",
+    private val authors: List<Term>? = null,
+    @SerialName("author") private val authorOld: List<Term>? = null,
+    private val artists: List<Term>? = null,
+    @SerialName("artist") private val artistOld: List<Term>? = null,
+    private val genres: List<Term>? = null,
+    @SerialName("genre") private val genreOld: List<Term>? = null,
+    private val tags: List<Term>? = null,
+    @SerialName("theme") private val themeOld: List<Term>? = null,
+    private val demographics: List<Term>? = null,
+    @SerialName("demographic") private val demographicOld: List<Term>? = null,
+    private val formats: List<Term>? = null,
+    private val ratedAvg: Double = 0.0,
+    private val ratedCount: Long = 0L,
+    private val followsTotal: Long = 0L,
+    private val rank: Int = 0,
+    private val year: Int? = null,
+    private val originalLanguage: String? = null,
+    private val links: Map<String, String?>? = null,
+    private val url: String? = null,
+    val chapterUpdatedAtFormatted: String? = null,
+) {
+    @Serializable
+    class Poster(
+        private val small: String? = null,
+        private val medium: String? = null,
+        private val large: String? = null,
+    ) {
+        fun from(baseUrl: HttpUrl, quality: String?) = when (quality) {
+            "large" -> large ?: medium ?: small
+            "small" -> small ?: medium ?: large
+            else -> medium ?: large ?: small
+        }?.let { baseUrl.resolve(it)?.toString() }
+    }
+
+    fun toSManga(
+        baseUrl: HttpUrl,
+        posterQuality: String?,
+        altTitlesInDesc: Boolean = false,
+        scorePosition: String,
+        showExtraInfo: Boolean = true,
+        showTags: Boolean = false,
+    ) = SManga.create().apply {
+        url = this@Manga.url?.substringAfter("/title") ?: "/$hid"
+        memo = buildJsonObject { put(MANGA_ID_MEMO, hid) }
+        title = this@Manga.title
+
+        val actualAuthors = authors ?: authorOld
+        val actualArtists = artists ?: artistOld
+
+        author = actualAuthors?.joinToString { it.title }
+        artist = actualArtists?.joinToString { it.title }
+        description = MarkdownDescription.Builder().apply {
+            val score = ratedAvg.takeIf { it > 0 }
+            if (scorePosition == "top") rating(score)
+            markdown(synopsis)
+            if (altTitlesInDesc) altTitles(altTitles.ifEmpty { altTitlesOld })
+            if (showExtraInfo) {
+                field("Year", year?.takeIf { it > 0 }?.toString())
+                field("Language", originalLanguage?.uppercase())
+                field("Content rating", contentRating.replaceFirstChar(Char::uppercase))
+                field("Rank", rank.takeIf { it > 0 }?.let { "#$it" })
+                field("Rated by", ratedCount.takeIf { it > 0 }?.toString())
+                field("Followed by", followsTotal.takeIf { it > 0 }?.toString())
+                links(getTrackerLinks(), label = "Trackers")
+            }
+            if (scorePosition == "bottom") rating(score)
+        }.build()
+        initialized = true
+        status = when (this@Manga.status) {
+            "releasing" -> SManga.ONGOING
+            "on_hiatus" -> SManga.ON_HIATUS
+            "finished" -> SManga.COMPLETED
+            "discontinued" -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
+        thumbnail_url = this@Manga.poster?.from(baseUrl, posterQuality)
+        genre = getGenres(showTags)
+    }
+
+    fun toBasicSManga(baseUrl: HttpUrl, posterQuality: String?) = SManga.create().apply {
+        url = this@Manga.url?.substringAfter("/title") ?: "/$hid"
+        memo = buildJsonObject { put(MANGA_ID_MEMO, hid) }
+        title = this@Manga.title
+        thumbnail_url = this@Manga.poster?.from(baseUrl, posterQuality)
+    }
+
+    private fun getTrackerLinks(): List<Pair<String, String?>> {
+        val linkMap = links ?: return emptyList()
+        val siteNames = mapOf(
+            "al" to "AniList",
+            "mal" to "MyAnimeList",
+            "mu" to "MangaUpdates",
+            "md" to "MangaDex",
+            "mb" to "MangaBaka",
+        )
+        val known = siteNames.map { (key, name) -> name to linkMap[key] }
+        val unknown = linkMap.filterKeys { it !in siteNames }
+            .map { (key, url) -> key.uppercase() to url?.takeIf { it.startsWith("http") } }
+        return known + unknown
+    }
+
+    // Tags are separate from the curated genres in the site's detail UI.
+    private fun getGenres(showTags: Boolean) = buildList {
+        when (type) {
+            "manhwa" -> add("Manhwa")
+            "manhua" -> add("Manhua")
+            "manga" -> add("Manga")
+            else -> add("Other")
+        }
+        (genres ?: genreOld)?.map { it.title }?.let { addAll(it) }
+        (demographics ?: demographicOld)?.map { it.title }?.let { addAll(it) }
+        if (showTags) tags?.map { it.title }?.let { addAll(it) }
+        if (contentRating == "erotica" || contentRating == "pornographic") add("NSFW")
+    }.distinct().joinToString()
+}
+
+@Serializable
+class SingleMangaResponse(
+    val result: Manga,
+)
+
+@Serializable
+class Meta(
+    val page: Int = 1,
+    private val lastPage: Int = 1,
+    @SerialName("last_page") private val lastPageOld: Int = 1,
+    val hasNext: Boolean = false,
+) {
+    val actualLastPage: Int get() = maxOf(lastPage, lastPageOld)
+}
+
+@Serializable
+class Pagination(
+    val page: Int = 1,
+    private val lastPage: Int = 1,
+    @SerialName("last_page") private val lastPageOld: Int = 1,
+) {
+    val actualLastPage: Int get() = maxOf(lastPage, lastPageOld)
+}
+
+@Serializable
+class SearchResponse(
+    val result: Items,
+) {
+    @Serializable
+    class Items(
+        val items: List<Manga> = emptyList(),
+        private val meta: Meta? = null,
+        private val pagination: Pagination? = null,
+    ) {
+        fun hasNextPage(): Boolean = when {
+            meta != null -> meta.page < meta.actualLastPage
+            pagination != null -> pagination.page < pagination.actualLastPage
+            else -> false
+        }
+    }
+}
+
+@Serializable
+class ChapterList(
+    val chapters: List<Chapter>,
+    val complete: Boolean,
+    val error: String? = null,
+    val queries: JsonObject? = null,
+)
+
+@Serializable
+class Chapter(
+    val id: Int,
+    val url: String = "",
+    val number: Double,
+    private val name: String = "",
+    val votes: Int = 0,
+    private val createdAtFormatted: String = "",
+    val group: ScanlationGroup? = null,
+    val isOfficial: Boolean = false,
+) {
+    @Serializable
+    class ScanlationGroup(
+        val id: Int? = null,
+        val name: String,
+    )
+
+    fun toSChapter(mangaSlug: String) = SChapter.create().apply {
+        url = this@Chapter.url.indexOf("/title/").let { index ->
+            if (index != -1) {
+                this@Chapter.url.substring(index + 1)
+            } else {
+                "title/$mangaSlug/$id-chapter-${number.toString().removeSuffix(".0")}"
+            }
+        }
+        memo = buildJsonObject {
+            put(CHAPTER_ID_MEMO, id)
+            put(CHAPTER_VOTES_MEMO, votes)
+            put(CHAPTER_OFFICIAL_MEMO, isOfficial)
+            group?.id?.let { put(CHAPTER_GROUP_ID_MEMO, it) }
+        }
+        name = buildString {
+            append("Chapter ")
+            append(this@Chapter.number.toString().removeSuffix(".0"))
+            this@Chapter.name.takeUnless { it.isEmpty() }?.let { append(": $it") }
+        }
+        date_upload = parseRelativeDate(this@Chapter.createdAtFormatted)
+        chapter_number = this@Chapter.number.toFloat()
+        scanlator = if (this@Chapter.group != null) {
+            this@Chapter.group.name
+        } else if (this@Chapter.isOfficial) {
+            "Official"
+        } else {
+            "Unknown"
+        }
+    }
+}
+
+// One message from the reader page walk
+@Serializable
+class CaptureMessage(
+    val type: String,
+    val total: Int? = null,
+    val index: Int? = null,
+    val url: String? = null,
+)
+
+private val DATE_REGEX = Regex("""^(\d+)\s*(s|m|h|d|w|mo|mos|y|yr|yrs|min|mins|sec|secs|hr|hrs|day|days|week|weeks|month|months|year|years)$""")
+
+// Relative site date ("2w ago"); with latest, the latest time the text can stand for
+fun parseRelativeDate(dateStr: String, latest: Boolean = false): Long {
+    if (dateStr.isEmpty()) return 0L
+    val trimmed = dateStr.trim().lowercase().removeSuffix(" ago")
+    val match = DATE_REGEX.find(trimmed) ?: return 0L
+
+    val amount = (match.groupValues[1].toIntOrNull() ?: return 0L) - if (latest) 1 else 0
+    val unit = match.groupValues[2]
+
+    val calendar = Calendar.getInstance()
+    when (unit) {
+        "s", "sec", "secs" -> calendar.add(Calendar.SECOND, -amount)
+        "m", "min", "mins" -> calendar.add(Calendar.MINUTE, -amount)
+        "h", "hr", "hrs" -> calendar.add(Calendar.HOUR_OF_DAY, -amount)
+        "d", "day", "days" -> calendar.add(Calendar.DAY_OF_YEAR, -amount)
+        "w", "week", "weeks" -> calendar.add(Calendar.WEEK_OF_YEAR, -amount)
+        "mo", "mos", "month", "months" -> calendar.add(Calendar.MONTH, -amount)
+        "y", "yr", "yrs", "year", "years" -> calendar.add(Calendar.YEAR, -amount)
+    }
+    return calendar.timeInMillis
+}

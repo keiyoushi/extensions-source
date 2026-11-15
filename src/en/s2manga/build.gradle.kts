@@ -1,0 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "S2Manga"
+    versionCode = 5
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
+    theme = "madara"
+
+    source {
+        lang = "en"
+        baseUrl = "https://s2read.com"
+    }
+}

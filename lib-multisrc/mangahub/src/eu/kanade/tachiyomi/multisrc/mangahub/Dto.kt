@@ -1,0 +1,83 @@
+package eu.kanade.tachiyomi.multisrc.mangahub
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+// Chapter metadata (pages)
+@Serializable
+class ApiChapterData(
+    val chapter: ApiChapter?,
+)
+
+@Serializable
+class ApiChapter(
+    val pages: String,
+    val mangaID: Int,
+    @SerialName("number") val chapterNumber: Float,
+)
+
+@Serializable
+class ChapterCryptoDto(
+    val keyId: String? = null,
+    val key: String? = null,
+    val expiresAt: Long? = null,
+    val keys: Map<String, String>? = null,
+)
+
+// Search, Popular, Latest
+@Serializable
+class ApiSearchObject(
+    val search: ApiSearchResults?,
+)
+
+@Serializable
+class ApiSearchResults(
+    val rows: List<ApiMangaSearchItem>,
+)
+
+@Serializable
+class ApiMangaSearchItem(
+    val title: String,
+    val slug: String,
+    val image: String?,
+)
+
+// Manga Details + Chapters
+@Serializable
+class ApiMangaObject(
+    val manga: ApiMangaData?,
+)
+
+@Serializable
+class ApiMangaData(
+    val title: String?,
+    val status: String?,
+    val image: String?,
+    val author: String?,
+    val artist: String?,
+    val genres: String?,
+    val description: String?,
+    val alternativeTitle: String?,
+    val slug: String?,
+    val chapters: List<ApiMangaChapterList>?,
+)
+
+@Serializable
+class ApiMangaChapterList(
+    val number: Float,
+    val title: String,
+    val date: String,
+)
+
+// Filters
+@Serializable
+class ApiGenresObject(
+    val genres: List<ApiGenre>,
+)
+
+@Serializable
+class ApiGenre(
+    val title: String,
+    val slug: String,
+    val group: String?,
+)

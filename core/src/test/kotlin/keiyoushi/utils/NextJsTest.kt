@@ -1,0 +1,176 @@
+package keiyoushi.utils
+
+import keiyoushi.utils.reactFlight.ReactFlightBigInt
+import keiyoushi.utils.reactFlight.ReactFlightNumber
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import okio.ByteString.Companion.toByteString
+import org.jsoup.Jsoup
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.BeforeClass
+import org.junit.Test
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.addSingleton
+import kotlin.time.Instant
+
+class NextJsTest {
+
+    companion object {
+        @JvmStatic
+        @BeforeClass
+        fun setUp() {
+            // jsonInstance = Injekt.get(); register one for the unit-test JVM.
+            Injekt.addSingleton(Json { ignoreUnknownKeys = true })
+        }
+    }
+
+    private fun fixture(name: String): String = javaClass.getResource("/reactflight/$name.txt")!!.readText()
+
+    // Fixtures captured from real React 19 Flight output (regenerate via src/test/rsc-capture).
+
+    @Serializable
+    data class FixtureMarkers(
+        val name: String,
+        val big: ReactFlightBigInt,
+        val date: Instant,
+        val inf: ReactFlightNumber,
+        val negInf: ReactFlightNumber,
+        val nan: ReactFlightNumber,
+        val negZero: ReactFlightNumber,
+        val plain: ReactFlightNumber,
+        val missing: String? = null,
+    )
+
+    @Test
+    fun realFlightMarkersFixture() {
+        val m = fixture("markers").extractNextJsRsc<FixtureMarkers>()
+        assertNotNull(m)
+        m!!
+        assertEquals("hello", m.name)
+        assertEquals("123456789012345678901234567890", m.big.toString())
+        assertEquals(1704164645000L, m.date.toEpochMilliseconds())
+        assertTrue(m.inf.toDouble() == Double.POSITIVE_INFINITY)
+        assertTrue(m.negInf.toDouble() == Double.NEGATIVE_INFINITY)
+        assertTrue(m.nan.toDouble().isNaN())
+        assertEquals(-0.0, m.negZero.toDouble(), 0.0)
+        assertEquals(3.14, m.plain.toDouble(), 0.0) // bare JSON number, not a $-token
+        assertEquals(null, m.missing) // $undefined -> JSON null
+    }
+
+    @Serializable
+    data class LargeText(val title: String, val body: String, val unicode: String)
+
+    @Test
+    fun realFlightLargeTextFixture() {
+        // body/unicode are outlined as binary "T<byteLen>," chunks, referenced via $1/$2.
+        val expectedBody = "Lorem ipsum dolor sit amet. ".repeat(60)
+        val expectedUnicode = "héllo wörld 你好 🚀 ".repeat(80)
+        val t = fixture("largetext").extractNextJsRsc<LargeText>()
+        assertNotNull(t)
+        t!!
+        assertEquals("big", t.title)
+        assertEquals(expectedBody, t.body)
+        // Multibyte + surrogate (🚀) content survives UTF-8 byte-length walking intact.
+        assertEquals(expectedUnicode, t.unicode)
+    }
+
+    @Serializable
+    data class Collections(val items: Map<String, Int>, val tags: List<Int>)
+
+    @Test
+    fun realFlightCollectionsFixture() {
+        val c = fixture("collections").extractNextJsRsc<Collections>()
+        assertNotNull(c)
+        assertEquals(mapOf("a" to 1, "b" to 2), c!!.items)
+        assertEquals(listOf(10, 20, 30), c.tags)
+    }
+
+    @Serializable
+    data class Chapter(val number: Int, val title: String)
+
+    @Serializable
+    data class FullList(val mangaTitle: String, val chapters: List<Chapter>)
+
+    @Test
+    fun realFlightPathRefsFixture() {
+        // full.chapters[0] is emitted as a path reference ($0:preview:0) to the shared object
+        // first written under preview[0]; it must resolve to the full chapter, not stay a string.
+        val full = fixture("pathrefs").extractNextJsRsc<FullList>()
+        assertNotNull(full)
+        full!!
+        assertEquals("My Manga", full.mangaTitle)
+        assertEquals(listOf(3, 1), full.chapters.map { it.number })
+        assertEquals("Newest", full.chapters[0].title) // resolved via $0:preview:0
+        assertEquals("Oldest", full.chapters[1].title)
+    }
+
+    @Serializable
+    data class AsyncList(val mangaTitle: String, val chapters: List<Chapter>)
+
+    @Test
+    fun realFlightPromiseRefsFixture() {
+        // A Promise in the model is outlined into its own row and referenced as $@1;
+        // the row is emitted once it settles. Without resolving it, `chapters` stays
+        // the literal string "$@1" and never deserializes into a list.
+        val a = fixture("promises").extractNextJsRsc<AsyncList>()
+        assertNotNull(a)
+        a!!
+        assertEquals("Async Manga", a.mangaTitle)
+        assertEquals(listOf(2, 1), a.chapters.map { it.number })
+        assertEquals("Second", a.chapters[0].title)
+    }
+
+    @Serializable
+    data class LazySection(val mangaTitle: String, val children: List<String>)
+
+    @Test
+    fun realFlightLazyRefsFixture() {
+        // Async Server Components can't finish synchronously, so React flushes the parent
+        // element right away with $L1/$L2 placeholders in its children slot and emits the
+        // resolved subtrees as later rows. Both children only exist after resolution.
+        val s = fixture("lazyrefs").extractNextJsRsc<LazySection>()
+        assertNotNull(s)
+        s!!
+        assertEquals("Lazy Manga", s.mangaTitle)
+        assertEquals(listOf("Deferred Title", "42 chapters"), s.children)
+    }
+
+    @Test
+    fun appRouterRowsSplitAcrossPushes() {
+        // Next.js inlines the stream as one push per chunk, cutting after a T row header and mid-row.
+        val body = fixture("largetext")
+        val cuts = Regex("""[0-9a-f]+:T[0-9a-f]+,""").findAll(body).map { it.range.last + 1 } +
+            (body.indexOf("\"body\"") + 1)
+        val scripts = (listOf(0) + cuts + body.length).zipWithNext { from, to ->
+            "<script>self.__next_f.push([1,${JsonPrimitive(body.substring(from, to))}])</script>"
+        }
+        val html = "<script>(self.__next_f=self.__next_f||[]).push([0])</script>" + scripts.joinToString("")
+
+        val t = Jsoup.parse(html).extractNextJs<LargeText>()
+        assertNotNull(t)
+        t!!
+        assertEquals("big", t.title)
+        assertEquals("Lorem ipsum dolor sit amet. ".repeat(60), t.body)
+        assertEquals("héllo wörld 你好 🚀 ".repeat(80), t.unicode)
+    }
+
+    @Test
+    fun appRouterBinaryPushes() {
+        // [3, base64] pushes carry raw bytes; they join the stream like text pushes.
+        val bytes = fixture("largetext").toByteArray()
+        val cut = fixture("largetext").substringBefore("你").toByteArray().size + 1
+        val scripts = listOf(bytes.copyOfRange(0, cut), bytes.copyOfRange(cut, bytes.size)).joinToString("") {
+            "<script>self.__next_f.push([3,\"${it.toByteString().base64()}\"])</script>"
+        }
+        val html = "<script>self.__next_f.push([2,null])</script>$scripts"
+
+        val t = Jsoup.parse(html).extractNextJs<LargeText>()
+        assertNotNull(t)
+        t!!
+        assertEquals("big", t.title)
+        assertEquals("héllo wörld 你好 🚀 ".repeat(80), t.unicode)
+    }
+}

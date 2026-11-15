@@ -1,0 +1,49 @@
+package eu.kanade.tachiyomi.extension.en.allanime
+
+import kotlinx.serialization.Serializable
+
+@Serializable
+class PopularVariables(
+    private val type: String,
+    private val size: Int,
+    private val dateRange: Int,
+    private val page: Int,
+    private val allowAdult: Boolean,
+    private val allowUnknown: Boolean,
+)
+
+@Serializable
+class SearchVariables(
+    private val search: SearchPayload,
+    private val size: Int,
+    private val page: Int,
+    private val translationType: String,
+    private val countryOrigin: String,
+)
+
+@Serializable
+class SearchPayload(
+    private val query: String?,
+    private val sortBy: String?,
+    private val genres: List<String>?,
+    private val excludeGenres: List<String>?,
+    private val isManga: Boolean,
+    private val allowAdult: Boolean,
+    private val allowUnknown: Boolean,
+)
+
+@Serializable
+class MangaUpdateVariables(
+    private val id: String,
+    private val showId: String,
+    private val search: Map<String, Boolean>,
+)
+
+@Serializable
+class RelatedVariables(
+    private val ids: List<String>,
+    private val search: SearchPayload,
+    private val fewerGenresSearch: SearchPayload,
+    private val size: Int,
+    private val translationType: String,
+)

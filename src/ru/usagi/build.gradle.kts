@@ -1,0 +1,20 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "Usagi"
+    versionCode = 1
+    contentWarning = ContentWarning.SAFE
+    libVersion = "1.6"
+    theme = "grouple"
+
+    source {
+        baseUrl {
+            custom("https://web.usagi.one")
+        }
+        lang = "ru"
+    }
+}

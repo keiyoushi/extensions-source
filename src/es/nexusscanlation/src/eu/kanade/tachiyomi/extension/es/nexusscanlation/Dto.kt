@@ -1,0 +1,129 @@
+package eu.kanade.tachiyomi.extension.es.nexusscanlation
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+@Serializable
+class CatalogResponseDto(
+    val data: List<CatalogEntryDto>? = null,
+    val meta: CatalogMetaDto? = null,
+)
+
+@Serializable
+class LandingResponseDto(
+    @SerialName("latest_updates")
+    val latestUpdates: List<LandingUpdateDto>? = null,
+)
+
+@Serializable
+class LandingUpdateDto(
+    @SerialName("serie_id")
+    val serieId: String? = null,
+    @SerialName("serie_slug")
+    val serieSlug: String,
+    @SerialName("serie_titulo")
+    val serieTitulo: String,
+    @SerialName("portada_url")
+    val portadaUrl: String? = null,
+)
+
+@Serializable
+class CatalogMetaDto(
+    @SerialName("has_next")
+    val hasNext: Boolean = false,
+)
+
+@Serializable
+class CatalogEntryDto(
+    val id: String,
+    val slug: String,
+    val titulo: String,
+    @SerialName("portada_url")
+    val portadaUrl: String? = null,
+)
+
+@Serializable
+class SeriesPayloadDto(
+    val serie: SeriesDto,
+    val capitulos: List<ChapterEntryDto>? = null,
+)
+
+@Serializable
+class SeriesDto(
+    val id: String,
+    val slug: String,
+    val titulo: String,
+    @SerialName("portada_url")
+    val portadaUrl: String? = null,
+    val descripcion: String? = null,
+    val estado: String = "",
+    val generos: List<NameDto>? = null,
+    val autores: List<NameDto>? = null,
+)
+
+@Serializable
+class NameDto(
+    val nombre: String = "",
+    val rol: String? = null,
+)
+
+@Serializable
+class ChapterEntryDto(
+    val slug: String,
+    val numero: Float,
+    val titulo: String? = null,
+    @SerialName("published_at")
+    val publishedAt: String? = null,
+    @SerialName("es_premium")
+    val esPremium: Boolean = false,
+)
+
+// API may wrap chapter pages inside "data"
+@Serializable
+class ChapterPagesWrapperDto(
+    val data: ChapterPagesDto? = null,
+)
+
+// The chapter pages data (used both as root and inside "data" wrapper)
+@Serializable
+class ChapterPagesDto(
+    val paginas: List<PageEntryDto>? = null,
+    @SerialName("es_premium")
+    val esPremium: Boolean = false,
+    val locked: Boolean = false,
+    // ECDH-wrapped scramble seeds and page keys, only returned when the request carries an `X-Rs` public key.
+    val r: String? = null,
+)
+
+@Serializable
+class PageEntryDto(
+    val url: String,
+    val orden: Int = 0,
+    @SerialName("sc")
+    val scrambledData: ScrambledDataDto? = null,
+)
+
+@Serializable
+class ScrambledDataDto(
+    @SerialName("c") val columns: Int,
+    @SerialName("r") val rows: Int,
+    @SerialName("v") val version: Int = 1,
+)
+
+@Serializable
+class UnwrappedKeysDto(
+    val k: Map<String, String>? = null,
+    val s: Map<String, Long>? = null,
+)
+
+@Serializable
+class GenresResponseDto(
+    val data: List<GenreDto>? = null,
+)
+
+@Serializable
+class GenreDto(
+    val id: Long? = null,
+    val slug: String,
+    val nombre: String,
+)

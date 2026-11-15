@@ -1,0 +1,619 @@
+package eu.kanade.tachiyomi.multisrc.libgroup
+
+import android.annotation.SuppressLint
+import android.util.Log
+import android.widget.Toast
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
+import keiyoushi.network.get
+import keiyoushi.network.head
+import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.getLocalStorage
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonString
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.JsonElement
+import okhttp3.Headers
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import java.io.IOException
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+
+abstract class LibGroup :
+    KeiSource(),
+    ConfigurableSource {
+
+    private val preferences by getPreferencesLazy {
+        if (getString(SERVER_PREF, "main") == "fourth") {
+            edit().putString(SERVER_PREF, "secondary").apply()
+        }
+    }
+
+    private var bearerToken: String? = null
+
+    private var userId: Int? = null
+
+    abstract val siteId: Int // Important in api calls
+
+    private val apiDomain: String = preferences.getString(API_DOMAIN_PREF, API_DOMAIN_DEFAULT).toString()
+
+    override fun OkHttpClient.Builder.configureClient() = connectTimeout(1.minutes)
+        .readTimeout(30.seconds)
+        .addInterceptor(::checkForToken)
+        .addInterceptor { chain ->
+            val response = chain.proceed(chain.request())
+            if (response.code == 419) {
+                response.close()
+                throw IOException("HTTP error ${response.code}. Проверьте сайт. Для завершения авторизации необходимо перезапустить приложение с полной остановкой.")
+            }
+            if (response.code == 404) {
+                response.close()
+                throw IOException("HTTP error ${response.code}. Проверьте сайт. Попробуйте авторизоваться через WebView🌎︎ и обновите список. Для завершения авторизации может потребоваться перезапустить приложение с полной остановкой.")
+            }
+            return@addInterceptor response
+        }
+        .rateLimit(1) { it.host == apiDomain.toHttpUrl().host || it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(3)
+
+    override fun Headers.Builder.configureHeaders() = set("Accept", "text/html,application/json,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+        .set("Site-Id", siteId.toString())
+
+    private fun imageHeader() = headersBuilder()
+        .set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+        .build()
+
+    private var constants: Constants? = null
+
+    private suspend fun fetchConstants(): Constants = client.get("$apiDomain/api/constants?fields[]=genres&fields[]=tags&fields[]=types&fields[]=scanlateStatus&fields[]=status&fields[]=format&fields[]=ageRestriction&fields[]=imageServers", Fetch.XHR)
+        .parseAs<Data<Constants>>().data
+        .also { constants = it }
+
+    private suspend fun getConstants(): Constants? = constants ?: try {
+        fetchConstants()
+    } catch (ex: Exception) {
+        Log.d("LibGroup", "Error getting constants: $ex")
+        null
+    }
+
+    private fun checkForToken(chain: Interceptor.Chain): Response {
+        val req = chain.request().newBuilder()
+        val url = chain.request().url.toString()
+        val manualToken = preferences.getString("bearer_token", "")
+        if (url.contains(apiDomain) && !url.contains("/api/auth/me")) {
+            // Force change token if use manual
+            if (bearerToken.isNullOrBlank() || (!manualToken.isNullOrBlank() && bearerToken != manualToken)) {
+                val token = runBlocking { loadToken() }
+                if (token != null) {
+                    bearerToken = token.getToken()
+                    userId = token.getUserId()
+                } else {
+                    bearerToken = "none"
+                }
+            }
+            if (bearerToken != "none") {
+                req.apply {
+                    addHeader("Authorization", bearerToken.orEmpty())
+                }
+            }
+        }
+        return chain.proceed(req.build())
+    }
+
+    @SuppressLint("ApplySharedPref")
+    private suspend fun loadToken(): AuthToken? {
+        // Try to get manually configured token from preferences
+        val manualToken = preferences.getString("bearer_token", "")
+        val userId = preferences.getString("user_id", "")
+        val expiresIn = preferences.getString("expires_in", "0")?.toLongOrNull() ?: 0
+
+        if (!manualToken.isNullOrBlank()) {
+            return AuthToken(
+                auth = AuthToken.Auth(
+                    id = userId?.toIntOrNull() ?: 0,
+                ),
+                token = AuthToken.Token(
+                    timestamp = System.currentTimeMillis(),
+                    expiresIn = expiresIn,
+                    tokenType = "Bearer",
+                    accessToken = manualToken,
+                ),
+            )
+        }
+        try {
+            var token = preferences.getString(TOKEN_STORE, "")!!.parseAs<AuthToken>()
+            if (token.isExpired() || !isUserTokenValid(token.getToken())) {
+                val refreshedToken: AuthToken? = refreshToken()
+                if (refreshedToken != null) {
+                    preferences.edit().putString(TOKEN_STORE, refreshedToken.toJsonString()).commit()
+                    token = refreshedToken
+                }
+            }
+            return token
+        } catch (ex: SerializationException) {
+            val refreshedToken: AuthToken? = refreshToken()
+            if (refreshedToken != null) {
+                preferences.edit().putString(TOKEN_STORE, refreshedToken.toJsonString()).commit()
+                return refreshedToken
+            }
+        }
+        return null
+    }
+
+    private suspend fun refreshToken(): AuthToken? = getLocalStorage(baseUrl, "auth")
+        ?.parseAs<AuthToken>()
+        ?.takeIf { it.isValid() }
+
+    private suspend fun isUserTokenValid(token: String): Boolean {
+        val headers = Headers.Builder().apply {
+            add("Accept", "application/json")
+            add("Authorization", token)
+        }.build()
+        client.get("$apiDomain/api/auth/me", headers, Fetch.XHR, ensureSuccess = false).use { response ->
+            return when (response.code) {
+                401 -> throw Exception("Попробуйте авторизоваться через WebView🌎︎. Для завершения авторизации может потребоваться перезапустить приложение с полной остановкой.")
+                else -> true
+            }
+        }
+    }
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/ru/manga${manga.url}"
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangasPage(client.get("$apiDomain/api/latest-updates?page=$page", Fetch.XHR))
+
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = "$apiDomain/api/manga".toHttpUrl().newBuilder()
+            .addQueryParameter("site_id[]", siteId.toString())
+            .addQueryParameter("page", page.toString())
+        return parseMangasPage(client.get(url.build(), Fetch.XHR))
+    }
+
+    private fun parseMangasPage(response: Response): MangasPage {
+        val data = response.parseAs<MangasPageDto>()
+        val popularMangas = data.mapToSManga(isEng())
+        if (popularMangas.isNotEmpty()) {
+            return MangasPage(popularMangas, data.meta.hasNextPage)
+        }
+        return MangasPage(emptyList(), false)
+    }
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        // throw exception if old url
+        if (!manga.url.contains("--")) throw Exception(urlChangedError(name))
+
+        val details = async { if (fetchDetails) fetchMangaDetails(manga) else manga }
+        val chapterList = async { if (fetchChapters) fetchChapterList(manga) else chapters }
+
+        SMangaUpdate(details.await(), chapterList.await())
+    }
+
+    private suspend fun fetchMangaDetails(manga: SManga): SManga {
+        val url = "$apiDomain/api/manga${manga.url}".toHttpUrl().newBuilder()
+            .addQueryParameter("fields[]", "eng_name")
+            .addQueryParameter("fields[]", "otherNames")
+            .addQueryParameter("fields[]", "summary")
+            .addQueryParameter("fields[]", "rate")
+            .addQueryParameter("fields[]", "genres")
+            .addQueryParameter("fields[]", "tags")
+            .addQueryParameter("fields[]", "teams")
+            .addQueryParameter("fields[]", "authors")
+            .addQueryParameter("fields[]", "publisher")
+            .addQueryParameter("fields[]", "userRating")
+            .addQueryParameter("fields[]", "manga_status_id")
+            .addQueryParameter("fields[]", "status_id")
+            .addQueryParameter("fields[]", "artists")
+
+        return client.get(url.build(), Fetch.XHR).parseAs<Data<Manga>>().data.toSManga(isEng())
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val slugUrl = chapter.url.substringAfter("/").substringBefore("/")
+        val volume = chapter.url.substringAfter("volume=").substringBefore("&")
+        val number = chapter.url.substringAfter("number=").substringBefore("&")
+        val branchId = chapter.url.substringAfter("branch_id=", "").substringBefore("&")
+        val branchStr = if (branchId.isNotBlank()) "&bid=$branchId" else ""
+        val userStr = if (userId != null) "&ui=$userId" else ""
+
+        return "$baseUrl/ru/$slugUrl/read/v$volume/c$number?$branchStr$userStr"
+    }
+
+    private suspend fun getDefaultBranch(id: String): List<Branch> = client.get("$apiDomain/api/branches/$id", Fetch.XHR).parseAs<Data<List<Branch>>>().data
+
+    private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
+        val slugUrl = manga.url.removePrefix("/")
+        val chaptersData = client.get("$apiDomain/api/manga${manga.url}/chapters", Fetch.XHR).parseAs<Data<List<Chapter>>>()
+            .also { if (it.data.isEmpty()) return emptyList() }
+        val sortingList = preferences.getString(SORTING_PREF, "ms_mixing")
+        val defaultBranchId = if ((sortingList == "ms_mixing") && (chaptersData.data.getBranchCount() > 1)) {
+            runCatching { getDefaultBranch(slugUrl.substringBefore("-")).first().id }.getOrNull()
+        } else {
+            null
+        }
+        val showPaidChapters = preferences.getBoolean(PAID_CHAPTER_DISPLAY_PREF, false)
+
+        return chaptersData.data.flatMap { chapter ->
+            when {
+                (chapter.branchesCount > 1) && (sortingList == "ms_mixing") -> {
+                    val branch = chapter.branches
+                        .firstOrNull { it.branchId == defaultBranchId }?.branchId
+                        ?: chapter.branches.first().branchId
+
+                    listOf(
+                        chapter.toSChapter(slugUrl, branch, isScanUser(), showPaidChapters),
+                    )
+                }
+
+                (chapter.branchesCount > 1) && (sortingList == "ms_combining") -> {
+                    chapter.branches.map { branch ->
+                        chapter.toSChapter(slugUrl, branch.branchId, isScanUser(), showPaidChapters)
+                    }
+                }
+
+                else -> listOf(chapter.toSChapter(slugUrl, isScanUser = isScanUser(), showPaidChapter = showPaidChapters))
+            }
+        }.filterNotNull().reversed()
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        // throw exception if old url
+        if (!chapter.url.contains("--")) throw Exception(urlChangedError(name))
+        if (chapter.name.contains("$$")) throw Exception("Глава не куплена")
+
+        return client.get("$apiDomain/api/manga${chapter.url}", Fetch.XHR).parseAs<Data<Pages>>().data
+            .toPageList()
+            .sortedBy { it.index }
+    }
+
+    private suspend fun checkImage(url: String): Boolean = client.head(url, imageHeader(), ensureSuccess = false).use { response ->
+        response.isSuccessful && (response.header("content-length", "0")?.toInt()!! > 600)
+    }
+
+    override suspend fun getImageUrl(page: Page): String {
+        if (isServer() == "auto") {
+            for (serverApi in IMG_SERVERS.slice(1 until IMG_SERVERS.size)) {
+                val server = getConstants()?.getServer(serverApi, siteId)?.url
+                val imageUrl = "$server${page.url}"
+                if (checkImage(imageUrl)) {
+                    return imageUrl
+                }
+            }
+        }
+        val server = getConstants()?.getServer(isServer(), siteId)?.url ?: throw Exception("Ошибка получения сервера изображений")
+        return "$server${page.url}"
+    }
+
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
+        .headers(imageHeader())
+        .build()
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val titleId = url.pathSegments.getOrNull(2)?.takeIf { it.isNotEmpty() } ?: return null
+        return client.get("$apiDomain/api/manga/$titleId", Fetch.XHR).parseAs<Data<MangaShort>>().data.toSManga(isEng())
+    }
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = "$apiDomain/api/manga".toHttpUrl().newBuilder()
+        url.addQueryParameter("page", page.toString())
+        url.addQueryParameter("site_id[]", siteId.toString())
+        if (query.isNotEmpty()) {
+            url.addQueryParameter("q", query)
+        }
+        filters.forEach { filter ->
+            when (filter) {
+                is CategoryList -> filter.state.forEach { category ->
+                    if (category.state) {
+                        url.addQueryParameter("types[]", category.id)
+                    }
+                }
+
+                is FormatList -> filter.state.forEach { format ->
+                    if (format.state != Filter.TriState.STATE_IGNORE) {
+                        url.addQueryParameter(if (format.isIncluded()) "format[]" else "format_exclude[]", format.id)
+                    }
+                }
+
+                is StatusList -> filter.state.forEach { status ->
+                    if (status.state) {
+                        url.addQueryParameter("scanlate_status[]", status.id)
+                    }
+                }
+
+                is StatusTitleList -> filter.state.forEach { title ->
+                    if (title.state) {
+                        url.addQueryParameter("status[]", title.id)
+                    }
+                }
+
+                is GenreList -> filter.state.forEach { genre ->
+                    if (genre.state != Filter.TriState.STATE_IGNORE) {
+                        url.addQueryParameter(if (genre.isIncluded()) "genres[]" else "genres_exclude[]", genre.id)
+                    }
+                }
+
+                is OrderBy -> {
+                    if (filter.state!!.index == 0) {
+                        url.addQueryParameter("sort_type", if (filter.state!!.ascending) "asc" else "desc")
+                        return@forEach
+                    }
+                    val orderArray = arrayOf("", "rate_avg", "name", "rus_name", "views", "releaseDate", "created_at", "last_chapter_at", "chap_count")
+                    url.addQueryParameter("sort_type", if (filter.state!!.ascending) "asc" else "desc")
+                    url.addQueryParameter("sort_by", orderArray[filter.state!!.index])
+                    if (orderArray[filter.state!!.index] == "rate") {
+                        url.addQueryParameter("rate_min", "50")
+                    }
+                }
+
+                is MyList -> filter.state.forEach { favorite ->
+                    if (favorite.state != Filter.TriState.STATE_IGNORE) {
+                        url.addQueryParameter(if (favorite.isIncluded()) "bookmarks[]" else "bookmarks_exclude[]", favorite.id)
+                    }
+                }
+
+                is RequireChapters -> {
+                    if (filter.state == 0) {
+                        url.setQueryParameter("chap_count_min", "1")
+                    }
+                }
+
+                is AgeList -> filter.state.forEach { age ->
+                    if (age.state) {
+                        url.addQueryParameter("caution[]", age.id)
+                    }
+                }
+
+                is TagList -> filter.state.forEach { tag ->
+                    if (tag.state != Filter.TriState.STATE_IGNORE) {
+                        url.addQueryParameter(if (tag.isIncluded()) "tags[]" else "tags_exclude[]", tag.id)
+                    }
+                }
+
+                else -> {}
+            }
+        }
+        return parseMangasPage(client.get(url.build(), Fetch.XHR))
+    }
+
+    // Filters
+    private class SearchFilter(name: String, val id: String) : Filter.TriState(name)
+    private class CheckFilter(name: String, val id: String) : Filter.CheckBox(name)
+
+    private class CategoryList(categories: List<CheckFilter>) : Filter.Group<CheckFilter>("Тип", categories)
+    private class FormatList(formats: List<SearchFilter>) : Filter.Group<SearchFilter>("Формат выпуска", formats)
+    private class GenreList(genres: List<SearchFilter>) : Filter.Group<SearchFilter>("Жанры", genres)
+    private class TagList(tags: List<SearchFilter>) : Filter.Group<SearchFilter>("Теги", tags)
+    private class StatusList(statuses: List<CheckFilter>) : Filter.Group<CheckFilter>("Статус перевода", statuses)
+    private class StatusTitleList(titles: List<CheckFilter>) : Filter.Group<CheckFilter>("Статус тайтла", titles)
+    private class AgeList(ages: List<CheckFilter>) : Filter.Group<CheckFilter>("Возрастное ограничение", ages)
+    private class MyList(favorites: List<SearchFilter>) : Filter.Group<SearchFilter>("Мои списки", favorites)
+
+    override val supportsFilterFetching get() = true
+
+    override suspend fun fetchFilterData(): JsonElement = fetchConstants().toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filters = mutableListOf<Filter<*>>()
+        filters += listOf(
+            OrderBy(),
+        )
+
+        data?.parseAs<Constants>()?.let { constants ->
+            filters += listOf(
+                CategoryList(constants.getCategories(siteId).map { CheckFilter(it.label, it.id.toString()) }),
+                FormatList(constants.getFormats(siteId).map { SearchFilter(it.name, it.id.toString()) }),
+                GenreList(constants.getGenres(siteId).map { SearchFilter(it.name, it.id.toString()) }),
+                TagList(constants.getTags(siteId).map { SearchFilter(it.name, it.id.toString()) }),
+                StatusList(constants.getScanlateStatuses(siteId).map { CheckFilter(it.label, it.id.toString()) }),
+                StatusTitleList(constants.getTitleStatuses(siteId).map { CheckFilter(it.label, it.id.toString()) }),
+                AgeList(constants.getAgeRestrictions(siteId).map { CheckFilter(it.label, it.id.toString()) }),
+            )
+        }
+
+        filters += listOf(
+            MyList(getMyList()),
+            RequireChapters(),
+        )
+
+        return FilterList(filters)
+    }
+
+    private class OrderBy :
+        Filter.Sort(
+            "Сортировка",
+            arrayOf("Популярность", "Рейтинг", "Имя (A-Z)", "Имя (А-Я)", "Просмотры", "Дата релиза", "Дате добавления", "Дате обновления", "Кол-во глав"),
+            Selection(0, false),
+        )
+
+    private fun getMyList() = listOf(
+        SearchFilter("Читаю", "1"),
+        SearchFilter("В планах", "2"),
+        SearchFilter("Брошено", "3"),
+        SearchFilter("Прочитано", "4"),
+        SearchFilter("Любимые", "5"),
+    )
+
+    private class RequireChapters :
+        Filter.Select<String>(
+            "Только проекты с главами",
+            arrayOf("Да", "Все"),
+        )
+
+    // Utils
+    private fun urlChangedError(sourceName: String): String = "URL серии изменился. Перенесите/мигрируйте с $sourceName " +
+        "на $sourceName, чтобы список глав обновился."
+
+    companion object {
+        private const val SERVER_PREF = "MangaLibImageServer"
+        private val IMG_SERVERS = arrayOf("auto", "main", "secondary", "compress")
+
+        private const val SORTING_PREF = "MangaLibSorting"
+        private const val SORTING_PREF_TITLE = "Способ выбора переводчиков"
+
+        private const val IS_SCAN_USER = "ScanlatorUsername"
+        private const val IS_SCAN_USER_TITLE = "Альтернативный переводчик"
+
+        private const val TRANSLATORS_TITLE = "Чёрный список переводчиков\n(для красоты через «/» или с новой строки)"
+        private const val TRANSLATORS_DEFAULT = ""
+
+        private const val LANGUAGE_PREF = "MangaLibTitleLanguage"
+        private const val LANGUAGE_PREF_TITLE = "Выбор языка на обложке"
+
+        private const val API_DOMAIN_PREF = "MangaLibApiDomain"
+        private const val API_DOMAIN_TITLE = "Выбор домена API"
+        private const val API_DOMAIN_DEFAULT = "https://api.cdnlibs.org"
+
+        private const val PAID_CHAPTER_DISPLAY_PREF = "MangaLibPaidChapterDisplay"
+
+        private const val PAID_CHAPTER_DISPLAY_TITLE = "Показывать все платные главы"
+
+        private const val TOKEN_STORE = "TokenStore"
+    }
+
+    private fun isServer(): String = preferences.getString(SERVER_PREF, "compress")!!
+    private fun isEng(): String = preferences.getString(LANGUAGE_PREF, "eng")!!
+    private fun groupTranslates(): String = preferences.getString(TRANSLATORS_TITLE, TRANSLATORS_DEFAULT)!!
+    private fun isScanUser(): Boolean = preferences.getBoolean(IS_SCAN_USER, false)
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val serverPref = ListPreference(screen.context).apply {
+            key = SERVER_PREF
+            title = "Сервер изображений"
+            entries = arrayOf("Автовыбор", "Первый", "Второй", "Сжатия")
+            entryValues = IMG_SERVERS
+            summary = "%s \n\n" +
+                "По умолчанию в приложении и на сайте «Сжатия» - самый стабильный и быстрый. \n\n" +
+                "«Автовыбор» - проходит по всем серверам и показывает только загруженную картинку. \nМожет происходить медленно. \n\n" +
+                "ⓘВыбор другого сервера помогает при ошибках и медленной загрузки изображений глав."
+            setDefaultValue("compress")
+            setOnPreferenceChangeListener { _, newValue ->
+                val warning = "Для смены сервера: Настройки -> Дополнительно -> Очистить кэш глав"
+                Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
+                true
+            }
+        }
+
+        val sortingPref = ListPreference(screen.context).apply {
+            key = SORTING_PREF
+            title = SORTING_PREF_TITLE
+            entries = arrayOf(
+                "Полный список (без повторных переводов)",
+                "Все переводы (друг за другом)",
+            )
+            entryValues = arrayOf("ms_mixing", "ms_combining")
+            summary = "%s"
+            setDefaultValue("ms_mixing")
+        }
+        val scanlatorUsername = androidx.preference.CheckBoxPreference(screen.context).apply {
+            key = IS_SCAN_USER
+            title = IS_SCAN_USER_TITLE
+            summary = "Отображает Ник переводчика если Группа не указана явно."
+            setDefaultValue(false)
+        }
+        val titleLanguagePref = ListPreference(screen.context).apply {
+            key = LANGUAGE_PREF
+            title = LANGUAGE_PREF_TITLE
+            entries = arrayOf("Английский", "Русский")
+            entryValues = arrayOf("eng", "rus")
+            summary = "%s"
+            setDefaultValue("eng")
+            setOnPreferenceChangeListener { _, _ ->
+                val warning = "Если язык обложки не изменился очистите базу данных в приложении (Настройки -> Дополнительно -> Очистить базу данных)"
+                Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
+                true
+            }
+        }
+
+        val domainApiPref = ListPreference(screen.context).apply {
+            key = API_DOMAIN_PREF
+            title = API_DOMAIN_TITLE
+            entries = arrayOf("Основной (api.cdnlibs.org)", "Резервный (api2.mangalib.me)", "Резервный (hapi.hentaicdn.org)", "Резервный (api.imglib.info)")
+            entryValues = arrayOf(API_DOMAIN_DEFAULT, "https://api2.mangalib.me", "https://hapi.hentaicdn.org", "https://api.imglib.info")
+            summary = "%s" +
+                "\n\nВыбор домена API, используемого для работы приложения." +
+                "\n\nПо умолчанию «Официальное приложение»" +
+                "\n\nⓘВы не увидите его нигде глазами, но источник должен начать работать стибильнее."
+            setDefaultValue(API_DOMAIN_DEFAULT)
+            setOnPreferenceChangeListener { _, newValue ->
+                val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
+                Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
+                true
+            }
+        }
+
+        val paidChapterDisplayPref = androidx.preference.CheckBoxPreference(screen.context).apply {
+            key = PAID_CHAPTER_DISPLAY_PREF // This key links to SharedPreferences
+            title = PAID_CHAPTER_DISPLAY_TITLE
+            summary = "Показывает не купленные главы и отмечает их $$ (может вызвать ошибки при обновлении/автозагрузке)"
+            setDefaultValue(false) // Default value when no saved value exists
+        }
+
+        // Authentication fields
+        val bearerTokenPref = androidx.preference.EditTextPreference(screen.context).apply {
+            key = "bearer_token"
+            title = "Bearer Token"
+            summary = "Токен авторизации (оставьте пустым для автоматического получения)"
+            dialogTitle = "Введите Bearer Token"
+            setDefaultValue("")
+        }
+
+        val userIdPref = androidx.preference.EditTextPreference(screen.context).apply {
+            key = "user_id"
+            title = "User ID"
+            summary = "ID пользователя (оставьте пустым для автоматического получения)"
+            dialogTitle = "Введите User ID"
+            setDefaultValue("")
+        }
+
+        val expiresInPref = androidx.preference.EditTextPreference(screen.context).apply {
+            key = "expires_in"
+            title = "Expires In (ms)"
+            summary = "Время жизни токена в миллисекундах (оставьте пустым для автоматического получения)"
+            dialogTitle = "Введите время жизни токена"
+            setDefaultValue("")
+        }
+
+        screen.addPreference(serverPref)
+        screen.addPreference(sortingPref)
+        screen.addPreference(screen.editTextPreference(TRANSLATORS_TITLE, TRANSLATORS_DEFAULT, groupTranslates()))
+        screen.addPreference(scanlatorUsername)
+        screen.addPreference(titleLanguagePref)
+        screen.addPreference(paidChapterDisplayPref)
+        screen.addPreference(domainApiPref)
+        screen.addPreference(bearerTokenPref)
+        screen.addPreference(userIdPref)
+        screen.addPreference(expiresInPref)
+    }
+    private fun PreferenceScreen.editTextPreference(title: String, default: String, value: String): androidx.preference.EditTextPreference = androidx.preference.EditTextPreference(context).apply {
+        key = title
+        this.title = title
+        summary = value.replace("/", "\n")
+        this.setDefaultValue(default)
+        dialogTitle = title
+        setOnPreferenceChangeListener { _, _ ->
+            Toast.makeText(context, "Для обновления списка необходимо перезапустить приложение с полной остановкой.", Toast.LENGTH_LONG).show()
+            true
+        }
+    }
+}

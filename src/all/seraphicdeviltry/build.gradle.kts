@@ -1,0 +1,23 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "SeraphicDeviltry"
+    versionCode = 2
+    contentWarning = ContentWarning.NSFW
+    libVersion = "1.6"
+    theme = "madara"
+
+    source {
+        lang = "en"
+        baseUrl = "https://seraphic-deviltry.com"
+    }
+
+    source {
+        lang = "es"
+        baseUrl = "https://spanish.seraphic-deviltry.com"
+    }
+}

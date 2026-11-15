@@ -1,0 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "Menudo-Fansub"
+    versionCode = 1
+    contentWarning = ContentWarning.SAFE
+    libVersion = "1.6"
+    theme = "foolslide"
+
+    source {
+        lang = "es"
+        baseUrl = "https://www.menudo-fansub.com"
+    }
+}

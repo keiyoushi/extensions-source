@@ -1,0 +1,63 @@
+package eu.kanade.tachiyomi.extension.en.yakshacomics
+
+import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
+import keiyoushi.utils.sha256
+import okhttp3.FormBody
+import okhttp3.Interceptor
+import okhttp3.OkHttpClient
+import okhttp3.Response
+import java.io.IOException
+
+@Source
+abstract class YakshaComics : Madara() {
+    // Adapted from src/en/yakshascans
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(::jsChallengeInterceptor)
+        rateLimit(1)
+    }
+    private fun jsChallengeInterceptor(chain: Interceptor.Chain): Response {
+        val response = chain.proceed(chain.request())
+        if (response.code != 403) {
+            return response
+        }
+        response.close()
+
+        Thread.sleep(3000L)
+        val token = fetchToken(chain).sha256().toHexString()
+        val body = FormBody.Builder()
+            .add("challenge", token)
+            .build()
+
+        val validateResponse = chain.proceed(POST("$baseUrl/hcdn-cgi/jschallenge-validate", headers.newBuilder().set("Origin", baseUrl).build(), body))
+        validateResponse.use {
+            if (!it.isSuccessful) {
+                throw IOException("Failed to bypass js challenge!")
+            }
+        }
+        return chain.proceed(chain.request())
+    }
+
+    private tailrec fun fetchToken(chain: Interceptor.Chain, attempt: Int = 0): String {
+        if (attempt > MAX_ATTEMPT) {
+            throw IOException("Failed to fetch challenge token!")
+        }
+
+        val response = chain.proceed(GET("$baseUrl/hcdn-cgi/jschallenge", headers))
+        val token = TOKEN_REGEX.find(response.body.string())?.groups?.get(1)?.value
+
+        return if (!token.isNullOrEmpty() && token != "nil") {
+            token
+        } else {
+            fetchToken(chain, attempt + 1)
+        }
+    }
+
+    companion object {
+        private const val MAX_ATTEMPT = 5
+        private val TOKEN_REGEX = """cjs[^']+'([^']+)""".toRegex()
+    }
+}

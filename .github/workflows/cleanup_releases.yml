@@ -1,0 +1,30 @@
+name: Clean up releases
+
+on:
+  schedule:
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Remove unreferenced release assets
+    if: github.repository == 'keiyoushi/extensions-source'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Clean up releases
+        env:
+          GH_TOKEN: ${{ secrets.BOT_PAT }}
+        run: python -u .github/scripts/cleanup-releases.py

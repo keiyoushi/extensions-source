@@ -1,0 +1,65 @@
+package eu.kanade.tachiyomi.multisrc.mccms
+
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParseDateTime
+import kotlinx.serialization.Serializable
+import org.jsoup.nodes.Entities
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+@Serializable
+class MangaDto(
+    private val id: String,
+    private val name: String,
+    private val pic: String,
+    private val serialize: String,
+    private val author: String,
+    private val content: String,
+    private val addtime: String,
+    private val url: String,
+    private val tags: List<String>,
+) {
+    val cleanUrl get() = url.removePathPrefix()
+
+    fun toSManga() = SManga.create().apply {
+        url = cleanUrl
+        title = Entities.unescape(name)
+        author = Entities.unescape(this@MangaDto.author)
+        description = Entities.unescape(content)
+        genre = Entities.unescape(tags.joinToString())
+        status = when (serialize) {
+            "连载", "连载中", "連載中", "En cours", "OnGoing" -> SManga.ONGOING
+            "完结", "已完结", "已完結", "Terminé", "Complete", "Complété" -> SManga.COMPLETED
+            else -> if (isUpdating(addtime)) SManga.ONGOING else SManga.UNKNOWN
+        }
+        thumbnail_url = "$pic#$id"
+        initialized = true
+    }
+
+    companion object {
+        private fun isUpdating(dateStr: String): Boolean {
+            val date = DATE_FORMAT.tryParseDateTime(dateStr).takeIf { it != 0L } ?: return false
+            return System.currentTimeMillis() - date <= 30L * 24 * 3600 * 1000 // a month
+        }
+    }
+}
+
+@Serializable
+class ChapterDto(val id: String, private val name: String, private val link: String) {
+    fun toSChapter(date: Long) = SChapter.create().apply {
+        url = link.removePathPrefix()
+        name = Entities.unescape(this@ChapterDto.name)
+        date_upload = date
+    }
+}
+
+@Serializable
+class ChapterDataDto(val id: String, private val addtime: String) {
+    val date get() = DATE_FORMAT.tryParseDateTime(addtime)
+}
+
+@Serializable
+class ResultDto<T>(val data: T)
+
+private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)

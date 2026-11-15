@@ -1,0 +1,146 @@
+package eu.kanade.tachiyomi.extension.en.philiascans
+
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.Serializable
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import kotlin.time.Instant
+
+@Serializable
+class SeriesResponse(
+    val items: List<Item>,
+    private val page: Int,
+    private val totalPages: Int,
+) {
+    fun hasNextPage() = page < totalPages
+}
+
+@Serializable
+class Item(
+    private val slug: String,
+    private val title: String,
+    private val coverImageUrl: String?,
+) {
+    fun toSManga(baseUrl: String) = SManga.create().apply {
+        url = slug
+        title = this@Item.title
+        thumbnail_url = coverImageUrl?.let { baseUrl.toHttpUrl().resolve(it)?.toString() }
+    }
+}
+
+@Serializable
+class DetailsResponse(
+    private val title: String,
+    private val alternativeTitles: List<String>?,
+    private val synopsis: String?,
+    private val coverImageUrl: String?,
+    private val status: String?,
+    private val genres: List<Info>?,
+    private val authors: List<Info>?,
+    private val artists: List<Info>?,
+) {
+    fun toSManga(baseUrl: String) = SManga.create().apply {
+        title = this@DetailsResponse.title
+        description = buildString {
+            synopsis?.let { append(it) }
+            alternativeTitles?.takeIf { it.isNotEmpty() }?.let {
+                append("\n\nAlternative Titles:\n")
+                append(it.joinToString("\n") { altTitle -> "- $altTitle" })
+            }
+        }
+        author = authors?.joinToString { it.name }
+        artist = artists?.joinToString { it.name }
+        genre = genres?.joinToString { it.name }
+        status = when (this@DetailsResponse.status?.lowercase()) {
+            "on_going" -> SManga.ONGOING
+            "completed" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+        thumbnail_url = coverImageUrl?.let { baseUrl.toHttpUrl().resolve(it)?.toString() }
+    }
+}
+
+@Serializable
+class Genre(
+    private val slug: String,
+    private val name: String,
+) {
+    fun toPair() = name to slug
+}
+
+@Serializable
+class Info(
+    val name: String,
+)
+
+@Serializable
+class ChapterResponse(
+    val items: List<ChapterItem>,
+)
+
+@Serializable
+class ChapterItem(
+    private val number: String,
+    private val title: String?,
+    private val slug: String,
+    private val publishedAt: String?,
+    private val coinPrice: Int?,
+    private val purchased: Boolean?,
+) {
+    val isLocked: Boolean
+        get() = purchased == false && coinPrice != 0
+
+    fun toSChapter(mangaSlug: String): SChapter = SChapter.create().apply {
+        url = "$mangaSlug/$slug"
+        val lock = if (isLocked) "🔒 " else ""
+        val validTitle = title?.takeIf { it.isNotBlank() && it != "null" && it != number }
+        name = lock + if (validTitle != null) "Chapter $number - $validTitle" else "Chapter $number"
+        date_upload = Instant.tryParse(publishedAt)
+        number.toFloatOrNull()?.let { chapter_number = it }
+    }
+}
+
+@Serializable
+class TokenResponse(
+    val token: String,
+    val expiresAt: Long,
+)
+
+@Serializable
+class ViewerResponse(
+    val chapter: Chapter,
+    val hasAccess: Boolean,
+)
+
+@Serializable
+class Chapter(
+    val id: Int,
+    val scrambled: Boolean,
+    val pages: List<Page>,
+)
+
+@Serializable
+class Page(
+    val position: Int,
+    val url: String,
+    val mime: String,
+)
+
+@Serializable
+class PageKeys(
+    val chapterKeyB64: String,
+    val gridSize: Int,
+    val sessionDefault: Boolean = false,
+)
+
+@Serializable
+class OpenResponse(
+    val sessionId: String,
+    val payloadA: String? = null,
+)
+
+@Serializable
+class DrmResponse(
+    val payloadB: String? = null,
+)

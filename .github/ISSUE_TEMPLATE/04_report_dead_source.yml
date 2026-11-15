@@ -1,0 +1,76 @@
+name: ❌ Dead source report
+description: Source is down and website is closed
+labels: [Source is down]
+body:
+
+  - type: markdown
+    attributes:
+      value: |
+        ### Notice
+        * This request type is for dead sources, so we can remove the extension from the repo, double-check that you have chosen the correct request type first.
+        * If you have a lot of dead sources to report, please go back and submit a single meta request.
+
+  - type: input
+    id: source
+    attributes:
+      label: Source name
+      description: |
+        You can find the extension name in **Browse → Extensions**.
+      placeholder: |
+        Example: "Not Real Scans"
+    validations:
+      required: true
+
+  - type: input
+    id: language
+    attributes:
+      label: Source language
+      placeholder: |
+        Example: "English"
+    validations:
+      required: true
+
+  - type: input
+    id: link
+    attributes:
+      label: Source link
+      placeholder: |
+        Example: "https://notrealscans.org"
+    validations:
+      required: true
+
+  - type: textarea
+    id: other-details
+    attributes:
+      label: Other details
+      placeholder: |
+        Additional details and attachments about the source to remove the extension.
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Acknowledgements
+      description: Your issue will be closed if you haven't done these steps.
+      options:
+        - label: I have updated the extension to the latest version (as listed on the [extensions listing](https://keiyoushi.github.io/extensions/) page).
+          required: true
+        - label: I have opened WebView to check that the source website is down.
+          required: true
+        - label: I have searched [existing issues](https://github.com/keiyoushi/extensions-source/issues) both open & closed, and confirm that this is a new unreported issue.
+          required: true
+        - label: I have written a meaningful title with the source name.
+          required: true
+        - label: I will correctly fill out all of the requested information in this form.
+          required: true
+
+  - type: textarea
+    attributes:
+      label: <!-- footer -->
+      description: Do **not** modify. This is a reminder for other users to vote.
+      value: |
+        ---
+
+        Add a :+1: [reaction] to [issues you find important].
+
+        [reaction]: https://github.blog/2016-03-10-add-reactions-to-pull-requests-issues-and-comments/
+        [issues you find important]: https://github.com/keiyoushi/extensions-source/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc

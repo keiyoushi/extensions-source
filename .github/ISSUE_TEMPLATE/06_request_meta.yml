@@ -1,0 +1,53 @@
+name: 🧠 Meta request
+description: Suggest improvements to the project
+labels: [Meta request]
+body:
+
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: Describe why this should be added
+      description: How can the project be improved?
+      placeholder: |
+        Example:
+          "It should work like this..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: other-details
+    attributes:
+      label: Other details
+      placeholder: |
+        Additional details and attachments.
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Acknowledgements
+      description: Your issue will be closed if you haven't done these steps.
+      options:
+        - label: I have searched [existing issues](https://github.com/keiyoushi/extensions-source/issues) both open & closed, and confirm that this is a new unreported issue.
+          required: true
+        - label: I have written a short but informative title.
+          required: true
+        - label: If this is an issue with the app itself, I should be opening an issue in the [app repository](https://github.com/mihonapp/mihon/issues/).
+          required: true
+        - label: I have updated the app to version **[0.20.1](https://github.com/mihonapp/mihon/releases/latest)**.
+          required: true
+        - label: I have updated the extension to the latest version (as listed on the [extensions listing](https://keiyoushi.github.io/extensions/) page).
+          required: true
+        - label: I will correctly fill out all of the requested information in this form.
+          required: true
+
+  - type: textarea
+    attributes:
+      label: <!-- footer -->
+      description: Do **not** modify. This is a reminder for other users to vote.
+      value: |
+        ---
+
+        Add a :+1: [reaction] to [issues you find important].
+
+        [reaction]: https://github.blog/2016-03-10-add-reactions-to-pull-requests-issues-and-comments/
+        [issues you find important]: https://github.com/keiyoushi/extensions-source/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc

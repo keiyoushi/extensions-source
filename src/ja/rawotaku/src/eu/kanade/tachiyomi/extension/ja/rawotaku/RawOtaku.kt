@@ -1,0 +1,53 @@
+package eu.kanade.tachiyomi.extension.ja.rawotaku
+
+import eu.kanade.tachiyomi.multisrc.mangareader.MangaReader
+import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
+import okhttp3.OkHttpClient
+
+@Source
+abstract class RawOtaku : MangaReader() {
+
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
+
+    override fun addPage(page: Int, builder: HttpUrl.Builder) {
+        builder.addQueryParameter("p", page.toString())
+    }
+
+    // =============================== Search ===============================
+
+    override val searchPathSegment = ""
+    override val searchKeyword = "q"
+
+    // ============================== Chapters ==============================
+
+    override val chapterIdSelect = "ja-chaps"
+
+    // =============================== Pages ================================
+
+    override fun getAjaxUrl(id: String): String = "$baseUrl/json/chapter?mode=vertical&id=$id"
+
+    // =============================== Filters ==============================
+
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        Note,
+        Filter.Separator(),
+        TypeFilter(),
+        StatusFilter(),
+        LanguageFilter(),
+        getSortFilter(),
+        GenreFilter(),
+    )
+
+    override fun sortFilterValues(): Array<Pair<String, String>> = arrayOf(
+        Pair("デフォルト", "default"),
+        Pair("最新の更新", "latest-updated"),
+        Pair("最も見られました", "most-viewed"),
+        Pair("Title [A-Z]", "title-az"),
+        Pair("Title [Z-A]", "title-za"),
+    )
+}

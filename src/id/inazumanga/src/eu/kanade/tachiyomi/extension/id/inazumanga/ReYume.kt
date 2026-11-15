@@ -1,0 +1,32 @@
+package eu.kanade.tachiyomi.extension.id.inazumanga
+
+import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
+import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.annotation.Source
+import keiyoushi.utils.asJsoup
+import org.jsoup.nodes.Document
+
+@Source
+abstract class ReYume : ZeistManga() {
+
+    override val popularMangaSelector = ".pop-card"
+    override val popularMangaSelectorTitle = "h4 a"
+    override val popularMangaSelectorUrl = "h4 a"
+
+    override val mangaDetailsSelector = "#Blog1"
+    override val mangaDetailsSelectorDescription = "#synopsis p"
+    override val mangaDetailsSelectorGenres = "#append-info .col-span-2 a[rel=tag]"
+    override val mangaDetailsSelectorAuthor = "#extra-info dl:has(dt:contains(Author)) dd"
+    override val mangaDetailsSelectorArtist = "#extra-info dl:has(dt:contains(Artist)) dd"
+    override val mangaDetailsSelectorAltName = "#extra-info dl:has(dt:contains(Alternative)) dd"
+    override val mangaDetailsSelectorStatus = "span[data-bg]"
+    override val mangaDetailsSelectorInfo = "#append-info > div"
+    override val mangaDetailsSelectorInfoTitle = "dt"
+    override val mangaDetailsSelectorInfoDescription = "dd"
+
+    override val pageListSelector = ".separator"
+    override fun pageListParse(document: Document): List<Page> {
+        val textArea = document.selectFirst("textarea#zeist-raw-data")?.text().orEmpty()
+        return super.pageListParse(textArea.asJsoup(baseUrl))
+    }
+}

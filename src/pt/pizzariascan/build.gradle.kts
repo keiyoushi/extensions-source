@@ -1,0 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "PizzariaScan"
+    versionCode = 0
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
+    theme = "mangawork"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://pizzariacomics.com"
+        id = 3359822911747375789L
+    }
+}

@@ -1,0 +1,133 @@
+package eu.kanade.tachiyomi.extension.all.sandraandwoo
+
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
+import keiyoushi.utils.tryParseDate
+import org.jsoup.nodes.Element
+import java.net.URI
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import kotlin.math.floor
+
+@Source
+abstract class SandraAndWoo : KeiSource() {
+
+    override val supportsLatest = false
+
+    private val writer = "Oliver Knörzer"
+    private val illustrator = "Powree"
+    private val genres = "Comedy"
+    private val state = SManga.ON_HIATUS
+    private val thumbnail = "https://www.sandraandwoo.com/images/fanart/fanart-contest-2014/pictures/zheng-qu-01-color-corrected.jpg"
+
+    private val synopsis: String
+        get() = when (lang) {
+            "de" -> "Sandra und Woo ist ein Comedy-Webcomic mit dem zwölfjährigen Mädchen Sandra North und ihrem Waschbären Woo in den Hauptrollen. Zwar sollen die meisten Strips einfach nur lustig oder gewitzt sein, gelegentlich werden aber auch ernste Themen wie die Missachtung von Menschenrechten in Burma oder die Zerstörung der Natur angesprochen. Wir wollen außerdem zeigen, was es für Sandra und ihre Schulfreunde Cloud und Larisa bedeutet, erwachsen zu werden. Nicht vergessen werden sollten außerdem Woos Ausflüge in den nahen Wald um dort seine tierischen Freunde Shadow, ein Fuchs, und Sid, ein Eichhörnchen, zu treffen. Als weiteres Alleinstellungsmerkmal des Comics darf gelten, dass sich immer wieder einzelne Strips oder sogar längere Geschichten um die Nebenfiguren drehen."
+            else -> "Sandra and Woo is a comedy comic strip featuring the 13-year-old girl Sandra North and her mischievous pet raccoon Woo. While most strips are just supposed to be funny or tell an exciting story, some also deal with more serious topics. We also want to show what growing up means for Sandra and her best friends in middle school, Cloud and Larisa. Another regular feature of the comic are Woo’s trips to the forest to meet his furry friends Shadow (a fox) and Sid (a squirrel) and his love interest Lily."
+        }
+
+    private val archive: String
+        get() = when (lang) {
+            "de" -> "/woode/archiv"
+            else -> "/archive"
+        }
+
+    private val manga: SManga
+        get() = SManga.create().apply {
+            title = name
+            artist = illustrator
+            author = writer
+            description = synopsis
+            genre = genres
+            status = state
+            thumbnail_url = thumbnail
+            setUrlWithoutDomain(archive)
+        }
+
+    override suspend fun getPopularManga(page: Int) = MangasPage(listOf(manga), false)
+
+    override suspend fun getLatestUpdates(page: Int) = throw UnsupportedOperationException()
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = MangasPage(emptyList(), false)
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val updatedChapters = if (fetchChapters) getChapterList(manga) else chapters
+
+        return SMangaUpdate(this.manga, updatedChapters)
+    }
+
+    private fun roundHalfwayUp(x: Float) = (x + floor(x + 1)) / 2
+
+    private fun chapterParse(element: Element, lastChapterNumber: Float): Pair<Float, SChapter> {
+        val path = URI(element.attr("href")).path
+        val dateMatch = CHAPTER_DATE_REGEX.matchEntire(path)
+
+        val date = if (dateMatch != null) {
+            val (_, year, month, day) = dateMatch.groupValues
+            DATE_FORMAT.tryParseDate("$year-$month-$day")
+        } else {
+            0L
+        }
+
+        val hover = element.attr("title")
+        val titleMatch = CHAPTER_TITLE_REGEX.matchEntire(hover)
+
+        val title = titleMatch?.groupValues?.getOrNull(1) ?: hover
+        val number = titleMatch?.groupValues?.getOrNull(2).orEmpty()
+        val backupNumber = titleMatch?.groupValues?.getOrNull(3).orEmpty()
+
+        val chapterNumber = when {
+            number.isNotEmpty() -> number.toFloat()
+            backupNumber.isNotEmpty() -> backupNumber.toFloat()
+            else -> roundHalfwayUp(lastChapterNumber)
+        }
+
+        val chapter = SChapter.create().apply {
+            url = path
+            name = title
+            chapter_number = chapterNumber
+            date_upload = date
+        }
+
+        return Pair(chapterNumber, chapter)
+    }
+
+    private suspend fun getChapterList(manga: SManga): List<SChapter> {
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        val elements = document.select("#column a").reversed()
+
+        val initial = Pair(0f, SChapter.create())
+
+        return elements.runningFold(initial) { previous, element ->
+            chapterParse(element, previous.first)
+        }.drop(1).map { it.second }.reversed()
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
+        val imgUrl = document.selectFirst("#comic img")?.absUrl("src") ?: ""
+
+        return listOf(Page(0, imageUrl = imgUrl))
+    }
+
+    companion object {
+        private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
+
+        private val CHAPTER_DATE_REGEX = Regex(""".*/(\d+)/(\d+)/(\d+)/[^/]*/""")
+        private val CHAPTER_TITLE_REGEX = Regex("""Permanent Link:\s*((?:\[(\d{4})])?\s*(?:\[[^]]*(\d{4})])?.*)""")
+    }
+}

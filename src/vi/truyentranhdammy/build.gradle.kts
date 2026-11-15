@@ -1,0 +1,19 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "Truyen tranh dam my"
+    versionCode = 3
+    contentWarning = ContentWarning.NSFW
+    libVersion = "1.6"
+    theme = "madara"
+
+    source {
+        name = "Truyện tranh đam mỹ"
+        lang = "vi"
+        baseUrl = "https://truyentranhdammyy.site"
+    }
+}

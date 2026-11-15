@@ -1,0 +1,325 @@
+package eu.kanade.tachiyomi.extension.all.fourkhd
+
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Response
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.util.Locale
+
+@Source
+abstract class FourKHD : KeiSource() {
+    private val apiUrl get() = "$baseUrl/index.php".toHttpUrl()
+    private val pageSize = 20
+
+    // ========================= Popular =========================
+
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val requestUrl = apiUrl.newBuilder()
+            .addQueryParameter("rest_route", "/wp/v2/posts")
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("per_page", pageSize.toString())
+            .addQueryParameter("_embed", "1")
+            .addQueryParameter("orderby", "modified")
+            .build()
+        return postsToMangaPage(client.get(requestUrl, Fetch.XHR))
+    }
+
+    // ========================= Latest =========================
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val requestUrl = apiUrl.newBuilder()
+            .addQueryParameter("rest_route", "/wp/v2/posts")
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("per_page", pageSize.toString())
+            .addQueryParameter("_embed", "1")
+            .addQueryParameter("orderby", "date")
+            .build()
+        return postsToMangaPage(client.get(requestUrl, Fetch.XHR))
+    }
+
+    // ========================= Search =========================
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val builder = apiUrl.newBuilder()
+            .addQueryParameter("rest_route", "/wp/v2/posts")
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("per_page", pageSize.toString())
+            .addQueryParameter("_embed", "1")
+            .addQueryParameter("orderby", "date")
+
+        if (query.isNotBlank()) {
+            builder.addQueryParameter("search", query)
+        }
+
+        return postsToMangaPage(client.get(builder.build(), Fetch.XHR))
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val slug = deeplinkSlugFromQuery(url.toString()) ?: return null
+        val requestUrl = apiUrl.newBuilder()
+            .addQueryParameter("rest_route", "/wp/v2/posts")
+            .addQueryParameter("slug", slug)
+            .addQueryParameter("_embed", "1")
+            .build()
+        return postsToMangaPage(client.get(requestUrl, Fetch.XHR)).mangas.firstOrNull()
+    }
+
+    private fun postsToMangaPage(response: Response): MangasPage {
+        val currentPage = response.request.url.queryParameter("page")?.toIntOrNull() ?: 1
+        val totalPages = response.headers["X-WP-TotalPages"]?.toIntOrNull() ?: currentPage
+
+        val posts = parsePosts(response)
+        val mangas = posts.mapNotNull { it.toSManga() }
+
+        return MangasPage(mangas, currentPage < totalPages)
+    }
+
+    // ========================= Details =========================
+
+    override fun getMangaUrl(manga: SManga): String = frontendPostUrl(manga.url)
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val response = client.get(postByPathRequestUrl(manga.url, manga.memo), Fetch.XHR)
+        val post = parseSinglePost(response) ?: throw Exception("Missing post details from API")
+
+        val id = post.id
+        val title = post.titleText() ?: throw Exception("Missing title for post id=$id")
+
+        val updatedManga = SManga.create().apply {
+            val path = post.linkPath()
+            this.title = title
+            genre = post.genreText()
+            thumbnail_url = post.thumbnailUrl()
+            status = SManga.COMPLETED
+            setUrlWithoutDomain(path)
+            memo = buildJsonObject { put("post_id", id) }
+        }
+
+        val updatedChapters = listOf(
+            SChapter.create().apply {
+                setUrlWithoutDomain(post.linkPath())
+                memo = buildJsonObject { put("post_id", post.id) }
+                chapter_number = 1f
+                name = "Gallery"
+                date_upload = parseDate(post.date)
+            },
+        )
+
+        return SMangaUpdate(updatedManga, updatedChapters)
+    }
+
+    // ========================= Chapters =========================
+
+    override fun getChapterUrl(chapter: SChapter): String = frontendPostUrl(chapter.url)
+
+    // ========================= Pages =========================
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val response = client.get(postByPathRequestUrl(chapter.url, chapter.memo), Fetch.XHR)
+        val apiImageUrls = parseSinglePost(response)
+            ?.contentRendered()
+            ?.let(::extractImageUrlsFromHtml)
+            .orEmpty()
+
+        return apiImageUrls.mapIndexed { index, imageUrl ->
+            Page(index, imageUrl = imageUrl)
+        }
+    }
+
+    private fun postByPathRequestUrl(path: String, memo: JsonElement? = null): HttpUrl {
+        val fullUrl = (baseUrl + path).toHttpUrl()
+        val postId = fullUrl.queryParameter(POST_ID_QUERY)?.toIntOrNull()
+            ?: memo?.jsonObject?.get("post_id")?.jsonPrimitive?.intOrNull
+        val slug = slugFromPath(fullUrl.encodedPath)
+
+        val route = if (postId != null) "/wp/v2/posts/$postId" else "/wp/v2/posts"
+
+        val builder = apiUrl.newBuilder()
+            .addQueryParameter("rest_route", route)
+            .addQueryParameter("_embed", "1")
+
+        if (postId == null) {
+            if (slug.isNotBlank()) {
+                builder.addQueryParameter("slug", slug)
+            } else {
+                val fallbackQuery = fullUrl.encodedPath.trim('/').substringAfterLast('/').ifBlank { fullUrl.encodedPath }
+                if (fallbackQuery.isNotBlank()) {
+                    builder.addQueryParameter("search", fallbackQuery)
+                }
+            }
+        }
+
+        return builder.build()
+    }
+
+    private fun slugFromPath(path: String): String {
+        SLUG_PATH_REGEX.find(path)?.groupValues?.getOrNull(1)?.let {
+            if (it.isNotBlank()) return it
+        }
+
+        val lastSegment = path.trimEnd('/').substringAfterLast('/')
+        return lastSegment.substringBefore(".html")
+    }
+
+    private fun parsePosts(response: Response): List<PostDto> = response.use { res ->
+        val element = res.parseAs<JsonElement>()
+        if (bodyString(element).startsWith("[")) {
+            element.parseAs<List<PostDto>>()
+        } else {
+            listOf(element.parseAs<PostDto>())
+        }
+    }
+
+    private fun bodyString(element: JsonElement): String = element.toString().trimStart()
+
+    private fun parseSinglePost(response: Response): PostDto? = parsePosts(response).firstOrNull()
+
+    private fun PostDto.toSManga(): SManga? {
+        val path = linkPath().takeIf { it != "/" } ?: return null
+        val id = id
+        val title = titleText() ?: throw Exception("Missing title for post id=$id")
+
+        return SManga.create().apply {
+            this.title = title
+            thumbnail_url = thumbnailUrl()
+            genre = genreText()
+            status = SManga.COMPLETED
+            setUrlWithoutDomain(path)
+            memo = buildJsonObject { put("post_id", id) }
+            initialized = true
+        }
+    }
+
+    private fun PostDto.titleText(): String? = title.rendered.htmlToText()
+
+    private fun PostDto.contentRendered(): String = content.rendered
+
+    private fun PostDto.linkPath(): String = link
+        .toHttpUrlOrNull()
+        ?.encodedPath
+        .orEmpty()
+        .ifBlank { "/" }
+
+    private fun PostDto.thumbnailUrl(): String? = jetpackFeaturedMediaUrl
+        ?: embedded?.featuredMedia?.firstOrNull()?.sourceUrl
+        ?: extractImageUrlsFromHtml(content.rendered).firstOrNull()
+
+    private fun PostDto.genreText(): String? {
+        val names = embedded?.terms?.flatten()?.map { it.name }?.filter { it.isNotBlank() }?.distinct() ?: emptyList()
+        return names.joinToString(", ").ifBlank { null }
+    }
+
+    private fun frontendPostUrl(path: String): String {
+        val fullUrl = (baseUrl + path).toHttpUrl()
+        val normalizedPath = fullUrl.encodedPath
+        if (CONTENT_PATH_REGEX.containsMatchIn(normalizedPath)) {
+            return "$baseUrl${normalizedPath.substringBefore('?')}"
+        }
+
+        fullUrl.queryParameter(POST_ID_QUERY)?.let { postId ->
+            return baseUrl.toHttpUrl().newBuilder()
+                .addQueryParameter("p", postId)
+                .build()
+                .toString()
+        }
+
+        return "$baseUrl/${normalizedPath.trimStart('/')}"
+    }
+
+    private fun deeplinkSlugFromQuery(query: String): String? {
+        if (query.isBlank()) return null
+
+        val url = query.toHttpUrlOrNull() ?: return null
+        if (url.host.lowercase(Locale.ENGLISH) !in DEEPLINK_HOSTS) return null
+
+        val segments = url.pathSegments.filter { it.isNotBlank() }
+        if (segments.size < 3 || segments.first() != "content") return null
+
+        val slugSegment = when {
+            segments.last().all(Char::isDigit) && segments.size >= 4 -> segments[segments.lastIndex - 1]
+            else -> segments.last()
+        }
+
+        if (!slugSegment.endsWith(".html")) return null
+        return slugSegment.substringBefore(".html").takeIf { it.isNotBlank() }
+    }
+
+    private fun extractImageUrlsFromHtml(html: String): List<String> {
+        if (html.isBlank()) return emptyList()
+
+        val document = Jsoup.parseBodyFragment(html, baseUrl)
+        val contentRoot = document.selectFirst(".entry-content.wp-block-post-content, .entry-content") ?: document.body()
+        return extractImageUrlsFromElement(contentRoot)
+    }
+
+    private fun extractImageUrlsFromElement(root: Element): List<String> {
+        val imageSources = root.select("img[data-src], img[data-lazy-src], img[src]")
+            .mapNotNull { imageElement ->
+                sequenceOf("abs:data-src", "abs:data-lazy-src", "abs:src")
+                    .map { key -> imageElement.attr(key).trim() }
+                    .firstOrNull { isImageUrl(it) }
+            }
+
+        if (imageSources.isNotEmpty()) {
+            return imageSources.distinctBy(::imageCanonicalKey)
+        }
+
+        val anchorSources = root.select("a[href]")
+            .map { it.attr("abs:href").trim() }
+            .filter(::isImageUrl)
+
+        return anchorSources.distinctBy(::imageCanonicalKey)
+    }
+
+    private fun imageCanonicalKey(url: String): String {
+        val parsed = url.toHttpUrlOrNull() ?: return url
+        return parsed.newBuilder().query(null).build().toString()
+    }
+
+    private fun String.htmlToText(): String = Jsoup.parse(this).text().trim()
+
+    private fun isImageUrl(url: String): Boolean = IMAGE_URL_REGEX.containsMatchIn(url)
+
+    private fun parseDate(dateString: String?): Long {
+        if (dateString.isNullOrBlank()) return 0L
+        return try {
+            LocalDateTime.parse(dateString).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        } catch (_: Exception) {
+            0L
+        }
+    }
+
+    companion object {
+        private val IMAGE_URL_REGEX = Regex("\\.(?:jpe?g|png|webp|gif|avif)(?:$|\\?)", RegexOption.IGNORE_CASE)
+        private val SLUG_PATH_REGEX = Regex("/([^/]+)\\.html(?:/\\d+)?/?$")
+        private val CONTENT_PATH_REGEX = Regex("^/content/", RegexOption.IGNORE_CASE)
+        private val DEEPLINK_HOSTS = setOf("4khd.com", "www.4khd.com")
+        private const val POST_ID_QUERY = "post_id"
+    }
+}

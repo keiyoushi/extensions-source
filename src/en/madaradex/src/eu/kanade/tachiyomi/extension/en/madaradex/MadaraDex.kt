@@ -1,0 +1,68 @@
+package eu.kanade.tachiyomi.extension.en.madaradex
+
+import eu.kanade.tachiyomi.multisrc.madara.Madara
+import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
+import okhttp3.Cookie
+import okhttp3.FormBody
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.security.SecureRandom
+@Source
+abstract class MadaraDex : Madara() {
+
+    override val mangaSubString = "title"
+    override val genreDirectory = "genre"
+
+    private val siteUrl get() = baseUrl.toHttpUrl()
+
+    private fun randomHex16() = ByteArray(16)
+        .also { SecureRandom().nextBytes(it) }
+        .toHexString()
+
+    private fun refreshAuth() {
+        if (client.cookieJar.loadForRequest(siteUrl).none { it.name == "mdx_fp" }) {
+            client.cookieJar.saveFromResponse(
+                siteUrl,
+                listOf(
+                    Cookie.Builder()
+                        .domain("madaradex.org").path("/")
+                        .name("mdx_fp").value(randomHex16())
+                        .expiresAt(System.currentTimeMillis() + 2592000000L)
+                        .build(),
+                ),
+            )
+        }
+        runCatching {
+            client.newCall(
+                Request.Builder()
+                    .url("$baseUrl/wp-admin/admin-ajax.php")
+                    .post(FormBody.Builder().add("action", "mdx_auth_refresh").build())
+                    .header("X-Mdx-Auth-Refresh", "1")
+                    .fetch(Fetch.XHR)
+                    .build(),
+            ).execute().close()
+        }
+    }
+
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->
+        val request = chain.request()
+        if (request.header("X-Mdx-Auth-Refresh") != null) {
+            return@addInterceptor chain.proceed(
+                request.newBuilder().removeHeader("X-Mdx-Auth-Refresh").build(),
+            )
+        }
+        client.cookieJar.loadForRequest(siteUrl).let {
+            if (it.none { c -> c.name == "mdx_fp" } || it.none { c -> c.name == "mdx_auth" }) refreshAuth()
+        }
+        chain.proceed(request).also {
+            if (it.code == 403 && request.url.host == "cdn.madaradex.org") {
+                it.close()
+                refreshAuth()
+                return@addInterceptor chain.proceed(request)
+            }
+        }
+    }
+}

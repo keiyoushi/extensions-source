@@ -1,0 +1,18 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "Ler 999"
+    versionCode = 1
+    contentWarning = ContentWarning.SAFE
+    libVersion = "1.6"
+    theme = "zeistmanga"
+
+    source {
+        lang = "pt-BR"
+        baseUrl = "https://ler999.blogspot.com"
+    }
+}

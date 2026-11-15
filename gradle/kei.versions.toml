@@ -1,0 +1,13 @@
+[versions]
+# Used in [/gradle/build-logic/src/main/kotlin/AndroidBasePlugin.kt]
+android-sdk-min = "26"
+android-sdk-compile = "37"
+android-sdk-target = "37"
+java = "11"
+
+[plugins]
+android-base = { id = "kei.plugins.android.base" }
+extension = { id = "kei.plugins.extension" }
+library = { id = "kei.plugins.library" }
+spotless = { id = "kei.plugins.spotless" }
+multisrc = { id = "kei.plugins.theme" }

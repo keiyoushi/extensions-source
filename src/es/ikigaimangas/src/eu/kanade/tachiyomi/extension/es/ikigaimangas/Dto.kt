@@ -1,0 +1,71 @@
+package eu.kanade.tachiyomi.extension.es.ikigaimangas
+
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.parseAs
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+
+@Serializable
+class QwikData(
+    @SerialName("_objs") val objects: List<JsonElement>,
+) {
+    inline fun <reified T> parseAsList(): List<T> {
+        val results = mutableListOf<T>()
+        var i = 0
+
+        while (i < objects.size) {
+            var mapIndex = i
+            while (mapIndex < objects.size && objects[mapIndex] !is JsonObject) {
+                mapIndex++
+            }
+            if (mapIndex >= objects.size) break
+
+            val map = objects[mapIndex].jsonObject
+
+            val objContent = buildMap {
+                for ((key, jsonIndex) in map) {
+                    val index = jsonIndex.jsonPrimitive.content.toInt(radix = 36)
+                    put(key, unwrapJson(objects.getOrNull(index)))
+                }
+            }
+
+            results.add(JsonObject(objContent).parseAs<T>())
+
+            i = mapIndex + 1
+        }
+
+        return results
+    }
+
+    fun unwrapJson(el: JsonElement?): JsonElement = when (el) {
+        is JsonPrimitive -> el
+        is JsonObject -> el
+        is JsonArray -> JsonArray(el.map { unwrapJson(objects.getOrNull(it.jsonPrimitive.content.toInt(radix = 36))) })
+        else -> JsonNull
+    }
+}
+
+@Serializable
+class QwikSeriesDto(
+    private val name: String,
+    @SerialName("other_names") private val otherNames: List<String>? = null,
+    private val slug: String,
+    private val cover: String? = null,
+    val type: String? = null,
+    @SerialName("is_mature") val isMature: Boolean = false,
+) {
+    val titles get() = listOf(name) + otherNames.orEmpty()
+
+    fun toSManga(imageCdnUrl: String) = SManga.create().apply {
+        url = slug
+        title = name
+        thumbnail_url = cover?.let { "$imageCdnUrl/$it" }
+    }
+}

@@ -1,0 +1,69 @@
+name: 🔗 URL change report
+description: Report URL change of an existing source
+labels: [Bug,Domain changed]
+body:
+
+  - type: input
+    id: source
+    attributes:
+      label: Source information
+      description: |
+        You can find the extension name and version in **Browse → Extensions**.
+      placeholder: |
+        Example: "NotRealScans 1.6.1"
+    validations:
+      required: true
+
+  - type: input
+    id: language
+    attributes:
+      label: Source language
+      placeholder: |
+        Example: "English"
+    validations:
+      required: true
+
+  - type: input
+    id: link
+    attributes:
+      label: Source new URL
+      placeholder: |
+        Example: "https://notrealscans.org"
+    validations:
+      required: true
+
+  - type: textarea
+    id: other-details
+    attributes:
+      label: Other details
+      placeholder: |
+        Additional details and attachments.
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Acknowledgements
+      description: Your issue will be closed if you haven't done these steps.
+      options:
+        - label: I have updated the extension to the latest version (as listed on the [extensions listing](https://keiyoushi.github.io/extensions/) page).
+          required: true
+        - label: I have checked WebView to see the source's main URL is not up-to-date, or has to redirect into the new URL.
+          required: true
+        - label: I have searched [existing issues](https://github.com/keiyoushi/extensions-source/issues/) both open & closed, and confirm that this is a new unreported issue.
+          required: true
+        - label: I have written a short but informative title.
+          required: true
+        - label: I will correctly fill out all of the requested information in this form.
+          required: true
+
+  - type: textarea
+    attributes:
+      label: <!-- footer -->
+      description: Do **not** modify. This is a reminder for other users to vote.
+      value: |
+        ---
+
+        Add a :+1: [reaction] to [issues you find important].
+
+        [reaction]: https://github.blog/2016-03-10-add-reactions-to-pull-requests-issues-and-comments/
+        [issues you find important]: https://github.com/keiyoushi/extensions-source/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc

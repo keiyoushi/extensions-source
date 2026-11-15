@@ -1,0 +1,395 @@
+@file:Suppress("SpellCheckingInspection")
+
+package eu.kanade.tachiyomi.extension.pt.mangadash
+
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.pdf.PdfRenderer
+import android.os.ParcelFileDescriptor
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.applicationContext
+import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParseDate
+import kotlinx.serialization.json.JsonElement
+import okhttp3.FormBody
+import okhttp3.Headers
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
+import org.jsoup.nodes.Document
+import java.io.File
+import java.io.IOException
+import java.time.format.DateTimeFormatter
+import kotlin.time.Duration.Companion.minutes
+
+@Suppress("unused")
+@Source
+abstract class MangaDash :
+    KeiSource(),
+    ConfigurableSource {
+
+    private val preferences by getPreferencesLazy()
+
+    // Retrieve the app's dedicated cache directory safely
+    private val cacheDir: File by lazy {
+        File(applicationContext.cacheDir, "mangadash_pdf_cache").apply {
+            mkdirs()
+        }
+    }
+
+    private val loginInterceptor = Interceptor { chain ->
+        val request = chain.request()
+
+        // Skip login requests to avoid infinite loops
+        if (request.url.encodedPath.contains("auth/login")) {
+            return@Interceptor chain.proceed(request)
+        }
+
+        val username = preferences.getString(PREF_USERNAME, "") ?: ""
+        val password = preferences.getString(PREF_PASSWORD, "") ?: ""
+
+        if (username.isNotBlank() && password.isNotBlank()) {
+            val cookies = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
+            val hasSession = cookies.any { it.name == "session" }
+
+            if (!hasSession) {
+                synchronized(this) {
+                    val currentCookies = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
+                    if (!currentCookies.any { it.name == "session" }) {
+                        try {
+                            performLogin(username, password)
+                        } catch (_: Exception) {
+                            // Ignore login errors to let the original request proceed and fail naturally
+                        }
+                    }
+                }
+            }
+        }
+
+        chain.proceed(request)
+    }
+
+    private val pdfInterceptor = Interceptor { chain ->
+        val request = chain.request()
+        val url = request.url
+        if (url.pathSegments.firstOrNull() == "pdf-page") {
+            val fileName = url.pathSegments[1]
+            val pageIndex = url.pathSegments[2].toInt()
+
+            val file = File(cacheDir, fileName)
+            if (!file.exists()) {
+                throw IOException("PDF file not found in cache")
+            }
+
+            return@Interceptor ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
+                PdfRenderer(pfd).use { renderer ->
+                    renderer.openPage(pageIndex).use { page ->
+                        // Scale up the PDF page resolution (PDF coordinates are 72 DPI).
+                        // Max width bounded to ~1500px to ensure Memory Safety on large files.
+                        val scale = minOf(2.5f, 1500f / page.width)
+                        val bitmap = Bitmap.createBitmap(
+                            (page.width * scale).toInt(),
+                            (page.height * scale).toInt(),
+                            Bitmap.Config.ARGB_8888,
+                        )
+
+                        // PDF pages are transparent by default, fill the background with white
+                        val canvas = Canvas(bitmap)
+                        canvas.drawColor(Color.WHITE)
+
+                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+
+                        // Memory-efficient stream-based image processing using Okio
+                        val buffer = Buffer()
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
+                        bitmap.recycle() // Important: free native memory immediately
+
+                        val body = buffer.asResponseBody("image/jpeg".toMediaType())
+
+                        Response.Builder()
+                            .code(200)
+                            .protocol(Protocol.HTTP_1_1)
+                            .request(request)
+                            .message("OK")
+                            .body(body)
+                            .build()
+                    }
+                }
+            }
+        }
+        chain.proceed(request)
+    }
+
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor(loginInterceptor)
+        addInterceptor(pdfInterceptor)
+    }
+
+    override fun Headers.Builder.configureHeaders() = add("Accept", "application/json, text/plain, */*")
+
+    // ============================== Settings ==============================
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val usernamePref = EditTextPreference(screen.context).apply {
+            key = PREF_USERNAME
+            title = "Usuário / Email"
+            summary = "Preencha para fazer login automaticamente"
+            setDefaultValue("")
+        }
+
+        val passwordPref = EditTextPreference(screen.context).apply {
+            key = PREF_PASSWORD
+            title = "Senha"
+            summary = "Preencha para fazer login automaticamente"
+            setDefaultValue("")
+        }
+
+        val infoPref = EditTextPreference(screen.context).apply {
+            key = "pref_info_18plus"
+            title = "Atenção: Conteúdo +18"
+            summary = "Para acessar o conteúdo +18, você precisa de uma conta e habilitar a opção no site.\n\n" +
+                "Passo a passo:\n" +
+                "1. Abra a extensão no WebView (ícone de bússola).\n" +
+                "2. Faça login na sua conta.\n" +
+                "3. Acesse seu Perfil -> Configurações -> Preferências.\n" +
+                "4. Marque a opção 'Habilitar Conteúdo Adulto (+18)'.\n" +
+                "5. Clique em 'Salvar Preferências'."
+            setOnPreferenceClickListener { true }
+        }
+
+        screen.addPreference(usernamePref)
+        screen.addPreference(passwordPref)
+        screen.addPreference(infoPref)
+    }
+
+    private fun performLogin(username: String, password: String) {
+        val loginUrl = "$baseUrl/auth/login"
+        val baseClient = network.client
+
+        // 1. Get CSRF Token. Using Use block for safety.
+        val getRequest = GET(loginUrl, headers).newBuilder().fetch(Fetch.DOCUMENT).build()
+        val document = baseClient.newCall(getRequest).execute().asJsoup()
+        val csrfToken = document.selectFirst("meta[name=csrf-token]")?.attr("content")
+            ?: document.selectFirst("input[name=csrf_token]")?.attr("value")
+
+        if (csrfToken.isNullOrEmpty()) {
+            return
+        }
+
+        // 2. Perform Login POST
+        val formBody = FormBody.Builder()
+            .add("csrf_token", csrfToken)
+            .add("login", username)
+            .add("password", password)
+            .build()
+
+        val postRequest = POST(loginUrl, headers, formBody).newBuilder().fetch(Fetch.DOCUMENT).build()
+        baseClient.newCall(postRequest).execute().close()
+    }
+
+    // ============================== Popular ==============================
+
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList(SortFilter(1)))
+
+    // ============================== Latest ===============================
+
+    override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", FilterList())
+
+    // ============================== Search ===============================
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.pathSegments.count(String::isNotBlank) < 2) return null
+
+        return fetchMangaUpdate(
+            SManga.create().apply { this.url = url.encodedPath },
+            emptyList(),
+            true,
+            false,
+        ).manga
+    }
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val sort = filters.firstInstanceOrNull<SortFilter>()?.toUriPart() ?: "recentes"
+        val category = filters.firstInstanceOrNull<CategoryFilter>()?.toUriPart() ?: ""
+        val status = filters.firstInstanceOrNull<StatusFilter>()?.toUriPart() ?: ""
+        val year = filters.firstInstanceOrNull<YearFilter>()?.toUriPart() ?: ""
+        val plus18 = if (filters.firstInstanceOrNull<Plus18Filter>()?.state == true) "true" else ""
+
+        val url = "$baseUrl/api/mangas/list".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
+            addQueryParameter("q", query)
+            addQueryParameter("sort", sort)
+            addQueryParameter("categoria", category)
+            addQueryParameter("status", status)
+            addQueryParameter("ano", year)
+            addQueryParameter("plus18", plus18)
+        }.build()
+
+        return client.get(url, Fetch.XHR).parseAs<MangaListDto>().let {
+            MangasPage(
+                it.items.map {
+                    it.toSManga(baseUrl)
+                },
+                it.hasNext,
+            )
+        }
+    }
+
+    // ============================ MangaUpdate ============================
+
+    override val supportRelatedMangasBySearch = true
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        return SMangaUpdate(
+            mangaDetailsParse(doc),
+            chapterListParse(doc),
+        )
+    }
+
+    // ============================== Details ==============================
+    private fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        setUrlWithoutDomain(document.location())
+        title = document.selectFirst(".neon-title")?.text()!!
+        thumbnail_url = document.selectFirst(".cover-3d img")?.attr("abs:src")
+        author = document.selectFirst(".tag-author")?.text()
+        genre = document.select(".manga-tags a.tag:not(.tag-author)").joinToString { it.text() }
+        description = document.selectFirst(".manga-description")?.text()
+
+        val statsText = document.select(".stats-row .stat-item").text()
+        status = when {
+            statsText.contains("Lançamento", ignoreCase = true) -> SManga.ONGOING
+            statsText.contains("Concluído", ignoreCase = true) -> SManga.COMPLETED
+            statsText.contains("Hiato", ignoreCase = true) -> SManga.ON_HIATUS
+            else -> SManga.UNKNOWN
+        }
+    }
+
+    // ============================= Chapters ==============================
+    private fun chapterListParse(document: Document) = document.select(".chapters-scroll-container .chapter-row").map { element ->
+        SChapter.create().apply {
+            url = element.attr("href")
+            name = element.selectFirst(".chapter-title-group h4")?.text()!!
+            val dateStr = element.selectFirst(".chapter-meta-info:has(.fa-calendar)")?.text()
+            date_upload = dateFormat.tryParseDate(dateStr)
+
+            // Extract chapter number for proper sorting fixing the website's alphabetical issue
+            chapter_number = name.substringAfter("Capítulo").trim().toFloatOrNull() ?: -1f
+        }
+    }.sortedWith(
+        compareByDescending<SChapter> { it.chapter_number }
+            .thenByDescending { it.name },
+    )
+
+    // =============================== Pages ===============================
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
+        val dataElement = document.selectFirst("script#chapterViewerData")
+            ?: throw Exception("Dados do capítulo não encontrados")
+
+        val dto = dataElement.data().parseAs<ChapterDataDto>()
+
+        val images = dto.resolvedImages
+        if (!images.isNullOrEmpty()) {
+            return images.mapIndexed { i, img -> Page(i, imageUrl = img) }
+        }
+
+        var pdfUrl = dto.resolvedPdfUrl
+        if (!pdfUrl.isNullOrBlank()) {
+            pdfUrl = pdfUrl.replace(" ", "%20")
+            if (pdfUrl.startsWith("/")) {
+                pdfUrl = baseUrl + pdfUrl
+            }
+
+            // Create a specific client with a longer timeout to prevent OkHttp crashing on 30MB+ PDF downloads
+            val pdfClient = client.newBuilder()
+                .readTimeout(3.minutes)
+                .connectTimeout(1.minutes)
+                .build()
+
+            val pdfHeaders = headersBuilder()
+                .add("Origin", baseUrl)
+                .build()
+
+            // Using use { ... } around manual network calls block for reliable memory release
+            pdfClient.get(pdfUrl, pdfHeaders, Fetch.DOCUMENT, ensureSuccess = false).use { pdfResponse ->
+                if (!pdfResponse.isSuccessful) {
+                    throw Exception("HTTP error ${pdfResponse.code} ao baixar o arquivo PDF do capítulo")
+                }
+
+                // Cleanup older PDF files to free up disk space (removes files older than 1 hr)
+                cacheDir.listFiles()?.forEach {
+                    if (System.currentTimeMillis() - it.lastModified() > 3600000) {
+                        it.delete()
+                    }
+                }
+
+                val tempFile = File(cacheDir, "chapter_${System.currentTimeMillis()}.pdf")
+
+                // Use stream saving to prevent buffering heavy PDFs entirely into memory
+                pdfResponse.body.byteStream().use { input ->
+                    tempFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+
+                val pageCount = ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
+                    PdfRenderer(pfd).use { renderer ->
+                        renderer.pageCount
+                    }
+                }
+
+                return (0 until pageCount).map { i ->
+                    Page(i, imageUrl = "$baseUrl/pdf-page/${tempFile.name}/$i")
+                }
+            }
+        }
+
+        throw Exception("Nenhuma imagem encontrada para este capítulo.")
+    }
+
+    // ============================== Filters ==============================
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        SortFilter(),
+        CategoryFilter(),
+        StatusFilter(),
+        YearFilter(),
+        Plus18Filter(),
+    )
+
+    // ============================= Utilities =============================
+    companion object {
+        private const val PREF_USERNAME = "pref_username"
+        private const val PREF_PASSWORD = "pref_password"
+        private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy")
+    }
+}

@@ -1,0 +1,203 @@
+package eu.kanade.tachiyomi.extension.en.reimanga
+
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.ratingStars
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+
+@Serializable
+class Manga(
+    private val id: Long,
+    @SerialName("name_url")
+    private val slug: String,
+    private val title: String,
+    @SerialName("cover_url")
+    private val cover: String? = null,
+) {
+    fun toSManga(baseUrl: String) = SManga.create().apply {
+        url = "$slug-$id"
+        title = this@Manga.title
+        thumbnail_url = cover ?: "$baseUrl/covers/$id/thumbnail.png"
+    }
+}
+
+@Serializable
+class MangaList(
+    @JsonNames("initialData")
+    val data: List<Manga>,
+    val pagination: Pagination,
+) {
+    @Serializable
+    class Pagination(
+        private val currentPage: Int,
+        private val totalPages: Int,
+    ) {
+        fun hasNextPage() = currentPage < totalPages
+    }
+}
+
+@Serializable
+class MangaPage(
+    val manga: MangaDetails,
+) {
+    @Serializable
+    class MangaDetails(
+        private val id: Long,
+        @SerialName("name_url")
+        private val slug: String,
+        private val title: String,
+        @SerialName("cover_url")
+        private val cover: String? = null,
+        private val description: String? = null,
+        @SerialName("ai_description")
+        private val aiDescription: String? = null,
+        @SerialName("alt_title")
+        private val altTitle: String? = null,
+        private val completed: Int = 0,
+        private val rating: Double = -1.0,
+        @SerialName("is_adult")
+        private val isAdult: Int = 0,
+        private val genres: List<Tag> = emptyList(),
+        private val tags: List<Tag> = emptyList(),
+        private val authors: List<Name> = emptyList(),
+        @SerialName("main_manga_id")
+        private val mainMangaId: Long? = null,
+        @SerialName("main_name_url")
+        private val mainNameUrl: String? = null,
+    ) {
+        val resolvedId: Long get() = mainMangaId?.takeIf { it > 0 } ?: id
+
+        fun toSManga(baseUrl: String) = SManga.create().apply {
+            url = "$slug-$id"
+            title = this@MangaDetails.title
+            thumbnail_url = cover ?: "$baseUrl/covers/$id/thumbnail.png"
+            description = buildString {
+                if (rating > 0.0) {
+                    append(ratingStars(rating))
+                    append(" ")
+                    append(rating)
+                    append("\n\n")
+                }
+                (aiDescription ?: this@MangaDetails.description)?.takeIf { it.isNotBlank() }?.also {
+                    append(it.trim())
+                    append("\n\n")
+                }
+                altTitle?.takeIf { it.isNotBlank() }?.also {
+                    append("**Alternative Titles:**\n")
+                    it.split(",", ";", " / ").forEach { title ->
+                        append("- ")
+                        append(title.trim())
+                        append("\n")
+                    }
+                }
+            }.trim().ifEmpty { null }
+            status = if (completed == 1) SManga.COMPLETED else SManga.ONGOING
+            author = authors.joinToString { it.name.trim().removeSuffix(",").trim() }.ifEmpty { null }
+            genre = buildList {
+                if (isAdult == 1) {
+                    add("Adult")
+                }
+                genres.mapTo(this) { it.name.trim() }
+                tags.mapTo(this) { it.name.trim() }
+            }.joinToString().ifEmpty { null }
+            memo = buildJsonObject { put("mangaId", id) }
+        }
+
+        fun chapterPageUrl(baseUrl: String): String {
+            val mainId = mainMangaId
+            val mainSlug = mainNameUrl
+            return if (mainId != null && mainId > 0 && !mainSlug.isNullOrBlank()) {
+                "$baseUrl/manga/$mainSlug-$mainId"
+            } else {
+                "$baseUrl/manga/$slug-$id"
+            }
+        }
+
+        @Serializable
+        class Name(
+            val name: String,
+        )
+    }
+}
+
+@Serializable
+class ChapterList(
+    val manga: Manga,
+    val chapters: List<Chapter>,
+) {
+    @Serializable
+    class Manga(
+        val id: Long,
+        @SerialName("name_url")
+        val slug: String,
+    )
+
+    @Serializable
+    class Chapter(
+        val id: Long,
+        val name: String,
+        @SerialName("gdrive_upload_date")
+        val uploadDate: String? = null,
+        @SerialName("updated_at")
+        val updatedAt: String? = null,
+        @SerialName("created_at")
+        val createdAt: String? = null,
+    )
+}
+
+@Serializable
+class Images(
+    private val images: List<Image>,
+    private val pack: Pack? = null,
+) {
+    fun imageUrls() = pack?.imageUrls() ?: images.map { it.url }
+
+    @Serializable
+    class Image(
+        @SerialName("image_url")
+        val url: String,
+    )
+
+    /** One file per segment holding its pages as consecutive WebPs. */
+    @Serializable
+    class Pack(
+        private val index: Index,
+        private val urls: List<String>,
+    ) {
+        fun imageUrls(): List<String> {
+            val sizes = index.pages.map { (size) -> size }.iterator()
+
+            return index.segments.flatMapIndexed { segment, pageCount ->
+                var start = 0L
+                List(pageCount) {
+                    val end = start + sizes.next()
+                    "${urls[segment]}#$start-${end - 1}".also { start = end }
+                }
+            }
+        }
+
+        @Serializable
+        class Index(
+            /** Size, width and height of each page. */
+            @SerialName("p")
+            val pages: List<List<Long>>,
+            @SerialName("s")
+            val segments: List<Int>,
+        )
+    }
+}
+
+@Serializable
+class TagList(
+    val genres: List<Tag>,
+    val tags: List<Tag>,
+)
+
+@Serializable
+class Tag(
+    val name: String,
+    val slug: String,
+)

@@ -1,0 +1,72 @@
+package eu.kanade.tachiyomi.extension.all.imhentai
+
+import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
+import eu.kanade.tachiyomi.multisrc.galleryadults.imgAttr
+import keiyoushi.annotation.Source
+import okhttp3.OkHttpClient
+import okhttp3.ResponseBody.Companion.toResponseBody
+import org.jsoup.nodes.Element
+import org.jsoup.parser.Parser
+import java.io.IOException
+
+@Source
+abstract class IMHentai : GalleryAdults() {
+
+    override val mangaLang = when (lang) {
+        "en" -> LANGUAGE_ENGLISH
+        "ja" -> LANGUAGE_JAPANESE
+        "es" -> LANGUAGE_SPANISH
+        "fr" -> LANGUAGE_FRENCH
+        "ko" -> LANGUAGE_KOREAN
+        "de" -> LANGUAGE_GERMAN
+        "ru" -> LANGUAGE_RUSSIAN
+        "all" -> LANGUAGE_MULTI
+        else -> throw IllegalArgumentException("Invalid lang: $lang")
+    }
+
+    override val useIntermediateSearch: Boolean = true
+    override val supportAdvancedSearch: Boolean = true
+    override val supportSpeechless: Boolean = true
+
+    override fun Element.mangaLang() = select("a:has(.thumb_flag)").attr("href")
+        .removeSuffix("/").substringAfterLast("/")
+
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addInterceptor { chain ->
+            val request = chain.request()
+            val headers = request.headers.newBuilder()
+                .removeAll("Accept-Encoding")
+                .build()
+            chain.proceed(request.newBuilder().headers(headers).build())
+        }
+        addInterceptor { chain ->
+            val response = chain.proceed(chain.request())
+            if (!response.headers("Content-Type").toString().contains("text/html")) return@addInterceptor response
+
+            val responseContentType = response.body.contentType()
+            val responseString = response.body.string()
+
+            if (responseString.contains("Overload... Please use the advanced search")) {
+                response.close()
+                throw IOException("IMHentai search is overloaded try again later")
+            }
+
+            response.newBuilder()
+                .body(responseString.toResponseBody(responseContentType))
+                .build()
+        }
+    }
+
+    // Listing titles are encoded twice ("&amp;#039;")
+    override fun Element.mangaFullTitle(selector: String) = selectFirst(selector)?.text()?.let { Parser.unescapeEntities(it, false) }
+
+    override fun getInfoSelector(tag: String) = "li:has(.tags_text:contains($tag:)) a.tag"
+
+    override fun Element.getCover() = selectFirst(".left_cover img")?.imgAttr()
+
+    override val mangaDetailInfoSelector = ".gallery_first"
+
+    /* Pages */
+    override val thumbnailSelector = ".gthumb"
+    override val pageUri = "view"
+}

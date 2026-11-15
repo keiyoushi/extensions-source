@@ -1,0 +1,390 @@
+package eu.kanade.tachiyomi.extension.zh.manhuagui
+
+import android.content.SharedPreferences
+import androidx.preference.CheckBoxPreference
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.annotation.Source
+import keiyoushi.lib.lzstring.LZString
+import keiyoushi.lib.unpacker.Unpacker
+import keiyoushi.network.Fetch
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonElement
+import okhttp3.FormBody
+import okhttp3.Headers
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
+import okhttp3.OkHttpClient
+import okhttp3.Response
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
+
+@Source
+abstract class Manhuagui :
+    KeiSource(),
+    ConfigurableSource {
+    private val preferences: SharedPreferences by getPreferencesLazy()
+
+    private val imageServer = arrayOf("https://i.hamreus.com", "https://cf.hamreus.com")
+    private val mobileWebsiteUrl: String
+        get() = baseUrl.replace("www.", "m.").replace("tw.", "m.")
+
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.CHINA)
+
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        if (getShowR18()) {
+            addNetworkInterceptor(AddCookieHeaderInterceptor())
+        }
+    }
+        .rateLimit(
+            preferences.getString(MAINSITE_RATELIMIT_PREF, MAINSITE_RATELIMIT_DEFAULT_VALUE)!!.toInt(),
+            10.seconds,
+        ) { it.host == baseUrl.toHttpUrl().host }
+        .rateLimit(
+            preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt(),
+        ) { url -> url.host in imageServer.map { it.toHttpUrl().host } }
+
+    inner class AddCookieHeaderInterceptor : Interceptor {
+        override fun intercept(chain: Interceptor.Chain): Response {
+            if (chain.request().url.host == baseUrl.toHttpUrl().host) {
+                val originalCookies = chain.request().header("Cookie") ?: ""
+                if (originalCookies.isNotEmpty() && !originalCookies.contains("isAdult=1")) {
+                    return chain.proceed(
+                        chain.request().newBuilder()
+                            .header("Cookie", "$originalCookies; isAdult=1")
+                            .build(),
+                    )
+                }
+            }
+            return chain.proceed(chain.request())
+        }
+    }
+
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/list/view_p$page.html", Fetch.DOCUMENT).asJsoup())
+
+    private fun parseMangaList(document: Document): MangasPage {
+        val mangas = document.select("ul#contList > li").map(::mangaFromElement)
+        val hasNextPage = document.selectFirst("span.current + a") != null
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/list/update_p$page.html", Fetch.DOCUMENT).asJsoup())
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = if (query.isNotEmpty()) {
+            "$baseUrl/s/${query}_p$page.html"
+        } else {
+            val params = filters.filterIsInstance<UriPartFilter>()
+                .filter { it !is SortFilter }
+                .map { it.toUriPart() }
+                .filter { it.isNotEmpty() }
+                .joinToString("_")
+
+            val sortOrder = filters.firstInstanceOrNull<SortFilter>()?.toUriPart() ?: ""
+
+            when {
+                sortOrder.isEmpty() -> "$baseUrl/list${params.toPathOrEmpty()}/index_p$page.html"
+                sortOrder.startsWith(RANK_PREFIX) -> {
+                    "$baseUrl/rank${params.toPathOrEmpty()}".let {
+                        if (it.endsWith("rank")) {
+                            "$it/${sortOrder.removePrefix(RANK_PREFIX).toPathOrEmpty("", ".html")}"
+                        } else {
+                            "$it${sortOrder.removePrefix(RANK_PREFIX).toPathOrEmpty("_")}.html"
+                        }
+                    }
+                }
+                else -> "$baseUrl/list${params.toPathOrEmpty()}/${sortOrder}_p$page.html"
+            }
+        }
+
+        val response = client.get(url, Fetch.DOCUMENT)
+        val path = response.request.url.encodedPath
+        val document = response.asJsoup()
+        return when {
+            path.startsWith("/s/") -> {
+                val mangas = document.select("div.book-result > ul > li").map(::searchMangaFromElement)
+                val hasNextPage = document.selectFirst("span.current + a") != null
+                MangasPage(mangas, hasNextPage)
+            }
+            path.startsWith("/rank/") -> {
+                val mangas = document.select("td.rank-title").map {
+                    SManga.create().apply {
+                        this.url = it.selectFirst("a")?.attr("href") ?: ""
+                        title = it.selectFirst("a")?.text() ?: ""
+                    }
+                }
+                MangasPage(mangas, false)
+            }
+            else -> parseMangaList(document)
+        }
+    }
+
+    private fun String.toPathOrEmpty(prefix: String = "/", suffix: String = ""): String = if (isEmpty()) {
+        this
+    } else {
+        "$prefix$this$suffix"
+    }
+
+    private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
+        element.selectFirst("a.bcover")?.let {
+            url = it.attr("href")
+            title = it.attr("title")
+            val thumbnailElement = it.selectFirst("img")
+            if (thumbnailElement != null) {
+                thumbnail_url = if (thumbnailElement.hasAttr("src")) {
+                    thumbnailElement.absUrl("src")
+                } else {
+                    thumbnailElement.absUrl("data-src")
+                }
+            }
+        }
+    }
+
+    private fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        element.selectFirst("div.book-detail")?.let {
+            val a = it.selectFirst("dl > dt > a")
+            if (a != null) {
+                url = a.attr("href")
+                title = a.attr("title")
+            }
+        }
+        thumbnail_url = element.selectFirst("div.book-cover > a.bcover > img")?.absUrl("src")
+    }
+
+    override fun getMangaUrl(manga: SManga): String = mobileWebsiteUrl + manga.url
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (!url.host.endsWith("manhuagui.com") && !url.host.endsWith("mhgui.com")) return null
+        val id = url.pathSegments.getOrNull(1) ?: return null
+
+        val document = client.get("$baseUrl/comic/$id", Fetch.DOCUMENT).asJsoup()
+        return SManga.create().apply {
+            parseDetails(document)
+            this.url = "/comic/$id/"
+        }
+    }
+
+    @OptIn(DelicateCoroutinesApi::class)
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
+
+        val bid = Regex("""\d+""").find(manga.url)?.value
+        if (fetchDetails && bid != null) {
+            GlobalScope.launch(Dispatchers.IO) {
+                delay(1000L)
+                val ajaxHeaders = headersBuilder()
+                    .set("Referer", manga.url)
+                    .set("X-Requested-With", "XMLHttpRequest")
+                    .build()
+                runCatching {
+                    client.post(
+                        "$baseUrl/tools/submit_ajax.ashx?action=user_check_login",
+                        ajaxHeaders,
+                        Fetch.XHR,
+                        FormBody.Builder().build(),
+                        ensureSuccess = false,
+                    ).close()
+                }.onFailure { it.printStackTrace() }
+                runCatching {
+                    client.get(
+                        "$baseUrl/tools/vote.ashx?act=get&bid=$bid",
+                        ajaxHeaders,
+                        Fetch.XHR,
+                        ensureSuccess = false,
+                    ).close()
+                }.onFailure { it.printStackTrace() }
+            }
+        }
+
+        manga.parseDetails(document)
+
+        return SMangaUpdate(manga, parseChapterList(document))
+    }
+
+    private fun SManga.parseDetails(document: Document) {
+        title = document.selectFirst("div.book-title > h1:nth-child(1)")?.text() ?: ""
+        description = document.selectFirst("div#intro-all")?.text() ?: ""
+        thumbnail_url = document.selectFirst("p.hcover > img")?.absUrl("src")
+        author = document.select("span:contains(漫画作者) > a , span:contains(漫畫作者) > a").text().replace(" ", ", ")
+        genre = document.select("span:contains(漫画剧情) > a , span:contains(漫畫劇情) > a").text().replace(" ", ", ")
+        status = when (document.selectFirst("div.book-detail > ul.detail-list > li.status > span > span")?.text()) {
+            "连载中", "連載中" -> SManga.ONGOING
+            "已完结", "已完結" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+    }
+
+    private fun parseChapterList(document: Document): List<SChapter> {
+        val chapters = mutableListOf<SChapter>()
+
+        val hiddenEncryptedChapterList = document.selectFirst("#__VIEWSTATE")
+        if (hiddenEncryptedChapterList != null) {
+            if (getShowR18()) {
+                val decodedHiddenChapterList = LZString.decompressFromBase64(hiddenEncryptedChapterList.`val`())
+                val hiddenChapterList = Jsoup.parseBodyFragment(decodedHiddenChapterList, document.location())
+
+                document.selectFirst("#erroraudit_show")?.replaceWith(hiddenChapterList)
+                hiddenEncryptedChapterList.remove()
+            } else {
+                error("您需要打开R18作品显示开关并重启软件才能阅读此作品")
+            }
+        }
+        val latestChapterHref = document.selectFirst("div.book-detail > ul.detail-list > li.status > span > a.blue")?.attr("href")
+
+        val sectionList = document.select("[id^=chapter-list-]")
+        sectionList.forEach { section ->
+            val pageList = section.select("ul").reversed()
+            pageList.forEach { page ->
+                val chapterList = page.select("li > a.status0")
+                chapterList.forEach {
+                    val currentChapter = SChapter.create()
+                    currentChapter.url = it.attr("href")
+
+                    val titleAttr = it.attr("title")
+                    currentChapter.name = titleAttr.ifEmpty { it.selectFirst("span")?.ownText() ?: "" }
+
+                    if (currentChapter.url == latestChapterHref) {
+                        val dateElement = document.select("div.book-detail > ul.detail-list > li.status > span > span.red").last()
+                        if (dateElement != null) {
+                            currentChapter.date_upload = dateFormat.tryParseDate(dateElement.text())
+                        }
+                    }
+                    chapters.add(currentChapter)
+                }
+            }
+        }
+
+        return chapters
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
+        if (document.selectFirst("#erroraudit_show") != null && !getShowR18()) {
+            error("R18作品显示开关未开启或未生效")
+        }
+
+        val html = document.outerHtml()
+        val imgCode = packedRegex.find(html)?.groupValues?.get(1)?.let {
+            it.replace(packedContentRegex) { match ->
+                val lzs = match.groupValues[1]
+                val decoded = LZString.decompressFromBase64(lzs)
+                "'$decoded'.split('|')"
+            }
+        } ?: throw Exception("Failed to find image code")
+
+        val imgDecode = Unpacker.unpack(singleQuoteRegex.replace(imgCode, "-"))
+        val imgJsonStr = blockCcArgRegex.find(imgDecode)?.groupValues?.get(0) ?: throw Exception("Failed to extract JSON from parsed code")
+        val imageJson = imgJsonStr.parseAs<Comic>()
+
+        return imageJson.files.orEmpty().mapIndexed { i, imgStr ->
+            val imgurl = "${imageServer[0]}${imageJson.path}$imgStr?e=${imageJson.sl?.e}&m=${imageJson.sl?.m}"
+            Page(i, imageUrl = imgurl)
+        }
+    }
+
+    override fun Headers.Builder.configureHeaders() = set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
+        .set("Accept-Language", "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7")
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).run {
+            key = MAINSITE_RATELIMIT_PREF
+            title = MAINSITE_RATELIMIT_PREF_TITLE
+            entries = ENTRIES_ARRAY
+            entryValues = ENTRIES_ARRAY
+            summary = MAINSITE_RATELIMIT_PREF_SUMMARY
+
+            setDefaultValue(MAINSITE_RATELIMIT_DEFAULT_VALUE)
+            screen.addPreference(this)
+        }
+
+        ListPreference(screen.context).run {
+            key = IMAGE_CDN_RATELIMIT_PREF
+            title = IMAGE_CDN_RATELIMIT_PREF_TITLE
+            entries = ENTRIES_ARRAY
+            entryValues = ENTRIES_ARRAY
+            summary = IMAGE_CDN_RATELIMIT_PREF_SUMMARY
+
+            setDefaultValue(IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)
+            screen.addPreference(this)
+        }
+
+        CheckBoxPreference(screen.context).run {
+            key = SHOW_R18_PREF
+            title = SHOW_R18_PREF_TITLE
+            summary = SHOW_R18_PREF_SUMMARY
+            screen.addPreference(this)
+        }
+    }
+
+    private fun getShowR18(): Boolean = preferences.getBoolean(SHOW_R18_PREF, false)
+
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        SortFilter(),
+        LocaleFilter(),
+        GenreFilter(),
+        ReaderFilter(),
+        PublishDateFilter(),
+        FirstLetterFilter(),
+        StatusFilter(),
+    )
+
+    companion object {
+        private const val SHOW_R18_PREF = "showR18Default"
+        private const val SHOW_R18_PREF_TITLE = "显示R18作品"
+        private const val SHOW_R18_PREF_SUMMARY = "请确认您的IP不在漫画柜的屏蔽列表内，例如中国大陆IP。需要重启软件以生效。\n开启后如需关闭，需要到Tachiyomi高级设置内清除Cookies后才能生效。"
+
+        private const val MAINSITE_RATELIMIT_PREF = "mainSiteRatelimitPreference"
+        private const val MAINSITE_RATELIMIT_PREF_TITLE = "主站每十秒连接数限制"
+        private const val MAINSITE_RATELIMIT_PREF_SUMMARY = "此值影响更新书架时发起连接请求的数量。调低此值可能减小IP被屏蔽的几率，但加载速度也会变慢。需要重启软件以生效。\n当前值：%s"
+        private const val MAINSITE_RATELIMIT_DEFAULT_VALUE = "10"
+
+        private const val IMAGE_CDN_RATELIMIT_PREF = "imgCDNRatelimitPreference"
+        private const val IMAGE_CDN_RATELIMIT_PREF_TITLE = "图片CDN每秒连接数限制"
+        private const val IMAGE_CDN_RATELIMIT_PREF_SUMMARY = "此值影响加载图片时发起连接请求的数量。调低此值可能减小IP被屏蔽的几率，但加载速度也会变慢。需要重启软件以生效。\n当前值：%s"
+        private const val IMAGE_CDN_RATELIMIT_DEFAULT_VALUE = "4"
+
+        const val RANK_PREFIX = "rank_"
+
+        private val ENTRIES_ARRAY = (1..10).map { i -> i.toString() }.toTypedArray()
+
+        @Suppress("RegExpRedundantEscape")
+        private val packedRegex = Regex("""window\[".*?"\](\(.*\)\s*\{[\s\S]+\}\s*\(.*\))""")
+
+        @Suppress("RegExpRedundantEscape")
+        private val blockCcArgRegex = Regex("""\{.*\}""")
+
+        private val packedContentRegex = Regex("""['"]([0-9A-Za-z+/=]+)['"]\[['"].*?['"]]\(['"].*?['"]\)""")
+
+        private val singleQuoteRegex = Regex("""\\'""")
+    }
+}

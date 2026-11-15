@@ -1,0 +1,22 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "KissLove"
+    versionCode = 23
+    contentWarning = ContentWarning.MIXED
+    libVersion = "1.6"
+
+    source {
+        lang = "ja"
+        baseUrl = "https://klz9.com"
+    }
+}
+
+dependencies {
+
+    api(project(":lib:i18n"))
+}
