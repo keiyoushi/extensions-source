@@ -77,8 +77,12 @@ abstract class A3Manga : KeiSource() {
                 .add("action", "searchtax")
                 .add("keyword", query)
                 .build()
-            val mangas = client.post("$baseUrl/wp-admin/admin-ajax.php", Fetch.XHR, body)
-                .parseAs<SearchResponse>().data
+            val response = client.post("$baseUrl/wp-admin/admin-ajax.php", Fetch.XHR, body)
+            // Kept from the old sources: the endpoint can answer with a list page instead of JSON
+            if ("application/json" !in response.header("Content-Type").orEmpty()) {
+                return mangaListParse(response.asJsoup())
+            }
+            val mangas = response.parseAs<SearchResponse>().data
                 .filter { "/$mangaPath/" in it.link }
                 .map { result ->
                     SManga.create().apply {
@@ -99,7 +103,10 @@ abstract class A3Manga : KeiSource() {
     // Archive pages hold their whole list and page it with JavaScript; only grid pages have /page/N/
     protected open suspend fun getFilterMangaList(path: String, page: Int): MangasPage {
         val url = if (page == 1) baseUrl + path else "$baseUrl${path.trimEnd('/')}/page/$page/"
-        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
+        return mangaListParse(client.get(url, Fetch.DOCUMENT).asJsoup())
+    }
+
+    private fun mangaListParse(document: Document): MangasPage {
         val items = document.select("#archive-list-table li.position-relative")
             .ifEmpty { document.select("ul.single-list-comic li.position-relative") }
         if (items.isEmpty()) return mangaGridParse(document)
