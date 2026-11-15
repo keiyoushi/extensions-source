@@ -205,7 +205,7 @@ abstract class A3Manga : KeiSource() {
         }
     }
 
-    private fun isPlaceholder(text: String) = text.isEmpty() || placeholders.any { it.equals(text, ignoreCase = true) }
+    protected fun isPlaceholder(text: String) = text.isEmpty() || placeholders.any { it.equals(text, ignoreCase = true) }
 
     // ============================== Chapters ==============================
 

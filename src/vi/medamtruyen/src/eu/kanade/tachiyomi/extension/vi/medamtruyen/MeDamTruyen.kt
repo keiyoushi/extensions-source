@@ -96,9 +96,9 @@ abstract class MeDamTruyen : A3Manga() {
             ?.takeIf { it.isNotEmpty() }
             ?.toCoverUrl()
             ?: document.selectFirst("div.comic-info-img img, div.chapter-item-img img")?.coverUrl()
-        author = extractInfoValue(infoRows, "Tác giả")
-        genre = document.select("div.comic-desc-list a[href*=/the-loai/]")
-            .joinToString { it.text() }
+        author = extractInfoValue(infoRows, "Tác giả")?.takeUnless(::isPlaceholder)
+        genre = document.select("div.comic-desc-tags a[href*=/the-loai/]")
+            .joinToString { it.text().removePrefix("#") }
             .ifEmpty { null }
         status = parseStatus(document.selectFirst("span.comic-stt")?.text())
         description = MarkdownDescription.Builder()
