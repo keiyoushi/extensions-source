@@ -1,0 +1,36 @@
+name: Build Custom Extension
+
+on:
+  workflow_dispatch:
+    inputs:
+      module:
+        description: "Gradle module path (e.g. :src:tr:merlinscans)"
+        required: true
+        default: ":src:tr:merlinscans"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: 25
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build Debug APK & Lint
+        run: ./gradlew ${{ inputs.module }}:lintRelease ${{ inputs.module }}:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-apk
+          path: "**/build/outputs/apk/debug/*.apk"
+          retention-days: 7

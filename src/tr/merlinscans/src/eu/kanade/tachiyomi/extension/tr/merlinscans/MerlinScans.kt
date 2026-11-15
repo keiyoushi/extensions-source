@@ -6,7 +6,9 @@ import keiyoushi.annotation.Source
 @Source
 abstract class MerlinScans : InitManga() {
 
-    override val popularUrlSlug = "seri-siralamasi"
+    override val mangaUrlDirectory = "manga"
 
-    override val latestUrlSlug = "son-guncellenenler"
+    override val popularUrlSlug = "manga-ranking"
+
+    override val latestUrlSlug = "manga"
 }
