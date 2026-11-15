@@ -34,8 +34,12 @@ jobs:
 
       - name: Prepare signing key
         working-directory: main
+        env:
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
         run: |
           echo "${{ secrets.SIGNING_KEY }}" | base64 -d > signingkey.jks
+          cert_sha=$(openssl pkcs12 -in signingkey.jks -clcerts -nokeys -passin "pass:$KEY_STORE_PASSWORD" | openssl x509 -outform DER | sha256sum | awk '{print $1}')
+          echo "SIGNING_CERT_SHA256=$cert_sha" >> "$GITHUB_ENV"
 
       - name: Build Signed Release APK & Lint
         working-directory: main
@@ -61,8 +65,9 @@ jobs:
             git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
           fi
 
-      - name: Update index.min.json and publish to repo branch
+      - name: Update index.pb & index.min.json and publish to repo branch
         run: |
+          python -m pip install --user --upgrade protobuf
           python main/.github/scripts/publish-custom-repo.py main repo
           cd repo
           git config user.name "github-actions[bot]"
