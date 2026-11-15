@@ -43,7 +43,8 @@ abstract class WNACG :
     ConfigurableSource {
     private val preferences = getPreferences { preferenceMigration() }
 
-    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = client.get(DOMAIN_LIST_URL, Fetch.DOCUMENT).body.string().split(',')
+    // The domain list, like the site's address page, leaves out some mirrors
+    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = (client.get(DOMAIN_LIST_URL, Fetch.DOCUMENT).body.string().split(',') + UNLISTED_MIRRORS).distinct()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(::loginHintInterceptor)
@@ -344,6 +345,7 @@ abstract class WNACG :
     companion object {
         private const val LOGIN_HINT = "内容不存在或需要登录，请在 WebView 中登录后重试"
         private const val DOMAIN_LIST_URL = "https://stevenyomi.github.io/source-domains/wnacg.txt"
+        private val UNLISTED_MIRRORS = listOf("https://www.wn01.cfd")
         private const val CHAPTER_SELECTOR = "div.sr_compact a.tagshow[data-chid]"
         private val pageImageRegex = Regex(
             """//[^\s"'\\]+\.(?:jpeg|jpg|png|webp|gif)(?:\?[^\s"'\\]*)?""",
