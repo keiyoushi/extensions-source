@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.tryParseDate
 import okhttp3.HttpUrl
@@ -100,7 +101,9 @@ abstract class MeDamTruyen : A3Manga() {
             .joinToString { it.text() }
             .ifEmpty { null }
         status = parseStatus(document.selectFirst("span.comic-stt")?.text())
-        description = parseDescription(document)
+        description = MarkdownDescription.Builder()
+            .description(parseDescription(document))
+            .build()
     }
 
     private fun extractInfoValue(infoRows: List<Element>, label: String): String? = infoRows.firstOrNull { row ->

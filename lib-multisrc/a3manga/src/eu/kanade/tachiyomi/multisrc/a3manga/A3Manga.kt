@@ -11,6 +11,7 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.parseAs
@@ -176,13 +177,13 @@ abstract class A3Manga : KeiSource() {
             .joinToString { it.text() }
             .ifEmpty { null }
         status = parseStatus(document.selectFirst("span.comic-stt")?.text())
-        description = document.selectFirst(".intro-container .hide-long-text")?.text()
-            ?.substringBefore("— Xem Thêm —")
-            ?.substringBefore("- Xem thêm -")
-            ?.trim()
+        val synopsis = document.selectFirst(".intro-container .hide-long-text")
+        // The "Xem Thêm" toggle sits inside the synopsis block
+        synopsis?.select(".hide-long-text-shadow")?.remove()
+        description = MarkdownDescription.Builder()
+            .description(synopsis?.takeUnless { isPlaceholder(it.text()) })
+            .build()
             ?.removeSurrounding("\"")
-            ?.trim()
-            ?.takeUnless(::isPlaceholder)
     }
 
     protected fun parseStatus(status: String?): Int {
