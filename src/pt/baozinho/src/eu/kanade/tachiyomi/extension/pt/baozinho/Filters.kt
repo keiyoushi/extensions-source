@@ -6,7 +6,7 @@ open class SelectFilter(name: String, private val options: List<Pair<String, Str
     val value get() = options[state].second
 }
 
-// The first item matches getPopularManga, so the filter sheet reflects the open list.
+// O primeiro item é o padrão de getPopularManga, para a tela de filtros refletir a lista aberta.
 class SortFilter :
     SelectFilter(
         "Ordenar por",
@@ -33,11 +33,11 @@ class StatusFilter :
         ),
     )
 
-class FormatoFilter(formatos: List<FormatoDto>) : SelectFilter("Formato", listOf("Todos" to "") + formatos.map { it.nome to it.slug })
+class FormatFilter(formats: List<FormatDto>) : SelectFilter("Formato", listOf("Todos" to "") + formats.map { it.name to it.slug })
 
-class TagCheckBox(tag: TagDto) : Filter.CheckBox(tag.nome) {
+class TagCheckBox(tag: TagDto) : Filter.CheckBox(tag.name) {
     val id = tag.id
 }
 
-// The API combines several tags with OR, not AND.
+// A API combina várias tags por OU, não por E.
 class TagFilter(tags: List<TagDto>) : Filter.Group<TagCheckBox>("Gêneros (qualquer um dos marcados)", tags.map(::TagCheckBox))
