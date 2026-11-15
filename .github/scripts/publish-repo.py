@@ -123,6 +123,8 @@ for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
             )
             for source in info["sources"]
         ],
+        runtimeProvides=info.get("runtimeProvides", {}),
+        runtimeRequires=info.get("runtimeRequires", {}),
     )
     new_extensions.append((ext, apk, jar, changed))
 

@@ -11,8 +11,13 @@ import io.github.keiyoushi.gradle.api.dsl.KeiyoushiExtension
 import io.github.keiyoushi.gradle.api.dsl.KeiyoushiThemeExtension
 import io.github.keiyoushi.gradle.internal.ExtensionMetadata
 import io.github.keiyoushi.gradle.internal.ResolvedSource
+import io.github.keiyoushi.gradle.internal.RUNTIME_EXTENSION
 import io.github.keiyoushi.gradle.internal.SourceMetadata
 import io.github.keiyoushi.gradle.internal.VALID_LIB_VERSIONS
+import io.github.keiyoushi.gradle.internal.checkRuntimeServes
+import io.github.keiyoushi.gradle.internal.collectRuntimeRequirements
+import io.github.keiyoushi.gradle.internal.configureRuntimeConsumer
+import io.github.keiyoushi.gradle.internal.runtimeProvides
 import io.github.keiyoushi.gradle.internal.extensions.alias
 import io.github.keiyoushi.gradle.internal.extensions.compileOnly
 import io.github.keiyoushi.gradle.internal.extensions.implementation
@@ -21,11 +26,13 @@ import io.github.keiyoushi.gradle.internal.extensions.ksp
 import io.github.keiyoushi.gradle.internal.extensions.libs
 import io.github.keiyoushi.gradle.internal.extensions.lintChecks
 import io.github.keiyoushi.gradle.internal.extensions.plugins
+import io.github.keiyoushi.gradle.internal.extensions.testImplementation
 import io.github.keiyoushi.gradle.internal.extensionsLib
 import io.github.keiyoushi.gradle.internal.toMetadata
 import io.github.keiyoushi.gradle.tasks.ComputeContentHashTask
 import io.github.keiyoushi.gradle.tasks.CreateExtensionJarTask
 import io.github.keiyoushi.gradle.tasks.GenerateManifestTask
+import io.github.keiyoushi.gradle.tasks.GenerateRuntimeSourcesTask
 import io.github.keiyoushi.gradle.tasks.GenerateSourceInfoTask
 import io.github.keiyoushi.gradle.tasks.SignExtensionJarTask
 import kotlinx.serialization.json.Json
@@ -36,6 +43,7 @@ import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.create
 import org.gradle.kotlin.dsl.dependencies
 import org.gradle.kotlin.dsl.findByType
+import org.gradle.kotlin.dsl.named
 import org.gradle.kotlin.dsl.property
 import org.gradle.kotlin.dsl.register
 import org.gradle.kotlin.dsl.withType
@@ -71,6 +79,16 @@ class ExtensionPlugin : Plugin<Project> {
                     assets.directories.clear()
                     assets.directories.add("assets")
                 }
+                named("test") {
+                    kotlin.directories.clear()
+                    kotlin.directories.add("test")
+                    resources.directories.clear()
+                    resources.directories.add("test-resources")
+                }
+            }
+
+            testOptions {
+                unitTests.isReturnDefaultValues = true
             }
 
             lint {
@@ -138,6 +156,16 @@ class ExtensionPlugin : Plugin<Project> {
             versionCodeProvider.map { versionCode ->
                 libVersion.split(".").joinToString("") { it.padStart(2, '0') }.toInt().times(1000) + versionCode
             }
+        }
+
+        configureRuntimeConsumer(
+            packageName = provider { "eu.kanade.tachiyomi.extension.$dirSuffix" },
+            isHost = { keiyoushi.runtimeHost.isPresent },
+        ) {
+            hostVersionCode.set(keiyoushi.runtimeHost.flatMap { androidVersionCodeProvider })
+            hostVersionName.set(keiyoushi.runtimeHost.flatMap { versionNameProvider })
+            provides.set(keiyoushi.runtimeHost.flatMap { it.provides }.orElse(emptyMap()))
+            minApis.set(keiyoushi.runtimeHost.flatMap { it.minApis }.orElse(emptyMap()))
         }
 
         val themeDeeplinks = themeExtension
@@ -260,6 +288,10 @@ class ExtensionPlugin : Plugin<Project> {
             compileOnly(keiyoushi.libVersion.flatMap { libs.extensionsLib(it) })
             ksp(project(":compiler"))
             lintChecks(project(":lint-rules"))
+
+            testImplementation(libs.bundles.common)
+            testImplementation(keiyoushi.libVersion.flatMap { libs.extensionsLib(it) })
+            testImplementation(libs.junit)
         }
 
         afterEvaluate {
@@ -279,9 +311,36 @@ class ExtensionPlugin : Plugin<Project> {
                 ).get()
                 ResolvedSource(name, lang, id, baseUrl)
             }
+
+            val runtimeHost = keiyoushi.runtimeHost.orNull
+            val runtimeRequires = collectRuntimeRequirements()
+            if (runtimeHost != null) {
+                check(path == RUNTIME_EXTENSION) { "Only $RUNTIME_EXTENSION is the Keiyoushi Runtime" }
+                // The runtime depends on its modules' libs for their contracts, so it requires
+                // what those libs require: modules it must provide itself
+                checkRuntimeServes(runtimeRequires, runtimeHost.provides.get())
+                check(!keiyoushi.theme.isPresent) { "The Keiyoushi Runtime can't use a theme" }
+                // The apps offer it for install under its index row's lang "all"; installed, its one
+                // source has no lang and only holds settings
+                check(resolvedSources.size == 1 && resolvedSources.single().lang == "all") {
+                    "The Keiyoushi Runtime declares exactly one source { lang = \"all\" }"
+                }
+                val source = resolvedSources.single()
+                tasks.named<GenerateRuntimeSourcesTask>("generateRuntimeSources").configure {
+                    hostSourceId.set(source.id)
+                    hostSourceName.set(source.name)
+                    licenses.from(layout.projectDirectory.dir("assets/licenses").asFileTree.matching { include("*.txt") })
+                }
+            } else if (runtimeRequires.isNotEmpty()) {
+                checkRuntimeServes(runtimeRequires, runtimeProvides())
+            }
+
             val translationsFile = project(":core").projectDir.resolve("translations/strings.json")
             extensions.configure<KspExtension> {
-                arg("kei_sources", Json.encodeToString<List<ResolvedSource>>(resolvedSources))
+                // The runtime's entry point is generated by GenerateRuntimeSourcesTask instead
+                if (runtimeHost == null) {
+                    arg("kei_sources", Json.encodeToString<List<ResolvedSource>>(resolvedSources))
+                }
                 arg("kei_translations", translationsFile.absolutePath)
             }
             tasks.matching { it.name.startsWith("ksp") }.configureEach {
@@ -317,6 +376,8 @@ class ExtensionPlugin : Plugin<Project> {
                         contentWarning = contentWarningOrdinal,
                         sources = sourceInfos,
                         contentHash = hash,
+                        runtimeProvides = runtimeHost?.provides?.get()?.toSortedMap().orEmpty(),
+                        runtimeRequires = if (runtimeHost == null) runtimeRequires else emptyMap(),
                     ),
                 )
             }
