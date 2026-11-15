@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.network.head
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
@@ -43,13 +44,8 @@ abstract class PornSticky : KeiSource() {
 
     // A search for a category, model or paysite redirects to its list, and its next pages stay under /search/
     private suspend fun getGalleryList(segments: List<String>, page: Int): MangasPage {
-        val listUrl = baseUrl.toHttpUrl().newBuilder().apply {
-            segments.forEach(::addPathSegment)
-            if (page > 1) addPathSegment(page.toString())
-            addPathSegment("")
-        }.build()
         val document = try {
-            client.get(listUrl, Fetch.DOCUMENT).asJsoup()
+            client.get(listUrl(segments, page), Fetch.DOCUMENT).asJsoup()
         } catch (e: HttpException) {
             // Searches without results and pages past the last one answer 410
             if (e.code != 410) throw e
@@ -63,10 +59,17 @@ abstract class PornSticky : KeiSource() {
                 thumbnail_url = link.selectFirst("img")?.absUrl("data-src")
             }
         }.distinctBy { it.url }
-        // Model lists have no pager, yet go on past their first page
-        val hasNextPage = document.selectFirst("a.next") != null || (document.selectFirst(".pagination") == null && mangas.size >= PAGE_SIZE)
+        // Paysite pagers drop their next link a page early and model lists have none: after a full page, ask for the next one
+        val hasNextPage = document.selectFirst("a.next") != null ||
+            (mangas.size >= PAGE_SIZE && client.head(listUrl(segments, page + 1), ensureSuccess = false).use { it.isSuccessful })
         return MangasPage(mangas, hasNextPage)
     }
+
+    private fun listUrl(segments: List<String>, page: Int): HttpUrl = baseUrl.toHttpUrl().newBuilder().apply {
+        segments.forEach(::addPathSegment)
+        if (page > 1) addPathSegment(page.toString())
+        addPathSegment("")
+    }.build()
 
     override suspend fun getMangasByUrl(url: HttpUrl, page: Int): MangasPage {
         val segments = url.pathSegments.filter { it.isNotEmpty() }
