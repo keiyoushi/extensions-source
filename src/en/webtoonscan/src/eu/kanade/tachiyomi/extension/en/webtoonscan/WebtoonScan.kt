@@ -7,6 +7,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.ownTextOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import kotlinx.serialization.Serializable
@@ -38,13 +39,13 @@ abstract class WebtoonScan : Madara() {
             val score = document.selectFirst("#averagerate")?.text()?.toDoubleOrNull()
             val votes = document.selectFirst("#countrate")?.text()?.toIntOrNull()
             val release = document.summaryRow("Release")?.textOrNull()
-            val alts = document.summaryRow("Alternative")?.ownText()
-                ?.takeIf { it.isNotEmpty() && !isUpdating(it) }
+            val alts = document.summaryRow("Alternative")?.ownTextOrNull()
+                ?.takeUnless(::isUpdating)
                 ?.split(", ")
                 .orEmpty()
 
             description(document.selectFirst(mangaDetailsSelectorDescription))
-            rating(score?.takeIf { it > 0 }, max = 5, votes = votes)
+            rating(score, max = 5, votes = votes)
             info(release, type)
             altTitles(alts, label = "Alternative Name(s)")
         }.build()
