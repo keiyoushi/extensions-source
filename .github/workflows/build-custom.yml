@@ -8,13 +8,18 @@ on:
         required: true
         default: ":src:tr:merlinscans"
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Checkout repository
+      - name: Checkout main
         uses: actions/checkout@v4
+        with:
+          path: main
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -24,13 +29,55 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-home-cache-cleanup: true
 
-      - name: Build Debug APK & Lint
-        run: ./gradlew ${{ inputs.module }}:lintRelease ${{ inputs.module }}:assembleDebug
+      - name: Prepare signing key
+        working-directory: main
+        run: |
+          echo "${{ secrets.SIGNING_KEY }}" | base64 -d > signingkey.jks
 
-      - name: Upload APK
+      - name: Build Signed Release APK & Lint
+        working-directory: main
+        env:
+          ALIAS: ${{ secrets.ALIAS }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew ${{ inputs.module }}:lintRelease ${{ inputs.module }}:assembleRelease
+
+      - name: Clean up signing key
+        if: always()
+        working-directory: main
+        run: rm -f signingkey.jks
+
+      - name: Checkout or initialize repo branch
+        run: |
+          if git ls-remote --exit-code --heads "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" repo; then
+            git clone --branch repo --depth 1 "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" repo
+          else
+            git init repo
+            cd repo
+            git checkout --orphan repo
+            git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          fi
+
+      - name: Update index.min.json and publish to repo branch
+        run: |
+          python main/.github/scripts/publish-custom-repo.py main repo
+          cd repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Update custom extension repo (${{ inputs.module }})"
+            git push -u origin repo
+          else
+            echo "No changes to publish"
+          fi
+
+      - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: extension-apk
-          path: "**/build/outputs/apk/debug/*.apk"
+          path: "main/**/build/outputs/apk/release/*.apk"
           retention-days: 7
