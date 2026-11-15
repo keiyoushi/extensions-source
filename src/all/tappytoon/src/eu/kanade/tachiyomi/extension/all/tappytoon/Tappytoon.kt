@@ -44,7 +44,7 @@ abstract class Tappytoon :
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
         val res = chain.proceed(chain.request())
         val mime = res.headers["Content-Type"]
-        if (res.isSuccessful) {
+        if (res.isSuccessful || res.code == 401) {
             if (mime != "application/octet-stream") {
                 return@addInterceptor res
             }
@@ -78,6 +78,15 @@ abstract class Tappytoon :
             .also { apiHeaders = it }
     }
 
+    private suspend fun apiGet(url: HttpUrl, isRetry: Boolean = false): Response {
+        val res = client.get(url, apiHeaders(), Fetch.XHR, ensureSuccess = isRetry)
+        if (res.code != 401 || isRetry) return res
+
+        res.close()
+        apiHeaders = null
+        return apiGet(url, true)
+    }
+
     private var nextUrl: String? = null
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -87,7 +96,7 @@ abstract class Tappytoon :
             .addEncodedQueryParameter("locale", lang)
             .build()
 
-        return parseComics(client.get(url, apiHeaders(), Fetch.XHR))
+        return parseComics(apiGet(url))
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -99,7 +108,7 @@ abstract class Tappytoon :
             .addEncodedQueryParameter("locale", lang)
             .build()
 
-        return parseComics(client.get(url, apiHeaders(), Fetch.XHR))
+        return parseComics(apiGet(url))
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -116,13 +125,13 @@ abstract class Tappytoon :
             build()
         }
 
-        val response = client.get(url, apiHeaders(), Fetch.XHR)
+        val response = apiGet(url)
         val link = response.headers["Link"]
         nextUrl = link?.substringAfter('<')?.substringBefore('>')
-        return parseComics(response).copy(hasNextPage = link != null)
+        return parseComics(response, link != null)
     }
 
-    private fun parseComics(response: Response) = response.parseAs<List<Comic>>().accessible.map {
+    private fun parseComics(response: Response, hasNext: Boolean = false) = response.parseAs<List<Comic>>().accessible.map {
         SManga.create().apply {
             url = it.toString()
             title = it.title
@@ -141,9 +150,8 @@ abstract class Tappytoon :
                 else -> SManga.UNKNOWN
             }
         }
-    }.run { MangasPage(this, false) }
+    }.run { MangasPage(this, hasNext) }
 
-    // The real URL for the webview
     override fun getMangaUrl(manga: SManga) = "$baseUrl/comics/${manga.slug}"
 
     override suspend fun fetchMangaUpdate(
@@ -159,7 +167,7 @@ abstract class Tappytoon :
             .addEncodedQueryParameter("locale", lang)
             .build()
 
-        val chapterList = client.get(url, apiHeaders(), Fetch.XHR).parseAs<List<Chapter>>().accessible.asReversed().map {
+        val chapterList = apiGet(url).parseAs<List<Chapter>>().accessible.asReversed().map {
             SChapter.create().apply {
                 name = it.toString()
                 this.url = it.id.toString()
@@ -194,7 +202,7 @@ abstract class Tappytoon :
             .addEncodedQueryParameter("variant", variant)
             .addEncodedQueryParameter("locale", lang)
             .build()
-        return client.get(url, apiHeaders(), Fetch.XHR).parseAs<Media>()
+        return apiGet(url).parseAs<Media>()
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
