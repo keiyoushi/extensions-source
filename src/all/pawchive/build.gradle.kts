@@ -6,12 +6,16 @@ plugins {
 
 keiyoushi {
     name = "Pawchive"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
     source {
         lang = "all"
         baseUrl = "https://pawchive.pw"
+    }
+    deeplink {
+        path("/patreon/user/..*")
+        path("/fanbox/user/..*")
     }
 }

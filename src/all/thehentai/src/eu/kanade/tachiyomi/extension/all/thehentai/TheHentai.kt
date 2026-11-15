@@ -52,6 +52,8 @@ abstract class TheHentai : KeiSource() {
 
     private suspend fun fetchList(url: HttpUrl): MangasPage {
         val document = client.get(url, Fetch.DOCUMENT).asJsoup()
+        // A search without results shows the latest posts under a heading of its own
+        if (document.selectFirst("h3 + #posts_list") != null) return MangasPage(emptyList(), false)
         // Ads in the grid link to other sites, and video posts have no pages
         val mangas = document.select("#posts_list .gridPosts:has(h3 a[href^=/]):not(:has(a[href*=/category/videos/]))").map { card ->
             val link = card.selectFirst("h3 a")!!
@@ -63,6 +65,14 @@ abstract class TheHentai : KeiSource() {
         }
 
         return MangasPage(mangas, document.selectFirst(".pagination li:has(.current_page) ~ li > a:matchesOwn(\\d)") != null)
+    }
+
+    // Tag and category lists, from their first page or a later one
+    override suspend fun getMangasByUrl(url: HttpUrl, page: Int): MangasPage {
+        val segments = url.pathSegments.filter { it.isNotEmpty() }
+        if (url.host != host || segments.size < 2 || segments[0] !in LIST_PATHS) return super.getMangasByUrl(url, page)
+        val firstPage = segments.getOrNull(3)?.takeIf { segments[2] == "page" }?.toIntOrNull() ?: 1
+        return fetchList(baseUrl.toHttpUrl().newBuilder().addPathSegments("${segments[0]}/${segments[1]}/").addPage(firstPage + page - 1).build())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -151,6 +161,7 @@ abstract class TheHentai : KeiSource() {
     companion object {
         private const val PAGE_SELECTOR = ".post_imgs .thumbnails a"
         private val NON_POST_PATHS = setOf("category", "page", "tag", "tags")
+        private val LIST_PATHS = setOf("category", "tag")
         private val ZONE = ZoneId.of("America/Sao_Paulo")
         private val EN_DATE_FORMAT = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
 

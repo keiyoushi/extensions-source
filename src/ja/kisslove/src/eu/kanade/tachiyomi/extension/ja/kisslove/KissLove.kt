@@ -66,6 +66,7 @@ abstract class KissLove : KeiSource() {
             addQueryParameter("search", query)
             addQueryParameter("sort", "Popular")
             addQueryParameter("order", "desc")
+            addQueryParameter("page", page.toString())
 
             filters.forEach { filter ->
                 when (filter) {

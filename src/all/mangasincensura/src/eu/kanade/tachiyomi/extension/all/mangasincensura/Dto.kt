@@ -5,6 +5,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.MarkdownDescription
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 
 @Serializable
@@ -50,10 +52,20 @@ class SeriesDto(
             url = "/chapter?manhwa=$id&cap=$number"
             name = if (isVip(number)) "🔒 $label $number" else "$label $number"
             chapter_number = number.toFloat()
+            // What reading needs, so that it doesn't load the catalogue again
+            memo = buildJsonObject {
+                put(STORAGE, storageName)
+                put(VIP, isVip(number))
+            }
         }
     }
 
     fun isVip(chapter: Int) = freeLimit != null && chapter > freeLimit
+
+    companion object {
+        const val STORAGE = "storage"
+        const val VIP = "vip"
+    }
 }
 
 @Serializable

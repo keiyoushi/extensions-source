@@ -14,6 +14,7 @@ import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.WebViewTimeoutException
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.cryptoJsDecrypt
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
@@ -111,15 +112,16 @@ abstract class Softkomik : KeiSource() {
 
     // ======================== Details ========================
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        val slug = url.pathSegments.firstOrNull()?.takeIf { it.isNotBlank() } ?: return null
+        val slug = url.pathSegments.first().takeIf { it.isNotBlank() && it !in sitePages } ?: return null
 
-        return getMangaDetails(slug)
+        return getMangaDetails(slug).apply { initialized = true }
     }
 
-    // Detail and chapter pages carry their data CryptoJS-encrypted in `pageProps._stk`.
+    // softkomik.app CryptoJS-encrypts the detail and chapter page data in `pageProps._stk`, softkomik.online sends it as is.
     private suspend inline fun <reified T> getPageProps(url: String): T {
-        val stk = client.get(url, Fetch.XHR).extractNextJs<EncryptedPropsDto>()?.stk
-            ?: throw Exception("Could not find page data")
+        val document = client.get(url, Fetch.XHR).asJsoup()
+        val stk = document.extractNextJs<EncryptedPropsDto>()?.stk
+            ?: return document.extractNextJs<T>() ?: throw Exception("Could not find page data")
         return stk.cryptoJsDecrypt(pagePropsKey).parseAs()
     }
 
@@ -419,7 +421,7 @@ abstract class Softkomik : KeiSource() {
 
             // Softkomik frequently renames their session API endpoint. When the direct
             // call fails (commonly with HTTP 404), fall back to capturing the session
-            // headers that the site's own JavaScript sends from a live WebView — that
+            // headers that the site's own JavaScript sends from a live WebView: that
             // path survives URL changes without an extension update.
             return getSessionViaWebView(route, call)
         }
@@ -451,7 +453,7 @@ abstract class Softkomik : KeiSource() {
                     blockImages = true
 
                     interceptRequest { request ->
-                        // Intercept the chapter list API call — it always carries X-Token & X-Sign
+                        // Intercept the chapter list API call: it always carries X-Token & X-Sign
                         if (request.url.toString().contains(apiUrl)) {
                             val token = request.requestHeaders["X-Token"]
                             val sign = request.requestHeaders["X-Sign"]
@@ -516,6 +518,9 @@ abstract class Softkomik : KeiSource() {
     private val sessionKeyChapterList = "chapter-list"
     private val sessionKeyChapterImage = "chapter-image"
     private val apiUrl = "https://api.softkomik.org"
+
+    // The site's own pages; any other first path segment is a series slug.
+    private val sitePages = setOf("akun", "img", "komik", "u")
 
     // NEXT_PUBLIC_ENCRYPTION_KEY from the site's JS bundle.
     private val pagePropsKey = "nYTInq9MwR4pWa8yeXtu/2iO3t9nGP65WHpWEvqpEdU="

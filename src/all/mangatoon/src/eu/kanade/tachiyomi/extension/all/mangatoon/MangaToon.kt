@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.mangatoon
 
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,16 +13,17 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
-import java.time.format.DateTimeFormatter
-import java.util.Locale
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -34,25 +36,21 @@ abstract class MangaToon : KeiSource() {
         lang
     }
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(1, 1.seconds)
+    // French lists moved to their own host, and the redirect there drops the page number
+    private val webUrl: String get() = if (lang == "fr") "https://fr.mangatoon.mobi" else "$baseUrl/$urlLang"
 
-    private val locale by lazy { Locale.forLanguageTag(lang) }
-
-    private val lockedError = when (lang) {
-        "pt-BR" ->
-            "Este capítulo é pago e não pode ser lido. " +
-                "Use o app oficial do MangaToon para comprar e ler."
-
-        else ->
-            "This chapter is paid and can't be read. " +
-                "Use the MangaToon official app to purchase and read it."
-    }
+    // Page images and covers come from the *-pic hosts, which have no limit
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(1, 1.seconds) { "-pic" !in it.host }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         // Portuguese website doesn't seem to have popular titles.
         val path = if (lang == "pt-BR") "comic" else "hot"
-        return mangaListParse(client.get("$baseUrl/$urlLang/genre/$path?type=1&page=${page - 1}", Fetch.DOCUMENT))
+        return mangaListParse(client.get(listUrl(path, page), Fetch.DOCUMENT))
     }
+
+    private fun listUrl(path: String, page: Int): HttpUrl = "$webUrl/genre/$path".toHttpUrl().newBuilder()
+        .apply { if (page > 1) addQueryParameter("page", (page - 1).toString()) }
+        .build()
 
     private fun mangaListParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -61,14 +59,30 @@ abstract class MangaToon : KeiSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaListParse(client.get("$baseUrl/$urlLang/genre/new?type=1&page=${page - 1}", Fetch.DOCUMENT))
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val mangas = mangaListParse(client.get(listUrl("new", page), Fetch.DOCUMENT)).mangas
+        // This list has no next link, but every page but the last has a full page of entries
+        return MangasPage(mangas, mangas.size >= LIST_PAGE_SIZE)
+    }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val searchUrl = "$baseUrl/$urlLang/search".toHttpUrl().newBuilder()
+        val searchUrl = "$webUrl/search".toHttpUrl().newBuilder()
             .addQueryParameter("word", query)
             .build()
-        val document = client.get(searchUrl, Fetch.DOCUMENT).asJsoup()
-        val mangas = document.select("div.comics-result div.recommend-item:has(a[abs:href^=$baseUrl])").map { element ->
+        val response = client.get(searchUrl, Fetch.DOCUMENT, ensureSuccess = false)
+        // A search without results is a 404
+        if (response.code == 404) {
+            response.close()
+            return MangasPage(emptyList(), false)
+        }
+        if (!response.isSuccessful) {
+            val code = response.code
+            response.close()
+            throw HttpException(code)
+        }
+        val document = response.asJsoup()
+        // Some languages link to their own host (fr.mangatoon.mobi, mangatooncom.vn)
+        val mangas = document.select("div.comics-result div.recommend-item:has(a[href*=mangatoon])").map { element ->
             SManga.create().apply {
                 title = element.select("div.recommend-comics-title").text()
                 thumbnail_url = element.select("img").imgAttr().toNormalPosterUrl()
@@ -85,60 +99,61 @@ abstract class MangaToon : KeiSource() {
         setUrlWithoutDomain(element.absUrl("href"))
     }
 
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/$urlLang/detail/${manga.contentId}"
+
+    // The website cuts later free episodes short and lists no French episodes; the app API has them all
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
-        return SMangaUpdate(mangaDetailsParse(manga, document), chapterListParse(document))
-    }
-
-    private fun mangaDetailsParse(manga: SManga, document: Document): SManga = SManga.create().apply {
-        title = manga.title
-        author = document.select("div.detail-author-name span").text()
-            .substringAfter(": ")
-        description = document.select("div.detail-description-short p")
-            .joinToString("\n\n") { it.text() }
-        genre = document.select("div.detail-tags-info span").text()
-            .split("/")
-            .map { it.capitalize(locale) }
-            .sorted()
-            .joinToString { it.trim() }
-        status = document.select("div.detail-status").text().toStatus()
-        val thumbnail = document.select("div.detail-img img").imgAttr().toNormalPosterUrl()
-        if (!thumbnail.contains("cartoon-big-images")) {
-            thumbnail_url = thumbnail
+    ): SMangaUpdate = coroutineScope {
+        val contentId = manga.contentId
+        val details = if (fetchDetails) {
+            async { api<DetailDto>("/api/content/detail", contentId)!!.toSManga() }
+        } else {
+            null
         }
-    }
-
-    // The page only renders a few episodes; the full list (with paid flags) is embedded as JSON.
-    private fun chapterListParse(document: Document): List<SChapter> {
-        val watchPath = document.selectFirst("a.episode-item-new")?.attr("href")
-            ?.substringBeforeLast("/")
-            ?: return emptyList()
-        val episodes = document.select("script").firstNotNullOfOrNull { EPISODES_REGEX.find(it.data()) }
-            ?.groupValues?.get(1)
-            ?.replace(JS_ESCAPE_REGEX, "$1")
-            ?.parseAs<List<EpisodeDto>?>()
-            .orEmpty()
-
-        return episodes.filterNot { it.isFee }.map {
-            SChapter.create().apply {
-                name = it.title
-                chapter_number = it.weight
-                date_upload = DATE_FORMAT.tryParseDate(it.openAt)
-                setUrlWithoutDomain("$watchPath/${it.id}")
+        val episodes = if (fetchChapters) {
+            async {
+                api<List<EpisodeDto>>("/api/content/episodes", contentId)!!
+                    .filterNot { it.isFee }
+                    .map { it.toSChapter(urlLang, contentId) }
+                    .reversed()
             }
-        }.reversed()
+        } else {
+            null
+        }
+        SMangaUpdate(details?.await() ?: manga, episodes?.await() ?: chapters)
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup())
+    override fun getChapterUrl(chapter: SChapter): String {
+        val (contentId, episodeId) = chapter.url.split("/").takeLast(2)
+        return "$H5_URL/cartoons/watch/$contentId/$episodeId?_language=$urlLang"
+    }
 
-    private fun pageListParse(document: Document): List<Page> = document.select("div.pictures div img:first-child")
-        .mapIndexed { i, element -> Page(i, imageUrl = element.imgAttr()) }
-        .takeIf { it.isNotEmpty() } ?: throw Exception(lockedError)
+    override suspend fun getPageList(chapter: SChapter): List<Page> = api<List<PictureDto>>("/api/cartoons/pictures", chapter.url.substringAfterLast("/"))
+        .orEmpty()
+        .mapNotNull { it.imageUrl }
+        .mapIndexed { i, url -> Page(i, imageUrl = url) }
+
+    // The calls of h5.mangatoon.mobi, signed like its script does
+    private suspend inline fun <reified T> api(path: String, id: String): T? {
+        val query = sortedMapOf(
+            "id" to id,
+            "_" to Clock.System.now().epochSeconds.toString(),
+            "_language" to urlLang,
+            "_platform" to "web",
+            "_preference" to "girl",
+            "_v" to "3.07.00",
+            "_webp" to "false",
+        ).entries.joinToString("&") { "${it.key}=${it.value}" }
+        val sign = (path + query + SIGN_KEY).md5().toHexString()
+        return client.get("$API_URL$path?sign=$sign&$query", Fetch.XHR.from("$H5_URL/")).parseAs<DataDto<T>>().data
+    }
+
+    private val SManga.contentId: String
+        get() = CONTENT_ID_REGEX.find(url)!!.groupValues[1]
 
     protected open fun Element.imgAttr(): String = when {
         hasAttr("data-src") -> attr("abs:data-src")
@@ -149,35 +164,18 @@ abstract class MangaToon : KeiSource() {
 
     private fun String.toNormalPosterUrl(): String = replace(POSTER_SUFFIX, "$1")
 
-    private fun String.toStatus(): Int = when (lowercase(locale)) {
-        in ONGOING_STATUS -> SManga.ONGOING
-        in COMPLETED_STATUS -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
-
     companion object {
-        private val ONGOING_STATUS = listOf(
-            "连载", "on going", "sedang berlangsung", "tiếp tục cập nhật",
-            "en proceso", "atualizando", "เซเรียล", "en cours", "連載中",
-        )
+        private const val API_URL = "https://sg.mangatoon.mobi"
 
-        private val COMPLETED_STATUS = listOf(
-            "完结",
-            "completed",
-            "tamat",
-            "đã full",
-            "terminada",
-            "concluído",
-            "จบ",
-            "fin",
-        )
+        private const val H5_URL = "https://h5.mangatoon.mobi"
 
-        private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US)
+        private const val SIGN_KEY = "66c10a61bd916c23f3b33810d3785d17"
+
+        private const val LIST_PAGE_SIZE = 18
 
         private val POSTER_SUFFIX = "(jpg)-poster(.*)\\d+?$".toRegex()
 
-        private val EPISODES_REGEX = """data = JSON\.parse\('(.*)'\);""".toRegex()
-
-        private val JS_ESCAPE_REGEX = """\\(["'])""".toRegex()
+        // Series links: /en/<slug>?content_id=<id>, /cn/detail/<id>, or /<id>-<slug> on fr.mangatoon.mobi
+        private val CONTENT_ID_REGEX = """(?:content_id=|/detail/|^/)(\d+)""".toRegex()
     }
 }

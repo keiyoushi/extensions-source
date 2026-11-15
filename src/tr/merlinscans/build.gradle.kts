@@ -6,14 +6,14 @@ plugins {
 
 keiyoushi {
     name = "Merlin Scans"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "initmanga"
 
     source {
         lang = "tr"
-        baseUrl = "https://merlintoon.com"
+        baseUrl = "https://merlintoon.net"
         versionId = 2
     }
 }

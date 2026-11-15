@@ -87,9 +87,15 @@ abstract class Bbato : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (!url.host.equals(baseUrl.toHttpUrl().host, ignoreCase = true) && !url.host.equals("bbato.com", ignoreCase = true)) return null
+        val host = url.host.removePrefix("www.")
+        if (!host.equals(baseUrl.toHttpUrl().host, ignoreCase = true) && host !in MIRROR_HOSTS && host != MANGABUDDY_HOST) return null
 
+        val segments = url.pathSegments
         val mangaUrl = when {
+            host == MANGABUDDY_HOST -> {
+                if (segments[0] != "series" || segments.size < 2) return null
+                "/manga/${segments[1].substringBeforeLast(".")}"
+            }
             url.encodedPath.startsWith("/manga/") -> url.encodedPath.removeSuffix("/")
             url.encodedPath.startsWith("/read/") -> {
                 val slug = url.encodedPath.removePrefix("/read/").substringBefore("/")
@@ -173,4 +179,12 @@ abstract class Bbato : KeiSource() {
     // ============================= Utilities =============================
 
     private fun Element.getImageUrl(): String? = attr("abs:data-src").ifEmpty { attr("abs:src") }.takeIf { it.isNotEmpty() }
+
+    companion object {
+        // Sites with the same series under the same paths
+        private val MIRROR_HOSTS = setOf("bbato.com", "xbato.co.uk")
+
+        // Same series under other paths (/series/<slug>.<code>[/chapter-N]), so not a mirror
+        private const val MANGABUDDY_HOST = "mangabuddy1.co.uk"
+    }
 }

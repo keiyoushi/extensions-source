@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.saymanhwa
 
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,18 +11,19 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 @Source
@@ -36,56 +36,55 @@ abstract class SayManhwa : KeiSource() {
             else -> lang
         }
 
-    override fun OkHttpClient.Builder.configureClient() = apply {
-        rateLimit(3)
-    }
+    // Guests may open a new chapter once every 5 seconds (429 otherwise), 6 leaves room for network delays
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 1, period = 6.seconds) { it.isSite() && it.pathSegments.last().startsWith("chapter-") }
+        .rateLimit(permits = 3) { it.isSite() }
 
-    // ============================== Popular ===============================
+    private fun HttpUrl.isSite() = host == baseUrl.toHttpUrl().host
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/$saymanhwaLang/popular".toHttpUrl().newBuilder()
             .apply { if (page != 1) addQueryParameter("page", page.toString()) }
             .build()
         val document = client.get(url, Fetch.DOCUMENT).asJsoup()
-        return parseMangaPage(document, page)
+        return parseMangaPage(document)
     }
-
-    // ============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/$saymanhwaLang/latest".toHttpUrl().newBuilder()
             .apply { if (page != 1) addQueryParameter("page", page.toString()) }
             .build()
-        return parseMangaPage(client.get(url, Fetch.DOCUMENT).asJsoup(), page)
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
-
-    // ============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
         val selectedGenre = genreFilter?.vals?.getOrNull(genreFilter.state)
 
-        val url = "$baseUrl/$saymanhwaLang/series".toHttpUrl().newBuilder().apply {
+        val url = "$baseUrl/$saymanhwaLang".toHttpUrl().newBuilder().apply {
+            if (selectedGenre.isNullOrEmpty()) {
+                addPathSegment("series")
+            } else {
+                addPathSegment("genres").addPathSegment(selectedGenre)
+            }
             if (query.isNotBlank()) {
                 addQueryParameter("q", query.trim())
-            }
-            if (!selectedGenre.isNullOrEmpty()) {
-                addQueryParameter("genre", selectedGenre)
             }
             if (page != 1) {
                 addQueryParameter("page", page.toString())
             }
         }.build()
 
-        return parseMangaPage(client.get(url, Fetch.DOCUMENT).asJsoup(), page)
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
-    private fun parseMangaPage(document: Document, page: Int): MangasPage {
+    private fun parseMangaPage(document: Document): MangasPage {
         val mangas = document
             .select("article.series-card")
             .map(::mangaFromElement)
 
-        val hasNextPage = document.select("nav.pagination span + a").isNotEmpty()
+        // The page number list has a link after a span too, even on the last page
+        val hasNextPage = document.selectFirst("nav.pagination > span + a") != null
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -95,8 +94,6 @@ abstract class SayManhwa : KeiSource() {
         title = mangaLink.text()
         thumbnail_url = element.selectFirst(".series-card-cover img, a img")?.absUrl("src")
     }
-
-    // ============================== Details ===============================
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -112,39 +109,50 @@ abstract class SayManhwa : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) return null
-        val mangaUrl = mangaUrlFrom(url)
+        if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host) return null
+        // Series and chapter links, with any language or none, open the series in this source's language
+        val slug = url.pathSegments.dropWhile { it != "series" }.getOrNull(1)?.ifEmpty { null } ?: return null
+        val mangaUrl = "$baseUrl/$saymanhwaLang/series/$slug"
         val document = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
-        return mangaDetailsParse(document, mangaUrl.toString()).apply { initialized = true }
-    }
-
-    private fun mangaUrlFrom(url: HttpUrl): HttpUrl {
-        val segments = url.pathSegments
-        if (segments.lastOrNull()?.startsWith("chapter-") == true) {
-            return url.newBuilder().removePathSegment(segments.size - 1).build()
-        }
-        return url
+        return mangaDetailsParse(document, mangaUrl).apply { initialized = true }
     }
 
     private fun mangaDetailsParse(document: Document, mangaUrl: String): SManga = SManga.create().apply {
-        setUrlWithoutDomain(mangaUrl.substringBefore("/chapter-"))
-        title = document.selectFirst("h1")?.ownText()!!
+        setUrlWithoutDomain(mangaUrl)
+        title = document.selectFirst("h1")!!.ownText()
         thumbnail_url = document.selectFirst(".series-v72-cover img")?.absUrl("src")
 
         val creatorRows = document.select(".series-v72-meta-row strong.series-creator-links")
-        author = creatorRows.getOrNull(0)?.select("a")?.joinToString { it.text() }
-        artist = creatorRows.getOrNull(1)?.select("a")?.joinToString { it.text() }
+        author = creatorRows.getOrNull(0)?.creators()
+        artist = creatorRows.getOrNull(1)?.creators()
 
         status = document.selectFirst(".series-v72-meta-pair > div:first-child strong")?.ownText().toStatus(saymanhwaLang)
 
         val type = document.selectFirst(".series-v72-meta-pair > div:nth-child(2) strong")?.ownText()
-        val genresContent = document.select("a[href*='/genres/']").map { it.text() }
+        val genresContent = document.select(".series-v72-genres a").map { it.text() }
         genre = (listOfNotNull(type) + genresContent)
             .distinct()
             .joinToString()
+            .ifEmpty { null }
 
-        description = document.selectFirst(".series-seo-context p")?.wholeText().orEmpty()
+        val altTitles = document.selectFirst(".series-v72-alt")?.text()?.let { altText ->
+            val separator = ALT_TITLE_SEPARATORS.firstOrNull { it in altText } ?: ", "
+            altText.split(separator).filterNot { it.isPlaceholder() || it == title }
+        }
+        description = MarkdownDescription.Builder()
+            .description(document.selectFirst(".series-v72-description"))
+            .altTitles(altTitles.orEmpty())
+            .build()
     }
+
+    private fun Element.creators(): String? = select("a")
+        .map { it.text() }
+        .filterNot { it.isPlaceholder() }
+        .joinToString()
+        .ifEmpty { null }
+
+    // The site's placeholder for an unknown author or title
+    private fun String.isPlaceholder() = equals("updating", ignoreCase = true)
 
     private fun String?.toStatus(langPath: String): Int {
         val text = this
@@ -187,16 +195,12 @@ abstract class SayManhwa : KeiSource() {
         }
     }
 
-    // =============================== Pages ===============================
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        return document.select(".reader-pages img").mapIndexed { index, element ->
+        return document.select(".reader-pages > img").mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("src"))
         }
     }
-
-    // ============================== Related ==============================
 
     override val supportsRelatedMangas get() = true
 
@@ -211,8 +215,6 @@ abstract class SayManhwa : KeiSource() {
             }
         }
     }
-
-    // ============================== Filters ==============================
 
     override val supportsFilterFetching = true
 
@@ -240,17 +242,8 @@ abstract class SayManhwa : KeiSource() {
         }
     }
 
-    @Serializable
-    class GenreOption(
-        val name: String,
-        val value: String?,
-    )
-
-    class GenreFilter(title: String, genres: List<GenreOption>) :
-        Filter.Select<String>(
-            title,
-            arrayOf("All") + genres.map { it.name }.toTypedArray(),
-        ) {
-        val vals = arrayOf<String?>(null) + genres.map { it.value }.toTypedArray()
+    companion object {
+        // Some series list their titles with these instead of commas, which titles can contain
+        private val ALT_TITLE_SEPARATORS = listOf(" • ", " / ")
     }
 }

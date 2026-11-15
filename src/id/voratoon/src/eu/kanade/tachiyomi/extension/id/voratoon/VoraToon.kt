@@ -12,8 +12,10 @@ import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.WebViewTimeoutException
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -22,6 +24,9 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.IOException
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class VoraToon : KeiSource() {
@@ -77,28 +82,15 @@ abstract class VoraToon : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        if (!fetchDetails && !fetchChapters) {
-            return SMangaUpdate(manga, chapters)
-        }
-
         val slug = manga.getSlug(baseUrl)
         val dto = client.get("$baseUrl/series/$slug", rscHeaders, Fetch.XHR).extractNextJs<SeriesDetailsDto> {
             it is JsonObject && "series" in it && "chapters" in it
         } ?: return SMangaUpdate(manga, chapters)
 
-        val updatedManga = if (fetchDetails) {
-            dto.series.firstOrNull()?.toSManga() ?: manga
-        } else {
-            manga
-        }
-
-        val updatedChapters = if (fetchChapters) {
-            dto.chapters.map { it.toSChapter(slug) }
-        } else {
-            chapters
-        }
-
-        return SMangaUpdate(updatedManga, updatedChapters)
+        return SMangaUpdate(
+            dto.series.firstOrNull()?.toSManga() ?: manga,
+            dto.chapters.map { it.toSChapter(slug) },
+        )
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -119,15 +111,54 @@ abstract class VoraToon : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (slug, chapterIndex) = chapter.getSlugAndIndex(baseUrl)
         val chapterUrl = "$baseUrl/series/$slug/chapter/$chapterIndex"
-        val dto = client.get(
-            chapterUrl,
-            rscHeaders,
-            Fetch.XHR,
-        ).extractNextJs<ChapterPageDto> {
-            it is JsonObject && "chapter" in it
-        } ?: error("Failed to extract chapter pages")
 
-        return dto.chapter.toPageList(chapterUrl)
+        val directDto = runCatching {
+            client.get(chapterUrl, rscHeaders, Fetch.XHR).extractNextJs<ChapterPageDto> {
+                it is JsonObject && "chapter" in it
+            }
+        }.getOrNull()
+
+        val directPages = directDto?.chapter?.toPageList(chapterUrl)
+        if (!directPages.isNullOrEmpty()) {
+            return directPages
+        }
+
+        val images = try {
+            runWebView<List<String>>(timeout = 25.seconds) {
+                userAgent = headers["User-Agent"] ?: ""
+                poll(500.milliseconds) {
+                    evaluateJs(
+                        """
+                        (() => {
+                            const imgs = Array.from(document.querySelectorAll('img[data-chapter-page], [data-reader-chapter-id] img'))
+                                .map(img => img.getAttribute('data-chapter-page') || img.src)
+                                .filter(src => src && (src.startsWith('http://') || src.startsWith('https://')));
+                            return imgs.length > 0 ? Array.from(new Set(imgs)) : null;
+                        })()
+                        """.trimIndent(),
+                    ) { output ->
+                        val list = runCatching {
+                            output.trim().takeIf { it != "null" && it != "undefined" }?.let { raw ->
+                                runCatching { raw.parseAs<List<String>>() }.getOrElse {
+                                    raw.parseAs<String>().parseAs<List<String>>()
+                                }
+                            }
+                        }.getOrNull()
+
+                        if (!list.isNullOrEmpty()) {
+                            resolve(list)
+                        }
+                    }
+                }
+                loadUrl(chapterUrl)
+            }
+        } catch (_: WebViewTimeoutException) {
+            throw IOException("Selesaikan verifikasi di WebView lalu coba lagi")
+        }
+
+        return images.mapIndexed { index, imageUrl ->
+            Page(index, url = chapterUrl, imageUrl = imageUrl)
+        }
     }
 
     override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()

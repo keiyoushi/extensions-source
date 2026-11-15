@@ -12,7 +12,9 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.boolean
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
@@ -55,11 +57,12 @@ abstract class MangasSinCensura : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter).toHttpUrl()
-        val series = fetchCatalogue()[chapterUrl.queryParameter("manhwa")!!]!!
         val number = chapterUrl.queryParameter("cap")!!.toInt()
-        val vip = series.isVip(number)
+        // Chapters listed by version 1 have no memo
+        val (storageName, vip) = chapter.memo[SeriesDto.STORAGE]?.let { it.string to chapter.memo[SeriesDto.VIP]!!.boolean }
+            ?: fetchCatalogue()[chapterUrl.queryParameter("manhwa")!!]!!.let { it.storageName to it.isVip(number) }
         val folder = (if (vip) siteUrl.resolve("/premium-content/manhwas")!! else storageUrl).newBuilder()
-            .addPathSegment(series.storageName)
+            .addPathSegment(storageName)
             .addPathSegment("ch" + number.toString().padStart(3, '0'))
             .build()
         val manifest = folder.newBuilder().addPathSegment("manifest.json").build()

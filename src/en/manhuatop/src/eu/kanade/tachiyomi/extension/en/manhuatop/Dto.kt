@@ -60,7 +60,6 @@ class ChapterDto(
 @Serializable
 class ContentDto(
     val images: List<ImageDto>,
-    val hasMore: Boolean,
 )
 
 @Serializable
