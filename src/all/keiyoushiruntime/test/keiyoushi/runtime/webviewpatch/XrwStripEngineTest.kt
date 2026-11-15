@@ -11,10 +11,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.coroutines.yield
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -481,35 +482,42 @@ class XrwStripEngineTest {
     }
 
     @Test
-    fun `no run active at completion promotes over the grace window, an active run blocks it`() {
+    fun `no run active at completion promotes over the grace window, an active run blocks it`() = runTest {
         // When the run that hosted the attempt has already ended (nothing active at completion), no completion
         // hook is left to host the promotion, so the grace path promotes the build — otherwise it stays
         // UNCONFIRMED and is re-located and re-self-tested on every launch. While a run is still active, the grace
-        // path is not taken; that run's own hook will promote when it ends.
+        // path is not taken; that run's own hook will promote when it ends. Driven on the test's virtual clock, so
+        // the grace window is exercised deterministically with no real-time sleep deciding the outcome.
         for (runActive in listOf(false, true)) {
             val f = Fixture()
             f.ops.seed(LIVE, VERIFY)
             val runJob = Job().apply { if (!runActive) complete() }
             val waiters = ConcurrentHashMap.newKeySet<Job>().apply { add(runJob) }
             val attempt = CompletableDeferred(f.patch())
-            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val grace = 40.milliseconds
 
-            runBlocking {
-                promoteOnAttemptCompletion(attempt, waiters, scope, 40.milliseconds, { true }) {
-                    f.engine().markRunSurvived()
-                }
-                if (runActive) {
-                    delay(120)
-                    assertEquals("not promoted while a run is active", "unconfirmed@1", f.map["sha.S1"])
-                    assertTrue(f.shared.hasPending())
-                } else {
-                    withTimeoutOrNull(5_000L) { while (f.shared.hasPending()) yield() }
-                    assertEquals("the grace path promotes once no run can host it", OK1, f.map["sha.S1"])
-                    assertEquals("1000", f.map["okapply.S1"])
-                    assertFalse(f.shared.hasPending())
-                }
+            promoteOnAttemptCompletion(attempt, waiters, this, grace, { true }) {
+                f.engine().markRunSurvived()
             }
-            scope.cancel()
+
+            if (runActive) {
+                // The grace path is never taken while a run is active, so advancing past the window changes nothing.
+                advanceTimeBy(grace * 3)
+                runCurrent()
+                assertEquals("not promoted while a run is active", "unconfirmed@1", f.map["sha.S1"])
+                assertTrue(f.shared.hasPending())
+            } else {
+                // Not promoted before the grace window elapses...
+                advanceTimeBy(grace / 2)
+                runCurrent()
+                assertEquals("not promoted before the grace window elapses", "unconfirmed@1", f.map["sha.S1"])
+                assertTrue(f.shared.hasPending())
+                // ...then the grace path promotes once the window passes and no run can host it.
+                advanceUntilIdle()
+                assertEquals("the grace path promotes once no run can host it", OK1, f.map["sha.S1"])
+                assertEquals("1000", f.map["okapply.S1"])
+                assertFalse(f.shared.hasPending())
+            }
         }
     }
 
