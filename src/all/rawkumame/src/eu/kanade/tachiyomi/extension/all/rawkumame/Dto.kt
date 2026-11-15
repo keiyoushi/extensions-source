@@ -7,6 +7,19 @@ import kotlinx.serialization.Serializable
 import kotlin.time.Instant
 
 @Serializable
+class SeriesCardDto(
+    private val slug: String,
+    private val title: String,
+    private val cover: String?,
+) {
+    fun toSManga(baseUrl: String) = SManga.create().apply {
+        url = slug
+        title = this@SeriesCardDto.title
+        thumbnail_url = cover?.let { baseUrl + it }
+    }
+}
+
+@Serializable
 class SeriesDto(
     private val slug: String,
     private val title: String,
@@ -20,13 +33,10 @@ class SeriesDto(
     private val status: String?,
     private val chapters: List<ChapterDto>,
 ) {
-    fun toSManga(baseUrl: String) = SManga.create().apply {
+    fun toSMangaDetails(baseUrl: String) = SManga.create().apply {
         url = slug
         title = this@SeriesDto.title
         thumbnail_url = cover?.let { baseUrl + it }
-    }
-
-    fun toSMangaDetails(baseUrl: String) = toSManga(baseUrl).apply {
         author = this@SeriesDto.author
         artist = this@SeriesDto.artist
         genre = (genres + listOfNotNull(type?.replaceFirstChar { it.uppercase() })).joinToString()

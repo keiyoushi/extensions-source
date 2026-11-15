@@ -53,7 +53,7 @@ abstract class RawkumaMe : KeiSource() {
             .apply(params)
             .build()
         val document = client.get(url, Fetch.DOCUMENT).asJsoup()
-        val mangas = document.extractNextJs<List<SeriesDto>>().orEmpty().map { it.toSManga(baseUrl) }
+        val mangas = document.extractNextJs<List<SeriesCardDto>>().orEmpty().map { it.toSManga(baseUrl) }
         return MangasPage(mangas, document.selectFirst("a[rel=next]") != null)
     }
 

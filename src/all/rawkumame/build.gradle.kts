@@ -6,14 +6,14 @@ plugins {
 
 keiyoushi {
     name = "Rawkuma.me"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     listOf("en", "es").forEach {
         source {
             lang = it
-            baseUrl = "https://rawkuma.me"
+            baseUrl = "https://mangamachina.com"
         }
     }
 
