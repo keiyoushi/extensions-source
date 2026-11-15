@@ -25,7 +25,9 @@ import keiyoushi.network.fetch
 import keiyoushi.webview.internal.WebViewGlueBridge
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -801,11 +803,12 @@ private val SHOWN_TIME_LIMIT = 3.minutes
 
 /**
  * Runs a WebView with [configure], suspending until it calls `resolve`/`reject` or [timeout]
- * elapses. The WebView is torn down whether this returns, throws, or is canceled.
+ * elapses. [timeout] bounds the whole run, a suspending [configure] included, so [configure] must
+ * suspend cancellably. The WebView is torn down whether this returns, throws, or is canceled.
  */
 suspend fun <T> runWebView(
     timeout: Duration = 30.seconds,
-    configure: WebViewScope<T>.() -> Unit,
+    configure: suspend WebViewScope<T>.() -> Unit,
 ): T = withContext(Dispatchers.Main) {
     val deferred = CompletableDeferred<T>()
     val webView = WebView(applicationContext)
@@ -813,11 +816,17 @@ suspend fun <T> runWebView(
     val scope = WebViewScope(webView, deferred)
     webView.webViewClient = ScopeWebViewClient(scope)
     webView.webChromeClient = LoggingWebChromeClient()
+    var configuring: Job? = null
     try {
-        try {
-            scope.configure()
-        } catch (t: Throwable) {
-            deferred.completeExceptionally(t)
+        configuring = launch(start = CoroutineStart.UNDISPATCHED) {
+            try {
+                scope.configure()
+            } catch (e: CancellationException) {
+                if (!isActive) throw e
+                deferred.completeExceptionally(e)
+            } catch (t: Throwable) {
+                deferred.completeExceptionally(t)
+            }
         }
         // The timeout waits while the user sees the WebView, until SHOWN_TIME_LIMIT after it was first shown
         var deadline = TimeSource.Monotonic.markNow() + timeout
@@ -836,6 +845,7 @@ suspend fun <T> runWebView(
         }
         deferred.await()
     } finally {
+        configuring?.cancel()
         scope.destroyed = true
         scope.overlay?.dismiss()
         runCatching { (webView.parent as? ViewGroup)?.removeView(webView) }
@@ -854,7 +864,7 @@ suspend fun <T> runWebView(
 fun <T> runWebViewBlocking(
     call: Call,
     timeout: Duration = 30.seconds,
-    configure: WebViewScope<T>.() -> Unit,
+    configure: suspend WebViewScope<T>.() -> Unit,
 ): T {
     check(Looper.myLooper() != Looper.getMainLooper()) {
         "runWebViewBlocking must not be called on the main thread"
