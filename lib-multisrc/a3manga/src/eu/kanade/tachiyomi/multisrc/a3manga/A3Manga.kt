@@ -183,6 +183,9 @@ abstract class A3Manga : KeiSource() {
         description = MarkdownDescription.Builder()
             .description(synopsis?.takeUnless { isPlaceholder(it.text()) })
             .build()
+            // Some uploaders paste Markdown: drop its heading marks, bold marks and closing rule
+            ?.replace(pastedMarkdownRegex, "")
+            ?.trim()
             ?.removeSurrounding("\"")
     }
 
@@ -363,6 +366,7 @@ abstract class A3Manga : KeiSource() {
         private val chapterNameRegex = Regex("""chap\s*\d+(?:\.\d+)?""", RegexOption.IGNORE_CASE)
         private val chapterWordRegex = Regex("chap", RegexOption.IGNORE_CASE)
         private val multiSpaceRegex = Regex("""\s+""")
+        private val pastedMarkdownRegex = Regex("""^\\#{1,6}[ \t]*|\\?-{3,}\s*\z|\\\*\\\*""", RegexOption.MULTILINE)
         private val hintColonRegex = Regex("""(Gợi\s*ý\s*:?)\s*""", RegexOption.IGNORE_CASE)
     }
 }
