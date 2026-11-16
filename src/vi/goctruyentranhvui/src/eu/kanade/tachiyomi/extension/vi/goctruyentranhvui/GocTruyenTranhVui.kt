@@ -210,7 +210,6 @@ abstract class GocTruyenTranhVui :
             val script = asset("goctruyentranhvui_reader.js")
             val imageUrls = runWebView(timeout = 30.seconds) {
                 userAgent = headers["User-Agent"]!!
-                loadUrl(chapterPageUrl)
 
                 var lastCount = 0
                 var stableCount = 0
@@ -251,6 +250,8 @@ abstract class GocTruyenTranhVui :
                         }
                     }
                 }
+
+                loadUrl(chapterPageUrl)
             }
 
             if (imageUrls.isEmpty()) {
