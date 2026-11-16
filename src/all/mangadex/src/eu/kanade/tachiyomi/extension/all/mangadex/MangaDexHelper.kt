@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.extension.all.mangadex.dto.UserRelationshipDto
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParse
 import org.jsoup.parser.Parser
 import java.util.Locale
@@ -42,16 +43,6 @@ class MangaDexHelper(private val lang: String) {
      * Turn HTML entities in manga or chapter names into characters. For example &hearts; will show ♥.
      */
     private fun String.removeEntities(): String = Parser.unescapeEntities(this, false)
-
-    /**
-     * Remove HTML entities and the Markdown syntax for links, italic and bold from a description.
-     */
-    private fun String.removeEntitiesAndMarkdown(): String = removeEntities()
-        .substringBefore("\n---")
-        .replace(markdownLinksRegex, "$1")
-        .replace(markdownItalicBoldRegex, "$1")
-        .replace(markdownItalicRegex, "$1")
-        .trim()
 
     /**
      * Maps MangaDex status to Tachiyomi status.
@@ -152,12 +143,8 @@ class MangaDexHelper(private val lang: String) {
 
         val genreList = MDConstants.TAG_GROUPS_ORDER.flatMap { genresMap[it].orEmpty() } + nonGenres
 
-        // Build description
-        val desc = mutableListOf<String>()
-
-        (attr.description[lang] ?: attr.description["en"])
-            ?.removeEntitiesAndMarkdown()
-            ?.let { desc.add(it) }
+        val description = MarkdownDescription.Builder()
+            .markdown((attr.description[lang] ?: attr.description["en"])?.removeEntities())
 
         if (altTitlesInDesc) {
             val romanizedOriginalLang = MDConstants.romanizedLangCodes[attr.originalLanguage].orEmpty()
@@ -165,14 +152,10 @@ class MangaDexHelper(private val lang: String) {
             val altTitles = attr.altTitles
                 .filter { allLanguages || it.containsKey(lang) || it.containsKey(romanizedOriginalLang) }
                 .mapNotNull { it.entries.singleOrNull() }
-                .filter { it.value.isNotEmpty() }
                 .map { (code, title) -> if (allLanguages) "[$code] $title" else title }
+                .map { it.removeEntities() }
 
-            if (altTitles.isNotEmpty()) {
-                val altTitlesDesc = altTitles
-                    .joinToString("\n", "${intl["alternative_titles"]}\n") { "• $it" }
-                desc.add(altTitlesDesc.removeEntities())
-            }
+            description.altTitles(altTitles, intl["alternative_titles"])
         }
 
         if (finalChapterInDesc) {
@@ -181,13 +164,11 @@ class MangaDexHelper(private val lang: String) {
                 attr.lastChapter?.takeIf { it.isNotEmpty() }?.let { "Ch.$it" },
             )
 
-            if (finalChapter.isNotEmpty()) {
-                desc.add(finalChapter.joinToString(" ", "${intl["final_chapter"]}\n").removeEntities())
-            }
+            description.field(intl["final_chapter"], finalChapter.joinToString(" "))
         }
 
         return createBasicManga(mangaDto, firstVolumeCover ?: mangaDto.coverFileName, coverSuffix, lang, preferExtensionLangTitle).apply {
-            description = desc.joinToString("\n\n")
+            this.description = description.build()
             author = mangaDto.relationships.names(MDConstants.AUTHOR)
             artist = mangaDto.relationships.names(MDConstants.ARTIST)
             status = getPublicationStatus(attr, chapters)
@@ -295,10 +276,6 @@ class MangaDexHelper(private val lang: String) {
     }
 
     companion object {
-        private val markdownLinksRegex = "\\[([^]]+)\\]\\(([^)]+)\\)".toRegex()
-        private val markdownItalicBoldRegex = "\\*+\\s*([^\\*]*)\\s*\\*+".toRegex()
-        private val markdownItalicRegex = "_+\\s*([^_]*)\\s*_+".toRegex()
-
         private val titleSpecialCharactersRegex = "[^a-z0-9]+".toRegex()
         private val trailingHyphenRegex = "-+$".toRegex()
     }
