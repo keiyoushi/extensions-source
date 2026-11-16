@@ -4,6 +4,7 @@ import android.text.InputType
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -33,7 +34,6 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl
-import java.io.IOException
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
@@ -198,7 +198,7 @@ abstract class Baozinho :
             clearSession()
             return null
         }
-        throw refreshError(code)
+        throw HttpException(code)
     }
 
     // The login needs a Cloudflare Turnstile token, which core solves in a WebView. Failures are reported to the user by the request that needed the login.
@@ -206,18 +206,9 @@ abstract class Baozinho :
         if (!hasCredentials) return null
         failureToRethrow(loginFailure, Clock.System.now(), LOGIN_RETRY)?.let { throw it }
         try {
-            val turnstile = try {
-                getTurnstileToken(baseUrl, TURNSTILE_SITE_KEY)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                throw IOException("Não foi possível passar a verificação do Baozinho (${e.message}).", e)
-            }
+            val turnstile = getTurnstileToken(baseUrl, TURNSTILE_SITE_KEY)
             val response = client.post("$apiUrl/auth/login", Fetch.XHR, LoginRequest(email, password, turnstile).toJsonRequestBody(), ensureSuccess = false)
-            if (response.isSuccessful) return saveSession(response.parseAs<TokensDto>()).accessToken
-            val code = response.code
-            val body = response.use { it.body.string() }
-            throw loginError(code, body)
+            return saveSession(response.orThrow().parseAs<TokensDto>()).accessToken
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

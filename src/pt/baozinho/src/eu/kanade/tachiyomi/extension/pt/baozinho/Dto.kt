@@ -15,7 +15,6 @@ import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
-import java.io.IOException
 import kotlin.time.Duration
 import kotlin.time.Instant
 
@@ -179,28 +178,8 @@ class LoginRequest(
 // Only a clear rejection drops the session; network errors, 5xx and 429 keep the stored token.
 fun isSessionRejected(code: Int, message: String?) = code == 401 || code == 403 || (code == 400 && message?.contains("token", ignoreCase = true) == true)
 
-enum class LoginFailure { CREDENTIALS, VERIFICATION, OTHER }
-
-private val verificationRegex = Regex("turnstile|captcha|verifica", RegexOption.IGNORE_CASE)
-
-// So the user knows what to fix: e-mail/password, the site's verification, or something else (network, server, rate limit).
-fun classifyLoginFailure(code: Int, message: String?) = when {
-    code !in 400..403 -> LoginFailure.OTHER
-    message?.let(verificationRegex::containsMatchIn) == true -> LoginFailure.VERIFICATION
-    else -> LoginFailure.CREDENTIALS
-}
-
 // A failed login is not retried for a while, so the captcha is not reopened on every request.
 fun shouldRetryLogin(lastFailureAt: Instant?, now: Instant, retryAfter: Duration) = lastFailureAt == null || now - lastFailureAt >= retryAfter
-
-// Only a rejection the user can fix gets a custom message; any other status is a plain HttpException.
-fun loginError(code: Int, message: String?): Exception = when (classifyLoginFailure(code, message)) {
-    LoginFailure.CREDENTIALS -> IOException("E-mail ou senha do Baozinho incorretos. Confira nas configurações da extensão.")
-    LoginFailure.VERIFICATION -> IOException("O Baozinho recusou a verificação anti-robô. Tente de novo mais tarde.")
-    LoginFailure.OTHER -> HttpException(code)
-}
-
-fun refreshError(code: Int): Exception = HttpException(code)
 
 // The failure stored by the last login attempt, while it is still inside the backoff window.
 fun failureToRethrow(failure: Pair<Instant, Exception>?, now: Instant, retryAfter: Duration): Exception? = failure?.takeUnless { shouldRetryLogin(it.first, now, retryAfter) }?.second
