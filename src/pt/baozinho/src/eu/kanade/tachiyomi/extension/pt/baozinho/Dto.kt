@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.baozinho
 
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -12,6 +13,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import java.io.IOException
+import kotlin.time.Duration
 import kotlin.time.Instant
 
 private const val CDN_URL = "https://cdn.baozinho.com"
@@ -186,7 +189,16 @@ fun classifyLoginFailure(code: Int, message: String?) = when {
 }
 
 // A failed login is not retried for a while, so the captcha is not reopened on every request.
-fun shouldRetryLogin(lastFailureAt: Long?, now: Long, retryAfterMs: Long) = lastFailureAt == null || now - lastFailureAt >= retryAfterMs
+fun shouldRetryLogin(lastFailureAt: Instant?, now: Instant, retryAfter: Duration) = lastFailureAt == null || now - lastFailureAt >= retryAfter
+
+// Only a rejection the user can fix gets a custom message; any other status is a plain HttpException.
+fun loginError(code: Int, message: String?): Exception = when (classifyLoginFailure(code, message)) {
+    LoginFailure.CREDENTIALS -> IOException("E-mail ou senha do Baozinho incorretos. Confira nas configurações da extensão.")
+    LoginFailure.VERIFICATION -> IOException("O Baozinho recusou a verificação anti-robô. Tente de novo mais tarde.")
+    LoginFailure.OTHER -> HttpException(code)
+}
+
+fun refreshError(code: Int): Exception = HttpException(code)
 
 // null = unknown: with credentials but no session yet, nothing should be hidden.
 fun unlockedWithoutSession(hasCredentials: Boolean): Set<Int>? = if (hasCredentials) null else emptySet()

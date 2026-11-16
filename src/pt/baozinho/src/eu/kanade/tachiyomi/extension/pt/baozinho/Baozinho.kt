@@ -4,6 +4,7 @@ import android.text.InputType
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -34,6 +35,9 @@ import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import java.io.IOException
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 
 @Source
 abstract class Baozinho :
@@ -58,11 +62,11 @@ abstract class Baozinho :
     private var accessToken: String? = null
 
     @Volatile
-    private var accessExpiresAt = 0L
+    private var accessExpiresAt = Instant.DISTANT_PAST
 
     // Time and message of the last failed login, so a failure is not retried (reopening the captcha) on every request.
     @Volatile
-    private var loginFailure: Pair<Long, String>? = null
+    private var loginFailure: Pair<Instant, Exception>? = null
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/obras/${manga.url}"
 
@@ -173,18 +177,18 @@ abstract class Baozinho :
             }
             if (!response.isSuccessful) {
                 response.close()
-                throw IOException("HTTP ${response.code}")
+                throw HttpException(response.code)
             }
             return response.parseAs<T>()
         }
         error("unreachable")
     }
 
-    private fun authHeaders(token: String?): Headers = token?.let { headers.newBuilder().set("Authorization", "Bearer $it").build() } ?: headers
+    private fun authHeaders(token: String?): Headers = token?.let { headersBuilder().set("Authorization", "Bearer $it").build() } ?: headers
 
     // Uses the stored session; only logs in with the saved credentials when asked to.
     private suspend fun accessToken(login: Boolean = false, force: Boolean = false): String? = authLock.withLock {
-        if (!force && System.currentTimeMillis() < accessExpiresAt) return@withLock accessToken
+        if (!force && Clock.System.now() < accessExpiresAt) return@withLock accessToken
         val renewed = preferences.getString(REFRESH_KEY, null)?.let { renewSession(it) }
         renewed ?: if (login) login() else null
     }
@@ -199,13 +203,13 @@ abstract class Baozinho :
             clearSession()
             return null
         }
-        throw IOException("HTTP $code ao renovar a sessão")
+        throw refreshError(code)
     }
 
     // The login needs a Cloudflare Turnstile token, which core solves in a WebView. Failures are reported to the user by the request that needed the login.
     private suspend fun login(): String? {
         if (!hasCredentials) return null
-        loginFailure?.takeUnless { shouldRetryLogin(it.first, System.currentTimeMillis(), LOGIN_RETRY_MS) }?.let { throw IOException(it.second) }
+        loginFailure?.takeUnless { shouldRetryLogin(it.first, Clock.System.now(), LOGIN_RETRY) }?.let { throw it.second }
         try {
             val turnstile = try {
                 getTurnstileToken(baseUrl, TURNSTILE_SITE_KEY)
@@ -218,17 +222,11 @@ abstract class Baozinho :
             if (response.isSuccessful) return saveSession(response.parseAs<TokensDto>()).accessToken
             val code = response.code
             val body = response.use { it.body.string() }
-            throw IOException(
-                when (classifyLoginFailure(code, body)) {
-                    LoginFailure.CREDENTIALS -> "E-mail ou senha do Baozinho incorretos. Confira nas configurações da extensão."
-                    LoginFailure.VERIFICATION -> "O Baozinho recusou a verificação anti-robô. Tente de novo mais tarde."
-                    LoginFailure.OTHER -> "Falha ao entrar no Baozinho (HTTP $code)."
-                },
-            )
+            throw loginError(code, body)
         } catch (e: CancellationException) {
             throw e
-        } catch (e: IOException) {
-            loginFailure = System.currentTimeMillis() to (e.message ?: "Falha ao entrar no Baozinho.")
+        } catch (e: Exception) {
+            loginFailure = Clock.System.now() to e
             throw e
         }
     }
@@ -237,7 +235,7 @@ abstract class Baozinho :
     private fun saveSession(tokens: TokensDto): TokensDto {
         preferences.edit().putString(REFRESH_KEY, tokens.refreshToken).commit()
         accessToken = tokens.accessToken
-        accessExpiresAt = System.currentTimeMillis() + ACCESS_TTL_MS
+        accessExpiresAt = Clock.System.now() + ACCESS_TTL
         loginFailure = null
         return tokens
     }
@@ -245,7 +243,7 @@ abstract class Baozinho :
     private fun clearSession() {
         preferences.edit().remove(REFRESH_KEY).apply()
         accessToken = null
-        accessExpiresAt = 0
+        accessExpiresAt = Instant.DISTANT_PAST
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -300,8 +298,8 @@ abstract class Baozinho :
         const val EMAIL_KEY = "login_email"
         const val PASSWORD_KEY = "login_password"
         const val REFRESH_KEY = "session_refresh_token"
-        const val ACCESS_TTL_MS = 10 * 60 * 1000L
-        const val LOGIN_RETRY_MS = 5 * 60 * 1000L
+        val ACCESS_TTL = 10.minutes
+        val LOGIN_RETRY = 5.minutes
 
         // Public key of the site's Turnstile widget (it appears in the login page's JS).
         const val TURNSTILE_SITE_KEY = "0x4AAAAAADtmuUfMFzDWFmF8"
