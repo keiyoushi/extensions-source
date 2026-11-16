@@ -17,4 +17,9 @@ keiyoushi {
             custom("https://meshmanga.com")
         }
     }
+
+    deeplink {
+        path("/series/..*")
+        path("/chapter/..*")
+    }
 }
