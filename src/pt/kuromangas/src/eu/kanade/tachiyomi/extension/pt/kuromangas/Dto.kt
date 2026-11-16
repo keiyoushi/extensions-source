@@ -7,15 +7,18 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.time.Instant
 
-/**
- * Builds the thumbnail URL, removing /uploads/ prefix if present.
- */
 internal fun buildThumbnailUrl(cdnUrl: String, path: String): String {
     val cleanPath = path
         .removePrefix("/")
         .removePrefix("uploads/")
     return "$cdnUrl/$cleanPath"
 }
+
+@Serializable
+class LoginBody(
+    val email: String,
+    val password: String,
+)
 
 @Serializable
 class SecureDto(

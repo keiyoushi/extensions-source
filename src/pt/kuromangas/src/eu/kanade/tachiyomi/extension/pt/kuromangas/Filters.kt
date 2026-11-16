@@ -19,8 +19,8 @@ class SortFilter(displayName: String, private val sortOptions: List<Pair<String,
 }
 
 private fun getSortOptions() = listOf(
-    Pair("Melhor Avaliados", "average_rating"),
-    Pair("Mais Antigos", "created_at"),
-    Pair("Titulo (A-Z)", "title"),
-    Pair("Titulo (Z-A)", "title"),
+    "Melhor Avaliados" to "average_rating",
+    "Mais Antigos" to "created_at",
+    "Titulo (A-Z)" to "title",
+    "Titulo (Z-A)" to "title",
 )
