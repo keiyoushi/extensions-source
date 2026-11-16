@@ -11,8 +11,10 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Response
 import java.io.IOException
 import kotlin.time.Duration
 import kotlin.time.Instant
@@ -199,6 +201,19 @@ fun loginError(code: Int, message: String?): Exception = when (classifyLoginFail
 }
 
 fun refreshError(code: Int): Exception = HttpException(code)
+
+// The failure stored by the last login attempt, while it is still inside the backoff window.
+fun failureToRethrow(failure: Pair<Instant, Exception>?, now: Instant, retryAfter: Duration): Exception? = failure?.takeUnless { shouldRetryLogin(it.first, now, retryAfter) }?.second
+
+fun bearerHeaders(base: Headers.Builder, token: String?): Headers = base.apply { token?.let { set("Authorization", "Bearer $it") } }.build()
+
+fun Response.orThrow(): Response {
+    if (!isSuccessful) {
+        close()
+        throw HttpException(code)
+    }
+    return this
+}
 
 // null = unknown: with credentials but no session yet, nothing should be hidden.
 fun unlockedWithoutSession(hasCredentials: Boolean): Set<Int>? = if (hasCredentials) null else emptySet()

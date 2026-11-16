@@ -4,7 +4,6 @@ import android.text.InputType
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -175,16 +174,12 @@ abstract class Baozinho :
                 token = accessToken(login, force = true)
                 continue
             }
-            if (!response.isSuccessful) {
-                response.close()
-                throw HttpException(response.code)
-            }
-            return response.parseAs<T>()
+            return response.orThrow().parseAs<T>()
         }
         error("unreachable")
     }
 
-    private fun authHeaders(token: String?): Headers = token?.let { headersBuilder().set("Authorization", "Bearer $it").build() } ?: headers
+    private fun authHeaders(token: String?): Headers = bearerHeaders(headersBuilder(), token)
 
     // Uses the stored session; only logs in with the saved credentials when asked to.
     private suspend fun accessToken(login: Boolean = false, force: Boolean = false): String? = authLock.withLock {
@@ -209,7 +204,7 @@ abstract class Baozinho :
     // The login needs a Cloudflare Turnstile token, which core solves in a WebView. Failures are reported to the user by the request that needed the login.
     private suspend fun login(): String? {
         if (!hasCredentials) return null
-        loginFailure?.takeUnless { shouldRetryLogin(it.first, Clock.System.now(), LOGIN_RETRY) }?.let { throw it.second }
+        failureToRethrow(loginFailure, Clock.System.now(), LOGIN_RETRY)?.let { throw it }
         try {
             val turnstile = try {
                 getTurnstileToken(baseUrl, TURNSTILE_SITE_KEY)
