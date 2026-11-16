@@ -81,6 +81,8 @@ class MangaDto(
 @Serializable
 class ImageListDto(
     val data: List<String>? = null,
+    val state: Boolean? = null,
+    val codeState: String? = null,
 )
 
 @Serializable

@@ -275,19 +275,31 @@ abstract class GocTruyenTranhVui :
             .add("nameEn", slug)
             .build()
 
-        suspend fun requestImages(): List<Page>? {
-            return client.post("$baseUrl/api/chapter/loadAll", Fetch.XHR, body).use { response ->
-                val result = runCatching { response.parseAs<ResultDto<ImageListDto>>() }.getOrNull()
-                val imageList = result?.result?.data ?: return@use null
+        suspend fun requestImages(): List<Page>? = client.post(
+            "$baseUrl/api/chapter/loadAll",
+            Fetch.XHR.from(chapterPageUrl),
+            body,
+        ).use { response ->
+            val result = runCatching { response.parseAs<ResultDto<ImageListDto>>() }.getOrNull()
+                ?: return@use null
+            val imageResult = result.result ?: return@use null
 
-                imageList.mapIndexed { i, imgUrl ->
-                    val finalUrl = if (imgUrl.startsWith("/image/")) {
-                        baseUrl + imgUrl
-                    } else {
-                        imgUrl
-                    }
-                    Page(i, imageUrl = finalUrl)
+            if (imageResult.state == true && result.status == false) {
+                val message = when (imageResult.codeState) {
+                    "01" -> "Trang web yêu cầu đăng nhập để đọc chương này."
+                    "02" -> "Chương này yêu cầu tài khoản cấp 2+."
+                    "03" -> "Trang web từ chối tải chương này (mã 03)."
+                    else -> result.errorMessage ?: "Trang web từ chối tải ảnh chương."
                 }
+                throw Exception(message)
+            }
+
+            if (result.status != true || imageResult.state != true) return@use null
+            val imageList = imageResult.data?.takeIf(List<String>::isNotEmpty) ?: return@use null
+
+            imageList.mapIndexed { i, imgUrl ->
+                val finalUrl = if (imgUrl.startsWith("/image/")) baseUrl + imgUrl else imgUrl
+                Page(i, imageUrl = finalUrl)
             }
         }
 
