@@ -6,6 +6,7 @@ import android.text.InputType
 import android.util.Base64
 import android.widget.Toast
 import androidx.preference.EditTextPreference
+import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
@@ -153,10 +154,11 @@ abstract class Jinmantiantang :
     }
 
     // Unknown ids answer an empty array
-    // The app's 10-minute HTTP cache would serve a stale is_favorite and favorite list, so logged-in reads go to the network
-    private suspend fun album(id: String, token: String? = null, fresh: Boolean = false): AlbumDto? {
-        val cacheControl = if (fresh) CacheControl.FORCE_NETWORK else DEFAULT_CACHE_CONTROL
-        return apiGet<JsonElement>(apiUrl("album", "id" to id), token, cacheControl)
+    // A logged-in read goes to the login host and skips the app's 10-minute HTTP cache, for a current is_favorite
+    private suspend fun album(id: String, member: MemberDto? = null): AlbumDto? {
+        val url = if (member == null) apiUrl("album", "id" to id) else loginApiUrl("album", "id" to id)
+        val cacheControl = if (member == null) DEFAULT_CACHE_CONTROL else CacheControl.FORCE_NETWORK
+        return apiGet<JsonElement>(url, member?.jwttoken, cacheControl)
             .takeIf { it is JsonObject }
             ?.parseAs<AlbumDto>()
     }
@@ -174,7 +176,7 @@ abstract class Jinmantiantang :
         val loggedIn = preferences.credentials != null
         // is_favorite is only filled for a logged-in request
         val album = if (loggedIn) {
-            withLogin { album(manga.albumId(), it.jwttoken, fresh = true) } ?: throw Exception("作品不存在")
+            withLogin { album(manga.albumId(), it) } ?: throw Exception("作品不存在")
         } else {
             album(manga)
         }
@@ -204,7 +206,7 @@ abstract class Jinmantiantang :
     }
 
     private suspend fun fetchFavorites(page: Int): MangasPage {
-        val url = favoritesUrl(page)
+        val url = favoritesUrl(page, loginHost())
         val favorites = withLogin { apiGet<FavoriteListDto>(url, it.jwttoken, CacheControl.FORCE_NETWORK) }
         return MangasPage(
             favorites.list.map { it.toSManga(coverHost) },
@@ -214,10 +216,9 @@ abstract class Jinmantiantang :
 
     // The list lagged behind the site while the album's is_favorite was already current, which points at a cache on
     // the API side keyed by URL: a changing parameter makes every request a new URL
-    private suspend fun favoritesUrl(page: Int, host: String? = null): HttpUrl {
+    private fun favoritesUrl(page: Int, host: String): HttpUrl {
         val cacheBuster = System.currentTimeMillis().toString()
-        val params = arrayOf("page" to "$page", "folder_id" to "0", "o" to "mr", "_" to cacheBuster)
-        return if (host == null) apiUrl("favorite", *params) else hostApiUrl(host, "favorite", *params)
+        return hostApiUrl(host, "favorite", "page" to "$page", "folder_id" to "0", "o" to "mr", "_" to cacheBuster)
     }
 
     // The app API toggles: the same call adds a missing favorite and removes an existing one
@@ -227,7 +228,7 @@ abstract class Jinmantiantang :
                 .setType(MultipartBody.FORM)
                 .addFormDataPart("aid", aid)
                 .build()
-            apiPost<FavoriteToggleDto>(apiUrl("favorite"), body, member.jwttoken)
+            apiPost<FavoriteToggleDto>(loginApiUrl("favorite"), body, member.jwttoken)
         }
         return when (result.type) {
             "add" -> "★ 已加入禁漫收藏（下拉刷新章节列表可更新状态）"
@@ -292,6 +293,12 @@ abstract class Jinmantiantang :
 
     private suspend fun apiUrl(path: String, vararg params: Pair<String, String>): HttpUrl = hostApiUrl(apiHost(), path, *params)
 
+    // API hosts keep their own copy of the favorite list and some lag behind the site, so logged-in calls can be pinned
+    // to a host the login test found current
+    private suspend fun loginHost(): String = preferences.favoriteHost ?: apiHost()
+
+    private suspend fun loginApiUrl(path: String, vararg params: Pair<String, String>): HttpUrl = hostApiUrl(loginHost(), path, *params)
+
     private fun hostApiUrl(host: String, path: String, vararg params: Pair<String, String>): HttpUrl = HttpUrl.Builder()
         .scheme("https")
         .host(host)
@@ -355,21 +362,20 @@ abstract class Jinmantiantang :
     private suspend fun member(expired: MemberDto? = null): MemberDto {
         val credentials = preferences.credentials ?: throw Exception("请在插件设置中填写用户名和密码")
         return loginMutex.withLock {
-            val host = apiHost()
+            val host = loginHost()
             session?.takeIf { it.credentials == credentials && it.host == host && it.member !== expired }?.member
-                ?: login(credentials).also { session = Session(credentials, host, it) }
+                ?: login(credentials, host).also { session = Session(credentials, host, it) }
         }
     }
 
     // A failed login answers 401 with the reason in errorMsg
-    private suspend fun login(credentials: Pair<String, String>, host: String? = null): MemberDto {
+    private suspend fun login(credentials: Pair<String, String>, host: String): MemberDto {
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart("username", credentials.first)
             .addFormDataPart("password", credentials.second)
             .build()
-        val url = if (host == null) apiUrl("login") else hostApiUrl(host, "login")
-        return apiPost(url, body, ensureSuccess = false)
+        return apiPost(hostApiUrl(host, "login"), body, ensureSuccess = false)
     }
 
     // A session the server has ended answers 401: log in again once
@@ -397,13 +403,13 @@ abstract class Jinmantiantang :
     }
 
     private suspend fun performCheckIn(): String = withLogin { member ->
-        val daily = apiGet<DailyDto>(apiUrl("daily", "user_id" to member.uid), member.jwttoken)
+        val daily = apiGet<DailyDto>(loginApiUrl("daily", "user_id" to member.uid), member.jwttoken)
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart("user_id", member.uid)
             .addFormDataPart("daily_id", daily.dailyId.toString())
             .build()
-        apiPost<MessageDto>(apiUrl("daily_chk"), body, member.jwttoken).msg
+        apiPost<MessageDto>(loginApiUrl("daily_chk"), body, member.jwttoken).msg
     }
 
     // Reports what the app API answers for this account, to tell a login problem from a stale favorite list
@@ -417,6 +423,7 @@ abstract class Jinmantiantang :
             } catch (e: Exception) {
                 "失败：${e::class.simpleName} ${e.message}"
             }
+            preferences.edit().putString(DIAGNOSIS_PREF, result).apply()
             Handler(Looper.getMainLooper()).post { preference.summary = result }
             showToast(result)
         }
@@ -426,7 +433,9 @@ abstract class Jinmantiantang :
     private suspend fun diagnose(): String {
         val credentials = preferences.credentials ?: throw Exception("请先填写用户名和密码")
         // map rather than joinToString's transform, which cannot suspend
-        return fetchServers().map { host ->
+        val hosts = fetchServers()
+        preferences.edit().putString(KNOWN_HOSTS_PREF, hosts.joinToString(" ")).apply()
+        return hosts.map { host ->
             val counts = try {
                 val member = login(credentials, host)
                 List(DIAGNOSIS_READS) {
@@ -492,11 +501,27 @@ abstract class Jinmantiantang :
 
         SwitchPreferenceCompat(context).apply {
             title = "测试登录"
-            summary = "在每个接口域名上登录并读取收藏数 3 次，结果会显示在这里"
+            summary = preferences.getString(DIAGNOSIS_PREF, null)
+                ?: "在每个接口域名上登录并读取收藏数 3 次，结果会显示在这里"
             setOnPreferenceChangeListener { pref, _ ->
                 pref.summary = "测试中…"
                 runDiagnosis(pref)
                 false
+            }
+        }.let(screen::addPreference)
+
+        val hosts = preferences.getString(KNOWN_HOSTS_PREF, null)?.split(' ') ?: FALLBACK_SERVERS
+        ListPreference(context).apply {
+            key = FAVORITE_HOST_PREF
+            title = "收藏使用的接口"
+            summary = "%s\n收藏夹、收藏状态、收藏切换和签到都走这里。" +
+                "选「测试登录」里收藏数和网页一致的域名；列表在测试后更新"
+            entries = arrayOf<CharSequence>("自动（随机）") + hosts
+            entryValues = arrayOf<CharSequence>("") + hosts
+            setDefaultValue("")
+            setOnPreferenceChangeListener { _, _ ->
+                session = null
+                true
             }
         }.let(screen::addPreference)
 

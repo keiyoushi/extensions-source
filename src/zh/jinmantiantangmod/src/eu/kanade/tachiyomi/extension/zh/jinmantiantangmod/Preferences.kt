@@ -7,9 +7,15 @@ internal const val USERNAME_PREF = "username"
 internal const val PASSWORD_PREF = "password"
 internal const val CHECKIN_PREF = "auto_checkin"
 internal const val CHECKIN_DATE_PREF = "last_checkin_date"
+internal const val FAVORITE_HOST_PREF = "favorite_host"
+internal const val KNOWN_HOSTS_PREF = "known_hosts"
+internal const val DIAGNOSIS_PREF = "last_diagnosis"
 
 internal val SharedPreferences.blockList: List<String>
     get() = getString(BLOCK_PREF, "")!!.substringBefore("//").trim().lowercase().split(' ')
+
+internal val SharedPreferences.favoriteHost: String?
+    get() = getString(FAVORITE_HOST_PREF, "")!!.ifEmpty { null }
 
 internal val SharedPreferences.credentials: Pair<String, String>?
     get() {
