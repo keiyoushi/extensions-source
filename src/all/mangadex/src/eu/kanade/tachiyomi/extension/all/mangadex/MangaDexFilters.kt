@@ -420,11 +420,9 @@ class MangaDexFilters {
         return url.build()
     }
 
-    private fun List<Tag>.sortIfTranslated(intl: Intl): List<Tag> = apply {
-        if (intl.chosenLanguage == MangaDexIntl.ENGLISH) {
-            return this
-        }
-
-        return sortedWith(compareBy(intl.collator, Tag::name))
+    private fun List<Tag>.sortIfTranslated(intl: Intl): List<Tag> = if (intl.chosenLanguage == MangaDexIntl.ENGLISH) {
+        this
+    } else {
+        sortedWith(compareBy(intl.collator, Tag::name))
     }
 }

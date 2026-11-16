@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.mangadex.dto
 
 import eu.kanade.tachiyomi.extension.all.mangadex.MDConstants
+import keiyoushi.utils.firstInstanceOrNull
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -91,7 +92,9 @@ class MangaDto(
     val id: String,
     val attributes: MangaAttributesDto,
     val relationships: List<RelationshipDto>,
-)
+) {
+    val coverFileName get() = relationships.firstInstanceOrNull<CoverRelationshipDto>()?.fileName
+}
 
 @Serializable
 class MangaAttributesDto(
@@ -123,7 +126,9 @@ class ChapterDto(
     val id: String,
     val attributes: ChapterAttributesDto,
     val relationships: List<RelationshipDto>,
-)
+) {
+    val mangaId get() = relationships.first { it.type == MDConstants.MANGA }.id
+}
 
 @Serializable
 class ChapterAttributesDto(
@@ -149,8 +154,10 @@ class ChapterAttributesDto(
 @Serializable
 class CoverDto(
     val attributes: CoverAttributesDto,
-    val relationships: List<RelationshipDto>,
-)
+    private val relationships: List<RelationshipDto>,
+) {
+    val mangaId get() = relationships.first { it.type == MDConstants.MANGA }.id
+}
 
 @Serializable
 class CoverAttributesDto(

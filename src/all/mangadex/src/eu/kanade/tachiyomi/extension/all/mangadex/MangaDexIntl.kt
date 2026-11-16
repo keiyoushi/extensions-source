@@ -19,6 +19,4 @@ object MangaDexIntl {
         SPANISH_LATAM,
         RUSSIAN,
     )
-
-    const val MANGADEX_NAME = "MangaDex"
 }
