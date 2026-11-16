@@ -20,17 +20,13 @@ import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.string
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
 import okhttp3.CacheControl
 import okhttp3.Headers
@@ -40,8 +36,6 @@ import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatter
-import kotlin.time.Clock
-import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -55,8 +49,8 @@ abstract class XXXYaoi : MadaraNoAjax() {
         interceptors().removeAll { it.javaClass.simpleName == "CloudflareInterceptor" }
         addInterceptor(ChallengeInterceptor())
         rateLimit(3, 1.seconds)
-        // The library page's daily cookie
-        addCookie { listOf("__xy_bguard" to "v1_${Clock.System.now().toEpochMilliseconds() / 1.days.inWholeMilliseconds}") }
+        // The cookie the library page sets before its request
+        addCookie { listOfNotNull(libraryConfig?.cookie) }
     }
 
     override fun Headers.Builder.configureHeaders() = set("Sec-GPC", "1")
@@ -113,9 +107,10 @@ abstract class XXXYaoi : MadaraNoAjax() {
 
     private suspend fun libraryConfig(refresh: Boolean) = libraryConfigMutex.withLock {
         libraryConfig.takeUnless { refresh } ?: client.get("$baseUrl/biblioteca/", Fetch.DOCUMENT, if (refresh) CacheControl.FORCE_NETWORK else DEFAULT_CACHE_CONTROL).asJsoup()
-            .selectFirst("#xyaoi-cards-container")!!.attr("data-k")
+            .selectFirst("#xyaoi-cards-container")!!.attributes().first { it.key.startsWith("data-x_") }.value
             .decodeReversedBase64()
-            .parseAs<LibraryConfig>()
+            .parseAs<JsonArray>()
+            .let(::LibraryConfig)
             .also { libraryConfig = it }
     }
 
@@ -157,7 +152,7 @@ abstract class XXXYaoi : MadaraNoAjax() {
     override fun chapterListSelector() = "ul.version-chap > li"
 
     override fun chapterFromElement(element: Element, mangaPath: String) = SChapter.create().apply {
-        val row = element.attributes().first { it.key.startsWith("data-x_") }.value.decodeReversedBase64().parseAs<ChapterRow>()
+        val row = element.attributes().first { it.key.startsWith("data-x_") }.value.decodeReversedBase64().parseAs<JsonArray>().let(::ChapterRow)
         url = row.slug
         name = row.name
         date_upload = parseChapterDate(element.selectFirst("""span:matchesOwn(^(\d{2}/\d{2}/\d{4}|.+ atrás)$)""")?.text())
@@ -166,16 +161,9 @@ abstract class XXXYaoi : MadaraNoAjax() {
 
     override fun parsePages(document: Document): List<Page> {
         if (document.selectFirst("iframe[src*=player.php]") != null) return emptyList()
-        // Reader block with key names renamed per page: the key, the entries and the decoy count
-        val values = document.selectFirst("script[type=application/json][id$=_v]")!!.data().parseAs<JsonObject>().values
-        val shift = SHIFT_REGEX.find(document.selectFirst("script:containsData(_shf)")!!.data())!!.groupValues[1].toInt()
-        return ReaderData(
-            key = values.firstNotNullOf { (it as? JsonPrimitive)?.takeIf(JsonPrimitive::isString)?.content },
-            payload = values.firstInstance<JsonArray>().map { it.string },
-            offset = values.firstNotNullOf { (it as? JsonPrimitive)?.intOrNull },
-            shift = shift,
-        ).toPageUrls()
-            .mapIndexed { index, imageUrl -> Page(index, document.location(), imageUrl) }
+        return ReaderData.from(document)
+            .toPageUrls()
+            .mapIndexed { index, imageUrl -> Page(index, document.location(), imageUrl.toHttpUrl().toString()) }
     }
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
@@ -209,8 +197,4 @@ abstract class XXXYaoi : MadaraNoAjax() {
         .toJsonElement()
 
     private fun Document.property(label: String) = selectFirst(".xyaoi-prop-label:containsOwn($label) + .xyaoi-prop-value:not(:containsOwn(Não informado))")?.textOrNull()
-
-    companion object {
-        private val SHIFT_REGEX = Regex("""var _shf\s*=\s*(\d+)""")
-    }
 }
