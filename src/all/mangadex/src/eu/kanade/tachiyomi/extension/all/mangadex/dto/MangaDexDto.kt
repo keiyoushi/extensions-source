@@ -39,6 +39,14 @@ sealed class RelationshipDto {
 @Serializable
 class BareRelationshipDto(override val id: String, override val type: String) : RelationshipDto()
 
+/** Another manga in a manga's relationships; [related] is how it's related, e.g. `sequel`. */
+@Serializable
+class RelatedMangaDto(
+    override val id: String,
+    override val type: String,
+    val related: String,
+) : RelationshipDto()
+
 /** An author, artist or scanlation group. */
 @Serializable
 class NamedRelationshipDto(
@@ -76,6 +84,7 @@ class CoverRelationshipDto(
 object RelationshipSerializer : JsonContentPolymorphicSerializer<RelationshipDto>(RelationshipDto::class) {
     override fun selectDeserializer(element: JsonElement): DeserializationStrategy<RelationshipDto> {
         val obj = element.jsonObject
+        if ("related" in obj) return RelatedMangaDto.serializer()
         if ("attributes" !in obj) return BareRelationshipDto.serializer()
 
         return when (obj["type"]!!.jsonPrimitive.content) {

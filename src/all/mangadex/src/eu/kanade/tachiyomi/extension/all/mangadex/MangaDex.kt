@@ -19,6 +19,7 @@ import eu.kanade.tachiyomi.extension.all.mangadex.dto.CustomListDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.DataDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.MangaDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.PagedDto
+import eu.kanade.tachiyomi.extension.all.mangadex.dto.RelatedMangaDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -345,7 +346,7 @@ class MangaDex(
             .addQueryParameter("order[volume]", "asc")
             .addQueryParameter("manga[]", mangaList.map { it.id })
             .addQueryParameter("locales[]", locales)
-            .addQueryParameter("limit", (mangaList.size * locales.size).coerceAtMost(100).toString())
+            .addQueryParameter("limit", (mangaList.size * locales.size).coerceAtMost(MDConstants.MANGA_IDS_LIMIT).toString())
             .build()
     }
 
@@ -389,6 +390,32 @@ class MangaDex(
             preferences.coverQuality,
             preferences.preferExtensionLangTitle,
         )
+    }
+
+    // Related
+
+    override val supportsRelatedMangas = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = coroutineScope {
+        val relatedIds = client.get("${MDConstants.API_MANGA_URL}/${manga.url.uuid()}", Fetch.XHR)
+            .parseAs<DataDto<MangaDto>>()
+            .data.relationships
+            .filterIsInstance<RelatedMangaDto>()
+            .sortedBy { MDConstants.relatedMangaOrder.indexOf(it.related).takeIf { i -> i >= 0 } ?: Int.MAX_VALUE }
+            .map { it.id }
+            .distinct()
+
+        val batches = relatedIds.chunked(MDConstants.MANGA_IDS_LIMIT)
+            .map { ids ->
+                async {
+                    val mangaList = client.get(mangaByIdsUrl(ids), Fetch.XHR).parseAs<PagedDto<MangaDto>>().data
+                    mangaList to fetchFirstVolumeCovers(mangaList)
+                }
+            }
+            .awaitAll()
+
+        val covers = batches.fold(emptyMap<String, String>()) { acc, (_, batchCovers) -> acc + batchCovers }
+        batches.flatMap { it.first }.orderedBy(relatedIds).toSMangaList(covers)
     }
 
     // Chapters

@@ -11,6 +11,7 @@ object MDConstants {
         Regex("[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
 
     const val MANGA_LIMIT = 20
+    const val MANGA_IDS_LIMIT = 100
     const val LATEST_CHAPTER_LIMIT = 100
     const val CHAPTER_FEED_LIMIT = 500
 
@@ -135,6 +136,26 @@ object MDConstants {
     private const val TAG_GROUP_GENRE = "genre"
     private const val TAG_GROUP_THEME = "theme"
     val TAG_GROUPS_ORDER = arrayOf(TAG_GROUP_CONTENT, TAG_GROUP_FORMAT, TAG_GROUP_GENRE, TAG_GROUP_THEME)
+
+    /** Order of related manga by how they're related; unlisted ones go last. */
+    val relatedMangaOrder = listOf(
+        "main_story",
+        "prequel",
+        "sequel",
+        "side_story",
+        "spin_off",
+        "alternate_story",
+        "alternate_version",
+        "adapted_from",
+        "based_on",
+        "preserialization",
+        "serialization",
+        "colored",
+        "monochrome",
+        "same_franchise",
+        "shared_universe",
+        "doujinshi",
+    )
 
     const val TAG_ANTHOLOGY_UUID = "51d83883-4103-437c-b4b1-731cb73d786c"
     const val TAG_ONE_SHOT_UUID = "0234a31e-a729-4e28-9d6a-3f87c4966b9e"
