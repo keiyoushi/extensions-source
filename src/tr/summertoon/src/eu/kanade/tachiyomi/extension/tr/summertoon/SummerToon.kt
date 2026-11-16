@@ -2,18 +2,12 @@ package eu.kanade.tachiyomi.extension.tr.summertoon
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import keiyoushi.network.Fetch
-import keiyoushi.network.get
-import keiyoushi.network.post
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.asJsoup
-import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import okhttp3.FormBody
 import okhttp3.OkHttpClient
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -31,6 +25,9 @@ abstract class SummerToon : MangaThemesia() {
         "Bırakıldı" to "dropped",
     )
 
+    // The value comes after an icon that is also an <i>
+    override val seriesStatusSelector = ".tsinfo .imptdt:contains(Durum) > i"
+
     override fun String?.parseStatus() = when (this?.lowercase()) {
         "devam ediyor", "güncel" -> SManga.ONGOING
         "tamamlandı" -> SManga.COMPLETED
@@ -43,48 +40,9 @@ abstract class SummerToon : MangaThemesia() {
         date_upload = Instant.tryParse(element.selectFirst("time.chapterdate")?.attr("datetime"))
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        if (document.selectFirst("main.mauve-chapter-gate") != null) {
-            throw Exception("Log in via WebView to read.")
-        }
-
-        val chapterId = document.postId()!!
-        sendView(chapterId)
-        if (document.selectFirst("script:containsData(STReaderGateShape=)") == null) {
-            return pageListParse(document)
-        }
-
-        val nonce = NONCE_REGEX.find(document.selectFirst("script:containsData(STGATE_NONCE)")!!.data())!!.groupValues[1]
-        val ajaxUrl = "$baseUrl/wp-admin/admin-ajax.php"
-
-        // Same fields as the site's reader script, with its values for ads that loaded
-        val decision = FormBody.Builder()
-            .add("action", "stgate_decide")
-            .add("nonce", nonce)
-            .add("chapter_id", chapterId)
-            .add("provider_ok", "1")
-            .add("bait_hidden", "0")
-            .add("fp_ad_blocked", "0")
-            .add("fp_health_ok", "1")
-            .add("tp_ad_blocked", "0")
-            .add("tp_neutral_ok", "1")
-            .add("recheck", "0")
-            .add("env", """{"opera":false,"brave":false,"ios":false,"mobile":true,"webview":false}""")
-            .build()
-        val grant = client.post(ajaxUrl, Fetch.XHR, decision).parseAs<AjaxDto<DecisionDto>>().data.grant
-
-        val manifest = FormBody.Builder()
-            .add("action", "stgate_manifest")
-            .add("nonce", nonce)
-            .add("chapter_id", chapterId)
-            .add("grant", grant)
-            .build()
-        return client.post(ajaxUrl, Fetch.XHR, manifest).parseAs<AjaxDto<ManifestDto>>().data.images
-            .mapIndexed { index, url -> Page(index, imageUrl = url) }
-    }
-
-    companion object {
-        private val NONCE_REGEX = """STGATE_NONCE = "(\w+)"""".toRegex()
+    // Members-only chapters show a sign-in prompt in place of the pages
+    override fun pageListParse(document: Document): List<Page> {
+        if (document.selectFirst("#readerarea .wmcp-paywall-wrapper") != null) return emptyList()
+        return super.pageListParse(document)
     }
 }
