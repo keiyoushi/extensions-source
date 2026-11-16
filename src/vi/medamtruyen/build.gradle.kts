@@ -9,7 +9,7 @@ keiyoushi {
     versionCode = 14
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
-    theme = "a3manga"
+    theme = "koi"
 
     source {
         lang = "vi"

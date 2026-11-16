@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.a3manga
+package eu.kanade.tachiyomi.multisrc.koi
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList

@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.vi.tusachxinhxinh
 
-import eu.kanade.tachiyomi.multisrc.a3manga.A3Manga
+import eu.kanade.tachiyomi.multisrc.koi.Koi
 import keiyoushi.annotation.Source
 
 @Source
-abstract class TuSachXinhXinh : A3Manga()
+abstract class TuSachXinhXinh : Koi()

@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.a3manga
+package eu.kanade.tachiyomi.multisrc.koi
 
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -34,7 +34,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-abstract class A3Manga : KeiSource() {
+abstract class Koi : KeiSource() {
 
     protected open val mangaPath = "truyen-tranh"
 

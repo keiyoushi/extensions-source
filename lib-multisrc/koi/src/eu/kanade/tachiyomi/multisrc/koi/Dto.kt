@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.a3manga
+package eu.kanade.tachiyomi.multisrc.koi
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive

@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.a3manga
+package eu.kanade.tachiyomi.multisrc.koi
 
 import android.util.Base64
 import keiyoushi.utils.aesCbc

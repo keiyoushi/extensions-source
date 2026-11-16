@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.medamtruyen
 
-import eu.kanade.tachiyomi.multisrc.a3manga.A3Manga
+import eu.kanade.tachiyomi.multisrc.koi.Koi
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -22,7 +22,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class MeDamTruyen : A3Manga() {
+abstract class MeDamTruyen : Koi() {
 
     override val mangaPath = "truyen"
 

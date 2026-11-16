@@ -9,7 +9,7 @@ keiyoushi {
     versionCode = 44
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
-    theme = "a3manga"
+    theme = "koi"
 
     source {
         name = "Team Lạnh Lùng"
