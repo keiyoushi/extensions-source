@@ -12,7 +12,6 @@ import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -34,7 +33,7 @@ abstract class TruyenTuoiTho : Madara() {
 
     override val chapterMode = ChapterMode.MangaAjaxPaginated
 
-    // Plain chapters put every page image in one .text-left block, so select the images themselves.
+    // Plain chapters hold every page image in one .text-left block
     override val pageListParseSelector = "div.page-break, li.blocks-gallery-item, .reading-content .text-left:not(:has(.blocks-gallery-item)) img"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -48,33 +47,16 @@ abstract class TruyenTuoiTho : Madara() {
             return driveFiles.flatMap { drivePages(it, chapterUrl) }.mapIndexed { index, page -> Page(index, url = page.url, imageUrl = page.imageUrl) }
         }
 
-        val decodedPayload = document.select("div.reading-content script")
-            .map { script ->
-                runCatching { decodeProtectedPayload(script.data()) }.getOrNull()
-            }
-            .firstInstanceOrNull<String>()
+        val payload = document.select("div.reading-content script").firstNotNullOfOrNull { decodeProtectedPayload(it.data()) }
             ?: return emptyList()
-
-        val images = runCatching {
-            decodedPayload.parseAs<ChapterImagesPayload>().images
-        }.getOrElse { emptyList() }
-
-        return images.mapIndexed { index, imageUrl ->
-            Page(index, document.location(), imageUrl)
-        }
+        return payload.parseAs<ChapterImagesPayload>().images.mapIndexed { index, imageUrl -> Page(index, url = document.location(), imageUrl = imageUrl) }
     }
 
-    private fun decodeProtectedPayload(script: String): String {
-        if (!script.contains("split('').reverse().join('')")) {
-            error("Not a protected payload script")
-        }
-
+    private fun decodeProtectedPayload(script: String): String? {
+        if (!script.contains("split('').reverse().join('')")) return null
         val match = protectedPayloadRegex.find(script) ?: error("Protected payload not found")
         val key = atobRegex.findAll(match.groupValues[1]).joinToString("") { it.groupValues[1].decodeBase64() }
-        if (key.isEmpty()) error("Protected payload key is empty")
-
-        val encrypted = match.groupValues[2]
-        return encrypted.reversed().decodeBase64().xorWithKey(key)
+        return match.groupValues[2].reversed().decodeBase64().xorWithKey(key)
     }
 
     private fun String.decodeBase64(): String = String(Base64.decode(this, Base64.DEFAULT), Charsets.UTF_8)
@@ -165,8 +147,7 @@ abstract class TruyenTuoiTho : Madara() {
         private const val DRIVE_PAGE_WIDTH = 1600
         private val driveUploadRegex = Regex(""""https://drive\.google\.com/viewer/upload\?[^"]+"""")
 
-        // The key is every atob() piece in the const, either "a=atob(..),b=atob(..)" or "d=atob(..)+atob(..)",
-        // and the payload is the string assigned right after them.
+        // Key: every atob() piece in the const, "a=atob(..),b=atob(..)" or "d=atob(..)+atob(..)"; payload: the string after them
         private val protectedPayloadRegex = Regex("""const\s+((?:\w+=)?(?:atob\('[^']+'\)[+,]\s*(?:\w+=)?)+)'([^']+)'""")
         private val atobRegex = Regex("""atob\('([^']+)'\)""")
     }

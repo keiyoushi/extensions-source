@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 class ChapterImagesPayload(
-    val images: List<String> = emptyList(),
+    val images: List<String>,
 )
 
 @Serializable
