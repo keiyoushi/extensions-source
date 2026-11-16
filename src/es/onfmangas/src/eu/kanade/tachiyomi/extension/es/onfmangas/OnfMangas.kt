@@ -15,6 +15,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
 import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
@@ -25,6 +26,7 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.selectLast
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Cookie
 import okhttp3.HttpUrl
@@ -171,9 +173,12 @@ abstract class OnfMangas :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        return document.selectFirst("script[type=application/json]:containsData(\"src\":)")!!.data()
-            .parseAs<List<PageDto>>()
+        val chapterUrl = getChapterUrl(chapter)
+        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
+        val access = document.selectFirst("#viewerContainer[data-reader-access]")!!.attr("data-reader-access")
+        return client.post("$baseUrl/reader_pages.php", Fetch.XHR.from(chapterUrl), ReaderPagesRequest(access).toJsonRequestBody())
+            .parseAs<ReaderPagesResponse>()
+            .pages
             .mapIndexed { index, dto -> dto.toPage(index, document.location()) }
     }
 
