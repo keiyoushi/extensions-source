@@ -185,9 +185,12 @@ abstract class Koi : KeiSource() {
             .ifEmpty { null }
         status = parseStatus(document.selectFirst("span.comic-stt")?.text())
         // Only long synopses get the "Xem Thêm" wrapper, short ones sit bare next to the follow button
-        val synopsis = document.selectFirst(".intro-container")
+        description = parseDescription(document.selectFirst(".intro-container"))
+    }
+
+    protected fun parseDescription(synopsis: Element?): String? {
         synopsis?.select(".follow-container, .hide-long-text-shadow")?.remove()
-        description = MarkdownDescription.Builder()
+        return MarkdownDescription.Builder()
             .description(synopsis?.takeUnless { isPlaceholder(it.text()) })
             .build()
             // Some uploaders paste Markdown: drop its heading marks, bold marks and closing rule

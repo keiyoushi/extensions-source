@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
-import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.tryParseDate
 import okhttp3.HttpUrl
@@ -101,28 +100,12 @@ abstract class MeDamTruyen : Koi() {
             .joinToString { it.text().removePrefix("#") }
             .ifEmpty { null }
         status = parseStatus(document.selectFirst("span.comic-stt")?.text())
-        description = MarkdownDescription.Builder()
-            .description(parseDescription(document))
-            .build()
+        description = parseDescription(document.selectFirst(".title-block:has(h3:containsOwn(Giới Thiệu)) + div"))
     }
 
     private fun extractInfoValue(infoRows: List<Element>, label: String): String? = infoRows.firstOrNull { row ->
         row.selectFirst("strong")?.text()?.contains(label, ignoreCase = true) == true
     }?.ownText()?.takeIf { it.isNotEmpty() }
-
-    private fun parseDescription(document: Document): String? {
-        val firstParagraph = document.selectFirst("div.hide-long-text p")
-            ?.text()
-            ?.substringBefore("— Xem Thêm —")
-        if (!firstParagraph.isNullOrBlank()) {
-            return firstParagraph
-        }
-
-        val fullText = document.selectFirst("div.hide-long-text")
-            ?.text()
-            ?.substringBefore("— Xem Thêm —")
-        return fullText?.takeIf { it.isNotBlank() }
-    }
 
     // ============================== Chapters ==============================
 
