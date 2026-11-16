@@ -214,9 +214,10 @@ abstract class Jinmantiantang :
 
     // The list lagged behind the site while the album's is_favorite was already current, which points at a cache on
     // the API side keyed by URL: a changing parameter makes every request a new URL
-    private suspend fun favoritesUrl(page: Int): HttpUrl {
+    private suspend fun favoritesUrl(page: Int, host: String? = null): HttpUrl {
         val cacheBuster = System.currentTimeMillis().toString()
-        return apiUrl("favorite", "page" to "$page", "folder_id" to "0", "o" to "mr", "_" to cacheBuster)
+        val params = arrayOf("page" to "$page", "folder_id" to "0", "o" to "mr", "_" to cacheBuster)
+        return if (host == null) apiUrl("favorite", *params) else hostApiUrl(host, "favorite", *params)
     }
 
     // The app API toggles: the same call adds a missing favorite and removes an existing one
@@ -289,9 +290,11 @@ abstract class Jinmantiantang :
         FALLBACK_SERVERS
     }
 
-    private suspend fun apiUrl(path: String, vararg params: Pair<String, String>): HttpUrl = HttpUrl.Builder()
+    private suspend fun apiUrl(path: String, vararg params: Pair<String, String>): HttpUrl = hostApiUrl(apiHost(), path, *params)
+
+    private fun hostApiUrl(host: String, path: String, vararg params: Pair<String, String>): HttpUrl = HttpUrl.Builder()
         .scheme("https")
-        .host(apiHost())
+        .host(host)
         .addPathSegments(path)
         .apply {
             params.forEach { (name, value) -> addQueryParameter(name, value) }
@@ -359,13 +362,14 @@ abstract class Jinmantiantang :
     }
 
     // A failed login answers 401 with the reason in errorMsg
-    private suspend fun login(credentials: Pair<String, String>): MemberDto {
+    private suspend fun login(credentials: Pair<String, String>, host: String? = null): MemberDto {
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart("username", credentials.first)
             .addFormDataPart("password", credentials.second)
             .build()
-        return apiPost(apiUrl("login"), body, ensureSuccess = false)
+        val url = if (host == null) apiUrl("login") else hostApiUrl(host, "login")
+        return apiPost(url, body, ensureSuccess = false)
     }
 
     // A session the server has ended answers 401: log in again once
@@ -418,20 +422,23 @@ abstract class Jinmantiantang :
         }
     }
 
+    // Logs in on every API host and reads the favorite count a few times, to find hosts that answer stale lists
     private suspend fun diagnose(): String {
-        loginMutex.withLock { session = null }
-        val host = apiHost()
-        val member = member()
-        // No withLogin: a 401 here should show up instead of being retried
-        val favorites = apiGet<FavoriteListDto>(favoritesUrl(1), member.jwttoken, CacheControl.FORCE_NETWORK)
-        val latest = favorites.list.firstOrNull()?.toSManga(coverHost)?.title ?: "无"
-        return buildString {
-            append("登录成功，用户ID ").append(member.uid)
-            append("，token ").append(if (member.jwttoken.isNullOrEmpty()) "无" else "有")
-            append("，接口 ").append(host)
-            append("，收藏共 ").append(favorites.total).append(" 部")
-            append("，最新收藏：").append(latest)
-        }
+        val credentials = preferences.credentials ?: throw Exception("请先填写用户名和密码")
+        // map rather than joinToString's transform, which cannot suspend
+        return fetchServers().map { host ->
+            val counts = try {
+                val member = login(credentials, host)
+                List(DIAGNOSIS_READS) {
+                    apiGet<FavoriteListDto>(favoritesUrl(1, host), member.jwttoken, CacheControl.FORCE_NETWORK).total
+                }.joinToString(" / ")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                "失败 ${e.message}"
+            }
+            "$host：$counts"
+        }.joinToString("\n")
     }
 
     private fun showToast(message: String) {
@@ -485,7 +492,7 @@ abstract class Jinmantiantang :
 
         SwitchPreferenceCompat(context).apply {
             title = "测试登录"
-            summary = "重新登录并读取收藏夹，结果会显示在这里"
+            summary = "在每个接口域名上登录并读取收藏数 3 次，结果会显示在这里"
             setOnPreferenceChangeListener { pref, _ ->
                 pref.summary = "测试中…"
                 runDiagnosis(pref)
@@ -509,6 +516,7 @@ abstract class Jinmantiantang :
         private const val PAGE_SIZE = 80
         private const val FAVORITES_PAGE_SIZE = 20
         private const val FAVORITE_PATH = "/favorite/"
+        private const val DIAGNOSIS_READS = 3
 
         // The mirrors in build.gradle.kts, all deep linked
         private val MIRROR_HOSTS = setOf("18comic.vip", "18comic.ink", "jmcomic-zzz.one", "jmcomic-zzz.org")
