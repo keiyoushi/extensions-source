@@ -2,7 +2,7 @@ syntax = "proto3";
 
 // Upstream source: https://github.com/mihonapp/tachiyomix/blob/e4d546c/index/index.proto
 //
-// divergence: Resources.jarUrl (field 501), Extension.runtimeProvides/runtimeRequires (fields 502, 503)
+// divergence: Resources.jarUrl (field 501), Extension.runtimeRequires (field 503)
 //
 // Regenerate the Python bindings after editing:
 //   protoc --python_out=. --pyi_out=. index.proto
@@ -36,8 +36,9 @@ message Extension {
   string versionName = 6;
   ContentWarning contentWarning = 7;
   repeated Source sources = 8;
-  // Keiyoushi Runtime modules with API levels: served by the runtime extension, needed by the others
-  map<string, int32> runtimeProvides = 502;
+  // Keiyoushi Runtime modules and the API levels this extension needs. Field 502 is the runtime's
+  // own index (keiyoushi/runtime): the modules it serves.
+  reserved 502;
   map<string, int32> runtimeRequires = 503;
 }
 

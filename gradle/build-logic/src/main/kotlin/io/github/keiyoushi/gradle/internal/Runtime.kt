@@ -1,7 +1,6 @@
 package io.github.keiyoushi.gradle.internal
 
 import com.android.build.api.variant.AndroidComponentsExtension
-import io.github.keiyoushi.gradle.api.dsl.KeiyoushiExtension
 import io.github.keiyoushi.gradle.api.dsl.KeiyoushiRuntimeExtension
 import io.github.keiyoushi.gradle.tasks.GenerateRuntimeSourcesTask
 import org.gradle.api.Project
@@ -12,11 +11,8 @@ import org.gradle.kotlin.dsl.findByType
 import org.gradle.kotlin.dsl.register
 import org.gradle.kotlin.dsl.withType
 
-/** The shim every runtime consumer and the runtime itself compile against */
+/** The shim every runtime consumer compiles against */
 internal const val RUNTIME_LIB = ":lib:runtime"
-
-/** The Keiyoushi Runtime extension module */
-internal const val RUNTIME_EXTENSION = ":src:all:keiyoushiruntime"
 
 private val MODULE_NAME = Regex("^[a-z][a-z0-9]*$")
 
@@ -31,23 +27,16 @@ internal fun checkRuntimeModule(module: String, api: Int) {
  * Adds `keiyoushiRuntime { requires(...) }` to a lib, theme or extension and generates its
  * `RuntimeModules` object in [packageName].
  */
-internal fun Project.configureRuntimeConsumer(
-    packageName: Provider<String>,
-    isHost: () -> Boolean = { false },
-    configure: GenerateRuntimeSourcesTask.() -> Unit = {},
-) {
+internal fun Project.configureRuntimeConsumer(packageName: Provider<String>) {
     val runtime = extensions.create<KeiyoushiRuntimeExtension>("keiyoushiRuntime")
     val task = tasks.register<GenerateRuntimeSourcesTask>("generateRuntimeSources") {
         this.packageName.set(packageName)
         requires.set(runtime.requires)
-        provides.set(emptyMap())
-        minApis.set(emptyMap())
         outputDir.set(layout.buildDirectory.dir("generated/source/keiyoushiRuntime"))
-        configure()
     }
 
     extensions.getByType(AndroidComponentsExtension::class.java).onVariants { variant ->
-        if (runtime.requires.get().isNotEmpty() || isHost()) {
+        if (runtime.requires.get().isNotEmpty()) {
             checkDependsOnRuntimeLib()
             variant.sources.kotlin?.addGeneratedSourceDirectory(task, GenerateRuntimeSourcesTask::outputDir)
         }
@@ -91,20 +80,3 @@ internal fun Project.collectRuntimeRequirements(): Map<String, Int> {
     visit(this)
     return requirements
 }
-
-/** Fails the build when [provided] doesn't serve what [requirements] asks for */
-internal fun Project.checkRuntimeServes(requirements: Map<String, Int>, provided: Map<String, Int>) {
-    requirements.forEach { (module, api) ->
-        val served = provided[module]
-        check(served != null && served >= api) {
-            "$path needs runtime module $module at API $api, but $RUNTIME_EXTENSION " +
-                if (served == null) "doesn't provide it" else "provides API $served"
-        }
-    }
-}
-
-/** The modules the runtime extension in this repo provides */
-internal fun Project.runtimeProvides(): Map<String, Int> =
-    evaluationDependsOn(RUNTIME_EXTENSION).extensions.findByType<KeiyoushiExtension>()
-        ?.runtimeHost?.orNull?.provides?.get()
-        ?: error("$RUNTIME_EXTENSION must declare keiyoushi { runtime { } }")
