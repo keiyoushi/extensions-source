@@ -25,7 +25,6 @@ import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatter
@@ -126,37 +125,22 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
                 .build()
 
         val html = client.get(url, ajaxHeaders, Fetch.XHR).parseAs<JsonObject>().getString("html")
-        val document = Jsoup.parse(html, baseUrl)
+        val document = html.asJsoup(baseUrl)
         val mangas = document.select("#library-grid .element").mapNotNull(::mangaFromElement)
-        val hasNextPage =
-            document.selectFirst(
-                "a[rel=next], .pagination a:contains(Siguiente), .pagination a:contains(›)",
-            ) != null
-
-        return MangasPage(mangas, hasNextPage)
+        return MangasPage(mangas, document.selectFirst("a[rel=next]") != null)
     }
 
     private fun mangaFromElement(element: Element): SManga? {
         val link = element.selectFirst("a[href*=/library/]") ?: return null
-        val canonicalUrl = link.attr("abs:href").toCanonicalMangaUrl()
+        val canonicalUrl = link.absUrl("href").toCanonicalMangaUrl()
         val type = canonicalUrl.mangaType()
-        val title =
-            link
-                .selectFirst(".thumbnail-title h4")
-                ?.let { it.attr("title").ifBlank(it::text) }
-                ?.trim()
-                ?.takeIf(String::isNotEmpty)
-                ?: return null
+        val title = link.selectFirst(".thumbnail-title h4")?.attrOrNull("title") ?: return null
 
         return SManga.create().apply {
             setUrlWithoutDomain(mangaIdentityUrl(title, type))
             this.title = title
             memo = memo.withCanonicalMangaUrl(canonicalUrl)
-            thumbnail_url =
-                link
-                    .selectFirst("img.cover-bg-img")
-                    ?.attr("abs:src")
-                    ?.ifBlank { link.selectFirst(".thumbnail.book")?.attr("data-bg") }
+            thumbnail_url = link.selectFirst("img.cover-bg-img")?.absUrl("src")
         }
     }
 
@@ -165,7 +149,7 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
         if (url.host.removePrefix("www.") != sourceHost.removePrefix("www.") ||
             url.pathSegments.firstOrNull() != "library"
         ) {
-            throw Exception("URL no soportada")
+            return null
         }
 
         val canonicalUrl = url.toString().toCanonicalMangaUrl()
@@ -217,7 +201,7 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
         .resolve(this)
         ?.encodedPath
         ?.takeIf { it.startsWith("/library/") }
-        ?: throw Exception("URL de manga no soportada")
+        ?: throw Exception("Unsupported manga URL")
 
     private fun String.mangaType(): String? = baseUrl
         .toHttpUrl()
@@ -253,10 +237,7 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
     private fun parseChapterList(document: Document): List<SChapter> = document
         .select("li.upload-link")
         .flatMap { row ->
-            val numberText =
-                row.attr("data-chapter-number").ifBlank {
-                    row.selectFirst(".chapter-number")?.attr("data-number").orEmpty()
-                }
+            val numberText = row.attr("data-chapter-number")
             val date =
                 dateFormat.tryParseDate(
                     row
@@ -267,30 +248,19 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
 
             row.select(".chapter-detail a[href*=/view_uploads/]").map { link ->
                 SChapter.create().apply {
-                    setUrlWithoutDomain(link.attr("abs:href"))
+                    setUrlWithoutDomain(link.absUrl("href"))
                     name = "Capítulo $numberText"
-                    chapter_number = numberText.toFloatOrNull() ?: -1f
-                    scanlator =
-                        link
-                            .parent()
-                            ?.selectFirst("a[href*=/groups/]")
-                            ?.text()
-                            ?.trim()
+                    scanlator = link.parent()?.selectFirst("a[href*=/groups/]")?.text()
                     date_upload = date
                 }
             }
         }.distinctBy { it.url }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = client
-        .get(baseUrl + chapter.url, Fetch.DOCUMENT)
+        .get(getChapterUrl(chapter), Fetch.DOCUMENT)
         .asJsoup()
         .select("#reader-wrap img.reader-image")
-        .mapIndexedNotNull { index, image ->
-            image
-                .attr("abs:src")
-                .takeIf(String::isNotBlank)
-                ?.let { Page(index, imageUrl = it) }
-        }
+        .mapIndexed { index, image -> Page(index, imageUrl = image.absUrl("src")) }
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList()
 
