@@ -14,9 +14,10 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
-import keiyoushi.utils.getString
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -25,6 +26,7 @@ import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatter
@@ -43,7 +45,7 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
                 .set("X-Requested-With", "XMLHttpRequest")
                 .build()
 
-    override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, order = "likes_count")
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", getFilterList(null))
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url =
@@ -105,27 +107,27 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): MangasPage = getMangaList(page, query, order = "likes_count")
-
-    private suspend fun getMangaList(
-        page: Int,
-        query: String? = null,
-        order: String,
     ): MangasPage {
-        val url =
-            "$baseUrl/biblioteca"
-                .toHttpUrl()
-                .newBuilder()
-                .addQueryParameter("title", query?.trim().orEmpty())
-                .addQueryParameter("filter_by", "title")
-                .addQueryParameter("order_item", order)
-                .addQueryParameter("order_dir", "desc")
-                .addQueryParameter("_pg", "1")
-                .addQueryParameter("page", page.toString())
-                .build()
+        val url = "$baseUrl/biblioteca".toHttpUrl().newBuilder().apply {
+            addQueryParameter("title", query.trim())
+            addQueryParameter("_pg", "1")
+            filters.firstInstanceOrNull<SearchByFilter>()?.let { addQueryParameter("filter_by", it.selected) }
+            filters.firstInstanceOrNull<SortFilter>()?.let {
+                addQueryParameter("order_item", it.sort)
+                addQueryParameter("order_dir", it.dir)
+            }
+            filters.firstInstanceOrNull<TypeFilter>()?.let { addQueryParameter("type", it.selected) }
+            filters.firstInstanceOrNull<DemographyFilter>()?.let { addQueryParameter("demography", it.selected) }
+            filters.firstInstanceOrNull<StatusFilter>()?.let { addQueryParameter("status", it.selected) }
+            filters.firstInstanceOrNull<GenreFilter>()?.let { genres ->
+                genres.included.forEach { addQueryParameter("genders[]", it) }
+                genres.excluded.forEach { addQueryParameter("exclude_genders[]", it) }
+            }
+            addQueryParameter("page", page.toString())
+        }.build()
 
-        val html = client.get(url, ajaxHeaders, Fetch.XHR).parseAs<JsonObject>().getString("html")
-        val document = html.asJsoup(baseUrl)
+        val html = client.get(url, ajaxHeaders, Fetch.XHR).parseAs<LibraryPageDto>().html
+        val document = Jsoup.parseBodyFragment(html, baseUrl)
         val mangas = document.select("#library-grid .element").mapNotNull(::mangaFromElement)
         return MangasPage(mangas, document.selectFirst("a[rel=next]") != null)
     }
@@ -262,7 +264,25 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
         .select("#reader-wrap img.reader-image")
         .mapIndexed { index, image -> Page(index, imageUrl = image.absUrl("src")) }
 
-    override fun getFilterList(data: JsonElement?): FilterList = FilterList()
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement = client
+        .get("$baseUrl/biblioteca", Fetch.DOCUMENT)
+        .asJsoup()
+        .select("label[for^=gender_]")
+        .map { GenreDto(it.text(), it.attr("for").removePrefix("gender_")) }
+        .toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
+        buildList {
+            add(SearchByFilter())
+            add(SortFilter())
+            add(TypeFilter())
+            add(DemographyFilter())
+            add(StatusFilter())
+            data?.parseAs<List<GenreDto>>()?.takeIf { it.isNotEmpty() }?.let { add(GenreFilter(it)) }
+        },
+    )
 
     companion object {
         private const val MANGA_URL_KEY = "zonatmoorgunoriginal.mangaUrl"
