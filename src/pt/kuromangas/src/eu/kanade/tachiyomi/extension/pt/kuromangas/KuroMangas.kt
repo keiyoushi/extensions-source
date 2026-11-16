@@ -164,7 +164,7 @@ abstract class KuroMangas :
         return "$baseUrl/manga/$mangaId"
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/reader" + chapter.url.removePrefix("/chapter")
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/read" + chapter.url.removePrefix("/chapter")
 
     @Synchronized
     private fun checkLogin(): Boolean {
