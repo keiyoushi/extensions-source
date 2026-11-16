@@ -150,7 +150,7 @@ abstract class Jinmantiantang :
     }
 
     // Unknown ids answer an empty array
-    private suspend fun album(id: String): AlbumDto? = apiGet<JsonElement>(apiUrl("album", "id" to id))
+    private suspend fun album(id: String, token: String? = null): AlbumDto? = apiGet<JsonElement>(apiUrl("album", "id" to id), token)
         .takeIf { it is JsonObject }
         ?.parseAs<AlbumDto>()
 
@@ -164,14 +164,20 @@ abstract class Jinmantiantang :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val album = album(manga)
+        val loggedIn = preferences.credentials != null
+        // is_favorite is only filled for a logged-in request
+        val album = if (loggedIn) {
+            withLogin { album(manga.albumId(), it.jwttoken) } ?: throw Exception("作品不存在")
+        } else {
+            album(manga)
+        }
         val updatedManga = album.toSManga(coverHost).apply { url = manga.url }
         val chapterList = album.toSChapterList()
-        if (preferences.credentials == null) return SMangaUpdate(updatedManga, chapterList)
+        if (!loggedIn) return SMangaUpdate(updatedManga, chapterList)
         // The app has no hook for a source action on a manga, so the site favorite is toggled by opening this chapter
         val favoriteChapter = SChapter.create().apply {
             url = "$FAVORITE_PATH${manga.albumId()}"
-            name = "☆ 禁漫收藏：点击切换收藏/取消"
+            name = if (album.isFavorite) "★【已收藏】点击取消收藏" else "☆【未收藏】点击加入收藏"
         }
         return SMangaUpdate(updatedManga, listOf(favoriteChapter) + chapterList)
     }
@@ -209,8 +215,8 @@ abstract class Jinmantiantang :
             apiPost<FavoriteToggleDto>(apiUrl("favorite"), body, member.jwttoken)
         }
         return when (result.type) {
-            "add" -> "已加入禁漫收藏"
-            "remove" -> "已取消禁漫收藏"
+            "add" -> "★ 已加入禁漫收藏（下拉刷新章节列表可更新状态）"
+            "remove" -> "☆ 已取消禁漫收藏（下拉刷新章节列表可更新状态）"
             else -> result.msg
         }
     }

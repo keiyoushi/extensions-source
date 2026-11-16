@@ -64,6 +64,7 @@ class AlbumDto(
     private val actors: List<String> = emptyList(),
     private val series: List<SeriesDto> = emptyList(),
     @SerialName("series_id") val seriesId: String,
+    @SerialName("is_favorite") val isFavorite: Boolean = false,
     private val addtime: String,
     @SerialName("related_list") val relatedList: List<RelatedDto> = emptyList(),
 ) {
