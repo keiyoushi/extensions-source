@@ -16,6 +16,7 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.xor
+import keiyoushi.utils.xorInPlace
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -148,7 +149,8 @@ abstract class Kumanga : KeiSource() {
         val scripts = document.select("script").joinToString("\n") { it.data().withoutBlocks() }
         val name = RPICS_REGEX.find(scripts)!!.groupValues[1]
         val encoded = STRING_CONST_REGEX.findAll(scripts).first { it.groupValues[1] == name }.groupValues[2]
-        val paths = Base64.decode(encoded, Base64.DEFAULT).xor(PAGES_KEY).decodeToString().parseAs<List<String>>()
+        val cipher = Base64.decode(encoded, Base64.DEFAULT)
+        val paths = cipher.xor(cipher.pagesKey()).decodeToString().parseAs<List<String>>()
         val base = readerUrl.toHttpUrl()
         return paths.mapIndexed { index, path -> Page(index, imageUrl = base.resolve(path)!!.toString()) }
     }
@@ -161,14 +163,21 @@ abstract class Kumanga : KeiSource() {
 
     private fun String.toMangaId() = "$baseUrl$this".toHttpUrl().pathSegments[1].toInt()
 
+    // The reader's XOR key, recovered from the page list's known opening
+    private fun ByteArray.pagesKey(): ByteArray {
+        val known = copyOf(PAGES_PREFIX.size).xorInPlace(PAGES_PREFIX)
+        val period = (1..known.size).first { period -> known.indices.all { known[it] == known[it % period] } }
+        return known.copyOf(period)
+    }
+
     private tailrec fun String.withoutBlocks(): String {
         val outer = BLOCK_REGEX.replace(this, "")
         return if (outer == this) this else outer.withoutBlocks()
     }
 
     companion object {
-        // XOR key from the site's kx.reader.js
-        private val PAGES_KEY = "Jr54VwepF4La".toByteArray()
+        // Opening of every page list (JSON-escaped): img.php with the hex of an "http" url
+        private val PAGES_PREFIX = """["\/img.php?src=68747470""".toByteArray()
         private val OTHER_CHAPTERS_REGEX = Regex("""OTHER_CHAPTERS\s*=\s*(\[.*])\s*;""", RegexOption.DOT_MATCHES_ALL)
         private val RPICS_REGEX = Regex("""const\s+rpics\s*=\s*(\w+)\s*;""")
         private val STRING_CONST_REGEX = Regex("""const\s+(\w+)\s*=\s*"([^"]*)"""")
