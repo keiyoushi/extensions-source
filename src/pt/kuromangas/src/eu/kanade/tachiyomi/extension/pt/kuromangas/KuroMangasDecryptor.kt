@@ -23,9 +23,9 @@ import java.time.ZoneOffset
 
 const val HOSTNAME_PART = "kuromangas.com::v2"
 const val ANTIBOT = "x9_4v2_b"
-const val DEFAULT_ENC_KEY = "i9ato8l6sai74jyIHfE2oeshoforanuYTusF4jKdqEwhUEft9dsadcxzsaipnjm8"
-const val TOKEN_COOKIE = "_kn"
-const val TOKEN_HEADER = "X-Client-Token"
+const val DEFAULT_ENC_KEY = "8at7vo8l6sai74jyIHfE2oeshoforanuYTusF4jKdqEwhUEft9dsadcxzsaipnjm8"
+const val TOKEN_COOKIE = "_vx"
+const val TOKEN_HEADER = "X-Request-Ctx"
 private const val LOGIN_EXPIRED_MESSAGE = "Sessão recusada pelo site. Refaça o login no WebView ou revise email e senha nas configurações."
 
 private val encKeyRegex = Regex("""ENCRYPTION_KEY\s*[:=]\s*["']([^"']+)["']""")
@@ -108,7 +108,7 @@ class KuroMangasDecryptor(val baseUrl: String, val client: OkHttpClient, val rel
         } catch (e: Exception) {
             return null
         }
-        val inner = wrapper.jsonObject[dataKey] ?: return null
+        val inner = wrapper.jsonObject[dataKey] ?: wrapper
         return inner.toString()
     }
 

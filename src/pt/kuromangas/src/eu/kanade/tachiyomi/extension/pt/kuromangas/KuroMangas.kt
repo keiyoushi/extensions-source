@@ -205,7 +205,7 @@ abstract class KuroMangas :
     // The site rejects requests carrying a session without its matching token.
     private fun hasSession(): Boolean = client.getCookie(baseUrl, SESSION_COOKIE) != null && client.getCookie(baseUrl, TOKEN_COOKIE) != null
 
-    // Implicit set-cookie: kuro_session + _kn
+    // Implicit set-cookie: kuro_session + _vx
     private fun login(): Boolean {
         val email = preferences.getString(PREF_EMAIL, "") ?: ""
         val password = preferences.getString(PREF_PASSWORD, "") ?: ""
