@@ -10,5 +10,5 @@ keiyoushiRuntime {
 }
 
 dependencies {
-    implementation(project(":lib:runtime"))
+    implementation(libs.keiyoushi.runtime.api.webviewpatch)
 }

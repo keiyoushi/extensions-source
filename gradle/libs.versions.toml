@@ -54,6 +54,8 @@ zstd-kmp-okio = { module = "com.squareup.zstd:zstd-kmp-okio", version = "0.4.0" 
 
 # The Keiyoushi Runtime's contract (github.com/keiyoushi/runtime), bundled by libs that call a runtime module
 keiyoushi-runtime-contract = { module = "com.github.keiyoushi.runtime:contract", version.ref = "keiyoushi-runtime" }
+# A runtime module's contract interfaces (brings the contract via api); bundled by the lib that calls that module
+keiyoushi-runtime-api-webviewpatch = { module = "com.github.keiyoushi.runtime:api-webviewpatch", version.ref = "keiyoushi-runtime" }
 
 # Core unit tests only, to check the WebView glue against it (kept current by Renovate); the app doesn't ship it
 androidx-webkit = { module = "androidx.webkit:webkit", version = "1.18.0" }
