@@ -32,6 +32,7 @@ env:
 jobs:
   prepare:
     name: Prepare job
+    if: github.repository == 'keiyoushi/extensions-source'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -74,6 +75,7 @@ jobs:
 
   build:
     name: Populate Gradle cache
+    if: github.repository == 'keiyoushi/extensions-source'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -172,7 +174,7 @@ jobs:
   mirror:
     name: Mirror Sync
     needs: build-extensions
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && github.repository == 'keiyoushi/extensions-source' }}
     uses: $/.github/workflows/codeberg_mirror.yml
     secrets:
       CODEBERG_SSH: ${{ secrets.CODEBERG_SSH }}

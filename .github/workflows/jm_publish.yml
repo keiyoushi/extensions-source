@@ -1,0 +1,88 @@
+name: Publish JM mod
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/zh/jinmantiantangmod/**'
+      - '.github/scripts/publish-jm.py'
+      - '.github/workflows/jm_publish.yml'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          java-version: 25
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+
+      - name: Prepare signing key
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          ALIAS: ${{ secrets.ALIAS }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+        run: |
+          if [ -z "$SIGNING_KEY" ] || [ -z "$ALIAS" ] || [ -z "$KEY_STORE_PASSWORD" ]; then
+            echo "::error::Add the SIGNING_KEY, ALIAS, KEY_STORE_PASSWORD and KEY_PASSWORD repository secrets first"
+            exit 1
+          fi
+          echo "$SIGNING_KEY" | base64 -d > signingkey.jks
+          fingerprint=$(keytool -list -v -keystore signingkey.jks -storepass "$KEY_STORE_PASSWORD" -alias "$ALIAS" \
+            | grep -m1 'SHA256:' | sed 's/.*SHA256: //; s/://g' | tr 'A-F' 'a-f')
+          echo "FINGERPRINT=$fingerprint" >> "$GITHUB_ENV"
+
+      - name: Build extension
+        env:
+          ALIAS: ${{ secrets.ALIAS }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          # Configure only this module instead of every extension in the tree
+          sed -i 's/^loadAllIndividualExtensions()$/loadIndividualExtension("zh", "jinmantiantangmod")/' settings.gradle.kts
+          ./gradlew :src:zh:jinmantiantangmod:assembleRelease
+
+      - name: Clean up signing key
+        if: always()
+        run: rm -f signingkey.jks
+
+      - name: Publish to the repo branch and a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.git"
+          if ! git clone --depth 1 --branch repo "$remote" repo-branch; then
+            mkdir repo-branch
+            git -C repo-branch init -b repo
+            git -C repo-branch remote add origin "$remote"
+          fi
+          python -m pip install --user --upgrade protobuf
+          python -u .github/scripts/publish-jm.py . repo-branch "$FINGERPRINT"
+          cd repo-branch
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add .
+          git commit -m "Update extension repo" || echo "No changes to commit"
+          git push origin repo
