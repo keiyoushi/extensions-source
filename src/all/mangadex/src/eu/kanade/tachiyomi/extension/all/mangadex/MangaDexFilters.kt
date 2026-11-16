@@ -14,12 +14,13 @@ class MangaDexFilters {
     internal fun getMDFilterList(
         preferences: SharedPreferences,
         dexLang: String,
+        contentRatings: Collection<String>,
         intl: Intl,
     ): FilterList = FilterList(
         AuthorFilter(intl),
         HasAvailableChaptersFilter(intl),
         OriginalLanguageList(intl, getOriginalLanguage(preferences, dexLang, intl)),
-        ContentRatingList(intl, getContentRating(preferences, dexLang, intl)),
+        ContentRatingList(intl, getContentRating(contentRatings, intl)),
         DemographicList(intl, getDemographics(intl)),
         StatusList(intl, getStatus(intl)),
         SortFilter(intl, getSortables(intl)),
@@ -124,7 +125,7 @@ class MangaDexFilters {
         )
     }
 
-    private class ContentRating(name: String, val value: String) : Filter.CheckBox(name)
+    private class ContentRating(name: String, val value: String, state: Boolean) : Filter.CheckBox(name, state)
     private class ContentRatingList(intl: Intl, contentRating: List<ContentRating>) :
         Filter.Group<ContentRating>(intl["content_rating"], contentRating),
         UrlQueryFilter {
@@ -135,30 +136,8 @@ class MangaDexFilters {
         }
     }
 
-    private fun getContentRating(
-        preferences: SharedPreferences,
-        dexLang: String,
-        intl: Intl,
-    ): List<ContentRating> {
-        val contentRatings = preferences.getStringSet(
-            MDConstants.getContentRatingPrefKey(dexLang),
-            MDConstants.contentRatingPrefDefaults,
-        )
-
-        return listOf(
-            ContentRating(intl["content_rating_safe"], "safe").apply {
-                state = contentRatings?.contains(MDConstants.CONTENT_RATING_PREF_VAL_SAFE) ?: true
-            },
-            ContentRating(intl["content_rating_suggestive"], "suggestive").apply {
-                state = contentRatings?.contains(MDConstants.CONTENT_RATING_PREF_VAL_SUGGESTIVE) ?: true
-            },
-            ContentRating(intl["content_rating_erotica"], "erotica").apply {
-                state = contentRatings?.contains(MDConstants.CONTENT_RATING_PREF_VAL_EROTICA) ?: false
-            },
-            ContentRating(intl["content_rating_pornographic"], "pornographic").apply {
-                state = contentRatings?.contains(MDConstants.CONTENT_RATING_PREF_VAL_PORNOGRAPHIC) ?: false
-            },
-        )
+    private fun getContentRating(contentRatings: Collection<String>, intl: Intl) = MDConstants.allContentRatings.map {
+        ContentRating(intl["content_rating_$it"], it, it in contentRatings)
     }
 
     private class Demographic(name: String, val value: String) : Filter.CheckBox(name)

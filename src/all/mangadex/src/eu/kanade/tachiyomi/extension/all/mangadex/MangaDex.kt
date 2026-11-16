@@ -76,7 +76,10 @@ class MangaDex(
 
     private val helper = MangaDexHelper(lang)
 
-    private val preferences by getPreferencesLazy { sanitizeExistingUuidPrefs() }
+    private val preferences by getPreferencesLazy {
+        sanitizeExistingUuidPrefs()
+        migrateContentRating()
+    }
 
     @Suppress("DEPRECATION")
     private fun isDelegate() = try {
@@ -525,23 +528,15 @@ class MangaDex(
             setDefaultValue(false)
         }
 
-        val contentRatingPref = MultiSelectListPreference(screen.context).apply {
+        val contentRatingPref = ListPreference(screen.context).apply {
             key = MDConstants.getContentRatingPrefKey(dexLang)
             title = helper.intl["standard_content_rating"]
-            summary = helper.intl["standard_content_rating_summary"]
-            entries = arrayOf(
-                helper.intl["content_rating_safe"],
-                helper.intl["content_rating_suggestive"],
-                helper.intl["content_rating_erotica"],
-                helper.intl["content_rating_pornographic"],
-            )
-            entryValues = arrayOf(
-                MDConstants.CONTENT_RATING_PREF_VAL_SAFE,
-                MDConstants.CONTENT_RATING_PREF_VAL_SUGGESTIVE,
-                MDConstants.CONTENT_RATING_PREF_VAL_EROTICA,
-                MDConstants.CONTENT_RATING_PREF_VAL_PORNOGRAPHIC,
-            )
-            setDefaultValue(MDConstants.contentRatingPrefDefaults)
+            entries = MDConstants.allContentRatings
+                .map { helper.intl.format("content_rating_up_to", helper.intl["content_rating_$it"]) }
+                .toTypedArray()
+            entryValues = MDConstants.allContentRatings.toTypedArray()
+            setDefaultValue(MDConstants.CONTENT_RATING_PREF_DEFAULT)
+            summary = "%s"
         }
 
         val originalLanguagePref = MultiSelectListPreference(screen.context).apply {
@@ -619,14 +614,17 @@ class MangaDex(
         screen.addPreference(blockedUploaderPref)
     }
 
-    override fun getFilterList(data: JsonElement?): FilterList = helper.mdFilters.getMDFilterList(preferences, dexLang, helper.intl)
+    override fun getFilterList(data: JsonElement?): FilterList = helper.mdFilters.getMDFilterList(preferences, dexLang, preferences.contentRating, helper.intl)
 
     private fun HttpUrl.Builder.addQueryParameter(name: String, values: Collection<String>?) = apply {
         values?.forEach { addQueryParameter(name, it) }
     }
 
-    private val SharedPreferences.contentRating
-        get() = getStringSet(MDConstants.getContentRatingPrefKey(dexLang), MDConstants.contentRatingPrefDefaults)
+    private val SharedPreferences.contentRating: List<String>
+        get() {
+            val level = getString(MDConstants.getContentRatingPrefKey(dexLang), MDConstants.CONTENT_RATING_PREF_DEFAULT)
+            return MDConstants.allContentRatings.take(MDConstants.allContentRatings.indexOf(level) + 1)
+        }
 
     private val SharedPreferences.originalLanguages: Set<String>
         get() {
@@ -675,6 +673,17 @@ class MangaDex(
 
     private val SharedPreferences.includeUnavailable
         get() = getBoolean(MDConstants.getIncludeUnavailablePrefKey(dexLang), false)
+
+    /** The content rating used to be a multi-select; keep the highest rating that was chosen. */
+    private fun SharedPreferences.migrateContentRating() {
+        val legacyKey = MDConstants.getLegacyContentRatingPrefKey(dexLang)
+        val legacy = getStringSet(legacyKey, null) ?: return
+
+        val editor = edit().remove(legacyKey)
+        MDConstants.allContentRatings.lastOrNull { it in legacy }
+            ?.let { editor.putString(MDConstants.getContentRatingPrefKey(dexLang), it) }
+        editor.apply()
+    }
 
     /**
      * Previous versions of the extension allowed invalid UUID values to be stored in the

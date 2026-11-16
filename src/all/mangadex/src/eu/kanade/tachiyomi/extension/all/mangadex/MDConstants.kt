@@ -72,13 +72,16 @@ object MDConstants {
 
     fun getStandardHttpsPreferenceKey(dexLang: String): String = "${STANDARD_HTTPS_PORT_PREF}_$dexLang"
 
-    private const val CONTENT_RATING_PREF = "contentRating"
+    private const val LEGACY_CONTENT_RATING_PREF = "contentRating"
+    private const val CONTENT_RATING_PREF = "contentRatingLevel"
     const val CONTENT_RATING_PREF_VAL_SAFE = "safe"
     const val CONTENT_RATING_PREF_VAL_SUGGESTIVE = "suggestive"
     const val CONTENT_RATING_PREF_VAL_EROTICA = "erotica"
     const val CONTENT_RATING_PREF_VAL_PORNOGRAPHIC = "pornographic"
-    val contentRatingPrefDefaults = setOf(CONTENT_RATING_PREF_VAL_SAFE, CONTENT_RATING_PREF_VAL_SUGGESTIVE)
-    val allContentRatings = setOf(
+    const val CONTENT_RATING_PREF_DEFAULT = CONTENT_RATING_PREF_VAL_EROTICA
+
+    /** In ascending order, the preference includes every rating up to the chosen one. */
+    val allContentRatings = listOf(
         CONTENT_RATING_PREF_VAL_SAFE,
         CONTENT_RATING_PREF_VAL_SUGGESTIVE,
         CONTENT_RATING_PREF_VAL_EROTICA,
@@ -86,6 +89,7 @@ object MDConstants {
     )
 
     fun getContentRatingPrefKey(dexLang: String): String = "${CONTENT_RATING_PREF}_$dexLang"
+    fun getLegacyContentRatingPrefKey(dexLang: String): String = "${LEGACY_CONTENT_RATING_PREF}_$dexLang"
 
     private const val ORIGINAL_LANGUAGE_PREF = "originalLanguage"
     const val ORIGINAL_LANGUAGE_PREF_VAL_JAPANESE = MangaDexIntl.JAPANESE
