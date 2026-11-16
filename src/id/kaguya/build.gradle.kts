@@ -7,14 +7,17 @@ plugins {
 keiyoushi {
     name = "Kaguya"
     pkgName = "id.yubikiri"
-    versionCode = 5
-    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
+    versionCode = 65
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
-    theme = "madara"
 
     source {
         lang = "id"
-        baseUrl = "https://02.kaguya.pro"
+        baseUrl = "https://01.kaguya.re"
         id = 1557304490417397104L
+    }
+
+    deeplink {
+        path("/comic/..*")
     }
 }
