@@ -4,6 +4,8 @@ import eu.kanade.tachiyomi.extension.all.mangadex.MDConstants
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+typealias AuthorListDto = PaginatedResponseDto<AuthorDto>
+
 @Serializable
 @SerialName(MDConstants.AUTHOR)
 class AuthorDto(override val attributes: AuthorArtistAttributesDto? = null) : EntityDto()

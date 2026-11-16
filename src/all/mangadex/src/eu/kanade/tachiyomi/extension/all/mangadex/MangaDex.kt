@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.AggregateDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.AggregateVolume
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.AtHomeDto
+import eu.kanade.tachiyomi.extension.all.mangadex.dto.AuthorListDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.ChapterDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.ChapterListDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.CoverArtDto
@@ -299,7 +300,7 @@ class MangaDex(
         return response.parseAs<ChapterDto>(helper.json).data!!.relationships.firstInstanceOrNull<MangaDataDto>()!!.id
     }
 
-    private fun searchMangaUrl(page: Int, query: String, filters: FilterList): HttpUrl {
+    private suspend fun searchMangaUrl(page: Int, query: String, filters: FilterList): HttpUrl {
         if (query.startsWith(MDConstants.PREFIX_ID_SEARCH)) {
             val mangaId = query.removePrefix(MDConstants.PREFIX_ID_SEARCH)
 
@@ -351,11 +352,29 @@ class MangaDex(
             }
         }
 
+        if (!query.startsWith(MDConstants.PREFIX_AUTHOR_SEARCH)) {
+            addAuthorFilter(tempUrl, filters)
+        }
+
         return helper.mdFilters.addFiltersToUrl(
             url = tempUrl,
             filters = filters.ifEmpty { getFilterList() },
             dexLang = dexLang,
         )
+    }
+
+    private suspend fun addAuthorFilter(url: HttpUrl.Builder, filters: FilterList) {
+        val name = filters.firstInstanceOrNull<MangaDexFilters.AuthorFilter>()?.state?.trim()
+        if (name.isNullOrEmpty()) return
+
+        val authorUrl = MDConstants.API_AUTHOR_URL.toHttpUrl().newBuilder()
+            .addQueryParameter("name", name)
+            .addQueryParameter("limit", "1")
+            .build()
+        val authorId = client.get(authorUrl, Fetch.XHR).parseAs<AuthorListDto>(helper.json).data.firstOrNull()?.id
+            ?: throw Exception(helper.intl.format("author_not_found", name))
+
+        url.addQueryParameter("authorOrArtist", authorId)
     }
 
     private suspend fun searchMangaListParse(response: Response, page: Int, filters: FilterList): MangasPage {
@@ -380,6 +399,7 @@ class MangaDex(
             .toSet()
 
         tempUrl.addQueryParameter("ids[]", ids)
+        addAuthorFilter(tempUrl, filters)
 
         val finalUrl = helper.mdFilters.addFiltersToUrl(
             url = tempUrl,

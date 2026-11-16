@@ -19,6 +19,7 @@ class MangaDexFilters {
         dexLang: String,
         intl: Intl,
     ): FilterList = FilterList(
+        AuthorFilter(intl),
         HasAvailableChaptersFilter(intl),
         OriginalLanguageList(intl, getOriginalLanguage(preferences, dexLang, intl)),
         ContentRatingList(intl, getContentRating(preferences, dexLang, intl)),
@@ -46,6 +47,8 @@ class MangaDexFilters {
     private interface UrlQueryFilter {
         fun addQueryParameter(url: HttpUrl.Builder, dexLang: String)
     }
+
+    internal class AuthorFilter(intl: Intl) : Filter.Text(intl["author_filter"])
 
     private class HasAvailableChaptersFilter(intl: Intl) :
         Filter.CheckBox(intl["has_available_chapters"]),
