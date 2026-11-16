@@ -233,8 +233,13 @@ abstract class GocTruyenTranhVui :
                             return@evaluateJs
                         }
 
-                        if (res.needLogin) {
-                            reject(Exception("Để đọc chương này bạn cần đăng nhập trong WebView!"))
+                        if (res.needLogin || res.needLevel2) {
+                            val message = if (res.needLogin) {
+                                "Để đọc chương này bạn cần đăng nhập trong WebView!"
+                            } else {
+                                "Chương này yêu cầu tài khoản cấp 2+ trong WebView!"
+                            }
+                            reject(Exception(message))
                         } else if (res.urls.isNotEmpty()) {
                             if (res.urls.size == lastCount) {
                                 stableCount++
@@ -285,17 +290,15 @@ abstract class GocTruyenTranhVui :
                 ?: return@use null
             val imageResult = result.result ?: return@use null
 
-            if (imageResult.state == true && result.status == false) {
-                val message = when (imageResult.codeState) {
-                    "01" -> "Trang web yêu cầu đăng nhập để đọc chương này."
-                    "02" -> "Chương này yêu cầu tài khoản cấp 2+."
-                    "03" -> "Trang web từ chối tải chương này (mã 03)."
-                    else -> result.errorMessage ?: "Trang web từ chối tải ảnh chương."
-                }
-                throw Exception(message)
+            val accessError = when (imageResult.codeState) {
+                "01" -> "Trang web yêu cầu đăng nhập để đọc chương này."
+                "02" -> "Chương này yêu cầu tài khoản cấp 2+."
+                "03" -> "Trang web từ chối tải chương này (mã 03)."
+                else -> null
             }
+            if (accessError != null) throw Exception(accessError)
 
-            if (result.status != true || imageResult.state != true) return@use null
+            if (result.status != true || imageResult.state != true || imageResult.codeState != "00") return@use null
             val imageList = imageResult.data?.takeIf(List<String>::isNotEmpty) ?: return@use null
 
             imageList.mapIndexed { i, imgUrl ->

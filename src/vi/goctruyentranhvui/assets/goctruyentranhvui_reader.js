@@ -1,15 +1,15 @@
 (function() {
     try {
-        var isBlocked = false;
+        var needLogin = false;
+        var needLevel2 = false;
         var elems = document.querySelectorAll('p, span, div, h1, h2, h3');
         for (var i = 0; i < elems.length; i++) {
             var el = elems[i];
             if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE') continue;
-            var txt = el.innerText || el.textContent || "";
-            if (txt.indexOf("Để đọc chương này bạn cần") !== -1 || txt.indexOf("bạn cần đăng nhập") !== -1) {
-                isBlocked = true;
-                break;
-            }
+            if (el.getClientRects().length === 0) continue;
+            var txt = (el.innerText || el.textContent || "").toLowerCase();
+            if (txt.indexOf("để đọc chương này bạn cần") !== -1 || txt.indexOf("bạn cần đăng nhập") !== -1) needLogin = true;
+            if (txt.indexOf("tài khoản cấp 2+") !== -1) needLevel2 = true;
         }
 
         window.scrollTo(0, document.body.scrollHeight);
@@ -48,8 +48,8 @@
                 }
             }
         }
-        return JSON.stringify({ needLogin: isBlocked, urls: urls });
+        return JSON.stringify({ needLogin: needLogin, needLevel2: needLevel2, urls: urls });
     } catch (e) {
-        return JSON.stringify({ needLogin: false, urls: [] });
+        return JSON.stringify({ needLogin: false, needLevel2: false, urls: [] });
     }
 })()
