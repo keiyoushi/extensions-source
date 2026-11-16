@@ -138,7 +138,16 @@ abstract class MadaraBase : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
-        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
+        val page = client.get(url, Fetch.DOCUMENT).asJsoup()
+        // A chapter page carries the post id of its series, and ?p= leads to the series
+        val document = if (page.body().hasClass("reading-manga")) {
+            val seriesId = page.mangaId() ?: return null
+            client.get("$baseUrl/?p=$seriesId", Fetch.DOCUMENT.from(page.location())).asJsoup()
+        } else {
+            page
+        }
+        // Other pages, like the home page or a genre, have no series title
+        if (document.selectFirst(mangaDetailsSelectorTitle)?.ownText().isNullOrBlank()) return null
         val id = if (supportsPostId) {
             document.mangaId() ?: return null
         } else {

@@ -8,29 +8,24 @@ import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import kotlin.random.Random
-
-class LunarMintedToken(val token: String, val nonce: String)
+import kotlin.time.Clock
 
 class LunarDecryptor(private val serenity: LunarSerenity) {
-
-    // ============================== Seeds ==============================
 
     fun extractSeeds(document: Document): LunarSeeds = document.extractNextJs<LunarSeedPropsDto>(LunarSeedPropsDto::matches)?.toSeeds()
         ?: error("Failed to find payload seeds")
 
-    // ============================== Token ==============================
+    fun newNonce(): String = randomString(NONCE_LENGTH)
 
     /**
      * `mint()` in the site's bundle: a timestamped payload naming the chapter, stream-encrypted
-     * with a key blended from both seeds. The nonce is folded into the response key, so it has
-     * to be kept around for [unpack].
+     * with a key blended from both seeds. [unpack] takes the same nonce.
      */
-    fun mint(seeds: LunarSeeds, slug: String, chapter: String): LunarMintedToken {
+    fun mint(seeds: LunarSeeds, slug: String, chapter: String, nonce: String): String {
         val key = blend(seeds.axis, seeds.pitch)
         require(key.isNotEmpty()) { "Failed to derive chapter key" }
 
-        val nonce = randomString(NONCE_LENGTH)
-        val timestamp = (System.currentTimeMillis() / 1000).toString(16)
+        val timestamp = Clock.System.now().epochSeconds.toString(16)
         val payload = "$timestamp|$nonce|$slug|$chapter|${randomString(6)}"
 
         val offset = Random.nextInt(256)
@@ -40,7 +35,7 @@ class LunarDecryptor(private val serenity: LunarSerenity) {
             out.add(char.code xor key[(i + offset) % key.size] xor (offset + 83 * i and 0xFF) and 0xFF)
         }
 
-        return LunarMintedToken(out.toByteArray().base64Url(), nonce)
+        return out.toByteArray().base64Url()
     }
 
     private fun blend(axis: String, pitch: String): IntArray {
@@ -55,11 +50,9 @@ class LunarDecryptor(private val serenity: LunarSerenity) {
         }
     }
 
-    // ============================= Session =============================
-
     /**
      * The response body is AES-CBC over a key derived from the first seed, the nonce that was
-     * minted with the token, and - when the server enforces it - the Serenity key thumbprint.
+     * minted into the token, and - when the server enforces it - the Serenity key thumbprint.
      */
     fun unpack(sessionData: String, seeds: LunarSeeds, nonce: String): String {
         val ciphertext = Base64.decode(
@@ -82,8 +75,6 @@ class LunarDecryptor(private val serenity: LunarSerenity) {
         }
         error("Failed to decrypt chapter session data")
     }
-
-    // ============================ Utilities ============================
 
     private fun randomString(length: Int) = String(CharArray(length) { ALPHABET[Random.nextInt(ALPHABET.length)] })
 

@@ -345,7 +345,7 @@ abstract class WNACG :
     companion object {
         private const val LOGIN_HINT = "内容不存在或需要登录，请在 WebView 中登录后重试"
         private const val DOMAIN_LIST_URL = "https://stevenyomi.github.io/source-domains/wnacg.txt"
-        private val UNLISTED_MIRRORS = listOf("https://www.wn01.cfd")
+        private val UNLISTED_MIRRORS = listOf("https://www.wn01.cfd", "https://www.wnacg.com")
         private const val CHAPTER_SELECTOR = "div.sr_compact a.tagshow[data-chid]"
         private val pageImageRegex = Regex(
             """//[^\s"'\\]+\.(?:jpeg|jpg|png|webp|gif)(?:\?[^\s"'\\]*)?""",

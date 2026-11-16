@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Manga Starz"
-    versionCode = 10
+    versionCode = 11
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "madara"
 
     source {
         lang = "ar"
-        baseUrl = "https://starzmanga.com"
+        baseUrl = "https://starzmanga.net"
     }
 }

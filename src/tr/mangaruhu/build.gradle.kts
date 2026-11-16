@@ -7,12 +7,12 @@ plugins {
 keiyoushi {
     name = "Manga Ruhu"
     theme = "initmanga"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
     source {
-        baseUrl = "https://mangaruhu.com"
+        baseUrl = "https://mangaruhu.net"
         lang = "tr"
         versionId = 2
     }

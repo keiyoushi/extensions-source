@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.rinkocomics
 
+import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -173,10 +174,10 @@ abstract class RinkoComics :
         }
 
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        val pages = document.select("img.chapter-image").mapIndexedNotNull { index, element ->
-            val imageUrl = element.attr("abs:data-src").ifBlank { element.attr("abs:src") }.trim()
-            if (imageUrl.isBlank()) return@mapIndexedNotNull null
-            Page(index, imageUrl = imageUrl)
+        val payload = document.selectFirst("script#cwPages")?.data()?.trim()
+            ?: return emptyList()
+        val pages = decodePages(payload).mapIndexed { index, url ->
+            Page(index, imageUrl = url)
         }
 
         if (pages.isEmpty()) {
@@ -264,7 +265,7 @@ abstract class RinkoComics :
 
             SChapter.create().apply {
                 setUrlWithoutDomain(url)
-                this.name = name?.trim().orEmpty()
+                this.name = name.trim()
                 date_upload = dateFormat.tryParseDate(dateText)
 
                 if (locked) {
@@ -310,6 +311,14 @@ abstract class RinkoComics :
 
         val doc = Jsoup.parseBodyFragment(html)
         return parseChapterElements(doc.select(CHAPTER_SELECTOR), hideLocked)
+    }
+
+    private fun decodePages(payload: String): List<String> {
+        val raw = Base64.decode(payload, Base64.DEFAULT)
+
+        return ByteArray(raw.size - 16) { i ->
+            ((raw[i + 16].toInt() and 0xFF) xor (raw[i % 16].toInt() and 0xFF)).toByte()
+        }.toString(Charsets.UTF_8).parseAs()
     }
 
     private fun extractNonce(document: Document): String? {
