@@ -204,12 +204,19 @@ abstract class Jinmantiantang :
     }
 
     private suspend fun fetchFavorites(page: Int): MangasPage {
-        val url = apiUrl("favorite", "page" to "$page", "folder_id" to "0", "o" to "mr")
+        val url = favoritesUrl(page)
         val favorites = withLogin { apiGet<FavoriteListDto>(url, it.jwttoken, CacheControl.FORCE_NETWORK) }
         return MangasPage(
             favorites.list.map { it.toSManga(coverHost) },
             hasNextPage = page * FAVORITES_PAGE_SIZE < favorites.total.toInt(),
         )
+    }
+
+    // The list lagged behind the site while the album's is_favorite was already current, which points at a cache on
+    // the API side keyed by URL: a changing parameter makes every request a new URL
+    private suspend fun favoritesUrl(page: Int): HttpUrl {
+        val cacheBuster = System.currentTimeMillis().toString()
+        return apiUrl("favorite", "page" to "$page", "folder_id" to "0", "o" to "mr", "_" to cacheBuster)
     }
 
     // The app API toggles: the same call adds a missing favorite and removes an existing one
@@ -416,8 +423,7 @@ abstract class Jinmantiantang :
         val host = apiHost()
         val member = member()
         // No withLogin: a 401 here should show up instead of being retried
-        val url = apiUrl("favorite", "page" to "1", "folder_id" to "0", "o" to "mr")
-        val favorites = apiGet<FavoriteListDto>(url, member.jwttoken, CacheControl.FORCE_NETWORK)
+        val favorites = apiGet<FavoriteListDto>(favoritesUrl(1), member.jwttoken, CacheControl.FORCE_NETWORK)
         val latest = favorites.list.firstOrNull()?.toSManga(coverHost)?.title ?: "无"
         return buildString {
             append("登录成功，用户ID ").append(member.uid)
