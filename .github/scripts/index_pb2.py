@@ -24,19 +24,17 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0bindex.proto\"\xab\x01\n\x05Index\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x12\n\nbadgeLabel\x18\x02 \x01(\t\x12\x12\n\nsigningKey\x18\x03 \x01(\t\x12\x19\n\x07\x63ontact\x18\x04 \x01(\x0b\x32\x08.Contact\x12\'\n\rextensionList\x18\x65 \x01(\x0b\x32\x0e.ExtensionListH\x00\x12\x1a\n\x10\x65xtensionListUrl\x18\x66 \x01(\tH\x00\x42\x0c\n\nextensions\"<\n\x07\x43ontact\x12\x0f\n\x07website\x18\x01 \x01(\t\x12\x14\n\x07\x64iscord\x18\x02 \x01(\tH\x00\x88\x01\x01\x42\n\n\x08_discord\"/\n\rExtensionList\x12\x1e\n\nextensions\x18\x01 \x03(\x0b\x32\n.Extension\"\xb6\x03\n\tExtension\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x13\n\x0bpackageName\x18\x02 \x01(\t\x12\x1d\n\tresources\x18\x03 \x01(\x0b\x32\n.Resources\x12\x14\n\x0c\x65xtensionLib\x18\x04 \x01(\t\x12\x13\n\x0bversionCode\x18\x05 \x01(\x03\x12\x13\n\x0bversionName\x18\x06 \x01(\t\x12\'\n\x0e\x63ontentWarning\x18\x07 \x01(\x0e\x32\x0f.ContentWarning\x12\x18\n\x07sources\x18\x08 \x03(\x0b\x32\x07.Source\x12\x39\n\x0fruntimeProvides\x18\xf6\x03 \x03(\x0b\x32\x1f.Extension.RuntimeProvidesEntry\x12\x39\n\x0fruntimeRequires\x18\xf7\x03 \x03(\x0b\x32\x1f.Extension.RuntimeRequiresEntry\x1a\x36\n\x14RuntimeProvidesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x05:\x02\x38\x01\x1a\x36\n\x14RuntimeRequiresEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x05:\x02\x38\x01\"=\n\tResources\x12\x0e\n\x06\x61pkUrl\x18\x01 \x01(\t\x12\x0f\n\x07iconUrl\x18\x02 \x01(\t\x12\x0f\n\x06jarUrl\x18\xf5\x03 \x01(\t\"{\n\x06Source\x12\n\n\x02id\x18\x01 \x01(\x03\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x10\n\x08language\x18\x03 \x01(\t\x12\x0f\n\x07homeUrl\x18\x04 \x01(\t\x12\x12\n\nmirrorUrls\x18\x05 \x03(\t\x12\x14\n\x07message\x18\x07 \x01(\tH\x00\x88\x01\x01\x42\n\n\x08_message*\x80\x01\n\x0e\x43ontentWarning\x12\x1f\n\x1b\x43ONTENT_WARNING_UNSPECIFIED\x10\x00\x12\x18\n\x14\x43ONTENT_WARNING_SAFE\x10\x01\x12\x19\n\x15\x43ONTENT_WARNING_MIXED\x10\x02\x12\x18\n\x14\x43ONTENT_WARNING_NSFW\x10\x03\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0bindex.proto\"\xab\x01\n\x05Index\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x12\n\nbadgeLabel\x18\x02 \x01(\t\x12\x12\n\nsigningKey\x18\x03 \x01(\t\x12\x19\n\x07\x63ontact\x18\x04 \x01(\x0b\x32\x08.Contact\x12\'\n\rextensionList\x18\x65 \x01(\x0b\x32\x0e.ExtensionListH\x00\x12\x1a\n\x10\x65xtensionListUrl\x18\x66 \x01(\tH\x00\x42\x0c\n\nextensions\"<\n\x07\x43ontact\x12\x0f\n\x07website\x18\x01 \x01(\t\x12\x14\n\x07\x64iscord\x18\x02 \x01(\tH\x00\x88\x01\x01\x42\n\n\x08_discord\"/\n\rExtensionList\x12\x1e\n\nextensions\x18\x01 \x03(\x0b\x32\n.Extension\"\xcb\x02\n\tExtension\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x13\n\x0bpackageName\x18\x02 \x01(\t\x12\x1d\n\tresources\x18\x03 \x01(\x0b\x32\n.Resources\x12\x14\n\x0c\x65xtensionLib\x18\x04 \x01(\t\x12\x13\n\x0bversionCode\x18\x05 \x01(\x03\x12\x13\n\x0bversionName\x18\x06 \x01(\t\x12\'\n\x0e\x63ontentWarning\x18\x07 \x01(\x0e\x32\x0f.ContentWarning\x12\x18\n\x07sources\x18\x08 \x03(\x0b\x32\x07.Source\x12\x39\n\x0fruntimeRequires\x18\xf7\x03 \x03(\x0b\x32\x1f.Extension.RuntimeRequiresEntry\x1a\x36\n\x14RuntimeRequiresEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x05:\x02\x38\x01J\x06\x08\xf6\x03\x10\xf7\x03\"=\n\tResources\x12\x0e\n\x06\x61pkUrl\x18\x01 \x01(\t\x12\x0f\n\x07iconUrl\x18\x02 \x01(\t\x12\x0f\n\x06jarUrl\x18\xf5\x03 \x01(\t\"{\n\x06Source\x12\n\n\x02id\x18\x01 \x01(\x03\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x10\n\x08language\x18\x03 \x01(\t\x12\x0f\n\x07homeUrl\x18\x04 \x01(\t\x12\x12\n\nmirrorUrls\x18\x05 \x03(\t\x12\x14\n\x07message\x18\x07 \x01(\tH\x00\x88\x01\x01\x42\n\n\x08_message*\x80\x01\n\x0e\x43ontentWarning\x12\x1f\n\x1b\x43ONTENT_WARNING_UNSPECIFIED\x10\x00\x12\x18\n\x14\x43ONTENT_WARNING_SAFE\x10\x01\x12\x19\n\x15\x43ONTENT_WARNING_MIXED\x10\x02\x12\x18\n\x14\x43ONTENT_WARNING_NSFW\x10\x03\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'index_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_EXTENSION_RUNTIMEPROVIDESENTRY']._loaded_options = None
-  _globals['_EXTENSION_RUNTIMEPROVIDESENTRY']._serialized_options = b'8\001'
   _globals['_EXTENSION_RUNTIMEREQUIRESENTRY']._loaded_options = None
   _globals['_EXTENSION_RUNTIMEREQUIRESENTRY']._serialized_options = b'8\001'
-  _globals['_CONTENTWARNING']._serialized_start=930
-  _globals['_CONTENTWARNING']._serialized_end=1058
+  _globals['_CONTENTWARNING']._serialized_start=823
+  _globals['_CONTENTWARNING']._serialized_end=951
   _globals['_INDEX']._serialized_start=16
   _globals['_INDEX']._serialized_end=187
   _globals['_CONTACT']._serialized_start=189
@@ -44,13 +42,11 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_EXTENSIONLIST']._serialized_start=251
   _globals['_EXTENSIONLIST']._serialized_end=298
   _globals['_EXTENSION']._serialized_start=301
-  _globals['_EXTENSION']._serialized_end=739
-  _globals['_EXTENSION_RUNTIMEPROVIDESENTRY']._serialized_start=629
-  _globals['_EXTENSION_RUNTIMEPROVIDESENTRY']._serialized_end=683
-  _globals['_EXTENSION_RUNTIMEREQUIRESENTRY']._serialized_start=685
-  _globals['_EXTENSION_RUNTIMEREQUIRESENTRY']._serialized_end=739
-  _globals['_RESOURCES']._serialized_start=741
-  _globals['_RESOURCES']._serialized_end=802
-  _globals['_SOURCE']._serialized_start=804
-  _globals['_SOURCE']._serialized_end=927
+  _globals['_EXTENSION']._serialized_end=632
+  _globals['_EXTENSION_RUNTIMEREQUIRESENTRY']._serialized_start=570
+  _globals['_EXTENSION_RUNTIMEREQUIRESENTRY']._serialized_end=624
+  _globals['_RESOURCES']._serialized_start=634
+  _globals['_RESOURCES']._serialized_end=695
+  _globals['_SOURCE']._serialized_start=697
+  _globals['_SOURCE']._serialized_end=820
 # @@protoc_insertion_point(module_scope)

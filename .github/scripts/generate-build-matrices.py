@@ -11,7 +11,6 @@ MULTISRC_LIB_REGEX = re.compile(r"^lib-multisrc/(?P<multisrc>\w+)")
 LIB_REGEX = re.compile(r"^lib/(?P<lib>\w+)")
 MODULE_REGEX = re.compile(r"^:src:(?P<lang>\w+):(?P<extension>\w+)$")
 PKG_NAME_REGEX = re.compile(r"""pkgName\s*=\s*["']([^"']+)["']""")
-RUNTIME_EXTENSION = ("all", "keiyoushiruntime")
 CORE_FILES_REGEX = re.compile(
     r"^(common/|compiler/|core/|gradle/|build\.gradle\.kts|gradle\.properties|settings\.gradle\.kts|\.github/scripts/(publish-repo\.py|index))"
 )
@@ -174,9 +173,6 @@ def get_module_list(ref: str) -> tuple[list[str], list[str], list[str], bool]:
             if Path("src", lang, extension).is_dir():
                 modules.add(f':src:{lang}:{extension}')
             deleted.add(resolve_module_suffix(ref, lang, extension))
-            if (lang, extension) == RUNTIME_EXTENSION:
-                # its consumers' builds check that it still serves the modules they need
-                libs.add("runtime")
 
         elif match := MULTISRC_LIB_REGEX.search(file):
             multisrc = match.group("multisrc")
