@@ -24,7 +24,6 @@ import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -38,39 +37,28 @@ abstract class Atsumaru :
         rateLimit(2)
     }
 
-    override fun Headers.Builder.configureHeaders() = apply {
-        add("Content-Type", "application/json")
-    }
-
     private val prefs by getPreferencesLazy()
 
-    // ============================== Popular ===============================
+    override suspend fun getPopularManga(page: Int): MangasPage = getBrowsePage("popular", page) {
+        addQueryParameter("timeframe", "daily")
+    }
 
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        val offset = (page - 1) * BROWSE_LIMIT
-        val data = client.get(
-            "$baseUrl/api/home2/popular?offset=$offset&limit=$BROWSE_LIMIT" +
-                "&types=Manga,Manwha,Manhua,OEL&mediums=Comic&timeframe=daily${get18Mode()}${excludedGenresQuery()}",
-            Fetch.XHR,
-        ).parseAs<BrowseMangaDto>()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getBrowsePage("recentlyUpdated", page)
+
+    private suspend fun getBrowsePage(path: String, page: Int, block: HttpUrl.Builder.() -> Unit = {}): MangasPage {
+        val url = "$baseUrl/api/home2/$path".toHttpUrl().newBuilder().apply {
+            addQueryParameter("offset", ((page - 1) * BROWSE_LIMIT).toString())
+            addQueryParameter("limit", BROWSE_LIMIT.toString())
+            addQueryParameter("types", "Manga,Manwha,Manhua,OEL")
+            addQueryParameter("mediums", "Comic")
+            block()
+            if (adultMode) addQueryParameter("adult", "1")
+            if (excludedGenres.isNotEmpty()) addQueryParameter("excludedTags", excludedGenres.joinToString(","))
+        }.build()
+        val data = client.get(url, Fetch.XHR).parseAs<BrowseMangaDto>()
 
         return MangasPage(data.items.map { it.toSManga(baseUrl) }, true)
     }
-
-    // =============================== Latest ===============================
-
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val offset = (page - 1) * BROWSE_LIMIT
-        val data = client.get(
-            "$baseUrl/api/home2/recentlyUpdated?offset=$offset&limit=$BROWSE_LIMIT" +
-                "&types=Manga,Manwha,Manhua,OEL&mediums=Comic${get18Mode()}${excludedGenresQuery()}",
-            Fetch.XHR,
-        ).parseAs<BrowseMangaDto>()
-
-        return MangasPage(data.items.map { it.toSManga(baseUrl) }, true)
-    }
-
-    // =============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/collections/manga/documents/search".toHttpUrl().newBuilder().apply {
@@ -89,7 +77,7 @@ abstract class Atsumaru :
             var minChapters: Int? = null
             var showAdult = false
             var officialTranslation = false
-            var sortBy = ""
+            var sortBy: String? = null
 
             filters.forEach { filter ->
                 when (filter) {
@@ -138,12 +126,12 @@ abstract class Atsumaru :
                     }
 
                     is SortFilter -> {
-                        val direction = if (filter.state!!.ascending) "asc" else "desc"
-                        sortBy = SortFilter.VALUES[filter.state!!.index] + ':' + direction
+                        val selection = filter.state!!
+                        sortBy = SortFilter.VALUES[selection.index] + if (selection.ascending) ":asc" else ":desc"
                     }
 
                     is AdultFilter -> {
-                        showAdult = filter.state || get18Mode().isNotEmpty()
+                        showAdult = filter.state || adultMode
                     }
 
                     is OfficialFilter -> {
@@ -198,9 +186,7 @@ abstract class Atsumaru :
 
             addQueryParameter("filter_by", filterBy.joinToString(" && "))
 
-            if (sortBy.isNotEmpty()) {
-                addQueryParameter("sort_by", sortBy)
-            }
+            sortBy?.let { addQueryParameter("sort_by", it) }
 
             if (query.isNotEmpty()) {
                 addQueryParameter("query_by", "title,englishTitle,otherNames,authors")
@@ -212,15 +198,9 @@ abstract class Atsumaru :
             addQueryParameter("per_page", "40")
         }.build()
 
-        val body = client.get(url, Fetch.XHR).body.string()
+        val data = client.get(url, Fetch.XHR).parseAs<SearchResultsDto>()
 
-        return if (body.contains("\"hits\"")) {
-            val data = body.parseAs<SearchResultsDto>()
-            MangasPage(data.hits.map { it.document.toSManga(baseUrl) }, data.hasNextPage())
-        } else {
-            val data = body.parseAs<BrowseMangaDto>()
-            MangasPage(data.items.map { it.toSManga(baseUrl) }, true)
-        }
+        return MangasPage(data.hits.map { it.document.toSManga(baseUrl) }, data.hasNextPage())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -228,39 +208,8 @@ abstract class Atsumaru :
         if (url.pathSegments.getOrNull(0) != "manga") return null
         val id = url.pathSegments.getOrNull(1) ?: return null
 
-        return fetchMangaUpdate(
-            SManga.create().apply { this.url = id },
-            emptyList(),
-            fetchDetails = true,
-            fetchChapters = false,
-        ).manga.apply { initialized = true }
+        return getMangaUpdate(SManga.create().apply { this.url = id }, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
-
-    // =============================== Filters ===============================
-
-    override val supportsFilterFetching = true
-
-    override suspend fun fetchFilterData(): JsonElement {
-        val filters = client.get("$baseUrl/api/explore/availableFilters", Fetch.XHR).parseAs<FilterData>()
-        return filters.toJsonElement()
-    }
-
-    override fun getFilterList(data: JsonElement?): FilterList {
-        val excludedGenres = prefs.getStringSet(PREF_EXCLUDE_GENRES, emptySet()).orEmpty()
-        val filters = data?.parseAs<FilterData>()?.getFilterList(excludedGenres).orEmpty()
-
-        return FilterList(
-            filters + listOf(
-                YearFilter(),
-                MinChaptersFilter(),
-                SortFilter(),
-                AdultFilter(get18Mode().isNotEmpty()),
-                OfficialFilter(),
-            ),
-        )
-    }
-
-    // =========================== Manga Details ============================
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
@@ -270,19 +219,14 @@ abstract class Atsumaru :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
-        val detailsDeferred = async {
-            if (fetchDetails || fetchChapters) {
-                client.get("$baseUrl/api/manga/page?id=${manga.url}", Fetch.XHR)
-                    .parseAs<MangaObjectDto>()
-                    .mangaPage
-            } else {
-                null
-            }
-        }
+        // Details carry the scanlator names the chapter list needs
+        val detailsDeferred = async { fetchMangaPage(manga) }
         val chaptersDeferred = async {
             if (fetchChapters) {
-                client.get("$baseUrl/api/manga/allChapters?mangaId=${manga.url}", Fetch.XHR)
-                    .parseAs<AllChaptersDto>()
+                val url = "$baseUrl/api/manga/allChapters".toHttpUrl().newBuilder()
+                    .addQueryParameter("mangaId", manga.url)
+                    .build()
+                client.get(url, Fetch.XHR).parseAs<AllChaptersDto>()
             } else {
                 null
             }
@@ -291,25 +235,19 @@ abstract class Atsumaru :
         val details = detailsDeferred.await()
         val chaptersDto = chaptersDeferred.await()
 
-        val updatedManga = if (fetchDetails && details != null) {
-            details.toSManga(baseUrl)
-        } else {
-            manga
-        }
-
-        val updatedChapters = if (fetchChapters && chaptersDto != null) {
-            val scanlatorMap = details?.scanlators?.associate { it.id to it.name }.orEmpty()
+        val updatedChapters = chaptersDto?.let { dto ->
+            val scanlatorMap = details.scanlators?.associate { it.id to it.name }.orEmpty()
             val blacklist = scanlatorBlacklist
             val filteredChapters = if (blacklist.isEmpty()) {
-                chaptersDto.chapters
+                dto.chapters
             } else {
-                chaptersDto.chapters.filter { chapter ->
+                dto.chapters.filter { chapter ->
                     val name = chapter.scanlationMangaId?.let(scanlatorMap::get)
                     name == null || name.trim().lowercase() !in blacklist
                 }
             }
             val chapterDtos = if (deduplicateChapters) {
-                val scores = details?.scanlators?.associate { it.id to it.score }.orEmpty()
+                val scores = details.scanlators?.associate { it.id to it.score }.orEmpty()
                 filteredChapters.groupBy { it.number }.map { (_, uploads) ->
                     uploads.maxWith(
                         compareBy<ChapterDto> { scores[it.scanlationMangaId] ?: Int.MIN_VALUE }
@@ -326,28 +264,26 @@ abstract class Atsumaru :
                     .thenBy { it.scanlator }
                     .thenByDescending { it.date_upload },
             )
-        } else {
-            chapters
-        }
+        } ?: chapters
 
-        SMangaUpdate(updatedManga, updatedChapters)
+        SMangaUpdate(details.toSManga(baseUrl), updatedChapters)
     }
 
     override val supportsRelatedMangas = true
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get("$baseUrl/api/manga/page?id=${manga.url}", Fetch.XHR)
-        .parseAs<MangaObjectDto>()
-        .mangaPage
-        .recommendations(baseUrl)
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = fetchMangaPage(manga).recommendations(baseUrl)
 
-    // ============================== Chapters ==============================
+    private suspend fun fetchMangaPage(manga: SManga): MangaDto {
+        val url = "$baseUrl/api/manga/page".toHttpUrl().newBuilder()
+            .addQueryParameter("id", manga.url)
+            .build()
+        return client.get(url, Fetch.XHR).parseAs<MangaObjectDto>().mangaPage
+    }
 
     override fun getChapterUrl(chapter: SChapter): String {
         val (slug, name) = chapter.url.split("/")
         return "$baseUrl/read/$slug/$name"
     }
-
-    // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (slug, name) = chapter.url.split("/")
@@ -366,16 +302,32 @@ abstract class Atsumaru :
         }
     }
 
-    private fun get18Mode(): String {
-        val isEnabled = prefs.getBoolean(PREF_SHOW_18, false)
-        return if (isEnabled) "&adult=1" else ""
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val filters = client.get("$baseUrl/api/explore/availableFilters".toHttpUrl(), Fetch.XHR).parseAs<FilterData>()
+        return filters.toJsonElement()
     }
 
-    private fun excludedGenresQuery(): String {
-        val ids = prefs.getStringSet(PREF_EXCLUDE_GENRES, emptySet()).orEmpty()
-        if (ids.isEmpty()) return ""
-        return "&excludedTags=${ids.joinToString(",")}"
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filters = data?.parseAs<FilterData>()?.getFilterList(excludedGenres).orEmpty()
+
+        return FilterList(
+            filters + listOf(
+                YearFilter(),
+                MinChaptersFilter(),
+                SortFilter(),
+                AdultFilter(adultMode),
+                OfficialFilter(),
+            ),
+        )
     }
+
+    private val adultMode: Boolean
+        get() = prefs.getBoolean(PREF_SHOW_18, false)
+
+    private val excludedGenres: Set<String>
+        get() = prefs.getStringSet(PREF_EXCLUDE_GENRES, emptySet()).orEmpty()
 
     private val deduplicateChapters: Boolean
         get() = prefs.getBoolean(PREF_DEDUPLICATE_CHAPTERS, false)
