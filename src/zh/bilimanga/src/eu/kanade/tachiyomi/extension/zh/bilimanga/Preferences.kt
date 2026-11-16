@@ -6,10 +6,12 @@ import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
+import androidx.preference.SwitchPreferenceCompat
 
 const val PREF_POPULAR_MANGA_DISPLAY = "POPULAR_MANGA_DISPLAY"
 const val PREF_RATE_LIMIT = "RATE_LIMIT"
 const val PREF_DESCRIPTION = "DESCRIPTION"
+const val PREF_SOLVE_CAPTCHA = "SOLVE_CAPTCHA"
 
 val RATE_LIMIT_REGEX = Regex("^\\d+/\\d+$")
 val DEFAULT_SET = setOf("A", "B", "C")
@@ -74,5 +76,11 @@ fun preferencesInternal(context: Context, pref: SharedPreferences) = arrayOf(
         entries = arrayOf("作品公告", "作品别名", "跳轉連結")
         entryValues = arrayOf("A", "B", "C")
         setDefaultValue(DEFAULT_SET)
+    },
+    SwitchPreferenceCompat(context).apply {
+        key = PREF_SOLVE_CAPTCHA
+        title = "自動輸入搜尋驗證碼"
+        summary = "搜尋需要驗證碼時自動識別並提交；關閉時需在 WebView 中手動驗證"
+        setDefaultValue(false)
     },
 )

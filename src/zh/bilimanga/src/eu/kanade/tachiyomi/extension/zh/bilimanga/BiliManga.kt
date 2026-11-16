@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.bilimanga
 
+import android.graphics.BitmapFactory
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -11,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
@@ -18,17 +20,13 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.serialization.json.JsonElement
-import okhttp3.CacheControl
-import okhttp3.Cookie
+import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
@@ -103,33 +101,13 @@ abstract class BiliManga :
         return desc.toString()
     }
 
-    private suspend fun ensureSearchTicket() {
-        val names = client.cookieJar.loadForRequest(baseUrl.toHttpUrl()).map { it.name }
-        if (!names.contains("jieqiSearchCss") || !names.contains("jieqiSearchJs")) {
-            coroutineScope {
-                launch { client.get("$baseUrl/search.html?search_guard=css", Fetch.DOCUMENT).close() }
-                launch {
-                    COOKIE_REGEX.find(client.get("$baseUrl/search.html?search_guard=js", Fetch.DOCUMENT).body.string())
-                        ?.groupValues?.get(1)
-                        ?.let { cookie ->
-                            val url = baseUrl.toHttpUrl()
-                            Cookie.parse(url, cookie)?.let { client.cookieJar.saveFromResponse(url, listOf(it)) }
-                        }
-                }
-            }
-        }
-        client.get("$baseUrl/search.html?search_guard=redeem", Fetch.DOCUMENT, CacheControl.FORCE_NETWORK)
-        val cookies = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
-        if (cookies.find { it.name == "jieqiSearchTicket" }?.value.isNullOrEmpty()) throw Exception("獲取搜索憑證失敗，請稍後重試")
-    }
-
     companion object {
         val NEWLINE_REGEX = Regex("(?:\n\r\n)+")
         val META_REGEX = Regex("收藏|推薦|連載中|已完結")
         val DATE_REGEX = Regex("\\d{4}-\\d{1,2}-\\d{1,2}")
         val PAGE_REGEX = Regex("第(\\d+)/(\\d+)页")
         val MANGA_ID_REGEX = Regex("/detail/(\\d+)\\.html")
-        val COOKIE_REGEX = Regex("cookie=\"(.*?)\";")
+        const val CAPTCHA_FORM = "form:has(img[src*=checkcode.php])"
         val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.CHINESE)
     }
 
@@ -138,7 +116,7 @@ abstract class BiliManga :
         else -> "${els[i - 1].attr("href")}#next"
     }
 
-    private fun mangaPageParse(response: Response) = response.asJsoup().let { doc ->
+    private fun mangaPageParse(doc: Document): MangasPage {
         val mangas = doc.select(".book-layout").map {
             SManga.create().apply {
                 setUrlWithoutDomain(it.absUrl("href"))
@@ -163,11 +141,10 @@ abstract class BiliManga :
                 else -> mangas.size == 50
             }
         }
-        MangasPage(mangas, hasNextPage)
+        return MangasPage(mangas, hasNextPage)
     }
 
-    private fun Response.parseManga() = SManga.create().apply {
-        val doc = asJsoup()
+    private fun parseManga(doc: Document) = SManga.create().apply {
         doc.selectFirst(".aui-ver-form")?.let { throw Exception(it.text()) }
         val meta = doc.select(".book-meta em").map(Element::text)
         val (main, extra) = meta.partition(META_REGEX::containsMatchIn)
@@ -190,12 +167,12 @@ abstract class BiliManga :
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val suffix = pref.getString(PREF_POPULAR_MANGA_DISPLAY, "/top/weekvisit/%d.html")!!
-        return mangaPageParse(client.get(baseUrl + String.format(suffix, page), Fetch.DOCUMENT))
+        return mangaPageParse(client.get(baseUrl + String.format(suffix, page), Fetch.DOCUMENT).asJsoup())
     }
 
     // Latest
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaPageParse(client.get("$baseUrl/top/lastupdate/$page.html", Fetch.DOCUMENT))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaPageParse(client.get("$baseUrl/top/lastupdate/$page.html", Fetch.DOCUMENT).asJsoup())
 
     // Search
 
@@ -203,24 +180,41 @@ abstract class BiliManga :
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (!MANGA_ID_REGEX.matches(url.encodedPath)) return null
-        return client.get(url, Fetch.DOCUMENT).parseManga()
+        return parseManga(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // /${Sort}_${Theme}_${Status}_${Anime}_${Region}_${Type}_${Time}_${Novel}_${page}_0_${Year}_${Award}.html
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val url = baseUrl.toHttpUrl().newBuilder()
-        if (query.isNotBlank()) {
-            ensureSearchTicket()
-            url.addPathSegment("search").addPathSegment("${query}_$page.html")
+        val doc = if (query.isNotBlank()) {
+            searchDocument(baseUrl.toHttpUrl().newBuilder().addPathSegment("search").addPathSegment("${query}_$page.html").build())
         } else {
-            url.addPathSegment("filter")
-                .addPathSegment("${filters[5]}_${filters[1]}_${filters[9]}_${filters[6]}_${filters[3]}_${filters[2]}_${filters[10]}_${filters[7]}_${page}_0_${filters[4]}_${filters[8]}.html")
+            val path = "${filters[5]}_${filters[1]}_${filters[9]}_${filters[6]}_${filters[3]}_${filters[2]}_${filters[10]}_${filters[7]}_${page}_0_${filters[4]}_${filters[8]}.html"
+            client.get(baseUrl.toHttpUrl().newBuilder().addPathSegment("filter").addPathSegment(path).build(), Fetch.DOCUMENT).asJsoup()
         }
-        val response = client.get(url.build(), Fetch.DOCUMENT)
-        if (response.request.url.pathSegments.contains("detail")) {
-            return MangasPage(listOf(response.parseManga()), false)
+        if (MANGA_ID_REGEX.containsMatchIn(doc.location())) {
+            return MangasPage(listOf(parseManga(doc)), false)
         }
-        return mangaPageParse(response)
+        return mangaPageParse(doc)
+    }
+
+    private suspend fun searchDocument(url: HttpUrl): Document {
+        var doc = client.get(url, Fetch.DOCUMENT).asJsoup()
+        if (pref.getBoolean(PREF_SOLVE_CAPTCHA, false)) {
+            repeat(3) {
+                val form = doc.selectFirst(CAPTCHA_FORM) ?: return doc
+                val image = form.selectFirst("img")!!.absUrl("src")
+                val bitmap = client.get(image, Fetch.IMAGE.from(doc.location())).use { BitmapFactory.decodeStream(it.body.byteStream()) }
+                    ?: throw Exception("無法自動識別搜尋驗證碼，請在 WebView 中搜尋一次並輸入驗證碼")
+                val code = solveSearchCaptcha(bitmap).also { bitmap.recycle() }
+                val body = FormBody.Builder().apply {
+                    form.select("input[type=hidden]").forEach { add(it.attr("name"), it.attr("value")) }
+                    add("search_code", code)
+                }.build()
+                doc = client.post(form.absUrl("action"), Fetch.DOCUMENT.from(doc.location()), body).asJsoup()
+            }
+        }
+        if (doc.selectFirst(CAPTCHA_FORM) != null) throw Exception("請在 WebView 中搜尋一次並輸入驗證碼，或在擴充功能設定中開啟「自動輸入搜尋驗證碼」")
+        return doc
     }
 
     // Manga Detail & Chapter
@@ -232,7 +226,7 @@ abstract class BiliManga :
         fetchChapters: Boolean,
     ) = supervisorScope {
         val asyncManga = if (fetchDetails) {
-            async { client.get(baseUrl + manga.url, Fetch.DOCUMENT).parseManga() }
+            async { parseManga(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()) }
         } else {
             CompletableDeferred(manga)
         }
