@@ -34,7 +34,9 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.applicationContext
+import keiyoushi.utils.booleanOrNull
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.get
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
@@ -449,6 +451,11 @@ class MangaDex(
     private class AtHomeHost(val url: String, val fetchedAt: Long)
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
+        // the API has no pages for these, so don't hit it for every chapter of a download queue
+        if (chapter.memo[MDConstants.MEMO_UNAVAILABLE]?.booleanOrNull == true) {
+            throw Exception(helper.intl["chapter_unavailable"])
+        }
+
         val atHomeUrl = "${MDConstants.API_URL}/at-home/server/${chapter.url.uuid()}" +
             if (preferences.forceStandardHttps) "?forcePort443=true" else ""
 

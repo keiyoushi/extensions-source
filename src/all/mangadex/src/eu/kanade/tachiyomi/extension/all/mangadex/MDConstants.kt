@@ -22,6 +22,7 @@ object MDConstants {
     const val USER = "user"
     const val AUTHOR = "author"
     const val ARTIST = "artist"
+    const val MEMO_UNAVAILABLE = "unavailable"
     const val LEGACY_NO_GROUP_ID = "00e03853-1b96-4f41-9542-c71b8692033b"
 
     const val CDN_URL = "https://uploads.mangadex.org"

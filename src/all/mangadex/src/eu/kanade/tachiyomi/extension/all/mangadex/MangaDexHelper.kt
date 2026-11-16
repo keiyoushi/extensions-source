@@ -15,6 +15,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.jsoup.parser.Parser
 import java.util.Locale
 import kotlin.time.Instant
@@ -227,6 +229,9 @@ class MangaDexHelper(private val lang: String) {
             name = chapterName.joinToString(" ").removeEntities()
             date_upload = Instant.tryParse(attr.publishAt)
             scanlator = languagePrefix + unavailablePrefix + groups
+            if (attr.isUnavailable) {
+                memo = buildJsonObject { put(MDConstants.MEMO_UNAVAILABLE, true) }
+            }
         }
     }
 
