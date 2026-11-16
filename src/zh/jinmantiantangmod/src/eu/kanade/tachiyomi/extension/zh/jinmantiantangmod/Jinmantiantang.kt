@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.DEFAULT_CACHE_CONTROL
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
@@ -43,6 +44,7 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -150,9 +152,11 @@ abstract class Jinmantiantang :
     }
 
     // Unknown ids answer an empty array
-    private suspend fun album(id: String, token: String? = null): AlbumDto? = apiGet<JsonElement>(apiUrl("album", "id" to id), token)
-        .takeIf { it is JsonObject }
-        ?.parseAs<AlbumDto>()
+    // The app's 10-minute HTTP cache would serve a stale is_favorite and favorite list, so logged-in reads go to the network
+    private suspend fun album(id: String, token: String? = null, fresh: Boolean = false): AlbumDto? =
+        apiGet<JsonElement>(apiUrl("album", "id" to id), token, if (fresh) CacheControl.FORCE_NETWORK else DEFAULT_CACHE_CONTROL)
+            .takeIf { it is JsonObject }
+            ?.parseAs<AlbumDto>()
 
     private suspend fun album(manga: SManga): AlbumDto = album(manga.albumId()) ?: throw Exception("作品不存在")
 
@@ -167,7 +171,7 @@ abstract class Jinmantiantang :
         val loggedIn = preferences.credentials != null
         // is_favorite is only filled for a logged-in request
         val album = if (loggedIn) {
-            withLogin { album(manga.albumId(), it.jwttoken) } ?: throw Exception("作品不存在")
+            withLogin { album(manga.albumId(), it.jwttoken, fresh = true) } ?: throw Exception("作品不存在")
         } else {
             album(manga)
         }
@@ -198,7 +202,7 @@ abstract class Jinmantiantang :
 
     private suspend fun fetchFavorites(page: Int): MangasPage {
         val url = apiUrl("favorite", "page" to "$page", "folder_id" to "0", "o" to "mr")
-        val favorites = withLogin { apiGet<FavoriteListDto>(url, it.jwttoken) }
+        val favorites = withLogin { apiGet<FavoriteListDto>(url, it.jwttoken, CacheControl.FORCE_NETWORK) }
         return MangasPage(
             favorites.list.map { it.toSManga(coverHost) },
             hasNextPage = page * FAVORITES_PAGE_SIZE < favorites.total.toInt(),
@@ -291,9 +295,9 @@ abstract class Jinmantiantang :
         .apply { if (token != null) set("Authorization", "Bearer $token") }
         .build()
 
-    private suspend inline fun <reified T> apiGet(url: HttpUrl, token: String? = null): T {
+    private suspend inline fun <reified T> apiGet(url: HttpUrl, token: String? = null, cacheControl: CacheControl = DEFAULT_CACHE_CONTROL): T {
         val timestamp = timestamp()
-        return client.get(url, apiHeaders(timestamp, token), Fetch.XHR).decode(timestamp)
+        return client.get(url, apiHeaders(timestamp, token), Fetch.XHR, cacheControl).decode(timestamp)
     }
 
     private suspend inline fun <reified T> apiPost(url: HttpUrl, body: RequestBody, token: String? = null, ensureSuccess: Boolean = true): T {
