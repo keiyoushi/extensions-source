@@ -53,12 +53,12 @@ abstract class RawkumaMe : KeiSource() {
             .apply(params)
             .build()
         val document = client.get(url, Fetch.DOCUMENT).asJsoup()
-        val mangas = document.extractNextJs<List<SeriesDto>>().orEmpty().map { it.toSManga(baseUrl) }
+        val mangas = document.extractNextJs<List<SeriesCardDto>>().orEmpty().map { it.toSManga(baseUrl) }
         return MangasPage(mangas, document.selectFirst("a[rel=next]") != null)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) return null
+        if (url.host !in DOMAINS) return null
         val index = url.pathSegments.indexOf("manga")
         if (index == -1) return null
         val slug = url.pathSegments.getOrNull(index + 1)?.takeIf { it.isNotEmpty() } ?: return null
@@ -90,8 +90,8 @@ abstract class RawkumaMe : KeiSource() {
     private val siteUrl get() = if (lang == "es") "$baseUrl/es" else baseUrl
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        // images are cleaned scans, the translated text for every language is an svg string in the chapter's rsc payload
-        val reader = client.get("$baseUrl/manga/${chapter.url}", Fetch.DOCUMENT).asJsoup().extractNextJs<ReaderChapterDto>()
+        // images are cleaned scans, the chapter's rsc payload carries the source language's text as an svg string
+        val reader = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup().extractNextJs<ReaderChapterDto>()
             ?: return emptyList()
         return reader.pages.mapIndexed { index, page ->
             val svg = page.text[lang]
@@ -110,4 +110,8 @@ abstract class RawkumaMe : KeiSource() {
         TypeFilter(),
         GenreFilter(),
     )
+
+    companion object {
+        private val DOMAINS = setOf("mangamachina.com", "rawkuma.me")
+    }
 }

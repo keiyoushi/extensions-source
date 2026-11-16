@@ -208,16 +208,16 @@ class Filters(
         PreferenceFilter {
         override fun addToUri(builder: HttpUrl.Builder) {
             state.filter { it.state == TriState.STATE_INCLUDE }
-                .forEach { builder.addQueryParameter("demographics[]", it.value) }
+                .forEach { builder.addQueryParameter("demos", it.value) }
             state.filter { it.state == TriState.STATE_EXCLUDE }
-                .forEach { builder.addQueryParameter("genres_ex[]", it.value) }
+                .forEach { builder.addQueryParameter("genres_ex", it.value) }
         }
     }
 
     private class TypeFilter(selectedValues: Set<String>) :
         UriMultiSelectFilter(
             "Type",
-            "types[]",
+            "types",
             getTypes(),
             selectedValues,
             true,
@@ -243,9 +243,9 @@ class Filters(
 
         override fun addToUri(builder: HttpUrl.Builder) {
             state.filter { it.state == TriState.STATE_INCLUDE }
-                .forEach { builder.addQueryParameter("genres_in[]", it.value) }
+                .forEach { builder.addQueryParameter("genres_in", it.value) }
             state.filter { it.state == TriState.STATE_EXCLUDE }
-                .forEach { builder.addQueryParameter("genres_ex[]", it.value) }
+                .forEach { builder.addQueryParameter("genres_ex", it.value) }
         }
     }
 
@@ -262,7 +262,7 @@ class Filters(
     private class StatusFilter :
         UriMultiSelectFilter(
             "Status",
-            "statuses[]",
+            "statuses",
             arrayOf(
                 Pair("Releasing", "releasing"),
                 Pair("Finished", "finished"),
@@ -376,7 +376,7 @@ class Filters(
                 }
                 val value = if (state!!.ascending) "asc" else "desc"
 
-                builder.addQueryParameter("order[$order]", value)
+                builder.addQueryParameter("sort", "$order:$value")
             }
         }
     }

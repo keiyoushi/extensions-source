@@ -292,3 +292,11 @@ fun parseRelativeDate(dateStr: String, latest: Boolean = false): Long {
     }
     return calendar.timeInMillis
 }
+
+@Serializable
+class WafVerifyRequest(
+    @SerialName("cf_turnstile_token") private val cfTurnstileToken: String,
+)
+
+@Serializable
+class WafVerifyResponse(val success: Boolean)

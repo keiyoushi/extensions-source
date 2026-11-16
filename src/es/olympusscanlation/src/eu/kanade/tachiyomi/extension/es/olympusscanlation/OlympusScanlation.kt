@@ -12,14 +12,17 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -93,10 +96,28 @@ abstract class OlympusScanlation : KeiSource() {
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         fetchSeriesList()
-        val filteredList = seriesList.filter { it.name.contains(query, ignoreCase = true) }
-        val paginatedList = filteredList.drop((page - 1) * 20).take(20)
-        val hasNextPage = page * 20 < filteredList.size
-        return MangasPage(paginatedList.map { it.toSManga() }, hasNextPage)
+
+        if (query.isNotEmpty()) {
+            val filteredList = seriesList.filter {
+                it.name.contains(query, ignoreCase = true)
+            }
+            val paginatedList = filteredList.drop((page - 1) * 20).take(20)
+            val hasNextPage = page * 20 < filteredList.size
+            return MangasPage(paginatedList.map { it.toSManga() }, hasNextPage)
+        }
+
+        val statusId = filters.firstInstance<StatusFilter>().id
+        val genreId = filters.firstInstance<GenreFilter>().id
+
+        val series = client.get(
+            "$baseUrl/api/series?page=$page&type=comic".toHttpUrl().newBuilder().apply {
+                genreId?.let { addQueryParameter("genres", it.toString()) }
+                statusId?.let { addQueryParameter("status", it.toString()) }
+            }.build(),
+            Fetch.XHR,
+        ).parseAs<PayloadSeriesDto>().data.series
+
+        return MangasPage(series.data.map { it.toSManga() }, series.hasNextPage())
     }
 
     override fun getMangaUrl(manga: SManga): String {
@@ -164,6 +185,20 @@ abstract class OlympusScanlation : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select("main.strip div.panel > img")
         .mapIndexed { index, img -> Page(index, imageUrl = img.absUrl("src")) }
+
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData() = client.get("$baseUrl/api/genres-statuses", Fetch.XHR)
+        .parseAs<GenresStatusesDto>()
+        .toJsonElement()
+
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        buildList {
+            val filters = data?.parseAs<GenresStatusesDto>() ?: return@buildList
+            if (filters.statuses.isNotEmpty()) add(StatusFilter(filters.statuses.map { it.name to it.id }))
+            if (filters.genres.isNotEmpty()) add(GenreFilter(filters.genres.map { it.name to it.id }))
+        },
+    )
 
     private var slugMapCache: Map<Int, String>? = null
     private var SharedPreferences.slugMap: Map<Int, String>

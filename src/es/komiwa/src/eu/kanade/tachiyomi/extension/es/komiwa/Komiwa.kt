@@ -163,7 +163,7 @@ abstract class Komiwa : KeiSource() {
     }
 
     companion object {
-        private const val API_URL = "https://api.komiwaapp.lat"
+        private const val API_URL = "https://b78sk.komiwa.net"
         private const val PAGE_SIZE = 24
         private val LIST_PATHS = setOf("genero", "tipo", "demografia")
         private val IMAGE_SERVERS = listOf(

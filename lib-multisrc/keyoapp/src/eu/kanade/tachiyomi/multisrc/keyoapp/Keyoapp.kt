@@ -194,7 +194,7 @@ abstract class Keyoapp : KeyoappBase() {
         setUrlWithoutDomain(element.selectFirst("a[href]")!!.attr("abs:href"))
         name = element.selectFirst(".text-sm")!!.text()
         element.selectFirst(dateSelector)?.run {
-            date_upload = text().trim().parseDate()
+            date_upload = text().parseDate()
         }
         if (element.select(paidChapterSelector).isNotEmpty()) {
             name = "🔒 $name"
@@ -235,7 +235,7 @@ abstract class Keyoapp : KeyoappBase() {
             "https://$cdnHost/uploads"
         }
 
-    private val oldImgCdnRegex = Regex("""^(https?:)?//cdn\d*\.keyoapp\.com""")
+    private val oldImgCdnRegex = """^(https?:)?//cdn\d*\.keyoapp\.com""".toRegex()
 
     // ============================== Filters ==============================
 
@@ -257,8 +257,8 @@ abstract class Keyoapp : KeyoappBase() {
 
     protected open fun parseGenres(document: Document): Map<String, String> {
         val script = document
-            .select("script:containsData(initializeDropdownMenu)")
-            .firstOrNull() ?.data()
+            .selectFirst("script:containsData(initializeDropdownMenu)")
+            ?.data()
             ?: return emptyMap()
 
         val items = script
