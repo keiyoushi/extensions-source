@@ -11,7 +11,9 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.getString
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
@@ -56,18 +58,9 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
         val seenMangaUrls = mutableSetOf<String>()
         val mangas =
             document.select(".upload-file-row").mapNotNull { element ->
-                val title = element.selectFirst(".thumbnail-title h4")?.textOrNull() ?: return@mapNotNull null
-                val type =
-                    element
-                        .selectFirst(".book-type")
-                        ?.textOrNull()
-                        ?.lowercase(Locale.ROOT)
-                        ?.replace(' ', '_')
-                val thumbnailUrl =
-                    element
-                        .selectFirst("style")
-                        ?.data()
-                        ?.let { backgroundImageRegex.find(it)?.groupValues?.get(1) }
+                val title = element.selectFirst(".upc__title")?.textOrNull() ?: return@mapNotNull null
+                val type = element.attrOrNull("data-zt-type")
+                val thumbnailUrl = element.selectFirst("img.upc__img")?.absUrl("src")
                 val mangaUrl = mangaIdentityUrl(title, type)
                 if (!seenMangaUrls.add(mangaUrl)) return@mapNotNull null
 
@@ -179,6 +172,7 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
         return parseMangaDetails(client.get(url, Fetch.DOCUMENT).asJsoup()).apply {
             setUrlWithoutDomain(mangaIdentityUrl(title, canonicalUrl.mangaType()))
             memo = memo.withCanonicalMangaUrl(canonicalUrl)
+            initialized = true
         }
     }
 
@@ -232,59 +226,28 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
         ?.getOrNull(1)
 
     private fun parseMangaDetails(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1.element-title")!!.text()
-        thumbnail_url = document.selectFirst("img.book-thumbnail")?.attr("abs:src")
-        description = document.selectFirst("#manga-synopsis")?.text()?.trim()
-        genre =
-            document
-                .select(".element-header-content-text a[href*=/tag/]")
-                .joinToString { it.text().trim() }
-                .ifBlank { null }
-        author = subtitleValues(document, "Autor/es").joinToString().ifBlank { null }
-        artist = subtitleValues(document, "Artista/s").joinToString().ifBlank { null }
-        status =
-            when (subtitleText(document, "Estado").lowercase(Locale.ROOT)) {
-                "en emisión", "en emision", "publicándose", "publicandose" -> SManga.ONGOING
-                "completado", "finalizado" -> SManga.COMPLETED
-                "en pausa", "hiatus" -> SManga.ON_HIATUS
-                "cancelado" -> SManga.CANCELLED
-                else -> SManga.UNKNOWN
-            }
-        initialized = true
-    }
-
-    private fun subtitleValues(
-        document: Document,
-        label: String,
-    ): List<String> {
-        val heading =
-            document
-                .select("h5.element-subtitle")
-                .firstOrNull { it.text().trim().equals(label, true) }
-                ?: return emptyList()
-        val values = mutableListOf<String>()
-        var sibling = heading.nextElementSibling()
-        while (sibling != null && !sibling.`is`("h5.element-subtitle")) {
-            values += sibling.select("a").map { it.text().trim() }.filter(String::isNotEmpty)
-            sibling = sibling.nextElementSibling()
+        title = document.selectFirst("h1.zt-hd__title")!!.text()
+        thumbnail_url = document.selectFirst(".zt-hd__cover img")?.absUrl("src")
+        author = document.select(".zt-hd__facts a[href*=filter_by=author]").joinToString { it.text() }.ifEmpty { null }
+        artist = document.select(".zt-hd__facts a[href*=filter_by=artist]").joinToString { it.text() }.ifEmpty { null }
+        genre = document.select(".zt-hd__kicker > :not(.zt-hd__state), a.zt-hd__genre")
+            .map { element -> element.text().replaceFirstChar { it.uppercase() } }
+            .distinct()
+            .joinToString()
+            .ifEmpty { null }
+        status = when {
+            document.selectFirst(".zt-hd__state--publishing") != null -> SManga.ONGOING
+            document.selectFirst(".zt-hd__state--ended") != null -> SManga.COMPLETED
+            document.selectFirst(".zt-hd__state--hiatus") != null -> SManga.ON_HIATUS
+            document.selectFirst(".zt-hd__state--cancelled") != null -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
         }
-        return values.distinct()
-    }
-
-    private fun subtitleText(
-        document: Document,
-        label: String,
-    ): String {
-        val heading =
-            document
-                .select("h5.element-subtitle")
-                .firstOrNull { it.text().trim().equals(label, true) }
-                ?: return ""
-        return heading
-            .nextElementSibling()
-            ?.text()
-            ?.trim()
-            .orEmpty()
+        val altTitles = document.selectFirst("p.zt-hd__alt")?.text()?.split("; ").orEmpty() +
+            document.select("details.zt-hd__alts summary span, details.zt-hd__alts li").eachText()
+        description = MarkdownDescription.Builder()
+            .description(document.selectFirst("#manga-synopsis"))
+            .altTitles(altTitles.distinct().filter { it != title }, "Títulos alternativos")
+            .build()
     }
 
     private fun parseChapterList(document: Document): List<SChapter> = document
@@ -333,7 +296,6 @@ abstract class ZonaTmoOrgUnoriginal : KeiSource() {
 
     companion object {
         private const val MANGA_URL_KEY = "zonatmoorgunoriginal.mangaUrl"
-        private val backgroundImageRegex = """background-image:\s*url\(['"]?([^'")]+)""".toRegex()
         private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
     }
 }
