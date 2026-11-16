@@ -172,10 +172,10 @@ abstract class Komiku : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = baseUrl + chapter.url
         val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
-        return document.select("#Baca_Komik img")
-            .filterNot { it.attr("src").contains("komiku-promosi") }
+        return document.select("#Baca_Komik img[data-src]")
+            .filterNot { it.attr("data-src").contains("komiku-promosi") }
             .mapIndexed { i, element ->
-                Page(i, chapterUrl, imageUrl = element.attr("abs:src"))
+                Page(i, chapterUrl, imageUrl = element.absUrl("data-src"))
             }
     }
 
