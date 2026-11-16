@@ -1,9 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.mangadex
 
 import android.content.SharedPreferences
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.ContentRatingDto
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.PublicationDemographicDto
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.StatusDto
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.lib.i18n.Intl
@@ -149,16 +146,16 @@ class MangaDexFilters {
         )
 
         return listOf(
-            ContentRating(intl["content_rating_safe"], ContentRatingDto.SAFE.value).apply {
+            ContentRating(intl["content_rating_safe"], "safe").apply {
                 state = contentRatings?.contains(MDConstants.CONTENT_RATING_PREF_VAL_SAFE) ?: true
             },
-            ContentRating(intl["content_rating_suggestive"], ContentRatingDto.SUGGESTIVE.value).apply {
+            ContentRating(intl["content_rating_suggestive"], "suggestive").apply {
                 state = contentRatings?.contains(MDConstants.CONTENT_RATING_PREF_VAL_SUGGESTIVE) ?: true
             },
-            ContentRating(intl["content_rating_erotica"], ContentRatingDto.EROTICA.value).apply {
+            ContentRating(intl["content_rating_erotica"], "erotica").apply {
                 state = contentRatings?.contains(MDConstants.CONTENT_RATING_PREF_VAL_EROTICA) ?: false
             },
-            ContentRating(intl["content_rating_pornographic"], ContentRatingDto.PORNOGRAPHIC.value).apply {
+            ContentRating(intl["content_rating_pornographic"], "pornographic").apply {
                 state = contentRatings?.contains(MDConstants.CONTENT_RATING_PREF_VAL_PORNOGRAPHIC) ?: false
             },
         )
@@ -176,11 +173,11 @@ class MangaDexFilters {
     }
 
     private fun getDemographics(intl: Intl) = listOf(
-        Demographic(intl["publication_demographic_none"], PublicationDemographicDto.NONE.value),
-        Demographic(intl["publication_demographic_shounen"], PublicationDemographicDto.SHOUNEN.value),
-        Demographic(intl["publication_demographic_shoujo"], PublicationDemographicDto.SHOUJO.value),
-        Demographic(intl["publication_demographic_seinen"], PublicationDemographicDto.SEINEN.value),
-        Demographic(intl["publication_demographic_josei"], PublicationDemographicDto.JOSEI.value),
+        Demographic(intl["publication_demographic_none"], "none"),
+        Demographic(intl["publication_demographic_shounen"], "shounen"),
+        Demographic(intl["publication_demographic_shoujo"], "shoujo"),
+        Demographic(intl["publication_demographic_seinen"], "seinen"),
+        Demographic(intl["publication_demographic_josei"], "josei"),
     )
 
     private class Status(name: String, val value: String) : Filter.CheckBox(name)
@@ -195,10 +192,10 @@ class MangaDexFilters {
     }
 
     private fun getStatus(intl: Intl) = listOf(
-        Status(intl["status_ongoing"], StatusDto.ONGOING.value),
-        Status(intl["status_completed"], StatusDto.COMPLETED.value),
-        Status(intl["status_hiatus"], StatusDto.HIATUS.value),
-        Status(intl["status_cancelled"], StatusDto.CANCELLED.value),
+        Status(intl["status_ongoing"], "ongoing"),
+        Status(intl["status_completed"], "completed"),
+        Status(intl["status_hiatus"], "hiatus"),
+        Status(intl["status_cancelled"], "cancelled"),
     )
 
     data class Sortable(val title: String, val value: String) {

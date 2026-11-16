@@ -5,30 +5,14 @@ import android.text.TextWatcher
 import android.util.Log
 import android.widget.Button
 import android.widget.EditText
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.AggregateVolume
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.ArtistDto
+import eu.kanade.tachiyomi.extension.all.mangadex.dto.AggregateVolumeDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.AtHomeDto
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.AttributesDto
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.AuthorArtistAttributesDto
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.AuthorDto
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.ChapterAttributesDto
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.ChapterDataDto
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.ContentRatingDto
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.CoverArtAttributesDto
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.CoverArtDto
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.EntityDto
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.ListAttributesDto
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.ListDataDto
+import eu.kanade.tachiyomi.extension.all.mangadex.dto.ChapterDto
+import eu.kanade.tachiyomi.extension.all.mangadex.dto.CoverRelationshipDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.MangaAttributesDto
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.MangaDataDto
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.ScanlationGroupAttributes
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.ScanlationGroupDto
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.StatusDto
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.TagAttributesDto
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.TagDto
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.UnknownEntity
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.UserAttributes
-import eu.kanade.tachiyomi.extension.all.mangadex.dto.UserDto
+import eu.kanade.tachiyomi.extension.all.mangadex.dto.MangaDto
+import eu.kanade.tachiyomi.extension.all.mangadex.dto.NamedRelationshipDto
+import eu.kanade.tachiyomi.extension.all.mangadex.dto.UserRelationshipDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -36,13 +20,9 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.modules.SerializersModule
-import kotlinx.serialization.modules.plus
-import kotlinx.serialization.modules.polymorphic
-import kotlinx.serialization.modules.subclass
 import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -56,38 +36,6 @@ import kotlin.time.Instant
 class MangaDexHelper(private val lang: String) {
 
     val mdFilters = MangaDexFilters()
-
-    val json = Json {
-        isLenient = true
-        ignoreUnknownKeys = true
-        allowSpecialFloatingPointValues = true
-        prettyPrint = true
-        serializersModule += SerializersModule {
-            polymorphic(EntityDto::class) {
-                subclass(AuthorDto::class)
-                subclass(ArtistDto::class)
-                subclass(ChapterDataDto::class)
-                subclass(CoverArtDto::class)
-                subclass(ListDataDto::class)
-                subclass(MangaDataDto::class)
-                subclass(ScanlationGroupDto::class)
-                subclass(TagDto::class)
-                subclass(UserDto::class)
-                defaultDeserializer { UnknownEntity.serializer() }
-            }
-
-            polymorphic(AttributesDto::class) {
-                subclass(AuthorArtistAttributesDto::class)
-                subclass(ChapterAttributesDto::class)
-                subclass(CoverArtAttributesDto::class)
-                subclass(ListAttributesDto::class)
-                subclass(MangaAttributesDto::class)
-                subclass(ScanlationGroupAttributes::class)
-                subclass(TagAttributesDto::class)
-                subclass(UserAttributes::class)
-            }
-        }
-    }
 
     val intl = Intl(
         language = lang,
@@ -162,16 +110,16 @@ class MangaDexHelper(private val lang: String) {
      * Maps MangaDex status to Tachiyomi status.
      * Adapted from the MangaDex handler from TachiyomiSY.
      */
-    fun getPublicationStatus(attr: MangaAttributesDto, volumes: Map<String, AggregateVolume>): Int {
+    fun getPublicationStatus(attr: MangaAttributesDto, volumes: Map<String, AggregateVolumeDto>): Int {
         val chaptersList = volumes.values
             .flatMap { it.chapters.values }
             .map { it.chapter }
 
         val tempStatus = when (attr.status) {
-            StatusDto.ONGOING -> SManga.ONGOING
-            StatusDto.CANCELLED -> SManga.CANCELLED
-            StatusDto.COMPLETED -> SManga.PUBLISHING_FINISHED
-            StatusDto.HIATUS -> SManga.ON_HIATUS
+            "ongoing" -> SManga.ONGOING
+            "cancelled" -> SManga.CANCELLED
+            "completed" -> SManga.PUBLISHING_FINISHED
+            "hiatus" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
 
@@ -250,7 +198,7 @@ class MangaDexHelper(private val lang: String) {
             return getMdAtHomeUrl(tokenRequestUrl, client, headers, CacheControl.FORCE_NETWORK)
         }
 
-        return response.parseAs<AtHomeDto>(json).baseUrl
+        return response.parseAs<AtHomeDto>().baseUrl
     }
 
     /**
@@ -278,7 +226,7 @@ class MangaDexHelper(private val lang: String) {
      * Create a [SManga] from the JSON element with only basic attributes filled.
      */
     fun createBasicManga(
-        mangaDataDto: MangaDataDto,
+        mangaDataDto: MangaDto,
         coverFileName: String?,
         coverSuffix: String?,
         lang: String,
@@ -286,7 +234,7 @@ class MangaDexHelper(private val lang: String) {
     ): SManga = SManga.create().apply {
         url = "/manga/${mangaDataDto.id}"
 
-        val titleMap = mangaDataDto.attributes!!.title
+        val titleMap = mangaDataDto.attributes.title
         title = with(mangaDataDto.attributes) {
             titleMap[lang] ?: altTitles.run {
                 val mainTitle = titleMap.values.firstOrNull()
@@ -313,8 +261,8 @@ class MangaDexHelper(private val lang: String) {
      * Create an [SManga] from the JSON element with all attributes filled.
      */
     fun createManga(
-        mangaDataDto: MangaDataDto,
-        chapters: Map<String, AggregateVolume>,
+        mangaDataDto: MangaDto,
+        chapters: Map<String, AggregateVolumeDto>,
         firstVolumeCover: String?,
         lang: String,
         coverSuffix: String?,
@@ -322,42 +270,42 @@ class MangaDexHelper(private val lang: String) {
         preferExtensionLangTitle: Boolean,
         finalChapterInDesc: Boolean,
     ): SManga {
-        val attr = mangaDataDto.attributes!!
+        val attr = mangaDataDto.attributes
 
         // Things that will go with the genre tags but aren't actually genre
         val dexLocale = Locale.forLanguageTag(lang)
 
         val nonGenres = listOfNotNull(
             attr.publicationDemographic
-                ?.let { intl["publication_demographic_${it.name.lowercase()}"] },
+                ?.let { intl["publication_demographic_$it"] },
             attr.contentRating
-                .takeIf { it != ContentRatingDto.SAFE }
-                ?.let { intl.format("content_rating_genre", intl["content_rating_${it.name.lowercase()}"]) },
-            attr.originalLanguage
-                ?.let { Locale.forLanguageTag(it) }
-                ?.getDisplayName(dexLocale)
-                ?.replaceFirstChar { it.uppercase(dexLocale) },
+                .takeIf { it != MDConstants.CONTENT_RATING_PREF_VAL_SAFE }
+                ?.let { intl.format("content_rating_genre", intl["content_rating_$it"]) },
+            Locale.forLanguageTag(attr.originalLanguage)
+                .getDisplayName(dexLocale)
+                .replaceFirstChar { it.uppercase(dexLocale) },
         )
 
         val authors = mangaDataDto.relationships
-            .filterIsInstance<AuthorDto>()
-            .mapNotNull { it.attributes?.name }
+            .filterIsInstance<NamedRelationshipDto>()
+            .filter { it.type == MDConstants.AUTHOR }
+            .map { it.name }
             .distinct()
 
         val artists = mangaDataDto.relationships
-            .filterIsInstance<ArtistDto>()
-            .mapNotNull { it.attributes?.name }
+            .filterIsInstance<NamedRelationshipDto>()
+            .filter { it.type == MDConstants.ARTIST }
+            .map { it.name }
             .distinct()
 
         val coverFileName = firstVolumeCover ?: mangaDataDto.relationships
-            .filterIsInstance<CoverArtDto>()
-            .firstOrNull()
-            ?.attributes?.fileName
+            .firstInstanceOrNull<CoverRelationshipDto>()
+            ?.fileName
 
         val tags = mdFilters.getTags(intl).associate { it.id to it.name }
 
         val genresMap = attr.tags
-            .groupBy({ it.attributes!!.group }) { tagDto -> tags[tagDto.id] }
+            .groupBy({ it.group }) { tagDto -> tags[tagDto.id] }
             .mapValues { it.value.filterNotNull().sortedWith(intl.collator) }
 
         val genreList = MDConstants.TAG_GROUPS_ORDER.flatMap { genresMap[it].orEmpty() } + nonGenres
@@ -411,19 +359,19 @@ class MangaDexHelper(private val lang: String) {
     /**
      * Create the [SChapter] from the JSON element.
      */
-    fun createChapter(chapterDataDto: ChapterDataDto): SChapter {
-        val attr = chapterDataDto.attributes!!
+    fun createChapter(chapterDataDto: ChapterDto): SChapter {
+        val attr = chapterDataDto.attributes
 
         val groups = chapterDataDto.relationships
-            .filterIsInstance<ScanlationGroupDto>()
+            .filterIsInstance<NamedRelationshipDto>()
             .filterNot { it.id == MDConstants.LEGACY_NO_GROUP_ID } // 'no group' left over from MDv3
-            .mapNotNull { it.attributes?.name }
+            .map { it.name }
             .joinToString(" & ")
             .ifEmpty {
                 // Fallback to uploader name if no group is set.
                 val users = chapterDataDto.relationships
-                    .filterIsInstance<UserDto>()
-                    .mapNotNull { it.attributes?.username }
+                    .filterIsInstance<UserRelationshipDto>()
+                    .map { it.username }
                 if (users.isNotEmpty()) intl.format("uploaded_by", users.joinToString(" & ")) else ""
             }
             .ifEmpty { intl["no_group"] } // "No Group" as final resort
@@ -459,7 +407,7 @@ class MangaDexHelper(private val lang: String) {
 
         // In future calculate [END] if non mvp api doesn't provide it
 
-        val unavailablePrefix = if (attr.isUnavailable == true) {
+        val unavailablePrefix = if (attr.isUnavailable) {
             intl["chapter_unavailable_prefix"] + " - "
         } else {
             ""
