@@ -24,8 +24,6 @@ abstract class MangaSwat : KeiSource() {
         rateLimit(1)
     }
 
-    private val apiUrl get() = "$baseUrl/v2/api/v2"
-
     private fun String.getMangaId(): String = this.removePrefix("/chapters/").substringBefore("/")
 
     private fun Response.parseMangaList(): MangasPage {
@@ -37,7 +35,7 @@ abstract class MangaSwat : KeiSource() {
     // ========================= Popular =========================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$apiUrl/series/?order_by=-followers_count&page=$page", Fetch.XHR)
+        val response = client.get("$API_URL/series/?order_by=-followers_count&page=$page", Fetch.XHR)
 
         return response.parseMangaList()
     }
@@ -45,7 +43,7 @@ abstract class MangaSwat : KeiSource() {
     // ========================= Latest =========================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val response = client.get("$apiUrl/series/releases/?page=$page", Fetch.XHR)
+        val response = client.get("$API_URL/series/releases/?page=$page", Fetch.XHR)
 
         return response.parseMangaList()
     }
@@ -53,7 +51,7 @@ abstract class MangaSwat : KeiSource() {
     //  ========================= Search =========================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val url = "$apiUrl/series/".toHttpUrl().newBuilder().apply {
+        val url = "$API_URL/series/".toHttpUrl().newBuilder().apply {
             addQueryParameter("search", query)
             addQueryParameter("page", page.toString())
         }.build()
@@ -74,7 +72,7 @@ abstract class MangaSwat : KeiSource() {
         val mangaDeferred = async {
             if (!fetchDetails) return@async manga
 
-            client.get("$apiUrl/series/${manga.url}/", Fetch.XHR)
+            client.get("$API_URL/series/${manga.url}/", Fetch.XHR)
                 .parseAs<MangaDetailsDto>().toSManga()
         }
 
@@ -88,22 +86,18 @@ abstract class MangaSwat : KeiSource() {
         )
     }
 
-    private suspend fun getChapterList(manga: SManga): List<SChapter> {
-        val url = "$apiUrl/chapters/".toHttpUrl().newBuilder().apply {
-            addQueryParameter("serie", manga.url)
-            addQueryParameter("order_by", "-order")
-            addQueryParameter("page_size", "200")
-        }.build()
-
-        return buildList {
-            var nextPage: String? = url.toString()
-
-            while (nextPage != null) {
-                val data = client.get(nextPage, Fetch.XHR).parseAs<ChapterListDto>()
-                addAll(data.results.map { it.toSChapter() })
-                nextPage = data.next
-            }
-        }
+    private suspend fun getChapterList(manga: SManga): List<SChapter> = buildList {
+        var page = 1
+        do {
+            val url = "$API_URL/chapters/".toHttpUrl().newBuilder().apply {
+                addQueryParameter("serie", manga.url)
+                addQueryParameter("order_by", "-order")
+                addQueryParameter("page_size", "200")
+                addQueryParameter("page", (page++).toString())
+            }.build()
+            val data = client.get(url, Fetch.XHR).parseAs<ChapterListDto>()
+            addAll(data.results.map { it.toSChapter() })
+        } while (data.next != null)
     }
 
     // ========================= Pages =========================
@@ -111,11 +105,17 @@ abstract class MangaSwat : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter/${chapter.url.getMangaId()}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get("$apiUrl/chapters/${chapter.url.getMangaId()}/", Fetch.XHR)
+        val response = client.get("$API_URL/chapters/${chapter.url.getMangaId()}/", Fetch.XHR)
 
         val chapter = response.parseAs<PageListDto>()
         return chapter.images.mapIndexed { i, page ->
-            Page(i, imageUrl = page.image)
+            Page(i, imageUrl = page.image.toAppHost())
         }
+    }
+
+    companion object {
+        // The site's mobile app host; the website's images redirect to a banner
+        internal const val APP_HOST = "appswat.com"
+        private const val API_URL = "https://$APP_HOST/v2/api/v2"
     }
 }

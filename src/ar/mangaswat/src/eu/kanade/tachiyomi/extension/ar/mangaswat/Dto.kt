@@ -6,6 +6,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.time.Instant
 
 @Serializable
@@ -25,7 +26,7 @@ class MangaDto(
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         title = this@MangaDto.title
-        thumbnail_url = poster.medium
+        thumbnail_url = poster.medium.toAppHost()
         url = (id ?: serie_id)!!.toString()
     }
 }
@@ -42,7 +43,7 @@ internal class MangaDetailsDto(
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         title = this@MangaDetailsDto.title
-        thumbnail_url = poster.medium
+        thumbnail_url = poster.medium.toAppHost()
         description = story
         genre = genres.joinToString { it.name }
         author = this@MangaDetailsDto.author?.name
@@ -100,3 +101,6 @@ class ChapterDto(
 class PageDto(
     val image: String,
 )
+
+// Cached API responses can carry the website's host
+fun String.toAppHost(): String = toHttpUrl().newBuilder().host(MangaSwat.APP_HOST).build().toString()
