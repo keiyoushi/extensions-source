@@ -29,7 +29,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.CacheControl
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
@@ -52,9 +51,6 @@ abstract class XXXYaoi : MadaraNoAjax() {
         // The cookie the library page sets before its request
         addCookie { listOfNotNull(libraryConfig?.cookie) }
     }
-
-    override fun Headers.Builder.configureHeaders() = set("Sec-GPC", "1")
-        .set("Pragma", "no-cache")
 
     override fun getHomeUrl() = "$baseUrl/biblioteca/"
 
