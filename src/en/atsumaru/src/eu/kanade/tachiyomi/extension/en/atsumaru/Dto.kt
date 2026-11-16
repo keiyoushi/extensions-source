@@ -1,19 +1,17 @@
 package eu.kanade.tachiyomi.extension.en.atsumaru
 
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNames
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
-import java.time.ZoneId
-import java.util.Locale
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import java.time.ZoneOffset
 import kotlin.time.Instant
 import kotlin.time.toJavaInstant
 
@@ -24,7 +22,7 @@ class BrowseMangaDto(
 
 @Serializable
 class MangaObjectDto(
-    val mangaPage: MangaDto,
+    val mangaPage: MangaPageDto,
 )
 
 @Serializable
@@ -49,128 +47,122 @@ class SearchResultsDto(
 
 @Serializable
 class MangaDto(
-    // Common
-    private val id: String,
-    private val title: String,
-    @JsonNames("poster", "image")
-    private val imagePath: JsonElement,
-    private val largeImage: String?,
-
-    // Details
-    private val authors: JsonElement? = null,
-    private val synopsis: String? = null,
-    @JsonNames("genres", "tags")
-    private val genres: JsonElement? = null,
-    private val released: Long? = null,
-    private val status: String? = null,
-    private val type: String? = null,
-    private val views: JsonElement? = null,
-    private val otherNames: List<String>? = null,
-    private val avgRating: Float? = null,
-    val scanlators: List<ScanlatorDto>? = null,
-
-    // Chapters
-    val chapters: List<ChapterDto>? = null,
-
-    val recommendations: List<MangaDto>? = null,
+    val id: String,
+    val title: String,
+    // Browse and related entries carry largeImage, search documents only posterMedium
+    private val largeImage: String? = null,
+    private val posterMedium: String? = null,
+    val medium: String? = null,
 ) {
-    private fun getImagePath(): String? {
-        val url = largeImage ?: when (imagePath) {
-            is JsonPrimitive -> imagePath.content
-            is JsonObject -> (imagePath["largeImage"] ?: imagePath["image"])?.jsonPrimitive?.content
-            else -> null
-        }
-        return url?.removePrefix("/")?.removePrefix("static/")
-    }
-
-    private fun parseNames(element: JsonElement?): List<String> = when (element) {
-        is JsonArray -> element.mapNotNull { item ->
-            when (item) {
-                is JsonPrimitive -> item.content
-                is JsonObject -> item["name"]?.jsonPrimitive?.content
-                else -> null
-            }
-        }
-        else -> emptyList()
-    }
-
-    private fun parseAuthorsWithType(element: JsonElement?): List<Pair<String, String?>> = when (element) {
-        is JsonArray -> element.mapNotNull { item ->
-            when (item) {
-                is JsonPrimitive -> Pair(item.content, null)
-                is JsonObject -> {
-                    val name = item["name"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                    val type = item["type"]?.jsonPrimitive?.content
-                    Pair(name, type)
-                }
-                else -> null
-            }
-        }
-        else -> emptyList()
-    }
-
     fun toSManga(baseUrl: String): SManga = SManga.create().apply {
         url = id
         title = this@MangaDto.title
-        thumbnail_url = getImagePath()?.let {
-            val url = when {
-                it.startsWith("http") -> it
-                it.startsWith("//") -> "https:$it"
-                else -> "$baseUrl/static/$it"
-            }
-            url.replaceFirst(PROTOCOL_REGEX, "https://")
-        }
+        thumbnail_url = (largeImage ?: posterMedium?.replace("-medium.", "-large."))?.let { cdnUrl(baseUrl, it) }
+    }
+}
 
-        description = buildList {
-            avgRating?.takeIf { it > 0 }?.let {
-                add("**Rating**: %.2f/10".format(Locale.ENGLISH, it))
-            }
-
-            released?.takeIf { it > 0 }?.let {
-                val releaseYear = Instant.fromEpochMilliseconds(it).toJavaInstant()
-                    .atZone(ZoneId.systemDefault()).year
-
-                add("**Year**: $releaseYear")
-            }
-
-            // can be Int or formatted String
-            views?.jsonPrimitive?.content?.let {
-                add("**Views**: $it")
-            }
-
-            synopsis?.takeIf { it.isNotBlank() }?.let {
-                add("\n")
-                add("**Synopsis**: $it")
-            }
-
-            otherNames?.filter { it != this@MangaDto.title }
-                ?.takeIf { it.isNotEmpty() }
-                ?.let { names ->
-                    val namesDesc = names.joinToString("\n") { "- $it" }
-                    add("\n")
-                    add("**Alternative Names**:\n$namesDesc")
-                }
-        }.joinToString("\n")
-
+@Serializable
+class MangaPageDto(
+    private val id: String,
+    private val title: String,
+    private val poster: PosterDto,
+    private val authors: List<AuthorDto>,
+    private val synopsis: String? = null,
+    private val genres: List<NameDto>,
+    private val tags: List<NameDto>,
+    private val released: Long? = null,
+    private val status: String? = null,
+    private val type: String? = null,
+    private val views: String? = null,
+    private val otherNames: List<String>,
+    private val avgRating: Float? = null,
+    val scanlators: List<ScanlatorDto>,
+    private val anilistId: String? = null,
+    private val malId: String? = null,
+    private val mangaUpdatesId: String? = null,
+    private val mangaBakaId: String? = null,
+    private val kitsuId: String? = null,
+    private val annId: String? = null,
+    private val apId: String? = null,
+    private val kenmeiUrl: String? = null,
+    private val relations: List<RelationDto>? = null,
+    private val recommendations: List<MangaDto>? = null,
+    private val similarManga: List<MangaDto>? = null,
+) {
+    fun toSManga(baseUrl: String): SManga = SManga.create().apply {
+        url = id
+        title = this@MangaPageDto.title
+        thumbnail_url = cdnUrl(baseUrl, poster.largeImage)
+        author = authors.filter { it.type != "Artist" }.joinToString { it.name }.ifEmpty { null }
+        artist = authors.filter { it.type == "Artist" }.joinToString { it.name }.ifEmpty { null }
         genre = buildList {
-            type?.let { add(it) }
-            addAll(parseNames(genres))
-        }.joinToString()
-
-        val authorsList = parseAuthorsWithType(authors)
-        author = authorsList.filter { it.second == "Author" || it.second == null }.joinToString { it.first }
-        artist = authorsList.filter { it.second == "Artist" }.joinToString { it.first }
-
-        status = when (this@MangaDto.status?.lowercase()?.trim()) {
+            // The site's data spells Manhwa "Manwha"
+            type?.let { add(if (it == "Manwha") "Manhwa" else it) }
+            genres.mapTo(this) { it.name }
+            tags.mapTo(this) { it.name }
+        }.distinct().joinToString()
+        status = when (this@MangaPageDto.status?.lowercase()) {
             "ongoing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
             "hiatus" -> SManga.ON_HIATUS
             "canceled" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
+        description = MarkdownDescription.Builder()
+            .rating(avgRating?.takeIf { it > 0 })
+            .field("Year", released?.takeIf { it > 0 }?.let { Instant.fromEpochMilliseconds(it).toJavaInstant().atZone(ZoneOffset.UTC).year.toString() })
+            .field("Views", views)
+            .separator()
+            .markdown(synopsis)
+            .links(
+                listOf(
+                    "AniList" to anilistId?.let { "https://anilist.co/manga/$it" },
+                    "MyAnimeList" to malId?.let { "https://myanimelist.net/manga/$it" },
+                    "MangaUpdates" to mangaUpdatesId?.let { "https://www.mangaupdates.com/series/$it" },
+                    "MangaBaka" to mangaBakaId?.let { "https://mangabaka.org/$it" },
+                    "Kitsu" to kitsuId?.let { "https://kitsu.app/manga/$it" },
+                    "AnimeNewsNetwork" to annId?.let { "https://www.animenewsnetwork.com/encyclopedia/manga.php?id=$it" },
+                    "AnimePlanet" to apId?.let { "https://www.anime-planet.com/manga/$it" },
+                    "Kenmei" to kenmeiUrl,
+                ),
+            )
+            .links(
+                relations.orEmpty().filter { it.manga.medium != "Novel" }
+                    .map { "${it.typeName()}: ${it.manga.title}" to "$baseUrl/manga/${it.manga.id}" },
+                label = "Related",
+            )
+            .altTitles(otherNames.filter { it != this@MangaPageDto.title })
+            .build()
     }
 
-    fun recommendations(baseUrl: String) = recommendations?.map { it.toSManga(baseUrl) } ?: emptyList()
+    fun relatedManga(baseUrl: String): List<SManga> = (relations.orEmpty().map { it.manga } + recommendations.orEmpty() + similarManga.orEmpty())
+        .filter { it.medium != "Novel" }
+        .map { it.toSManga(baseUrl) }
+        .distinctBy { it.url }
+
+    @Serializable
+    class PosterDto(
+        val largeImage: String,
+    )
+
+    @Serializable
+    class AuthorDto(
+        val name: String,
+        val type: String? = null,
+    )
+
+    @Serializable
+    class NameDto(
+        val name: String,
+    )
+
+    @Serializable
+    class RelationDto(
+        private val type: String,
+        val manga: MangaDto,
+    ) {
+        fun typeName(): String = type.replace(CAMEL_CASE_REGEX, " ")
+    }
 
     @Serializable
     class ScanlatorDto(
@@ -178,11 +170,14 @@ class MangaDto(
         val name: String,
         val score: Int,
     )
-
-    companion object {
-        private val PROTOCOL_REGEX = Regex("^https?:?//")
-    }
 }
+
+internal fun cdnUrl(baseUrl: String, path: String): String? {
+    val base = baseUrl.toHttpUrl()
+    return base.newBuilder().host("cdn.${base.host}").encodedPath("/static/").build().resolve(path)?.toString()
+}
+
+private val CAMEL_CASE_REGEX = Regex("""(?<=[a-z])(?=[A-Z])""")
 
 @Serializable
 class AllChaptersDto(
@@ -228,21 +223,35 @@ class PageDataDto(
 
 @Serializable
 class FilterData(
-    val genres: List<Filter>?,
-    val tags: List<Filter>?,
-    val types: List<Filter>?,
-    val statuses: List<Filter>?,
+    private val genres: List<FilterDto>?,
+    private val tags: List<FilterDto>?,
+    private val types: List<FilterDto>?,
+    private val statuses: List<FilterDto>?,
 ) {
-    fun getFilterList(excludedGenreIds: Set<String> = emptySet()) = buildList {
-        genres?.let { add(GenreFilter(it.map { Genre(it.name, it.id) }, excludedGenreIds)) }
-        tags?.let { add(TagFilters(it.map { Tag(it.name, it.id) })) }
-        types?.let { add(TypeFilter(it.map { Type(it.name, it.id) })) }
-        statuses?.let { add(StatusFilter(it.map { Status(it.name, it.id) })) }
+    fun getFilterList(excludedGenreIds: Set<String>) = buildList {
+        genres?.let { genres ->
+            add(
+                GenreFilter(
+                    genres.map {
+                        val state = if (it.id in excludedGenreIds) Filter.TriState.STATE_EXCLUDE else Filter.TriState.STATE_IGNORE
+                        TriStateOption(it.name, it.id, state)
+                    },
+                ),
+            )
+        }
+        tags?.let { tags ->
+            val letters = tags.sortedBy { it.name }
+                .groupBy { tag -> tag.name.firstOrNull()?.uppercaseChar()?.takeIf { it in 'A'..'Z' }?.toString() ?: "0-9" }
+                .map { (letter, letterTags) -> TagLetterFilter(letter, letterTags.map { TriStateOption(it.name, it.id) }) }
+            add(TagFilters(letters))
+        }
+        types?.let { add(TypeFilter(it.map { type -> CheckBoxOption(type.name, type.id) })) }
+        statuses?.let { add(StatusFilter(it.map { status -> CheckBoxOption(status.name, status.id) })) }
     }
 }
 
 @Serializable
-class Filter(
+class FilterDto(
     val id: String,
     val name: String,
 )
