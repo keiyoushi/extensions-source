@@ -209,8 +209,8 @@ abstract class GocTruyenTranhVui :
         if (useWebViewLoader) {
             val script = asset("goctruyentranhvui_reader.js")
             val imageUrls = runWebView(timeout = 30.seconds) {
+                userAgent = headers["User-Agent"]!!
                 loadUrl(chapterPageUrl)
-                headers["User-Agent"]!!
 
                 var lastCount = 0
                 var stableCount = 0
