@@ -153,10 +153,12 @@ abstract class Jinmantiantang :
 
     // Unknown ids answer an empty array
     // The app's 10-minute HTTP cache would serve a stale is_favorite and favorite list, so logged-in reads go to the network
-    private suspend fun album(id: String, token: String? = null, fresh: Boolean = false): AlbumDto? =
-        apiGet<JsonElement>(apiUrl("album", "id" to id), token, if (fresh) CacheControl.FORCE_NETWORK else DEFAULT_CACHE_CONTROL)
+    private suspend fun album(id: String, token: String? = null, fresh: Boolean = false): AlbumDto? {
+        val cacheControl = if (fresh) CacheControl.FORCE_NETWORK else DEFAULT_CACHE_CONTROL
+        return apiGet<JsonElement>(apiUrl("album", "id" to id), token, cacheControl)
             .takeIf { it is JsonObject }
             ?.parseAs<AlbumDto>()
+    }
 
     private suspend fun album(manga: SManga): AlbumDto = album(manga.albumId()) ?: throw Exception("作品不存在")
 
@@ -295,7 +297,11 @@ abstract class Jinmantiantang :
         .apply { if (token != null) set("Authorization", "Bearer $token") }
         .build()
 
-    private suspend inline fun <reified T> apiGet(url: HttpUrl, token: String? = null, cacheControl: CacheControl = DEFAULT_CACHE_CONTROL): T {
+    private suspend inline fun <reified T> apiGet(
+        url: HttpUrl,
+        token: String? = null,
+        cacheControl: CacheControl = DEFAULT_CACHE_CONTROL,
+    ): T {
         val timestamp = timestamp()
         return client.get(url, apiHeaders(timestamp, token), Fetch.XHR, cacheControl).decode(timestamp)
     }
