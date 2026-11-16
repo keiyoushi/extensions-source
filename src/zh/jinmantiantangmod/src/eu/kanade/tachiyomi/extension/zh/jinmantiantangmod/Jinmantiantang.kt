@@ -6,6 +6,7 @@ import android.text.InputType
 import android.util.Base64
 import android.widget.Toast
 import androidx.preference.EditTextPreference
+import androidx.preference.Preference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.HttpException
@@ -394,6 +395,39 @@ abstract class Jinmantiantang :
         apiPost<MessageDto>(apiUrl("daily_chk"), body, member.jwttoken).msg
     }
 
+    // Reports what the app API answers for this account, to tell a login problem from a stale favorite list
+    private fun runDiagnosis(preference: Preference) {
+        @OptIn(DelicateCoroutinesApi::class)
+        GlobalScope.launch(Dispatchers.IO) {
+            val result = try {
+                diagnose()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                "失败：${e::class.simpleName} ${e.message}"
+            }
+            Handler(Looper.getMainLooper()).post { preference.summary = result }
+            showToast(result)
+        }
+    }
+
+    private suspend fun diagnose(): String {
+        loginMutex.withLock { session = null }
+        val host = apiHost()
+        val member = member()
+        // No withLogin: a 401 here should show up instead of being retried
+        val url = apiUrl("favorite", "page" to "1", "folder_id" to "0", "o" to "mr")
+        val favorites = apiGet<FavoriteListDto>(url, member.jwttoken, CacheControl.FORCE_NETWORK)
+        val latest = favorites.list.firstOrNull()?.toSManga(coverHost)?.title ?: "无"
+        return buildString {
+            append("登录成功，用户ID ").append(member.uid)
+            append("，token ").append(if (member.jwttoken.isNullOrEmpty()) "无" else "有")
+            append("，接口 ").append(host)
+            append("，收藏共 ").append(favorites.total).append(" 部")
+            append("，最新收藏：").append(latest)
+        }
+    }
+
     private fun showToast(message: String) {
         Handler(Looper.getMainLooper()).post {
             Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
@@ -439,6 +473,16 @@ abstract class Jinmantiantang :
             summary = "点击立即签到一次"
             setOnPreferenceChangeListener { _, _ ->
                 checkIn(showError = true)
+                false
+            }
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(context).apply {
+            title = "测试登录"
+            summary = "重新登录并读取收藏夹，结果会显示在这里"
+            setOnPreferenceChangeListener { pref, _ ->
+                pref.summary = "测试中…"
+                runDiagnosis(pref)
                 false
             }
         }.let(screen::addPreference)
