@@ -192,7 +192,7 @@ abstract class Atsumaru :
                 filterBy.add("officialTranslation:=$officialTranslation")
             }
 
-            filterBy.add("(mbContentRating:=[`Safe`,`Suggestive`,`Erotica`] || mbContentRating:!=*)")
+            filterBy.add("mbContentRating:!=[`Pornographic`]")
             filterBy.add("medium:!=[`Novel`]")
             filterBy.add("views:>0")
 
