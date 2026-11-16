@@ -119,9 +119,7 @@ class MangaDexHelper(private val lang: String) {
         firstVolumeCover: String?,
         lang: String,
         coverSuffix: String?,
-        altTitlesInDesc: Boolean,
         preferExtensionLangTitle: Boolean,
-        finalChapterInDesc: Boolean,
     ): SManga {
         val attr = mangaDto.attributes
 
@@ -145,32 +143,25 @@ class MangaDexHelper(private val lang: String) {
 
         val genreList = MDConstants.TAG_GROUPS_ORDER.flatMap { genresMap[it].orEmpty() } + nonGenres
 
-        val description = MarkdownDescription.Builder()
-            .markdown((attr.description[lang] ?: attr.description["en"])?.removeEntities())
+        val romanizedOriginalLang = MDConstants.romanizedLangCodes[attr.originalLanguage].orEmpty()
+        val allLanguages = lang == MDConstants.ALL_LANGUAGES
+        val altTitles = attr.altTitles
+            .filter { allLanguages || it.containsKey(lang) || it.containsKey(romanizedOriginalLang) }
+            .mapNotNull { it.entries.singleOrNull() }
+            .map { (code, title) -> if (allLanguages) "[$code] $title" else title }
+            .map { it.removeEntities() }
 
-        if (altTitlesInDesc) {
-            val romanizedOriginalLang = MDConstants.romanizedLangCodes[attr.originalLanguage].orEmpty()
-            val allLanguages = lang == MDConstants.ALL_LANGUAGES
-            val altTitles = attr.altTitles
-                .filter { allLanguages || it.containsKey(lang) || it.containsKey(romanizedOriginalLang) }
-                .mapNotNull { it.entries.singleOrNull() }
-                .map { (code, title) -> if (allLanguages) "[$code] $title" else title }
-                .map { it.removeEntities() }
-
-            description.altTitles(altTitles, intl["alternative_titles"])
-        }
-
-        if (finalChapterInDesc) {
-            val finalChapter = listOfNotNull(
-                attr.lastVolume?.takeIf { it.isNotEmpty() }?.let { "Vol.$it" },
-                attr.lastChapter?.takeIf { it.isNotEmpty() }?.let { "Ch.$it" },
-            )
-
-            description.field(intl["final_chapter"], finalChapter.joinToString(" "))
-        }
+        val finalChapter = listOfNotNull(
+            attr.lastVolume?.takeIf { it.isNotEmpty() }?.let { "Vol.$it" },
+            attr.lastChapter?.takeIf { it.isNotEmpty() }?.let { "Ch.$it" },
+        )
 
         return createBasicManga(mangaDto, firstVolumeCover ?: mangaDto.coverFileName, coverSuffix, lang, preferExtensionLangTitle).apply {
-            this.description = description.build()
+            description = MarkdownDescription.Builder()
+                .markdown((attr.description[lang] ?: attr.description["en"])?.removeEntities())
+                .altTitles(altTitles, intl["alternative_titles"])
+                .field(intl["final_chapter"], finalChapter.joinToString(" "))
+                .build()
             author = mangaDto.relationships.names(MDConstants.AUTHOR)
             artist = mangaDto.relationships.names(MDConstants.ARTIST)
             status = getPublicationStatus(attr, chapters)

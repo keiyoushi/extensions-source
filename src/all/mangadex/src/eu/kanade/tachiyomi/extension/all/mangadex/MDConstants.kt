@@ -120,21 +120,12 @@ object MDConstants {
     private const val BLOCKED_UPLOADER_PREF = "blockedUploader"
     fun getBlockedUploaderPrefKey(dexLang: String): String = "${BLOCKED_UPLOADER_PREF}_$dexLang"
 
-    private const val HAS_SANITIZED_UUIDS_PREF = "hasSanitizedUuids"
-    fun getHasSanitizedUuidsPrefKey(dexLang: String): String = "${HAS_SANITIZED_UUIDS_PREF}_$dexLang"
-
     private const val TRY_USING_FIRST_VOLUME_COVER_PREF = "tryUsingFirstVolumeCover"
     const val TRY_USING_FIRST_VOLUME_COVER_DEFAULT = false
     fun getTryUsingFirstVolumeCoverPrefKey(dexLang: String): String = "${TRY_USING_FIRST_VOLUME_COVER_PREF}_$dexLang"
 
-    private const val ALT_TITLES_IN_DESC_PREF = "altTitlesInDesc"
-    fun getAltTitlesInDescPrefKey(dexLang: String): String = "${ALT_TITLES_IN_DESC_PREF}_$dexLang"
-
     private const val PREFER_EXTENSION_LANG_TITLE_PREF = "preferExtensionLangTitle"
     fun getPreferExtensionLangTitlePrefKey(dexLang: String): String = "${PREFER_EXTENSION_LANG_TITLE_PREF}_$dexLang"
-
-    private const val FINAL_CHAPTER_IN_DESC_PREF = "finalChapterInDesc"
-    fun getFinalChapterInDescPrefKey(dexLang: String): String = "${FINAL_CHAPTER_IN_DESC_PREF}_$dexLang"
 
     private const val INCLUDE_UNAVAILABLE_PREF = "includeUnavailable"
     fun getIncludeUnavailablePrefKey(dexLang: String): String = "${INCLUDE_UNAVAILABLE_PREF}_$dexLang"

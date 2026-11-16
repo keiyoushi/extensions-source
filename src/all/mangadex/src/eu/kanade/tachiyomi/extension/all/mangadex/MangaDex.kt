@@ -77,8 +77,8 @@ class MangaDex(
     private val helper = MangaDexHelper(lang)
 
     private val preferences by getPreferencesLazy {
-        sanitizeExistingUuidPrefs()
         migrateContentRating()
+        migrateObsoletePrefs()
     }
 
     @Suppress("DEPRECATION")
@@ -387,9 +387,7 @@ class MangaDex(
             firstVolumeCover,
             dexLang,
             preferences.coverQuality,
-            preferences.altTitlesInDesc,
             preferences.preferExtensionLangTitle,
-            preferences.finalChapterInDesc,
         )
     }
 
@@ -572,24 +570,10 @@ class MangaDex(
             setOnBindEditTextListener(helper::setupEditTextUuidValidator)
         }
 
-        val altTitlesInDescPref = SwitchPreferenceCompat(screen.context).apply {
-            key = MDConstants.getAltTitlesInDescPrefKey(dexLang)
-            title = helper.intl["alternative_titles_in_description"]
-            summary = helper.intl["alternative_titles_in_description_summary"]
-            setDefaultValue(false)
-        }
-
         val preferExtensionLangTitlePref = SwitchPreferenceCompat(screen.context).apply {
             key = MDConstants.getPreferExtensionLangTitlePrefKey(dexLang)
             title = helper.intl["prefer_title_in_extension_language"]
             summary = helper.intl["prefer_title_in_extension_language_summary"]
-            setDefaultValue(true)
-        }
-
-        val finalChapterInDescPref = SwitchPreferenceCompat(screen.context).apply {
-            key = MDConstants.getFinalChapterInDescPrefKey(dexLang)
-            title = helper.intl["final_chapter_in_description"]
-            summary = helper.intl["final_chapter_in_description_summary"]
             setDefaultValue(true)
         }
 
@@ -604,9 +588,7 @@ class MangaDex(
         screen.addPreference(tryUsingFirstVolumeCoverPref)
         screen.addPreference(dataSaverPref)
         screen.addPreference(standardHttpsPortPref)
-        screen.addPreference(altTitlesInDescPref)
         screen.addPreference(preferExtensionLangTitlePref)
-        screen.addPreference(finalChapterInDescPref)
         screen.addPreference(includeUnavailablePref)
         screen.addPreference(contentRatingPref)
         screen.addPreference(originalLanguagePref)
@@ -662,17 +644,27 @@ class MangaDex(
     private val SharedPreferences.useDataSaver
         get() = getBoolean(MDConstants.getDataSaverPreferenceKey(dexLang), false)
 
-    private val SharedPreferences.altTitlesInDesc
-        get() = getBoolean(MDConstants.getAltTitlesInDescPrefKey(dexLang), false)
-
     private val SharedPreferences.preferExtensionLangTitle
         get() = getBoolean(MDConstants.getPreferExtensionLangTitlePrefKey(dexLang), true)
 
-    private val SharedPreferences.finalChapterInDesc
-        get() = getBoolean(MDConstants.getFinalChapterInDescPrefKey(dexLang), true)
-
     private val SharedPreferences.includeUnavailable
         get() = getBoolean(MDConstants.getIncludeUnavailablePrefKey(dexLang), false)
+
+    /**
+     * Alt titles and the final chapter are always in the description now. TachiyomiSY and Komikku
+     * still read these toggles when delegating, so turn them on there too.
+     */
+    private fun SharedPreferences.migrateObsoletePrefs() {
+        val alwaysOn = listOf("altTitlesInDesc", "finalChapterInDesc")
+            .map { "${it}_$dexLang" }
+            .filterNot { getBoolean(it, false) }
+        val sanitizedUuidsKey = "hasSanitizedUuids_$dexLang"
+        if (alwaysOn.isEmpty() && sanitizedUuidsKey !in this) return
+
+        val editor = edit().remove(sanitizedUuidsKey)
+        alwaysOn.forEach { editor.putBoolean(it, true) }
+        editor.apply()
+    }
 
     /** The content rating used to be a multi-select; keep the highest rating that was chosen. */
     private fun SharedPreferences.migrateContentRating() {
@@ -683,28 +675,5 @@ class MangaDex(
         MDConstants.allContentRatings.lastOrNull { it in legacy }
             ?.let { editor.putString(MDConstants.getContentRatingPrefKey(dexLang), it) }
         editor.apply()
-    }
-
-    /**
-     * Previous versions of the extension allowed invalid UUID values to be stored in the
-     * preferences. This method clear invalid UUIDs in case the user have updated from
-     * a previous version with that behaviour.
-     */
-    private fun SharedPreferences.sanitizeExistingUuidPrefs() {
-        if (getBoolean(MDConstants.getHasSanitizedUuidsPrefKey(dexLang), false)) {
-            return
-        }
-
-        fun sanitized(key: String) = getString(key, "").orEmpty()
-            .split(",")
-            .map(String::trim)
-            .filter(MDConstants.uuidRegex::matches)
-            .joinToString(", ")
-
-        edit()
-            .putString(MDConstants.getBlockedGroupsPrefKey(dexLang), sanitized(MDConstants.getBlockedGroupsPrefKey(dexLang)))
-            .putString(MDConstants.getBlockedUploaderPrefKey(dexLang), sanitized(MDConstants.getBlockedUploaderPrefKey(dexLang)))
-            .putBoolean(MDConstants.getHasSanitizedUuidsPrefKey(dexLang), true)
-            .apply()
     }
 }
