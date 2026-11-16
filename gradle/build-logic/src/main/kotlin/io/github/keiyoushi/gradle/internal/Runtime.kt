@@ -2,17 +2,16 @@ package io.github.keiyoushi.gradle.internal
 
 import com.android.build.api.variant.AndroidComponentsExtension
 import io.github.keiyoushi.gradle.api.dsl.KeiyoushiRuntimeExtension
+import io.github.keiyoushi.gradle.internal.extensions.libs
 import io.github.keiyoushi.gradle.tasks.GenerateRuntimeSourcesTask
 import org.gradle.api.Project
+import org.gradle.api.artifacts.ExternalModuleDependency
 import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.api.provider.Provider
 import org.gradle.kotlin.dsl.create
 import org.gradle.kotlin.dsl.findByType
 import org.gradle.kotlin.dsl.register
 import org.gradle.kotlin.dsl.withType
-
-/** The shim every runtime consumer compiles against */
-internal const val RUNTIME_LIB = ":lib:runtime"
 
 private val MODULE_NAME = Regex("^[a-z][a-z0-9]*$")
 
@@ -37,24 +36,25 @@ internal fun Project.configureRuntimeConsumer(packageName: Provider<String>) {
 
     extensions.getByType(AndroidComponentsExtension::class.java).onVariants { variant ->
         if (runtime.requires.get().isNotEmpty()) {
-            checkDependsOnRuntimeLib()
+            checkDependsOnRuntimeContract()
             variant.sources.kotlin?.addGeneratedSourceDirectory(task, GenerateRuntimeSourcesTask::outputDir)
         }
     }
 }
 
 /**
- * The generated code calls `keiyoushi.lib.runtime`. The dependency must be written in the build
- * file: CI finds a lib's dependents by reading build files, so the runtime shim's consumers must be
- * visible there.
+ * The generated code calls `keiyoushi.lib.runtime`, which keiyoushi/runtime publishes as its `contract`
+ * artifact. Its `api-<module>` artifacts bring the contract along, so either one written in the build
+ * file will do.
  */
-private fun Project.checkDependsOnRuntimeLib() {
+private fun Project.checkDependsOnRuntimeContract() {
+    val group = libs.keiyoushi.runtime.contract.get().module.group
     val declared = listOf("api", "implementation")
         .mapNotNull { configurations.findByName(it) }
-        .flatMap { it.dependencies.withType<ProjectDependency>() }
-        .any { it.path == RUNTIME_LIB }
+        .flatMap { it.dependencies.withType<ExternalModuleDependency>() }
+        .any { it.group == group }
     check(declared) {
-        "$path uses the Keiyoushi Runtime: add implementation(project(\"$RUNTIME_LIB\")) to its dependencies"
+        "$path uses the Keiyoushi Runtime: add implementation(libs.keiyoushi.runtime.contract) to its dependencies"
     }
 }
 
