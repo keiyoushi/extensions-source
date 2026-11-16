@@ -114,5 +114,11 @@ class PageDto(
     val order: Int,
 )
 
+@Serializable
+class GenreDto(
+    val id: Int,
+    val name: String,
+)
+
 // Cached API responses can carry the website's host
 fun String.toAppHost(): String = toHttpUrl().newBuilder().host(MangaSwat.APP_HOST).build().toString()

@@ -14,6 +14,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -32,6 +33,7 @@ abstract class MangaSwat : KeiSource() {
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = getMangaList("series/", page) {
         addQueryParameter("search", query)
+        filters.filterIsInstance<UrlFilter>().forEach { it.addToUrl(this) }
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -100,6 +102,19 @@ abstract class MangaSwat : KeiSource() {
         .mapIndexed { i, page -> Page(i, imageUrl = page.image.toAppHost()) }
 
     private suspend fun getChapter(id: String): PageListDto = client.get(api("chapters/$id/").build(), Fetch.XHR).parseAs()
+
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement = client.get(api("genres/").build(), Fetch.XHR).parseAs()
+
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
+        listOfNotNull(
+            SortFilter(),
+            TypeFilter(),
+            StatusFilter(),
+            data?.parseAs<List<GenreDto>>()?.takeIf { it.isNotEmpty() }?.let(::GenreFilter),
+        ),
+    )
 
     private fun api(path: String): HttpUrl.Builder = API_URL.newBuilder().addPathSegments(path)
 
