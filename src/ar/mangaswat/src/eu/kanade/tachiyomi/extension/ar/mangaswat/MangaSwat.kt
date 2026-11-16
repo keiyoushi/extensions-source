@@ -21,9 +21,7 @@ import okhttp3.OkHttpClient
 
 @Source
 abstract class MangaSwat : KeiSource() {
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
-        rateLimit(1)
-    }
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(1) { it.pathSegments.getOrNull(1) == "api" }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList("series/", page) {
         addQueryParameter("order_by", "-followers_count")
