@@ -27,6 +27,7 @@ import keiyoushi.utils.textOrNull
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 
@@ -75,6 +76,20 @@ abstract class BookLive :
         return MangasPage(mangas, hasNextPage)
     }
 
+    // ブッコミ (sp.handycomic.jp) is a BookLive store with the same title ids and link paths
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host && url.host != HANDYCOMIC_HOST) return null
+        val segments = url.pathSegments
+        val titleId = when {
+            segments.first() == "bviewer" -> url.queryParameter("cid")?.substringBefore('_')
+            "title_id" in segments -> segments.getOrNull(segments.indexOf("title_id") + 1)
+            else -> null
+        }
+        if (titleId.isNullOrEmpty()) return null
+
+        return getMangaUpdate(SManga.create().apply { this.url = titleId }, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
+
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/product/index/title_id/${manga.url}"
 
     override suspend fun fetchMangaUpdate(
@@ -86,6 +101,7 @@ abstract class BookLive :
         val document = client.get(getMangaUrl(manga), desktopHeaders, Fetch.DOCUMENT).asJsoup()
         val mangaTitle = document.selectFirst("#breadcrumb .book_title")!!.text()
         val details = SManga.create().apply {
+            url = manga.url
             title = mangaTitle
             author = document.select("#product_detail_area dl.author a").joinToString { it.text() }
             description = document.selectFirst("#product_summary .product_description")?.textOrNull()
@@ -167,5 +183,6 @@ abstract class BookLive :
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+        private const val HANDYCOMIC_HOST = "sp.handycomic.jp"
     }
 }

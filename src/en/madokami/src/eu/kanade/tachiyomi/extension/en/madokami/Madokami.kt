@@ -34,8 +34,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 import okio.ForwardingSource
 import okio.buffer
 import org.jsoup.nodes.Document
@@ -75,8 +77,17 @@ abstract class Madokami :
         addInterceptor(::concurrencyInterceptor)
     }
 
-    // The site answers 404 beyond 3 concurrent requests; a permit is held until the body is closed,
-    // since page bodies are still streaming after OkHttp's dispatcher has freed the call
+    // Prevent "Not a local file header" error when resuming a previously started/stopped download in Mihon.
+    // The app's progress wrapper adds a resume Range of its own to image requests with a partial file, reading
+    // the Range from the request the source built. Add the entry's range here so it doesn't replace it
+    protected override fun getImageRequest(page: Page): Request {
+        val request = super.getImageRequest(page)
+        val entry = request.url.zipEntryOrNull() ?: return request
+        return request.newBuilder().range(entry.dataRange).build()
+    }
+
+    // The site answers 404 beyond 3 concurrent requests; a permit is held until the body is closed or fully
+    // read, since page bodies are still streaming after OkHttp's dispatcher has freed the call
     private val requestPermits = Semaphore(3)
 
     private fun concurrencyInterceptor(chain: Interceptor.Chain): Response {
@@ -88,12 +99,27 @@ abstract class Madokami :
             throw e
         }
         val released = AtomicBoolean()
+        fun releasePermit() {
+            if (released.compareAndSet(false, true)) requestPermits.release()
+        }
         val source = object : ForwardingSource(response.body.source()) {
+            override fun read(sink: Buffer, byteCount: Long): Long {
+                val read = try {
+                    super.read(sink, byteCount)
+                } catch (e: Throwable) {
+                    releasePermit()
+                    throw e
+                }
+                // A fully read body is done, whether or not the caller closes it afterwards
+                if (read == -1L) releasePermit()
+                return read
+            }
+
             override fun close() {
                 try {
                     super.close()
                 } finally {
-                    if (released.compareAndSet(false, true)) requestPermits.release()
+                    releasePermit()
                 }
             }
         }
@@ -105,36 +131,31 @@ abstract class Madokami :
     private fun zipRangeInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val url = request.url
-        val fragment = url.fragment
+        val entry = url.zipEntryOrNull() ?: return chain.proceed(request)
 
-        if (fragment != null && (url.encodedPath.endsWith(".zip", true) || url.encodedPath.endsWith(".cbz", true))) {
-            val parts = fragment.split("|")
-            if (parts.size == 4) {
-                val entry = keiyoushi.zip.Entry(
-                    name = parts[0],
-                    method = parts[1].toInt(),
-                    compressedSize = parts[2].toLong(),
-                    localHeaderOffset = parts[3].toLong(),
-                )
-                val rangeRequest = request.newBuilder()
-                    .url(url.newBuilder().fragment(null).build())
-                    .range(entry.dataRange)
-                    .build()
+        val rangeRequest = request.newBuilder()
+            .url(url.newBuilder().fragment(null).build())
+            .range(entry.dataRange)
+            .build()
 
-                val response = chain.proceed(rangeRequest)
-                if (!response.isSuccessful) return response
-                val source = readEntry(response.body.source(), entry.compressedSize, entry.method)
+        val response = chain.proceed(rangeRequest)
+        if (!response.isSuccessful) return response
 
-                return response.newBuilder()
-                    .removeHeader("Content-Range")
-                    .removeHeader("Content-Length")
-                    .code(200)
-                    .message("OK")
-                    .body(source.buffer().asResponseBody(getMediaType(entry.name)))
-                    .build()
-            }
+        val source = try {
+            readEntry(response.body.source(), entry.compressedSize, entry.method)
+        } catch (e: Throwable) {
+            // The body holds the concurrency permit, so it has to be closed if the entry can't be read
+            response.close()
+            throw e
         }
-        return chain.proceed(request)
+
+        return response.newBuilder()
+            .removeHeader("Content-Range")
+            .removeHeader("Content-Length")
+            .code(200)
+            .message("OK")
+            .body(source.buffer().asResponseBody(getMediaType(entry.name)))
+            .build()
     }
 
     private fun getAuthCredential(): String {
@@ -617,5 +638,22 @@ abstract class Madokami :
         private val YEAR_REGEX = Regex("""\b(19|20)\d{2}\b""")
         private val FIX_REGEX = Regex("""(?i)f\d*""")
         private val METADATA_WORDS_REGEX = Regex("""(?i)\b(?:end|digital|dig|omnibus|edition|pre|magazine|raws?|na|web)\b""")
+    }
+}
+
+/** The zip entry a page's URL fragment describes, or null when the URL isn't a zip page. */
+private fun HttpUrl.zipEntryOrNull(): keiyoushi.zip.Entry? {
+    if (!encodedPath.endsWith(".zip", true) && !encodedPath.endsWith(".cbz", true)) return null
+    val parts = fragment?.split("|") ?: return null
+    if (parts.size != 4) return null
+    return try {
+        keiyoushi.zip.Entry(
+            name = parts[0],
+            method = parts[1].toInt(),
+            compressedSize = parts[2].toLong(),
+            localHeaderOffset = parts[3].toLong(),
+        )
+    } catch (_: NumberFormatException) {
+        null
     }
 }

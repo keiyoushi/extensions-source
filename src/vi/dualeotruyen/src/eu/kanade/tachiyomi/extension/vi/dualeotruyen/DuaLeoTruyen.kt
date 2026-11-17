@@ -165,7 +165,7 @@ abstract class DuaLeoTruyen : KeiSource() {
         val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
         imageDecryptor.extractSecret(document)
 
-        return document.select(".content_view_chap img, .content_view_chap canvas")
+        return document.select(".content_view_chap > img, .content_view_chap > canvas")
             .mapNotNull { element ->
                 val dataImg = element.absUrl("data-img")
                     .ifEmpty { element.absUrl("data-canvas-img") }
@@ -178,6 +178,7 @@ abstract class DuaLeoTruyen : KeiSource() {
                     else -> null
                 }
             }
+            .filterNot { "/banner/" in it }
             .distinct()
             .mapIndexed { index, imageUrl ->
                 Page(index, imageUrl = imageUrl)

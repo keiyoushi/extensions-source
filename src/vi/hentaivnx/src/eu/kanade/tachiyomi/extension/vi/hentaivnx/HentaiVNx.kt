@@ -85,22 +85,24 @@ abstract class HentaiVNx : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "truyen-hentai") {
+        val siteUrl = baseUrl.toHttpUrl()
+        if ((url.host != siteUrl.host && url.host !in SITE_HOSTS) || url.pathSegments.firstOrNull() != "truyen-hentai") {
             return null
         }
 
-        val mangaUrl = if (url.pathSegments.size == 2) {
-            url
+        val mangaPath = if (url.pathSegments.size == 2) {
+            url.encodedPath
         } else {
-            client.get(url, Fetch.DOCUMENT).asJsoup()
+            client.get(siteUrl.newBuilder().encodedPath(url.encodedPath).build(), Fetch.DOCUMENT).asJsoup()
                 .selectFirst("a.itemcrumb[href*=/truyen-hentai/]")
                 ?.absUrl("href")
                 ?.toHttpUrlOrNull()
+                ?.encodedPath
                 ?: return null
         }
 
-        val manga = SManga.create().apply { setUrlWithoutDomain(mangaUrl.encodedPath) }
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = true).manga
+        val manga = SManga.create().apply { this.url = mangaPath }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     // ============================== Filters ===============================
@@ -241,4 +243,9 @@ abstract class HentaiVNx : KeiSource() {
         Regex("""(\d+)\s*phút""", RegexOption.IGNORE_CASE) to { it.minutes },
         Regex("""(\d+)\s*giây""", RegexOption.IGNORE_CASE) to { it.seconds },
     )
+
+    companion object {
+        // The site serves the same pages on both domains, so their links open with the chosen base URL
+        private val SITE_HOSTS = setOf("www.hentaivnx.com", "hentaivnx.com", "www.hentaivn.college", "hentaivn.college")
+    }
 }

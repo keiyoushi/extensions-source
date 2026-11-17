@@ -45,7 +45,7 @@ abstract class MiuRaw : KeiSource() {
     private fun parseMangasPage(document: Document): MangasPage {
         val mangas = document.select(".manga-card").map { element ->
             SManga.create().apply {
-                title = element.selectFirst(".manga-card-title")!!.text().removeSuffix(" (Raw – Free)")
+                title = element.selectFirst(".manga-card-title")!!.text().replace(TITLE_SUFFIX, "")
                 setUrlWithoutDomain(element.selectFirst("a.manga-card-thumb")!!.absUrl("href"))
                 thumbnail_url = element.selectFirst(".manga-card-thumb img")?.absUrl("src")
             }
@@ -66,7 +66,7 @@ abstract class MiuRaw : KeiSource() {
     }
 
     private fun parseDetails(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst(".md-title")!!.text().removeSuffix(" (Raw – Free)")
+        title = document.selectFirst(".md-title")!!.text().replace(TITLE_SUFFIX, "")
         author = document.select(".md-meta-row:has(.fa-user) .md-meta-val").text().takeIf { it != "更新中" }
         status = parseStatus(document.selectFirst(".md-meta-row:has(.fa-rss) .md-meta-val")?.text())
         genre = document.select(".md-tag").joinToString { it.text() }
@@ -132,5 +132,10 @@ abstract class MiuRaw : KeiSource() {
         }
 
         return calendar.timeInMillis
+    }
+
+    companion object {
+        // Lists write the suffix with an en dash, some series pages with a hyphen
+        private val TITLE_SUFFIX = Regex("""\s*\(Raw [-\u2013] Free\)$""")
     }
 }

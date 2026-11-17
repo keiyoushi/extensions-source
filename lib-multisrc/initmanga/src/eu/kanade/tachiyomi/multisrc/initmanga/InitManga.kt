@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -30,6 +31,7 @@ import keiyoushi.utils.tryParseDateTime
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -37,7 +39,6 @@ import okhttp3.Interceptor
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -49,6 +50,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
+import kotlin.time.Duration.Companion.milliseconds
 
 abstract class InitManga :
     KeiSource(),
@@ -76,7 +78,9 @@ abstract class InitManga :
 
     protected open val siteZone: ZoneId = ZoneId.of("Europe/Istanbul")
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::decryptImage)
+    protected fun OkHttpClient.Builder.addImageDecryptInterceptor(): OkHttpClient.Builder = addInterceptor(::decryptImage)
+
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addImageDecryptInterceptor()
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(baseUrl.toHttpUrl().newBuilder().addPathSegment(popularUrlSlug), page)
 
@@ -177,10 +181,11 @@ abstract class InitManga :
         ?.nextElementSibling()
         ?.textOrNull()
 
-    // Ribbon class key, or the label on sites without a ribbon
+    // Ribbon class key, else the same key from the JSON-LD, else the label
     private fun parseStatus(document: Document): Int {
         val key = document.selectFirst("div.story-cover-wrap span.manga-status-ribbon")
             ?.classNames()?.firstOrNull { it.startsWith("ribbon-") }?.removePrefix("ribbon-")
+            ?: document.select("script[type=application/ld+json]").firstNotNullOfOrNull { LD_STATUS_REGEX.find(it.data())?.groupValues?.get(1) }
             ?: document.selectFirst("#manga-status")?.text()?.lowercase()?.replace(' ', '_')
         return when (key) {
             "ongoing", "caught_up" -> SManga.ONGOING
@@ -243,11 +248,11 @@ abstract class InitManga :
 
         val payload = scripts.firstOrNull { "\"ciphertext\"" in it }?.objectLiteral()?.parseAs<EncryptedPayloadDto>()
             ?: return document.select("div#chapter-content > img").toPages()
+        val initMangaData = scripts.first { "\"decryption_key\"" in it }.objectLiteral().parseAs<InitMangaDataDto>()
         val key = if (payload.salt != null) {
-            val initMangaData = scripts.first { "\"decryption_key\"" in it }.objectLiteral().parseAs<InitMangaDataDto>()
             passphraseKey(initMangaData.decryptionKey, payload.salt)
         } else {
-            fetchChapterKey(payload, chapterUrl)
+            fetchChapterKey(payload, initMangaData.nonce, chapterUrl)
         }
         val content = Base64.decode(payload.ciphertext, Base64.DEFAULT)
             .aesDecrypt(aesCbc(key, payload.iv.decodeHex()))
@@ -258,17 +263,22 @@ abstract class InitManga :
 
     private suspend fun getProtectedPages(gallery: Element, scripts: List<String>, chapterUrl: String): List<Page> {
         val vault = scripts.first { "admin-ajax" in it && "\"nonce\"" in it }.objectLiteral().parseAs<ImageVaultDto>()
+        val chapterId = gallery.attr("data-cid")
         val body = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart("action", "imip_gate_unlock")
-            .addFormDataPart("cid", gallery.attr("data-cid"))
+            .addFormDataPart("cid", chapterId)
             .addFormDataPart("nonce", vault.nonce)
+            .addFormDataPart("tok", vault.tok)
+            .addFormDataPart("p", ImageProtector.proof(vault.tok, chapterId))
+            .addFormDataPart("e", gallery.attrOrNull("data-e") ?: "0")
+            .addFormDataPart("g", gallery.attr("data-g"))
             .build()
-        val key = client.post(vault.url, Fetch.XHR.from(chapterUrl), body).parseAs<ImageKeyResponseDto>().data.k
+        val gate = client.post(vault.url, Fetch.XHR.from(chapterUrl), body).parseAs<ImageKeyResponseDto>().data
+        val (key, imageUrls) = ImageProtector.unlock(gate, vault.tok, chapterId)
 
-        return gallery.select("div.imip-page[data-bin]").mapIndexed { i, element ->
-            val imageUrl = element.absUrl("data-bin").toHttpUrl().newBuilder().fragment("$IMAGE_KEY_FRAGMENT$key").build().toString()
-            Page(i, imageUrl = imageUrl)
+        return imageUrls.mapIndexed { i, url ->
+            Page(i, imageUrl = url.toHttpUrl().newBuilder().fragment("$IMAGE_KEY_FRAGMENT$key").build().toString())
         }
     }
 
@@ -281,8 +291,8 @@ abstract class InitManga :
 
         // The real image header sits at the end of the file, so the whole body is needed
         val data = response.body.use { body -> Buffer().apply { writeAll(body.source()) } }
-        val image = ImageProtector.decrypt(data, key) ?: throw IOException("Failed to decrypt image")
-        return response.newBuilder().body(image.asResponseBody(response.body.contentType(), image.size)).build()
+        val image = ImageProtector.decrypt(data, key, response.body.contentType()) ?: throw IOException("Failed to decrypt image")
+        return response.newBuilder().body(image).build()
     }
 
     // Reader data is in inline scripts or base64 data: scripts
@@ -300,10 +310,57 @@ abstract class InitManga :
         return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA512").generateSecret(spec).encoded
     }
 
-    private suspend fun fetchChapterKey(payload: EncryptedPayloadDto, chapterUrl: String): ByteArray {
-        val body = ChapterKeyRequestDto(payload.cid!!, payload.e!!, payload.g!!).toJsonRequestBody()
-        return client.post("$baseUrl/wp-json/initmanga/v1/chapter-key", Fetch.XHR.from(chapterUrl), body)
-            .parseAs<ChapterKeyResponseDto>().key.decodeHex()
+    private suspend fun fetchChapterKey(payload: EncryptedPayloadDto, nonce: String?, chapterUrl: String): ByteArray {
+        var response = postChapterKey(payload, nonce, chapterUrl)
+        // Site reader resends with the token after its "Load chapter" button, which takes clicks 300 ms after it shows
+        val token = response.data?.token
+        if (response.code == "imc_challenge_required" && token != null) {
+            delay(500.milliseconds)
+            response = postChapterKey(payload, nonce, chapterUrl, token)
+        }
+        val key = response.key ?: throw Exception(
+            when (response.code) {
+                "imc_rate_limited" -> "Loading too quickly, wait a bit and retry"
+                else -> "Open the chapter in WebView" + response.code?.let { " ($it)" }.orEmpty()
+            },
+        )
+        return key.decodeHex()
+    }
+
+    private suspend fun postChapterKey(
+        payload: EncryptedPayloadDto,
+        nonce: String?,
+        chapterUrl: String,
+        challengeToken: String = "",
+    ): ChapterKeyResponseDto {
+        val keyHeaders = headers.newBuilder().apply {
+            if (!nonce.isNullOrEmpty()) set("X-WP-Nonce", nonce)
+        }.build()
+        val body = ChapterKeyRequestDto(
+            chapterId = payload.cid!!,
+            epoch = payload.e!!,
+            grant = payload.g!!,
+            // Site's headless check report for a clean browser
+            verdict = "pass",
+            score = 0,
+            codes = emptyList(),
+            challengeToken = challengeToken,
+        ).toJsonRequestBody()
+        val response = client.post(
+            "$baseUrl/wp-json/initmanga/v1/chapter-key",
+            keyHeaders,
+            Fetch.XHR.from(chapterUrl),
+            body,
+            ensureSuccess = false,
+        )
+        if (response.body.contentType()?.subtype != "json") {
+            response.close()
+            throw HttpException(response.code)
+        }
+        val result = response.parseAs<ChapterKeyResponseDto>()
+        // Site reader retries without the nonce when it has expired
+        if (nonce.isNullOrEmpty() || result.code != "rest_cookie_invalid_nonce") return result
+        return postChapterKey(payload, nonce = null, chapterUrl, challengeToken)
     }
 
     private fun Elements.toPages(): List<Page> = mapNotNull { element ->
@@ -350,6 +407,7 @@ abstract class InitManga :
         private const val SEARCH_PAGE_SIZE = 10
         private const val IMAGE_KEY_FRAGMENT = "imip="
         private val POST_ID_REGEX = Regex("""postid-(\d+)""")
+        private val LD_STATUS_REGEX = Regex(""""name":"status","value":"([a-z_]+)"""")
         private val chapterDateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
     }
 }

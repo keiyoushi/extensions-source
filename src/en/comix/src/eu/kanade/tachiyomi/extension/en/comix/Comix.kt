@@ -1,11 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.comix
 
-import android.app.Application
 import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
 import android.webkit.WebResourceResponse
-import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
@@ -22,17 +18,20 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.NativeWebViewApi
 import keiyoushi.utils.booleanOrNull
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.int
 import keiyoushi.utils.long
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import keiyoushi.utils.string
+import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -44,7 +43,10 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonElement
@@ -60,10 +62,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okio.Buffer
 import org.json.JSONObject
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.random.Random
@@ -77,23 +76,12 @@ abstract class Comix :
     KeiSource(),
     ConfigurableSource {
 
-    private val preferences: SharedPreferences by getPreferencesLazy()
-
-    // A full chapter walk pages through the whole list at a paced rate, so warn once per session
-    private val chapterListHintShown = AtomicBoolean(false)
-
-    private fun showChapterListHint() {
-        if (!chapterListHintShown.compareAndSet(false, true)) return
-        Handler(Looper.getMainLooper()).post {
-            runCatching {
-                Toast.makeText(
-                    Injekt.get<Application>(),
-                    "Chapter List loading takes time for first time",
-                    Toast.LENGTH_LONG,
-                ).show()
-            }
-        }
+    private val preferences: SharedPreferences by getPreferencesLazy {
+        edit().remove(LEGACY_SOLVE_CAPTCHA_PREF).apply()
     }
+
+    private val siteCheckMutex = Mutex()
+    private val siteCheckPasses = AtomicInteger()
 
     // Reader captures by chapter url, LRU; only finished ones are dropped
     private val captureScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -187,7 +175,7 @@ abstract class Comix :
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("browse")
-            addQueryParameter("order[score]", "desc")
+            addQueryParameter("sort", "score:desc")
             addQueryParameter("page", page.toString())
             applyPreferenceFilters()
         }.build()
@@ -196,7 +184,7 @@ abstract class Comix :
 
     private suspend fun getMangaListFromBrowse(url: HttpUrl): MangasPage {
         val searchResponse = runInWebView(
-            url = url.toString(),
+            url = url.joinListParameters().toString(),
             buildScript = { passPayloadName ->
                 """
                 (function () {
@@ -238,7 +226,7 @@ abstract class Comix :
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("browse")
-            addQueryParameter("order[chapter_updated_at]", "desc")
+            addQueryParameter("sort", "chapter_updated_at:desc")
             addQueryParameter("page", page.toString())
             applyPreferenceFilters()
         }.build()
@@ -270,12 +258,12 @@ abstract class Comix :
                         }
                     }
 
-                authorIds.forEach { addQueryParameter("authors[]", it) }
-                artistIds.forEach { addQueryParameter("artists[]", it) }
-                tagIds.forEach { addQueryParameter("genres_in[]", it) }
+                authorIds.forEach { addQueryParameter("authors", it) }
+                artistIds.forEach { addQueryParameter("artists", it) }
+                tagIds.forEach { addQueryParameter("genres_in", it) }
 
                 if (query.isNotBlank()) {
-                    addQueryParameter("keyword", query)
+                    addQueryParameter("q", query)
                 }
 
                 addQueryParameter("page", page.toString())
@@ -497,7 +485,6 @@ abstract class Comix :
         manga: SManga,
         knownIds: List<Int>,
     ): ChapterList {
-        if (knownIds.isEmpty()) showChapterListHint()
         val mangaId = manga.url.removePrefix("/").substringBefore('-')
         val payload = runInWebView(getMangaUrl(manga), { it.isChapterListRequest() }) { passPayloadName, _, touchName ->
             """
@@ -781,6 +768,21 @@ abstract class Comix :
         var job: Job? = null
     }
 
+    // The site's Turnstile check from its /@waf/challenge page, answered through /@waf/verify
+    private suspend fun passSiteCheck(challengeUrl: HttpUrl, passesBefore: Int) = siteCheckMutex.withLock {
+        if (siteCheckPasses.get() != passesBefore) return@withLock
+        val page = client.get(challengeUrl, Fetch.DOCUMENT).body.string()
+        val siteKey = TURNSTILE_SITE_KEY.find(page)!!.groupValues[1]
+        val token = getTurnstileToken(challengeUrl.toString(), siteKey)
+        val verified = client.post(
+            "$baseUrl$WAF_VERIFY_PATH",
+            Fetch.XHR.from(challengeUrl.toString()),
+            WafVerifyRequest(token).toJsonRequestBody(),
+        ).parseAs<WafVerifyResponse>().success
+        check(verified)
+        siteCheckPasses.incrementAndGet()
+    }
+
     override fun getFilterList(data: JsonElement?) = sourceFilters().getFilterList()
 
     @OptIn(NativeWebViewApi::class)
@@ -809,20 +811,24 @@ abstract class Comix :
                 val requestUrl = request.url?.toString()?.toHttpUrlOrNull()
                     ?: return@interceptRequest emptyResponse
                 if (UNUSED_SITE_PATHS.any(requestUrl.encodedPath::startsWith)) return@interceptRequest emptyResponse
-                // The solver's own request for this path reads the site's page
-                val isFrameLoad = request.requestHeaders["Accept"].orEmpty().contains("text/html")
-                if (requestUrl.encodedPath == WAF_CHALLENGE_PATH && isFrameLoad) {
-                    if (!preferences.solveCaptchas()) {
-                        reject(Exception("Open in WebView to solve the captcha, or turn on \"Solve captchas\" in extension settings"))
+                // The site's check frame, answered the way its page does
+                // The site's check in a frame; as a full page it's handled when the page starts
+                if (requestUrl.encodedPath == WAF_CHALLENGE_PATH && !request.isForMainFrame) {
+                    val passesBefore = siteCheckPasses.get()
+                    timeoutDeadline.set(System.nanoTime() + SITE_CHECK_WAIT_SECONDS.seconds.inWholeNanoseconds)
+                    val passed = runCatching { runBlocking { passSiteCheck(requestUrl, passesBefore) } }
+                    timeoutDeadline.set(System.nanoTime() + timeoutSeconds.seconds.inWholeNanoseconds)
+                    if (passed.isFailure) {
+                        reject(Exception(SITE_CHECK_ERROR))
                         return@interceptRequest emptyResponse
                     }
-                    val page = "<script>(${asset("solve_captcha.js")})(parent.$rejectName)</script>"
+                    val page = "<script>parent.postMessage({ type: 'waf-captcha-solved' }, location.origin)</script>"
                     return@interceptRequest WebResourceResponse("text/html", "utf-8", page.byteInputStream())
                 }
                 val isData = isDataRequest?.invoke(requestUrl) == true
                 if (isData) dataRequests.incrementAndGet()
                 if (requestUrl.isChapterListRequest()) chapterListPacer.waitForSlot()
-                if (isData || requestUrl.encodedPath.startsWith(WAF_PATH)) {
+                if (isData) {
                     timeoutDeadline.set(System.nanoTime() + timeoutSeconds.seconds.inWholeNanoseconds)
                 }
                 val allowed = requestUrl.host == baseUrlHost ||
@@ -831,7 +837,8 @@ abstract class Comix :
                     requestUrl.host.endsWith(".comix.to") ||
                     requestUrl.host == "comix.ws" ||
                     requestUrl.host.endsWith(".comix.ws") ||
-                    requestUrl.host == "challenges.cloudflare.com"
+                    requestUrl.host == "challenges.cloudflare.com" ||
+                    requestUrl.host.endsWith(".challenges.cloudflare.com")
                 // Page images are off-site
                 if (allowed || loadImages) null else emptyResponse
             }
@@ -856,7 +863,33 @@ abstract class Comix :
                 it.settings.setSupportMultipleWindows(true)
             }
 
+            // The site's check as a full page, answered like the frame, then back to its same-site return path
+            onPageStarted { pageUrl ->
+                val challengeUrl = pageUrl.toHttpUrlOrNull()?.takeIf { it.encodedPath == WAF_CHALLENGE_PATH }
+                    ?: return@onPageStarted
+                stopLoading()
+                val passesBefore = siteCheckPasses.get()
+                timeoutDeadline.set(System.nanoTime() + SITE_CHECK_WAIT_SECONDS.seconds.inWholeNanoseconds)
+                captureScope.launch {
+                    try {
+                        passSiteCheck(challengeUrl, passesBefore)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        reject(Exception(SITE_CHECK_ERROR))
+                        return@launch
+                    }
+                    timeoutDeadline.set(System.nanoTime() + timeoutSeconds.seconds.inWholeNanoseconds)
+                    val target = challengeUrl.queryParameter("return")
+                        ?.takeIf { it.startsWith("/") && !it.startsWith("//") && !it.startsWith("/\\") }
+                        ?: "/"
+                    evaluateJs("location.replace(${JSONObject.quote(target)})")
+                }
+            }
+
+            // Nothing runs on the site's check page
             val captureScript = buildScript?.invoke(passPayloadName)
+                ?.let { "location.pathname === '$WAF_CHALLENGE_PATH' ? null : $it" }
             if (captureScript != null) {
                 onPageStarted { evaluateJs(captureScript) }
                 onPageFinished { evaluateJs(captureScript) }
@@ -880,7 +913,7 @@ abstract class Comix :
             val startFlagName = "window.${randomName()}"
             val bootstrapScript = """
                 (() => {
-                if (window.top !== window || $startFlagName) return;
+                if (window.top !== window || location.pathname === '$WAF_CHALLENGE_PATH' || $startFlagName) return;
                 $startFlagName = true;
                 try { localStorage.setItem("__pu1", "[" + Date.now() + "]"); } catch (e) {}
                 window.$passPayloadName = payload => window.$bridgeName.postMessage(payload);
@@ -899,6 +932,13 @@ abstract class Comix :
         .map { (('a'..'z') + ('A'..'Z')).random() }
         .joinToString("")
 
+    // The site reads list filters as one comma-separated value
+    private fun HttpUrl.joinListParameters(): HttpUrl = newBuilder().query(null).apply {
+        queryParameterNames.forEach { name ->
+            addQueryParameter(name, queryParameterValues(name).joinToString(","))
+        }
+    }.build()
+
     private fun asset(name: String) = javaClass.getResource("/assets/$name")!!.readText()
 
     private fun HttpUrl.isChapterListRequest(): Boolean = pathSegments.size == 5 &&
@@ -908,13 +948,6 @@ abstract class Comix :
         pathSegments[4] == "chapters"
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = PREF_SOLVE_CAPTCHA
-            title = "Solve captchas"
-            summary = "Solve the site's \"Verify you're human\" captcha automatically"
-            setDefaultValue(false)
-        }.let(screen::addPreference)
-
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_FETCH_CHAPTERS_UNTIL_KNOWN
             title = "Faster chapter list fetching"
@@ -1037,8 +1070,6 @@ abstract class Comix :
         ?.filter { it.isNotEmpty() }
         ?.toSet() ?: emptySet()
 
-    private fun SharedPreferences.solveCaptchas() = getBoolean(PREF_SOLVE_CAPTCHA, false)
-
     private fun SharedPreferences.alternativeNamesInDescription() = getBoolean(ALTERNATIVE_NAMES_IN_DESCRIPTION, false)
 
     private fun SharedPreferences.scorePosition() = getString(PREF_SCORE_POSITION, "top") ?: "top"
@@ -1085,7 +1116,7 @@ abstract class Comix :
         private const val PREF_SHOW_EXTRA_INFO = "pref_show_extra_info"
         private const val PREF_SHOW_TAGS_IN_GENRES = "pref_show_tags_in_genres"
         private const val PREF_SCORE_POSITION = "pref_score_position"
-        private const val PREF_SOLVE_CAPTCHA = "pref_solve_captcha"
+        private const val LEGACY_SOLVE_CAPTCHA_PREF = "pref_solve_captcha"
 
         private const val DEFAULT_CONTENT_RATING = "suggestive"
         private const val WEBVIEW_TIMEOUT_SECONDS = 120L
@@ -1116,8 +1147,9 @@ abstract class Comix :
 
         // Site's captcha page, shown when the API answers 403 captcha_required
         private const val WAF_CHALLENGE_PATH = "/@waf/challenge"
-
-        // Site's captcha endpoints, which also keep a WebView run alive while the solver works
-        private const val WAF_PATH = "/@waf/"
+        private const val WAF_VERIFY_PATH = "/@waf/verify"
+        private const val SITE_CHECK_WAIT_SECONDS = 180L
+        private const val SITE_CHECK_ERROR = "Open in WebView to pass the site's check"
+        private val TURNSTILE_SITE_KEY = Regex("""sitekey:\s*["']([^"']+)["']""")
     }
 }

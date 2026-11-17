@@ -395,7 +395,7 @@ abstract class MoeTruyen : KeiSource() {
 
     private fun imgxInterceptor() = Interceptor { chain ->
         val request = chain.request()
-        val grantEntry = imgxGrants.remove(request.url.toString())
+        val grantEntry = imgxGrants[request.url.toString()]
             ?: return@Interceptor chain.proceed(request)
         val (grant, storageKey) = grantEntry
         val response = chain.proceed(request)
@@ -425,12 +425,12 @@ abstract class MoeTruyen : KeiSource() {
         }
         Response.Builder()
             .request(request)
-            .protocol(Protocol.HTTP_1_1)
+            .protocol(Protocol.HTTP_2)
             .code(200)
             .message("OK")
             .header("Content-Type", "image/webp")
             .header("Content-Length", webp.size.toString())
-            .header("Cache-Control", "no-store")
+            .header("Cache-Control", "no-cache, no-store")
             .body(webp.toResponseBody("image/webp".toMediaType()))
             .build()
     }

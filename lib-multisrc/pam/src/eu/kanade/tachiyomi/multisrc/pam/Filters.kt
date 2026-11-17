@@ -39,3 +39,14 @@ class SortFilter(
     val sort get() = sortValues[state?.index ?: 0].second
     val ascending get() = state?.ascending ?: false
 }
+
+/** A [TriStateGroupFilter] over the site's types rather than its genres. */
+abstract class TypeGroupFilter(
+    name: String,
+    options: List<Pair<String, String>>,
+) : TriStateGroupFilter(name, options)
+
+/** A whole-number library parameter, such as the year or chapter count range. */
+class NumberFilter(name: String, val parameter: String) : Filter.Text(name) {
+    val value get() = state.trim().toIntOrNull()?.takeIf { it > 0 }
+}

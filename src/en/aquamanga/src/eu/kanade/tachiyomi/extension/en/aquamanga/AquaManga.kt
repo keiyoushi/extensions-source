@@ -17,8 +17,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 abstract class AquaManga : MadaraNoAjax() {
     override val supportsPostId = false
 
-    override fun archiveSelector() = ".aqua-archive-card"
-    override val archiveUrlSelector = ".aqua-archive-card__title a"
+    override fun archiveSelector() = ".aqua-manga-card"
+    override val archiveUrlSelector = ".aqua-manga-card__title a"
     override fun nextPageSelector() = "a.next"
     override val searchQueryParameter = "search"
     override val filterGenresSelector = "div.aqua-genre-pills"

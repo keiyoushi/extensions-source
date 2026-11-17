@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "NetTruyenViet (unoriginal)"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
@@ -15,5 +15,15 @@ keiyoushi {
         baseUrl {
             custom("https://nettruyenviet10.com")
         }
+    }
+
+    deeplink {
+        host("nettruyenviet10.com")
+        host("www.nettruyenviet10.com")
+        host("nettruyenviet11.com")
+        host("www.nettruyenviet11.com")
+        host("hinettruyen.com")
+        host("www.hinettruyen.com")
+        path("/truyen-tranh/..*")
     }
 }

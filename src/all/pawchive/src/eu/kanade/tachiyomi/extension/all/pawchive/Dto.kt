@@ -2,6 +2,8 @@ package eu.kanade.tachiyomi.extension.all.pawchive
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import kotlinx.serialization.json.JsonPrimitive
@@ -11,7 +13,7 @@ import kotlin.time.Instant
 @Serializable
 class PawchiveFavoritesDto(
     val id: String,
-    val faved_seq: Long,
+    @SerialName("faved_seq") val favedSeq: Long,
 )
 
 @Serializable
@@ -26,7 +28,7 @@ class PawchiveCreatorDto(
     var fav: Long = 0L
 
     val updatedDate get() = when {
-        updated.isString -> Instant.parseOrNull(updated.content)?.toEpochMilliseconds() ?: 0L
+        updated.isString -> Instant.tryParse(updated.content)
         else -> (updated.double * 1000).toLong()
     }
 
@@ -63,7 +65,7 @@ class PawchivePostDto(
         get() = (listOfNotNull(file) + attachments)
             .filter { it.path.isNotBlank() && it.path.substringAfterLast('.').lowercase() in validImageExtensions }
             .distinctBy { it.path }
-            .map { it.toString() }
+            .map { "${it.server}/data${it.path}" }
 
     fun toSChapter(serviceName: String?, datePref: String) = SChapter.create().apply {
         val dateStr = when (datePref) {
@@ -78,7 +80,7 @@ class PawchivePostDto(
             } else {
                 it + if (serviceName == "Pixiv Fanbox") "+09:00" else "Z"
             }
-            Instant.parseOrNull(dateWithTz)?.toEpochMilliseconds()
+            Instant.tryParse(dateWithTz)
         } ?: 0L
 
         url = "/$service/user/$user/post/$id"
@@ -101,6 +103,4 @@ class PawchivePostDto(
 }
 
 @Serializable
-class PawchiveFileDto(val path: String = "") {
-    override fun toString() = path
-}
+class PawchiveFileDto(val path: String = "", val server: String = "")

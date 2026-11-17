@@ -129,7 +129,7 @@ abstract class KeyoappV2 : KeyoappBase() {
 
     private fun seriesUrl(slug: String): HttpUrl = baseUrl.toHttpUrl().newBuilder().addPathSegment(slug).build()
 
-    private fun parseMangaDetails(document: Document, slug: String): SManga = SManga.create().apply {
+    protected open fun parseMangaDetails(document: Document, slug: String): SManga = SManga.create().apply {
         url = seriesUrl(slug).encodedPath
         title = document.selectFirst("h1")!!.text()
         description = document.selectFirst("#series-desc")?.wholeText()?.trim()

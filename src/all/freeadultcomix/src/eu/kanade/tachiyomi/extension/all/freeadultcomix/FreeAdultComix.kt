@@ -20,6 +20,7 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 
 @Source
 abstract class FreeAdultComix : KeiSource() {
@@ -61,11 +62,12 @@ abstract class FreeAdultComix : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val document = client.get(url, Fetch.DOCUMENT).asJsoup()
-        val gallery = document.selectFirst(".dgwt-jg-gallery") ?: return null
+        val pages = pageUrls(document).ifEmpty { return null }
         return mangaDetailsParse(document).apply {
             setUrlWithoutDomain(document.location())
             // Posts don't show their cover
-            thumbnail_url = gallery.selectFirst("a")?.absUrl("href")
+            thumbnail_url = pages.first()
+            initialized = true
         }
     }
 
@@ -77,7 +79,7 @@ abstract class FreeAdultComix : KeiSource() {
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         // Video posts have no pages to read
-        val chapterList = if (document.selectFirst(".dgwt-jg-gallery") == null) {
+        val chapterList = if (pageUrls(document).isEmpty()) {
             emptyList()
         } else {
             listOf(
@@ -100,9 +102,17 @@ abstract class FreeAdultComix : KeiSource() {
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        .select(".dgwt-jg-gallery figure > a[href]")
-        .mapIndexed { index, link -> Page(index, imageUrl = link.absUrl("href")) }
+    override suspend fun getPageList(chapter: SChapter): List<Page> = pageUrls(client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup())
+        .mapIndexed { index, url -> Page(index, imageUrl = url) }
+
+    // Posts keep their pages in a gallery plugin, in the theme's own gallery or as images in the text
+    private fun pageUrls(document: Document): List<String> = document.select(".dgwt-jg-gallery figure > a[href], .fotos .foto > a[href]").map { it.absUrl("href") }
+        .ifEmpty { document.select(".post-texto img").map(::originalImageUrl) }
+
+    // Older posts show resized images, with the original in their srcset
+    private fun originalImageUrl(img: Element): String = img.attr("srcset").split(", ")
+        .maxByOrNull { it.substringAfterLast(' ').dropLast(1).toIntOrNull() ?: 0 }
+        ?.substringBefore(' ')?.ifEmpty { null } ?: img.absUrl("src")
 
     override val supportsFilterFetching = true
 

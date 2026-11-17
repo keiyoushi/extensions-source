@@ -15,11 +15,16 @@ import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.decodeHex
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.get
+import keiyoushi.utils.getObjectOrNull
+import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -29,6 +34,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.jsoup.parser.Parser
 import kotlin.time.Instant
 
 @Source
@@ -204,40 +210,169 @@ abstract class LxHentai : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = "$baseUrl${chapter.url}"
-        val chapterHtml = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup().html()
 
-        val imageUrls = extractImageUrls(chapterHtml)
-        if (imageUrls.isEmpty()) return emptyList()
+        var lastError: Exception? = null
+        // /get_token can rotate the XSRF cookie, invalidating a stale CSRF (HTTP 419).
+        // Retry once with a fresh page.
+        repeat(2) {
+            try {
+                val chapterBody = client.get(chapterUrl, Fetch.DOCUMENT).body.string()
+                val chapterHtml = chapterBody
 
-        val token = getActionToken(chapterUrl, chapterHtml)
-        val pageMetadata = encodePageMetadata(chapterUrl, token)
+                val mfKey = extractMfKey(chapterHtml)
+                    ?: throw Exception("Không giải mã được viewer")
+                val component = findViewerComponent(chapterHtml)
+                    ?: throw Exception("Không tìm thấy component ảnh")
+                val mfKid = component.serverMemo.getObjectOrNull("data")?.getStringOrNull("manifestKid")
 
-        return imageUrls.mapIndexed { index: Int, imageUrl: String ->
-            Page(index, url = pageMetadata, imageUrl = imageUrl)
+                val csrfToken = csrfTokenRegex.find(chapterHtml)?.groupValues?.get(1).orEmpty()
+                val actionToken = getActionToken(chapterUrl, csrfToken, chapterHtml, mfKey, mfKid)
+                val imageUrls = fetchImageManifest(chapterUrl, component, csrfToken, actionToken, mfKey)
+                if (imageUrls.isEmpty()) return@repeat
+
+                val pageMetadata = encodePageMetadata(chapterUrl, actionToken)
+
+                return imageUrls.mapIndexed { index: Int, imageUrl: String ->
+                    Page(index, url = pageMetadata, imageUrl = imageUrl)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                lastError = e
+            }
         }
+
+        throw lastError ?: Exception("Không tải được danh sách trang")
     }
 
-    private suspend fun getActionToken(chapterUrl: String, chapterHtml: String): String {
-        cachedActionToken?.let { return it }
+    /** Finds the `chapter-viewer-images` `wire:initial-data` JSON by regex —
+     * avoids a Jsoup DOM build on ~1 MB pages. */
+    private fun findViewerComponent(html: String): LivewireInitialData? = wireInitialDataRegex.findAll(html)
+        .mapNotNull { match ->
+            try {
+                decodeHtmlEntities(match.groupValues[1]).parseAs<LivewireInitialData>()
+            } catch (_: Exception) {
+                null
+            }
+        }
+        .firstOrNull { component ->
+            component.fingerprint.getStringOrNull("name") == "chapter-viewer-images"
+        }
 
-        val csrfToken = csrfTokenRegex.find(chapterHtml)?.groupValues?.get(1).orEmpty()
+    private fun decodeHtmlEntities(text: String): String = Parser.unescapeEntities(text, false)
+
+    /** Extracts `__lxMfkey` — nested inside hex-encoded JS layers
+     * (`var _x = ["hex", ...]`). Walks up to 4 layers; 2 are used today.
+     * Returns the key with `\/` unescaped. */
+    private fun extractMfKey(html: String): String? {
+        var candidates = listOf(html)
+        repeat(4) {
+            val next = mutableListOf<String>()
+            for (text in candidates) {
+                mfKeyRegex.find(text)?.let { return it.groupValues[1].replace("\\/", "/") }
+                next.addAll(decodeHexPayloads(text))
+            }
+            if (next.isEmpty()) return null
+            candidates = next
+        }
+        return null
+    }
+
+    /** Finds `var _x = ["hex", ...]` arrays, decodes each to a JS layer.
+     * indexOf scanning is used instead of regex over array contents. */
+    private fun decodeHexPayloads(text: String): List<String> {
+        val layers = mutableListOf<String>()
+        var offset = 0
+        while (true) {
+            val start = arrayStartRegex.find(text, offset)?.let { it.range.last + 1 } ?: break
+            val end = text.indexOf(']', start)
+            if (end < 0) break
+            offset = end + 1
+            val hex = extractHex(text, start, end) ?: continue
+            decodeHexPayload(hex)?.let(layers::add)
+        }
+        return layers
+    }
+
+    /** Reads `"hex", ...` elements between [start] and [end] as one hex string.
+     * Returns null at the first non-hex character. */
+    private fun extractHex(text: String, start: Int, end: Int): String? {
+        // Hex entries are ~50 chars; decoys pack one long blob — bail early.
+        val firstQuote = text.indexOf('"', start)
+        if (firstQuote < 0 || firstQuote >= end) return null
+        val secondQuote = text.indexOf('"', firstQuote + 1)
+        if (secondQuote < 0 || secondQuote >= end) return null
+        if (secondQuote - firstQuote - 1 > 512) return null
+
+        val hex = StringBuilder(end - start)
+        for (i in start until end) {
+            when (text[i]) {
+                in '0'..'9', in 'a'..'f', in 'A'..'F' -> hex.append(text[i])
+                '"', ',', ' ', '\t', '\n', '\r' -> Unit
+                else -> return null
+            }
+        }
+        return hex.toString().takeIf { it.length >= 66 }
+    }
+
+    private fun decodeHexPayload(hex: String): String? {
+        if (hex.length < 66 || hex.length % 2 != 0) return null
+        val bytes = try {
+            hex.decodeHex()
+        } catch (_: Exception) {
+            return null
+        }
+        val out = ByteArray(bytes.size - 32)
+        for (i in out.indices) {
+            out[i] = (bytes[i + 32].toInt() xor bytes[i % 32].toInt()).toByte()
+        }
+        return String(out, Charsets.UTF_8).takeIf { it.isNotBlank() }
+    }
+
+    private fun xorB64Decode(payload: String, key: String): String? = try {
+        val bytes = Base64.decode(payload, Base64.DEFAULT)
+        val keyBytes = key.toByteArray(Charsets.UTF_8)
+        for (i in bytes.indices) {
+            bytes[i] = (bytes[i].toInt() xor keyBytes[i % keyBytes.size].toInt()).toByte()
+        }
+        String(bytes, Charsets.UTF_8)
+    } catch (_: Exception) {
+        null
+    }
+
+    private suspend fun getActionToken(chapterUrl: String, csrfToken: String, chapterHtml: String, mfKey: String, mfKid: String?): String {
         val siteKey = recaptchaRegex.find(chapterHtml)?.groupValues?.get(1).orEmpty()
-
-        val encodedChapterUrl = chapterUrl.toHttpUrlOrNull()?.toString() ?: chapterUrl
+            .ifEmpty { cachedActionTokenSiteKey.orEmpty() }
+            .also { if (it.isNotEmpty()) cachedActionTokenSiteKey = it }
 
         val tokenHeaders = headersBuilder()
             .set("Accept", "application/json")
             .set("Content-Type", "application/json")
             .set("X-CSRF-TOKEN", csrfToken)
-            .set("Referer", encodedChapterUrl)
+            .set("Referer", chapterUrl.toHttpUrlOrNull()?.toString() ?: chapterUrl)
             .set("Origin", baseUrl)
             .build()
 
-        val getResponse = client.get("$baseUrl/get_token", tokenHeaders, Fetch.XHR, ensureSuccess = false)
+        val tokenUrl = buildString {
+            append("$baseUrl/get_token")
+            if (!mfKid.isNullOrEmpty()) {
+                append("?kid=", mfKid)
+            }
+        }
+
+        fun TokenResponse.actionToken(): String? {
+            action_token?.let { return it }
+            val encrypted = e ?: return null
+            return xorB64Decode(encrypted, mfKey)
+                ?.parseAs<EncryptedToken>()
+                ?.at
+        }
+
+        val getResponse = client.get(tokenUrl, tokenHeaders, Fetch.XHR, ensureSuccess = false)
         if (getResponse.isSuccessful) {
             val data = getResponse.parseAs<TokenResponse>()
-            if (!data.is_bot && !data.action_token.isNullOrEmpty()) {
-                return data.action_token.also { cachedActionToken = it }
+            if (!data.is_bot) {
+                data.actionToken()?.let { return it }
             }
         } else {
             getResponse.close()
@@ -249,12 +384,23 @@ abstract class LxHentai : KeiSource() {
                 siteKey = siteKey,
             )
 
+            val freshCsrf = client.get(chapterUrl, Fetch.DOCUMENT).body.string()
+                .let { csrfTokenRegex.find(it)?.groupValues?.get(1) }
+                ?: csrfToken
+            val postHeaders = headersBuilder()
+                .set("Accept", "application/json")
+                .set("Content-Type", "application/json")
+                .set("X-CSRF-TOKEN", freshCsrf)
+                .set("Referer", chapterUrl.toHttpUrlOrNull()?.toString() ?: chapterUrl)
+                .set("Origin", baseUrl)
+                .build()
+
             val payload = TurnstilePayload(turnstileResponse = turnstileToken).toJsonRequestBody()
-            val postResponse = client.post("$baseUrl/get_token", tokenHeaders, Fetch.XHR, payload, ensureSuccess = false)
+            val postResponse = client.post(tokenUrl, postHeaders, Fetch.XHR, payload, ensureSuccess = false)
             if (postResponse.isSuccessful) {
                 val data = postResponse.parseAs<TokenResponse>()
-                if (!data.is_bot && !data.action_token.isNullOrEmpty()) {
-                    return data.action_token.also { cachedActionToken = it }
+                if (!data.is_bot) {
+                    data.actionToken()?.let { return it }
                 }
             } else {
                 postResponse.close()
@@ -264,87 +410,49 @@ abstract class LxHentai : KeiSource() {
         return ""
     }
 
-    private fun extractImageUrls(html: String): List<String> {
-        for (match in scriptTagRegex.findAll(html)) {
-            val scriptContent = match.groupValues[1]
-            if (!scriptContent.contains("KGZ") || scriptContent.length < 1000) continue
+    private suspend fun fetchImageManifest(chapterUrl: String, component: LivewireInitialData, csrfToken: String, actionToken: String, mfKey: String): List<String> {
+        val message = LivewireMessage(
+            fingerprint = component.fingerprint,
+            serverMemo = component.serverMemo,
+            updates = listOf(
+                LivewireUpdate(
+                    type = "fireEvent",
+                    payload = LivewireUpdatePayload(
+                        id = (1..7).map { "abcdefghijklmnopqrstuvwxyz0123456789".random() }.joinToString(""),
+                        event = "lxViewerImagesUnlock",
+                        params = listOf(actionToken),
+                    ),
+                ),
+            ),
+        )
 
-            val bArrayContent = bArrayRegex.find(scriptContent)?.groupValues?.get(2) ?: continue
-            val parts = quotedStringRegex.findAll(bArrayContent).map { it.groupValues[1] }.toList()
-            if (parts.isEmpty()) continue
+        val manifestHeaders = headersBuilder()
+            .set("Accept", "text/html, application/xhtml+xml")
+            .set("Content-Type", "application/json")
+            .set("X-Livewire", "true")
+            .set("X-CSRF-TOKEN", csrfToken)
+            .set("Referer", chapterUrl.toHttpUrlOrNull()?.toString() ?: chapterUrl)
+            .set("Origin", baseUrl)
+            .build()
 
-            val layer2 = try {
-                String(Base64.decode(parts.joinToString(""), Base64.DEFAULT), Charsets.UTF_8)
-            } catch (_: Exception) {
-                continue
-            }
+        val response = client.post(
+            "$baseUrl/livewire/message/chapter-viewer-images",
+            manifestHeaders,
+            Fetch.XHR,
+            message.toJsonRequestBody(),
+        )
 
-            val arrayMap = mutableMapOf<String, IntArray>()
-            for (arrMatch in arrayAssignRegex.findAll(layer2)) {
-                val name = arrMatch.groupValues[1]
-                val nums = arrMatch.groupValues[2].split(',').mapNotNull { it.trim().toIntOrNull() }.toIntArray()
-                arrayMap[name] = nums
-            }
+        val manifest = response.parseAs<LivewireResponse>()
+            .effects
+            ?.dispatches
+            ?.firstOrNull { it.event == "lx:srcs" }
+            ?.data
+            ?.data
+            ?.let { xorB64Decode(it, mfKey) }
+            ?.parseAs<ImageManifest>()
+            ?: return emptyList()
 
-            val hexKey = keyRegex.find(layer2)?.groupValues?.get(1) ?: continue
-            val concatExpr = concatRegex.find(layer2)?.groupValues?.get(1) ?: continue
-            val varNames = varNameRegex.findAll(concatExpr).map { it.value }.toList()
-            if (varNames.isEmpty()) continue
-
-            var totalLength = 0
-            for (v in varNames) {
-                totalLength += arrayMap[v]?.size ?: 0
-            }
-            if (totalLength == 0) continue
-
-            val payload = ByteArray(totalLength)
-            var offset = 0
-            for (v in varNames) {
-                val arr = arrayMap[v] ?: continue
-                for (num in arr) {
-                    payload[offset++] = num.toByte()
-                }
-            }
-
-            val keyLen = hexKey.length
-            for (i in payload.indices) {
-                payload[i] = (payload[i].toInt() xor hexKey[i % keyLen].code).toByte()
-            }
-
-            val layer3 = String(payload, Charsets.UTF_8)
-            val key3 = key3Regex.find(layer3)?.groupValues?.get(1) ?: continue
-            val rawJsonB64 = b64JsonRegex.find(layer3)?.groupValues?.get(1) ?: continue
-
-            val jsonStr = try {
-                String(Base64.decode(rawJsonB64, Base64.DEFAULT), Charsets.UTF_8)
-            } catch (_: Exception) {
-                continue
-            }
-
-            val rawList = try {
-                jsonStr.parseAs<List<String>>()
-            } catch (_: Exception) {
-                continue
-            }
-
-            val urls = mutableListOf<String>()
-            val key3Len = key3.length
-            for (item in rawList) {
-                val b = try {
-                    Base64.decode(item, Base64.DEFAULT)
-                } catch (_: Exception) {
-                    continue
-                }
-                for (j in b.indices) {
-                    b[j] = (b[j].toInt() xor key3[j % key3Len].code).toByte()
-                }
-                urls.add(String(b, Charsets.UTF_8))
-            }
-
-            if (urls.isNotEmpty()) return urls
-        }
-
-        return emptyList()
+        return manifest.u.filterIndexed { index, _ -> (manifest.f.getOrNull(index) ?: 0) and 1 == 0 }
     }
 
     override fun getImageRequest(page: Page): Request {
@@ -354,13 +462,9 @@ abstract class LxHentai : KeiSource() {
     }
 
     private fun imageHeaders(chapterUrl: String, actionToken: String) = super.headersBuilder()
-        .add("Referer", chapterUrl.toHttpUrlOrNull()?.toString() ?: chapterUrl)
+        .add("Referer", "$baseUrl/")
         .add("Origin", baseUrl)
-        .apply {
-            if (actionToken.isNotEmpty()) {
-                add("Token", actionToken)
-            }
-        }
+        .add("Token", actionToken.ifEmpty { "x" })
         .build()
 
     // ============================== Filters ===============================
@@ -405,19 +509,13 @@ abstract class LxHentai : KeiSource() {
         return chapterUrl to actionToken
     }
 
-    private var cachedActionToken: String? = null
+    private var cachedActionTokenSiteKey: String? = null
 
     private val csrfTokenRegex = Regex("""var\s+csrf_token\s*=\s*'([^']+)'""")
+    private val wireInitialDataRegex = Regex("""wire:initial-data="((?:[^"\\]|\\.)*)"""")
     private val recaptchaRegex = Regex("""var\s+recaptcha\s*=\s*'([^']+)'""")
-    private val scriptTagRegex = Regex("""<script\b[^>]*>([\s\S]*?)</script>""", RegexOption.IGNORE_CASE)
-    private val bArrayRegex = Regex("""var\s+(_\w+)\s*=\s*\[([\s\S]*?)\];\s*var\s+_\w+\s*=\s*\1\.join""")
-    private val quotedStringRegex = Regex(""""([^"]+)"""")
-    private val arrayAssignRegex = Regex("""var\s+(_\w+)\s*=\s*\[((?:\d+(?:\s*,\s*\d+)*)?)\]""")
-    private val keyRegex = Regex("""var\s+_\w+\s*=\s*['"]([0-9a-f]{16,64})['"]""")
-    private val concatRegex = Regex("""var\s+_\w+\s*=\s*(_\w+(?:\.concat\(_\w+\))+)""")
-    private val varNameRegex = Regex("""_\w+""")
-    private val key3Regex = Regex("""var\s+_\w+\s*=\s*"([0-9a-f]{16,64})";""")
-    private val b64JsonRegex = Regex("""var\s+_\w+\s*=\s*"([A-Za-z0-9+/=]{100,})";""")
+    private val mfKeyRegex = Regex("""__lxMfkey\s*=\s*"([^"]+)"""")
+    private val arrayStartRegex = Regex("""var\s+_\w+\s*=\s*\[""")
     private val backgroundUrlRegex = Regex("""background-image:\s*url\(['"]?([^'")]+)""", RegexOption.IGNORE_CASE)
     private val genreSlugRegex = Regex("""toggleGenre\('([^']+)'\)""")
 }

@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "WNACG"
-    versionCode = 6
+    versionCode = 8
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
@@ -17,6 +17,8 @@ keiyoushi {
             mirrors(
                 "https://www.wnacg.buzz",
                 "https://www.wnacg.site",
+                "https://www.wn01.cfd",
+                "https://www.wnacg.com",
             )
         }
     }

@@ -4,6 +4,7 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.all.pawchive.PawchiveCreatorDto.Companion.serviceName
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -26,9 +27,7 @@ import okhttp3.CacheControl
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import kotlin.io.use
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Pawchive :
@@ -38,38 +37,23 @@ abstract class Pawchive :
 
     private val apiPath = "api/v1"
 
-    private val dataPath = "data"
-
-    private val fileUrl = baseUrl.replace("//", "//file.")
-
     private val imgUrl = baseUrl.replace("//", "//img.")
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor { chain ->
             val request = chain.request()
 
-            val modifiedRequest = when {
-                request.url.pathSegments.firstOrNull() == "api" -> {
-                    request.newBuilder()
-                        .header("Accept", "text/css")
-                        .build()
-                }
-
-                request.url.toString().startsWith(fileUrl) || request.url.toString().startsWith(imgUrl) -> {
-                    request.newBuilder()
-                        .header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-                        .header("Sec-Fetch-Dest", "image")
-                        .header("Sec-Fetch-Mode", "no-cors")
-                        .header("Sec-Fetch-Site", "same-site")
-                        .build()
-                }
-
-                else -> request
+            val modifiedRequest = if (request.url.pathSegments.firstOrNull() == "api") {
+                request.newBuilder()
+                    .header("Accept", "text/css")
+                    .build()
+            } else {
+                request
             }
 
             var response = chain.proceed(modifiedRequest)
 
-            if (response.code == 404 && request.url.toString().startsWith(fileUrl)) {
+            if (response.code == 404 && request.url.pathSegments.firstOrNull() == "data") {
                 if (preferences.getBoolean(FALLBACK_LOW_RES_IMG, true)) {
                     response.close()
 
@@ -82,9 +66,6 @@ abstract class Pawchive :
 
             response
         }
-        connectTimeout(15.seconds)
-        readTimeout(30.seconds)
-        writeTimeout(15.seconds)
     }
 
     private val apiClient = client.newBuilder()
@@ -94,8 +75,6 @@ abstract class Pawchive :
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", getFilterList(null))
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", getLatestUpdatesFilterList())
-
-    // ============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         var sort: Pair<String, String> = "" to ""
@@ -133,12 +112,9 @@ abstract class Pawchive :
                     val url = "$baseUrl/$apiPath/account/favorites"
 
                     apiClient.get(url, Fetch.XHR, ensureSuccess = false).use { response ->
-                        if (response.isSuccessful) {
-                            response.parseAs<List<PawchiveFavoritesDto>>()
-                        } else {
-                            val message = if (response.code == 401) "You are not logged in" else "HTTP error ${response.code}"
-                            throw Exception("Failed to fetch favorites: $message")
-                        }
+                        if (response.code == 401) throw Exception("Log in via WebView to use Favorites")
+                        if (!response.isSuccessful) throw HttpException(response.code)
+                        response.parseAs<List<PawchiveFavoritesDto>>()
                     }
                 } else {
                     emptyList()
@@ -149,12 +125,7 @@ abstract class Pawchive :
                 val url = "$baseUrl/$apiPath/creators"
                 val cacheControl = CacheControl.Builder().maxStale(30.minutes).build()
 
-                apiClient.get(url, Fetch.XHR, cacheControl).use { response ->
-                    if (!response.isSuccessful) {
-                        throw Exception("HTTP error ${response.code}")
-                    }
-                    response.parseAs<List<PawchiveCreatorDto>>()
-                }
+                apiClient.get(url, Fetch.XHR, cacheControl).parseAs<List<PawchiveCreatorDto>>()
             }
 
             val favorites = favoritesDeferred.await()
@@ -167,7 +138,7 @@ abstract class Pawchive :
                 val regularSearch = creator.name.contains(query, true)
 
                 val favEntry = favorites.find { f -> f.id == creator.id }
-                creator.fav = favEntry?.faved_seq ?: 0L
+                creator.fav = favEntry?.favedSeq ?: 0L
 
                 val isFavorited = when (fav) {
                     true -> favEntry != null
@@ -182,6 +153,7 @@ abstract class Pawchive :
         val sorted = when (sort.first) {
             "pop" -> if (sort.second == "desc") mangas.sortedByDescending { it.favorited } else mangas.sortedBy { it.favorited }
             "tit" -> if (sort.second == "desc") mangas.sortedByDescending { it.name.lowercase() } else mangas.sortedBy { it.name.lowercase() }
+            "serv" -> if (sort.second == "desc") mangas.sortedByDescending { it.service } else mangas.sortedBy { it.service }
             "new" -> if (sort.second == "desc") mangas.sortedByDescending { it.id.toLongOrNull() ?: 0L } else mangas.sortedBy { it.id.toLongOrNull() ?: 0L }
             "fav" -> {
                 if (fav != true) throw Exception("Please check 'Favorites Only' Filter")
@@ -205,35 +177,25 @@ abstract class Pawchive :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) {
-            return null
-        }
+        if (url.host != baseUrl.toHttpUrl().host) return null
 
-        if (url.pathSegments.firstOrNull() != "creators" || url.pathSegments.size < 2) {
-            return null
-        }
+        val segments = url.pathSegments
+        if (segments.size < 3 || segments[0] !in services || segments[1] != "user" || segments[2].isBlank()) return null
 
-        val id = url.pathSegments[1]
-        if (id.isBlank()) {
-            return null
-        }
+        val profileUrl = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments(apiPath)
+            .addPathSegment(segments[0])
+            .addPathSegment("user")
+            .addPathSegment(segments[2])
+            .addPathSegment("profile")
+            .build()
 
-        val cache = CacheControl.Builder().maxStale(30.minutes).build()
-        val url = "$baseUrl/$apiPath/creators"
-
-        return apiClient.get(url, Fetch.XHR, cache, ensureSuccess = false).use { response ->
-            if (!response.isSuccessful) {
-                return null
-            }
-            val allCreators = response.parseAs<List<PawchiveCreatorDto>>()
-            val creator = allCreators.find { it.id == id } ?: return null
-            creator.toSManga(baseUrl)
+        return apiClient.get(profileUrl, Fetch.XHR, ensureSuccess = false).use { response ->
+            if (response.code == 404) return null
+            if (!response.isSuccessful) throw HttpException(response.code)
+            response.parseAs<PawchiveCreatorDto>().toSManga(baseUrl)
         }
     }
-
-    // ============================== Details ==============================
-
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -266,10 +228,7 @@ abstract class Pawchive :
                 hasNextPage = page.size == PAGE_POST_LIMIT
             }
 
-            // Every post is its own chapter, so it needs a unique chapter number. Otherwise the
-            // app's "Skip duplicate chapters" setting groups them all together and only one
-            // chapter remains (breaking reader navigation). Posts arrive newest-first, so the
-            // newest gets the highest number.
+            // Unique numbers stop "Skip duplicate chapters" merging posts
             result.forEachIndexed { index, chapter ->
                 chapter.chapter_number = (result.size - index).toFloat()
             }
@@ -281,33 +240,18 @@ abstract class Pawchive :
         return SMangaUpdate(manga, updatedChapters)
     }
 
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
-
-    // =============================== Pages ===============================
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = "$baseUrl/$apiPath${chapter.url}"
 
-        apiClient.get(url, Fetch.XHR).use { response ->
-            val postData: PawchivePostDto = response.parseAs()
+        val postData = apiClient.get(url, Fetch.XHR).parseAs<PawchivePostDto>()
+        val useLowRes = preferences.getBoolean(USE_LOW_RES_IMG, false)
 
-            val useLowRes = preferences.getBoolean(USE_LOW_RES_IMG, false)
-
-            return postData.images.mapIndexed { i, path ->
-                val originalUrl = "$fileUrl/$dataPath$path"
-
-                val finalImageUrl = if (useLowRes) originalUrl.toThumbnailUrl() else originalUrl
-
-                Page(i, imageUrl = finalImageUrl)
-            }
+        return postData.images.mapIndexed { i, url ->
+            Page(i, imageUrl = if (useLowRes) url.toThumbnailUrl() else url)
         }
     }
 
-    // ============================== Filters ==============================
-
     override fun getFilterList(data: JsonElement?): FilterList = getDefaultFilterList()
-
-    // ============================= Utilities =============================
 
     private fun String.toThumbnailUrl(): String {
         val pathIndex = this.indexOf('/', 8) // Skips the `https://`
@@ -354,6 +298,8 @@ abstract class Pawchive :
     }
 
     companion object {
+        private val services = setOf("patreon", "fanbox")
+
         private const val PAGE_POST_LIMIT = 50
         private const val PAGE_CREATORS_LIMIT = 50
         const val PROMPT = "You can change how many posts to load in the extension preferences."

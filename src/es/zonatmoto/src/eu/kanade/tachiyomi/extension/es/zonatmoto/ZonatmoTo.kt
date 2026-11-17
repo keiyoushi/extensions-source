@@ -26,7 +26,6 @@ abstract class ZonatmoTo : KeiSource() {
 
     private val baseHost get() = baseUrl.toHttpUrl().host
 
-    private val cdnUrl get() = "https://cdn.$baseHost"
     private val apiUrl get() = "https://$baseHost/wp-api/api".toHttpUrl()
     private val uploadsUrl get() = "https://$baseHost/wp-content/uploads".toHttpUrl()
 
@@ -51,14 +50,14 @@ abstract class ZonatmoTo : KeiSource() {
     // ========================= Search =========================
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseHost) return null
-        val mangaSlug = url.pathSegments.getOrNull(1) ?: return null
+        if (url.host.removePrefix("www.") !in MIRROR_HOSTS || url.pathSegments[0] != "manga") return null
+        val mangaSlug = url.pathSegments.getOrNull(1)?.ifEmpty { null } ?: return null
 
-        return fetchMangaUpdate(
+        return getMangaUpdate(
             SManga.create().apply { this.url = mangaSlug },
             emptyList(),
-            true,
-            false,
+            fetchDetails = true,
+            fetchChapters = false,
         ).manga
     }
 
@@ -204,7 +203,7 @@ abstract class ZonatmoTo : KeiSource() {
 
     // ========================= Utilities =========================
 
-    private fun cdnImageUrl(jit: String, imageName: String): String = cdnUrl.toHttpUrl().newBuilder()
+    private fun cdnImageUrl(jit: String, imageName: String): String = CDN_URL.newBuilder()
         .addPathSegment("manga")
         .addPathSegments(jit)
         .addPathSegment(imageName)
@@ -266,5 +265,9 @@ abstract class ZonatmoTo : KeiSource() {
     companion object {
         private const val CHAPTERS_PER_PAGE = 50
         private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+        private val MIRROR_HOSTS = setOf("zonatmo.to", "otakuteca.net")
+
+        // otakuteca.net loads its pages from zonatmo.to's CDN too
+        private val CDN_URL = "https://cdn.zonatmo.to".toHttpUrl()
     }
 }

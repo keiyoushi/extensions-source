@@ -33,6 +33,7 @@ class EncryptedPayloadDto(
 @Serializable
 class InitMangaDataDto(
     @SerialName("decryption_key") val decryptionKey: String,
+    val nonce: String? = null,
 )
 
 @Serializable
@@ -40,11 +41,22 @@ class ChapterKeyRequestDto(
     @SerialName("chapter_id") private val chapterId: Long,
     private val epoch: Long,
     private val grant: String,
+    private val verdict: String,
+    private val score: Int,
+    private val codes: List<String>,
+    @SerialName("challenge_token") private val challengeToken: String,
 )
 
 @Serializable
 class ChapterKeyResponseDto(
-    val key: String,
+    val key: String? = null,
+    val code: String? = null,
+    val data: ChapterKeyErrorDataDto? = null,
+)
+
+@Serializable
+class ChapterKeyErrorDataDto(
+    val token: String? = null,
 )
 
 @Serializable
@@ -73,6 +85,7 @@ class GenreData(
 class ImageVaultDto(
     val url: String,
     val nonce: String,
+    val tok: String,
 )
 
 @Serializable
@@ -83,4 +96,6 @@ class ImageKeyResponseDto(
 @Serializable
 class ImageKeyDto(
     val k: String,
+    val s: String? = null,
+    val u: String,
 )

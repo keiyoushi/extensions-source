@@ -3,17 +3,13 @@ package eu.kanade.tachiyomi.extension.id.voratoon
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
 
-interface UriFilter {
-    fun addToFilter(builder: StringBuilder)
-}
-
 interface UriQueryFilter {
     fun addToQuery(builder: HttpUrl.Builder)
 }
 
 open class UriPartFilter(
     name: String,
-    private val field: String,
+    private val param: String,
     private val vals: Array<Pair<String, String>>,
     private val default: String = "",
 ) : Filter.Select<String>(
@@ -25,57 +21,23 @@ open class UriPartFilter(
     override fun addToQuery(builder: HttpUrl.Builder) {
         val selected = vals[state].second
         if (selected.isNotEmpty()) {
-            builder.addQueryParameter(field, selected)
+            builder.addQueryParameter(param, selected)
         }
     }
-}
-
-open class UriMultiSelectOption(name: String, val value: String) : Filter.CheckBox(name)
-
-open class UriMultiSelectFilter(
-    name: String,
-    private val field: String,
-    private val options: Array<Pair<String, String>>,
-) : Filter.Group<UriMultiSelectOption>(
-    name,
-    options.map { UriMultiSelectOption(it.first, it.second) },
-),
-    UriFilter {
-    override fun addToFilter(builder: StringBuilder) {
-        state.filter { it.state }.forEach {
-            appendFilter(builder, "$field==${it.value}")
-        }
-    }
-}
-
-private fun appendFilter(builder: StringBuilder, filter: String) {
-    if (builder.isNotEmpty()) {
-        builder.append(';')
-    }
-    builder.append(filter)
 }
 
 class SortFilter :
     UriPartFilter(
-        "Sort",
+        "Urutkan",
         "sort",
         arrayOf(
-            Pair("Popular", "popularity"),
-            Pair("Terbaru", "latest"),
+            Pair("Terbaru", "new"),
+            Pair("Populer", "popular"),
             Pair("Rating", "rating"),
-            Pair("A-Z", "title"),
+            Pair("A - Z", "az"),
+            Pair("Seri Baru", "newseries"),
+            Pair("Favorit", "bookmark"),
         ),
-    )
-
-class SortOrderFilter :
-    UriPartFilter(
-        "Sort Order",
-        "sortOrder",
-        arrayOf(
-            Pair("Desc", "desc"),
-            Pair("Asc", "asc"),
-        ),
-        default = "desc",
     )
 
 class StatusFilter :
@@ -83,8 +45,8 @@ class StatusFilter :
         "Status",
         "status",
         arrayOf(
-            Pair("Any", ""),
-            Pair("On Going", "ongoing"),
+            Pair("Semua", ""),
+            Pair("Ongoing", "ongoing"),
             Pair("Completed", "completed"),
             Pair("Hiatus", "hiatus"),
             Pair("Cancelled", "cancelled"),
@@ -96,7 +58,7 @@ class FormatFilter :
         "Format",
         "format",
         arrayOf(
-            Pair("Any", ""),
+            Pair("Semua", ""),
             Pair("Manga", "manga"),
             Pair("Manhwa", "manhwa"),
             Pair("Manhua", "manhua"),
@@ -106,18 +68,49 @@ class FormatFilter :
 
 class TypeFilter :
     UriPartFilter(
-        "Type",
+        "Tipe",
         "type",
         arrayOf(
-            Pair("Any", ""),
+            Pair("Semua", ""),
             Pair("Project", "project"),
             Pair("Mirror", "mirror"),
         ),
     )
 
-class GenreFilter(genres: Array<Pair<String, String>>) :
-    UriMultiSelectFilter(
-        "Genre",
-        "genreIds",
-        genres,
+class AdaptationFilter :
+    UriPartFilter(
+        "Adaptasi",
+        "anime",
+        arrayOf(
+            Pair("Semua", ""),
+            Pair("Animated", "yes"),
+            Pair("Yet Animated", "no"),
+        ),
     )
+
+class MinChapterFilter :
+    Filter.Text("Minimum Chapter"),
+    UriQueryFilter {
+    override fun addToQuery(builder: HttpUrl.Builder) {
+        val value = state.trim().toIntOrNull()?.takeIf { it > 0 }
+        if (value != null) {
+            builder.addQueryParameter("min", value.toString())
+        }
+    }
+}
+
+class GenreOption(name: String, val value: String) : Filter.CheckBox(name)
+
+class GenreFilter(genres: Array<Pair<String, String>>) :
+    Filter.Group<GenreOption>(
+        "Genre",
+        genres.map { GenreOption(it.first, it.second) },
+    ),
+    UriQueryFilter {
+    override fun addToQuery(builder: HttpUrl.Builder) {
+        val selected = state.filter { it.state }.map { it.value }
+        if (selected.isNotEmpty()) {
+            builder.addQueryParameter("genre", selected.joinToString(","))
+        }
+    }
+}

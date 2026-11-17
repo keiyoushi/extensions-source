@@ -1,9 +1,11 @@
 package eu.kanade.tachiyomi.extension.fr.epsilonscan
 
 import eu.kanade.tachiyomi.multisrc.pam.CheckBoxGroup
+import eu.kanade.tachiyomi.multisrc.pam.NumberFilter
 import eu.kanade.tachiyomi.multisrc.pam.Pam
 import eu.kanade.tachiyomi.multisrc.pam.SortFilter
 import eu.kanade.tachiyomi.multisrc.pam.TriStateGroupFilter
+import eu.kanade.tachiyomi.multisrc.pam.TypeGroupFilter
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.annotation.Source
@@ -12,79 +14,97 @@ import kotlinx.serialization.json.JsonElement
 @Source
 abstract class EpsilonScan : Pam() {
 
-    override val popularFilters = FilterList(SortFilter("Sort", sortValues, Filter.Sort.Selection(3, false)))
-    override val latestFilters = FilterList(SortFilter("Sort", sortValues, Filter.Sort.Selection(2, false)))
+    override val popularFilters = FilterList(SortFilter("Trier par", sortValues, Filter.Sort.Selection(3, false)))
+    override val latestFilters = FilterList(SortFilter("Trier par", sortValues, Filter.Sort.Selection(2, false)))
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
-        Filter.Header("La recherche textuelle ignore les filtres !"),
-        Filter.Separator(),
-        SortFilter("Sort", sortValues),
+        SortFilter("Trier par", sortValues),
         GenreFilter(),
         TypeFilter(),
         StatusFilter(),
+        NumberFilter("Année min", "year_min"),
+        NumberFilter("Année max", "year_max"),
+        NumberFilter("Chapitres min", "chapters_min"),
+        NumberFilter("Chapitres max", "chapters_max"),
     )
 
     private class GenreFilter : TriStateGroupFilter("Genres", genres)
-    private class TypeFilter : TriStateGroupFilter("Types", type)
-    private class StatusFilter : CheckBoxGroup("Status", status)
+    private class TypeFilter : TypeGroupFilter("Types", type)
+    private class StatusFilter : CheckBoxGroup("Statut", status)
 }
 
 private val sortValues = listOf(
-    "New Series" to "date",
-    "Trending" to "trending",
-    "Recently Updated" to "recently",
-    "Most Views" to "views",
+    "Nouveautés" to "date",
+    "Tendances" to "trending",
+    "Mises à jour" to "recently",
+    "Plus vues" to "views",
     "A-Z" to "alphabetical",
+    "Chapitres" to "chapters",
 )
 
 private val genres = listOf(
     "Action" to "action",
     "Ahegao" to "ahegao",
     "Anal" to "anal",
-    "Anime bl" to "anime-bl",
     "Arts martiaux" to "arts-martiaux",
     "Aventure" to "aventure",
     "Bdsm" to "bdsm",
+    "Big penis" to "big-penis",
+    "Blowjob" to "blowjob",
     "Bondage" to "bondage",
+    "Boulot" to "boulot",
     "Boys love" to "boys-love",
     "Bureau" to "bureau",
-    "Campus" to "campus",
     "Comédie" to "comedie",
     "Comics" to "comics",
     "Cosplay" to "cosplay",
     "Coup d'un soir" to "coup-dun-soir",
+    "Créature" to "creature",
     "Dark skin" to "dark-skin",
     "Démon/démone" to "demondemone",
     "Différence d'âge" to "difference-dage",
     "Doujinshi" to "doujinshi",
     "Drame" to "drame",
+    "Ecchi" to "ecchi",
     "Échangisme" to "echangisme",
-    "Elf" to "elf",
+    "Esclave" to "esclave",
     "Espion" to "espion",
     "Exhibitionniste" to "exhibitionniste",
     "Fantaisie" to "fantaisie",
     "Fantastique" to "fantastique",
     "Fétichisme" to "fetichisme",
+    "Filming" to "filming",
+    "Full color" to "full-color",
     "Furry" to "furry",
+    "Gag" to "gag",
     "Gangster" to "gangster",
     "Gender bender" to "gender-bender",
     "Girls love" to "girls-love",
     "Gros seins" to "gros-seins",
+    "Group" to "group",
     "Guideverse" to "guideverse",
     "Hardcore" to "hardcore",
     "Harem" to "harem",
+    "Hentai" to "hentai",
     "Historique" to "historique",
     "Horreur" to "horreur",
+    "Humiliation" to "humiliation",
     "Hypnose" to "hypnose",
     "Ia" to "ia",
     "Immoral" to "immoral",
+    "Incest" to "incest",
     "Isekai" to "isekai",
     "Jeux vidéo" to "jeux-video",
     "Josei" to "josei",
+    "Lingerie" to "lingerie",
     "Magie" to "magie",
+    "Malentendu" to "malentendu",
+    "Manga" to "manga",
     "Manga bl" to "manga-bl",
     "Manga h" to "manga-h",
     "Manga josei" to "manga-josei",
+    "Manhwa" to "manhwa",
+    "Masturbation" to "masturbation",
     "Mature" to "mature",
     "Médical" to "medical",
     "Milf" to "milf",
@@ -92,24 +112,36 @@ private val genres = listOf(
     "Moderne" to "moderne",
     "Muscle" to "muscle",
     "Mystère" to "mystere",
+    "Nakadashi" to "nakadashi",
     "Noblesse" to "noblesse",
     "Non-censuré" to "non-censure",
-    "Novel" to "novel",
     "Ntr" to "ntr",
+    "Obsession" to "obsession",
     "Omégaverse" to "omegaverse",
     "One shot" to "one-shot",
-    "Percing" to "percing",
+    "Piercing" to "piercing",
     "Plan à 3" to "plan-a-3",
     "Pornhwa" to "pornhwa",
+    "Pouvoir" to "pouvoir",
+    "Pregnant" to "pregnant",
     "Professeur" to "professeur",
+    "Prostitution" to "prostitution",
     "Psychologique" to "psychologique",
+    "Rape" to "rape",
+    "Réaliste" to "realiste",
     "Réincarnation" to "reincarnation",
     "Romance" to "romance",
+    "Schoolgirl uniform" to "schoolgirl-uniform",
     "Science-fiction" to "science-fiction",
+    "Seinen" to "seinen",
+    "Séquestration" to "sequestration",
+    "Sex toys" to "sex-toys",
     "Showbiz" to "showbiz",
     "Smut" to "smut",
+    "Sole female" to "sole-female",
     "Spanking" to "spanking",
     "Sports" to "sports",
+    "Stockings" to "stockings",
     "Succube" to "succube",
     "Surnaturel" to "surnaturel",
     "Système" to "systeme",
@@ -121,6 +153,7 @@ private val genres = listOf(
     "Vampire" to "vampire",
     "Vengeance" to "vengeance",
     "Vie scolaire" to "vie-scolaire",
+    "Voyeurism" to "voyeurism",
     "Webtoon" to "webtoon",
 )
 
@@ -141,12 +174,13 @@ private val type = listOf(
     "Other" to "other",
     "Pornhwa" to "pornhwa",
     "Seinen" to "seinen",
+    "Webtoon" to "webtoon",
 )
 
 private val status = listOf(
-    "Ongoing" to "ongoing",
-    "Finished" to "finished",
-    "Dropped" to "dropped",
-    "On Hold" to "onhold",
-    "Upcoming" to "upcoming",
+    "En cours" to "ongoing",
+    "Terminée" to "finished",
+    "Abandonnée" to "dropped",
+    "En pause" to "onhold",
+    "À venir" to "upcoming",
 )

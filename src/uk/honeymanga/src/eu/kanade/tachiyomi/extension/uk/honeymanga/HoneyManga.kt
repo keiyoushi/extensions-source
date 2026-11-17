@@ -24,11 +24,13 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import kotlin.math.ceil
 
 @Source
 abstract class HoneyManga :
@@ -182,23 +184,22 @@ abstract class HoneyManga :
         val chaptersAsync = async {
             if (fetchChapters) {
                 val fetchedChapters = mutableListOf<SChapter>()
-                var page = 1
-                val chaptersUrl = "$apiUrl/v2/chapter/cursor-list"
+                val chaptersUrl = "$apiUrl/v3/comics/$mangaId/chapters?sortOrder=DESC&page=1&pageSize=$DEFAULT_CHAPTERS_REQUEST_SIZE"
                 val hideLocked = hideLocked()
 
-                do {
-                    val body = ChapterRequestBody(
-                        mangaId = mangaId,
-                        page = page,
-                        pageSize = 1000,
-                        sortOrder = "DESC",
-                    ).toJsonRequestBody()
+                val data = client.get(chaptersUrl, Fetch.XHR).parseAs<ChapterResponse>()
+                fetchedChapters.addAll(data.data.mapNotNull { it.toSChapter(hideLocked) })
 
-                    val data = client.post(chaptersUrl, Fetch.XHR, body).parseAs<ChapterResponse>()
-                    fetchedChapters.addAll(data.data.mapNotNull { it.toSChapter(hideLocked) })
-                    page++
-                } while (data.hasNextPage)
-
+                if (data.total > DEFAULT_CHAPTERS_REQUEST_SIZE) {
+                    val totalPages = ceil(data.total.toDouble() / DEFAULT_CHAPTERS_REQUEST_SIZE).toInt().coerceAtLeast(2)
+                    val extra = (2..totalPages).map { page ->
+                        async {
+                            val url = "$apiUrl/v3/comics/$mangaId/chapters?sortOrder=DESC&page=$page&pageSize=$DEFAULT_CHAPTERS_REQUEST_SIZE"
+                            client.get(url, Fetch.XHR).parseAs<ChapterResponse>().data
+                        }
+                    }.awaitAll().flatten().mapNotNull { it.toSChapter(hideLocked) }
+                    fetchedChapters.addAll(extra)
+                }
                 fetchedChapters
             } else {
                 chapters
@@ -223,8 +224,8 @@ abstract class HoneyManga :
         } else {
             chapter.url
         }
-        val url = "$apiUrl/chapter/frames/$chapterId"
-        return client.get(url, Fetch.XHR).use { it.parseAs<ChapterPages>().toPageList(imgUrl) }
+        val url = "$apiUrl/v3/chapters/$chapterId/frames"
+        return client.get(url, Fetch.XHR).parseAs<List<ChapterPages>>().map { it.toPage(imgUrl) }
     }
 
     // ============================= Filters ==============================
@@ -245,6 +246,7 @@ abstract class HoneyManga :
     companion object {
         private val cleanSearch = """[^\p{L}\d\s]""".toRegex()
         private const val DEFAULT_PAGE_SIZE = 30
+        private const val DEFAULT_CHAPTERS_REQUEST_SIZE = 1000
         private const val GENRES_PREF = "pref_genres_exclude"
         private const val GENRES_PREF_TITLE = "Приховані жанри"
         private const val GENRES_PREF_DIALOG = "Виберіть жанри які потрібно сховати"
