@@ -153,12 +153,3 @@ class SearchFilter(
     val filterOperator: String,
     val filterValue: List<String>,
 )
-
-// ============================== Chapter Request ===============================
-@Serializable
-class ChapterRequestBody(
-    val mangaId: String,
-    val page: Int,
-    val pageSize: Int,
-    val sortOrder: String,
-)
