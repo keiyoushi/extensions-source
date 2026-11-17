@@ -67,6 +67,6 @@ abstract class BRScans : KeiSource() {
     }
 
     companion object {
-        private const val API_URL = "https://e5oer7ngt8.execute-api.sa-east-1.amazonaws.com/dev"
+        private const val API_URL = "https://3wzrvo9ltl.execute-api.sa-east-1.amazonaws.com/dev"
     }
 }
