@@ -13,6 +13,7 @@ import java.time.format.DateTimeFormatter
 class ApiResult<T>(
     val success: Boolean,
     val data: T?,
+    val message: String?,
     val error: ApiErrorDto?,
 )
 
@@ -246,6 +247,11 @@ class EpisodePriceDto(
 @Serializable
 class ViewerRequest(
     @SerialName("book_id") private val bookId: String,
+)
+
+@Serializable
+class TokenRequest(
+    @SerialName("grant_type") private val grantType: String,
 )
 
 @Serializable

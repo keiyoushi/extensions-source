@@ -140,19 +140,35 @@ abstract class Ridibooks : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val result = client.post(
-            "$baseUrl/api/web-viewer/generate",
-            Fetch.XHR.from("/books/${chapter.url}"),
-            ViewerRequest(chapter.url).toJsonRequestBody(),
-            ensureSuccess = false,
-        ).parseAs<ApiResult<ViewerDto>>()
+        var result = generateViewer(chapter)
+        if (result.error?.code == "NOT_AUTHORIZED" && refreshToken()) {
+            result = generateViewer(chapter)
+        }
 
         if (!result.success) {
-            if (result.error?.code == "NOT_AUTHORIZED") throw Exception("Log in via WebView to read this chapter")
-            return emptyList()
+            when (result.error?.code) {
+                "INVALID_ACCESS" -> return emptyList()
+                "NOT_AUTHORIZED" -> throw Exception("Log in via WebView to read this chapter")
+                "ADULT_VERIFICATION_REQUIRED" -> throw Exception("Verify your age on RidiBooks in WebView to read this chapter")
+                else -> throw Exception(result.message ?: result.error?.code)
+            }
         }
         return result.data!!.pages.mapIndexed { index, page -> Page(index, imageUrl = page.src) }
     }
+
+    private suspend fun generateViewer(chapter: SChapter): ApiResult<ViewerDto> = client.post(
+        "$baseUrl/api/web-viewer/generate",
+        Fetch.XHR.from("/books/${chapter.url}"),
+        ViewerRequest(chapter.url).toJsonRequestBody(),
+        ensureSuccess = false,
+    ).parseAs()
+
+    private suspend fun refreshToken(): Boolean = client.post(
+        "$baseUrl/apps/books/auth/token",
+        Fetch.XHR,
+        TokenRequest("refresh_token").toJsonRequestBody(),
+        ensureSuccess = false,
+    ).use { it.isSuccessful }
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         CategoryFilter(),
