@@ -14,7 +14,6 @@ class ZeistMangaDto(
 @Serializable
 class ZeistMangaFeedDto(
     @SerialName("openSearch\$totalResults") val totalResults: TotalResult? = null,
-    @SerialName("openSearch\$itemsPerPage") val itemsPerPage: TotalResult? = null,
     val category: List<ZeistMangaCategoryDto>? = emptyList(),
     val entry: List<ZeistMangaEntryDto>? = emptyList(),
 )
