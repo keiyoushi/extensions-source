@@ -52,8 +52,7 @@ class VeilInterceptor(private val cdnHost: String) : Interceptor {
         val scaleY = height / veil.floatAttr("height")
         val canvas = Canvas(this)
         for (patch in veil.select("image")) {
-            val data = patch.attr("href").ifEmpty { patch.attr("xlink:href") }
-            val bytes = Base64.decode(data.substringAfter("base64,"), Base64.DEFAULT)
+            val bytes = Base64.decode(patch.attr("xlink:href").substringAfter("base64,"), Base64.DEFAULT)
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: throw IOException("Failed to decode page veil")
             val left = patch.floatAttr("x")
             val top = patch.floatAttr("y")
