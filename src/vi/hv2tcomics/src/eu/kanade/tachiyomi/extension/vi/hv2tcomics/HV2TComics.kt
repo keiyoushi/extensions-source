@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.hv2tcomics
 
 import android.graphics.Bitmap
-import android.graphics.ImageDecoder
-import android.os.Build
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.lib.imagedecoder.ImageDecoder
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
@@ -66,51 +65,27 @@ abstract class HV2TComics : KeiSource() {
 
     // ============================== AVIF to WebP ==============================
 
-    /**
-     * Website have some animated avif images in thumbnail. Can't display follow bug
-     * https://github.com/mihonapp/mihon/issues/1975
-     * Convert first frame animated avif image to webp image
-     */
+    // Animated avif thumbnails play with Mihon's new decoder (v0.21.0+); older apps
+    // can't show them (https://github.com/mihonapp/mihon/issues/1975), so send the first frame as webp
+    private val hasNewDecoder by lazy { runCatching { Class.forName("ca.mpreg.imagedecoder.ImageDecoder") }.isSuccess }
+
     private fun avifToWebpInterceptor() = Interceptor { chain ->
         val request = chain.request()
-        val url = request.url.toString()
-
-        if (!url.endsWith(".avif", ignoreCase = true)) {
-            return@Interceptor chain.proceed(request)
-        }
-
         val response = chain.proceed(request)
-        if (!response.isSuccessful) {
+        if (hasNewDecoder || !response.isSuccessful || !request.url.encodedPath.endsWith(".avif", ignoreCase = true)) {
             return@Interceptor response
         }
 
-        response.body.use { body ->
-            val bytes = body.bytes()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                try {
-                    val source = ImageDecoder.createSource(bytes)
-                    val bitmap = ImageDecoder.decodeBitmap(source) { decoder, info, source ->
-                        decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-                    }
+        val bytes = response.body.use { it.bytes() }
+        val webp = runCatching {
+            ByteArrayOutputStream().also {
+                ImageDecoder.decode(bytes).compress(Bitmap.CompressFormat.WEBP, 90, it)
+            }.toByteArray()
+        }.getOrNull()
 
-                    val outputStream = ByteArrayOutputStream()
-                    bitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, 90, outputStream)
-                    val webpBytes = outputStream.toByteArray()
-
-                    response.newBuilder()
-                        .body(webpBytes.toResponseBody("image/webp".toMediaType()))
-                        .build()
-                } catch (_: Exception) {
-                    response.newBuilder()
-                        .body(bytes.toResponseBody("image/webp".toMediaType()))
-                        .build()
-                }
-            } else {
-                response.newBuilder()
-                    .body(bytes.toResponseBody("image/webp".toMediaType()))
-                    .build()
-            }
-        }
+        val body = webp?.toResponseBody("image/webp".toMediaType())
+            ?: bytes.toResponseBody(response.body.contentType())
+        response.newBuilder().body(body).build()
     }
 
     // ============================== Popular ===============================
