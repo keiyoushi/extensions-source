@@ -17,7 +17,6 @@ import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParse
 import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
@@ -319,21 +318,14 @@ abstract class ZeistManga : KeiSource() {
     open suspend fun getChapterList(feedUrl: String, doc: Document? = null): List<SChapter> {
         val allEntries = mutableListOf<ZeistMangaEntryDto>()
 
-        // Get total and server chunk size by initial max request.
-        val result = fetchChapter(feedUrl, 1, MAX_CHAPTER_RESULTS)
-        val totalResults = result.feed?.totalResults?.t?.toIntOrNull() ?: MAX_CHAPTER_RESULTS
-        val itemsPerPage = result.feed?.itemsPerPage?.t?.toIntOrNull() ?: CHAPTER_CHUNK
-
-        allEntries += result.feed?.entry ?: throw Exception("Failed to parse from chapter API")
-
-        coroutineScope {
-            (allEntries.size until totalResults step itemsPerPage).map { startIndex ->
-                async {
-                    fetchChapter(feedUrl, startIndex + 1, maxResults = itemsPerPage)
-                        .feed!!.entry!!
-                }
-            }.awaitAll().flatten().also(allEntries::addAll)
-        }
+        // Blogger ends a page at 150 posts or about 2 MB of post content, so each page starts where the last one stopped
+        do {
+            val feed = fetchChapter(feedUrl, allEntries.size + 1, MAX_CHAPTER_RESULTS).feed
+                ?: throw Exception("Failed to parse from chapter API")
+            val entries = feed.entry.orEmpty()
+            allEntries += entries
+            val totalResults = feed.totalResults?.t?.toIntOrNull() ?: 0
+        } while (entries.isNotEmpty() && allEntries.size < totalResults)
 
         return allEntries
             .filter { it.category.orEmpty().any { cat -> cat.term == chapterCategory } }
@@ -557,6 +549,5 @@ abstract class ZeistManga : KeiSource() {
         private val POST_PATH_REGEX = Regex("""/\d{4}/\d{2}/[^/]+\.html""")
         private const val MAX_MANGA_RESULTS = 20
         private const val MAX_CHAPTER_RESULTS = 150
-        private const val CHAPTER_CHUNK = 50
     }
 }

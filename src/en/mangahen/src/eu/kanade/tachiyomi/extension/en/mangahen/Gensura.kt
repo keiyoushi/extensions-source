@@ -1,5 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.mangahen
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,13 +16,19 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.nodes.Element
 
 @Source
-abstract class Gensura : KeiSource() {
+abstract class Gensura :
+    KeiSource(),
+    ConfigurableSource {
+
+    private val preferences: SharedPreferences by getPreferencesLazy()
+
     private val advSearchURL get() = "$baseUrl/advanced-search"
 
     private var tagsList: Map<String, String> = emptyMap()
@@ -108,16 +118,42 @@ abstract class Gensura : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        val availableChapters = document.selectFirst("div.gap-1 > ul")
         val details = if (fetchDetails) mangaDetails(manga) else manga
 
-        val chapterList = listOf(
-            SChapter.create().apply {
+        fun createChapter(chapNum: Float = -1f, chapUrl: String = "", chapTitle: String = ""): SChapter = SChapter.create().apply {
+            val titles = document.selectFirst("h1.font-semibold")!!.text().split(" | ")
+            val titleText = chapTitle.ifEmpty { titles[0] }
+            chapter_number = if (chapNum == -1f) 1f else chapNum
+            if (showAllChapters()) {
+                name = "${if (chapter_number % 1f == 0f) chapter_number.toInt() else chapter_number} - $titleText"
+            } else {
                 name = "Chapter"
-                setUrlWithoutDomain(manga.url)
-            },
-        )
+            }
+            setUrlWithoutDomain(chapUrl.ifEmpty { manga.url })
+        }
 
-        return SMangaUpdate(details, chapterList)
+        val allChapters = mutableListOf<SChapter>()
+
+        if (availableChapters == null || !showAllChapters()) {
+            allChapters.add(createChapter())
+        } else if (fetchChapters) {
+            for (element: Element in availableChapters.select("li")) {
+                val chapInfo = element.selectFirst("a")!!
+                val regexInfo = chap_info_regex.find(chapInfo.text())!!
+                val chapNum = regexInfo.groupValues[1].toFloat()
+                val chapTitle = regexInfo.groupValues[2]
+                val chapUrl = chapInfo.absUrl("href")
+                allChapters.add(createChapter(chapNum, chapUrl, chapTitle))
+            }
+        } else {
+            return SMangaUpdate(details, chapters)
+        }
+
+        allChapters.sortByDescending { it.chapter_number }
+
+        return SMangaUpdate(details, allChapters)
     }
 
     private suspend fun mangaDetails(manga: SManga): SManga {
@@ -127,6 +163,7 @@ abstract class Gensura : KeiSource() {
             val artists = document.select("a[href*=/authors/]").eachText().joinToString()
             val titles = document.select("h1.font-semibold").text().split(" | ")
             val altit = document.select("h2.text-lg.font-medium").text()
+            val mainSeries = document.select("h2.text-primary").text()
             title = titles[0]
             author = authors.ifEmpty { artists }
             artist = artists
@@ -142,6 +179,7 @@ abstract class Gensura : KeiSource() {
                 append("Circles: ", document.select("a[href*=/circles/]").text(), "\n\n")
                 append(document.select("tr:contains(page)").text(), "\n")
                 append(document.select("tr:contains(view)").text(), "\n")
+                if (mainSeries.isNotBlank() && showAllChapters()) append("\nMain Series: ", mainSeries, "\n")
             }
             thumbnail_url = document.selectFirst("img[src*=thumbnail].w-96")?.absUrl("src")
             status = COMPLETED
@@ -159,4 +197,20 @@ abstract class Gensura : KeiSource() {
     }
 
     override fun getFilterList(data: JsonElement?) = getFilters()
+
+    private fun showAllChapters() = preferences.getBoolean(PREF_SHOW_ALL_CHAPTERS, true)
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_SHOW_ALL_CHAPTERS
+            title = "Show All Chapters"
+            summary = "Display every chapter shown in a manga's page"
+            setDefaultValue(true)
+        }.let(screen::addPreference)
+    }
+
+    companion object {
+        private val chap_info_regex = Regex("""^#?([\d.]+)\s+(.+)$""")
+        private const val PREF_SHOW_ALL_CHAPTERS = "pref_show_all_chapters"
+    }
 }

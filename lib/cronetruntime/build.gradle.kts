@@ -29,6 +29,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             signingConfig = null
+            // Keeps the commit SHA out of the APK, so rebuilds don't change the content hash of extensions bundling it
+            @Suppress("UnstableApiUsage")
+            vcsInfo.include = false
         }
     }
 }

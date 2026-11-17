@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.bilimanga
 
+import android.graphics.BitmapFactory
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -10,245 +11,130 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.addCookie
 import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.escapeMarkdown
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.tryParse
+import keiyoushi.utils.selectLast
+import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.supervisorScope
 import kotlinx.serialization.json.JsonElement
-import okhttp3.CacheControl
-import okhttp3.Cookie
+import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
-import java.text.SimpleDateFormat
-import java.util.Locale
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class BiliManga :
     KeiSource(),
     ConfigurableSource {
-    private val pref by getPreferencesLazy()
+    private val preferences by getPreferencesLazy()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        preferencesInternal(screen.context, pref).forEach(screen::addPreference)
+        preferencesInternal(screen.context).forEach(screen::addPreference)
     }
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addNetworkInterceptor(ChapterInterceptor())
-        val split = pref.getString(PREF_RATE_LIMIT, "10/10")!!.split("/")
-        rateLimit(split[0].toInt(), split[1].toInt().seconds)
+        addCookie("night" to "1")
+        rateLimit(10, 10.seconds) { it.host == baseUrl.toHttpUrl().host && it.pathSegments.first() != "files" }
     }
 
     override fun Headers.Builder.configureHeaders() = apply {
         add("Accept-Language", "zh")
     }
 
-    // Customize
-
-    private val SManga.id get() = MANGA_ID_REGEX.find(url)!!.groups[1]!!.value
-    private fun Element.formatText(c: String) = this.wholeText().replace(NEWLINE_REGEX, c).trim()
-    private fun Elements.mapToChapter(date: Long, volume: String? = null) = mapIndexed { i, element ->
-        val url = element.absUrl("href").takeUnless("javascript:cid(1)"::equals)
-        SChapter.create().apply {
-            name = element.text().toHalfWidthDigits()
-            date_upload = date
-            scanlator = volume
-            setUrlWithoutDomain(url ?: getChapterUrlByContext(i, this@mapToChapter))
-        }
-    }
-
-    private fun String.toHalfWidthDigits(): String = this.map { if (it in '０'..'９') it - 65248 else it }.joinToString("")
-
-    private fun buildDescription(doc: Document): String {
-        val configs = pref.getStringSet(PREF_DESCRIPTION, DEFAULT_SET)!!
-        val desc = StringBuilder(doc.selectFirst("#bookSummary > content")!!.formatText("\n\n\n"))
-        for (item in configs) {
-            when (item) {
-                "A" -> {
-                    desc.insert(
-                        0,
-                        doc.selectFirst(".notice")?.let { "> ${it.formatText("\n")}\n\n" } ?: "",
-                    )
-                }
-
-                "B" -> {
-                    desc.append(
-                        doc.selectFirst(".backupname")?.let { "\n\n\n***别名**：${it.text()}* " } ?: "",
-                    )
-                }
-
-                "C" -> {
-                    desc.append(
-                        doc.select(".book-detail-btn .btn-group-cell > a").find { it.text() == "輕小說" }
-                            ?.attr("href")?.substringAfter('?')
-                            ?.let { "\n\n\n***[跳轉至「哔哩轻小说」上的同名小說](https://www.bilinovel.com/novel/$it.html)*** " }
-                            ?: "",
-                    )
-                }
-            }
-        }
-        return desc.toString()
-    }
-
-    private suspend fun ensureSearchTicket() {
-        val names = client.cookieJar.loadForRequest(baseUrl.toHttpUrl()).map { it.name }
-        if (!names.contains("jieqiSearchCss") || !names.contains("jieqiSearchJs")) {
-            coroutineScope {
-                launch { client.get("$baseUrl/search.html?search_guard=css", Fetch.DOCUMENT).close() }
-                launch {
-                    COOKIE_REGEX.find(client.get("$baseUrl/search.html?search_guard=js", Fetch.DOCUMENT).body.string())
-                        ?.groupValues?.get(1)
-                        ?.let { cookie ->
-                            val url = baseUrl.toHttpUrl()
-                            Cookie.parse(url, cookie)?.let { client.cookieJar.saveFromResponse(url, listOf(it)) }
-                        }
-                }
-            }
-        }
-        client.get("$baseUrl/search.html?search_guard=redeem", Fetch.DOCUMENT, CacheControl.FORCE_NETWORK)
-        val cookies = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
-        if (cookies.find { it.name == "jieqiSearchTicket" }?.value.isNullOrEmpty()) throw Exception("獲取搜索憑證失敗，請稍後重試")
-    }
-
-    companion object {
-        val NEWLINE_REGEX = Regex("(?:\n\r\n)+")
-        val META_REGEX = Regex("收藏|推薦|連載中|已完結")
-        val DATE_REGEX = Regex("\\d{4}-\\d{1,2}-\\d{1,2}")
-        val PAGE_REGEX = Regex("第(\\d+)/(\\d+)页")
-        val MANGA_ID_REGEX = Regex("/detail/(\\d+)\\.html")
-        val COOKIE_REGEX = Regex("cookie=\"(.*?)\";")
-        val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.CHINESE)
-    }
-
-    private fun getChapterUrlByContext(i: Int, els: Elements) = when (i) {
-        0 -> "${els[1].attr("href")}#prev"
-        else -> "${els[i - 1].attr("href")}#next"
-    }
-
-    private fun mangaPageParse(response: Response) = response.asJsoup().let { doc ->
-        val mangas = doc.select(".book-layout").map {
-            SManga.create().apply {
-                setUrlWithoutDomain(it.absUrl("href"))
-                val img = it.selectFirst("img")!!
-                thumbnail_url = img.absUrl("data-src")
-                title = img.attr("alt")
-            }
-        }
-        val hasNextPage = with(doc.location()) {
-            when {
-                contains("filter") -> {
-                    val total = doc.selectFirst("#pagelink > .last")?.text()?.toInt()
-                    val cur = doc.selectFirst("#pagelink > strong")?.text()?.toInt()
-                    total != null && cur != null && cur < total
-                }
-
-                contains("search") -> {
-                    val find = doc.selectFirst("#pagelink > span")?.text()?.let(PAGE_REGEX::find)
-                    find != null && find.groups[1]!!.value.toInt() < find.groups[2]!!.value.toInt()
-                }
-
-                else -> mangas.size == 50
-            }
-        }
-        MangasPage(mangas, hasNextPage)
-    }
-
-    private fun Response.parseManga() = SManga.create().apply {
-        val doc = asJsoup()
-        doc.selectFirst(".aui-ver-form")?.let { throw Exception(it.text()) }
-        val meta = doc.select(".book-meta em").map(Element::text)
-        val (main, extra) = meta.partition(META_REGEX::containsMatchIn)
-        setUrlWithoutDomain(doc.location())
-        title = doc.selectFirst(".book-title")!!.text()
-        thumbnail_url = doc.selectFirst(".book-cover")!!.attr("src")
-        description = buildDescription(doc)
-        artist = doc.selectFirst(".authorname")?.text()
-        author = doc.selectFirst(".illname")?.text() ?: artist
-        status = when (main.lastOrNull()) {
-            "連載中" -> SManga.ONGOING
-            "已完結" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
-        genre = (doc.select(".tag-small").map(Element::text) + extra).joinToString()
-        initialized = true
-    }
-
-    // Popular
-
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val suffix = pref.getString(PREF_POPULAR_MANGA_DISPLAY, "/top/weekvisit/%d.html")!!
-        return mangaPageParse(client.get(baseUrl + String.format(suffix, page), Fetch.DOCUMENT))
+        val path = preferences.getString(PREF_POPULAR_MANGA_DISPLAY, "/top/weekvisit/%d.html")!!.format(page)
+        return parseMangasPage(client.get(baseUrl + path, Fetch.DOCUMENT).asJsoup())
     }
 
-    // Latest
-
-    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaPageParse(client.get("$baseUrl/top/lastupdate/$page.html", Fetch.DOCUMENT))
-
-    // Search
-
-    override fun getFilterList(data: JsonElement?) = buildFilterList()
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangasPage(client.get("$baseUrl/top/lastupdate/$page.html", Fetch.DOCUMENT).asJsoup())
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (!MANGA_ID_REGEX.matches(url.encodedPath)) return null
-        return client.get(url, Fetch.DOCUMENT).parseManga()
+        if (url.host != baseUrl.toHttpUrl().host || !MANGA_ID_REGEX.matches(url.encodedPath)) return null
+        return parseManga(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
-    // /${Sort}_${Theme}_${Status}_${Anime}_${Region}_${Type}_${Time}_${Novel}_${page}_0_${Year}_${Award}.html
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val url = baseUrl.toHttpUrl().newBuilder()
-        if (query.isNotBlank()) {
-            ensureSearchTicket()
-            url.addPathSegment("search").addPathSegment("${query}_$page.html")
+        val document = if (query.isNotBlank()) {
+            searchDocument(baseUrl.toHttpUrl().newBuilder().addPathSegment("search").addPathSegment("${query}_$page.html").build())
         } else {
-            url.addPathSegment("filter")
-                .addPathSegment("${filters[5]}_${filters[1]}_${filters[9]}_${filters[6]}_${filters[3]}_${filters[2]}_${filters[10]}_${filters[7]}_${page}_0_${filters[4]}_${filters[8]}.html")
+            val path = listOf(
+                filters.firstInstance<SortFilter>().value,
+                filters.firstInstance<ThemeFilter>().value,
+                filters.firstInstance<StatusFilter>().value,
+                filters.firstInstance<AnimeFilter>().value,
+                filters.firstInstance<RegionFilter>().value,
+                filters.firstInstance<TypeFilter>().value,
+                filters.firstInstance<TimeFilter>().value,
+                filters.firstInstance<NovelFilter>().value,
+                page.toString(),
+                "0",
+                filters.firstInstance<YearFilter>().value,
+                filters.firstInstance<AwardFilter>().value,
+            ).joinToString("_")
+            client.get(baseUrl.toHttpUrl().newBuilder().addPathSegment("filter").addPathSegment("$path.html").build(), Fetch.DOCUMENT).asJsoup()
         }
-        val response = client.get(url.build(), Fetch.DOCUMENT)
-        if (response.request.url.pathSegments.contains("detail")) {
-            return MangasPage(listOf(response.parseManga()), false)
+        if (MANGA_ID_REGEX.containsMatchIn(document.location())) {
+            return MangasPage(listOf(parseManga(document)), false)
         }
-        return mangaPageParse(response)
+        return parseMangasPage(document)
     }
 
-    // Manga Detail & Chapter
+    private suspend fun searchDocument(url: HttpUrl): Document {
+        var document = client.get(url, Fetch.DOCUMENT).asJsoup()
+        val solveCaptcha = preferences.getBoolean(PREF_SOLVE_CAPTCHA, false)
+        if (solveCaptcha) {
+            repeat(3) {
+                val form = document.selectFirst(CAPTCHA_FORM) ?: return document
+                val image = form.selectFirst("img")!!.absUrl("src")
+                val bitmap = client.get(image, Fetch.IMAGE.from(document.location())).use { BitmapFactory.decodeStream(it.body.byteStream()) }
+                    ?: throw Exception(CAPTCHA_UNSOLVED)
+                val code = solveSearchCaptcha(bitmap).also { bitmap.recycle() }
+                val body = FormBody.Builder().apply {
+                    form.select("input[type=hidden]").forEach { add(it.attr("name"), it.attr("value")) }
+                    add("search_code", code)
+                }.build()
+                document = client.post(form.absUrl("action"), Fetch.DOCUMENT.from(document.location()), body).asJsoup()
+            }
+        }
+        if (document.selectFirst(CAPTCHA_FORM) != null) {
+            if (solveCaptcha) throw Exception(CAPTCHA_UNSOLVED)
+            throw Exception("請在 WebView 中搜尋一次並輸入驗證碼，或在擴充功能設定中開啟「自動輸入搜尋驗證碼」")
+        }
+        return document
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ) = supervisorScope {
+    ) = coroutineScope {
         val asyncManga = if (fetchDetails) {
-            async { client.get(baseUrl + manga.url, Fetch.DOCUMENT).parseManga() }
+            async { parseManga(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()) }
         } else {
             CompletableDeferred(manga)
         }
 
         val asyncChapters = if (fetchChapters) {
-            async {
-                val doc = client.get("$baseUrl/read/${manga.id}/catalog", Fetch.DOCUMENT).asJsoup()
-                val info = doc.selectFirst(".chapter-sub-title")!!.text()
-                val title = doc.selectFirst(".book-title")!!.text()
-                val date = DATE_FORMAT.tryParse(DATE_REGEX.find(info)?.value)
-                doc.select(".catalog-volume").takeIf(Elements::isNotEmpty)?.flatMap {
-                    val bar = it.selectFirst(".chapter-bar")!!.text().substring(title.length + 1)
-                    val volume = if (bar.first().isDigit()) "Vol.$bar" else bar.toHalfWidthDigits()
-                    it.select(".chapter-li-a").mapToChapter(date, volume)
-                }?.reversed() ?: doc.select(".chapter-li-a").mapToChapter(date).reversed()
-            }
+            async { parseChapters(client.get("$baseUrl/read/${manga.id}/catalog", Fetch.DOCUMENT).asJsoup()) }
         } else {
             CompletableDeferred(chapters)
         }
@@ -259,28 +145,137 @@ abstract class BiliManga :
     override val supportsRelatedMangas = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
-        return doc.select("#book-friend-list-container").last()?.select(".module-slide-a")?.map {
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        return document.selectLast("#book-friend-list-container")?.select(".module-slide-a")?.map {
             SManga.create().apply {
                 setUrlWithoutDomain(it.absUrl("href"))
                 title = it.selectFirst(".module-slide-caption")!!.text()
-                thumbnail_url = it.selectFirst(".module-slide-img")!!.attr("data-src")
+                thumbnail_url = it.selectFirst(".module-slide-img")?.absUrl("data-src")
             }
-        } ?: emptyList()
+        }.orEmpty()
     }
 
-    // Page
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(baseUrl + chapter.url, Fetch.DOCUMENT)
-        return response.asJsoup().let { doc ->
-            val images = doc.select(".imagecontent")
-            check(images.isNotEmpty()) {
-                doc.selectFirst("#acontentz")?.let {
-                    if ("電腦端" in it.text()) "不支持電腦端查看，請在高級設置中更換移動端UA標識" else "漫畫可能已下架或需要足夠的權限"
-                } ?: "章节鏈接错误"
-            }
-            images.mapIndexed { i, img -> Page(i, imageUrl = img.attr("data-src")) }
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
+        val images = document.select(".imagecontent")
+        check(images.isNotEmpty()) {
+            document.selectFirst("#acontentz")?.let {
+                if ("電腦端" in it.text()) "不支持電腦端查看，請在高級設置中更換移動端UA標識" else "漫畫可能已下架或需要足夠的權限"
+            } ?: "章节鏈接错误"
         }
+        return images.mapIndexed { index, image -> Page(index, imageUrl = image.absUrl("data-src")) }
+    }
+
+    override fun getFilterList(data: JsonElement?) = buildFilterList()
+
+    private val SManga.id get() = MANGA_ID_REGEX.find(url)!!.groupValues[1]
+
+    private fun parseMangasPage(document: Document): MangasPage {
+        val mangas = document.select(".book-layout").map {
+            SManga.create().apply {
+                setUrlWithoutDomain(it.absUrl("href"))
+                val image = it.selectFirst("img")!!
+                thumbnail_url = image.absUrl("data-src")
+                title = image.attr("alt")
+            }
+        }
+        val hasNextPage = when (document.location().toHttpUrl().pathSegments.first()) {
+            "filter" -> {
+                val total = document.selectFirst("#pagelink > .last")?.text()?.toInt()
+                val current = document.selectFirst("#pagelink > strong")?.text()?.toInt()
+                total != null && current != null && current < total
+            }
+
+            "search" -> {
+                val match = document.selectFirst("#pagelink > span")?.text()?.let(PAGE_REGEX::find)
+                match != null && match.groupValues[1].toInt() < match.groupValues[2].toInt()
+            }
+
+            else -> mangas.size == 50
+        }
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    private fun parseManga(document: Document) = SManga.create().apply {
+        document.selectFirst(".aui-ver-form")?.let { throw Exception(it.text()) }
+        val (main, extra) = document.select(".book-meta em").map(Element::text).partition(META_REGEX::containsMatchIn)
+        setUrlWithoutDomain(document.location())
+        title = document.selectFirst(".book-title")!!.text()
+        thumbnail_url = document.selectFirst(".book-cover")?.absUrl("src")
+        description = buildDescription(document)
+        artist = document.selectFirst(".authorname")?.text()
+        author = document.selectFirst(".illname")?.text() ?: artist
+        status = when (main.lastOrNull()) {
+            "連載中" -> SManga.ONGOING
+            "已完結" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+        genre = (document.select(".tag-small").map(Element::text) + extra).joinToString()
+        initialized = true
+    }
+
+    private fun buildDescription(document: Document): String? {
+        val sections = preferences.getStringSet(PREF_DESCRIPTION, DEFAULT_SET)!!
+        return MarkdownDescription.Builder().apply {
+            if ("A" in sections) {
+                markdown(document.selectFirst(".notice")?.formatText("\n")?.escapeMarkdown()?.let { "> $it" })
+            }
+            description(document.selectFirst("#bookSummary > content")?.formatText("\n\n"))
+            if ("B" in sections) {
+                field("别名", document.selectFirst(".backupname")?.text())
+            }
+            if ("C" in sections) {
+                val novel = document.select(".book-detail-btn .btn-group-cell > a").find { it.text() == "輕小說" }
+                    ?.absUrl("href")?.toHttpUrl()?.query
+                if (novel != null) links(listOf("跳轉至「哔哩轻小说」上的同名小說" to "https://www.bilinovel.com/novel/$novel.html"), "輕小說")
+            }
+        }.build()
+    }
+
+    private fun parseChapters(document: Document): List<SChapter> {
+        val title = document.selectFirst(".book-title")!!.text()
+        val volumes = document.select(".catalog-volume")
+        val chapters = if (volumes.isEmpty()) {
+            document.select(".chapter-li-a").toChapters()
+        } else {
+            volumes.flatMap {
+                val bar = it.selectFirst(".chapter-bar")!!.text().substring(title.length + 1)
+                val volume = if (bar.first().isDigit()) "Vol.$bar" else bar.toHalfWidthDigits()
+                it.select(".chapter-li-a").toChapters(volume)
+            }
+        }.reversed()
+        val updated = DATE_REGEX.find(document.selectFirst(".chapter-sub-title")!!.text())?.value
+        chapters.firstOrNull()?.date_upload = DATE_FORMAT.tryParseDate(updated)
+        return chapters
+    }
+
+    private fun Elements.toChapters(volume: String? = null) = mapIndexed { index, element ->
+        SChapter.create().apply {
+            name = element.text().toHalfWidthDigits()
+            scanlator = volume
+            val url = element.absUrl("href").takeUnless("javascript:cid(1)"::equals)
+            setUrlWithoutDomain(url ?: neighbourUrl(index, this@toChapters))
+        }
+    }
+
+    // Hidden chapters are read from the next page of their neighbour
+    private fun neighbourUrl(index: Int, elements: Elements) = when (index) {
+        0 -> "${elements[1].attr("href")}#prev"
+        else -> "${elements[index - 1].attr("href")}#next"
+    }
+
+    private fun Element.formatText(separator: String) = wholeText().replace(NEWLINE_REGEX, separator).trim()
+
+    private fun String.toHalfWidthDigits() = map { if (it in '０'..'９') it - 65248 else it }.joinToString("")
+
+    companion object {
+        private val NEWLINE_REGEX = Regex("(?:\n\r\n)+")
+        private val META_REGEX = Regex("收藏|推薦|連載中|已完結")
+        private val DATE_REGEX = Regex("""\d{4}-\d{1,2}-\d{1,2}""")
+        private val PAGE_REGEX = Regex("""第(\d+)/(\d+)页""")
+        private val MANGA_ID_REGEX = Regex("""/detail/(\d+)\.html""")
+        private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-M-d").withZone(ZoneId.of("Asia/Shanghai"))
+        private const val CAPTCHA_FORM = "form:has(img[src*=checkcode.php])"
+        private const val CAPTCHA_UNSOLVED = "無法自動識別搜尋驗證碼，請在 WebView 中搜尋一次並輸入驗證碼"
     }
 }

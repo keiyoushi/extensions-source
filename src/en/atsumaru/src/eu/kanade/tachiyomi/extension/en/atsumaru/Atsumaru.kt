@@ -24,10 +24,10 @@ import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import kotlin.random.Random
 
 @Source
 abstract class Atsumaru :
@@ -38,229 +38,123 @@ abstract class Atsumaru :
         rateLimit(2)
     }
 
-    override fun Headers.Builder.configureHeaders() = apply {
-        add("Content-Type", "application/json")
-    }
-
     private val prefs by getPreferencesLazy()
 
-    // ============================== Popular ===============================
+    private var randomSeed = 1
 
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        val offset = (page - 1) * BROWSE_LIMIT
-        val data = client.get(
-            "$baseUrl/api/home2/popular?offset=$offset&limit=$BROWSE_LIMIT" +
-                "&types=Manga,Manwha,Manhua,OEL&mediums=Comic&timeframe=daily${get18Mode()}${excludedGenresQuery()}",
-            Fetch.XHR,
-        ).parseAs<BrowseMangaDto>()
+    override suspend fun getPopularManga(page: Int): MangasPage = getBrowsePage("popular", page, timeframe = "daily")
 
-        return MangasPage(data.items.map { it.toSManga(baseUrl) }, true)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getBrowsePage("recentlyUpdated", page)
+
+    private suspend fun getBrowsePage(
+        path: String,
+        page: Int,
+        types: List<String> = BROWSE_TYPES,
+        includedTags: List<String> = emptyList(),
+        excludedTags: Collection<String> = excludedGenres,
+        timeframe: String? = null,
+    ): MangasPage {
+        val url = "$baseUrl/api/home2/$path".toHttpUrl().newBuilder().apply {
+            addQueryParameter("offset", ((page - 1) * BROWSE_LIMIT).toString())
+            addQueryParameter("limit", BROWSE_LIMIT.toString())
+            if (types.isNotEmpty()) addQueryParameter("types", types.joinToString(","))
+            addQueryParameter("mediums", "Comic")
+            timeframe?.let { addQueryParameter("timeframe", it) }
+            if (adultMode) addQueryParameter("adult", "1")
+            if (includedTags.isNotEmpty()) addQueryParameter("includedTags", includedTags.joinToString(","))
+            if (excludedTags.isNotEmpty()) addQueryParameter("excludedTags", excludedTags.joinToString(","))
+        }.build()
+        val data = client.get(url, Fetch.XHR).parseAs<BrowseMangaDto>()
+
+        return MangasPage(data.items.map { it.toSManga(baseUrl) }, data.items.size == BROWSE_LIMIT)
     }
-
-    // =============================== Latest ===============================
-
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val offset = (page - 1) * BROWSE_LIMIT
-        val data = client.get(
-            "$baseUrl/api/home2/recentlyUpdated?offset=$offset&limit=$BROWSE_LIMIT" +
-                "&types=Manga,Manwha,Manhua,OEL&mediums=Comic${get18Mode()}${excludedGenresQuery()}",
-            Fetch.XHR,
-        ).parseAs<BrowseMangaDto>()
-
-        return MangasPage(data.items.map { it.toSManga(baseUrl) }, true)
-    }
-
-    // =============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val sort = filters.firstInstanceOrNull<SortFilter>()?.selected ?: SortOption.POPULARITY
+        val timeframe = filters.firstInstanceOrNull<TimeframeFilter>()?.selected ?: "all"
+        val genreFilter = filters.firstInstanceOrNull<GenreFilter>()
+        val tagFilters = filters.firstInstanceOrNull<TagFilters>()
+        val includedGenres = genreFilter?.ids(Filter.TriState.STATE_INCLUDE).orEmpty()
+        val filterExcludedGenres = genreFilter?.ids(Filter.TriState.STATE_EXCLUDE).orEmpty()
+        val includedTags = tagFilters?.ids(Filter.TriState.STATE_INCLUDE).orEmpty()
+        val excludedTags = tagFilters?.ids(Filter.TriState.STATE_EXCLUDE).orEmpty()
+        val types = filters.firstInstanceOrNull<TypeFilter>()?.selectedIds.orEmpty()
+
+        val home2Path = sort.home2Path(timeframe)
+        if (query.isEmpty() && home2Path != null) {
+            return getBrowsePage(
+                home2Path,
+                page,
+                types = types,
+                includedTags = includedGenres + includedTags,
+                excludedTags = filterExcludedGenres + excludedTags,
+                timeframe = timeframe.takeIf { sort.supportsTimeframe },
+            )
+        }
+
+        val statuses = filters.firstInstanceOrNull<StatusFilter>()?.selectedIds.orEmpty()
+        val years = filters.firstInstanceOrNull<YearFilter>()?.state.orEmpty().split(",").mapNotNull { it.trim().toIntOrNull() }
+        val minChapters = filters.firstInstanceOrNull<MinChaptersFilter>()?.state?.trim()?.toIntOrNull()
+        val maxChapters = filters.firstInstanceOrNull<MaxChaptersFilter>()?.state?.trim()?.toIntOrNull()
+        val showAdult = filters.firstInstanceOrNull<AdultFilter>()?.state == true
+        val official = filters.firstInstanceOrNull<OfficialFilter>()?.state == true
+
+        val filterBy = buildList {
+            includedGenres.forEach { add("genreIds:=`$it`") }
+            if (filterExcludedGenres.isNotEmpty()) add("genreIds:!=[${filterExcludedGenres.quoted()}]")
+            includedTags.forEach { add("tagIds:=`$it`") }
+            if (excludedTags.isNotEmpty()) add("tagIds:!=[${excludedTags.quoted()}]")
+            // The site's data spells Manhwa "Manwha"
+            if (types.isNotEmpty()) add("type:=[${types.flatMap { if (it == "Manhwa") listOf(it, "Manwha") else listOf(it) }.quoted()}]")
+            add("medium:!=[`Novel`]")
+            if (statuses.isNotEmpty()) add("status:=[${statuses.quoted()}]")
+            if (years.isNotEmpty()) add("releaseYear:=[${years.joinToString(",")}]")
+            minChapters?.let { add("chapterCount:>=$it") }
+            maxChapters?.let { add("chapterCount:<=$it") }
+            if (adultMode) {
+                add("isAdult:=true")
+            } else {
+                if (!showAdult) add("isAdult:=false")
+                if (query.isEmpty()) add("mbContentRating:!=[`Pornographic`]")
+            }
+            if (official) add("officialTranslation:=true")
+            if (sort == SortOption.TOP_RATED) add("mbRating:>0")
+            if (sort == SortOption.POPULARITY) add("views:>0")
+            add("hidden:!=true")
+        }
+
         val url = "$baseUrl/collections/manga/documents/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("q", query.ifEmpty { "*" })
-
-            val filterBy = mutableListOf<String>()
-            filterBy.add("hidden:!=true")
-
-            val includedGenres = mutableListOf<String>()
-            val excludedGenres = mutableListOf<String>()
-            val includedTags = mutableListOf<String>()
-            val excludedTags = mutableListOf<String>()
-            val typesList = mutableListOf<String>()
-            val statuses = mutableListOf<String>()
-            var year: Int? = null
-            var minChapters: Int? = null
-            var showAdult = false
-            var officialTranslation = false
-            var sortBy = ""
-
-            filters.forEach { filter ->
-                when (filter) {
-                    is GenreFilter -> {
-                        filter.state.forEachIndexed { index, state ->
-                            when (state.state) {
-                                Filter.TriState.STATE_INCLUDE -> includedGenres.add(filter.genreIds[index])
-                                Filter.TriState.STATE_EXCLUDE -> excludedGenres.add(filter.genreIds[index])
-                            }
-                        }
-                    }
-
-                    is TagFilters -> {
-                        filter.state.forEach { letter ->
-                            letter.state.forEachIndexed { index, state ->
-                                when (state.state) {
-                                    Filter.TriState.STATE_INCLUDE -> includedTags.add(letter.tagIds[index])
-                                    Filter.TriState.STATE_EXCLUDE -> excludedTags.add(letter.tagIds[index])
-                                }
-                            }
-                        }
-                    }
-
-                    is TypeFilter -> {
-                        filter.state.forEachIndexed { index, checkBox ->
-                            if (checkBox.state) {
-                                typesList.add(filter.ids[index])
-                            }
-                        }
-                    }
-
-                    is StatusFilter -> {
-                        filter.state.forEachIndexed { index, checkBox ->
-                            if (checkBox.state) {
-                                statuses.add(filter.ids[index])
-                            }
-                        }
-                    }
-
-                    is YearFilter -> {
-                        if (filter.state.isNotEmpty()) year = filter.state.toIntOrNull()
-                    }
-
-                    is MinChaptersFilter -> {
-                        if (filter.state.isNotEmpty()) minChapters = filter.state.toIntOrNull()
-                    }
-
-                    is SortFilter -> {
-                        val direction = if (filter.state!!.ascending) "asc" else "desc"
-                        sortBy = SortFilter.VALUES[filter.state!!.index] + ':' + direction
-                    }
-
-                    is AdultFilter -> {
-                        showAdult = filter.state || get18Mode().isNotEmpty()
-                    }
-
-                    is OfficialFilter -> {
-                        officialTranslation = filter.state
-                    }
-
-                    else -> {}
-                }
-            }
-
-            if (includedGenres.isNotEmpty()) {
-                filterBy.add(includedGenres.joinToString(" && ") { "genreIds:=`$it`" })
-            }
-            if (excludedGenres.isNotEmpty()) {
-                filterBy.add("genreIds:!=[${excludedGenres.joinToString(",") { "`$it`" }}]")
-            }
-
-            if (includedTags.isNotEmpty()) {
-                filterBy.add(includedTags.joinToString(" && ") { "tagIds:=`$it`" })
-            }
-            if (excludedTags.isNotEmpty()) {
-                filterBy.add("tagIds:!=[${excludedTags.joinToString(",") { "`$it`" }}]")
-            }
-
-            if (typesList.isNotEmpty()) {
-                filterBy.add("type:=[${typesList.joinToString(",") { "`$it`" }}]")
-            }
-
-            if (statuses.isNotEmpty()) {
-                filterBy.add("status:=[${statuses.joinToString(",") { "`$it`" }}]")
-            }
-
-            year?.let {
-                filterBy.add("releaseYear:=[$it]")
-            }
-
-            minChapters?.let {
-                filterBy.add("chapterCount:>=$it")
-            }
-
-            if (!showAdult) {
-                filterBy.add("isAdult:=$showAdult")
-            }
-
-            if (officialTranslation) {
-                filterBy.add("officialTranslation:=$officialTranslation")
-            }
-
-            filterBy.add("(mbContentRating:=[`Safe`,`Suggestive`,`Erotica`] || mbContentRating:!=*)")
-            filterBy.add("medium:!=[`Novel`]")
-            filterBy.add("views:>0")
-
+            addQueryParameter("query_by", "title,englishTitle,otherNames,authors,acronyms")
+            addQueryParameter("query_by_weights", "4,3,2,2,1")
+            addQueryParameter("num_typos", "4,3,2,1,0")
+            addQueryParameter("prefix", "true,true,true,true,false")
+            addQueryParameter("include_fields", "id,title,posterMedium")
             addQueryParameter("filter_by", filterBy.joinToString(" && "))
-
-            if (sortBy.isNotEmpty()) {
-                addQueryParameter("sort_by", sortBy)
-            }
-
-            if (query.isNotEmpty()) {
-                addQueryParameter("query_by", "title,englishTitle,otherNames,authors")
-                addQueryParameter("query_by_weights", "4,3,2,1")
-                addQueryParameter("num_typos", "4,3,2,1")
-            }
-
             addQueryParameter("page", page.toString())
-            addQueryParameter("per_page", "40")
+            addQueryParameter("per_page", BROWSE_LIMIT.toString())
+            if (query.isNotEmpty()) {
+                addQueryParameter("infix", "off,off,fallback,off,off")
+            } else {
+                if (sort == SortOption.RANDOM && page == 1) randomSeed = Random.nextInt(1, Int.MAX_VALUE)
+                addQueryParameter("sort_by", sort.typesenseSort(randomSeed))
+            }
         }.build()
 
-        val body = client.get(url, Fetch.XHR).body.string()
+        val data = client.get(url, Fetch.XHR).parseAs<SearchResultsDto>()
 
-        return if (body.contains("\"hits\"")) {
-            val data = body.parseAs<SearchResultsDto>()
-            MangasPage(data.hits.map { it.document.toSManga(baseUrl) }, data.hasNextPage())
-        } else {
-            val data = body.parseAs<BrowseMangaDto>()
-            MangasPage(data.items.map { it.toSManga(baseUrl) }, true)
-        }
+        return MangasPage(data.hits.map { it.document.toSManga(baseUrl) }, data.hasNextPage())
     }
+
+    private fun List<String>.quoted() = joinToString(",") { "`$it`" }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
-        if (url.pathSegments.getOrNull(0) != "manga") return null
-        val id = url.pathSegments.getOrNull(1) ?: return null
+        if (url.pathSegments.getOrNull(0) !in listOf("manga", "read")) return null
+        val id = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
 
-        return fetchMangaUpdate(
-            SManga.create().apply { this.url = id },
-            emptyList(),
-            fetchDetails = true,
-            fetchChapters = false,
-        ).manga.apply { initialized = true }
+        return getMangaUpdate(SManga.create().apply { this.url = id }, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
-
-    // =============================== Filters ===============================
-
-    override val supportsFilterFetching = true
-
-    override suspend fun fetchFilterData(): JsonElement {
-        val filters = client.get("$baseUrl/api/explore/availableFilters", Fetch.XHR).parseAs<FilterData>()
-        return filters.toJsonElement()
-    }
-
-    override fun getFilterList(data: JsonElement?): FilterList {
-        val excludedGenres = prefs.getStringSet(PREF_EXCLUDE_GENRES, emptySet()).orEmpty()
-        val filters = data?.parseAs<FilterData>()?.getFilterList(excludedGenres).orEmpty()
-
-        return FilterList(
-            filters + listOf(
-                YearFilter(),
-                MinChaptersFilter(),
-                SortFilter(),
-                AdultFilter(get18Mode().isNotEmpty()),
-                OfficialFilter(),
-            ),
-        )
-    }
-
-    // =========================== Manga Details ============================
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
@@ -270,19 +164,14 @@ abstract class Atsumaru :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
-        val detailsDeferred = async {
-            if (fetchDetails || fetchChapters) {
-                client.get("$baseUrl/api/manga/page?id=${manga.url}", Fetch.XHR)
-                    .parseAs<MangaObjectDto>()
-                    .mangaPage
-            } else {
-                null
-            }
-        }
+        // Details carry the scanlator names the chapter list needs
+        val detailsDeferred = async { fetchMangaPage(manga) }
         val chaptersDeferred = async {
             if (fetchChapters) {
-                client.get("$baseUrl/api/manga/allChapters?mangaId=${manga.url}", Fetch.XHR)
-                    .parseAs<AllChaptersDto>()
+                val url = "$baseUrl/api/manga/allChapters".toHttpUrl().newBuilder()
+                    .addQueryParameter("mangaId", manga.url)
+                    .build()
+                client.get(url, Fetch.XHR).parseAs<AllChaptersDto>()
             } else {
                 null
             }
@@ -291,25 +180,19 @@ abstract class Atsumaru :
         val details = detailsDeferred.await()
         val chaptersDto = chaptersDeferred.await()
 
-        val updatedManga = if (fetchDetails && details != null) {
-            details.toSManga(baseUrl)
-        } else {
-            manga
-        }
-
-        val updatedChapters = if (fetchChapters && chaptersDto != null) {
-            val scanlatorMap = details?.scanlators?.associate { it.id to it.name }.orEmpty()
+        val updatedChapters = chaptersDto?.let { dto ->
+            val scanlatorMap = details.scanlators.associate { it.id to it.name }
             val blacklist = scanlatorBlacklist
             val filteredChapters = if (blacklist.isEmpty()) {
-                chaptersDto.chapters
+                dto.chapters
             } else {
-                chaptersDto.chapters.filter { chapter ->
+                dto.chapters.filter { chapter ->
                     val name = chapter.scanlationMangaId?.let(scanlatorMap::get)
                     name == null || name.trim().lowercase() !in blacklist
                 }
             }
             val chapterDtos = if (deduplicateChapters) {
-                val scores = details?.scanlators?.associate { it.id to it.score }.orEmpty()
+                val scores = details.scanlators.associate { it.id to it.score }
                 filteredChapters.groupBy { it.number }.map { (_, uploads) ->
                     uploads.maxWith(
                         compareBy<ChapterDto> { scores[it.scanlationMangaId] ?: Int.MIN_VALUE }
@@ -326,28 +209,23 @@ abstract class Atsumaru :
                     .thenBy { it.scanlator }
                     .thenByDescending { it.date_upload },
             )
-        } else {
-            chapters
-        }
+        } ?: chapters
 
-        SMangaUpdate(updatedManga, updatedChapters)
+        SMangaUpdate(details.toSManga(baseUrl), updatedChapters)
     }
 
     override val supportsRelatedMangas = true
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get("$baseUrl/api/manga/page?id=${manga.url}", Fetch.XHR)
-        .parseAs<MangaObjectDto>()
-        .mangaPage
-        .recommendations(baseUrl)
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = fetchMangaPage(manga).relatedManga(baseUrl)
 
-    // ============================== Chapters ==============================
-
-    override fun getChapterUrl(chapter: SChapter): String {
-        val (slug, name) = chapter.url.split("/")
-        return "$baseUrl/read/$slug/$name"
+    private suspend fun fetchMangaPage(manga: SManga): MangaPageDto {
+        val url = "$baseUrl/api/manga/page".toHttpUrl().newBuilder()
+            .addQueryParameter("id", manga.url)
+            .build()
+        return client.get(url, Fetch.XHR).parseAs<MangaObjectDto>().mangaPage
     }
 
-    // =============================== Pages ================================
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/read/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (slug, name) = chapter.url.split("/")
@@ -357,25 +235,39 @@ abstract class Atsumaru :
             .build()
 
         return client.get(url, Fetch.XHR).parseAs<PageObjectDto>().readChapter.pages.mapIndexed { index, page ->
-            val imageUrl = when {
-                page.image.startsWith("http") -> page.image
-                page.image.startsWith("//") -> "https:${page.image}"
-                else -> "$baseUrl/static/${page.image.removePrefix("/").removePrefix("static/")}"
-            }
-            Page(index, imageUrl = imageUrl.replaceFirst(PROTOCOL_REGEX, "https://cdn."))
+            Page(index, imageUrl = cdnUrl(baseUrl, page.image)!!)
         }
     }
 
-    private fun get18Mode(): String {
-        val isEnabled = prefs.getBoolean(PREF_SHOW_18, false)
-        return if (isEnabled) "&adult=1" else ""
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val filters = client.get("$baseUrl/api/explore/availableFilters", Fetch.XHR).parseAs<FilterData>()
+        return filters.toJsonElement()
     }
 
-    private fun excludedGenresQuery(): String {
-        val ids = prefs.getStringSet(PREF_EXCLUDE_GENRES, emptySet()).orEmpty()
-        if (ids.isEmpty()) return ""
-        return "&excludedTags=${ids.joinToString(",")}"
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filters = data?.parseAs<FilterData>()?.getFilterList(excludedGenres).orEmpty()
+
+        return FilterList(
+            filters + listOf(
+                YearFilter(),
+                MinChaptersFilter(),
+                MaxChaptersFilter(),
+                SortFilter(),
+                TimeframeFilter(),
+                Filter.Header("Hot Updates and the sorts below it, and Popularity with a timeframe, ignore status, year, chapter, adult and official filters"),
+                AdultFilter(),
+                OfficialFilter(),
+            ),
+        )
     }
+
+    private val adultMode: Boolean
+        get() = prefs.getBoolean(PREF_SHOW_18, false)
+
+    private val excludedGenres: Set<String>
+        get() = prefs.getStringSet(PREF_EXCLUDE_GENRES, emptySet()).orEmpty()
 
     private val deduplicateChapters: Boolean
         get() = prefs.getBoolean(PREF_DEDUPLICATE_CHAPTERS, false)
@@ -392,18 +284,16 @@ abstract class Atsumaru :
             key = PREF_SHOW_18
             title = "Toggle adult mode"
             summaryOff = "Safe (default)"
-            summaryOn = "+18"
+            summaryOn = "18+: adult titles only"
         }.let(screen::addPreference)
 
-        val genreFilter = getFilterList().firstInstanceOrNull<GenreFilter>()
-        val genres = genreFilter?.state.orEmpty()
-        val genreIds = genreFilter?.genreIds.orEmpty()
+        val genres = getFilterList().firstInstanceOrNull<GenreFilter>()?.state.orEmpty()
 
         MultiSelectListPreference(screen.context).apply {
             key = PREF_EXCLUDE_GENRES
             title = "Exclude Genres from Browse"
             entries = genres.map { it.name }.toTypedArray()
-            entryValues = genreIds.toTypedArray()
+            entryValues = genres.map { it.id }.toTypedArray()
             setDefaultValue(emptySet<String>())
             setEnabled(genres.isNotEmpty())
 
@@ -420,12 +310,7 @@ abstract class Atsumaru :
 
             setOnPreferenceChangeListener { pref, newValue ->
                 @Suppress("UNCHECKED_CAST")
-                val updated = pref as MultiSelectListPreference
-
-                @Suppress("UNCHECKED_CAST")
-                val newSet = newValue as Set<String>
-
-                updateSummary(updated, newSet)
+                updateSummary(pref as MultiSelectListPreference, newValue as Set<String>)
                 true
             }
         }.let(screen::addPreference)
@@ -452,7 +337,6 @@ abstract class Atsumaru :
         private const val PREF_DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
         private const val PREF_SCANLATOR_BLACKLIST = "pref_scanlator_blacklist"
         private const val BROWSE_LIMIT = 40
-
-        private val PROTOCOL_REGEX = Regex("^https?:?//")
+        private val BROWSE_TYPES = listOf("Manga", "Manwha", "Manhua", "OEL")
     }
 }

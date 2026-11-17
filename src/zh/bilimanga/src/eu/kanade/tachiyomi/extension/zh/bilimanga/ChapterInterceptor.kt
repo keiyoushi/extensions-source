@@ -7,9 +7,9 @@ import okhttp3.Response
 class ChapterInterceptor : Interceptor {
 
     companion object {
-        val PREV_URL_REGEX = Regex("url_previous:'(.*?)'")
-        val NEXT_URL_REGEX = Regex("url_next:'(.*?)'")
-        val CHAPTER_ID_REGEX = Regex("/read/(\\d+)/(\\d+)\\.html")
+        private val PREV_URL_REGEX = Regex("url_previous:'(.*?)'")
+        private val NEXT_URL_REGEX = Regex("url_next:'(.*?)'")
+        private val CHAPTER_ID_REGEX = Regex("""/read/(\d+)/(\d+)\.html""")
     }
 
     private fun regexOf(str: String?) = when (str) {
@@ -39,6 +39,6 @@ class ChapterInterceptor : Interceptor {
             val path = it.find(response.body.string())?.groups?.get(1)?.value ?: predictUrlByContext(origin.url)
             return response.newBuilder().code(302).header("Location", path.replace(".", "_2.")).build()
         }
-        return chain.proceed(origin.newBuilder().addHeader("Cookie", "night=1").build())
+        return chain.proceed(origin)
     }
 }

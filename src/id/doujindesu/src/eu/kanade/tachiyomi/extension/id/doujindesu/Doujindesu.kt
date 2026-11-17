@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.id.doujindesu
 
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -9,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
@@ -17,10 +19,15 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Response
 import org.jsoup.parser.Parser
 import java.io.IOException
 import java.util.LinkedHashMap
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 @Source
 abstract class Doujindesu : KeiSource() {
@@ -34,6 +41,7 @@ abstract class Doujindesu : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(decryptor.xorInterceptor())
+        addInterceptor(::resignExpiredPage)
         addInterceptor { chain ->
             val request = chain.request()
             if (request.url.host != baseUrl.toHttpUrl().host) {
@@ -183,9 +191,51 @@ abstract class Doujindesu : KeiSource() {
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/reader/${chapter.url}"
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/chapters/${chapter.url}".toHttpUrl(), Fetch.XHR).parseAs<PageList>().pages.mapIndexed { i, imgUrl ->
-        Page(i, imageUrl = Parser.unescapeEntities(imgUrl, false))
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(chapterApiUrl(chapter.url), Fetch.XHR).parseAs<PageList>().imageUrls().mapIndexed { i, url ->
+        Page(i, imageUrl = url.newBuilder().fragment(chapter.url).build().toString())
     }
+
+    private fun chapterApiUrl(chapterId: String) = "$apiUrl/chapters/$chapterId".toHttpUrl()
+
+    private fun PageList.imageUrls() = pages.map { Parser.unescapeEntities(it, false).toHttpUrl() }
+
+    // Page links are signed for 24 hours; the fragment holds the chapter id
+    private fun resignExpiredPage(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val chapterId = request.url.fragment ?: return chain.proceed(request)
+        val response = chain.proceed(request)
+        if (response.code != 410) return response
+        response.close()
+
+        val path = request.url.encodedPath
+        val url = resignedPages(chapterId).firstOrNull { it.encodedPath == path }
+            ?: throw IOException("Page not found in chapter $chapterId")
+        return chain.proceed(request.newBuilder().url(url).build())
+    }
+
+    // Last re-signed chapter, so its other expired pages need no further request
+    private var resigned: ResignedPages? = null
+
+    @Synchronized
+    private fun resignedPages(chapterId: String): List<HttpUrl> {
+        resigned?.let { if (it.chapterId == chapterId && it.fetchedAt.elapsedNow() < RESIGNED_TTL) return it.urls }
+        val fetchedAt = TimeSource.Monotonic.markNow()
+        val request = GET(chapterApiUrl(chapterId), headers).newBuilder().fetch(Fetch.XHR).build()
+        val urls = try {
+            val response = client.newCall(request).execute()
+            if (!response.isSuccessful) {
+                response.close()
+                throw IOException("HTTP error ${response.code}")
+            }
+            response.parseAs<PageList>().imageUrls()
+        } catch (e: Exception) {
+            throw e as? IOException ?: IOException(e)
+        }
+        resigned = ResignedPages(chapterId, fetchedAt, urls)
+        return urls
+    }
+
+    private class ResignedPages(val chapterId: String, val fetchedAt: TimeMark, val urls: List<HttpUrl>)
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("Filter Tipe Diabaikan Saat Menggunakan Pencarian"),
@@ -206,5 +256,6 @@ abstract class Doujindesu : KeiSource() {
     companion object {
         private const val APP_SECRET = "dfdf72051dbfdc7d76889ebd31324e74"
         private const val LIMIT = 24
+        private val RESIGNED_TTL = 10.minutes
     }
 }
