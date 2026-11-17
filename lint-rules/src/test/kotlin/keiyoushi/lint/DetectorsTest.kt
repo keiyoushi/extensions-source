@@ -188,6 +188,8 @@ class DetectorsTest {
             fun <T> String.parseAs(): T = TODO()
             fun parse(response: Response): Int = response.body.string().parseAs()
             fun raw(response: Response) = Regex("x").find(response.body.string())
+            fun doc(response: Response) = org.jsoup.Jsoup.parse(response.body.string())
+            fun fragment(response: Response) = org.jsoup.Jsoup.parseBodyFragment(response.body.string())
             val sam = Interceptor { chain -> chain.proceed(chain.request()).also { it.body.string().parseAs<Int>() } }
             class I : Interceptor {
                 override fun intercept(chain: Interceptor.Chain): Response {
@@ -199,7 +201,7 @@ class DetectorsTest {
             fun OkHttpClientBuilderLike.x() = addInterceptor { chain -> chain.proceed(chain.request()).also { it.body.string() } }
             interface OkHttpClientBuilderLike { fun addInterceptor(i: Interceptor): OkHttpClientBuilderLike }
             """,
-        ).count(1)
+        ).count(2)
     }
 
     @Test
@@ -241,6 +243,7 @@ class DetectorsTest {
             """
             package test.pkg
             import kotlinx.serialization.Serializable
+            /** Paginated data from the API */
             @Serializable data class A(val id: Int)
             @Serializable class B(val id: Int)
             data class C(val id: Int)
@@ -248,10 +251,10 @@ class DetectorsTest {
         ).count(1)
             .expectFixDiffs(
                 """
-                Fix for src/test/pkg/Test.kt line 3: Delete "data ":
-                @@ -3 +3
-                - @Serializable data class A(val id: Int)
-                + @Serializable class A(val id: Int)
+                Fix for src/test/pkg/Test.kt line 4: Delete:
+                @@ -4 +4 @@
+                -@Serializable data class A(val id: Int)
+                +@Serializable class A(val id: Int)
                 """,
             )
     }
@@ -283,9 +286,13 @@ class DetectorsTest {
             """
             package test.pkg
             import kotlinx.serialization.*
-            @Serializable class A(val manga_id: Int, @SerialName("_count") val count: Int, val title: String)
+            @Serializable class A(val manga_id: Int, @SerialName("_count") val count: Int, val title: String) {
+                val page_count: Int = 0
+                val chapter_count get() = count
+                val cover_url by lazy { title }
+            }
             """,
-        ).count(1)
+        ).count(2)
     }
 
     @Test
@@ -299,14 +306,7 @@ class DetectorsTest {
             class NotDto(val a: String? = null)
             """,
         ).count(1)
-            .expectFixDiffs(
-                """
-                Fix for src/test/pkg/Test.kt line 3: Delete:
-                @@ -3 +3 @@
-                -@Serializable class A(val a: String? = null, val b: String?, val c: Int = 0)
-                +@Serializable class A(val a: String?, val b: String?, val c: Int = 0)
-                """,
-            )
+            .expectFixDiffs("")
     }
 
     @Test
@@ -327,10 +327,11 @@ class DetectorsTest {
             JsonDetector.DECODE_FROM_STRING,
             """
             package test.pkg
-            import kotlinx.serialization.json.Json
+            import kotlinx.serialization.json.*
             fun f(s: String): Int = Json.decodeFromString(s)
+            fun g(json: Json, e: JsonElement): Int = json.decodeFromJsonElement(e)
             """,
-        ).count(1)
+        ).count(2)
     }
 
     // endregion
@@ -408,9 +409,11 @@ class DetectorsTest {
                 e.select("div.css-1x2y3z4")
                 e.select("div.card > a.title")
                 e.select(".preview-card__title, .main-content__tumba")
+                e.select("div.sc-gKsewC > a")
+                e.select(".sc-header .sc-button")
             }
             """,
-        ).count(2)
+        ).count(3)
     }
 
     // endregion
@@ -692,12 +695,17 @@ class DetectorsTest {
                 private val interceptor = okhttp3.Interceptor { chain -> chain.proceed(chain.request()).also { println(baseUrl) } }
                 private val urlOf: (String) -> String = { slug -> "${'$'}baseUrl/${'$'}slug" }
                 private val headersBuilderCopy get() = headersBuilder()
+                private val config = Config("https://a.com")
+                private val api = config.baseUrl
+                private val cdn = with(config) { baseUrl }
+                private val own = this.baseUrl
                 companion object { const val X = "y" }
             }
             class Helper(val baseUrl: () -> String)
+            class Config(val baseUrl: String)
             """,
             source("build.gradle.kts", "keiyoushi { source { baseUrl { mirrors(\"https://a.com\", \"https://b.com\") } } }"),
-        ).count(3)
+        ).count(4)
         check(
             SourceDetector.STORED_BASE_URL,
             """
