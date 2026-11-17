@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.extension.es.kumanga
 
 import android.util.Base64
+import android.webkit.WebResourceResponse
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,6 +16,7 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.xor
 import keiyoushi.utils.xorInPlace
@@ -22,11 +25,16 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
+import java.io.ByteArrayInputStream
+import java.io.IOException
+import kotlin.coroutines.cancellation.CancellationException
 
 @Source
 abstract class Kumanga : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
+
+    private val redirectClient by lazy { client.newBuilder().followRedirects(false).build() }
 
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList())
 
@@ -135,20 +143,44 @@ abstract class Kumanga : KeiSource() {
         val readerUrl = if (chapter.url.startsWith("/manga/leer/")) {
             getChapterUrl(chapter)
         } else {
-            val upload = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-                .selectFirst("a#leer, a.readButton")!!.absUrl("href").toHttpUrl()
-            // Upload pages (/manga/c/<id>) and the reader (/manga/leer/<id>) share the upload id
+            // Chapters redirect to their upload (/manga/c/<id>), or list one per group; the reader (/manga/leer/<id>) shares the id
+            val upload = redirectClient.get(getChapterUrl(chapter), Fetch.DOCUMENT, ensureSuccess = false).use { response ->
+                response.header("Location") ?: run {
+                    if (!response.isSuccessful) throw HttpException(response.code)
+                    response.asJsoup().selectFirst("a.readButton")?.absUrl("href") ?: throw Exception("Chapter not found")
+                }
+            }
             baseUrl.toHttpUrl().newBuilder()
                 .addPathSegments("manga/leer")
-                .addPathSegment(upload.pathSegments.last())
+                .addPathSegment(baseUrl.toHttpUrl().resolve(upload)!!.pathSegments.last())
                 .build()
                 .toString()
         }
-        val document = client.get(readerUrl, Fetch.DOCUMENT).asJsoup()
-        // Decoy page lists are declared inside blocks, out of the reader's scope
-        val scripts = document.select("script").joinToString("\n") { it.data().withoutBlocks() }
-        val name = RPICS_REGEX.find(scripts)!!.groupValues[1]
-        val encoded = STRING_CONST_REGEX.findAll(scripts).first { it.groupValues[1] == name }.groupValues[2]
+        val html = client.get(readerUrl, Fetch.DOCUMENT).body.string()
+        val readerHost = readerUrl.toHttpUrl().host
+        // The page list is whatever the reader page's scripts leave in rpics
+        val encoded = try {
+            runWebView<String> {
+                // The site's own scripts, which rpics may depend on
+                interceptRequest { request ->
+                    if (request.url.host == readerHost && request.url.path.orEmpty().endsWith(".js")) {
+                        proxyRequest(request, client)
+                    } else {
+                        WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
+                    }
+                }
+                onPageFinished {
+                    evaluateJs("typeof rpics == 'string' ? rpics : null") { result ->
+                        result.parseAs<String?>()?.let(::resolve) ?: reject(Exception("No page list"))
+                    }
+                }
+                loadData(readerUrl, html)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            throw IOException(e.message, e)
+        }
         val cipher = Base64.decode(encoded, Base64.DEFAULT)
         val paths = cipher.xor(cipher.pagesKey()).decodeToString().parseAs<List<String>>()
         val base = readerUrl.toHttpUrl()
@@ -170,17 +202,9 @@ abstract class Kumanga : KeiSource() {
         return known.copyOf(period)
     }
 
-    private tailrec fun String.withoutBlocks(): String {
-        val outer = BLOCK_REGEX.replace(this, "")
-        return if (outer == this) this else outer.withoutBlocks()
-    }
-
     companion object {
         // Opening of every page list (JSON-escaped): img.php with the hex of an "http" url
         private val PAGES_PREFIX = """["\/img.php?src=68747470""".toByteArray()
         private val OTHER_CHAPTERS_REGEX = Regex("""OTHER_CHAPTERS\s*=\s*(\[.*])\s*;""", RegexOption.DOT_MATCHES_ALL)
-        private val RPICS_REGEX = Regex("""const\s+rpics\s*=\s*(\w+)\s*;""")
-        private val STRING_CONST_REGEX = Regex("""const\s+(\w+)\s*=\s*"([^"]*)"""")
-        private val BLOCK_REGEX = Regex("""\{[^{}]*\}""")
     }
 }
