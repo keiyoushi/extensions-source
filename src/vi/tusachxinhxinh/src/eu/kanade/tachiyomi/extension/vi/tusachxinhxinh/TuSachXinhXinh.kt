@@ -1,12 +1,13 @@
 package eu.kanade.tachiyomi.extension.vi.tusachxinhxinh
 
+import android.content.Context
 import android.content.SharedPreferences
 import android.text.InputType
 import android.webkit.CookieManager
 import android.widget.Toast
 import androidx.preference.EditTextPreference
+import androidx.preference.Preference
 import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.koi.Koi
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
@@ -48,6 +49,10 @@ abstract class TuSachXinhXinh :
         user: String = preferences.getString(PREF_USERNAME, "").orEmpty(),
         pass: String = preferences.getString(PREF_PASSWORD, "").orEmpty(),
     ): Boolean {
+        if (isLoggedIn()) {
+            throw Exception("Bạn đã đăng nhập trước đó")
+        }
+
         if (user.isBlank() || pass.isBlank()) {
             throw Exception("Vui lòng nhập tên đăng nhập và mật khẩu")
         }
@@ -55,7 +60,7 @@ abstract class TuSachXinhXinh :
         val loginUrl = "$baseUrl/tai-khoan/"
         val doc = client.get(loginUrl, Fetch.DOCUMENT).asJsoup()
         val nonce = doc.selectFirst("input[name=user-registration-login-nonce]")?.attr("value")
-            ?: throw Exception("Không tìm thấy login nonce")
+            ?: throw Exception("Bạn đã đăng nhập trước đó")
 
         val formBody = FormBody.Builder()
             .add("username", user)
@@ -94,6 +99,8 @@ abstract class TuSachXinhXinh :
         cookieManager.flush()
     }
 
+    private fun createPreference(context: Context): Preference = Preference::class.java.getConstructor(Context::class.java).newInstance(context)
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val context = screen.context
 
@@ -124,15 +131,15 @@ abstract class TuSachXinhXinh :
             }
         }.let(screen::addPreference)
 
-        SwitchPreferenceCompat(context).apply {
+        val loginPref = createPreference(context).apply {
             title = "Đăng nhập ngay"
             summary = if (isLoggedIn()) "Trạng thái: Đã đăng nhập" else "Nhấn để thực hiện đăng nhập"
-            setOnPreferenceChangeListener { pref, _ ->
+            setOnPreferenceClickListener { pref ->
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
                         login()
                         withContext(Dispatchers.Main) {
-                            (pref as SwitchPreferenceCompat).summary = "Trạng thái: Đã đăng nhập"
+                            pref.summary = "Trạng thái: Đã đăng nhập"
                             Toast.makeText(context, "Đăng nhập thành công!", Toast.LENGTH_SHORT).show()
                         }
                     } catch (e: Exception) {
@@ -141,17 +148,18 @@ abstract class TuSachXinhXinh :
                         }
                     }
                 }
-                false
+                true
             }
-        }.let(screen::addPreference)
+        }.also(screen::addPreference)
 
-        SwitchPreferenceCompat(context).apply {
+        createPreference(context).apply {
             title = "Đăng xuất"
             summary = "Xóa phiên đăng nhập hiện tại"
-            setOnPreferenceChangeListener { _, _ ->
+            setOnPreferenceClickListener {
                 logout()
+                loginPref.summary = "Nhấn để thực hiện đăng nhập"
                 Toast.makeText(context, "Đã đăng xuất!", Toast.LENGTH_SHORT).show()
-                false
+                true
             }
         }.let(screen::addPreference)
     }
