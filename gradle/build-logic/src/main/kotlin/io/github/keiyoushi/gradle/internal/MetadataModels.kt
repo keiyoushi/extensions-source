@@ -17,8 +17,6 @@ internal data class ExtensionMetadata(
     val contentWarning: Int,
     val sources: List<SourceMetadata>,
     val contentHash: String,
-    /** Keiyoushi Runtime modules and minimum API levels this extension calls */
-    val runtimeRequires: Map<String, Int> = emptyMap(),
 )
 
 @Serializable
