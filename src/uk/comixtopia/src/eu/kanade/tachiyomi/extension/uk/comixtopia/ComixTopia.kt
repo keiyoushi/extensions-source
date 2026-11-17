@@ -120,8 +120,7 @@ abstract class ComixTopia : KeiSource() {
                     "publishers:publishers(name)," +
                     "genres:genres(name)," +
                     "votes:votes(rating)," +
-                    "issues:issues(id,issue_no,translator,created_at,image_list,metadata:issues_metadata(state))," +
-                    "comics_metadata(state)",
+                    "issues:issues(id,issue_no,translator,created_at,image_list,metadata:issues_metadata!inner(state))",
             )
             addQueryParameter("slug", "eq.$mangaUrl")
             addQueryParameter("issues.metadata.state", "eq.approved")
