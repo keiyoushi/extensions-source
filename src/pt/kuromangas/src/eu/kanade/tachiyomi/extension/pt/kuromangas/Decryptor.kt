@@ -5,39 +5,48 @@ import eu.kanade.tachiyomi.network.GET
 import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.evpBytesToKey
 import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.readIntBigEndian
 import keiyoushi.utils.readIntLittleEndian
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.IOException
-import java.security.MessageDigest
 import java.time.LocalDate
 import java.time.ZoneOffset
 
-const val HOSTNAME_PART = "kuromangas.com::v2"
-const val ANTIBOT = "x9_4v2_b"
-const val DEFAULT_ENC_KEY = "i9ato8l6sai74jyIHfE2oeshoforanuYTusF4jKdqEwhUEft9dsadcxzsaipnjm8"
-const val TOKEN_COOKIE = "_kn"
-const val TOKEN_HEADER = "X-Client-Token"
+private const val HOSTNAME_PART = "kuromangas.com::v2"
+private const val ANTIBOT = "x9_4v2_b"
+private const val DEFAULT_ENC_KEY = "8at7vo8l6sai74jyIHfE2oeshoforanuYTusF4jKdqEwhUEft9dsadcxzsaipnjm8"
+internal const val TOKEN_COOKIE = "_vx"
+private const val TOKEN_HEADER = "X-Request-Ctx"
 private const val LOGIN_EXPIRED_MESSAGE = "Sessão recusada pelo site. Refaça o login no WebView ou revise email e senha nas configurações."
 
 private val encKeyRegex = Regex("""ENCRYPTION_KEY\s*[:=]\s*["']([^"']+)["']""")
 
-class KuroMangasDecryptor(val baseUrl: String, val client: OkHttpClient, val relogin: () -> Boolean) {
-    private var viteApiEncKey: String? = DEFAULT_ENC_KEY
+internal class KuroMangasDecryptor(
+    private val baseUrl: String,
+    private val client: OkHttpClient,
+    private val relogin: () -> Boolean,
+) {
+    private val host = baseUrl.toHttpUrl().host
+
+    private var viteApiEncKey = DEFAULT_ENC_KEY
 
     fun vSecureInterceptor() = Interceptor { chain ->
 
         fun newRequest(): Request {
-            val token = client.getCookie(baseUrl, TOKEN_COOKIE) ?: return chain.request()
-            return chain.request().newBuilder()
+            val request = chain.request()
+            if (request.url.host != host) return request
+            val token = client.getCookie(baseUrl, TOKEN_COOKIE) ?: return request
+            return request.newBuilder()
                 .header(TOKEN_HEADER, token)
                 .build()
         }
@@ -75,8 +84,11 @@ class KuroMangasDecryptor(val baseUrl: String, val client: OkHttpClient, val rel
         execute(newRequest(), false)
     }
 
-    fun reloadCredentials(login: Boolean = false) {
-        if (login) relogin().also { return }
+    private fun reloadCredentials(login: Boolean = false) {
+        if (login) {
+            relogin()
+            return
+        }
 
         val indexJsUrl = client.newCall(GET(baseUrl).newBuilder().fetch(Fetch.DOCUMENT).build()).execute()
             .asJsoup()
@@ -88,14 +100,13 @@ class KuroMangasDecryptor(val baseUrl: String, val client: OkHttpClient, val rel
         encKeyRegex.find(js)?.groupValues?.get(1)?.let { viteApiEncKey = it }
     }
 
-    // index-*.js: Ik2() + Hk2()
-    fun decrypt(vSecure: String, dataKey: String): String? {
+    private fun decrypt(vSecure: String, dataKey: String): String? {
         val password = derivePassword()
         val encrypted = Base64.decode(vSecure, Base64.DEFAULT)
         val salt = encrypted.copyOfRange(8, 16)
         val ciphertext = encrypted.copyOfRange(16, encrypted.size)
 
-        val (key, iv) = evpBytesToKey(password.toByteArray(), salt)
+        val (key, iv) = evpBytesToKey(password.toByteArray(), salt, keyLen = 16, ivLen = 8)
         val rabbit = Rabbit()
         rabbit.setup(key, iv)
         val plaintext = ciphertext.copyOf()
@@ -108,37 +119,20 @@ class KuroMangasDecryptor(val baseUrl: String, val client: OkHttpClient, val rel
         } catch (e: Exception) {
             return null
         }
-        val inner = wrapper.jsonObject[dataKey] ?: return null
+        // Whole object when the data key is absent, as in the site's client
+        val inner = wrapper.jsonObject[dataKey] ?: wrapper
         return inner.toString()
     }
 
-    fun derivePassword(date: String = LocalDate.now(ZoneOffset.UTC).toString()): String {
+    private fun derivePassword(date: String = LocalDate.now(ZoneOffset.UTC).toString()): String {
         val toHash = "$date$HOSTNAME_PART$ANTIBOT"
         val md5Part = toHash.md5().toHexString().substring(0, 8)
         return viteApiEncKey + md5Part
     }
-
-    fun evpBytesToKey(password: ByteArray, salt: ByteArray, keyLen: Int = 16, ivLen: Int = 8): Pair<ByteArray, ByteArray> {
-        val derived = ByteArray(keyLen + ivLen)
-        var derivedPos = 0
-        var md5Hash = ByteArray(0)
-        val md = MessageDigest.getInstance("MD5")
-        while (derivedPos < derived.size) {
-            md.reset()
-            if (md5Hash.isNotEmpty()) md.update(md5Hash)
-            md.update(password)
-            md.update(salt)
-            md5Hash = md.digest()
-            val toCopy = minOf(md5Hash.size, derived.size - derivedPos)
-            System.arraycopy(md5Hash, 0, derived, derivedPos, toCopy)
-            derivedPos += toCopy
-        }
-        return Pair(derived.copyOfRange(0, keyLen), derived.copyOfRange(keyLen, keyLen + ivLen))
-    }
 }
 
 // Rabbit Cipher (crypto-js)
-class Rabbit {
+private class Rabbit {
     val x = IntArray(8)
     val c = IntArray(8)
     var b = 0
