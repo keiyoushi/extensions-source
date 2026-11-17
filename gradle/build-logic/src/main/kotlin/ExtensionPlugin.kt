@@ -75,8 +75,6 @@ class ExtensionPlugin : Plugin<Project> {
 
             lint {
                 checkReleaseBuilds = false
-                // Lint's HTML syntax highlighter crashes on a raw string ending in a quote followed by a backtick in a string (`"""x"""" + "`"`)
-                htmlReport = false
             }
 
             signingConfigs {
