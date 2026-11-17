@@ -12,7 +12,7 @@ ktlint = "1.8.0"
 spotless = "8.10.1"
 tapmoc = "0.4.2"
 okhttp = "5.4.0"
-keiyoushi-runtime = "0.0.0-local"
+keiyoushi-runtime = "c135b783529c7a3fb6a69a9227bcda2c2e23fbc5"
 
 [libraries]
 android-gradle = { module = "com.android.tools.build:gradle", version.ref = "android-gradle" }
@@ -32,7 +32,6 @@ tapmoc-gradle = { module = "com.gradleup.tapmoc:tapmoc-gradle-plugin", version.r
 
 coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 injekt-core = { module = "com.github.null2264.injekt:injekt-core", version = "4135455a2a" }
 jsoup = { module = "org.jsoup:jsoup", version = "1.22.2" }
 kotlin-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
