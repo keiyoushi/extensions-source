@@ -93,7 +93,7 @@ object Stubs {
         """,
     ).indented()
 
-    val json: TestFile = kotlin(
+    val jsonElement: TestFile = kotlin(
         """
         package kotlinx.serialization.json
 
@@ -102,7 +102,20 @@ object Stubs {
         class JsonPrimitive : JsonElement() { val content: String = "" }
         val JsonElement.jsonObject: JsonObject get() = TODO()
         val JsonElement.jsonPrimitive: JsonPrimitive get() = TODO()
-        open class Json { fun <T> decodeFromString(string: String): T = TODO(); companion object Default : Json() }
+        """,
+    ).indented()
+
+    // As in the library: reified `decodeFromString` is a member, reified `decodeFromJsonElement` a top-level extension (JsonKt)
+    val json: TestFile = kotlin(
+        "src/kotlinx/serialization/json/Json.kt",
+        """
+        package kotlinx.serialization.json
+
+        open class Json {
+            inline fun <reified T> decodeFromString(string: String): T = TODO()
+            companion object Default : Json()
+        }
+        inline fun <reified T> Json.decodeFromJsonElement(json: JsonElement): T = TODO()
         """,
     ).indented()
 
@@ -203,5 +216,5 @@ object Stubs {
         """,
     ).indented()
 
-    val all = arrayOf(androidExtra, androidContext, injekt, okhttp, jsoup, jsoupElements, jsoupParser, serialization, json, model, source, keiSource, network, android)
+    val all = arrayOf(androidExtra, androidContext, injekt, okhttp, jsoup, jsoupElements, jsoupParser, serialization, jsonElement, json, model, source, keiSource, network, android)
 }

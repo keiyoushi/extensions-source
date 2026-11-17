@@ -9,10 +9,12 @@ import com.android.tools.lint.detector.api.SourceCodeScanner
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiMember
 import com.intellij.psi.PsiMethod
+import com.intellij.psi.util.PsiTreeUtil
 import keiyoushi.lint.inClass
 import keiyoushi.lint.issue
 import keiyoushi.lint.loc
 import keiyoushi.lint.stringValue
+import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.KtAnnotated
 import org.jetbrains.kotlin.psi.KtAnnotationEntry
 import org.jetbrains.kotlin.psi.KtClass
@@ -38,19 +40,20 @@ class JsonDetector :
             if (!ktClass.hasAnnotation("Serializable")) return
 
             if (ktClass.isData()) {
-                val dataKeyword = ktClass.modifierList?.getModifier(org.jetbrains.kotlin.lexer.KtTokens.DATA_KEYWORD)
+                val dataKeyword = ktClass.modifierList?.getModifier(KtTokens.DATA_KEYWORD) ?: return
+                // The keyword and the space after it, so neither the KDoc nor `class` is touched
+                val keywordAndSpace = context.getRangeLocation(dataKeyword, 0, PsiTreeUtil.nextLeaf(dataKeyword) ?: dataKeyword, 0)
                 context.report(
                     DATA_CLASS_DTO,
                     node,
-                    context.getLocation(dataKeyword ?: ktClass.nameIdentifier ?: ktClass),
+                    context.getLocation(dataKeyword),
                     "Use a regular `class` for `@Serializable` DTOs; `data class` generates code that's never used",
-                    // The range must contain the replaced text: the keyword alone stops before its trailing space
-                    LintFix.create().replace().range(context.getLocation(ktClass as PsiElement)).text("data ").with("").build(),
+                    LintFix.create().replace().range(keywordAndSpace).all().with("").build(),
                 )
             }
 
             val declarations = ktClass.primaryConstructorParameters.filter { it.hasValOrVar() } +
-                ktClass.getProperties().filter { it.hasBackingFieldInitializer() }
+                ktClass.getProperties().filter { it.isSerialized() }
             declarations.forEach { checkProperty(context, it) }
         }
 
@@ -69,7 +72,7 @@ class JsonDetector :
         }
     }
 
-    private fun KtProperty.hasBackingFieldInitializer() = initializer == null && delegate == null && getter == null
+    private fun KtProperty.isSerialized() = delegate == null && getter == null
 
     private fun checkProperty(context: JavaContext, declaration: KtNamedDeclaration) {
         val name = declaration.name ?: return
@@ -103,8 +106,8 @@ class JsonDetector :
                     NULL_DEFAULT,
                     declaration,
                     context.getLocation(declaration.defaultValue!!),
+                    // No quick fix: removing the default breaks the call sites of a class that is also built in code
                     "No need for `= null`: the app's `Json` decodes a missing nullable field as null (keep it only if the class is also built in code)",
-                    LintFix.create().replace().pattern("""\s*=\s*null""").with("").range(context.getLocation(declaration)).build(),
                 )
             }
         }
@@ -121,7 +124,7 @@ class JsonDetector :
     override fun visitMethodCall(context: JavaContext, node: UCallExpression, method: PsiMethod) {
         when (method.name) {
             "decodeFromString", "decodeFromStream", "decodeFromJsonElement" ->
-                if (method.inClass("kotlinx.serialization.json.Json", "kotlinx.serialization.json.JvmStreamsKt")) {
+                if (method.inClass("kotlinx.serialization.json.Json", "kotlinx.serialization.json.JsonKt", "kotlinx.serialization.json.JvmStreamsKt")) {
                     context.report(
                         DECODE_FROM_STRING,
                         node,
