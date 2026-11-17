@@ -1,18 +1,19 @@
 package keiyoushi.lint.detectors
 
 import com.android.tools.lint.client.api.UElementHandler
+import com.android.tools.lint.detector.api.Context
 import com.android.tools.lint.detector.api.Detector
 import com.android.tools.lint.detector.api.JavaContext
 import com.android.tools.lint.detector.api.LintFix
 import com.android.tools.lint.detector.api.SourceCodeScanner
 import com.intellij.psi.PsiMember
 import com.intellij.psi.PsiMethod
+import com.intellij.psi.util.InheritanceUtil
+import keiyoushi.lint.BuildScript
 import keiyoushi.lint.HTTP_SOURCE
 import keiyoushi.lint.KEI_SOURCE
 import keiyoushi.lint.SCHAPTER
 import keiyoushi.lint.SMANGA
-import keiyoushi.lint.hasDynamicBaseUrl
-import keiyoushi.lint.isTheme
 import keiyoushi.lint.issue
 import keiyoushi.lint.loc
 import org.jetbrains.kotlin.psi.KtClassOrObject
@@ -26,7 +27,9 @@ import org.jetbrains.uast.UElement
 import org.jetbrains.uast.UIfExpression
 import org.jetbrains.uast.ULambdaExpression
 import org.jetbrains.uast.UMethod
+import org.jetbrains.uast.UQualifiedReferenceExpression
 import org.jetbrains.uast.USimpleNameReferenceExpression
+import org.jetbrains.uast.UThisExpression
 import org.jetbrains.uast.UastBinaryOperator
 import org.jetbrains.uast.getParentOfType
 import org.jetbrains.uast.toUElement
@@ -36,6 +39,12 @@ import org.jetbrains.uast.visitor.AbstractUastVisitor
 class SourceDetector :
     Detector(),
     SourceCodeScanner {
+
+    private lateinit var buildScript: BuildScript
+
+    override fun beforeCheckFile(context: Context) {
+        buildScript = BuildScript(context)
+    }
 
     override fun getApplicableUastTypes(): List<Class<out UElement>> = listOf(
         UClass::class.java,
@@ -49,7 +58,9 @@ class SourceDetector :
             if (ktClass is KtObjectDeclaration) return
             if (!context.evaluator.extendsClass(node.javaPsi, HTTP_SOURCE, false)) return
 
-            ktClass.body?.properties.orEmpty().forEach { property -> checkClassProperty(context, node, property) }
+            // A static baseUrl is a constant getter, so only mirrors/custom URLs, fetchBaseUrls and themes can change it
+            val dynamicBaseUrl = buildScript.isTheme || buildScript.hasDynamicBaseUrl || ktClass.body?.functions?.any { it.name == "fetchBaseUrls" } == true
+            ktClass.body?.properties.orEmpty().forEach { property -> checkClassProperty(context, node, property, dynamicBaseUrl) }
         }
 
         override fun visitBinaryExpression(node: UBinaryExpression) {
@@ -88,7 +99,7 @@ class SourceDetector :
         }
     }
 
-    private fun checkClassProperty(context: JavaContext, cls: UClass, property: KtProperty) {
+    private fun checkClassProperty(context: JavaContext, cls: UClass, property: KtProperty, dynamicBaseUrl: Boolean) {
         val name = property.name ?: return
 
         if (name == "supportsLatest" && property.hasModifier(org.jetbrains.kotlin.lexer.KtTokens.OVERRIDE_KEYWORD)) {
@@ -105,13 +116,10 @@ class SourceDetector :
             }
         }
 
-        if (property.getter != null || property.isLocal) return
-        // A static baseUrl is a constant getter, so only mirrors/custom URLs, fetchBaseUrls and themes can change it
-        val overridesFetch = (cls.sourcePsi as? KtClassOrObject)?.body?.functions?.any { it.name == "fetchBaseUrls" } == true
-        if (!context.isTheme() && !context.hasDynamicBaseUrl() && !overridesFetch) return
+        if (!dynamicBaseUrl || property.getter != null || property.isLocal) return
         val initializer = (property.initializer ?: property.delegateExpression).toUElement() ?: return
         val isLazy = property.delegateExpression != null
-        val reference = context.eagerReference(initializer, isLazy) ?: return
+        val reference = context.eagerReference(cls, initializer, isLazy) ?: return
         context.report(
             STORED_BASE_URL,
             property,
@@ -121,18 +129,28 @@ class SourceDetector :
         )
     }
 
-    /** The first `baseUrl`/`headers` read while [root] runs, skipping lambdas and objects that are only stored. */
-    private fun JavaContext.eagerReference(root: UElement, delegated: Boolean): String? {
+    /** The first read of [source]'s `baseUrl`/`headers` while [root] runs, skipping lambdas and objects that are only stored. */
+    private fun JavaContext.eagerReference(source: UClass, root: UElement, delegated: Boolean): String? {
         var found: String? = null
         root.accept(
             object : AbstractUastVisitor() {
                 override fun visitSimpleNameReferenceExpression(node: USimpleNameReferenceExpression): Boolean {
-                    if (found == null && node.identifier in DYNAMIC_NAMES && !isDeferred(node, root, delegated)) found = node.identifier
+                    if (found == null && node.identifier in DYNAMIC_NAMES && source.owns(node) && !isDeferred(node, root, delegated)) found = node.identifier
                     return false
                 }
             },
         )
         return found
+    }
+
+    /** `baseUrl` or `this.baseUrl`, not `config.baseUrl`, a parameter or another object's member. */
+    private fun UClass.owns(node: USimpleNameReferenceExpression): Boolean {
+        val parent = node.uastParent
+        if (parent is UQualifiedReferenceExpression && parent.selector == node && parent.receiver !is UThisExpression) return false
+        // Unresolved: the KSP-generated `baseUrl` may not be visible to lint
+        val resolved = node.resolve() ?: return true
+        val owner = (resolved as? PsiMember)?.containingClass ?: return false
+        return InheritanceUtil.isInheritorOrSelf(javaPsi, owner, true)
     }
 
     // A lambda runs right away when an inline function (`run`, `let`, `buildString`) or the `lazy` delegate takes it

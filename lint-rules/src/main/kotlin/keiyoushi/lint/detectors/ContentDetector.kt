@@ -1,16 +1,17 @@
 package keiyoushi.lint.detectors
 
 import com.android.tools.lint.client.api.UElementHandler
+import com.android.tools.lint.detector.api.Context
 import com.android.tools.lint.detector.api.Detector
 import com.android.tools.lint.detector.api.JavaContext
 import com.android.tools.lint.detector.api.Severity
 import com.android.tools.lint.detector.api.SourceCodeScanner
 import com.intellij.psi.PsiMember
 import com.intellij.psi.PsiMethod
+import keiyoushi.lint.BuildScript
 import keiyoushi.lint.SCHAPTER
 import keiyoushi.lint.SMANGA
 import keiyoushi.lint.asCall
-import keiyoushi.lint.baseUrlHosts
 import keiyoushi.lint.issue
 import keiyoushi.lint.loc
 import keiyoushi.lint.stringValue
@@ -26,6 +27,12 @@ import org.jetbrains.uast.tryResolve
 class ContentDetector :
     Detector(),
     SourceCodeScanner {
+
+    private lateinit var buildScript: BuildScript
+
+    override fun beforeCheckFile(context: Context) {
+        buildScript = BuildScript(context)
+    }
 
     override fun getApplicableUastTypes(): List<Class<out UElement>> = listOf(
         UBinaryExpression::class.java,
@@ -126,7 +133,7 @@ class ContentDetector :
         val literal = sides.firstNotNullOfOrNull { it.stringValue() } ?: return
         val other = sides.firstOrNull { it.stringValue() == null }?.sourcePsi?.text ?: return
         // Only the source's own host: CDN and API hosts are fixed
-        if (other.endsWith(".host") && literal.lowercase().removePrefix("www.") in context.baseUrlHosts()) {
+        if (other.endsWith(".host") && literal.lowercase().removePrefix("www.") in buildScript.baseUrlHosts) {
             context.report(
                 HARDCODED_HOST,
                 node,

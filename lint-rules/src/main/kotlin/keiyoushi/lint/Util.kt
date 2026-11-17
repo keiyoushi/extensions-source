@@ -1,6 +1,7 @@
 package keiyoushi.lint
 
 import com.android.tools.lint.detector.api.Category
+import com.android.tools.lint.detector.api.Context
 import com.android.tools.lint.detector.api.Detector
 import com.android.tools.lint.detector.api.Implementation
 import com.android.tools.lint.detector.api.Issue
@@ -8,7 +9,6 @@ import com.android.tools.lint.detector.api.JavaContext
 import com.android.tools.lint.detector.api.Location
 import com.android.tools.lint.detector.api.Scope
 import com.android.tools.lint.detector.api.Severity
-import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiMethod
 import org.jetbrains.uast.UCallExpression
 import org.jetbrains.uast.UClass
@@ -21,6 +21,7 @@ import org.jetbrains.uast.UPolyadicExpression
 import org.jetbrains.uast.UQualifiedReferenceExpression
 import org.jetbrains.uast.evaluateString
 import org.jetbrains.uast.getParentOfType
+import org.jetbrains.uast.skipParenthesizedExprDown
 import java.io.File
 
 val KEIYOUSHI: Category = Category.create("Keiyoushi", 75)
@@ -48,25 +49,15 @@ inline fun <reified T : Detector> issue(
 )
 
 /** The call at the end of a receiver chain: `a.b().c()` → `c()`. */
-fun UExpression?.asCall(): UCallExpression? = when (val e = this?.skipParens()) {
+fun UExpression?.asCall(): UCallExpression? = when (val e = this?.skipParenthesizedExprDown()) {
     is UCallExpression -> e
     is UQualifiedReferenceExpression -> e.selector as? UCallExpression
     else -> null
 }
 
-fun UExpression.skipParens(): UExpression {
-    var e: UExpression = this
-    while (e is UParenthesizedExpression) e = e.expression
-    return e
-}
-
-fun UExpression?.stringValue(): String? = this?.skipParens()?.evaluateString()
+fun UExpression?.stringValue(): String? = this?.skipParenthesizedExprDown()?.evaluateString()
 
 fun PsiMethod.inClass(vararg names: String): Boolean = containingClass?.qualifiedName in names
-
-fun JavaContext.isSubclass(cls: PsiClass?, name: String): Boolean = evaluator.extendsClass(cls, name, false)
-
-fun JavaContext.inSourceClass(element: UElement): Boolean = isSubclass(element.getParentOfType<UClass>(true)?.javaPsi, HTTP_SOURCE)
 
 fun JavaContext.inInterceptor(element: UElement): Boolean {
     var cls = element.getParentOfType<UClass>(true)
@@ -103,17 +94,18 @@ fun JavaContext.argument(node: UCallExpression, method: PsiMethod, parameter: St
 /** For a call, just the call (name and arguments) rather than the whole receiver chain. */
 fun JavaContext.loc(node: UElement): Location = if (node is UCallExpression) getCallLocation(node, includeReceiver = false, includeArguments = true) else getLocation(node)
 
-/** The module's `build.gradle.kts`, which holds the `source {}` blocks: the nearest one above the file. */
-fun JavaContext.buildScriptFile(): File? = generateSequence(file.parentFile) { it.parentFile }.map { File(it, "build.gradle.kts") }.firstOrNull { it.isFile }
+/** What the module's `build.gradle.kts` (the nearest one above the file, holding the `source {}` blocks) says about `baseUrl`. */
+class BuildScript(context: Context) {
+    private val file = generateSequence(context.file.parentFile) { it.parentFile }.map { File(it, "build.gradle.kts") }.firstOrNull { it.isFile }
+    private val text = file?.readText().orEmpty()
 
-fun JavaContext.buildScript(): String? = buildScriptFile()?.readText()
+    val isTheme = file?.parentFile?.parentFile?.name == "lib-multisrc"
 
-fun JavaContext.isTheme(): Boolean = buildScriptFile()?.parentFile?.parentFile?.name == "lib-multisrc"
+    /** `baseUrl` can change while the source runs: a mirror or custom-URL preference. */
+    val hasDynamicBaseUrl = "mirrors(" in text || "custom(" in text
 
-/** `baseUrl` can change while the source runs: a mirror or custom-URL preference. */
-fun JavaContext.hasDynamicBaseUrl(): Boolean = buildScript()?.let { "mirrors(" in it || "custom(" in it } == true
-
-/** Hosts of every URL in the module's build script (the `baseUrl`s and mirrors). */
-fun JavaContext.baseUrlHosts(): Set<String> = URL_HOST.findAll(buildScript().orEmpty()).map { it.groupValues[1].lowercase().removePrefix("www.") }.toSet()
+    /** Hosts of every URL in the script (the `baseUrl`s and mirrors). */
+    val baseUrlHosts by lazy { URL_HOST.findAll(text).map { it.groupValues[1].lowercase().removePrefix("www.") }.toSet() }
+}
 
 private val URL_HOST = Regex("""https?://([^/"\s:]+)""")
