@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.id.kaguya
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -46,14 +47,10 @@ class ComicDto(
         thumbnail_url = cover?.let { CDN_URL.toHttpUrl().newBuilder().addPathSegments(it).build().toString() }
         author = this@ComicDto.author
         artist = this@ComicDto.artist
-        description = buildString {
-            this@ComicDto.description?.let(::append)
-            if (altTitles.isNotEmpty()) {
-                if (isNotEmpty()) append("\n\n")
-                append("Alternative titles:\n")
-                altTitles.joinTo(this, "\n") { "- $it" }
-            }
-        }.ifEmpty { null }
+        description = MarkdownDescription.Builder()
+            .description(this@ComicDto.description)
+            .altTitles(altTitles)
+            .build()
         genre = (listOfNotNull(type?.lowercase()?.replaceFirstChar(Char::uppercase)) + genres.map { it.name })
             .joinToString()
             .ifEmpty { null }

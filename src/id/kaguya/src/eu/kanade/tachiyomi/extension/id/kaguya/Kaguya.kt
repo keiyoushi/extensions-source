@@ -67,8 +67,7 @@ abstract class Kaguya : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        // Library entries from the old Madara site are stored as /series/<slug>/
-        val slug = manga.url.trim('/').split('/')[1]
+        val slug = manga.url.substringAfterLast('/')
         val comic = getComic(slug)
         return SMangaUpdate(comic.toSManga(), comic.toSChapters())
     }
