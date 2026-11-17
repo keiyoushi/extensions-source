@@ -39,6 +39,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -172,7 +174,8 @@ abstract class Jinmantiantang :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
+    ): SMangaUpdate = coroutineScope {
+        val comments = async { if (fetchDetails) fetchComments(manga.albumId()) else null }
         val loggedIn = preferences.credentials != null
         // is_favorite is only filled for a logged-in request
         val album = if (loggedIn) {
@@ -180,16 +183,33 @@ abstract class Jinmantiantang :
         } else {
             album(manga)
         }
-        val updatedManga = album.toSManga(coverHost).apply { url = manga.url }
+        val updatedManga = album.toSManga(coverHost).apply {
+            url = manga.url
+            // A chapter-only update keeps the stored description, so the comments in it are not dropped
+            description = if (fetchDetails) {
+                listOfNotNull(description, comments.await()).joinToString("\n\n").ifEmpty { null }
+            } else {
+                manga.description
+            }
+        }
         val chapterList = album.toSChapterList()
-        if (!loggedIn) return SMangaUpdate(updatedManga, chapterList)
+        if (!loggedIn) return@coroutineScope SMangaUpdate(updatedManga, chapterList)
         // The app has no hook for a source action on a manga, so the site favorite is set by opening this chapter. The url
         // stays the same in both states so a change does not show up as a new chapter; the name says which action it takes.
         val favoriteChapter = SChapter.create().apply {
             url = "$FAVORITE_PATH${manga.albumId()}"
             name = if (album.isFavorite) FAVORITE_REMOVE_NAME else FAVORITE_ADD_NAME
         }
-        return SMangaUpdate(updatedManga, listOf(favoriteChapter) + chapterList)
+        SMangaUpdate(updatedManga, listOf(favoriteChapter) + chapterList)
+    }
+
+    // The latest page of comments; details still load when comments fail
+    private suspend fun fetchComments(aid: String): String? = try {
+        apiGet<CommentListDto>(apiUrl("forum", "mode" to "all", "aid" to aid, "page" to "1")).toMarkdown()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        null
     }
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = album(manga).relatedList.map { it.toSManga(coverHost) }

@@ -2,10 +2,16 @@ package eu.kanade.tachiyomi.extension.zh.jinmantiantangmod
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.escapeMarkdown
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
+import org.jsoup.Jsoup
 import org.jsoup.parser.Parser
+import java.time.Instant
+import java.time.ZoneId
 
 @Serializable
 class ApiResponse(
@@ -214,3 +220,51 @@ private fun albumPath(id: String) = "/album/$id/"
 private fun chapterPath(id: String) = "/photo/$id"
 
 private fun coverUrl(coverHost: String, id: String) = "$coverHost/media/albums/${id}_3x4.jpg"
+
+@Serializable
+class CommentListDto(
+    private val list: List<CommentDto> = emptyList(),
+    private val total: JsonElement? = null,
+) {
+    fun toMarkdown(): String? {
+        if (list.isEmpty()) return null
+        return buildString {
+            append("**评论")
+            total?.jsonPrimitive?.contentOrNull?.let {
+                append("（共 ").append(it).append(" 条，显示最新 ").append(list.size).append(" 条）")
+            }
+            append(":**")
+            list.forEach { it.appendTo(this, depth = 0) }
+        }
+    }
+}
+
+@Serializable
+class CommentDto(
+    private val username: String? = null,
+    private val nickname: String? = null,
+    private val content: String? = null,
+    private val addtime: JsonElement? = null,
+    private val spoiler: JsonElement? = null,
+    private val replys: List<CommentDto> = emptyList(),
+) {
+    fun appendTo(builder: StringBuilder, depth: Int) {
+        val text = content?.let { Jsoup.parseBodyFragment(it).text() }.orEmpty()
+        builder.append('\n').append("  ".repeat(depth)).append("- ")
+        builder.append((nickname?.takeIf { it.isNotBlank() } ?: username ?: "匿名").escapeMarkdown())
+        time()?.let { builder.append("（").append(it).append("）") }
+        builder.append("：")
+        if (spoiler?.jsonPrimitive?.contentOrNull == "2") builder.append("【剧透】")
+        builder.append(text.escapeMarkdown())
+        replys.forEach { it.appendTo(builder, depth + 1) }
+    }
+
+    // addtime comes as epoch seconds or as text the site already formatted
+    private fun time(): String? {
+        val value = addtime?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: return null
+        val seconds = value.toLongOrNull() ?: return value
+        return Instant.ofEpochSecond(seconds).atZone(SITE_ZONE).toLocalDate().toString()
+    }
+}
+
+private val SITE_ZONE = ZoneId.of("Asia/Shanghai")
