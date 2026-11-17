@@ -136,3 +136,23 @@ internal fun Activity.onDestroyed(block: () -> Unit): () -> Unit {
     application.registerActivityLifecycleCallbacks(callbacks)
     return { application.unregisterActivityLifecycleCallbacks(callbacks) }
 }
+
+/** Runs [block] once on the next usable Activity that resumes. Returns a function that unregisters the hook. */
+internal fun Application.onNextResumed(block: (Activity) -> Unit): () -> Unit {
+    val callbacks = object : Application.ActivityLifecycleCallbacks {
+        override fun onActivityResumed(a: Activity) {
+            if (!a.usable()) return
+            unregisterActivityLifecycleCallbacks(this)
+            block(a)
+        }
+
+        override fun onActivityDestroyed(a: Activity) = Unit
+        override fun onActivityPaused(a: Activity) = Unit
+        override fun onActivitySaveInstanceState(a: Activity, outState: Bundle) = Unit
+        override fun onActivityStarted(a: Activity) = Unit
+        override fun onActivityStopped(a: Activity) = Unit
+        override fun onActivityCreated(a: Activity, savedInstanceState: Bundle?) = Unit
+    }
+    registerActivityLifecycleCallbacks(callbacks)
+    return { unregisterActivityLifecycleCallbacks(callbacks) }
+}
