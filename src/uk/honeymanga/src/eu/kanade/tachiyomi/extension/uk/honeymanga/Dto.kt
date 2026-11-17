@@ -86,10 +86,8 @@ class CompleteMangaDto(
 @Serializable
 class ChapterResponse(
     val data: List<ChapterResponseList>,
-    private val cursorNext: JsonObject? = null, // Next page doesn't exist if it's null. Content doesn't matter
-) {
-    val hasNextPage: Boolean get() = cursorNext?.isEmpty() == false
-}
+    val total: Int,
+)
 
 @Serializable
 class ChapterResponseList(
@@ -128,11 +126,10 @@ class ChapterResponseList(
 // ============================== Pages ===============================
 @Serializable
 class ChapterPages(
-    private val resourceIds: Map<Int, String>,
+    private val frameIndex: Int,
+    private val dataUrl: String,
 ) {
-    fun toPageList(imageUrl: String): List<Page> = resourceIds.map { (index, imageId) ->
-        Page(index = index, imageUrl = "$imageUrl/$imageId")
-    }
+    fun toPage(imgUrl: String): Page = Page(index = frameIndex, imageUrl = "$imgUrl${dataUrl.removePrefix("public-resources")}")
 }
 
 // ============================== Search Request ===============================
@@ -155,13 +152,4 @@ class SearchFilter(
     val filterBy: String,
     val filterOperator: String,
     val filterValue: List<String>,
-)
-
-// ============================== Chapter Request ===============================
-@Serializable
-class ChapterRequestBody(
-    val mangaId: String,
-    val page: Int,
-    val pageSize: Int,
-    val sortOrder: String,
 )
