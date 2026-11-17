@@ -398,7 +398,7 @@ class WebViewScope<T> internal constructor(
     fun hideFromUser() {
         runOnMain {
             overlayCall++
-            overlay?.dismiss()
+            overlay?.hide()
         }
     }
 
@@ -750,14 +750,26 @@ internal fun layOutOffscreen(webView: WebView) {
     }
 }
 
-// Scrolls the first element [selector] matches to the middle and returns its edges in device pixels, or null
+// Scrolls the first element [selector] matches to the middle and returns its edges in device pixels, or null. A
+// Turnstile widget's frame can sit in a closed shadow root inside a larger container, so its area is the widget's own
+// size (300x65 px, 150x140 px when compact) at the container's top left; a container that aligns it otherwise shows whole.
 private fun measureAreaScript(selector: String) = """
     (() => {
         const area = document.querySelector(${selector.toJsonString()});
         if (!area) return null;
         area.scrollIntoView({ block: 'center', behavior: 'instant' });
         const box = area.getBoundingClientRect();
-        return [box.left, box.top, box.right, box.bottom].map((value) => Math.round(value * devicePixelRatio));
+        let right = box.right;
+        let bottom = box.bottom;
+        const style = getComputedStyle(area);
+        const centred = ['center', 'flex-end', 'end', 'right'].includes(style.justifyContent);
+        const leftAligned = ['start', 'left'].includes(style.textAlign) && !centred;
+        if (leftAligned && area.querySelector(':scope > input[name="cf-turnstile-response"]')) {
+            const compact = box.height > 100;
+            right = Math.min(right, box.left + (compact ? 150 : 300));
+            bottom = Math.min(bottom, box.top + (compact ? 140 : 65));
+        }
+        return [box.left, box.top, right, bottom].map((value) => Math.round(value * devicePixelRatio));
     })()
 """.trimIndent()
 

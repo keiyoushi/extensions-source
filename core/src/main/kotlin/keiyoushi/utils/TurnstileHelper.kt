@@ -10,7 +10,6 @@ import android.graphics.drawable.ColorDrawable
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
-import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.WindowManager
@@ -201,6 +200,9 @@ internal class CaptchaOverlayDialog(
     private var unhook: (() -> Unit)? = null
     private var placed: Rect? = null
 
+    // Hidden but still attached: a WebView that was ever attached stops running once it leaves a visible window
+    private var parked = false
+
     private fun runOnMain(block: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) block() else mainHandler.post(block)
     }
@@ -211,6 +213,7 @@ internal class CaptchaOverlayDialog(
      */
     fun show(area: Rect? = null) = runOnMain {
         if (dialog != null) {
+            if (parked) park(false)
             // The same area again leaves the view where it is, so a tap isn't lost
             if (area != placed) runCatching { place(area) }.onFailure(onFailure)
             return@runOnMain
@@ -266,16 +269,34 @@ internal class CaptchaOverlayDialog(
     }
 
     /** Whether it's on screen; main thread only. */
-    val isShowing: Boolean get() = dialog != null
+    val isShowing: Boolean get() = dialog != null && !parked
 
     /** Whether it's on screen over an Activity the user is in, not one left in the background; main thread only. */
-    val isInFront: Boolean get() = dialog != null && foregroundActivity() === shownOn
+    val isInFront: Boolean get() = isShowing && foregroundActivity() === shownOn
+
+    /** Hides it from the user, keeping the WebView in its window, invisible and letting touches through, until [show] or [dismiss]. */
+    fun hide() = runOnMain { if (dialog != null && !parked) park(true) }
+
+    private fun park(hidden: Boolean) {
+        parked = hidden
+        val window = dialog?.window ?: return
+        val flags = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        if (hidden) {
+            window.addFlags(flags)
+            window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        } else {
+            window.clearFlags(flags)
+            window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        }
+        window.attributes = window.attributes.apply { alpha = if (hidden) 0f else 1f }
+    }
 
     fun dismiss() = runOnMain {
         val d = dialog ?: return@runOnMain
         dialog = null
         shownOn = null
         placed = null
+        parked = false
         unhook?.invoke()
         unhook = null
         try {
@@ -287,8 +308,6 @@ internal class CaptchaOverlayDialog(
             webView.translationX = 0f
             webView.translationY = 0f
             layOutOffscreen(webView)
-            // Leaving the window marked the page hidden, which stops its timers and lazy loads
-            webView.dispatchWindowVisibilityChanged(View.VISIBLE)
         }
     }
 }
