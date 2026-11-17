@@ -107,9 +107,9 @@ class JsoupDetector :
         private val SELECTORS = setOf("select", "selectFirst", "selectLast", "selectXpath", "selectStream", "expectFirst", "is")
 
         // CSS modules (`Card_title__jN8og`: a hash with a digit or capital, not BEM's `card__title`),
-        // emotion (`css-1x2y3z`), styled-components (`sc-bdVaJa`)
+        // emotion (`css-1x2y3z`), styled-components (`sc-bdVaJa`: mixed case, unlike `sc-header`)
         private val VOLATILE_CLASS = Regex(
-            """\b[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9-]+__(?=[A-Za-z0-9_-]{0,4}[A-Z0-9])[A-Za-z0-9_-]{5}\b|\bcss-(?=[a-z0-9]*\d)[a-z0-9]{5,}\b|\bsc-[a-zA-Z]{6}\b""",
+            """\b[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9-]+__(?=[A-Za-z0-9_-]{0,4}[A-Z0-9])[A-Za-z0-9_-]{5}\b|\bcss-(?=[a-z0-9]*\d)[a-z0-9]{5,}\b|\bsc-(?=[a-z]*[A-Z])[a-zA-Z]{6}\b""",
         )
 
         val SELECT_FIRST = issue<JsoupDetector>(
