@@ -183,10 +183,11 @@ abstract class Jinmantiantang :
         val updatedManga = album.toSManga(coverHost).apply { url = manga.url }
         val chapterList = album.toSChapterList()
         if (!loggedIn) return SMangaUpdate(updatedManga, chapterList)
-        // The app has no hook for a source action on a manga, so the site favorite is toggled by opening this chapter
+        // The app has no hook for a source action on a manga, so the site favorite is set by opening this chapter. The url
+        // stays the same in both states so a change does not show up as a new chapter; the name says which action it takes.
         val favoriteChapter = SChapter.create().apply {
             url = "$FAVORITE_PATH${manga.albumId()}"
-            name = if (album.isFavorite) "★【已收藏】点击取消收藏" else "☆【未收藏】点击加入收藏"
+            name = if (album.isFavorite) FAVORITE_REMOVE_NAME else FAVORITE_ADD_NAME
         }
         return SMangaUpdate(updatedManga, listOf(favoriteChapter) + chapterList)
     }
@@ -196,7 +197,7 @@ abstract class Jinmantiantang :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         if (chapter.url.startsWith(FAVORITE_PATH)) {
             // The reader shows a thrown message as is, which reports the result without a page to render
-            throw Exception(toggleFavorite(chapter.url.removePrefix(FAVORITE_PATH)))
+            throw Exception(favoriteAction(chapter.url.removePrefix(FAVORITE_PATH), add = chapter.name != FAVORITE_REMOVE_NAME))
         }
         val chapterId = chapter.url.split('/')[2]
         // A removed chapter answers an empty array
@@ -221,20 +222,41 @@ abstract class Jinmantiantang :
         return hostApiUrl(host, "favorite", "page" to "$page", "folder_id" to "0", "o" to "mr", "_" to cacheBuster)
     }
 
-    // The app API toggles: the same call adds a missing favorite and removes an existing one
-    private suspend fun toggleFavorite(aid: String): String {
-        val result = withLogin { member ->
-            val body = MultipartBody.Builder()
-                .setType(MultipartBody.FORM)
-                .addFormDataPart("aid", aid)
-                .build()
-            apiPost<FavoriteToggleDto>(loginApiUrl("favorite"), body, member.jwttoken)
+    @Volatile private var pendingFavorite: Pair<String, Long>? = null
+
+    // The reader moves on to the next chapter by itself and downloads open every chapter, so a single open only asks for
+    // confirmation; a second open of the same action within the window carries it out
+    private suspend fun favoriteAction(aid: String, add: Boolean): String {
+        val key = "$aid:$add"
+        val now = System.currentTimeMillis()
+        val pending = pendingFavorite
+        if (pending == null || pending.first != key || now - pending.second > FAVORITE_CONFIRM_MILLIS) {
+            pendingFavorite = key to now
+            val action = if (add) "加入" else "取消"
+            return "要${action}禁漫收藏吗？30 秒内点「重试」或再打开一次本条目确认"
         }
-        return when (result.type) {
-            "add" -> "★ 已加入禁漫收藏（下拉刷新章节列表可更新状态）"
-            "remove" -> "☆ 已取消禁漫收藏（下拉刷新章节列表可更新状态）"
-            else -> result.msg
-        }
+        pendingFavorite = null
+        setFavorite(aid, add)
+        val result = if (add) "★ 已加入禁漫收藏" else "☆ 已取消禁漫收藏"
+        return "$result（下拉刷新章节列表可更新状态）"
+    }
+
+    // The app API only toggles. A toggle that went the other way means the album was already in the wanted state
+    // (the chapter name was stale), so a second toggle restores it.
+    private suspend fun setFavorite(aid: String, add: Boolean) {
+        val wanted = if (add) "add" else "remove"
+        val first = toggleFavorite(aid)
+        if (first.type == wanted) return
+        val second = toggleFavorite(aid)
+        if (second.type != wanted) throw Exception("收藏状态异常：${second.msg}")
+    }
+
+    private suspend fun toggleFavorite(aid: String): FavoriteToggleDto = withLogin { member ->
+        val body = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("aid", aid)
+            .build()
+        apiPost<FavoriteToggleDto>(loginApiUrl("favorite"), body, member.jwttoken)
     }
 
     override val supportsFilterFetching get() = true
@@ -541,6 +563,9 @@ abstract class Jinmantiantang :
         private const val PAGE_SIZE = 80
         private const val FAVORITES_PAGE_SIZE = 20
         private const val FAVORITE_PATH = "/favorite/"
+        private const val FAVORITE_ADD_NAME = "☆【未收藏】点两次加入收藏"
+        private const val FAVORITE_REMOVE_NAME = "★【已收藏】点两次取消收藏"
+        private const val FAVORITE_CONFIRM_MILLIS = 30_000L
         private const val DIAGNOSIS_READS = 3
 
         // The mirrors in build.gradle.kts, all deep linked
