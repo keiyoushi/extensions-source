@@ -22,6 +22,9 @@ import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -170,7 +173,8 @@ abstract class GocTruyenTranhVui :
             ?: requestUrl.pathSegments.getOrNull(1)
 
         if (id != null && nameEn != null) {
-            setUrlWithoutDomain("$id:$nameEn")
+            runCatching { setUrlWithoutDomain("$id:$nameEn") }
+                .onFailure { this.url = "$id:$nameEn" }
         }
     }
 
@@ -207,7 +211,7 @@ abstract class GocTruyenTranhVui :
 
         // Chế độ 1: Tải bằng WebView Loader (Nếu công tắc BẬT) - Không fallback về API
         if (useWebViewLoader) {
-            val script = asset("goctruyentranhvui_reader.js")
+            val script = javaClass.getResource("/assets/reader.js")!!.readText()
             val imageUrls = runWebView(timeout = 30.seconds) {
                 userAgent = headers["User-Agent"]!!
 
@@ -321,8 +325,6 @@ abstract class GocTruyenTranhVui :
         return pages ?: throw Exception("Không thể tải danh sách ảnh bằng API. Vui lòng kiểm tra đăng nhập hoặc bật lại WebView Loader!")
     }
 
-    private fun asset(name: String): String = javaClass.getResource("/assets/$name")!!.readText()
-
     private var tokenCache: String? = null
     private var tokenChecked = false
 
@@ -337,7 +339,11 @@ abstract class GocTruyenTranhVui :
                 return it
             }
 
-        tokenCache = runCatching { getLocalStorage(baseUrl, "Authorization") }.getOrNull()
+        tokenCache = runCatching { getLocalStorage(baseUrl, "Authorization") }.onFailure {
+            if (it is CancellationException) {
+                currentCoroutineContext().ensureActive()
+            }
+        }.getOrNull()
             ?.takeIf(String::isNotBlank)
         tokenChecked = true
         return tokenCache
