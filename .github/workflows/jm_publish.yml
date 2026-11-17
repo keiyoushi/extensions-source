@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'src/zh/jinmantiantangmod/**'
+      - 'src/zh/picacomicmod/**'
       - '.github/scripts/publish-jm.py'
       - '.github/workflows/jm_publish.yml'
   workflow_dispatch:
@@ -59,9 +60,9 @@ jobs:
           KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          # Configure only this module instead of every extension in the tree
-          sed -i 's/^loadAllIndividualExtensions()$/loadIndividualExtension("zh", "jinmantiantangmod")/' settings.gradle.kts
-          ./gradlew :src:zh:jinmantiantangmod:assembleRelease
+          # Configure only these modules instead of every extension in the tree
+          sed -i 's/^loadAllIndividualExtensions()$/loadIndividualExtension("zh", "jinmantiantangmod")\nloadIndividualExtension("zh", "picacomicmod")/' settings.gradle.kts
+          ./gradlew :src:zh:jinmantiantangmod:assembleRelease :src:zh:picacomicmod:assembleRelease
 
       - name: Clean up signing key
         if: always()
