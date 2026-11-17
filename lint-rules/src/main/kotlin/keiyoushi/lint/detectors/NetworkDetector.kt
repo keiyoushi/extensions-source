@@ -85,10 +85,10 @@ class NetworkDetector :
             if (parent is UQualifiedReferenceExpression && parent.selector == expression) expression = parent else break
         }
         val parent = expression.uastParent
-        if (parent is UQualifiedReferenceExpression && parent.receiver == expression) {
-            return (parent.selector as? UCallExpression)?.methodName in PARSERS
-        }
-        return (parent as? UCallExpression)?.methodName in PARSERS
+        val parser = if (parent is UQualifiedReferenceExpression && parent.receiver == expression) parent.selector as? UCallExpression else parent as? UCallExpression
+        // `Jsoup.parse(body.string())` is KeiJsoupParseBody's
+        if (parser?.methodName == "parse" && parser.resolve()?.containingClass?.qualifiedName == "org.jsoup.Jsoup") return false
+        return parser?.methodName in PARSERS
     }
 
     private fun UCallExpression.inSuspendFunction(context: JavaContext): Boolean {
