@@ -45,7 +45,7 @@ class ChallengeInterceptor : Interceptor {
                 poll(POLL_INTERVAL) {
                     if (clearance(origin).let { it != null && it != previous }) resolve(Unit)
                 }
-                loadUrl("$origin/")
+                loadUrl(request.url.toString())
             }
         } catch (e: UnsupportedOperationException) {
             throw IOException("Update Android System WebView to pass Cloudflare's check", e)
