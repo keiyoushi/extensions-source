@@ -12,14 +12,13 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.math.absoluteValue
@@ -84,7 +83,7 @@ abstract class Komiwa : KeiSource() {
             "chapter" -> fetchReader(segments[1]).manga.slug
             else -> return null
         }
-        return fetchManga(slug).toSMangaDetails().apply { initialized = true }
+        return fetchMangaPage(slug).manga.toSMangaDetails().apply { initialized = true }
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
@@ -97,31 +96,25 @@ abstract class Komiwa : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val id = manga.memo["id"]?.stringOrNull
-            ?: return fetchManga(manga.url).let { SMangaUpdate(it.toSMangaDetails(), if (fetchChapters) fetchChapters(it.id) else chapters) }
-        return coroutineScope {
-            val details = async { if (fetchDetails) fetchManga(manga.url).toSMangaDetails() else manga }
-            val chapterList = async { if (fetchChapters) fetchChapters(id) else chapters }
-            SMangaUpdate(details.await(), chapterList.await())
-        }
+        val page = fetchMangaPage(manga.url)
+        return SMangaUpdate(
+            if (fetchDetails) page.manga.toSMangaDetails() else manga,
+            if (fetchChapters) fetchChapters(page.initialChapters) else chapters,
+        )
     }
 
-    private suspend fun fetchManga(slug: String) = client.get("$API_URL/manga/$slug", Fetch.XHR.from("/manga/$slug"))
-        .parseAs<ResponseDto<MangaDto>>()
-        .data
+    private suspend fun fetchMangaPage(slug: String) = client.get("$baseUrl/manga/$slug", Fetch.DOCUMENT)
+        .extractNextJs<MangaPageDto> { it is JsonObject && "manga" in it && "initialChapters" in it }!!
 
-    // The chapter list takes the series id, not its slug
-    private suspend fun fetchChapters(id: String): List<SChapter> {
-        val chapters = mutableListOf<SChapter>()
-        var page = 1
-        do {
-            val data = client.get("$API_URL/manga/$id/chapters?page=$page&limit=500&sort=desc", Fetch.XHR)
-                .parseAs<ResponseDto<ChapterListDto>>()
-                .data
-            chapters += data.chapters.map { it.toSChapter() }
-            page++
-        } while (data.hasMore)
-        return chapters
+    // The series page lists only the newest chapters with dates; the reader page lists every chapter, without dates
+    private suspend fun fetchChapters(initial: ChapterListDto): List<SChapter> {
+        val newest = initial.chapters.firstOrNull() ?: return emptyList()
+        if (!initial.hasMore) return initial.chapters.map { it.toSChapter() }
+        val dated = initial.chapters.associateBy { it.id }
+        return client.get("$baseUrl/chapter/${newest.id}", Fetch.DOCUMENT)
+            .extractNextJs<ReaderChaptersDto> { it is JsonObject && "allChapters" in it }!!
+            .allChapters
+            .map { (dated[it.id] ?: it).toSChapter() }
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -129,9 +122,9 @@ abstract class Komiwa : KeiSource() {
         return reader.pages.mapIndexed { index, url -> Page(index, imageUrl = proxyUrl(url, reader.imageSigs[url])) }
     }
 
-    private suspend fun fetchReader(chapterId: String) = client.get("$API_URL/manga/chapter/$chapterId", Fetch.XHR.from("/chapter/$chapterId"))
-        .parseAs<ResponseDto<ReaderDto>>()
-        .data
+    // The chapter API serves placeholder pages; the reader page carries the real ones
+    private suspend fun fetchReader(chapterId: String) = client.get("$baseUrl/chapter/$chapterId", Fetch.DOCUMENT)
+        .extractNextJs<ReaderDto>()!!
 
     // The site's reader loads every page through its image proxy, signed, on the server its script picks for the URL
     private fun proxyUrl(url: String, signature: String?): String {
@@ -144,9 +137,8 @@ abstract class Komiwa : KeiSource() {
 
     override suspend fun fetchFilterData(): JsonElement = fetchFilters().toJsonElement()
 
-    private suspend fun fetchFilters() = client.get("$API_URL/manga/filters", Fetch.XHR.from("/catalog"))
-        .parseAs<ResponseDto<FiltersDto>>()
-        .data
+    private suspend fun fetchFilters() = client.get("$baseUrl/catalog", Fetch.DOCUMENT)
+        .extractNextJs<FiltersDto>()!!
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val filters = data?.parseAs<FiltersDto>()
