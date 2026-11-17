@@ -47,6 +47,7 @@ abstract class MangaSwat : KeiSource() {
 
     private suspend fun getMangaList(path: String, page: Int, params: HttpUrl.Builder.() -> Unit): MangasPage {
         val url = api(path).apply(params)
+            .addQueryParameter("page_size", "100")
             .addQueryParameter("page", page.toString())
             .build()
         val data = client.get(url, Fetch.XHR).parseAs<MangaListDto>()
