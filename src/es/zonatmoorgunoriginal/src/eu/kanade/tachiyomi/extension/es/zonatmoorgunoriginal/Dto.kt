@@ -17,3 +17,14 @@ class SearchSuggestionDto(
             "/library/" in it
     }
 }
+
+@Serializable
+class LibraryPageDto(
+    val html: String,
+)
+
+@Serializable
+class GenreDto(
+    val name: String,
+    val id: String,
+)
