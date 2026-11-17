@@ -13,7 +13,6 @@ import io.github.keiyoushi.gradle.internal.ExtensionMetadata
 import io.github.keiyoushi.gradle.internal.ResolvedSource
 import io.github.keiyoushi.gradle.internal.SourceMetadata
 import io.github.keiyoushi.gradle.internal.VALID_LIB_VERSIONS
-import io.github.keiyoushi.gradle.internal.collectRuntimeRequirements
 import io.github.keiyoushi.gradle.internal.configureRuntimeConsumer
 import io.github.keiyoushi.gradle.internal.extensions.alias
 import io.github.keiyoushi.gradle.internal.extensions.compileOnly
@@ -299,9 +298,6 @@ class ExtensionPlugin : Plugin<Project> {
                 ).get()
                 ResolvedSource(name, lang, id, baseUrl)
             }
-
-            val runtimeRequires = collectRuntimeRequirements()
-
             val translationsFile = project(":core").projectDir.resolve("translations/strings.json")
             extensions.configure<KspExtension> {
                 arg("kei_sources", Json.encodeToString<List<ResolvedSource>>(resolvedSources))
@@ -340,7 +336,6 @@ class ExtensionPlugin : Plugin<Project> {
                         contentWarning = contentWarningOrdinal,
                         sources = sourceInfos,
                         contentHash = hash,
-                        runtimeRequires = runtimeRequires,
                     ),
                 )
             }

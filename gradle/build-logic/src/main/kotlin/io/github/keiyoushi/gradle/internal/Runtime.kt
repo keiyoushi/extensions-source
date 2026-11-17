@@ -6,10 +6,8 @@ import io.github.keiyoushi.gradle.internal.extensions.libs
 import io.github.keiyoushi.gradle.tasks.GenerateRuntimeSourcesTask
 import org.gradle.api.Project
 import org.gradle.api.artifacts.ExternalModuleDependency
-import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.api.provider.Provider
 import org.gradle.kotlin.dsl.create
-import org.gradle.kotlin.dsl.findByType
 import org.gradle.kotlin.dsl.register
 import org.gradle.kotlin.dsl.withType
 
@@ -56,27 +54,4 @@ private fun Project.checkDependsOnRuntimeContract() {
     check(declared) {
         "$path uses the Keiyoushi Runtime: add implementation(libs.keiyoushi.runtime.contract) to its dependencies"
     }
-}
-
-/**
- * Every runtime module this project calls, directly or through the libs and theme it depends on,
- * at the highest API level any of them needs.
- */
-internal fun Project.collectRuntimeRequirements(): Map<String, Int> {
-    val requirements = sortedMapOf<String, Int>()
-    val seen = mutableSetOf<String>()
-
-    fun visit(project: Project) {
-        if (!seen.add(project.path)) return
-        project.extensions.findByType<KeiyoushiRuntimeExtension>()?.requires?.get()?.forEach { (module, api) ->
-            requirements.merge(module, api, ::maxOf)
-        }
-        listOf("api", "implementation")
-            .mapNotNull { project.configurations.findByName(it) }
-            .flatMap { it.dependencies.withType<ProjectDependency>() }
-            .forEach { visit(evaluationDependsOn(it.path)) }
-    }
-
-    visit(this)
-    return requirements
 }

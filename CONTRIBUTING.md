@@ -661,8 +661,7 @@ install or update. When a function reports a catalog ID it doesn't know (a patch
 it into `RuntimeModules.<module>.needsUpdate("<id>")`, the same "Update Keiyoushi Runtime" error,
 so "the runtime is too old" stays apart from "this device isn't supported".
 
-Extensions built with the lib list the module and API level in the repo index (`runtimeRequires`).
-The build doesn't check them against a runtime release; raise the `keiyoushi-runtime` version in
+The build doesn't check `requires` against a runtime release; raise the `keiyoushi-runtime` version in
 `gradle/libs.versions.toml` when a lib needs a newer contract.
 
 #### keiyoushi.utils (core utilities)
