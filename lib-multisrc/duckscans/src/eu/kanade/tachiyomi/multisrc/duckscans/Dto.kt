@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.tr.duckscans
+package eu.kanade.tachiyomi.multisrc.duckscans
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -51,11 +51,11 @@ class SeriesDto(
         author = this@SeriesDto.author.toPerson()
         artist = this@SeriesDto.artist.toPerson()
         genre = (listOfNotNull(type) + this@SeriesDto.genre).distinct().joinToString().ifEmpty { null }
-        status = when (this@SeriesDto.status) {
-            "Devam Ediyor", "Güncel" -> SManga.ONGOING
-            "Tamamlandı" -> SManga.COMPLETED
-            "Durduruldu" -> SManga.ON_HIATUS
-            "Bırakıldı" -> SManga.CANCELLED
+        status = when (this@SeriesDto.status?.lowercase()) {
+            "devam ediyor", "güncel", "ongoing" -> SManga.ONGOING
+            "tamamlandı" -> SManga.COMPLETED
+            "durduruldu" -> SManga.ON_HIATUS
+            "bırakıldı" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
         description = MarkdownDescription.Builder()
@@ -64,7 +64,8 @@ class SeriesDto(
             .build()
     }
 
-    private fun String?.toPerson() = this?.trim()?.takeUnless { it.isEmpty() || it.equals("n/a", ignoreCase = true) }
+    // "Bilinmiyor" and "Güncellenecek..." stand for an unknown author ("unknown", "to be updated")
+    private fun String?.toPerson() = this?.trim()?.takeUnless { it.isEmpty() || it.lowercase() in NO_PERSON }
 }
 
 @Serializable
@@ -108,3 +109,5 @@ class ChapterSeriesDto(val allowUnauthenticated: Boolean = true)
 class CategoriesDto(val data: List<String>)
 
 private const val DAY_MILLIS = 24 * 60 * 60 * 1000L
+
+private val NO_PERSON = setOf("n/a", "bilinmiyor", "güncellenecek...")

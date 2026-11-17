@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.tr.duckscans
+package eu.kanade.tachiyomi.multisrc.duckscans
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory

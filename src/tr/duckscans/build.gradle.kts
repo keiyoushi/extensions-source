@@ -6,6 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Duck Scans"
+    theme = "duckscans"
     versionCode = 1
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
@@ -20,8 +21,4 @@ keiyoushi {
         host("www.duckscans.com")
         path("/seri/..*")
     }
-}
-
-dependencies {
-    implementation(project(":lib:ece"))
 }
