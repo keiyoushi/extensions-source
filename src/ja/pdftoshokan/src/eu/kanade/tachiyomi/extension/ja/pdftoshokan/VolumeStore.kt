@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.ja.pdftoshokan
 import keiyoushi.utils.inflate
 import keiyoushi.utils.md5
 import okhttp3.HttpUrl
-import okhttp3.Response
 import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
@@ -27,14 +26,34 @@ class VolumeStore(private val dir: File) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, VolumeIndex>) = size > 4
     }
 
-    fun index(url: HttpUrl, fetch: (HttpUrl) -> Response): Pair<File, VolumeIndex> {
-        val key = url.newBuilder().fragment(null).build().toString().md5().toHexString()
+    fun contains(url: HttpUrl): Boolean = File(dir, key(url)).exists()
+
+    /** Stores the volume that [write] downloads into the file it's given. */
+    suspend fun save(url: HttpUrl, write: suspend (File) -> Unit) {
+        dir.mkdirs()
+        val file = File(dir, key(url))
+        val tmp = File(dir, "${file.name}.tmp")
+        try {
+            write(tmp)
+        } catch (e: Throwable) {
+            tmp.delete()
+            throw e
+        }
+        synchronized(locks.getOrPut(file.name) { Any() }) {
+            synchronized(indexes) { indexes.remove(file.name) }
+            if (!tmp.renameTo(file)) {
+                tmp.delete()
+                throw IOException("Failed to store volume")
+            }
+        }
+        trim(file)
+    }
+
+    fun index(url: HttpUrl): Pair<File, VolumeIndex> {
+        val key = key(url)
         synchronized(locks.getOrPut(key) { Any() }) {
             val file = File(dir, key)
-            if (!file.exists()) {
-                synchronized(indexes) { indexes.remove(key) }
-                download(url, file, fetch)
-            }
+            if (!file.exists()) throw IOException("Volume is no longer cached, open the chapter again")
             file.setLastModified(System.currentTimeMillis())
             synchronized(indexes) { indexes[key] }?.let { return file to it }
 
@@ -49,19 +68,7 @@ class VolumeStore(private val dir: File) {
         }
     }
 
-    private fun download(url: HttpUrl, file: File, fetch: (HttpUrl) -> Response) {
-        dir.mkdirs()
-        val tmp = File(dir, "${file.name}.tmp")
-        fetch(url.newBuilder().fragment(null).build()).use { response ->
-            if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
-            tmp.outputStream().use { response.body.byteStream().copyTo(it) }
-        }
-        if (!tmp.renameTo(file)) {
-            tmp.delete()
-            throw IOException("Failed to store volume")
-        }
-        trim(file)
-    }
+    private fun key(url: HttpUrl) = url.newBuilder().fragment(null).build().toString().md5().toHexString()
 
     private fun trim(keep: File) {
         val files = dir.listFiles()?.filter { it != keep && !it.name.endsWith(".tmp") } ?: return

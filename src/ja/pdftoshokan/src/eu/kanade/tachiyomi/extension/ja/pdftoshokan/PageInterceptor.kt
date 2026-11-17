@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
+import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
@@ -15,18 +16,16 @@ import okio.Buffer
 import java.io.RandomAccessFile
 
 /** Serves `<volume file url>#<page index>` by slicing the page out of the cached volume. */
-class PageInterceptor(private val store: VolumeStore) : Interceptor {
+class PageInterceptor(private val store: VolumeStore, private val isVolumeFile: (HttpUrl) -> Boolean) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val pageIndex = request.url.fragment?.toIntOrNull()
-        if (pageIndex == null || !request.url.encodedPath.endsWith(".pdf")) {
+        if (pageIndex == null || !isVolumeFile(request.url)) {
             return chain.proceed(request)
         }
 
-        val (file, index) = store.index(request.url) { url ->
-            chain.proceed(request.newBuilder().url(url).build())
-        }
+        val (file, index) = store.index(request.url)
         val slices = index.pages[pageIndex]
         val parts = RandomAccessFile(file, "r").use { raf ->
             slices.map { slice ->

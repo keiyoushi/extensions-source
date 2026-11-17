@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.ja.pdftoshokan
 
+import android.util.Base64
+import android.webkit.WebResourceResponse
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -8,27 +10,32 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
-import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.NativeWebViewApi
+import keiyoushi.utils.WebViewScope
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
+import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
-import okhttp3.CacheControl
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.jsoup.nodes.Document
+import java.io.ByteArrayInputStream
+import java.io.File
 import java.io.IOException
-import java.net.URLDecoder
-import java.text.Normalizer
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -40,18 +47,35 @@ abstract class PdfToshokan : KeiSource() {
 
     private val baseHost get() = baseUrl.toHttpUrl().host
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(PageInterceptor(store))
-        .rateLimit(permits = 1, period = 3.seconds) { it.encodedPath == "/decode.php" }
-        .rateLimit(permits = 2, period = 1.seconds) { it.host == baseHost }
-
-    private val noRedirectClient by lazy { client.newBuilder().followRedirects(false).build() }
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = this
+        .addInterceptor(PageInterceptor(store) { it.host.endsWith(".$baseHost") })
+        .addInterceptor(ClientHintsInterceptor(baseUrl) { it.host == baseHost || it.host.endsWith(".$baseHost") })
+        // TEMP DEBUG: remove before PR
+        .addNetworkInterceptor { chain ->
+            val request = chain.request()
+            val response = chain.proceed(request)
+            if (request.url.host.endsWith(baseHost)) {
+                val sent = request.headers.names().filterNot { it.equals("Cookie", true) }.joinToString { "$it=${request.header(it)}" }
+                val cookies = request.header("Cookie")?.split(";")?.joinToString { it.substringBefore("=").trim() }
+                android.util.Log.d(
+                    "PdfToshokanDebug",
+                    "${request.method} ${request.url} -> ${response.code} cf-mitigated=${response.header("cf-mitigated")} cookies=[$cookies] headers=[$sent]",
+                )
+            }
+            response
+        }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getListing("popular", page)
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = getListing("", page)
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        if (query.isNotBlank()) return searchIndex(page, query)
+        // Same normalization and limits as the site's own search box
+        val keyword = query.replace(SPACES_REGEX, " ").trim()
+        if (keyword.isNotEmpty()) {
+            if (keyword.length !in 2..20) throw Exception("キーワードは2〜20文字で入力してください")
+            return getListing("search/$keyword", page)
+        }
 
         val category = filters.firstInstance<CategoryFilter>().toUriPart()
         return if (category.isNotEmpty()) {
@@ -66,7 +90,7 @@ abstract class PdfToshokan : KeiSource() {
             if (path.isNotEmpty()) addPathSegments(path)
             if (page > 1) addPathSegment("page").addPathSegment(page.toString())
         }.build()
-        val document = client.get(url).asJsoup()
+        val document = loadPage(url.toString())
         val hasNextPage = document.select("a[href*=/page/${page + 1}]")
             .any { it.attr("href").substringAfterLast("/page/").trimEnd('/') == "${page + 1}" }
         return MangasPage(parseListing(document), hasNextPage)
@@ -75,14 +99,12 @@ abstract class PdfToshokan : KeiSource() {
     private fun parseListing(document: Document): List<SManga> {
         val scripts = document.select("script:not([src])").joinToString("\n") { it.data() }
         val (linkKey, linkAttr) = HES_CONFIG_REGEX.find(scripts)!!.destructured
-        val covers = COVER_STYLE_REGEX.find(scripts)?.let { m ->
-            val css = xorHex(m.groupValues[2], m.groupValues[1])
-            CSS_RULE_REGEX.findAll(css).associate { it.groupValues[1].lowercase() to it.groupValues[2] }
-        }.orEmpty()
 
-        // Honeypots: a hidden article whose link leads to an URL that gets the client IP banned
+        // Honeypots: a collapsed article whose link leads to an URL that gets the client IP banned.
+        // Its link only ever gets read here, from the raw HTML: the page hooks getAttribute on it to navigate there.
         val styles = document.select("style").joinToString("\n") { it.data() }
-        val hiddenClasses = HIDDEN_CLASS_REGEX.findAll(styles).map { it.groupValues[1] }.toSet()
+        val hiddenClasses = HIDDEN_CLASS_REGEX.findAll(styles).map { it.groupValues[1] }.toSet() +
+            TRAP_CLASS_REGEX.findAll(scripts).map { it.groupValues[1] }
         val trapIds = TRAP_REGEX.findAll(scripts).map { it.groupValues[1] }.toSet() + TRAP_ID
 
         return document.select("article").mapNotNull { article ->
@@ -95,51 +117,16 @@ abstract class PdfToshokan : KeiSource() {
             SManga.create().apply {
                 url = id
                 title = link.text()
-                thumbnail_url = article.selectFirst(".entry-content p > *")?.let { covers[it.tagName().lowercase()] }
+                thumbnail_url = article.selectFirst(".entry-content img")?.absUrl("src")
             }
         }
-    }
-
-    private suspend fun searchIndex(page: Int, query: String): MangasPage {
-        val needle = normalize(query.trim())
-        val matches = buildList {
-            var file = 1
-            while (true) {
-                val response = client.get("$baseUrl/search$file.txt", ensureSuccess = false)
-                if (!response.isSuccessful) {
-                    response.close()
-                    break
-                }
-                val lines = response.use { it.body.string() }.lines().filter { it.isNotBlank() }
-                lines.forEach { line ->
-                    val parts = line.split(":::")
-                    if (parts.size >= 2 && parts[1] != TRAP_ID) {
-                        val normalized = normalize(parts[0])
-                        if (normalized.contains(needle)) add(Triple(parts[0], parts[1], normalized))
-                    }
-                }
-                if (lines.size < SEARCH_FILE_LINES) break
-                file++
-            }
-        }.sortedWith(
-            compareBy<Triple<String, String, String>> { if (it.third.startsWith(needle)) 0 else 1 }
-                .thenBy { it.third.length },
-        )
-
-        val entries = matches.drop((page - 1) * SEARCH_PAGE_SIZE).take(SEARCH_PAGE_SIZE).map { (title, id) ->
-            SManga.create().apply {
-                url = id
-                this.title = title
-            }
-        }
-        return MangasPage(entries, matches.size > page * SEARCH_PAGE_SIZE)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseHost) return null
         val id = MANGA_ID_REGEX.find(url.encodedPath)?.groupValues?.get(1) ?: return null
         if (id == TRAP_ID) return null
-        return parseDetails(fetchMangaPage(id), id)
+        return parseDetails(loadPage("$baseUrl/manga/$id"), id)
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
@@ -150,7 +137,7 @@ abstract class PdfToshokan : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = fetchMangaPage(manga.url)
+        val document = loadPage(getMangaUrl(manga))
         val chapterList = volumeOptions(document).map { label ->
             SChapter.create().apply {
                 url = "${manga.url}/$label"
@@ -158,10 +145,10 @@ abstract class PdfToshokan : KeiSource() {
                 chapter_number = label.toFloatOrNull() ?: -1f
             }
         }.reversed()
-        return SMangaUpdate(parseDetails(document, manga.url), chapterList)
+        val details = parseDetails(document, manga.url)
+        preferences.edit().putString(titleKey(manga.url), details.title).apply()
+        return SMangaUpdate(details, chapterList)
     }
-
-    private suspend fun fetchMangaPage(id: String): Document = client.get("$baseUrl/manga/$id", cacheControl = CacheControl.FORCE_NETWORK).asJsoup()
 
     private fun parseDetails(document: Document, id: String) = SManga.create().apply {
         url = id
@@ -178,7 +165,7 @@ abstract class PdfToshokan : KeiSource() {
         status = SManga.UNKNOWN
     }
 
-    private fun volumeOptions(document: Document) = document.select("select.vi13 option, #selector option").map { it.text() }.distinct()
+    private fun volumeOptions(document: Document) = document.select("select.vi13 option").map { it.text() }.distinct()
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/manga/${chapter.url.substringBefore("/")}"
 
@@ -196,91 +183,219 @@ abstract class PdfToshokan : KeiSource() {
         return List(index.pages.size) { Page(it, imageUrl = "$fileUrl#$it") }
     }
 
-    private suspend fun loadIndex(url: HttpUrl): VolumeIndex = withContext(Dispatchers.IO) {
-        store.index(url) { client.newCall(Request.Builder().url(it).headers(headers).build()).execute() }.second
+    private suspend fun loadIndex(url: HttpUrl): VolumeIndex {
+        if (!store.contains(url)) store.save(url) { download(url, it) }
+        return withContext(Dispatchers.IO) { store.index(url).second }
     }
 
     /**
-     * decode.php is heavily rate limited, so resolved files are remembered. All volumes of a title
-     * live in the same folder as `<volume>.pdf`, so once one is known the others can usually be
-     * guessed without asking decode.php again.
+     * decode.php sits behind Cloudflare's bot scoring, so it's the last resort. Volume files are
+     * `<file host>/<prefix>/<folder>/<volume>.pdf`, with one prefix for the whole site and a folder
+     * that is usually the title with its brackets spaced out, so a known or guessed folder is tried first.
      */
     private suspend fun resolveFile(id: String, label: String, guessFromFolder: Boolean): HttpUrl {
         if (guessFromFolder) {
-            preferences.getString(folderKey(id), null)?.let { folder ->
+            val folders = listOfNotNull(
+                preferences.getString(folderKey(id), null),
+                preferences.getString(titleKey(id), null)?.let { title ->
+                    HttpUrl.Builder().scheme("https").host("n3.$baseHost")
+                        .addPathSegment(preferences.getString(PREFIX_KEY, DEFAULT_PREFIX)!!)
+                        .addPathSegment(title.replace(BRACKETS_REGEX, " ").replace(SPACES_RUN_REGEX, " ").trim())
+                        .addPathSegment("")
+                        .build().toString()
+                },
+            ).distinct()
+            for (folder in folders) {
                 val guess = folder.toHttpUrl().newBuilder().addPathSegment("$label.pdf").build()
-                if (exists(guess)) return guess.also { remember(id, label, it) }
+                if (fetchGuess(guess)) return guess.also { remember(id, label, it) }
             }
         }
 
-        val document = fetchMangaPage(id)
-        val decodeUrl = document.select("select.vi13 option, #selector option")
-            .firstOrNull { it.text() == label }
-            ?.absUrl("value")
-            ?: throw IOException("Volume not found")
-        return decode(decodeUrl, "$baseUrl/manga/$id").also { remember(id, label, it) }
+        return decode("$baseUrl/manga/$id", label).also { remember(id, label, it) }
     }
 
-    private suspend fun decode(url: String, referer: String): HttpUrl {
-        val navigationHeaders = navigationHeaders(referer)
+    private suspend fun decode(titleUrl: String, label: String): HttpUrl {
         repeat(DECODE_ATTEMPTS) { attempt ->
-            val response = noRedirectClient.get(
-                url,
-                navigationHeaders,
-                cacheControl = CacheControl.FORCE_NETWORK,
-                ensureSuccess = false,
-            )
-            response.use {
-                when {
-                    it.isRedirect -> {
-                        val viewer = it.request.url.resolve(it.header("Location")!!)!!
-                        viewer.queryParameter("file")?.let { file -> return file.toHttpUrl() }
-                    }
+            when (val result = runDecode(titleUrl, label)) {
+                null -> if (attempt < DECODE_ATTEMPTS - 1) delay(10.seconds * (attempt + 1))
+                else -> return result
+            }
+        }
+        throw IOException("Site is rate limiting volume requests, try again in a few minutes")
+    }
 
-                    it.isSuccessful -> {
-                        val viewer = it.request.url.queryParameter("file")
-                            ?: VIEWER_FILE_REGEX.find(it.body.string())?.groupValues?.get(1)
-                                ?.let { file -> URLDecoder.decode(file, "UTF-8") }
-                        if (viewer != null) return viewer.toHttpUrl()
-                    }
-
-                    it.code != 429 -> throw IOException("HTTP ${it.code}")
+    /**
+     * Opens a volume the way a reader does: the site's firewall only lets decode.php through for a real tap on the
+     * title page's read button, which opens it in place of the page. decode.php then hands the viewer an opaque token,
+     * so the viewer is left to run and its request for the volume file is caught. Returns the volume file, or null
+     * when rate limited.
+     */
+    @OptIn(NativeWebViewApi::class)
+    private suspend fun runDecode(titleUrl: String, label: String): HttpUrl? = runWebView(timeout = 90.seconds) {
+        setupSiteWebView(onVolumeFile = { resolve(it) })
+        val bridge = randomName()
+        webMessageBridge(bridge, setOf(baseUrl)) { message ->
+            if (message == "missing") {
+                reject(IOException("Volume not found"))
+            } else {
+                val (x, y) = message.split(',').map(String::toFloat)
+                tap(x, y)
+            }
+        }
+        injectAtDocumentStart(pressReadScript(bridge, label), setOf(baseUrl))
+        poll(1.seconds) {
+            evaluateJs(DECODE_STATE_JS) { json ->
+                val state = json.parseAs<String?>() ?: return@evaluateJs
+                when (state) {
+                    "429" -> resolve(null)
+                    BLOCKED -> reject(IOException("Blocked by Cloudflare, open the title in WebView and try again"))
+                    MAINTENANCE -> reject(IOException("Site is under maintenance, try again later"))
                 }
             }
-            if (attempt < DECODE_ATTEMPTS - 1) delay(5.seconds * (attempt + 1))
         }
-        throw IOException("Site is rate limiting volume requests, try again in a minute")
+        loadUrl(titleUrl)
     }
 
-    private fun navigationHeaders(referer: String): Headers = headers.newBuilder()
-        .removeAll("Origin")
-        .set("Referer", referer)
-        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-        .set("Sec-Fetch-Dest", "document")
-        .set("Sec-Fetch-Mode", "navigate")
-        .set("Sec-Fetch-Site", "same-origin")
-        .set("Sec-Fetch-User", "?1")
-        .set("Upgrade-Insecure-Requests", "1")
-        .build()
+    private fun pressReadScript(bridge: String, label: String) = """
+        (() => {
+            if (window.top !== window || !location.pathname.startsWith('/manga/')) return;
+            document.addEventListener('DOMContentLoaded', () => {
+                // The first read tap opens an ad unless the site's timer, keyed by a hash of the UA and language, says one just did
+                const raw = navigator.userAgent + navigator.language;
+                let hash = 0;
+                for (let i = 0; i < raw.length; i++) { hash = ((hash << 5) - hash) + raw.charCodeAt(i); hash |= 0; }
+                localStorage.setItem('vi4' + Math.abs(hash), Date.now());
+                // Wait for the site's own handler to restore the last read volume first, then pick ours
+                setTimeout(() => {
+                    const select = document.querySelector('select.vi13');
+                    const button = document.querySelector('input.vi12');
+                    const option = select && [...select.options].find(o => o.text === ${label.toJsonString()});
+                    if (!option || !button) return window.$bridge.postMessage('missing');
+                    select.value = option.value;
+                    button.scrollIntoView({ block: 'center' });
+                    setTimeout(() => {
+                        const r = button.getBoundingClientRect();
+                        window.$bridge.postMessage((r.left + r.width / 2) + ',' + (r.top + r.height / 2));
+                    }, 300);
+                }, 500);
+            });
+        })();
+    """.trimIndent()
 
-    private suspend fun exists(url: HttpUrl): Boolean {
-        val rangeHeaders = headers.newBuilder().set("Range", "bytes=0-0").build()
-        return runCatching {
-            client.get(url, rangeHeaders, CacheControl.FORCE_NETWORK, ensureSuccess = false).use { it.isSuccessful }
-        }.getOrDefault(false)
+    private fun randomName() = List(12) { ('a'..'z').random() }.joinToString("")
+
+    /** Downloads a guessed volume file straight away: the file host allows few requests, so there's no separate check. */
+    private suspend fun fetchGuess(url: HttpUrl): Boolean = try {
+        store.save(url) { download(url, it) }
+        true
+    } catch (_: VolumeMissing) {
+        false
     }
+
+    /**
+     * Fetched in one request the way the site's PDF viewer does, and from one of the site's pages: the file host turns
+     * away requests from outside the site, and blocks for a while after a burst of requests.
+     */
+    private suspend fun download(url: HttpUrl, file: File) = file.outputStream().buffered().use { out ->
+        runInSite<Unit>(DOWNLOAD_TIMEOUT, downloadScript(url)) { message ->
+            when {
+                message == "done" -> resolve(Unit)
+                message.startsWith("data:") -> out.write(Base64.decode(message.substring(5), Base64.DEFAULT))
+                message == "404" -> reject(VolumeMissing())
+                message == "403" || message == "429" -> reject(IOException("$RATE_LIMITED_MESSAGE (HTTP $message)"))
+                else -> reject(IOException("Volume download failed (HTTP $message)"))
+            }
+        }
+    }
+
+    /** Runs [script] on a page of the site, with a bridge it posts its results to; `BRIDGE` in it is the bridge's name. */
+    private suspend fun <T> runInSite(timeout: Duration, script: String, onMessage: WebViewScope<T>.(String) -> Unit): T = runWebView(timeout) {
+        setupSiteWebView(allowFileHost = true)
+        val bridge = randomName()
+        webMessageBridge(bridge, setOf(baseUrl)) { message -> onMessage(message) }
+        var started = false
+        onPageFinished { url ->
+            if (!started && url.toHttpUrlOrNull()?.encodedPath == "/robots.txt") {
+                started = true
+                evaluateJs(script.replace("BRIDGE", bridge))
+            }
+        }
+        loadUrl("$baseUrl/robots.txt")
+    }
+
+    // Streamed out in pieces as it arrives, so a whole volume never sits in one bridge message
+    private fun downloadScript(url: HttpUrl) = """
+        (async () => {
+            const response = await fetch(${url.toString().toJsonString()}, { credentials: 'include' });
+            // The file host also answers a file that isn't there with 403, only without Cloudflare's block page
+            if (response.status === 403 && !/cloudflare/i.test(await response.text())) return window.BRIDGE.postMessage('404');
+            if (response.status !== 200) return window.BRIDGE.postMessage(String(response.status));
+            const reader = response.body.getReader();
+            let parts = [], size = 0;
+            const flush = () => {
+                const bytes = new Uint8Array(size);
+                let at = 0;
+                for (const part of parts) { bytes.set(part, at); at += part.length; }
+                let binary = '';
+                for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+                window.BRIDGE.postMessage('data:' + btoa(binary));
+                parts = [];
+                size = 0;
+            };
+            for (;;) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                parts.push(value);
+                size += value.length;
+                if (size >= $BRIDGE_PIECE) flush();
+            }
+            if (size > 0) flush();
+            window.BRIDGE.postMessage('done');
+        })().catch(() => window.BRIDGE.postMessage('0'));
+    """.trimIndent()
 
     private fun remember(id: String, label: String, file: HttpUrl) {
         val folder = file.newBuilder().removePathSegment(file.pathSize - 1).addPathSegment("").build()
         preferences.edit()
             .putString(fileKey(id, label), file.toString())
             .putString(folderKey(id), folder.toString())
+            .putString(PREFIX_KEY, file.pathSegments.first())
             .apply()
     }
 
     private fun fileKey(id: String, label: String) = "file_$id/$label"
 
     private fun folderKey(id: String) = "folder_$id"
+
+    private fun titleKey(id: String) = "title_$id"
+
+    private suspend fun loadPage(url: String): Document = client.get(url, Fetch.DOCUMENT).asJsoup()
+
+    /**
+     * Only the site and its challenge load, and the file host with [allowFileHost]: ads hijack the page. A viewer
+     * run passes [onVolumeFile] to also let the reader library load and to catch its request for the volume file.
+     */
+    private fun WebViewScope<*>.setupSiteWebView(onVolumeFile: ((HttpUrl) -> Unit)? = null, allowFileHost: Boolean = false) {
+        userAgent = headers["User-Agent"]!!
+        blockImages = true
+        // The firewall turns away requests that name the app, which WebView does unless told otherwise
+        setOriginMatchedHeader("X-Requested-With", "", setOf(baseUrl, "https://*.$baseHost"))
+        interceptRequest { request ->
+            val url = request.url.toString().toHttpUrlOrNull() ?: return@interceptRequest emptyResponse()
+            when {
+                url.host == baseHost || url.host == "challenges.cloudflare.com" -> null
+                allowFileHost && url.host.endsWith(".$baseHost") -> null
+                onVolumeFile != null && url.host in VIEWER_LIBRARY_HOSTS -> null
+                onVolumeFile != null && url.host.endsWith(".$baseHost") && url.pathSegments.last().substringAfterLast('.', "") !in ASSET_EXTENSIONS -> {
+                    onVolumeFile(url)
+                    emptyResponse()
+                }
+                else -> emptyResponse()
+            }
+        }
+    }
+
+    private fun emptyResponse() = WebResourceResponse("text/plain", null, 204, "No Content", null, ByteArrayInputStream(ByteArray(0)))
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("キーワード検索時はフィルターは無視されます"),
@@ -295,24 +410,44 @@ abstract class PdfToshokan : KeiSource() {
         }
     }
 
-    // Same normalization as the site's own search: NFKC, katakana -> hiragana, lowercase
-    private fun normalize(text: String): String = Normalizer.normalize(text, Normalizer.Form.NFKC)
-        .lowercase()
-        .map { if (it in 'ァ'..'ヶ') it - 0x60 else it }
-        .joinToString("")
-
     companion object {
         private const val TRAP_ID = "4973674"
-        private const val SEARCH_FILE_LINES = 10000
-        private const val SEARCH_PAGE_SIZE = 40
-        private const val DECODE_ATTEMPTS = 4
+        private const val DECODE_ATTEMPTS = 3
+        private const val BLOCKED = "__blocked__"
+        private const val MAINTENANCE = "__maintenance__"
+        private const val PREFIX_KEY = "file_prefix"
+        private const val BRIDGE_PIECE = 1024 * 1024
+        private const val RATE_LIMITED_MESSAGE = "The file host only allows a few downloads in a short time, try again in a few minutes"
+        private val DOWNLOAD_TIMEOUT = 10.minutes
 
+        // As seen in the site's volume URLs in November 2026; replaced by whatever decode.php last returned
+        private const val DEFAULT_PREFIX = "ghy6g4bujsw"
+
+        // decode.php redirects to the viewer with the volume file in its `file` parameter
+        private const val DECODE_STATE_JS = """(() => {
+            if (location.pathname.startsWith('/manga/')) return null;
+            if (location.pathname === '/maintenance.html') return '$MAINTENANCE';
+            if (document.readyState !== 'complete' || /Just a moment/.test(document.title)) return null;
+            const nav = performance.getEntriesByType('navigation')[0];
+            if (nav && nav.responseStatus === 429) return '429';
+            if (/Attention Required/.test(document.title)) return '$BLOCKED';
+            return location.href;
+        })()"""
+
+        private val ASSET_EXTENSIONS = setOf("js", "css", "png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "woff", "woff2")
+
+        // Script hosts the viewer loads its PDF reader from
+        private val VIEWER_LIBRARY_HOSTS = setOf("cdnjs.cloudflare.com", "cdn.jsdelivr.net", "ajax.googleapis.com", "unpkg.com")
+
+        private val BRACKETS_REGEX = Regex("""[（）()［］\[\]【】「」『』〈〉《》]""")
+        private val SPACES_RUN_REGEX = Regex("""\s+""")
+        private val SPACES_REGEX = Regex("""[　 ]""")
         private val HES_CONFIG_REGEX = Regex("""key\s*:\s*"([^"]+)"\s*,\s*randAttr\s*:\s*"([^"]+)"""")
-        private val COVER_STYLE_REGEX = Regex("""let\s+k\s*=\s*"([^"]+)"\s*,\s*x\s*=\s*"([0-9a-f]+)"""")
-        private val CSS_RULE_REGEX = Regex("""([a-zA-Z][\w-]*)\s*\{[^}]*url\(\s*['"]?([^'")]+)""")
-        private val HIDDEN_CLASS_REGEX = Regex("""\.(category-\d+)\s*\{\s*display\s*:\s*none""")
+        private val HIDDEN_CLASS_REGEX = Regex("""\.(category-\d+)\s*\{[^}]*?(?:display\s*:\s*none|opacity\s*:\s*0|(?<![-\w])width\s*:\s*0)""")
+        private val TRAP_CLASS_REGEX = Regex("""querySelector\(\s*["']\.(category-\d+)\s+a["']""")
         private val TRAP_REGEX = Regex("""location\.href\s*=\s*['"]/manga/(\d+)""")
         private val MANGA_ID_REGEX = Regex("""/manga/(\d+)""")
-        private val VIEWER_FILE_REGEX = Regex("""[?&]file=([^"'&\s<>]+)""")
     }
 }
+
+private class VolumeMissing : IOException("Volume not found")
