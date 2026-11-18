@@ -13,6 +13,7 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
@@ -45,7 +46,7 @@ abstract class Yupmanga : KeiSource() {
 
     private val apiHeaders: Headers
         get() = headers.newBuilder()
-            .add("X-Requested-With", "XMLHttpRequest")
+            .set("X-Requested-With", "XMLHttpRequest")
             .build()
 
     override suspend fun getPopularManga(page: Int): MangasPage = parseSeriesList(client.get("$baseUrl/top", Fetch.DOCUMENT).asJsoup())
@@ -108,7 +109,9 @@ abstract class Yupmanga : KeiSource() {
 
             title = container.selectFirst("h1")?.text()
                 ?: throw Exception("Título del manga no encontrado")
-            description = container.selectFirst("p#synopsisText")?.text()
+            description = MarkdownDescription.Builder()
+                .description(container.selectFirst("p#synopsisText")?.text())
+                .build()
             author = container.selectFirst("i[title=Editorial] + span")?.text()
             status = container.selectFirst("span:has(i[title=Estado])").parseStatus()
             genre = container.select("a.genre-tag").joinToString { genre ->
