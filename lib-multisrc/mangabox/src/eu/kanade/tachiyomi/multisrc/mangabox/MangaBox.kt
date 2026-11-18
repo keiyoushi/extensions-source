@@ -594,6 +594,8 @@ abstract class MangaBox :
         str = str.replace("[ùúụủũưừứựửữ]".toRegex(), "u")
         str = str.replace("[ỳýỵỷỹ]".toRegex(), "y")
         str = str.replace("đ".toRegex(), "d")
+        str = str.replace("[‘’‚‛]".toRegex(), "'") // curly apostrophes, e.g. "I’m"
+        str = str.replace("[“”„‟]".toRegex(), "\"") // curly quotes
         str = str.replace(
             """!|@|%|\^|\*|\(|\)|\+|=|<|>|\?|/|,|\.|:|;|'| |"|&|#|\[|]|~|-|$|_""".toRegex(),
             "_",

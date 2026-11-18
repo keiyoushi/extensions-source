@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Mangakakalot"
-    versionCode = 10
+    versionCode = 11
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "mangabox"
@@ -15,6 +15,7 @@ keiyoushi {
         lang = "en"
         baseUrl {
             mirrors(
+                "https://www.katamanga.com",
                 "https://www.kakamanga.com",
                 "https://www.mangakakalove.com",
             )
