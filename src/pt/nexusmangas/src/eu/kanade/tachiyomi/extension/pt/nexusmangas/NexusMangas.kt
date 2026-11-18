@@ -169,6 +169,7 @@ abstract class NexusMangas : KeiSource() {
         val manga = SManga.create().apply { this.url = slug }
 
         return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+            .takeUnless { "Novel" in it.genre.orEmpty().split(", ") }
     }
 
     override suspend fun fetchMangaUpdate(
