@@ -118,6 +118,7 @@ abstract class Keroscans :
         genre = buildList {
             details["Type"]?.let(::add)
             details["Language"]?.let(::add)
+            details["Demographic"]?.let(::add)
             document.select("ul[aria-label=\"Genres\"] li").forEach { add(it.text().trim()) }
             document.select("ul[aria-label=\"Tags\"] li").forEach { add(it.text().substringAfter('#').trim()) }
         }.distinct().joinToString()
@@ -127,6 +128,7 @@ abstract class Keroscans :
                 details["Rating"]?.takeIf { it != "Not rated yet" },
                 details["Released"],
                 details["Type"],
+                details["Format"],
                 details["Language"],
             )
             description(document.selectFirst(".ks-sp__summary")?.wholeText()?.trim())
@@ -140,8 +142,6 @@ abstract class Keroscans :
             )
             details["Chapters"]?.let { field("Chapters", it) }
             details["Views"]?.let { field("Views", it) }
-            details["Format"]?.let { field("Format", it) }
-            details["Demographic"]?.let { field("Demographic", it) }
         }.build()
     }
 
