@@ -57,8 +57,9 @@ abstract class WNACG :
     }
 
     // Mobile user agents get a mobile layout
-    override fun Headers.Builder.configureHeaders() = apply {
-        set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0")
+    override fun Headers.Builder.configureHeaders(): Headers.Builder {
+        val chromeVersion = chromeVersionRegex.find(get("User-Agent").orEmpty())?.groupValues?.get(1) ?: "156"
+        return set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$chromeVersion.0.0.0 Safari/537.36")
     }
 
     // Guests get 404 on some galleries and on login-only categories
@@ -358,6 +359,7 @@ abstract class WNACG :
 
         // Gallery page, reader and chapter links; a chapter's sid is its collection
         private val mangaUrlRegex = Regex("""/photos-(?:index|slide|list|gallery)(?:-page-\d+)?-aid-(\d+)(?:-sid-(\d+))?(?:-page-\d+)?\.html""")
+        private val chromeVersionRegex = Regex("""Chrome/(\d+)""")
         private val mirrorHostRegex = Regex("""^(?:www\.)?(?:wn(?:acg\w*|manga|\d+)|cloudwn)\.""")
         private val mangaAidRegex = Regex("""photos-index-aid-(\d+)""")
         private val chapterListPageRegex = Regex("""photos-index-aid-\d+-page-(\d+)\.html""")
