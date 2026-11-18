@@ -157,17 +157,14 @@ abstract class ComicFuz : KeiSource() {
             .mapNotNull { it.image }
 
         return pages.mapIndexed { idx, page ->
-            Page(
-                index = idx,
-                imageUrl = if (page.encryptionKey.isEmpty() && page.iv.isEmpty()) {
-                    cdnUrl + page.imageUrl
-                } else {
-                    "$cdnUrl${page.imageUrl}".toHttpUrl().newBuilder()
-                        .addQueryParameter("key", page.encryptionKey)
-                        .addQueryParameter("iv", page.iv)
-                        .toString()
-                },
-            )
+            val imageUrl = "$cdnUrl${page.imageUrl}".toHttpUrl().newBuilder().apply {
+                if (page.encryptionKey.isNotEmpty() || page.iv.isNotEmpty()) {
+                    addQueryParameter("key", page.encryptionKey)
+                    addQueryParameter("iv", page.iv)
+                }
+            }.toString()
+
+            Page(index = idx, imageUrl = imageUrl)
         }
     }
 }
