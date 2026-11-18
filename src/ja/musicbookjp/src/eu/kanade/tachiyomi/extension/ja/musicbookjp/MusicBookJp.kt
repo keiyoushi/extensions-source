@@ -18,6 +18,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.aesCbc
 import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
@@ -25,9 +26,11 @@ import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonRequestBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import java.io.IOException
 
 @Source
@@ -79,23 +82,20 @@ abstract class MusicBookJp :
 
     private fun Response.toMangasPage(): MangasPage {
         val document = this.asJsoup()
-        val script = document.selectFirst("script:containsData(__NUXT__)")!!.data()
-        val thumbnails = THUMBNAIL_REGEX.findAll(script).joinToString(",", "[", "]") {
-            """{"id":"${it.groupValues[1]}","thumbnail":${it.groupValues[2]}}"""
-        }.parseAs<List<RankingThumbnail>>().associate { it.idThumbnail }
-
-        val mangas = document.select("a.index-link:has(.ranking-title), a.index-link:has(span.title)").map {
+        val mangas = document.select("div.index-link").map {
+            val link = it.selectFirst("a.stretched-link[href*=seriesId]")!!
             SManga.create().apply {
-                val seriesId = it.absUrl("href").toHttpUrl().queryParameter("seriesId")!!
-                url = seriesId
-                title = it.selectFirst(".ranking-title .text, span.title")!!.text()
-                thumbnail_url = thumbnails[seriesId]
+                url = link.absUrl("href").toHttpUrl().queryParameter("seriesId")!!
+                title = link.attrOrNull("aria-label")!!
+                thumbnail_url = it.selectFirst("img.copy-guard-image")?.coverUrl()
             }
         }
 
         val hasNextPage = document.selectFirst("ul.pager li.pager-box.active ~ li.pager-box") != null
         return MangasPage(mangas, hasNextPage)
     }
+
+    private fun Element.coverUrl() = absUrl("src").toHttpUrlOrNull()?.newBuilder()?.query(null)?.build()?.toString()
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -183,7 +183,6 @@ abstract class MusicBookJp :
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
-        private val THUMBNAIL_REGEX = Regex("""id:"(\d+)"[^}]*?thumbnail:("[^"]*")""")
         private const val SCID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
         private val IV = "bvinitialvectolv".toByteArray()
     }
