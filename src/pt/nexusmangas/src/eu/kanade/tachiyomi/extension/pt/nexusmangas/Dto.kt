@@ -86,7 +86,7 @@ class ChapterDto(
         val numberLabel = number?.toString()?.removeSuffix(".0")
         url = if (numberLabel != null) "/capitulo/$workSlug/$numberLabel" else "${NexusMangas.READ_PATH}$id"
         name = buildString {
-            append(numberLabel?.let { "Capítulo $it" } ?: label.orEmpty())
+            append(numberLabel?.let { "Capítulo $it" } ?: label!!)
             this@ChapterDto.title?.takeIf(String::isNotBlank)?.let { append(" - $it") }
         }
         number?.let { chapter_number = it }
