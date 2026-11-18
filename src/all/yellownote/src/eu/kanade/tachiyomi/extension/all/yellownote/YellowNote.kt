@@ -153,7 +153,7 @@ abstract class YellowNote :
             .let(dateRegex::find)
             ?.let { dateFormat.tryParseDate(it.value) }
             ?: 0L
-        val pageCount = document.selectFirst("main [data-total]")?.attr("data-total")?.toIntOrNull() ?: 1
+        val pageCount = document.selectFirst("form[data-page-jump]")?.attr("data-total")?.toIntOrNull() ?: 1
 
         return (pageCount downTo 1).map { page ->
             SChapter.create().apply {
