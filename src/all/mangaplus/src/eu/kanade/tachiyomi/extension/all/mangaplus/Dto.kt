@@ -122,13 +122,11 @@ class TitleDetailView(
     @ProtoNumber(8) val nonAppearanceInfo: String = "",
     @ProtoNumber(28) val chapterListGroup: List<ChapterListGroup> = emptyList(),
     @ProtoNumber(31) val genreList: List<TagName> = emptyList(),
+    @ProtoNumber(32) private val titleLabels: TitleLabels? = null,
     @ProtoNumber(39) private val labelV2: LabelV2? = null,
 ) {
     val chapterList: List<Chapter>
         get() = chapterListGroup.flatMap { it.firstChapterList + it.lastChapterList }
-
-    private val isOneShot: Boolean
-        get() = genreList.any { it.slug == "one-shot" }
 
     fun toSManga(): SManga = title.toSManga().apply {
         description = listOf(overview, viewingPeriodDescription)
@@ -137,18 +135,26 @@ class TitleDetailView(
         genre = (genreList.map(TagName::name) + labelV2?.magazine)
             .filterNot(String?::isNullOrEmpty)
             .joinToString()
-        status = when {
-            isOneShot || nonAppearanceInfo.contains(COMPLETED_REGEX) || viewingPeriodDescription.contains("latest 0 chapters") -> SManga.COMPLETED
-            nonAppearanceInfo.contains(HIATUS_REGEX) -> SManga.ON_HIATUS
-            else -> SManga.ONGOING
+        status = when (titleLabels?.releaseSchedule) {
+            SCHEDULE_COMPLETED, SCHEDULE_ONE_SHOT -> SManga.COMPLETED
+            SCHEDULE_HIATUS -> SManga.ON_HIATUS
+            else -> if (nonAppearanceInfo.contains(HIATUS_REGEX)) SManga.ON_HIATUS else SManga.ONGOING
         }
     }
 
     companion object {
-        private val COMPLETED_REGEX = "completado|completed?|completo".toRegex(RegexOption.IGNORE_CASE)
-        private val HIATUS_REGEX = "on a hiatus".toRegex(RegexOption.IGNORE_CASE)
+        // Some hiatus titles keep their regular schedule and only say so in this text
+        private val HIATUS_REGEX = "on (a )?hiatus|suspendid|suspendu".toRegex(RegexOption.IGNORE_CASE)
+        private const val SCHEDULE_COMPLETED = 8
+        private const val SCHEDULE_ONE_SHOT = 9
+        private const val SCHEDULE_HIATUS = 10
     }
 }
+
+@Serializable
+class TitleLabels(
+    @ProtoNumber(1) val releaseSchedule: Int = 0,
+)
 
 @Serializable
 class LabelV2(
