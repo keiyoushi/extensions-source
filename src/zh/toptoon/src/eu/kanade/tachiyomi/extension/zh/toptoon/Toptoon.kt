@@ -11,6 +11,7 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
@@ -22,10 +23,8 @@ abstract class Toptoon : KeiSource() {
     // Set by the site's 18+ toggle
     override fun OkHttpClient.Builder.configureClient() = addCookie("adultStatus" to "1")
 
-    // Popular
-
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val jsonUrl = client.get("$baseUrl/ranking", Fetch.DOCUMENT).use { it.body.string() }
+        val jsonUrl = client.get("$baseUrl/ranking", Fetch.DOCUMENT).body.string()
             .substringAfter("jsonFileUrl: [\"")
             .substringBefore("\"")
             .replace("\\/", "/")
@@ -34,8 +33,6 @@ abstract class Toptoon : KeiSource() {
         }
         return MangasPage(mangas, false)
     }
-
-    // Latest
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val mangas = fetchAllManga()
@@ -46,25 +43,21 @@ abstract class Toptoon : KeiSource() {
         return MangasPage(mangas, false)
     }
 
-    // Search
-
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val mangas = fetchAllManga()
             .map {
                 it.toSManga()
             }
-            .filter { it.title.contains(query, true) || it.author!!.contains(query, true) }
+            .filter { it.title.contains(query, true) || it.author?.contains(query, true) == true }
         return MangasPage(mangas, false)
     }
 
     private suspend fun fetchAllManga(): Collection<MangaDto> {
-        val jsonUrl = client.get("$baseUrl/search", Fetch.DOCUMENT).use { it.body.string() }
+        val jsonUrl = client.get("$baseUrl/search", Fetch.DOCUMENT).body.string()
             .substringAfter("var jsonFileUrl = '")
             .substringBefore("'")
         return client.get("https:$jsonUrl", Fetch.XHR).parseAs<Map<String, MangaDto>>().values
     }
-
-    // Details & Chapters
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -77,16 +70,19 @@ abstract class Toptoon : KeiSource() {
         val details = SManga.create().apply {
             url = manga.url
             title = document.selectFirst("section.infoContent div.title")!!.text()
-            thumbnail_url = document.selectFirst("div.comicThumb img")!!.absUrl("src")
-            author = document.selectFirst("section.infoContent div.etc")!!.text()
-                .substringAfter("作家 : ").substringBefore("|")
-            description = document.selectFirst("div.comic_story div.desc")!!.text()
-            genre = document.selectFirst("section.infoContent div.hashTag")?.text()
-                ?.replace("#", ", ")
+            thumbnail_url = document.selectFirst("div.comicThumb img")?.absUrl("src")
+            author = document.selectFirst("section.infoContent div.etc")?.text()
+                ?.substringAfter("作家 :")?.substringBefore("|")?.trim()
+            description = MarkdownDescription.Builder()
+                .description(document.selectFirst("div.comic_story div.desc"))
+                .build()
+            genre = document.select("section.infoContent div.hashTag a")
+                .map { it.text().removePrefix("#") }
+                .distinct()
+                .joinToString()
+                .ifEmpty { null }
             if (document.selectFirst("div.etc span.comicDayBox") != null) {
                 status = SManga.ONGOING
-            } else if (document.selectFirst("div.hashTag a[href=/search/keyword/79]") != null) {
-                status = SManga.COMPLETED
             }
         }
 
@@ -94,7 +90,7 @@ abstract class Toptoon : KeiSource() {
             SChapter.create().apply {
                 setUrlWithoutDomain(it.selectFirst("a")!!.absUrl("href"))
                 name = if (it.selectFirst("button.coin, button.gift, button.waitFree") != null) {
-                    "\uD83D\uDD12" // lock emoji
+                    "\uD83D\uDD12"
                 } else {
                     ""
                 } + it.selectFirst("div.title")!!.text() + " " +
@@ -106,16 +102,8 @@ abstract class Toptoon : KeiSource() {
         return SMangaUpdate(details, chapterList)
     }
 
-    // Pages
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
-        val pathSegments = response.request.url.pathSegments
-        if (pathSegments.size < 2 || pathSegments[1] != "epView") {
-            response.close()
-            throw Exception("请确认是否已登录解锁")
-        }
-        val document = response.asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val images = document.select("article.epContent section.imgWrap div.cImg img")
         return images.mapIndexed { index, img ->
             Page(index, imageUrl = img.absUrl("data-src"))
