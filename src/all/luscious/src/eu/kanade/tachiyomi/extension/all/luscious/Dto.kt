@@ -10,6 +10,12 @@ class Info(
 )
 
 @Serializable
+class PictureListInfo(
+    @SerialName("total_pages")
+    val totalPages: Int,
+)
+
+@Serializable
 class SingleIdVariable(
     val id: String,
 )
@@ -105,6 +111,7 @@ class Cover(
     val url: String,
     val height: Int,
     val width: Int,
+    val size: String? = null,
 )
 
 // QUERY
@@ -147,7 +154,7 @@ class AlbumListOwnPicturesDataPicture(
 
 @Serializable
 class AlbumListOwnPicturesList(
-    val info: Info,
+    val info: PictureListInfo,
     val items: List<Picture>,
 )
 
@@ -158,16 +165,6 @@ class Picture(
     val urlToOriginal: String?,
     @SerialName("url_to_video")
     val urlToVideo: String?,
-    val position: Int,
-    val title: String,
-    val created: Double,
-)
-
-class PictureItem(
-    val index: Int,
-    val url: String,
-    val title: String? = null,
-    val created: Long? = null,
 )
 
 // AlbumGet
