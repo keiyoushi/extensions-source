@@ -7,7 +7,7 @@ class StatusFilter :
         "Status",
         STATUS_OPTIONS.map { it.first }.toTypedArray(),
     ) {
-    fun toUriPart() = STATUS_OPTIONS[state].second
+    val selected: String? get() = STATUS_OPTIONS[state].second
 }
 
 class GenreFilter :
@@ -15,27 +15,27 @@ class GenreFilter :
         "Gênero",
         GENRE_OPTIONS.map { it.first }.toTypedArray(),
     ) {
-    fun toUriPart() = GENRE_OPTIONS[state].second
+    val selected: String? get() = GENRE_OPTIONS[state].second
 }
 
 private val STATUS_OPTIONS = arrayOf(
-    Pair("Todos", ""),
-    Pair("Completos", "completed"),
+    "Todos" to null,
+    "Completos" to "completed",
 )
 
 private val GENRE_OPTIONS = arrayOf(
-    Pair("Todos", ""),
-    Pair("Adulto", "Adulto"),
-    Pair("Drama", "Drama"),
-    Pair("Harém", "Harém"),
-    Pair("Romance", "Romance"),
-    Pair("Comédia", "Comédia"),
-    Pair("Ação", "Ação"),
-    Pair("Fantasia", "Fantasia"),
-    Pair("Mistério", "Mistério"),
-    Pair("Isekai", "Isekai"),
-    Pair("Vida Universitária", "Vida Universitária"),
-    Pair("Manhwa", "Manhwa"),
-    Pair("Pornhwa", "Pornhwa"),
-    Pair("Webtoon", "Webtoon"),
+    "Todos" to null,
+    "Adulto" to "Adulto",
+    "Drama" to "Drama",
+    "Harém" to "Harém",
+    "Romance" to "Romance",
+    "Comédia" to "Comédia",
+    "Ação" to "Ação",
+    "Fantasia" to "Fantasia",
+    "Mistério" to "Mistério",
+    "Isekai" to "Isekai",
+    "Vida Universitária" to "Vida Universitária",
+    "Manhwa" to "Manhwa",
+    "Pornhwa" to "Pornhwa",
+    "Webtoon" to "Webtoon",
 )
