@@ -17,6 +17,7 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
@@ -166,9 +167,20 @@ abstract class BlackoutComics : KeiSource() {
         .removeHeader("Referer")
         .build()
 
+    override val supportsFilterFetching: Boolean get() = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val document = client.get("$baseUrl/comics", Fetch.DOCUMENT).asJsoup()
+        return document.select("li.generos-blackout a[href*='gen=']")
+            .map { it.absUrl("href").toHttpUrl().queryParameter("gen")!! }
+            .toJsonElement()
+    }
+
     override fun getFilterList(data: JsonElement?) = FilterList(
-        StatusFilter(),
-        GenreFilter(),
+        buildList {
+            add(StatusFilter())
+            data?.parseAs<List<String>>()?.let { add(GenreFilter(it)) }
+        },
     )
 
     private fun Element.toSManga() = SManga.create().apply {

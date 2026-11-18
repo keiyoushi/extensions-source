@@ -5,37 +5,15 @@ import eu.kanade.tachiyomi.source.model.Filter
 class StatusFilter :
     Filter.Select<String>(
         "Status",
-        STATUS_OPTIONS.map { it.first }.toTypedArray(),
+        arrayOf("Todos", "Completos"),
     ) {
-    val selected: String? get() = STATUS_OPTIONS[state].second
+    val selected: String? get() = if (state == 1) "completed" else null
 }
 
-class GenreFilter :
+class GenreFilter(private val genres: List<String>) :
     Filter.Select<String>(
         "Gênero",
-        GENRE_OPTIONS.map { it.first }.toTypedArray(),
+        arrayOf("Todos") + genres,
     ) {
-    val selected: String? get() = GENRE_OPTIONS[state].second
+    val selected: String? get() = if (state == 0) null else genres[state - 1]
 }
-
-private val STATUS_OPTIONS = arrayOf(
-    "Todos" to null,
-    "Completos" to "completed",
-)
-
-private val GENRE_OPTIONS = arrayOf(
-    "Todos" to null,
-    "Adulto" to "Adulto",
-    "Drama" to "Drama",
-    "Harém" to "Harém",
-    "Romance" to "Romance",
-    "Comédia" to "Comédia",
-    "Ação" to "Ação",
-    "Fantasia" to "Fantasia",
-    "Mistério" to "Mistério",
-    "Isekai" to "Isekai",
-    "Vida Universitária" to "Vida Universitária",
-    "Manhwa" to "Manhwa",
-    "Pornhwa" to "Pornhwa",
-    "Webtoon" to "Webtoon",
-)
