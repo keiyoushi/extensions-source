@@ -20,6 +20,7 @@ abstract class FleurBlanche : Madara() {
         .rateLimit(1, 2.seconds) { !it.encodedPath.startsWith("/wp-content/uploads/") }
 
     override val mangaDetailsSelectorStatus = "div.post-content_item:contains(Status) > div.summary-content"
+    override val mangaDetailsSelectorDescription = "div.manga-summary"
 
     private fun authWarningIntercept(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
