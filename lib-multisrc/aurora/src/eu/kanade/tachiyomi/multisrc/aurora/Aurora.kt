@@ -54,7 +54,7 @@ abstract class Aurora : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val segments = url.pathSegments
-        if (url.host != baseUrl.toHttpUrl().host || segments.size < 2 || segments[1].isEmpty()) return null
+        if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host.removePrefix("www.") || segments.size < 2 || segments[1].isEmpty()) return null
         val mangaUrl = baseUrl.toHttpUrl().newBuilder()
             .addPathSegment(segments[0])
             .addPathSegment(segments[1])
