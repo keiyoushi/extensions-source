@@ -14,4 +14,8 @@ keiyoushi {
         lang = "ja"
         baseUrl = "https://comic-fuz.com"
     }
+
+    deeplink {
+        path("/manga/..*")
+    }
 }
