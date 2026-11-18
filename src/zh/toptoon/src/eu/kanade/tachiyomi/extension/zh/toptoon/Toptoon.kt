@@ -15,6 +15,8 @@ import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.time.format.DateTimeFormatter
 
@@ -57,6 +59,13 @@ abstract class Toptoon : KeiSource() {
             .substringAfter("var jsonFileUrl = '")
             .substringBefore("'")
         return client.get("https:$jsonUrl", Fetch.XHR).parseAs<Map<String, MangaDto>>().values
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val segments = url.pathSegments
+        if (url.host != baseUrl.toHttpUrl().host || segments.size < 3 || segments[0] != "comic" || segments[1] !in listOf("epList", "epView")) return null
+        val manga = SManga.create().apply { this.url = "/comic/epList/${segments[2]}" }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun fetchMangaUpdate(
