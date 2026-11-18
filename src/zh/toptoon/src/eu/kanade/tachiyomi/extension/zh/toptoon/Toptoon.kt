@@ -63,8 +63,10 @@ abstract class Toptoon : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val segments = url.pathSegments
-        if (url.host != baseUrl.toHttpUrl().host || segments.size < 3 || segments[0] != "comic" || segments[1] !in listOf("epList", "epView")) return null
-        val manga = SManga.create().apply { this.url = "/comic/epList/${segments[2]}" }
+        if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host.removePrefix("www.")) return null
+        if (segments.getOrNull(0) != "comic" || segments.getOrNull(1) !in listOf("epList", "epView")) return null
+        val id = segments.getOrNull(2)?.toIntOrNull() ?: return null
+        val manga = SManga.create().apply { this.url = "/comic/epList/$id" }
         return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
