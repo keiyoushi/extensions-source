@@ -122,6 +122,7 @@ class TitleDetailView(
     @ProtoNumber(8) val nonAppearanceInfo: String = "",
     @ProtoNumber(28) val chapterListGroup: List<ChapterListGroup> = emptyList(),
     @ProtoNumber(31) val genreList: List<TagName> = emptyList(),
+    @ProtoNumber(39) private val labelV2: LabelV2? = null,
 ) {
     val chapterList: List<Chapter>
         get() = chapterListGroup.flatMap { it.firstChapterList + it.lastChapterList }
@@ -133,7 +134,9 @@ class TitleDetailView(
         description = listOf(overview, viewingPeriodDescription)
             .filter(String::isNotEmpty)
             .joinToString("\n\n")
-        genre = genreList.mapNotNull { it.name.takeIf(String::isNotEmpty) }.joinToString()
+        genre = (genreList.map(TagName::name) + labelV2?.magazine)
+            .filterNot(String?::isNullOrEmpty)
+            .joinToString()
         status = when {
             isOneShot || nonAppearanceInfo.contains(COMPLETED_REGEX) || viewingPeriodDescription.contains("latest 0 chapters") -> SManga.COMPLETED
             nonAppearanceInfo.contains(HIATUS_REGEX) -> SManga.ON_HIATUS
@@ -144,6 +147,33 @@ class TitleDetailView(
     companion object {
         private val COMPLETED_REGEX = "completado|completed?|completo".toRegex(RegexOption.IGNORE_CASE)
         private val HIATUS_REGEX = "on a hiatus".toRegex(RegexOption.IGNORE_CASE)
+    }
+}
+
+@Serializable
+class LabelV2(
+    @ProtoNumber(1) val id: Int = -1,
+) {
+    val magazine: String?
+        get() = MAGAZINES[id]
+
+    companion object {
+        private val MAGAZINES = mapOf(
+            1 to "Weekly Shounen Jump",
+            2 to "Jump SQ.",
+            3 to "V Jump",
+            4 to "Weekly Young Jump",
+            5 to "Shounen Jump+",
+            8 to "MANGA Plus Creators",
+            9 to "Manga Mee",
+            12 to "Tonari no Young Jump",
+            16 to "Saikyou Jump",
+            19 to "Shounen Jump GIGA",
+            20 to "Ultra Jump",
+            21 to "Dash X Comic",
+            23 to "Bessatsu Margaret",
+            24 to "Young Jump+",
+        )
     }
 }
 
