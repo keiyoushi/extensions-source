@@ -32,6 +32,7 @@ internal class CGenderFilter :
             listOf("BL向", "gender", "0"),
             listOf("禁漫", "gender", "1"),
             listOf("TL向", "gender", "3"),
+            listOf("GL向", "gender", "4"),
         ),
     )
 
