@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.ja.comicfuz
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
@@ -29,7 +30,9 @@ class Manga(
         url = "/manga/$id"
         title = this@Manga.title
         thumbnail_url = cdnUrl + cover
-        description = this@Manga.description
+        description = MarkdownDescription.Builder()
+            .description(this@Manga.description)
+            .build()
     }
 }
 
