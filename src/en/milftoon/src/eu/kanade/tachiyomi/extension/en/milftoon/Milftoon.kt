@@ -10,10 +10,12 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import org.jsoup.Jsoup
 import kotlin.time.Instant
 
 @Source
@@ -94,30 +96,37 @@ abstract class Milftoon : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
-        val data = document.html().parseRouteData<DetailWrapper>().data
+        val route = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup().html().parseRouteData<DetailWrapper>()
+        val comic = route.auxiliary
         val details = SManga.create().apply {
             url = manga.url
-            title = data.comic.title
-            author = manga.author
-            description = document.selectFirst("meta[name=description]")?.attr("content")
-            thumbnail_url = data.comic.coverPath?.let { cdnUrl + it }
-            initialized = true
+            title = comic.title
+            author = comic.author
+            description = MarkdownDescription.Builder()
+                .description(comic.synopsisHtml?.let { Jsoup.parseBodyFragment(it, baseUrl).body() })
+                .build()
+            genre = (comic.genres + comic.tags).map { it.name }.distinct().joinToString().ifEmpty { null }
+            status = when (comic.status) {
+                "ongoing" -> SManga.ONGOING
+                "end" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+            thumbnail_url = comic.coverPath?.let { cdnUrl + it }
         }
-        val chapterList = data.chapter?.let { chapter ->
-            listOf(
-                SChapter.create().apply {
-                    name = chapter.name.ifBlank { "Chapter" }
-                    setUrlWithoutDomain(manga.url)
-                    date_upload = Instant.tryParse(chapter.publishedAt)
-                },
-            )
-        }.orEmpty()
+        // Keeps the bare comic url for this chapter so library entries saved before chapter urls still match
+        val landingSlug = route.data.chapter?.slug
+        val chapterList = comic.chapters.map { chapter ->
+            SChapter.create().apply {
+                name = listOfNotNull(chapter.name, chapter.nameExtend).filter { it.isNotBlank() }.joinToString(" ")
+                url = if (chapter.slug == landingSlug) manga.url else "${manga.url}/${chapter.slug}"
+                date_upload = Instant.tryParse(chapter.publishedAt)
+            }
+        }.asReversed()
         return SMangaUpdate(details, chapterList)
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup().html().parseRouteData<DetailWrapper>().data
+        val data = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup().html().parseRouteData<PageWrapper>().data
         return data.pages.mapIndexed { index, page ->
             Page(index, imageUrl = page.src)
         }
