@@ -17,7 +17,7 @@ val ALBUM_LIST_REQUEST_GQL = $$"""
             }
         }
     }
-""".replace("\n", " ").replace("\\s+".toRegex(), " ")
+""".replace("\n", " ").replace("""\s+""".toRegex(), " ")
 
 val ALBUM_PICTURES_REQUEST_GQL = $$"""
     query AlbumListOwnPictures($input: PictureListInput!) {
@@ -43,7 +43,7 @@ val ALBUM_PICTURES_REQUEST_GQL = $$"""
         }
       }
     }
-""".replace("\n", " ").replace("\\s+".toRegex(), " ")
+""".replace("\n", " ").replace("""\s+""".toRegex(), " ")
 
 val albumInfoQuery = $$"""
 query AlbumGet($id: ID!) {

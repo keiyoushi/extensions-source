@@ -61,7 +61,21 @@ abstract class Luscious :
         }
     }
 
-    // Common
+    override suspend fun getPopularManga(page: Int): MangasPage = getAlbumList(page, getSortFilters(POPULAR_DEFAULT_SORT_STATE, lusLang))
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getAlbumList(page, getSortFilters(LATEST_DEFAULT_SORT_STATE, lusLang))
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = getAlbumList(page, filters, query)
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (!url.host.endsWith(baseUrl.toHttpUrl().host.substringAfter("."))) return null
+        if (url.pathSegments.getOrNull(0) != "albums") return null
+        val album = url.pathSegments.getOrNull(1) ?: return null
+        val id = album.split("_").last()
+
+        return detailsParse(getAlbumInfo(id))
+    }
+
     private fun buildAlbumListRequestInput(page: Int, filters: FilterList, query: String = ""): Variables {
         val sortByFilter = filters.firstInstance<SortBySelectFilter>()
         val albumTypeFilter = filters.firstInstance<AlbumTypeSelectFilter>()
@@ -194,11 +208,70 @@ abstract class Luscious :
         return client.get(url, Fetch.XHR).parseAs<AlbumGetResponse>().data.album.get
     }
 
-    // Latest
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val id = manga.url.substringAfterLast("_").removeSuffix("/")
+        val album = getAlbumInfo(id)
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getAlbumList(page, getSortFilters(LATEST_DEFAULT_SORT_STATE, lusLang))
+        val chapterList = if (fetchChapters) getChapters(manga, album) else chapters
 
-    // Chapters
+        return SMangaUpdate(detailsParse(album).apply { url = manga.url }, chapterList)
+    }
+
+    private fun detailsParse(data: FullAlbum): SManga {
+        val manga = SManga.create()
+        manga.url = data.url
+        manga.title = data.title
+        manga.thumbnail_url = data.cover.url
+        manga.description = "${data.description}\n\nPictures: ${data.numberOfPictures}\nAnimated Pictures: ${data.numberOfAnimatedPictures}"
+        val genreList = listOfNotNull(data.language?.title).toMutableList()
+        genreList += data.labels
+        genreList += data.genres.map { it.title }
+        genreList += data.audiences.map { it.title }
+        genreList += data.tags.map { it.text }
+        val artist = data.tags.find { it.text.contains("Artist:") }
+        if (artist != null) {
+            manga.artist = artist.text.substringAfter(":").trim()
+            manga.author = manga.artist
+        }
+        genreList += data.content.title
+        manga.genre = genreList.joinToString()
+
+        return manga
+    }
+
+    override val supportsRelatedMangas get() = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val id = manga.url.substringAfterLast("_").removeSuffix("/")
+        val input = SingleIdVariable(id = id)
+        val url = apiBaseUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("operationName", "AlbumListRelated")
+            .addQueryParameter("query", albumListRelatedQuery)
+            .addQueryParameter("variables", input.toJsonString())
+            .build()
+
+        val data = client.get(url, Fetch.XHR).parseAs<AlbumRelatedResponse>()
+        with(data.data.album.listRelated) {
+            return listOfNotNull(
+                moreLikeThis,
+                itemsLikedLikeThis,
+                itemsCreatedByThisUser,
+            ).flatMap { relatedItems ->
+                relatedItems.map {
+                    SManga.create().apply {
+                        this.url = it.url
+                        title = it.title
+                        thumbnail_url = it.cover.url
+                    }
+                }
+            }
+        }
+    }
 
     private fun getChapters(manga: SManga, album: FullAlbum): List<SChapter> {
         val chunkCount = ceil(album.numberOfPictures / (PAGES_PER_CHUNK * 50.0)).toInt().coerceAtLeast(1)
@@ -212,35 +285,6 @@ abstract class Luscious :
             }
         }
     }
-
-    // signed original links expire, so pages are fetched on read
-    private fun getPictureUrl(picture: Picture): String = when {
-        getResolutionPref() != "-1" -> {
-            picture.thumbnails[getResolutionPref().toInt()].url.resolved()
-        }
-
-        // the gif of a video, unsigned on the image host
-        picture.urlToVideo != null -> {
-            val video = picture.urlToVideo.resolved()
-            video.newBuilder()
-                .host(cdnHost)
-                .query(null)
-                .setPathSegment(video.pathSize - 1, video.pathSegments.last().removeSuffix(".mp4") + ".gif")
-                .build()
-        }
-
-        picture.urlToOriginal != null -> {
-            picture.urlToOriginal.resolved()
-        }
-
-        else -> {
-            picture.thumbnails.maxBy { it.height * it.width }.url.resolved()
-        }
-    }.toString()
-
-    private fun String.resolved(): HttpUrl = cdnBaseUrl.resolve(this)!!
-
-    // Pages
 
     private fun buildAlbumPicturesRequestInput(id: String, page: Int): Variables = Variables(
         input = Input(
@@ -284,91 +328,32 @@ abstract class Luscious :
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url.substringBefore("?")}"
 
-    // Details
-
-    override suspend fun fetchMangaUpdate(
-        manga: SManga,
-        chapters: List<SChapter>,
-        fetchDetails: Boolean,
-        fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val id = manga.url.substringAfterLast("_").removeSuffix("/")
-        val album = getAlbumInfo(id)
-
-        val chapterList = if (fetchChapters) getChapters(manga, album) else chapters
-
-        return SMangaUpdate(detailsParse(album).apply { url = manga.url }, chapterList)
-    }
-
-    private fun detailsParse(data: FullAlbum): SManga {
-        val manga = SManga.create()
-        manga.url = data.url
-        manga.title = data.title
-        manga.thumbnail_url = data.cover.url
-        manga.description = "${data.description}\n\nPictures: ${data.numberOfPictures}\nAnimated Pictures: ${data.numberOfAnimatedPictures}"
-        val genreList = listOfNotNull(data.language?.title).toMutableList()
-        genreList += data.labels
-        genreList += data.genres.map { it.title }
-        genreList += data.audiences.map { it.title }
-        genreList += data.tags.map { it.text }
-        val artist = data.tags.find { it.text.contains("Artist:") }
-        if (artist != null) {
-            manga.artist = artist.text.substringAfter(":").trim()
-            manga.author = manga.artist
+    // signed original links expire, so pages are fetched on read
+    private fun getPictureUrl(picture: Picture): String = when {
+        getResolutionPref() != "-1" -> {
+            picture.thumbnails[getResolutionPref().toInt()].url.resolved()
         }
-        genreList += data.content.title
-        manga.genre = genreList.joinToString()
 
-        return manga
-    }
-
-    // Related
-
-    override val supportsRelatedMangas get() = true
-
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val id = manga.url.substringAfterLast("_").removeSuffix("/")
-        val input = SingleIdVariable(id = id)
-        val url = apiBaseUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("operationName", "AlbumListRelated")
-            .addQueryParameter("query", albumListRelatedQuery)
-            .addQueryParameter("variables", input.toJsonString())
-            .build()
-
-        val data = client.get(url, Fetch.XHR).parseAs<AlbumRelatedResponse>()
-        with(data.data.album.listRelated) {
-            return listOfNotNull(
-                moreLikeThis,
-                itemsLikedLikeThis,
-                itemsCreatedByThisUser,
-            ).flatMap { relatedItems ->
-                relatedItems.map {
-                    SManga.create().apply {
-                        this.url = it.url
-                        title = it.title
-                        thumbnail_url = it.cover.url
-                    }
-                }
-            }
+        // the gif of a video, unsigned on the image host
+        picture.urlToVideo != null -> {
+            val video = picture.urlToVideo.resolved()
+            video.newBuilder()
+                .host(cdnHost)
+                .query(null)
+                .setPathSegment(video.pathSize - 1, video.pathSegments.last().removeSuffix(".mp4") + ".gif")
+                .build()
         }
-    }
 
-    // Popular
+        picture.urlToOriginal != null -> {
+            picture.urlToOriginal.resolved()
+        }
 
-    override suspend fun getPopularManga(page: Int): MangasPage = getAlbumList(page, getSortFilters(POPULAR_DEFAULT_SORT_STATE, lusLang))
+        else -> {
+            picture.thumbnails.maxBy { it.height * it.width }.url.resolved()
+        }
+    }.toString()
 
-    // Search
-
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = getAlbumList(page, filters, query)
-
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (!url.host.endsWith(baseUrl.toHttpUrl().host.substringAfter("."))) return null
-        if (url.pathSegments.getOrNull(0) != "albums") return null
-        val album = url.pathSegments.getOrNull(1) ?: return null
-        val id = album.split("_").last()
-
-        return detailsParse(getAlbumInfo(id))
-    }
+    private fun String.resolved(): HttpUrl = cdnBaseUrl.resolve(this)!!
 
     override fun getFilterList(data: JsonElement?): FilterList = getSortFilters(POPULAR_DEFAULT_SORT_STATE, lusLang)
 
