@@ -103,8 +103,7 @@ abstract class SuperEcchi : KeiSource() {
             description = MarkdownDescription.Builder()
                 .description(document.selectFirst(".sinopse-completa")?.clone()?.apply { select("h3").remove() })
                 .build()
-            genre = document.select("td.relatedtags a").eachText()
-                .joinToString().ifEmpty { null }
+            genre = document.tags()
             thumbnail_url = document.selectFirst(".dj-img1 img")?.attrOrNull("abs:src")
             status = if (document.detailField("Tipo")?.contains("one-shot", ignoreCase = true) == true) {
                 SManga.COMPLETED
@@ -149,13 +148,18 @@ abstract class SuperEcchi : KeiSource() {
         title = rawTitle
         thumbnail_url = element.selectFirst(".dj-img1 img")?.attrOrNull("abs:src")
         author = element.detailField("Autor")
-        genre = element.select("td.relatedtags a").eachText().joinToString().ifEmpty { null }
+        genre = element.tags()
     }
 
     private fun Element.detailField(label: String): String? = select("table.dj-desc tr")
         .firstOrNull { it.selectFirst("td")?.text().equals(label, ignoreCase = true) }
         ?.select("td")?.getOrNull(1)
         ?.textOrNull()
+
+    private fun Element.tags(): String? = select("td.relatedtags a[href^=tag.php]").eachText()
+        .distinct()
+        .joinToString()
+        .ifEmpty { null }
 
     private fun nomeSeo(name: String): String = name.replace("-", "*").replace(" ", "-")
 
