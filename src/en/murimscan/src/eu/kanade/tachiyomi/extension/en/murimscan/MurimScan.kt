@@ -8,13 +8,10 @@ abstract class MurimScan : ZeistManga() {
 
     override val supportsLatest = false
 
-    // Details
     override val mangaDetailsSelector = "main"
-    override val mangaDetailsSelectorGenres = "dl.flex:contains(Genre) a[rel=tag], dl.flex:contains(Type) a[rel=tag]"
-    override val mangaDetailsSelectorInfo = "dl.flex"
-    override val mangaDetailsSelectorInfoTitle = "dt"
-    override val mangaDetailsSelectorInfoDescription = "dd"
+    override val mangaDetailsSelectorDescription = ".entry-content"
+    override val mangaDetailsSelectorGenres = "h1.entry-title + div > span:first-child, h1.entry-title ~ div a[rel=tag]"
+    override val mangaDetailsSelectorStatus = "h1.entry-title + div > span:nth-child(3)"
 
-    // Pages
-    override val pageListSelector = ".post-body, .check-box"
+    override val pageListSelector = ".chapter-raw-content:not(.chapter-raw-content ~ .chapter-raw-content)"
 }
