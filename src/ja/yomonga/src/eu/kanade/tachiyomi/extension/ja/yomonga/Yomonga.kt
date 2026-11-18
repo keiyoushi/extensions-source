@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.yomonga
 
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -20,9 +21,9 @@ import keiyoushi.utils.textOrNull
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Response
 
 @Source
 abstract class Yomonga : KeiSource() {
@@ -30,7 +31,13 @@ abstract class Yomonga : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(SpeedBinbInterceptor())
 
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/titles/?page_num=$page", Fetch.DOCUMENT).toMangasPage()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = "$baseUrl/titles/".toHttpUrl().newBuilder()
+            .addQueryParameter("page_num", page.toString())
+            .build()
+
+        return fetchMangasPage(url)
+    }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
@@ -50,11 +57,22 @@ abstract class Yomonga : KeiSource() {
             }
         }
 
-        return client.get(url.build(), Fetch.DOCUMENT).toMangasPage()
+        return fetchMangasPage(url.build())
     }
 
-    private fun Response.toMangasPage(): MangasPage {
-        val document = this.asJsoup()
+    private suspend fun fetchMangasPage(url: HttpUrl): MangasPage {
+        val response = client.get(url, Fetch.DOCUMENT, ensureSuccess = false)
+        // An empty listing is answered with a 404
+        if (response.code == 404) {
+            response.close()
+            return MangasPage(emptyList(), false)
+        }
+        if (!response.isSuccessful) {
+            response.close()
+            throw HttpException(response.code)
+        }
+
+        val document = response.asJsoup()
         val mangas = document.select("div.book-box4").map {
             SManga.create().apply {
                 title = it.selectFirst("div.book-box4-title")!!.text()
