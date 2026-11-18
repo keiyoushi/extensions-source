@@ -26,6 +26,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
+import java.text.Normalizer
 
 @Source
 abstract class NexusMangas : KeiSource() {
@@ -123,8 +124,8 @@ abstract class NexusMangas : KeiSource() {
             .addQueryParameter("limit", PAGE_SIZE.toString())
             .addQueryParameter("offset", ((page - 1) * PAGE_SIZE).toString())
             .apply {
-                search?.sanitized()?.let {
-                    addQueryParameter("or", "(title.ilike.*$it*,alternative_title.ilike.*$it*)")
+                search?.toSearchPattern()?.let {
+                    addQueryParameter("or", "(title.imatch.$it,alternative_title.imatch.$it)")
                 }
                 addQueryParameter("type", type?.takeIf(String::isNotBlank)?.let { "eq.$it" } ?: "neq.$NOVEL_TYPE")
                 status?.takeIf(String::isNotBlank)?.let { addQueryParameter("status", "eq.$it") }
@@ -140,7 +141,26 @@ abstract class NexusMangas : KeiSource() {
         return MangasPage(works.map { it.toSManga(mediaUrl) }, works.size == PAGE_SIZE)
     }
 
-    private fun String.sanitized(): String? = replace(FILTER_SYNTAX_REGEX, " ").trim().takeIf(String::isNotBlank)
+    private fun String.toSearchPattern(): String? {
+        val text = Normalizer.normalize(this, Normalizer.Form.NFD)
+            .replace(DIACRITICS_REGEX, "")
+            .lowercase()
+            .trim()
+            .replace(WHITESPACE_REGEX, " ")
+            .takeIf(String::isNotEmpty)
+            ?: return null
+
+        val pattern = text.map { char ->
+            when (char) {
+                ' ' -> "[[:space:]]+"
+                in ACCENT_CLASSES -> ACCENT_CLASSES.getValue(char)
+                in REGEX_SPECIAL_CHARS -> "\\$char"
+                else -> char.toString()
+            }
+        }.joinToString("")
+
+        return "\"" + pattern.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+    }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "obra") return null
@@ -262,6 +282,18 @@ abstract class NexusMangas : KeiSource() {
             "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9." +
                 "eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc4NzgwMjAwMCwiZXhwIjo0OTQzNDc1NjAwLCJyb2xlIjoiYW5vbiJ9." +
                 "Cnl8Jw2DeKe84OAkmJYfO33xlcZsw0TC2Nw_il0tpRs"
-        private val FILTER_SYNTAX_REGEX = Regex("""[,()*]""")
+        private val DIACRITICS_REGEX = Regex("""\p{Mn}+""")
+        private val WHITESPACE_REGEX = Regex("""\s+""")
+        private const val REGEX_SPECIAL_CHARS = ".*+?^\${}()|[]\\"
+        private val ACCENT_CLASSES = mapOf(
+            'a' to "[aàáâãäå]",
+            'e' to "[eèéêë]",
+            'i' to "[iìíîï]",
+            'o' to "[oòóôõö]",
+            'u' to "[uùúûü]",
+            'c' to "[cç]",
+            'n' to "[nñ]",
+            'y' to "[yýÿ]",
+        )
     }
 }
