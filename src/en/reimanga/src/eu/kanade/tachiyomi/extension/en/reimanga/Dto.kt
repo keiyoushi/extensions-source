@@ -149,16 +149,90 @@ class ChapterList(
 }
 
 @Serializable
+class ChapterHandoff(
+    val chapter: Chapter,
+    val readerNonce: String,
+) {
+    @Serializable
+    class Chapter(
+        val mangaId: Long,
+        val chapterId: Long,
+    )
+}
+
+@Serializable
+class GuardRequest(
+    private val nonce: String,
+    private val mangaId: Long,
+)
+
+@Serializable
+class ChapterTokenRequest(
+    private val chapterId: Long,
+    private val nonce: String,
+    private val mangaId: Long,
+)
+
+@Serializable
+class ReaderGuard(
+    val data: Data,
+) {
+    @Serializable
+    class Data(
+        val kid: String,
+        val key: String,
+        val now: Long,
+        @SerialName("expires_in")
+        val expiresIn: Long,
+        @SerialName("turnstile_site_key")
+        val turnstileSiteKey: String?,
+    )
+}
+
+@Serializable
+class GuardRefusal(
+    val error: String? = null,
+    val guard: Boolean = false,
+)
+
+@Serializable
+class GuardVerifyRequest(
+    private val token: String,
+)
+
+@Serializable
+class ReaderPass(
+    val data: Data,
+) {
+    @Serializable
+    class Data(
+        val pass: String,
+        @SerialName("expires_in")
+        val expiresIn: Long,
+    )
+}
+
+@Serializable
+class ChapterToken(
+    val data: Data,
+) {
+    @Serializable
+    class Data(
+        val token: String,
+    )
+}
+
+@Serializable
 class Images(
     private val images: List<Image>,
     private val pack: Pack? = null,
 ) {
-    fun imageUrls() = pack?.imageUrls() ?: images.map { it.url }
+    fun imageUrls() = pack?.imageUrls() ?: images.map { it.url!! }
 
     @Serializable
     class Image(
         @SerialName("image_url")
-        val url: String,
+        val url: String?,
     )
 
     /** One file per segment holding its pages as consecutive WebPs. */
