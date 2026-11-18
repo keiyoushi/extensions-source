@@ -13,6 +13,7 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
@@ -34,7 +35,7 @@ abstract class Aurora : KeiSource() {
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3, 1.seconds)
         .addCookie("mnx_adulto" to "1")
 
-    override fun Headers.Builder.configureHeaders() = set("Alt-Used", baseUrl.substringAfterLast("/"))
+    override fun Headers.Builder.configureHeaders() = set("Alt-Used", baseUrl.toHttpUrl().host)
 
     override suspend fun getPopularManga(page: Int) = getMangasPage(client.get("$baseUrl/catalogo", Fetch.DOCUMENT))
 
@@ -87,7 +88,9 @@ abstract class Aurora : KeiSource() {
             document.selectFirst("script:containsData(ComicSeries)")?.data()
                 ?.replace(cleanRegex, "")
                 ?.let {
-                    description = mangaDetailsDescriptionRegex.find(it)?.groupValues?.last()
+                    description = MarkdownDescription.Builder()
+                        .description(mangaDetailsDescriptionRegex.find(it)?.groupValues?.last())
+                        .build()
                     genre = mangaDetailsGenreRegex.find(it)?.groupValues?.last()?.parseAs<List<String>>()?.joinToString()
                     author = mangaDetailsAuthorRegex.find(it)?.groupValues?.last()
                 }

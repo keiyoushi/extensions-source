@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.multisrc.aurora
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.string
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.Serializable
@@ -29,16 +30,20 @@ class MangaDto(
     val coverUrl: String?,
     @JsonNames("url")
     val slug: String,
-    var type: String? = null,
-    val description: String? = null,
-    val author: Value? = null,
+    var type: String?,
+    val alternateName: String?,
+    val description: String?,
+    val author: Value?,
     val genre: List<String> = emptyList(),
 ) {
     fun String.isUrl() = toHttpUrlOrNull() != null
     fun toSManga() = SManga.create().apply {
         title = this@MangaDto.title
         thumbnail_url = coverUrl
-        description = this@MangaDto.description
+        description = MarkdownDescription.Builder()
+            .description(this@MangaDto.description)
+            .altTitles(listOfNotNull(alternateName), "Títulos alternativos")
+            .build()
         author = this@MangaDto.author?.name
         genre = this@MangaDto.genre.joinToString()
         url = when {
