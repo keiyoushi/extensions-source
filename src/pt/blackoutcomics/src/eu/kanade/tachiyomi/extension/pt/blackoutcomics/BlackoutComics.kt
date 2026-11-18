@@ -43,7 +43,7 @@ abstract class BlackoutComics : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/ranking", Fetch.DOCUMENT).asJsoup().extractCsrf()
-        val mangas = document.select("#rankingContent a[href]").map { it.toSManga() }
+        val mangas = document.select("#rankingContent a[href*=/comics/]").map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
