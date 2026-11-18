@@ -126,7 +126,7 @@ abstract class NexusMangas : KeiSource() {
                 search?.sanitized()?.let {
                     addQueryParameter("or", "(title.ilike.*$it*,alternative_title.ilike.*$it*)")
                 }
-                type?.takeIf(String::isNotBlank)?.let { addQueryParameter("type", "eq.$it") }
+                addQueryParameter("type", type?.takeIf(String::isNotBlank)?.let { "eq.$it" } ?: "neq.$NOVEL_TYPE")
                 status?.takeIf(String::isNotBlank)?.let { addQueryParameter("status", "eq.$it") }
                 demographic?.takeIf(String::isNotBlank)?.let { addQueryParameter("demographic", "eq.$it") }
                 genre?.takeIf(String::isNotBlank)?.let {
@@ -249,6 +249,7 @@ abstract class NexusMangas : KeiSource() {
         private const val API_HOST = "supabase.nexusmangas.com"
         const val READ_PATH = "/read/"
         private const val PAGE_SIZE = 30
+        private const val NOVEL_TYPE = "NOVEL"
         private const val POPULAR_ORDER = "avg_rating.desc.nullslast"
         private const val LATEST_ORDER = "updated_at.desc"
         private const val LIST_COLUMNS = "slug,title,cover_url,status,type"

@@ -35,7 +35,6 @@ class TypeFilter :
             "Mangá" to "MANGA",
             "Manhua" to "MANHUA",
             "Webtoon" to "WEBTOON",
-            "Novel" to "NOVEL",
         ),
     )
 
