@@ -165,9 +165,6 @@ class Picture(
     val urlToOriginal: String?,
     @SerialName("url_to_video")
     val urlToVideo: String?,
-    val position: Int,
-    val title: String,
-    val created: Double,
 )
 
 // AlbumGet

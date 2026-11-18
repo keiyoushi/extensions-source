@@ -273,7 +273,7 @@ abstract class Luscious :
     }
 
     private fun getChapters(manga: SManga, album: FullAlbum): List<SChapter> {
-        val chunkCount = ceil(album.numberOfPictures / (PAGES_PER_CHUNK * 50.0)).toInt().coerceAtLeast(1)
+        val chunkCount = ceil(album.numberOfPictures / (PAGES_PER_CHUNK * PICTURES_PER_PAGE).toDouble()).toInt().coerceAtLeast(1)
 
         return (chunkCount downTo 1).map { i ->
             SChapter.create().apply {
@@ -285,54 +285,52 @@ abstract class Luscious :
         }
     }
 
-    private fun buildAlbumPicturesRequestInput(id: String, page: Int): Variables = Variables(
-        input = Input(
-            filters = listOf(
-                Filter(name = "album_id", value = id),
+    private suspend fun getPicturesPage(id: String, page: Int): AlbumListOwnPicturesList {
+        val input = Variables(
+            Input(
+                display = getSortPref(),
+                page = page,
+                itemsPerPage = PICTURES_PER_PAGE,
+                filters = listOf(Filter(name = "album_id", value = id)),
             ),
-            display = getSortPref(),
-            page = page,
-            itemsPerPage = 50,
-        ),
-    )
-
-    private fun buildAlbumPicturesPageUrl(id: String, page: Int): HttpUrl {
-        val input = buildAlbumPicturesRequestInput(id, page)
-        return apiBaseUrl.toHttpUrl().newBuilder()
+        )
+        val url = apiBaseUrl.toHttpUrl().newBuilder()
             .addQueryParameter("operationName", "AlbumListOwnPictures")
             .addQueryParameter("query", ALBUM_PICTURES_REQUEST_GQL)
             .addQueryParameter("variables", input.toJsonString())
             .build()
+
+        return client.get(url, Fetch.XHR).parseAs<AlbumListOwnPicturesResponse>().data.picture.list
     }
 
-    private suspend fun getPicturesPage(id: String, page: Int): AlbumListOwnPicturesList = client.get(buildAlbumPicturesPageUrl(id, page), Fetch.XHR).parseAs<AlbumListOwnPicturesResponse>().data.picture.list
-
     override suspend fun getPageList(chapter: SChapter): List<Page> = coroutineScope {
-        val chunk = chapter.url.substringAfter("?chunk=", "1").toInt()
-        val id = chapter.url.substringBefore("?").substringAfterLast("_").removeSuffix("/")
+        // one-picture chapters of older versions
+        if (!chapter.url.startsWith("/albums/")) throw Exception("Refresh the chapter list")
+
+        val url = baseUrl.toHttpUrl().resolve(chapter.url)!!
+        val chunk = url.queryParameter("chunk")?.toInt() ?: 1
+        val id = url.pathSegments[1].substringAfterLast("_")
 
         val startPage = (chunk - 1) * PAGES_PER_CHUNK + 1
         val first = getPicturesPage(id, startPage)
-        if (first.items.isEmpty()) throw Exception("Log in via WebView to view more than 1000 pictures")
+        if (first.items.isEmpty()) {
+            if (chunk == 1) return@coroutineScope emptyList()
+            throw Exception("Log in via WebView to view more than 1000 pictures")
+        }
 
         val endPage = minOf(chunk * PAGES_PER_CHUNK, first.info.totalPages)
         val rest = (startPage + 1..endPage).map { page ->
             async { getPicturesPage(id, page).items }
         }.awaitAll()
 
-        (listOf(first.items) + rest).flatten().mapIndexed { i, picture ->
+        (first.items + rest.flatten()).mapIndexed { i, picture ->
             Page(i, imageUrl = getPictureUrl(picture))
         }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url.substringBefore("?")}"
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl.toHttpUrl().resolve(chapter.url)!!.newBuilder().query(null).build().toString()
 
-    // signed original links expire, so pages are fetched on read
     private fun getPictureUrl(picture: Picture): String = when {
-        getResolutionPref() != "-1" -> {
-            picture.thumbnails[getResolutionPref().toInt()].url.resolved()
-        }
-
         // gif of a video on the image host, at the size-less thumbnail path for videos without an xMax rendition
         picture.urlToVideo != null -> {
             val thumbnail = picture.thumbnails.firstOrNull()
@@ -349,6 +347,11 @@ abstract class Luscious :
                     .setPathSegment(video.pathSize - 1, video.pathSegments.last().removeSuffix(".mp4") + ".gif")
                     .build()
             }
+        }
+
+        getResolutionPref() != "-1" -> {
+            val size = RESOLUTION_SIZES.getValue(getResolutionPref())
+            (picture.thumbnails.find { it.size == size } ?: picture.thumbnails.maxBy { it.height * it.width }).url.resolved()
         }
 
         picture.urlToOriginal != null -> {
