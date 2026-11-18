@@ -66,7 +66,11 @@ abstract class Milftoon : KeiSource() {
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val html = client.get("$baseUrl/ranking/hottest?page=$page", Fetch.DOCUMENT).asJsoup().html()
+        val url = "$baseUrl/manga_list/all".toHttpUrl().newBuilder()
+            .addQueryParameter("orderby", "views")
+            .addQueryParameter("page", page.toString())
+            .build()
+        val html = client.get(url, Fetch.DOCUMENT).asJsoup().html()
         return parseList(html)
     }
 
