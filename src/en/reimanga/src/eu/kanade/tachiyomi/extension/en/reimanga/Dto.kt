@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.reimanga
 
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.ratingStars
+import keiyoushi.utils.MarkdownDescription
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
@@ -74,26 +74,11 @@ class MangaPage(
             url = "$slug-$id"
             title = this@MangaDetails.title
             thumbnail_url = cover ?: "$baseUrl/covers/$id/thumbnail.png"
-            description = buildString {
-                if (rating > 0.0) {
-                    append(ratingStars(rating))
-                    append(" ")
-                    append(rating)
-                    append("\n\n")
-                }
-                (aiDescription ?: this@MangaDetails.description)?.takeIf { it.isNotBlank() }?.also {
-                    append(it.trim())
-                    append("\n\n")
-                }
-                altTitle?.takeIf { it.isNotBlank() }?.also {
-                    append("**Alternative Titles:**\n")
-                    it.split(",", ";", " / ").forEach { title ->
-                        append("- ")
-                        append(title.trim())
-                        append("\n")
-                    }
-                }
-            }.trim().ifEmpty { null }
+            description = MarkdownDescription.Builder()
+                .rating(rating.takeIf { it > 0.0 })
+                .description(aiDescription ?: this@MangaDetails.description)
+                .altTitles(altTitle?.split(",", ";", " / ").orEmpty(), label = "Alternative Titles")
+                .build()
             status = if (completed == 1) SManga.COMPLETED else SManga.ONGOING
             author = authors.joinToString { it.name.trim().removeSuffix(",").trim() }.ifEmpty { null }
             genre = buildList {
