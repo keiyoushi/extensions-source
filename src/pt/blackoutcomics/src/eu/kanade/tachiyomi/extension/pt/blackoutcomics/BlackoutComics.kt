@@ -58,15 +58,11 @@ abstract class BlackoutComics : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) return null
-        if (url.pathSegments.count(String::isNotBlank) < 2) return null
+        val segments = url.encodedPathSegments.filter(String::isNotBlank)
+        if (url.host != baseUrl.toHttpUrl().host || segments.size != 2 || segments[0] != "comics") return null
 
-        return fetchMangaUpdate(
-            SManga.create().apply { this.url = url.encodedPath },
-            emptyList(),
-            true,
-            false,
-        ).manga
+        val manga = SManga.create().apply { this.url = "/comics/${segments[1]}" }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
