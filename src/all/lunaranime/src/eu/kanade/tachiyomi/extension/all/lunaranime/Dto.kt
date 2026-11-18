@@ -309,6 +309,9 @@ class LunarPageListData(
 @Serializable
 class LunarPageListDecrypted(
     val data: LunarPageListData,
+    val slug: String? = null,
+    val v4: String? = null,
+    val veil: List<String?>? = null,
     @SerialName("cache_status") val cacheStatus: String? = null,
     @SerialName("cache_ttl") val cacheTtl: Long? = null,
 )

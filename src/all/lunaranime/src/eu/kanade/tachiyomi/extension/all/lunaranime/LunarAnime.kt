@@ -24,7 +24,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Clock
@@ -69,8 +68,10 @@ abstract class LunarAnime : KeiSource() {
     )
 
     override fun OkHttpClient.Builder.configureClient() = this
+        .addInterceptor(VeilInterceptor(CDN_HOST))
         .addInterceptor(serenity.interceptor())
-        .rateLimit(2) { it.host == API_HOST || it.host == CDN_HOST }
+        .rateLimit(2) { it.host == API_HOST }
+        .rateLimit(4) { it.host == CDN_HOST }
 
     private val crypto by lazy { LunarDecryptor(serenity) }
 
@@ -249,7 +250,9 @@ abstract class LunarAnime : KeiSource() {
         client.post(viewUrl, Fetch.XHR, viewBody, ensureSuccess = false).close()
 
         return result.data.images.mapIndexed { index, imageUrl ->
-            Page(index, imageUrl = imageUrl)
+            val veilUrl = result.veil?.getOrNull(index)?.takeIf { it.isNotEmpty() }?.let { API_URL.toHttpUrl().resolve(it) }
+            val url = imageUrl.toHttpUrl().newBuilder().fragment(veilUrl?.toString()).build()
+            Page(index, imageUrl = url.toString())
         }
     }
 
@@ -293,8 +296,10 @@ abstract class LunarAnime : KeiSource() {
     private fun LunarPageListDecrypted.needsRevalidation(): Boolean {
         val images = data.images
         return cacheStatus == "revalidate" ||
+            slug == "unknown" ||
+            v4 == null ||
             images.isEmpty() ||
-            images.any { it.toHttpUrlOrNull()?.host != CDN_HOST }
+            images.all { DECOY_PATH in it }
     }
 
     override val supportsFilterFetching = true
@@ -321,6 +326,7 @@ abstract class LunarAnime : KeiSource() {
         private const val API_HOST = "api.lunarx.to"
         private const val API_URL = "https://$API_HOST"
         private const val CDN_HOST = "vault.lunarx.to"
+        private const val DECOY_PATH = "/api/cdn/p/"
         private const val DEFAULT_CLEARANCE_TTL_S = 300L
         private const val CLEARANCE_MARGIN_S = 30L
     }

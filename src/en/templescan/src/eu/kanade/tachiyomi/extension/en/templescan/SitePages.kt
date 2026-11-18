@@ -2,17 +2,17 @@ package eu.kanade.tachiyomi.extension.en.templescan
 
 import android.util.Base64
 import android.webkit.WebResourceResponse
+import keiyoushi.utils.TURNSTILE_AREA
 import keiyoushi.utils.WebViewTimeoutException
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import java.io.ByteArrayInputStream
 import java.io.IOException
-import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -22,73 +22,41 @@ import kotlin.time.TimeSource
 /** Loads the site's pages in a WebView, one at a time, and reads what they render with an asset script. */
 internal class SitePages(
     baseUrl: String,
-    private val client: OkHttpClient,
     private val userAgent: () -> String,
-    private val passSiteCheck: suspend (siteKey: String) -> Unit,
 ) {
 
     private val host = baseUrl.toHttpUrl().host
 
     private val mutex = Mutex()
 
-    /** When Cloudflare's challenge last failed to pass by itself; until [BACKOFF] runs out, the next one goes to the user. */
+    /** When a check last failed without the app on screen to show it; until [BACKOFF] runs out, the next one fails after [SHOW_AFTER]. */
     private var failedAt: TimeMark? = null
 
-    /** When the site's own Turnstile check last failed to pass, and why; rethrown until [SITE_CHECK_BACKOFF] runs out. */
-    private var siteCheckFailure: Pair<TimeMark, Exception>? = null
+    /** When the last page load started; loads start at most every [LOAD_GAP], like a reader's. */
+    private var lastLoad: TimeMark? = null
 
     /**
-     * Loads [url] and polls `(script)(args, state)` from `assets/[scriptName]` until it returns a result, passing the
-     * site's own Turnstile check first when the page is sent to it.
+     * Loads [url] and polls `(script)(args, state)` from `assets/[scriptName]` until it returns a result; `state`
+     * keeps the script's progress between polls. Cloudflare's and the site's own checks run in the page, shown to the
+     * user when they want a tap.
      */
     suspend fun read(url: String, scriptName: String, args: String = "{}"): String = mutex.withLock {
-        try {
-            load(url, scriptName, args)
-        } catch (check: SiteCheckException) {
-            siteCheckFailure?.takeIf { it.first.elapsedNow() < SITE_CHECK_BACKOFF }?.let { throw it.second }
-            try {
-                passSiteCheck(check.siteKey)
-                load(url, scriptName, args)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                siteCheckFailure = TimeSource.Monotonic.markNow() to e
-                throw e
-            }
-        }
-    }
-
-    /** The script returns null while it is still working; `state` keeps its progress between polls. */
-    private suspend fun load(url: String, scriptName: String, args: String): String {
+        lastLoad?.let { delay(LOAD_GAP - it.elapsedNow()) }
+        lastLoad = TimeSource.Monotonic.markNow()
         val stateName = List(16) { ('a'..'z').random() }.joinToString("")
         val call = "(${asset("run.js")})(${asset(scriptName)}, $args, \"$stateName\")"
-        var challengeSeenAt: TimeMark? = null
-        var siteCheckSeenAt: TimeMark? = null
-        val siteKey = AtomicReference<String?>()
+        var checkSeenAt: TimeMark? = null
 
-        val result = try {
+        try {
             runWebView<String>(timeout = TIMEOUT) {
                 userAgent = this@SitePages.userAgent()
-                // The site refuses WebView's X-Requested-With, which the requests left to the WebView carry; only its check needs them
-                if (originMatchedHeaderSupported) setOriginMatchedHeader("X-Requested-With", "XMLHttpRequest", setOf("https://$host"))
+                // Empty: the site and its check refuse any X-Requested-With value
+                if (!originMatchedHeaderSupported) throw IOException(UPDATE_WEBVIEW)
+                setOriginMatchedHeader("X-Requested-With", "", setOf("https://$host"))
                 interceptRequest { request ->
-                    // A key from Cloudflare's own challenge page, before it moved on to the site's
-                    if (request.isForMainFrame) siteKey.set(null)
                     val requestHost = request.url.host
-                    val path = request.url.path.orEmpty()
                     when {
-                        requestHost == host -> when {
-                            // Stylesheets and fonts
-                            path.startsWith("/_next/static/css/") || path.startsWith("/_next/static/media/") -> blocked()
-                            // Not the X-Requested-With set for the requests left to the WebView
-                            else -> proxyRequest(request, client) { removeHeader("X-Requested-With") }
-                        }
-                        requestHost == null -> null
-                        requestHost == TURNSTILE_HOST -> {
-                            // The site's Turnstile key, from the widget its check page loads
-                            TURNSTILE_KEY.find(path)?.let { siteKey.set(it.value) }
-                            null
-                        }
+                        requestHost == null || requestHost == host || requestHost == TURNSTILE_HOST -> null
                         // The reader loads a few pages at a time and mounts the next ones once those have loaded
                         requestHost.endsWith(".$host") -> pixel()
                         else -> blocked()
@@ -99,29 +67,34 @@ internal class SitePages(
                 }
                 poll(POLL_INTERVAL) {
                     evaluateJs(call) { output ->
+                        // Null while the page navigates
                         val json = output.parseAs<String?>() ?: return@evaluateJs
-                        val page = json.parseAs<PageStatus?>() ?: return@evaluateJs
+                        val page = json.parseAs<PageStatus?>()
+                        // The check passed and the page moved on
+                        if (page?.check != true && checkSeenAt != null) {
+                            hideFromUser()
+                            checkSeenAt = null
+                        }
+                        if (page == null) return@evaluateJs
                         when {
-                            page.siteCheck -> {
-                                val seenAt = siteCheckSeenAt ?: TimeSource.Monotonic.markNow().also { siteCheckSeenAt = it }
-                                val key = siteKey.get()
-                                when {
-                                    key != null -> reject(SiteCheckException(key))
-                                    seenAt.elapsedNow() > CHALLENGE_WAIT -> reject(IOException(SITE_CHECK_MISSING))
-                                }
-                            }
-                            page.challenge -> {
-                                // The site's check usually passes by itself within a few seconds
-                                val recentlyFailed = failedAt?.let { it.elapsedNow() < BACKOFF } == true
-                                val seenAt = challengeSeenAt ?: TimeSource.Monotonic.markNow().also { challengeSeenAt = it }
-                                if (recentlyFailed || seenAt.elapsedNow() > CHALLENGE_WAIT) {
-                                    failedAt = TimeSource.Monotonic.markNow()
-                                    reject(IOException(if (originMatchedHeaderSupported) SOLVE_MANUALLY else UPDATE_WEBVIEW))
+                            page.check -> {
+                                // Cloudflare's and the site's checks usually pass by themselves within a few seconds
+                                val seenAt = checkSeenAt ?: TimeSource.Monotonic.markNow().also { checkSeenAt = it }
+                                if (seenAt.elapsedNow() > SHOW_AFTER && !showToUser(TURNSTILE_AREA)) {
+                                    // Without the app on screen there's no one to tap it
+                                    val recentlyFailed = failedAt?.let { it.elapsedNow() < BACKOFF } == true
+                                    if (recentlyFailed || seenAt.elapsedNow() > CHECK_WAIT) {
+                                        failedAt = TimeSource.Monotonic.markNow()
+                                        reject(IOException(SOLVE_MANUALLY))
+                                    }
                                 }
                             }
                             page.status != null -> reject(IOException("HTTP error ${page.status}"))
                             page.error != null -> reject(IOException(page.error))
-                            else -> resolve(json)
+                            else -> {
+                                failedAt = null
+                                resolve(json)
+                            }
                         }
                     }
                 }
@@ -136,11 +109,7 @@ internal class SitePages(
         } catch (e: Throwable) {
             throw IOException(e.message, e)
         }
-        failedAt = null
-        return result
     }
-
-    private class SiteCheckException(val siteKey: String) : IOException("The site's verification did not pass")
 
     private fun asset(name: String) = javaClass.getResource("/assets/$name")!!.readText()
 
@@ -159,18 +128,16 @@ internal class SitePages(
 
         private val TIMEOUT = 2.minutes
 
-        private val CHALLENGE_WAIT = 30.seconds
+        private val LOAD_GAP = 2.seconds
+
+        private val SHOW_AFTER = 5.seconds
+
+        private val CHECK_WAIT = 30.seconds
+
+        private val BACKOFF = 5.minutes
 
         private const val SOLVE_MANUALLY = "Open in WebView to pass the site's verification"
 
         private const val UPDATE_WEBVIEW = "Update Android System WebView to pass the site's verification"
-
-        private val BACKOFF = 5.minutes
-
-        private val SITE_CHECK_BACKOFF = 30.seconds
-
-        private const val SITE_CHECK_MISSING = "The site's verification did not load"
-
-        private val TURNSTILE_KEY = Regex("""0x4[A-Za-z0-9_-]{20,}""")
     }
 }

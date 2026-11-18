@@ -4,6 +4,7 @@ import io.github.keiyoushi.gradle.internal.extensions.compileOnly
 import io.github.keiyoushi.gradle.internal.extensions.implementation
 import io.github.keiyoushi.gradle.internal.extensions.kei
 import io.github.keiyoushi.gradle.internal.extensions.libs
+import io.github.keiyoushi.gradle.internal.extensions.lintChecks
 import io.github.keiyoushi.gradle.internal.extensions.plugins
 import org.gradle.api.Plugin
 import org.gradle.api.Project
@@ -42,6 +43,7 @@ class LibraryPlugin : Plugin<Project> {
             compileOnly(libs.bundles.common)
             compileOnly(libs.tachiyomi.lib.v16)
             implementation(project(":core"))
+            lintChecks(project(":lint-rules"))
         }
     }
 }
