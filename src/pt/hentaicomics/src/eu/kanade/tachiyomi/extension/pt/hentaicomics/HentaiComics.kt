@@ -56,7 +56,9 @@ abstract class HentaiComics : KeiSource() {
             .apply { if (page > 1) addPathSegment("page").addPathSegment(page.toString()) }
             .addPathSegment("")
             .build()
-        return listingParse(client.get(url, Fetch.DOCUMENT).asJsoup(), page)
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
+        if (document.selectFirst("div.pesquisadesc") != null) return MangasPage(emptyList(), false)
+        return listingParse(document, page)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
