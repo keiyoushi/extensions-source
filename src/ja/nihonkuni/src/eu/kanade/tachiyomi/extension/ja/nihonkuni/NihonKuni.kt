@@ -27,10 +27,11 @@ abstract class NihonKuni : FMReader() {
     override val altNameSelector = "li:has(.fa-clone) .info-field-value"
     override val altName = "Alternative Name: "
 
-    // The title is base64 encoded and filled in by JS
-    override fun parseMangaTitle(document: Document): String? = document.selectFirst("h1.manga-main-title")
-        ?.attr("data-enc")
-        ?.let { String(Base64.decode(it, Base64.DEFAULT)) }
+    // h1 title is base64 and uppercased, the breadcrumb keeps the list casing
+    override fun parseMangaTitle(document: Document): String? = document.selectFirst(".breadcrumb-item.active")?.text()
+        ?: document.selectFirst("h1.manga-main-title")
+            ?.attr("data-enc")
+            ?.let { String(Base64.decode(it, Base64.DEFAULT)) }
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addCookie("smartlink_shown" to "1")
 
