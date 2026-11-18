@@ -38,6 +38,9 @@ val ALBUM_PICTURES_REQUEST_GQL = $$"""
                 position
                 thumbnails {
                     url
+                    width
+                    height
+                    size
                 }
             }
         }

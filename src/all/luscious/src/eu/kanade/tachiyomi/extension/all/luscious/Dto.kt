@@ -111,6 +111,7 @@ class Cover(
     val url: String,
     val height: Int,
     val width: Int,
+    val size: String? = null,
 )
 
 // QUERY

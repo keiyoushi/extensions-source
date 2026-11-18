@@ -333,14 +333,22 @@ abstract class Luscious :
             picture.thumbnails[getResolutionPref().toInt()].url.resolved()
         }
 
-        // the gif of a video, unsigned on the image host
+        // gif of a video on the image host, at the size-less thumbnail path for videos without an xMax rendition
         picture.urlToVideo != null -> {
-            val video = picture.urlToVideo.resolved()
-            video.newBuilder()
-                .host(cdnHost)
-                .query(null)
-                .setPathSegment(video.pathSize - 1, video.pathSegments.last().removeSuffix(".mp4") + ".gif")
-                .build()
+            val thumbnail = picture.thumbnails.firstOrNull()
+            if (thumbnail != null && picture.thumbnails.none { it.size == "xMax" }) {
+                val url = thumbnail.url.resolved()
+                url.newBuilder()
+                    .setPathSegment(url.pathSize - 1, url.pathSegments.last().replace(thumbnailSizeRegex, ""))
+                    .build()
+            } else {
+                val video = picture.urlToVideo.resolved()
+                video.newBuilder()
+                    .host(cdnHost)
+                    .query(null)
+                    .setPathSegment(video.pathSize - 1, video.pathSegments.last().removeSuffix(".mp4") + ".gif")
+                    .build()
+            }
         }
 
         picture.urlToOriginal != null -> {
@@ -351,6 +359,8 @@ abstract class Luscious :
             picture.thumbnails.maxBy { it.height * it.width }.url.resolved()
         }
     }.toString()
+
+    private val thumbnailSizeRegex = Regex("""\.\d+x\d+(?=\.\w+$)""")
 
     private fun String.resolved(): HttpUrl = cdnBaseUrl.resolve(this)!!
 
