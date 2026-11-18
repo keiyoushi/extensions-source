@@ -11,6 +11,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -125,7 +126,9 @@ abstract class Wolf : KeiSource() {
         val updatedManga = manga.apply {
             title = document.selectFirst("h1.w-title")!!.text()
             thumbnail_url = document.selectFirst(".thumb-wrap img")?.absUrl("src")
-            description = document.selectFirst(".summary")?.text()
+            description = MarkdownDescription.Builder()
+                .description(document.selectFirst(".summary"))
+                .build()
             genre = document.select(".genre-tags a.gtag").joinToString { it.text().removePrefix("#") }
         }
 
