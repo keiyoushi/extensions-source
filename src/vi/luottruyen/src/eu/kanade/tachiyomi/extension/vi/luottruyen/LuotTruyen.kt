@@ -141,7 +141,7 @@ abstract class LuotTruyen : KeiSource() {
         document.selectFirst("article#item-detail")?.let { infoElement ->
             author = infoElement.selectFirst("li.author p.col-xs-8, li.author p.col-xs-10")?.text()
             status = infoElement.selectFirst("li.status p.col-xs-8, li.status p.col-xs-10")?.text().toStatus()
-            genre = infoElement.select("li.kind p.col-xs-8 a, li.kind p.col-xs-12 a").joinToString { it.text() }
+            genre = infoElement.select("li.kind p.col-xs-8 a, li.kind p.col-xs-12 a").joinToString { it.text() }.ifEmpty { null }
             description = MarkdownDescription.Builder().apply {
                 infoElement.select("div.detail-content p").forEach { description(it) }
             }.build()
