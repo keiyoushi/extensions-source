@@ -2,11 +2,18 @@ package eu.kanade.tachiyomi.extension.ar.goonscans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.utils.asJsoup
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MultipartBody
 import org.jsoup.nodes.Element
 
 @Source
@@ -18,21 +25,45 @@ abstract class GoonScans : MangaThemesia() {
 
     override fun searchMangaNextPageSelector() = ".next-btn"
 
-    override fun searchMangaUrl(page: Int, query: String, filters: FilterList) = if (query.isEmpty()) {
-        baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("title")
-            if (page > 1) {
-                addPathSegment("page")
-                addPathSegment(page.toString())
-            }
-            addPathSegment("")
-            addQueryParameter(
-                "orderby",
-                filters.filterIsInstance<OrderByFilter>().first().name,
-            )
+    override fun searchMangaUrl(page: Int, query: String, filters: FilterList) = baseUrl.toHttpUrl().newBuilder().apply {
+        addPathSegment("title")
+        if (page > 1) {
+            addPathSegment("page")
+            addPathSegment(page.toString())
         }
-    } else {
-        super.searchMangaUrl(page, query)
+        addPathSegment("")
+        addQueryParameter(
+            "orderby",
+            filters.filterIsInstance<OrderByFilter>().first().name,
+        )
+    }
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val term = query.trim()
+        if (term.isEmpty()) return super.getSearchMangaList(page, query, filters)
+        // The site's live search needs at least two characters
+        if (term.length < 2) return MangasPage(emptyList(), false)
+
+        val searchUrl = "$baseUrl/search/"
+        val nonce = client.get(searchUrl, Fetch.DOCUMENT).asJsoup()
+            .selectFirst("script:containsData(glsa_live_search)")!!.data()
+            .let { NONCE_REGEX.find(it)!!.groupValues[1] }
+        val body = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("action", "glsa_live_search")
+            .addFormDataPart("term", term)
+            .addFormDataPart("nonce", nonce)
+            .build()
+        val html = client.post("$baseUrl/wp-admin/admin-ajax.php", Fetch.XHR.from(searchUrl), body)
+            .parseAs<LiveSearchDto>().data.html
+        val mangas = html.asJsoup(baseUrl).select("a.result-item").map { element ->
+            SManga.create().apply {
+                setUrlWithoutDomain(element.absUrl("href"))
+                title = element.selectFirst(".result-title")!!.text()
+                thumbnail_url = element.selectFirst("img")?.imgAttr()
+            }
+        }
+        return MangasPage(mangas, false)
     }
 
     override fun searchMangaSelector() = ".cover-wrapper"
@@ -61,4 +92,8 @@ abstract class GoonScans : MangaThemesia() {
 
     override val supportsFilterFetching = false
     override fun getFilterList(data: JsonElement?) = FilterList()
+
+    companion object {
+        private val NONCE_REGEX = Regex("""'nonce',\s*'([^']+)'""")
+    }
 }
