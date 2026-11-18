@@ -13,7 +13,6 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -40,8 +39,6 @@ abstract class BenDezOmniHero : KeiSource() {
         return MangasPage(filtered, false)
     }
 
-    override fun getFilterList(data: JsonElement?): FilterList = FilterList()
-
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         return fetchEntries()
@@ -66,6 +63,20 @@ abstract class BenDezOmniHero : KeiSource() {
         return SMangaUpdate(entry.toPostManga(), listOf(chapter))
     }
 
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
+        return document.select(".post-body img[src^=http]")
+            .mapNotNull { img ->
+                img.attr("data-src")
+                    .ifBlank { img.attr("abs:src") }
+                    .takeIf { it.startsWith("http") && ("blogger.googleusercontent.com" in it || "bp.blogspot.com" in it) }
+                    // Original-size Blogger image (s0 size segment)
+                    ?.let { bloggerSizeRegex.replaceFirst(it, "/s0/$1") }
+            }
+            .distinct()
+            .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
+    }
+
     private suspend fun fetchEntries(): List<BloggerEntry> {
         val entries = mutableListOf<BloggerEntry>()
         var startIndex = 1
@@ -86,24 +97,6 @@ abstract class BenDezOmniHero : KeiSource() {
         }
         return entries.filter { it.isReadableComic() }.distinctBy { it.postPath() }
     }
-
-    override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        return document.select(".post-body img[src^=http]")
-            .mapNotNull { img ->
-                img.attr("data-src")
-                    .ifBlank { img.attr("abs:src") }
-                    .takeIf { it.startsWith("http") && isPageImage(it) }
-                    ?.let(::fullQualityImage)
-            }
-            .distinct()
-            .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
-    }
-
-    private fun isPageImage(url: String): Boolean = "blogger.googleusercontent.com" in url || "bp.blogspot.com" in url
-
-    // Original-size Blogger image (s0 size segment)
-    private fun fullQualityImage(url: String): String = bloggerSizeRegex.replaceFirst(url, "/s0/$1")
 
     private val bloggerSizeRegex = Regex("""/[sw]\d[\w-]*/([^/]+)$""")
 
