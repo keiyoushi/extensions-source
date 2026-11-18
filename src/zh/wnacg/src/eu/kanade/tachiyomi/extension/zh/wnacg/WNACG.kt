@@ -19,6 +19,7 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -43,8 +44,11 @@ abstract class WNACG :
     ConfigurableSource {
     private val preferences = getPreferences { preferenceMigration() }
 
-    // The domain list, like the site's address page, leaves out some mirrors
-    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = (client.get(DOMAIN_LIST_URL, Fetch.DOCUMENT).body.string().split(',') + UNLISTED_MIRRORS).distinct()
+    // The site's release page leaves out some mirrors
+    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = client.get(RELEASE_PAGE_URL, Fetch.DOCUMENT).asJsoup()
+        .selectFirst("script:containsData(window.__INITIAL_CONFIG__=)")!!.data()
+        .substringAfter("__INITIAL_CONFIG__=").substringBeforeLast(";")
+        .parseAs<ReleasePageConfig>().sites.map { it.url } + UNLISTED_MIRRORS
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(::loginHintInterceptor)
@@ -344,7 +348,7 @@ abstract class WNACG :
 
     companion object {
         private const val LOGIN_HINT = "内容不存在或需要登录，请在 WebView 中登录后重试"
-        private const val DOMAIN_LIST_URL = "https://stevenyomi.github.io/source-domains/wnacg.txt"
+        private const val RELEASE_PAGE_URL = "https://wnacglink.com/"
         private val UNLISTED_MIRRORS = listOf("https://www.wn01.cfd", "https://www.wnacg.com")
         private const val CHAPTER_SELECTOR = "div.sr_compact a.tagshow[data-chid]"
         private val pageImageRegex = Regex(
@@ -354,7 +358,7 @@ abstract class WNACG :
 
         // Gallery page, reader and chapter links; a chapter's sid is its collection
         private val mangaUrlRegex = Regex("""/photos-(?:index|slide|list|gallery)(?:-page-\d+)?-aid-(\d+)(?:-sid-(\d+))?(?:-page-\d+)?\.html""")
-        private val mirrorHostRegex = Regex("""^(?:www\.)?wn(?:acg\w*|\d+)\.""")
+        private val mirrorHostRegex = Regex("""^(?:www\.)?(?:wn(?:acg\w*|manga|\d+)|cloudwn)\.""")
         private val mangaAidRegex = Regex("""photos-index-aid-(\d+)""")
         private val chapterListPageRegex = Regex("""photos-index-aid-\d+-page-(\d+)\.html""")
         private val chapterDateRegex = Regex("""\d{4}-\d{2}-\d{2}""")
