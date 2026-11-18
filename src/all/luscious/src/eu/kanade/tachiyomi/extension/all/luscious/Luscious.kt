@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
@@ -30,6 +31,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import kotlin.math.ceil
+import kotlin.time.Duration.Companion.minutes
 
 @Source
 abstract class Luscious :
@@ -45,6 +47,7 @@ abstract class Luscious :
     private val cdnBaseUrl = "https://$cdnHost/".toHttpUrl()
 
     override fun OkHttpClient.Builder.configureClient() = addNetworkInterceptor(rewriteOctetStream)
+        .rateLimit(60, 1.minutes) { it.pathSegments.firstOrNull() == "graphql" }
 
     private val rewriteOctetStream: Interceptor = Interceptor { chain ->
         val originalResponse: Response = chain.proceed(chain.request())
