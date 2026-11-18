@@ -41,12 +41,12 @@ abstract class BlackoutComics : KeiSource() {
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val doc = client.get("$baseUrl/ranking", Fetch.DOCUMENT).asJsoup().extractCsrf()
-        val mangas = doc.select(".ranking-grid a.webtoon-card").map { el ->
+        val document = client.get("$baseUrl/ranking", Fetch.DOCUMENT).asJsoup().extractCsrf()
+        val mangas = document.select("#rankingContent a[href]").map { element ->
             SManga.create().apply {
-                setUrlWithoutDomain(el.attr("abs:href"))
-                title = el.select(".card-title span").text()
-                thumbnail_url = el.select(".card-thumb img").attr("abs:src")
+                setUrlWithoutDomain(element.absUrl("href"))
+                title = element.selectFirst("h2, .card-title")!!.text()
+                thumbnail_url = element.selectFirst("img")?.absUrl("src")
             }
         }
         return MangasPage(mangas, false)
