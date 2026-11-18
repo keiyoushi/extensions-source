@@ -14,6 +14,7 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAsProto
 import keiyoushi.utils.toRequestBodyProto
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okio.IOException
@@ -97,22 +98,13 @@ abstract class ComicFuz : KeiSource() {
 
     override fun getFilterList(data: JsonElement?) = getFilters()
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
-
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val payload = MangaDetailsRequest(
-            deviceInfo = DeviceInfo(
-                deviceType = DeviceType.BROWSER,
-            ),
-            mangaId = manga.url.substringAfterLast("/").toInt(),
-        ).toRequestBodyProto()
-
-        val data = client.post("$apiUrl/manga_detail", Fetch.XHR, payload).parseAsProto<MangaDetailsResponse>()
+        val data = getMangaDetails(manga.url.substringAfterLast("/").toInt())
         val chapterList = data.chapterGroups.flatMap { group ->
             group.chapters.map { chapter ->
                 chapter.toSChapter()
@@ -122,7 +114,25 @@ abstract class ComicFuz : KeiSource() {
         return SMangaUpdate(data.toSManga(cdnUrl), chapterList)
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != domain) return null
+        val segments = url.pathSegments
+        if (segments.size != 2 || segments[0] != "manga") return null
+        val id = segments[1].toIntOrNull() ?: return null
+
+        return getMangaDetails(id).toSManga(cdnUrl).apply { initialized = true }
+    }
+
+    private suspend fun getMangaDetails(mangaId: Int): MangaDetailsResponse {
+        val payload = MangaDetailsRequest(
+            deviceInfo = DeviceInfo(
+                deviceType = DeviceType.BROWSER,
+            ),
+            mangaId = mangaId,
+        ).toRequestBodyProto()
+
+        return client.post("$apiUrl/manga_detail", Fetch.XHR, payload).parseAsProto<MangaDetailsResponse>()
+    }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val payload = MangaViewerRequest(
