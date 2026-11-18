@@ -23,6 +23,7 @@ import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -82,9 +83,9 @@ abstract class LuotTruyen : KeiSource() {
             url.pathSegments.size == 4 &&
                 url.pathSegments[2].startsWith("chapter-") &&
                 url.pathSegments[3].isNotEmpty() -> {
-                client.get(url, Fetch.DOCUMENT).asJsoup()
+                getChapterDocument(url.toString())
                     .select(".breadcrumb a[href]")
-                    .map { it.absUrl("href").toHttpUrl() }
+                    .mapNotNull { it.absUrl("href").toHttpUrlOrNull() }
                     .firstOrNull {
                         it.pathSegments.size == 2 &&
                             it.pathSegments[0] == "truyen-tranh" &&
@@ -201,7 +202,7 @@ abstract class LuotTruyen : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
+        val document = getChapterDocument(getChapterUrl(chapter))
         val images = document.select("#view-chapter img")
             .ifEmpty {
                 document.select(".chapter-content img, .reading-content img, .content-chapter img, .reading-detail .page-chapter img[data-index]")
@@ -210,6 +211,15 @@ abstract class LuotTruyen : KeiSource() {
         if (images.isEmpty()) return emptyList()
 
         return images.mapIndexed { index, image -> Page(index, imageUrl = image.absUrl("src")) }
+    }
+
+    private suspend fun getChapterDocument(url: String): Document {
+        val response = client.get(url, Fetch.DOCUMENT)
+        if (response.request.url.encodedPath == "/Account/Login") {
+            response.close()
+            throw Exception("Đăng nhập bằng Google trong WebView để đọc truyện.")
+        }
+        return response.asJsoup()
     }
 
     // ============================== Filters ===============================
