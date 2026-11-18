@@ -14,10 +14,10 @@ import keiyoushi.lib.speedbinb.fetchPages
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.string
-import keiyoushi.utils.textOrNull
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -95,9 +95,11 @@ abstract class Yomonga : KeiSource() {
             title = document.selectFirst(".intr-title")!!.text()
             author = document.select(".intr-writer").joinToString {
                 it.text().replace(AUTHOR_ROLE_REGEX, "").trim()
-            }
-            description = document.selectFirst(".intr-text > .intr-desc")?.textOrNull()
-            genre = document.select(".tag-wrapper .tag").joinToString { it.text() }
+            }.ifEmpty { null }
+            description = MarkdownDescription.Builder()
+                .description(document.selectFirst(".intr-text > .intr-desc"))
+                .build()
+            genre = document.select(".tag-wrapper .tag").joinToString { it.text() }.ifEmpty { null }
             status = when {
                 genre?.contains("連載中") == true -> SManga.ONGOING
                 genre?.contains("連載終了") == true -> SManga.COMPLETED
