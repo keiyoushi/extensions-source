@@ -33,6 +33,10 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * Chapter membership is derived from post dates, not from the per-chapter categories: those are
  * flat siblings of the story category and are occasionally mis-tagged.
+ *
+ * URLs carry the story's category id as a query parameter (`/category/<slug>/?id=<id>`) so the
+ * chapter and page queries can scope by `categories=<id>` without resolving the slug to an id on
+ * every call. [getMangaUrl] and [getChapterUrl] strip it again.
  */
 @Source
 abstract class Reinbach : KeiSource() {
