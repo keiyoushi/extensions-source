@@ -12,8 +12,11 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.textOrNull
 import keiyoushi.utils.tryParseDateTime
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -38,8 +41,6 @@ abstract class SuperEcchi : KeiSource() {
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url}"
 
-    // ============================== Popular ===============================
-
     // The site only publishes a "latest releases" listing, so it is served here.
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/index.php?pageId=$page", Fetch.DOCUMENT).asJsoup()
@@ -48,16 +49,12 @@ abstract class SuperEcchi : KeiSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    // ============================== Latest ================================
-
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
-    // ============================== Search =================================
-
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = coroutineScope {
-        if (page > 1 || query.isBlank()) return@coroutineScope MangasPage(emptyList(), false)
+        if (query.isBlank()) return@coroutineScope MangasPage(emptyList(), false)
         val body = FormBody.Builder().add("id", query).build()
-        val suggestions = client.post("$baseUrl/ajax_pesquisar.php", headers, Fetch.XHR, body).parseAs<List<String>?>().orEmpty()
+        val suggestions = client.post("$baseUrl/ajax_pesquisar.php", Fetch.XHR, body).parseAs<List<String>?>().orEmpty()
         val mangas = suggestions.map { async { suggestionResults(it) } }
             .awaitAll()
             .flatten()
@@ -88,15 +85,13 @@ abstract class SuperEcchi : KeiSource() {
 
     private suspend fun fetchListingEntries(url: String): List<SManga> = client.get(url, Fetch.DOCUMENT).asJsoup().select(LISTING_SELECTOR).map(::parseListingEntry)
 
-    // ============================== Details ================================
-
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl/${manga.url}", Fetch.DOCUMENT).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = manga.apply {
             val rawTitle = document.selectFirst("h1")?.text().orEmpty()
@@ -105,11 +100,12 @@ abstract class SuperEcchi : KeiSource() {
             title = rawTitle
             author = document.detailField("Autor")
             artist = author
-            description = document.selectFirst(".sinopse-completa")?.text()
-                ?.removePrefix("Sinopse:")?.trim()?.ifEmpty { null }
+            description = MarkdownDescription.Builder()
+                .description(document.selectFirst(".sinopse-completa")?.clone()?.apply { select("h3").remove() })
+                .build()
             genre = document.select("td.relatedtags a").eachText()
-                .joinToString(", ").ifEmpty { null }
-            thumbnail_url = document.selectFirst(".dj-img1 img")?.attr("abs:src")?.ifEmpty { null }
+                .joinToString().ifEmpty { null }
+            thumbnail_url = document.selectFirst(".dj-img1 img")?.attrOrNull("abs:src")
             status = if (document.detailField("Tipo")?.contains("one-shot", ignoreCase = true) == true) {
                 SManga.COMPLETED
             } else {
@@ -122,7 +118,7 @@ abstract class SuperEcchi : KeiSource() {
 
     private fun parseChapters(document: Document): List<SChapter> {
         val date = DATE_FORMAT.tryParseDateTime(
-            document.selectFirst(".cg-date.date")?.text()?.trim(),
+            document.selectFirst(".cg-date.date")?.text(),
             SITE_ZONE,
         )
         return document.select("a[href^=leitor.php?t=]")
@@ -141,31 +137,27 @@ abstract class SuperEcchi : KeiSource() {
             .sortedByDescending { it.chapter_number }
     }
 
-    // ============================== Pages ==================================
-
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/${chapter.url}", Fetch.DOCUMENT).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select("#gerar_pdf img[src^=mangas/]")
         .mapIndexed { index, img -> Page(index, imageUrl = img.attr("abs:src")) }
-
-    // ============================== Helpers ================================
 
     private fun parseListingEntry(element: Element): SManga = SManga.create().apply {
         val link = element.selectFirst("h2 a.titulo-linhas")!!
         url = link.attr("href")
-        val rawTitle = link.text().trim()
+        val rawTitle = link.text()
         check(rawTitle.isNotBlank()) { "Empty title for entry: $url" }
         title = rawTitle
-        thumbnail_url = element.selectFirst(".dj-img1 img")?.attr("abs:src")?.ifEmpty { null }
+        thumbnail_url = element.selectFirst(".dj-img1 img")?.attrOrNull("abs:src")
         author = element.detailField("Autor")
-        genre = element.select("td.relatedtags a").eachText().joinToString(", ").ifEmpty { null }
+        genre = element.select("td.relatedtags a").eachText().joinToString().ifEmpty { null }
     }
 
     private fun Element.detailField(label: String): String? = select("table.dj-desc tr")
-        .firstOrNull { it.selectFirst("td")?.text()?.trim().equals(label, ignoreCase = true) }
+        .firstOrNull { it.selectFirst("td")?.text().equals(label, ignoreCase = true) }
         ?.select("td")?.getOrNull(1)
-        ?.text()?.trim()?.ifEmpty { null }
+        ?.textOrNull()
 
-    private fun nomeSeo(name: String): String = name.trim().replace("-", "*").replace(" ", "-")
+    private fun nomeSeo(name: String): String = name.replace("-", "*").replace(" ", "-")
 
     companion object {
         private const val LISTING_SELECTOR =
