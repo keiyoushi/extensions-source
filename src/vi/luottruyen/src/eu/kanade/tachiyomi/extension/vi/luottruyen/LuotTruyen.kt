@@ -12,9 +12,12 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -40,19 +43,13 @@ abstract class LuotTruyen : KeiSource() {
         rateLimit(3)
     }
 
-    // ============================== Popular ===============================
-
     override suspend fun getPopularManga(page: Int): MangasPage = mangaListParse(
         client.get("$baseUrl/tim-truyen?status=-1&sort=10&page=$page", Fetch.DOCUMENT).asJsoup(),
     )
 
-    // =============================== Latest ===============================
-
     override suspend fun getLatestUpdates(page: Int): MangasPage = mangaListParse(
         client.get("$baseUrl/tim-truyen-nang-cao?status=-1&sort=0&advancedSearch=true&page=$page", Fetch.DOCUMENT).asJsoup(),
     )
-
-    // =============================== Search ===============================
 
     override suspend fun getSearchMangaList(
         page: Int,
@@ -115,8 +112,6 @@ abstract class LuotTruyen : KeiSource() {
         return MangasPage(mangaList, hasNextPage)
     }
 
-    // =============================== Details ==============================
-
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -124,12 +119,12 @@ abstract class LuotTruyen : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
         val mangaDeferred = if (fetchDetails) {
-            async { mangaDetailsParse(client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup(), manga) }
+            async { mangaDetailsParse(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup(), manga) }
         } else {
             null
         }
         val chaptersDeferred = if (fetchChapters) {
-            async { parseChapterList(client.post("$baseUrl/Story/ListChapterByStoryID", chapterHeaders, Fetch.DOCUMENT, chapterBody(manga))) }
+            async { parseChapterList(client.post("$baseUrl/Story/ListChapterByStoryID", chapterHeaders, Fetch.XHR.from(getMangaUrl(manga)), chapterBody(manga))) }
         } else {
             null
         }
@@ -147,7 +142,9 @@ abstract class LuotTruyen : KeiSource() {
             author = infoElement.selectFirst("li.author p.col-xs-8, li.author p.col-xs-10")?.text()
             status = infoElement.selectFirst("li.status p.col-xs-8, li.status p.col-xs-10")?.text().toStatus()
             genre = infoElement.select("li.kind p.col-xs-8 a, li.kind p.col-xs-12 a").joinToString { it.text() }
-            description = infoElement.select("div.detail-content p").joinToString("\n") { it.text() }
+            description = MarkdownDescription.Builder().apply {
+                infoElement.select("div.detail-content p").forEach { description(it) }
+            }.build()
             thumbnail_url = infoElement.selectFirst("div.col-image img")?.absUrl("src")
         }
     }
@@ -161,8 +158,6 @@ abstract class LuotTruyen : KeiSource() {
         }
     }
 
-    // ============================== Chapters ==============================
-
     private fun chapterBody(manga: SManga) = FormBody.Builder()
         .add("StoryID", manga.url.substringAfterLast("-"))
         .build()
@@ -170,7 +165,6 @@ abstract class LuotTruyen : KeiSource() {
     private val chapterHeaders: Headers
         get() = headersBuilder()
             .set("X-Requested-With", "XMLHttpRequest")
-            .set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
             .build()
 
     private fun parseChapterList(response: Response): List<SChapter> = response.asJsoup()
@@ -199,16 +193,12 @@ abstract class LuotTruyen : KeiSource() {
         return (Clock.System.now() - duration).toEpochMilliseconds()
     }
 
-    // =============================== Pages ================================
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = getChapterDocument(getChapterUrl(chapter))
         val images = document.select("#view-chapter img")
             .ifEmpty {
                 document.select(".chapter-content img, .reading-content img, .content-chapter img, .reading-detail .page-chapter img[data-index]")
             }
-
-        if (images.isEmpty()) return emptyList()
 
         return images.mapIndexed { index, image -> Page(index, imageUrl = image.absUrl("src")) }
     }
@@ -222,17 +212,13 @@ abstract class LuotTruyen : KeiSource() {
         return response.asJsoup()
     }
 
-    // ============================== Filters ===============================
-
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-truyen-nang-cao", Fetch.DOCUMENT).asJsoup()
         .select("input[name=categories]")
         .mapNotNull { input ->
-            val name = input.parent()?.selectFirst("label[for=${input.id()}]")?.text()
-                ?.takeIf { it.isNotEmpty() }
-                ?: return@mapNotNull null
-            val value = input.attr("value").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            val name = input.parent()?.selectFirst("label[for=${input.id()}]")?.textOrNull() ?: return@mapNotNull null
+            val value = input.attrOrNull("value") ?: return@mapNotNull null
             GenreOption(name, value)
         }
         .distinctBy { it.value }
