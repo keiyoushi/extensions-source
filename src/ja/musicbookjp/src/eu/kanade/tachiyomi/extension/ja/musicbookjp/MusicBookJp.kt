@@ -97,7 +97,27 @@ abstract class MusicBookJp :
         return MangasPage(mangas, hasNextPage)
     }
 
-    private fun Element.coverUrl() = absUrl("src").toHttpUrlOrNull()?.newBuilder()?.query(null)?.build()?.toString()
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.encodedPath != "/comic/store/seriesDetails") return null
+        val seriesId = url.queryParameter("seriesId")?.takeIf { it.isNotEmpty() } ?: return null
+        return fetchSeriesPage(seriesId, 1).toSManga().apply {
+            this.url = seriesId
+            initialized = true
+        }
+    }
+
+    private fun Document.toSManga() = SManga.create().apply {
+        title = selectFirst("article.main h1")!!.text()
+        thumbnail_url = selectFirst("img.copy-guard-image[src*=comicsp.file]")?.coverUrl()
+        author = selectFirst("article.main a[href*=authorDetails]")?.textOrNull()
+        genre = select("section.series-additional-section a[href*=genreDetails]").joinToString { it.text() }.ifEmpty { null }
+        status = if (selectFirst("article.main span.completed-flag") != null) SManga.COMPLETED else SManga.ONGOING
+        description = MarkdownDescription.Builder()
+            .description(selectFirst("section.series-outline-section p.text"))
+            .field("Publisher", selectFirst("section.series-additional-section a[href*=publisherDetails]")?.textOrNull())
+            .field("Magazine", selectFirst("section.series-additional-section a[href*=magazineDetails]")?.textOrNull())
+            .build()
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -134,28 +154,6 @@ abstract class MusicBookJp :
         return SMangaUpdate(details, chapterList)
     }
 
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host || url.encodedPath != "/comic/store/seriesDetails") return null
-        val seriesId = url.queryParameter("seriesId")?.takeIf { it.isNotEmpty() } ?: return null
-        return fetchSeriesPage(seriesId, 1).toSManga().apply {
-            this.url = seriesId
-            initialized = true
-        }
-    }
-
-    private fun Document.toSManga() = SManga.create().apply {
-        title = selectFirst("article.main h1")!!.text()
-        thumbnail_url = selectFirst("img.copy-guard-image[src*=comicsp.file]")?.coverUrl()
-        author = selectFirst("article.main a[href*=authorDetails]")?.textOrNull()
-        genre = select("section.series-additional-section a[href*=genreDetails]").joinToString { it.text() }.ifEmpty { null }
-        status = if (selectFirst("article.main span.completed-flag") != null) SManga.COMPLETED else SManga.ONGOING
-        description = MarkdownDescription.Builder()
-            .description(selectFirst("section.series-outline-section p.text"))
-            .field("Publisher", selectFirst("section.series-additional-section a[href*=publisherDetails]")?.textOrNull())
-            .field("Magazine", selectFirst("section.series-additional-section a[href*=magazineDetails]")?.textOrNull())
-            .build()
-    }
-
     private suspend fun fetchSeriesPage(seriesId: String, page: Int): Document {
         val url = seriesUrl(seriesId)
             .addQueryParameter("sort", "desc")
@@ -187,6 +185,8 @@ abstract class MusicBookJp :
         val md5Key = key.md5()
         return Base64.decode(this, Base64.DEFAULT).aesDecrypt(aesCbc(md5Key, IV)).decodeToString()
     }
+
+    private fun Element.coverUrl() = absUrl("src").toHttpUrlOrNull()?.newBuilder()?.query(null)?.build()?.toString()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
