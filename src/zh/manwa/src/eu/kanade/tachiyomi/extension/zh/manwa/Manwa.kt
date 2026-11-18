@@ -22,6 +22,7 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -65,10 +66,7 @@ abstract class Manwa :
 
     private val updateMirror: Interceptor = UpdateMirror(baseUrl, preferences)
 
-    private val imageSource: Interceptor = ImageSource(baseUrl, preferences)
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addNetworkInterceptor(rewriteOctetStream)
-        .addInterceptor(imageSource)
         .addInterceptor(updateMirror)
 
     // Popular
@@ -182,6 +180,11 @@ abstract class Manwa :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         client.get("$baseUrl/static/images/pv.gif", Fetch.IMAGE, ensureSuccess = false).close()
         val document = client.get("$baseUrl${chapter.url}${preferences.getString(IMAGE_HOST_KEY, "")}", Fetch.DOCUMENT).asJsoup()
+        val imageHosts = document.select(".img-hosts > a").map { ImageSourceInfo(it.text(), it.attr("href")) }
+        if (imageHosts.isNotEmpty()) {
+            val hostList = listOf(ImageSourceInfo("None", "")) + imageHosts
+            preferences.edit().putString(APP_IMAGE_SOURCE_LIST_KEY, hostList.toJsonString()).apply()
+        }
         return document.select("#cp_img > div.img-content > img[data-r-src]").mapIndexed { index, it ->
             Page(index, imageUrl = it.attr("abs:data-r-src"))
         }
@@ -247,7 +250,7 @@ abstract class Manwa :
             key = IMAGE_HOST_KEY
             title = "图源"
             summary =
-                "切换图源能使一些无法加载的图片进行优化加载，但对于已经缓存了章节图片信息的章节只是修改图源是不会重新加载的，你需要手动在应用设置里<清除章节缓存>"
+                "图源列表在打开任一章节后加载。切换图源能使一些无法加载的图片进行优化加载，但对于已经缓存了章节图片信息的章节只是修改图源是不会重新加载的，你需要手动在应用设置里<清除章节缓存>"
 
             val list: Array<ImageSourceInfo> = try {
                 preferences.getString(APP_IMAGE_SOURCE_LIST_KEY, "")!!
@@ -282,11 +285,11 @@ abstract class Manwa :
                 "https://manwasy.cc",
             )
         private const val IMAGE_HOST_KEY = "IMG_HOST"
+        private const val APP_IMAGE_SOURCE_LIST_KEY = "APP_IMAGE_SOURCE_LIST_KEY"
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-M-d", Locale.ROOT)
     }
 }
 
-const val APP_IMAGE_SOURCE_LIST_KEY = "APP_IMAGE_SOURCE_LIST_KEY"
 const val APP_REDIRECT_URL_KEY = "APP_REDIRECT_URL_KEY"
 const val APP_URL_LIST_PREF_KEY = "APP_URL_LIST_PREF_KEY"
 const val APP_CUSTOMIZATION_URL_KEY = "APP_CUSTOMIZATION_URL_KEY"
