@@ -19,6 +19,7 @@ abstract class FleurBlanche : Madara() {
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(::authWarningIntercept)
         .rateLimit(1, 2.seconds) { !it.encodedPath.startsWith("/wp-content/uploads/") }
 
+    override val archiveUrlSelector = ".post-title a:not(:has(.manga-title-badges))"
     override val mangaDetailsSelectorStatus = "div.post-content_item:contains(Status) > div.summary-content"
     override val mangaDetailsSelectorDescription = "div.manga-summary"
 
