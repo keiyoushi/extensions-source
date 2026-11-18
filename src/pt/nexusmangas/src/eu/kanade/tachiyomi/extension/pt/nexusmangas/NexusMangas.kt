@@ -177,7 +177,7 @@ abstract class NexusMangas : KeiSource() {
         val (slug, number) = chapter.url.split('/').takeLast(2)
 
         val url = "$apiUrl/chapters".toHttpUrl().newBuilder()
-            .addQueryParameter("select", "id,works!inner(slug)")
+            .addQueryParameter("select", "id,works!work_id!inner(slug)")
             .addQueryParameter("works.slug", "eq.$slug")
             .addQueryParameter("number", "eq.$number")
             .addQueryParameter("limit", "1")
@@ -228,7 +228,7 @@ abstract class NexusMangas : KeiSource() {
         private const val DETAIL_COLUMNS =
             "slug,title,description,cover_url,alternative_title,status,type,author,artist," +
                 "demographic,scan:scans(name),work_genres(genres(name))," +
-                "chapters(number,title,published_at)"
+                "chapters!work_id(number,title,published_at)"
         private const val ANON_KEY =
             "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9." +
                 "eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc4NzgwMjAwMCwiZXhwIjo0OTQzNDc1NjAwLCJyb2xlIjoiYW5vbiJ9." +
