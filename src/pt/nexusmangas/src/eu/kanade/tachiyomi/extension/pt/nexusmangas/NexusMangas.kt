@@ -50,7 +50,7 @@ abstract class NexusMangas : KeiSource() {
     }
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = this
-        .add("Accept", "application/json")
+        .set("Accept", "application/json")
 
     private val readerHeaders: Headers
         get() = headersBuilder()

@@ -14,15 +14,15 @@ import kotlin.time.Instant
 class WorkDto(
     private val slug: String,
     private val title: String,
-    private val description: String? = null,
-    @SerialName("cover_url") private val coverUrl: String? = null,
-    @SerialName("alternative_title") private val alternativeTitle: String? = null,
-    private val status: String? = null,
-    private val type: String? = null,
-    private val author: String? = null,
-    private val artist: String? = null,
-    private val demographic: String? = null,
-    private val scan: ScanDto? = null,
+    private val description: String?,
+    @SerialName("cover_url") private val coverUrl: String?,
+    @SerialName("alternative_title") private val alternativeTitle: String?,
+    private val status: String?,
+    private val type: String?,
+    private val author: String?,
+    private val artist: String?,
+    private val demographic: String?,
+    private val scan: ScanDto?,
     @SerialName("work_genres") private val workGenres: List<WorkGenreDto> = emptyList(),
     private val chapters: List<ChapterDto> = emptyList(),
 ) {
@@ -64,12 +64,12 @@ class WorkDto(
 
 @Serializable
 class ScanDto(
-    val name: String? = null,
+    val name: String?,
 )
 
 @Serializable
 class WorkGenreDto(
-    val genres: GenreDto? = null,
+    val genres: GenreDto?,
 )
 
 @Serializable
@@ -80,8 +80,8 @@ class GenreDto(
 @Serializable
 class ChapterDto(
     private val number: Float,
-    private val title: String? = null,
-    @SerialName("published_at") private val publishedAt: String? = null,
+    private val title: String?,
+    @SerialName("published_at") private val publishedAt: String?,
 ) {
     fun toSChapter(workSlug: String) = SChapter.create().apply {
         val label = number.toString().removeSuffix(".0")
@@ -108,7 +108,7 @@ class ReadChapterRequestDto(
 @Serializable
 class ReadChapterDto(
     private val access: AccessDto,
-    private val chapter: ReadChapterPagesDto? = null,
+    private val chapter: ReadChapterPagesDto?,
 ) {
     private val pages get() = chapter?.pages.orEmpty()
 
