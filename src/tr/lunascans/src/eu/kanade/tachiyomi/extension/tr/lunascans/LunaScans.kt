@@ -44,8 +44,8 @@ abstract class LunaScans : MadaraNoAjax() {
         if (element.tagName() == "a") {
             val url = element.attr("abs:href").takeIf(String::isNotBlank) ?: return null
             val slug = url.toHttpUrl().encodedPath.trimEnd('/').substringAfterLast('/').takeIf(String::isNotEmpty) ?: return null
-            val name = element.selectFirst(".tuhaf-ch-name")?.text()?.trim()
-                ?: element.ownText().trim().ifBlank { element.text().trim() }
+            val name = element.selectFirst(".tuhaf-ch-name")?.text()
+                ?: element.ownText().ifBlank { element.text() }
             val date = element.selectFirst(".tuhaf-ch-date")?.text()
                 ?: element.selectFirst(chapterDateSelector)?.text()
 
