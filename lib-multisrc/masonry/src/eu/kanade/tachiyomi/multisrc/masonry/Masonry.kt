@@ -54,11 +54,12 @@ abstract class Masonry : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (!url.host.endsWith(baseUrl.toHttpUrl().host.removePrefix("www.")) || url.pathSegments.count { it.isNotEmpty() } != 1) return null
-        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
+        if (!url.host.endsWith(baseUrl.toHttpUrl().host.removePrefix("www."))) return null
+        val slug = url.pathSegments.singleOrNull { it.isNotEmpty() } ?: return null
+        val document = client.get("$baseUrl/$slug/", Fetch.DOCUMENT).asJsoup()
         val firstImage = document.selectFirst(".list-gallery a[href^=https://cdn.]") ?: return null
         return parseMangaDetails(document, SManga.create()).apply {
-            setUrlWithoutDomain(url.toString())
+            this.url = "/$slug/"
             title = document.selectFirst("header h1")!!.text()
             thumbnail_url = firstImage.selectFirst("img")?.imgAttr()
             initialized = true
