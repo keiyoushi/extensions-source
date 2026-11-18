@@ -26,15 +26,11 @@ abstract class BenDezOmniHero : KeiSource() {
 
     override val supportsLatest = false
 
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        if (page > 1) return MangasPage(emptyList(), false)
-        return MangasPage(fetchEntries().map { it.toPostManga() }, false)
-    }
+    override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(fetchEntries().map { it.toPostManga() }, false)
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        if (page > 1) return MangasPage(emptyList(), false)
         val comics = fetchEntries().map { it.toPostManga() }
         val filtered = if (query.isBlank()) {
             comics
@@ -60,7 +56,7 @@ abstract class BenDezOmniHero : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val entry = fetchEntries().firstOrNull { it.postPath() == manga.url }
-            ?: throw IllegalStateException("Post not found: ${manga.url}")
+            ?: error("Post not found: ${manga.url}")
         val chapter = SChapter.create().apply {
             url = entry.postPath()
             name = "Oneshot"
@@ -74,7 +70,13 @@ abstract class BenDezOmniHero : KeiSource() {
         val entries = mutableListOf<BloggerEntry>()
         var startIndex = 1
         while (true) {
-            val feed = client.get("$baseUrl/feeds/posts/default?alt=json&max-results=$MAX_RESULTS&start-index=$startIndex", Fetch.XHR)
+            val url = baseUrl.toHttpUrl().newBuilder()
+                .addPathSegments("feeds/posts/default")
+                .addQueryParameter("alt", "json")
+                .addQueryParameter("max-results", MAX_RESULTS.toString())
+                .addQueryParameter("start-index", startIndex.toString())
+                .build()
+            val feed = client.get(url, Fetch.XHR)
                 .parseAs<BloggerFeedResponse>()
                 .feed
             if (feed.entry.isEmpty()) break
@@ -86,7 +88,7 @@ abstract class BenDezOmniHero : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(".post-body img[src^=http]")
             .mapNotNull { img ->
                 img.attr("data-src")
@@ -100,11 +102,10 @@ abstract class BenDezOmniHero : KeiSource() {
 
     private fun isPageImage(url: String): Boolean = "blogger.googleusercontent.com" in url || "bp.blogspot.com" in url
 
-    // Blogger serves downscaled images via a size segment (s320, w1200-h630-p-k-no-nu, ...);
-    // replacing it with s0 requests the original full-resolution image.
+    // Original-size Blogger image (s0 size segment)
     private fun fullQualityImage(url: String): String = bloggerSizeRegex.replaceFirst(url, "/s0/$1")
 
-    private val bloggerSizeRegex = Regex("/[sw]\\d[\\w-]*/([^/]+)$")
+    private val bloggerSizeRegex = Regex("""/[sw]\d[\w-]*/([^/]+)$""")
 
     companion object {
         private const val MAX_RESULTS = 500
