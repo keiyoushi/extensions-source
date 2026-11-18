@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.id.shinigami
 
 import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.Filter.Sort.Selection
 import okhttp3.HttpUrl
 
 interface UriFilter {
@@ -45,54 +46,21 @@ open class UriMultiSelectFilter(
     }
 }
 
-open class UriMultiTriSelectOption(name: String, val value: String) : Filter.TriState(name)
-
-open class UriMultiTriSelectFilter(
-    name: String,
-    private val includeParam: String,
-    private val excludeParam: String,
-    private val options: Array<Pair<String, String>>,
-) : Filter.Group<UriMultiTriSelectOption>(
-    name,
-    options.map { UriMultiTriSelectOption(it.first, it.second) },
-),
-    UriFilter {
-    override fun addToUri(builder: HttpUrl.Builder) {
-        val included = state.filter { it.isIncluded() }.map { it.value }
-        val excluded = state.filter { it.isExcluded() }.map { it.value }
-
-        if (included.isNotEmpty()) {
-            builder.addQueryParameter(includeParam, included.joinToString(","))
-            builder.addQueryParameter("genre_include_mode", "and")
-        }
-        if (excluded.isNotEmpty()) {
-            builder.addQueryParameter(excludeParam, excluded.joinToString(","))
-            builder.addQueryParameter("genre_exclude_mode", "and")
-        }
-    }
-}
-
 class SortFilter :
-    UriPartFilter(
+    Filter.Sort(
         "Sort",
-        "sort",
-        arrayOf(
-            Pair("Default", ""),
-            Pair("Latest", "latest"),
-            Pair("Popularity", "popularity"),
-            Pair("Rating", "rating"),
-        ),
-    )
-
-class SortOrderFilter :
-    UriPartFilter(
-        "Sort Order",
-        "sort_order",
-        arrayOf(
-            Pair("Descending", "desc"),
-            Pair("Ascending", "asc"),
-        ),
-    )
+        arrayOf("Latest Updates", "New Series", "Popularity", "Rating", "A-Z"),
+        Selection(0, false),
+    ) {
+    val sort get() = when (state?.index) {
+        1 -> "new_manga"
+        2 -> "popularity"
+        3 -> "rating"
+        4 -> "title"
+        else -> "latest"
+    }
+    val order get() = if (state?.index == 4 || state?.ascending == true) "asc" else "desc"
+}
 
 class StatusFilter :
     UriPartFilter(
@@ -127,62 +95,31 @@ class TypeFilter :
         ),
     )
 
-class GenreFilter :
-    UriMultiTriSelectFilter(
-        "Genre",
-        "genre_include",
-        "genre_exclude",
-        GENRES,
+class GenreFilter(options: Array<Pair<String, String>>) : UriMultiSelectFilter("Genre", "genre", options)
+
+class ThemeFilter(options: Array<Pair<String, String>>) : UriMultiSelectFilter("Theme", "theme", options)
+
+class SubFormatFilter :
+    UriMultiSelectFilter(
+        "Sub-format",
+        "subformat",
+        arrayOf(
+            Pair("Long Strip", "long-strip"),
+            Pair("Web Comic", "web-comic"),
+            Pair("Adaptation", "adaptation-2"),
+            Pair("Full Color", "full-color"),
+        ),
     )
 
-private val GENRES = arrayOf(
-    Pair("Action", "action"),
-    Pair("Adaptation", "adaptation"),
-    Pair("Adult", "adult"),
-    Pair("Adventure", "adventure"),
-    Pair("Comedy", "comedy"),
-    Pair("Cooking", "cooking"),
-    Pair("Crime", "crime"),
-    Pair("Demon", "demon"),
-    Pair("Demons", "demons"),
-    Pair("Dra", "dra-genre"),
-    Pair("Drama", "drama"),
-    Pair("Ecchi", "ecchi"),
-    Pair("Fantasy", "fantasy"),
-    Pair("Fight", "fight"),
-    Pair("Game", "game"),
-    Pair("Gender Bender", "gender-bender"),
-    Pair("Harem", "harem"),
-    Pair("Historical", "historical"),
-    Pair("Horror", "horror"),
-    Pair("Isekai", "isekai"),
-    Pair("Josei", "josei-genre"),
-    Pair("Latest", "latest"),
-    Pair("Love", "love"),
-    Pair("Magic", "magic"),
-    Pair("Martial Arts", "martial-arts"),
-    Pair("Mature", "mature"),
-    Pair("Mecha", "mecha"),
-    Pair("Medical", "medical"),
-    Pair("Murim", "murim"),
-    Pair("Mystery", "mystery"),
-    Pair("Philosophical", "philosophical"),
-    Pair("Psychological", "psychological"),
-    Pair("Regression", "regression"),
-    Pair("Revenge", "revenge"),
-    Pair("Romance", "romance"),
-    Pair("School Life", "school-life"),
-    Pair("Sci-fi", "sci-fi"),
-    Pair("Seinen", "seinen"),
-    Pair("Shoujo", "shoujo"),
-    Pair("Shounen", "shounen"),
-    Pair("Slice of Life", "slice-of-life"),
-    Pair("Smut", "smut"),
-    Pair("Sports", "sports"),
-    Pair("Supernatural", "supernatural"),
-    Pair("Supranatural", "supranatural"),
-    Pair("Thriller", "thriller"),
-    Pair("Tragedy", "tragedy"),
-    Pair("Violence", "violence"),
-    Pair("Wuxia", "wuxia"),
-)
+class ChapterRangeFilter :
+    UriPartFilter(
+        "Chapters",
+        "min_chapters",
+        arrayOf(
+            Pair("All", ""),
+            Pair("10+", "10"),
+            Pair("50+", "50"),
+            Pair("100+", "100"),
+            Pair("200+", "200"),
+        ),
+    )
