@@ -21,3 +21,19 @@ class SearchType :
             "Canvas" to "canvas",
         ),
     )
+
+class BrowseFilter(options: List<Pair<String, String?>>) :
+    SelectFilter(
+        name = "Browse",
+        options = listOf("None" to null) + options,
+    )
+
+class SortFilter :
+    SelectFilter(
+        name = "Sort",
+        options = listOf(
+            "Popularity" to "MANA",
+            "Likes" to "LIKEIT",
+            "Date updated" to "UPDATE",
+        ),
+    )
