@@ -13,6 +13,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -97,7 +98,13 @@ abstract class Keroscans :
     private suspend fun getMangaDocument(slug: String): Document = client.get("$baseUrl/series/comic/$slug", Fetch.DOCUMENT).asJsoup()
 
     private fun getManga(document: Document, slug: String): SManga = SManga.create().apply {
-        val details = document.selectFirst("aside[aria-label=\"Series details\"]")
+        val detailsElement = document.selectFirst("aside[aria-label=\"Series details\"]")
+        val details = detailsElement?.select("dl div:has(dt):has(dd)")?.associate {
+            val dt = it.selectFirst("dt")!!.text().trim()
+            val dd = it.selectFirst("dd")!!.text().trim()
+            dt to dd
+        }.orEmpty()
+
         title = document.selectFirst("#series-title")!!.text().trim()
         thumbnail_url = document.selectFirst("section[aria-label=\"Cover\"] img")?.absUrl("src")
         url = "/series/comic/$slug"
@@ -105,51 +112,37 @@ abstract class Keroscans :
             put("id", url)
             put("slug", slug)
         }
-        val info = mutableListOf<String>()
-        var type: String? = null
-        var language: String? = null
-        details?.select("dl div:has(dt):has(dd)")?.forEach {
-            val dd = it.selectFirst("dd")!!.text().trim()
-            when (it.selectFirst("dt")!!.text().trim()) {
-                "Author" -> author = dd
-                "Artist" -> artist = dd
-                "Status" -> status = dd.toSMangaStatus()
-                "Type" -> {
-                    type = dd
-                    info.add("Type: $dd")
-                }
-                "Format" -> info.add("Format: $dd")
-                "Demographic" -> info.add("Demographic: $dd")
-                "Rating" -> info.add("Rating: $dd")
-                "Language" -> {
-                    language = dd
-                    info.add("Language: $dd")
-                }
-            }
-        }
+        author = details["Author"]
+        artist = details["Artist"]
+        status = details["Status"].toSMangaStatus()
         genre = buildList {
-            type?.let(::add)
-            language?.let(::add)
+            details["Type"]?.let(::add)
+            details["Language"]?.let(::add)
             document.select("ul[aria-label=\"Genres\"] li").forEach { add(it.text().trim()) }
             document.select("ul[aria-label=\"Tags\"] li").forEach { add(it.text().substringAfter('#').trim()) }
         }.distinct().joinToString()
-        description = buildString {
-            document.selectFirst(".ks-sp__summary")?.wholeText()?.trim()?.let(::append)
-            if (info.isNotEmpty()) {
-                if (isNotEmpty()) append("\n\n")
-                append(info.joinToString("\n"))
-            }
-            val altTitles = details
-                ?.select("h2:contains(Also known as) + ul li")
-                ?.map { it.text().trim() }
-                ?.filter { it.isNotEmpty() && !it.equals(title, ignoreCase = true) }
-                ?.distinct()
-            if (!altTitles.isNullOrEmpty()) {
-                if (isNotEmpty()) append("\n\n")
-                append("**Alternative titles:**\n")
-                append(altTitles.joinToString("\n") { "- $it" })
-            }
-        }.ifEmpty { null }
+        description = MarkdownDescription.Builder().apply {
+            info(
+                // Currently, no manga has ratings, so the format is unknown. Use .rating() when format is known.
+                details["Rating"]?.takeIf { it != "Not rated yet" },
+                details["Released"],
+                details["Type"],
+                details["Language"],
+            )
+            description(document.selectFirst(".ks-sp__summary")?.wholeText()?.trim())
+            altTitles(
+                detailsElement
+                    ?.select("h2:contains(Also known as) + ul li")
+                    ?.map { it.text().trim() }
+                    ?.filter { it.isNotEmpty() && !it.equals(title, ignoreCase = true) }
+                    ?.distinct()
+                    ?: emptyList(),
+            )
+            details["Chapters"]?.let { field("Chapters", it) }
+            details["Views"]?.let { field("Views", it) }
+            details["Format"]?.let { field("Format", it) }
+            details["Demographic"]?.let { field("Demographic", it) }
+        }.build()
     }
 
     override suspend fun fetchMangaUpdate(
@@ -274,7 +267,7 @@ abstract class Keroscans :
         return "$baseUrl/series/comic/$slug/chapter/$number"
     }
 
-    private fun String.toSMangaStatus(): Int = when (this) {
+    private fun String?.toSMangaStatus(): Int = when (this) {
         "Ongoing" -> SManga.ONGOING
         "Completed" -> SManga.COMPLETED
         "Hiatus" -> SManga.ON_HIATUS
