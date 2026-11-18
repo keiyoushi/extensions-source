@@ -22,6 +22,7 @@ import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -49,6 +50,21 @@ abstract class Aurora : KeiSource() {
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val mangas = getPopularManga(page).mangas.filter { it.title.contains(query, ignoreCase = true) }
         return MangasPage(mangas, false)
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val segments = url.pathSegments
+        if (url.host != baseUrl.toHttpUrl().host || segments.size < 2 || segments[1].isEmpty()) return null
+        val mangaUrl = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment(segments[0])
+            .addPathSegment(segments[1])
+            .build()
+        val response = client.get(mangaUrl, Fetch.DOCUMENT, ensureSuccess = false)
+        if (!response.isSuccessful) {
+            response.close()
+            return null
+        }
+        return response.asJsoup().seriesDto()?.toSManga()?.apply { initialized = true }
     }
 
     override fun getMangaUrl(manga: SManga): String = entryURL(manga.memo)
@@ -81,8 +97,7 @@ abstract class Aurora : KeiSource() {
     private fun getSMangaDetails(
         document: Document,
         manga: SManga,
-    ): SManga = document.selectFirst("script[type]:containsData(ComicSeries)")?.data()
-        ?.parseAs<MangaDto>()
+    ): SManga = document.seriesDto()
         ?.toSManga()
         ?: manga.apply {
             document.selectFirst("script:containsData(ComicSeries)")?.data()
@@ -95,6 +110,8 @@ abstract class Aurora : KeiSource() {
                     author = mangaDetailsAuthorRegex.find(it)?.groupValues?.last()
                 }
         }
+
+    private fun Document.seriesDto() = selectFirst("script[type]:containsData(ComicSeries)")?.data()?.parseAs<MangaDto>()
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
