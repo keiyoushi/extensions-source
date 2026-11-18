@@ -15,6 +15,7 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.MirrorPreferences
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstanceOrNull
@@ -50,10 +51,14 @@ abstract class WNACG :
         .substringAfter("__INITIAL_CONFIG__=").substringBeforeLast(";")
         .parseAs<ReleasePageConfig>().sites.map { it.url } + UNLISTED_MIRRORS
 
+    // Hosts without "www.", which links can leave out
+    private val mirrorHosts: List<String>
+        get() = (fetchableBaseUrl as MirrorPreferences).mirrors.map { it.second.toHttpUrl().host.removePrefix("www.") }
+
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(::loginHintInterceptor)
         // Cloudflare answers 429 past 60 page requests a minute
-        rateLimit(50, 1.minutes) { mirrorHostRegex.containsMatchIn(it.host) }
+        rateLimit(50, 1.minutes) { it.host.removePrefix("www.") in mirrorHosts }
     }
 
     // Mobile user agents get a mobile layout
@@ -163,8 +168,8 @@ abstract class WNACG :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        // Links point at the live mirror, which can be newer than the selected baseUrl
-        if (url.host != baseUrl.toHttpUrl().host && !mirrorHostRegex.containsMatchIn(url.host)) return null
+        // Links can come from any of the site's mirrors
+        if (url.host.removePrefix("www.") !in mirrorHosts) return null
         val (aid, sid) = mangaUrlRegex.matchEntire(url.encodedPath)?.destructured ?: return null
         val path = "/photos-index-aid-${sid.ifEmpty { aid }}.html"
 
@@ -360,7 +365,6 @@ abstract class WNACG :
         // Gallery page, reader and chapter links; a chapter's sid is its collection
         private val mangaUrlRegex = Regex("""/photos-(?:index|slide|list|gallery)(?:-page-\d+)?-aid-(\d+)(?:-sid-(\d+))?(?:-page-\d+)?\.html""")
         private val chromeVersionRegex = Regex("""Chrome/(\d+)""")
-        private val mirrorHostRegex = Regex("""^(?:www\.)?(?:wn(?:acg\w*|manga|\d+)|cloudwn)\.""")
         private val mangaAidRegex = Regex("""photos-index-aid-(\d+)""")
         private val chapterListPageRegex = Regex("""photos-index-aid-\d+-page-(\d+)\.html""")
         private val chapterDateRegex = Regex("""\d{4}-\d{2}-\d{2}""")
