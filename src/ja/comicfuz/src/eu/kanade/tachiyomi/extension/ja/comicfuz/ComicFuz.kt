@@ -17,7 +17,6 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okio.IOException
 
 @Source
 abstract class ComicFuz : KeiSource() {
@@ -26,21 +25,6 @@ abstract class ComicFuz : KeiSource() {
     private val cdnUrl get() = "https://img.$domain"
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(ImageInterceptor)
-        .addNetworkInterceptor { chain ->
-            val response = chain.proceed(chain.request())
-
-            if (!response.isSuccessful) {
-                val exception = when (response.code) {
-                    401 -> "Unauthorized"
-                    402 -> "Payment Required"
-                    else -> "HTTP error ${response.code}"
-                }
-
-                throw IOException(exception)
-            }
-
-            return@addNetworkInterceptor response
-        }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", getFilterList())
 
