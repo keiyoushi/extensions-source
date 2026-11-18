@@ -57,11 +57,7 @@ abstract class RaindropFansub : MangaThemesia() {
                 dummyChapter.url
             }
 
-        return when (lastChapterUrl) {
-            chapters.first().url -> chapters
-            chapters.last().url -> chapters.reversed()
-            else -> chapters.reversed()
-        }
+        return if (lastChapterUrl == chapters.firstOrNull()?.url) chapters else chapters.reversed()
     }
 
     companion object {
