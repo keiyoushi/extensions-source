@@ -44,8 +44,8 @@ class MangaDetailsResponse(
     @ProtoNumber(7) private val tags: List<Name>,
 ) {
     fun toSManga(cdnUrl: String) = manga.toSManga(cdnUrl).apply {
-        genre = tags.joinToString { it.name }
-        author = authors.joinToString { it.author.name }
+        genre = tags.ifEmpty { null }?.joinToString { it.name }
+        author = authors.ifEmpty { null }?.joinToString { it.author.name }
     }
 }
 
