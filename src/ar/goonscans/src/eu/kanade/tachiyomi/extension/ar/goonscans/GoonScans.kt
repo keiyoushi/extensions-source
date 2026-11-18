@@ -10,6 +10,8 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -34,7 +36,7 @@ abstract class GoonScans : MangaThemesia() {
         addPathSegment("")
         addQueryParameter(
             "orderby",
-            filters.filterIsInstance<OrderByFilter>().first().name,
+            filters.firstInstance<OrderByFilter>().name,
         )
     }
 
@@ -69,10 +71,10 @@ abstract class GoonScans : MangaThemesia() {
     override fun searchMangaSelector() = ".cover-wrapper"
 
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        val img = element.select("img")
+        val img = element.selectFirst("img")!!
         thumbnail_url = img.imgAttr()
-        title = img.attr("alt")
-        setUrlWithoutDomain(element.select("a").attr("href"))
+        title = img.attrOrNull("alt")!!
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
     }
 
     override val seriesDetailsSelector = ".webtoon-container"
@@ -85,7 +87,7 @@ abstract class GoonScans : MangaThemesia() {
     override fun chapterListSelector() = "ul.chapter-list li"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
         name = element.selectFirst(".chapter-number")!!.text()
         date_upload = element.selectFirst(".chapter-date")?.text().parseChapterDate()
     }
