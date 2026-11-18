@@ -157,8 +157,12 @@ abstract class NexusMangas : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val slug = manga.url
+    ): SMangaUpdate = SMangaUpdate(
+        manga = if (fetchDetails) fetchWork(manga.url) else manga,
+        chapters = if (fetchChapters) fetchChapters(manga.url) else chapters,
+    )
+
+    private suspend fun fetchWork(slug: String): SManga {
         val url = "$apiUrl/works".toHttpUrl().newBuilder()
             .addQueryParameter("select", DETAIL_COLUMNS)
             .addQueryParameter("slug", "eq.$slug")
@@ -168,27 +172,49 @@ abstract class NexusMangas : KeiSource() {
         val work = client.get(url, Fetch.XHR).parseAs<List<WorkDto>>().firstOrNull()
             ?: throw IOException("Obra não encontrada")
 
-        return SMangaUpdate(manga = work.toSManga(mediaUrl), chapters = work.chapterList)
+        return work.toSManga(mediaUrl)
+    }
+
+    private suspend fun fetchChapters(slug: String): List<SChapter> {
+        val chapters = mutableListOf<ChapterDto>()
+        do {
+            val url = "$apiUrl/chapters".toHttpUrl().newBuilder()
+                .addQueryParameter("select", "$CHAPTER_COLUMNS,works!work_id!inner()")
+                .addQueryParameter("works.slug", "eq.$slug")
+                .addQueryParameter("order", "sort_order.desc,id.desc")
+                .addQueryParameter("limit", CHAPTER_PAGE_SIZE.toString())
+                .addQueryParameter("offset", chapters.size.toString())
+                .build()
+
+            val page = client.get(url, Fetch.XHR).parseAs<List<ChapterDto>>()
+            chapters += page
+        } while (page.size == CHAPTER_PAGE_SIZE)
+
+        return chapters.map { it.toSChapter(slug) }
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/obra/${manga.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val (slug, number) = chapter.url.split('/').takeLast(2)
+        val chapterId = if (chapter.url.startsWith(READ_PATH)) chapter.url.removePrefix(READ_PATH) else findChapterId(chapter.url)
+
+        return client.post("$functionsUrl/read-chapter", readerHeaders, Fetch.XHR, ReadChapterRequestDto(chapterId).toJsonRequestBody())
+            .parseAs<ReadChapterDto>()
+            .toPageList(chapterId)
+    }
+
+    private suspend fun findChapterId(chapterUrl: String): String {
+        val (slug, number) = chapterUrl.split('/').takeLast(2)
 
         val url = "$apiUrl/chapters".toHttpUrl().newBuilder()
-            .addQueryParameter("select", "id,works!work_id!inner(slug)")
+            .addQueryParameter("select", "id,works!work_id!inner()")
             .addQueryParameter("works.slug", "eq.$slug")
             .addQueryParameter("number", "eq.$number")
             .addQueryParameter("limit", "1")
             .build()
 
-        val chapterId = client.get(url, Fetch.XHR).parseAs<List<ChapterIdDto>>().firstOrNull()?.id
+        return client.get(url, Fetch.XHR).parseAs<List<ChapterIdDto>>().firstOrNull()?.id
             ?: throw IOException("Capítulo não encontrado")
-
-        return client.post("$functionsUrl/read-chapter", readerHeaders, Fetch.XHR, ReadChapterRequestDto(chapterId).toJsonRequestBody())
-            .parseAs<ReadChapterDto>()
-            .toPageList(chapterId)
     }
 
     override val supportsFilterFetching: Boolean get() = true
@@ -221,14 +247,16 @@ abstract class NexusMangas : KeiSource() {
 
     companion object {
         private const val API_HOST = "supabase.nexusmangas.com"
+        const val READ_PATH = "/read/"
         private const val PAGE_SIZE = 30
         private const val POPULAR_ORDER = "avg_rating.desc.nullslast"
         private const val LATEST_ORDER = "updated_at.desc"
         private const val LIST_COLUMNS = "slug,title,cover_url,status,type"
         private const val DETAIL_COLUMNS =
             "slug,title,description,cover_url,alternative_title,status,type,author,artist," +
-                "demographic,scan:scans(name),work_genres(genres(name))," +
-                "chapters!work_id(number,title,published_at)"
+                "demographic,scan:scans(name),work_genres(genres(name))"
+        private const val CHAPTER_COLUMNS = "id,number,chapter_label,title,published_at"
+        private const val CHAPTER_PAGE_SIZE = 1000
         private const val ANON_KEY =
             "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9." +
                 "eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc4NzgwMjAwMCwiZXhwIjo0OTQzNDc1NjAwLCJyb2xlIjoiYW5vbiJ9." +

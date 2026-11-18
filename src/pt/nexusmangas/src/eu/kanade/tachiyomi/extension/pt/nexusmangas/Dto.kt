@@ -24,7 +24,6 @@ class WorkDto(
     private val demographic: String?,
     private val scan: ScanDto?,
     @SerialName("work_genres") private val workGenres: List<WorkGenreDto> = emptyList(),
-    private val chapters: List<ChapterDto> = emptyList(),
 ) {
     fun toSManga(mediaUrl: HttpUrl) = SManga.create().apply {
         url = slug
@@ -58,8 +57,6 @@ class WorkDto(
             else -> SManga.UNKNOWN
         }
     }
-
-    val chapterList get() = chapters.map { it.toSChapter(slug) }.sortedByDescending(SChapter::chapter_number)
 }
 
 @Serializable
@@ -79,18 +76,20 @@ class GenreDto(
 
 @Serializable
 class ChapterDto(
-    private val number: Float,
+    private val id: String,
+    private val number: Float?,
+    @SerialName("chapter_label") private val label: String?,
     private val title: String?,
     @SerialName("published_at") private val publishedAt: String?,
 ) {
     fun toSChapter(workSlug: String) = SChapter.create().apply {
-        val label = number.toString().removeSuffix(".0")
-        url = "/capitulo/$workSlug/$label"
+        val numberLabel = number?.toString()?.removeSuffix(".0")
+        url = if (numberLabel != null) "/capitulo/$workSlug/$numberLabel" else "${NexusMangas.READ_PATH}$id"
         name = buildString {
-            append("Capítulo $label")
+            append(numberLabel?.let { "Capítulo $it" } ?: label.orEmpty())
             this@ChapterDto.title?.takeIf(String::isNotBlank)?.let { append(" - $it") }
         }
-        chapter_number = number
+        number?.let { chapter_number = it }
         date_upload = Instant.tryParse(publishedAt)
     }
 }
