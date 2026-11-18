@@ -11,16 +11,21 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.getIntOrNull
+import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
 import java.time.Instant
-import java.time.LocalDateTime
 import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -34,14 +39,15 @@ import java.util.concurrent.ConcurrentHashMap
  * Chapter membership is derived from post dates, not from the per-chapter categories: those are
  * flat siblings of the story category and are occasionally mis-tagged.
  *
- * URLs carry the story's category id as a query parameter (`/category/<slug>/?id=<id>`) so the
- * chapter and page queries can scope by `categories=<id>` without resolving the slug to an id on
- * every call. [getMangaUrl] and [getChapterUrl] strip it again.
+ * `url` holds only the post id; the human path and the story id live in `memo`.
  */
 @Source
 abstract class Reinbach : KeiSource() {
 
     private val coverCache = ConcurrentHashMap<Int, String>()
+
+    // The catalogue is a single ongoing comic, so there is no distinct latest feed.
+    override val supportsLatest = false
 
     // Keeps API calls polite without throttling the page images.
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2) { url ->
@@ -97,12 +103,18 @@ abstract class Reinbach : KeiSource() {
         return category.toSManga(coverFor(category.id)).apply { initialized = true }
     }
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url.substringBefore('?')
+    override fun getMangaUrl(manga: SManga): String {
+        val slug = manga.memo.getStringOrNull("slug") ?: return baseUrl + manga.url
+        return "$baseUrl/category/$slug/"
+    }
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url.substringBefore('?')
+    override fun getChapterUrl(chapter: SChapter): String {
+        val path = chapter.memo.getStringOrNull("path") ?: return baseUrl + chapter.url
+        return baseUrl + path
+    }
 
     private suspend fun mangaDetails(manga: SManga): SManga {
-        val categoryId = categoryId(manga.url) ?: return manga
+        val categoryId = manga.url.toIntOrNull() ?: return manga
         val category = client.get(api("categories/$categoryId").build(), Fetch.XHR).parseAs<WpCategory>()
         val categoryTitle = category.name.unescape()
 
@@ -115,6 +127,9 @@ abstract class Reinbach : KeiSource() {
             status = SManga.ONGOING
             genre = GENRES.joinToString()
             description = descriptionFor(category.slug, categoryTitle)
+            memo = buildJsonObject {
+                put("slug", category.slug)
+            }
             initialized = true
         }
     }
@@ -122,7 +137,7 @@ abstract class Reinbach : KeiSource() {
     // ============================== Chapters ==============================
 
     private suspend fun chapterList(manga: SManga): List<SChapter> {
-        val categoryId = categoryId(manga.url) ?: return emptyList()
+        val categoryId = manga.url.toIntOrNull() ?: return emptyList()
         val requestUrl = api("posts").apply {
             addQueryParameter("categories", categoryId.toString())
             addQueryParameter("search", "Chapter")
@@ -140,9 +155,13 @@ abstract class Reinbach : KeiSource() {
         return markers.mapIndexed { index, post ->
             SChapter.create().apply {
                 name = post.title.rendered.unescape()
-                url = "${post.link.toHttpUrl().encodedPath}?id=$categoryId"
+                url = post.id.toString()
                 chapter_number = (index + 1).toFloat()
                 date_upload = parseDate(post.date)
+                memo = buildJsonObject {
+                    put("path", post.link.toHttpUrl().encodedPath)
+                    put("category", categoryId)
+                }
             }
         }.reversed()
     }
@@ -150,8 +169,8 @@ abstract class Reinbach : KeiSource() {
     // ============================== Pages ==============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val categoryId = categoryId(chapter.url) ?: throw Exception("Invalid chapter URL")
-        if (chapter.date_upload <= 0L) throw Exception("Unknown chapter date, refresh the chapter list and retry")
+        val categoryId = chapter.memo.getIntOrNull("category")
+            ?: throw Exception("Invalid chapter, refresh the chapter list and retry")
 
         val imageUrls = mutableListOf<String>()
         var page = 1
@@ -205,8 +224,6 @@ abstract class Reinbach : KeiSource() {
         addQueryParameter("_fields", "id,name,slug,count,parent,link")
     }
 
-    private fun categoryId(url: String): Int? = url.substringAfter("?id=", "").substringBefore('&').toIntOrNull()
-
     private fun WpCategory.isStory(): Boolean = parent == 0 &&
         count > 1 &&
         link.isNotBlank() &&
@@ -215,9 +232,12 @@ abstract class Reinbach : KeiSource() {
 
     private fun WpCategory.toSManga(cover: String?): SManga = SManga.create().apply {
         title = name.unescape()
-        url = "/category/$slug/?id=$id"
+        url = id.toString()
         thumbnail_url = cover
         genre = GENRES.joinToString()
+        memo = buildJsonObject {
+            put("slug", slug)
+        }
     }
 
     /**
@@ -281,9 +301,7 @@ abstract class Reinbach : KeiSource() {
 
     private fun String.unescape(): String = Jsoup.parse(this).text()
 
-    private fun parseDate(raw: String): Long = runCatching {
-        LocalDateTime.parse(raw).toInstant(ZoneOffset.UTC).toEpochMilli()
-    }.getOrDefault(0L)
+    private fun parseDate(raw: String): Long = DATE_FORMAT.tryParseDateTime(raw, ZoneOffset.UTC)
 
     private fun formatWpDate(epochMillis: Long): String = Instant.ofEpochMilli(epochMillis)
         .atZone(ZoneOffset.UTC)
@@ -295,6 +313,8 @@ abstract class Reinbach : KeiSource() {
         private const val TRW_SLUG = "this-romantic-world"
         private const val PER_PAGE = 100
         private const val MAX_PAGES = 20
+
+        private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
 
         private val GENRES = listOf("Adult", "Comedy", "Romance", "School Life", "Slice of Life")
 
