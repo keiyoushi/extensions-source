@@ -50,7 +50,7 @@ abstract class RaindropFansub : MangaThemesia() {
 
         val lastChapterUrl = document
             .selectFirst("a:has(.epcurlast)")
-            ?.attr("href")
+            ?.absUrl("href")
             ?.let {
                 val dummyChapter = SChapter.create()
                 dummyChapter.setUrlWithoutDomain(it)
