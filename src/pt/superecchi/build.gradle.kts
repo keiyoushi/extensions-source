@@ -14,4 +14,9 @@ keiyoushi {
         lang = "pt-BR"
         baseUrl = "https://superecchi.com"
     }
+
+    deeplink {
+        path("/livro.php")
+        path("/leitor.php")
+    }
 }

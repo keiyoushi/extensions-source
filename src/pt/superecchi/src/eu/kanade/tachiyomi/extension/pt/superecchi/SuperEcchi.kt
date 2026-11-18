@@ -22,6 +22,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import okhttp3.FormBody
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -62,6 +64,16 @@ abstract class SuperEcchi : KeiSource() {
         MangasPage(mangas, false)
     }
 
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.encodedPath !in MANGA_PATHS) return null
+        val slug = url.queryParameter("t")?.takeIf { it.isNotBlank() } ?: return null
+        return SManga.create().apply {
+            this.url = "livro.php?t=$slug"
+            setDetails(client.get(getMangaUrl(this), Fetch.DOCUMENT).asJsoup())
+            initialized = true
+        }
+    }
+
     private suspend fun suggestionResults(suggestion: String): List<SManga> {
         val kind = SUGGESTION_KIND_REGEX.find(suggestion)?.groupValues?.get(1) ?: return emptyList()
         val name = suggestion.substringBeforeLast(" (").trim()
@@ -92,27 +104,27 @@ abstract class SuperEcchi : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        manga.setDetails(document)
+        return SMangaUpdate(manga, parseChapters(document))
+    }
 
-        val updatedManga = manga.apply {
-            val rawTitle = document.selectFirst("h1")?.text().orEmpty()
-                .removePrefix("Album:").trim()
-            check(rawTitle.isNotBlank()) { "Empty title for ${manga.url}" }
-            title = rawTitle
-            author = document.detailField("Autor")
-            artist = author
-            description = MarkdownDescription.Builder()
-                .description(document.selectFirst(".sinopse-completa")?.clone()?.apply { select("h3").remove() })
-                .build()
-            genre = document.tags()
-            thumbnail_url = document.selectFirst(".dj-img1 img")?.attrOrNull("abs:src")
-            status = if (document.detailField("Tipo")?.contains("one-shot", ignoreCase = true) == true) {
-                SManga.COMPLETED
-            } else {
-                SManga.ONGOING
-            }
+    private fun SManga.setDetails(document: Document) {
+        val rawTitle = document.selectFirst("h1")?.text().orEmpty()
+            .removePrefix("Album:").trim()
+        check(rawTitle.isNotBlank()) { "Empty title for $url" }
+        title = rawTitle
+        author = document.detailField("Autor")
+        artist = author
+        description = MarkdownDescription.Builder()
+            .description(document.selectFirst(".sinopse-completa")?.clone()?.apply { select("h3").remove() })
+            .build()
+        genre = document.tags()
+        thumbnail_url = document.selectFirst(".dj-img1 img")?.attrOrNull("abs:src")
+        status = if (document.detailField("Tipo")?.contains("one-shot", ignoreCase = true) == true) {
+            SManga.COMPLETED
+        } else {
+            SManga.ONGOING
         }
-
-        return SMangaUpdate(updatedManga, parseChapters(document))
     }
 
     private fun parseChapters(document: Document): List<SChapter> {
@@ -167,6 +179,8 @@ abstract class SuperEcchi : KeiSource() {
         private const val LISTING_SELECTOR =
             ".gallery-content > div.cg, .gallery-content > div.dj, .gallery-content > div.manga, " +
                 ".gallery-content > div.hq, .gallery-content > div.anime, .gallery-content > div.acg"
+
+        private val MANGA_PATHS = setOf("/livro.php", "/leitor.php")
 
         private val SUGGESTION_KIND_REGEX = Regex("""\(([^)]+)\)$""")
 
