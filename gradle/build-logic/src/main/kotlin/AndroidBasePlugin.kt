@@ -31,6 +31,11 @@ class AndroidBasePlugin : Plugin<Project> {
                     }
                 }
             }
+
+            // Lint 32.5.1's HTML syntax highlighter throws StringIndexOutOfBoundsException on a raw string
+            // ending in a quote followed by a backtick in a string (`"""x"""" + "`"`), failing lintReport:
+            // https://issuetracker.google.com/issues/584806755
+            lint.htmlReport = false
         }
 
         tasks.getByName("preBuild").dependsOn(spotlessTaskName())
