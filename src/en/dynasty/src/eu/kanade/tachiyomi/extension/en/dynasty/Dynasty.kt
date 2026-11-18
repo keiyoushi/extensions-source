@@ -20,6 +20,7 @@ import keiyoushi.network.head
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getArrayOrNull
@@ -385,39 +386,28 @@ abstract class Dynasty :
                 authors.joinToString { it.first }
             }
             artist = author
-            description = buildString {
-                val prefChapterFetchLimit = preferences.chapterFetchLimit
-                if (prefChapterFetchLimit < data.totalPages) {
-                    append("IMPORTANT: Only first $prefChapterFetchLimit pages of chapter list will be fetched. You can change this in extension settings.\n\n")
+            if (authors.size > AUTHORS_UPPER_LIMIT) {
+                others.addAll(authors.map { "Author" to it.first })
+            }
+            val prefChapterFetchLimit = preferences.chapterFetchLimit
+            description = MarkdownDescription.Builder()
+                .description(
+                    "IMPORTANT: Only first $prefChapterFetchLimit pages of chapter list will be fetched. You can change this in extension settings."
+                        .takeIf { prefChapterFetchLimit < data.totalPages },
+                )
+                .description(
+                    data.description?.let { html ->
+                        Jsoup.parseBodyFragment(decodeUnicode(html)).body().apply { select("a").remove() }
+                    },
+                )
+                .field("Type", data.type)
+                .apply {
+                    for ((type, values) in others.groupBy { it.first }) {
+                        field(type, values.map { it.second })
+                    }
                 }
-
-                data.description?.let {
-                    val desc = Jsoup.parseBodyFragment(
-                        decodeUnicode(it),
-                    )
-                    desc.select("a").remove()
-
-                    append(desc.wholeText().trim())
-                    append("\n\n")
-                }
-
-                append("Type: ", data.type, "\n\n")
-
-                if (authors.size > AUTHORS_UPPER_LIMIT) {
-                    others.addAll(authors.map { "Author" to it.first })
-                }
-
-                for ((type, values) in others.groupBy { it.first }) {
-                    append(type, ":\n")
-                    values.forEach { append("• ", it.second, "\n") }
-                    append("\n")
-                }
-                if (data.aliases.isNotEmpty()) {
-                    append("Aliases:\n")
-                    data.aliases.forEach { append("• ", it, "\n") }
-                    append("\n")
-                }
-            }.trim()
+                .altTitles(data.aliases, "Aliases")
+                .build()
             genre = tags.joinToString()
             status = when {
                 publishingStatus.contains("Ongoing") -> SManga.ONGOING
@@ -477,15 +467,15 @@ abstract class Dynasty :
             title = data.title
             author = authors.joinToString { it.first }
             artist = author
-            description = buildString {
-                append("Type: ", CHAPTER_TYPE, "\n\n")
-                for ((type, values) in others.groupBy { it.first }) {
-                    append(type, ":\n")
-                    values.forEach { append("• ", it.second, "\n") }
-                    append("\n")
+            description = MarkdownDescription.Builder()
+                .field("Type", CHAPTER_TYPE)
+                .apply {
+                    for ((type, values) in others.groupBy { it.first }) {
+                        field(type, values.map { it.second })
+                    }
                 }
-                append("Released: ", data.releasedOn)
-            }.trim()
+                .field("Released", data.releasedOn)
+                .build()
             genre = tags.joinToString()
             thumbnail_url = buildCoverUrl(data.pages.first().url)
             status = SManga.COMPLETED
