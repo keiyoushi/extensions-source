@@ -30,13 +30,12 @@ class MangaDto(
     val coverUrl: String?,
     @JsonNames("url")
     val slug: String,
-    var type: String?,
+    val type: String?,
     val alternateName: String?,
     val description: String?,
     val author: Value?,
     val genre: List<String> = emptyList(),
 ) {
-    fun String.isUrl() = toHttpUrlOrNull() != null
     fun toSManga() = SManga.create().apply {
         title = this@MangaDto.title
         thumbnail_url = coverUrl
@@ -46,18 +45,12 @@ class MangaDto(
             .build()
         author = this@MangaDto.author?.name
         genre = this@MangaDto.genre.joinToString()
-        url = when {
-            slug.isUrl() -> {
-                val location = slug.toHttpUrlOrNull()!!
-                type = location.pathSegments.first()
-                location.pathSegments.last()
-            }
-            else -> slug
-        }
+        val location = slug.toHttpUrlOrNull()
+        url = location?.pathSegments?.last() ?: slug
 
         memo = buildJsonObject {
             put("slug", url)
-            put("type", type?.lowercase())
+            put("type", (location?.pathSegments?.first() ?: type)?.lowercase())
         }
     }
 }
@@ -95,7 +88,7 @@ class ChapterDto(
     }
 
     companion object {
-        private val dateFormat = DateTimeFormatter.ofPattern("d 'de' MMM 'de' yyyy", Locale("pt", "BR"))
+        private val dateFormat = DateTimeFormatter.ofPattern("d 'de' MMM 'de' yyyy", Locale.forLanguageTag("pt-BR"))
     }
 }
 
