@@ -121,10 +121,9 @@ abstract class Luscious :
                         add(this.toJsonObject("audience_ids"))
                     }
 
-                    if (lusLang != FILTER_VALUE_IGNORE) {
-                        add(
-                            Filter(name = "language_ids", value = "+" + languagesFilter.selected.joinToString("+")),
-                        )
+                    val languageIds = listOfNotNull(lusLang.takeIf { it != FILTER_VALUE_IGNORE }) + languagesFilter.selected
+                    if (languageIds.isNotEmpty()) {
+                        add(Filter(name = "language_ids", value = languageIds.joinToString("") { "+$it" }))
                     }
 
                     if (tagsFilter.state.isNotEmpty()) {
