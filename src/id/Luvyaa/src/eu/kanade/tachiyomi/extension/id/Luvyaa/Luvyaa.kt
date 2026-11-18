@@ -23,6 +23,12 @@ abstract class Luvyaa :
     ConfigurableSource {
     override val datePattern = "dd/MM/yyyy"
 
+    override val seriesAuthorSelector = metaSelector("Author")
+    override val seriesArtistSelector = metaSelector("Artist")
+    override val seriesTypeSelector = metaSelector("Type")
+    override val seriesGenreSelector = ".mgen a"
+    override val seriesStatusSelector = ".kh-status .status-text"
+
     private val preferences by getPreferencesLazy {
         if (contains(PREF_HIDE_LOCKED_OLD)) edit().remove(PREF_HIDE_LOCKED_OLD).apply()
     }
@@ -85,6 +91,8 @@ abstract class Luvyaa :
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
+
+    private fun metaSelector(label: String) = ".meta-item:has(> .meta-label:matchesOwn(^$label$)) .meta-pill"
 
     companion object {
         private const val HUB_URL = "https://luvyaa.co/"
