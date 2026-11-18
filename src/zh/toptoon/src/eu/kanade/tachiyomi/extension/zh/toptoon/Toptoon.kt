@@ -18,6 +18,7 @@ import keiyoushi.utils.tryParseDate
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @Source
@@ -106,7 +107,7 @@ abstract class Toptoon : KeiSource() {
                     ""
                 } + it.selectFirst("div.title")!!.text() + " " +
                     it.selectFirst("div.subTitle")!!.text()
-                date_upload = dateFormat.tryParseDate(it.selectFirst("div.pubDate")?.text())
+                date_upload = dateFormat.tryParseDate(it.selectFirst("div.pubDate")?.text(), ZoneId.of("Asia/Taipei"))
             }
         }.asReversed()
 
