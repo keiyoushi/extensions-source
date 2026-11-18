@@ -59,22 +59,15 @@ abstract class BenDezOmniHero : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        if (!fetchDetails) return SMangaUpdate(manga, chapters)
         val entry = fetchEntries().firstOrNull { it.postPath() == manga.url }
             ?: throw IllegalStateException("Post not found: ${manga.url}")
-        val chapterList = if (fetchChapters) {
-            listOf(
-                SChapter.create().apply {
-                    url = entry.postPath()
-                    name = "Oneshot"
-                    chapter_number = 1f
-                    date_upload = entry.publishedEpoch()
-                },
-            )
-        } else {
-            chapters
+        val chapter = SChapter.create().apply {
+            url = entry.postPath()
+            name = "Oneshot"
+            chapter_number = 1f
+            date_upload = entry.publishedEpoch()
         }
-        return SMangaUpdate(entry.toPostManga(), chapterList)
+        return SMangaUpdate(entry.toPostManga(), listOf(chapter))
     }
 
     private suspend fun fetchEntries(): List<BloggerEntry> {
