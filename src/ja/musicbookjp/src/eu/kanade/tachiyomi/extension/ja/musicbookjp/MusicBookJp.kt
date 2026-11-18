@@ -135,8 +135,8 @@ abstract class MusicBookJp :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) return null
-        val seriesId = url.queryParameter("seriesId") ?: return null
+        if (url.host != baseUrl.toHttpUrl().host || url.encodedPath != "/comic/store/seriesDetails") return null
+        val seriesId = url.queryParameter("seriesId")?.takeIf { it.isNotEmpty() } ?: return null
         return fetchSeriesPage(seriesId, 1).toSManga().apply {
             this.url = seriesId
             initialized = true
