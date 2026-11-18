@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "KeroScans"
-    versionCode = 1
+    versionCode = 10
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
