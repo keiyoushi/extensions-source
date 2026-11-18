@@ -20,6 +20,7 @@ import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import java.net.URLEncoder
 import java.time.format.DateTimeFormatter
@@ -47,6 +48,13 @@ abstract class Wolf : KeiSource() {
         isComic -> "cv"
         else -> "view"
     }
+
+    // Old domains serve a notice linking the current one
+    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = listOfNotNull(
+        client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
+            .selectFirst(".card a.main-btn")
+            ?.absUrl("href"),
+    )
 
     private val sortOptions get() = if (isComic) {
         listOf("최신순" to "n", "인기순" to "f")
