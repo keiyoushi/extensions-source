@@ -142,8 +142,7 @@ abstract class NexusMangas : KeiSource() {
     }
 
     private fun String.toSearchPattern(): String? {
-        val text = Normalizer.normalize(this, Normalizer.Form.NFD)
-            .replace(DIACRITICS_REGEX, "")
+        val text = Normalizer.normalize(this, Normalizer.Form.NFC)
             .lowercase()
             .trim()
             .replace(WHITESPACE_REGEX, " ")
@@ -151,15 +150,20 @@ abstract class NexusMangas : KeiSource() {
             ?: return null
 
         val pattern = text.map { char ->
-            when (char) {
-                ' ' -> "[[:space:]]+"
-                in ACCENT_CLASSES -> ACCENT_CLASSES.getValue(char)
-                in REGEX_SPECIAL_CHARS -> "\\$char"
+            val accentClass = ACCENT_CLASSES[Normalizer.normalize(char.toString(), Normalizer.Form.NFD).first()]
+            when {
+                char == ' ' -> "[[:space:]]+"
+                accentClass != null -> if (char in accentClass) accentClass else accentClass.dropLast(1) + char + "]"
+                char in REGEX_SPECIAL_CHARS -> "\\$char"
                 else -> char.toString()
             }
         }.joinToString("")
 
-        return "\"" + pattern.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+        return buildString {
+            append('"')
+            append(pattern.replace("\\", "\\\\").replace("\"", "\\\""))
+            append('"')
+        }
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -282,7 +286,6 @@ abstract class NexusMangas : KeiSource() {
             "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9." +
                 "eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc4NzgwMjAwMCwiZXhwIjo0OTQzNDc1NjAwLCJyb2xlIjoiYW5vbiJ9." +
                 "Cnl8Jw2DeKe84OAkmJYfO33xlcZsw0TC2Nw_il0tpRs"
-        private val DIACRITICS_REGEX = Regex("""\p{Mn}+""")
         private val WHITESPACE_REGEX = Regex("""\s+""")
         private const val REGEX_SPECIAL_CHARS = ".*+?^\${}()|[]\\"
         private val ACCENT_CLASSES = mapOf(
