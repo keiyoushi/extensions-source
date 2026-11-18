@@ -15,6 +15,7 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.aesCbc
 import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.asJsoup
@@ -25,6 +26,7 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonRequestBody
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
@@ -81,7 +83,7 @@ abstract class MusicBookJp :
     }
 
     private fun Response.toMangasPage(): MangasPage {
-        val document = this.asJsoup()
+        val document = asJsoup()
         val mangas = document.select("div.index-link").map {
             val link = it.selectFirst("a.stretched-link[href*=seriesId]")!!
             SManga.create().apply {
@@ -104,25 +106,13 @@ abstract class MusicBookJp :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         var page = 1
-        var document = fetchSeriesPage(manga, page)
-
-        val details = SManga.create().apply {
-            title = document.selectFirst("article.main h1")!!.text()
-            thumbnail_url = document.selectFirst("img.copy-guard-image[src*=comicsp.file]")?.absUrl("src")?.toHttpUrl()?.newBuilder()?.query(null)?.build()?.toString()
-            author = document.selectFirst("article.main a[href*=authorDetails]")?.textOrNull()
-            genre = document.select("section.series-additional-section a[href*=genreDetails]").joinToString { it.text() }
-            status = if (document.selectFirst("article.main span.completed-flag") != null) SManga.COMPLETED else SManga.ONGOING
-            description = listOfNotNull(
-                document.selectFirst("section.series-outline-section p.text")?.textOrNull(),
-                document.selectFirst("section.series-additional-section a[href*=publisherDetails]")?.textOrNull()?.let { "Publisher: $it" },
-                document.selectFirst("section.series-additional-section a[href*=magazineDetails]")?.textOrNull()?.let { "Magazine: $it" },
-            ).joinToString("\n\n")
-        }
+        var document = fetchSeriesPage(manga.url, page)
+        val details = document.toSManga()
 
         if (!fetchChapters) return SMangaUpdate(details, chapters)
 
         val chapterList = mutableListOf<SChapter>()
-        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
+        val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, true)
         while (true) {
             chapterList += document.select("ul.item-list li.item").mapNotNull {
                 val readContents = it.selectFirst("a[href*=readContents]")
@@ -138,14 +128,37 @@ abstract class MusicBookJp :
 
             val hasNextPage = document.selectFirst("ul.pager li.pager-box.active ~ li.pager-box") != null
             if (!hasNextPage) break
-            document = fetchSeriesPage(manga, ++page)
+            document = fetchSeriesPage(manga.url, ++page)
         }
 
         return SMangaUpdate(details, chapterList)
     }
 
-    private suspend fun fetchSeriesPage(manga: SManga, page: Int): Document {
-        val url = getMangaUrl(manga).toHttpUrl().newBuilder()
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val seriesId = url.queryParameter("seriesId") ?: return null
+        return fetchSeriesPage(seriesId, 1).toSManga().apply {
+            this.url = seriesId
+            initialized = true
+        }
+    }
+
+    private fun Document.toSManga() = SManga.create().apply {
+        title = selectFirst("article.main h1")!!.text()
+        thumbnail_url = selectFirst("img.copy-guard-image[src*=comicsp.file]")?.coverUrl()
+        author = selectFirst("article.main a[href*=authorDetails]")?.textOrNull()
+        genre = select("section.series-additional-section a[href*=genreDetails]").joinToString { it.text() }.ifEmpty { null }
+        status = if (selectFirst("article.main span.completed-flag") != null) SManga.COMPLETED else SManga.ONGOING
+        description = MarkdownDescription.Builder()
+            .description(selectFirst("section.series-outline-section p.text"))
+            .field("Publisher", selectFirst("section.series-additional-section a[href*=publisherDetails]")?.textOrNull())
+            .field("Magazine", selectFirst("section.series-additional-section a[href*=magazineDetails]")?.textOrNull())
+            .build()
+    }
+
+    private suspend fun fetchSeriesPage(seriesId: String, page: Int): Document {
+        val url = "$baseUrl/comic/store/seriesDetails".toHttpUrl().newBuilder()
+            .addQueryParameter("seriesId", seriesId)
             .addQueryParameter("sort", "desc")
             .addQueryParameter("tab", "book")
             .addQueryParameter("page", page.toString())
@@ -177,13 +190,13 @@ abstract class MusicBookJp :
         SwitchPreferenceCompat(screen.context).apply {
             key = HIDE_LOCKED_PREF_KEY
             title = "Hide Locked Chapters"
-            setDefaultValue(false)
+            setDefaultValue(true)
         }.also(screen::addPreference)
     }
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
         private const val SCID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-        private val IV = "bvinitialvectolv".toByteArray()
+        private val IV = "bvinitialvectolv".encodeToByteArray()
     }
 }
