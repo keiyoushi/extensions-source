@@ -203,15 +203,6 @@ abstract class LuotTruyen : KeiSource() {
         return images.mapIndexed { index, image -> Page(index, imageUrl = image.absUrl("src")) }
     }
 
-    private suspend fun getChapterDocument(url: String): Document {
-        val response = client.get(url, Fetch.DOCUMENT)
-        if (response.request.url.encodedPath == "/Account/Login") {
-            response.close()
-            throw Exception("Đăng nhập bằng Google trong WebView để đọc truyện.")
-        }
-        return response.asJsoup()
-    }
-
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-truyen-nang-cao", Fetch.DOCUMENT).asJsoup()
@@ -225,6 +216,15 @@ abstract class LuotTruyen : KeiSource() {
         .toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList = getFilters(data?.parseAs<List<GenreOption>>())
+
+    private suspend fun getChapterDocument(url: String): Document {
+        val response = client.get(url, Fetch.DOCUMENT)
+        if (response.request.url.encodedPath == "/Account/Login") {
+            response.close()
+            throw Exception("Đăng nhập bằng Google trong WebView để đọc truyện.")
+        }
+        return response.asJsoup()
+    }
 
     private fun String.hasNumericIdSuffix(): Boolean = substringAfterLast('-', missingDelimiterValue = "").let { it.isNotEmpty() && it.all(Char::isDigit) }
 
