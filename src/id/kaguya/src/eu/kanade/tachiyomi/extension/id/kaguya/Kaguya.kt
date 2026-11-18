@@ -1,35 +1,103 @@
 package eu.kanade.tachiyomi.extension.id.kaguya
 
-import android.util.Base64
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
-import okhttp3.OkHttpClient
-import org.jsoup.nodes.Element
-import kotlin.time.Duration.Companion.minutes
+import keiyoushi.network.Fetch
+import keiyoushi.network.get
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+
+const val CDN_URL = "https://storage.kaguyacdn.my.id"
+private const val API_URL = "https://tsuki.kaguya.re/api/v1"
 
 @Source
-abstract class Kaguya : Madara() {
-    override val supportsPostId = false
-    override fun OkHttpClient.Builder.configureClient() = readTimeout(1.minutes)
+abstract class Kaguya : KeiSource() {
 
-    // Fixed: Set to "series" to match https://02.kaguya.pro/series/...
-    override val mangaSubString = "series"
-    override val genreDirectory = "series-genre"
+    override val supportsFilterFetching = true
 
-    override val mangaDetailsSelectorTitle = "h1.post-title"
-    override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div"
-    override val mangaDetailsSelectorThumbnail = "head meta[property='og:image']"
+    // ============================== Popular ==============================
 
-    override fun imageFromElement(element: Element): String? {
-        if (element.hasAttr("data-aesir")) {
-            val decoded = Base64.decode(element.attr("data-aesir"), Base64.DEFAULT).toString(Charsets.UTF_8).trim()
-            if (decoded.isNotEmpty()) return decoded
-        }
+    override suspend fun getPopularManga(page: Int) = getComicList(comicsUrl(page).addQueryParameter("sort", "popular").build())
 
-        return super.imageFromElement(element)
-            ?.takeIf { it.isNotEmpty() }
-            ?: element.attr("content")
+    // ============================== Latest ===============================
+
+    override suspend fun getLatestUpdates(page: Int) = getComicList(comicsUrl(page).addQueryParameter("sort", "latest").build())
+
+    // ============================== Search ===============================
+
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val url = comicsUrl(page).apply {
+            query.trim().ifEmpty { null }?.let { addQueryParameter("search", it) }
+            filters.filterIsInstance<QueryFilter>().forEach { filter ->
+                filter.value?.let { addQueryParameter(filter.param, it) }
+            }
+        }.build()
+        return getComicList(url)
     }
 
-    override val chapterMode = ChapterMode.MangaAjaxPaginated
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.getOrNull(0) != "comic") return null
+        val slug = url.pathSegments.getOrNull(1)?.ifEmpty { null } ?: return null
+        return getComic(slug).toSManga()
+    }
+
+    private fun comicsUrl(page: Int) = "$API_URL/comics".toHttpUrl().newBuilder()
+        .addQueryParameter("page", page.toString())
+        .addQueryParameter("limit", "24")
+
+    private suspend fun getComicList(url: HttpUrl): MangasPage {
+        val dto = client.get(url, Fetch.XHR).parseAs<ResponseDto<ComicListDto>>().data
+        return MangasPage(dto.data.map(ComicDto::toSManga), dto.hasNextPage)
+    }
+
+    // =========================== Manga Update ============================
+
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val slug = manga.url.substringAfterLast('/')
+        val comic = getComic(slug)
+        return SMangaUpdate(comic.toSManga(), comic.toSChapters())
+    }
+
+    private suspend fun getComic(slug: String) = client.get("$API_URL/comics/$slug", Fetch.XHR).parseAs<ResponseDto<ComicDto>>().data
+
+    // =============================== Pages ===============================
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterId = chapter.url.substringAfterLast('/')
+        // Without the chapter page as Referer the site answers with placeholder pages
+        val dto = client.get("$baseUrl/api/reader/$chapterId/pages", Fetch.XHR.from(getChapterUrl(chapter)))
+            .parseAs<ResponseDto<ReaderDto>>()
+            .data
+        if (dto.locked) error("This chapter is locked")
+
+        return dto.pages.sortedBy(PageDto::order).mapIndexed { index, page ->
+            val imageUrl = "$API_URL/media/chapter/deliver".toHttpUrl().newBuilder()
+                .addQueryParameter("token", page.token)
+                .build()
+            Page(index, imageUrl = imageUrl.toString())
+        }
+    }
+
+    // ============================== Filters ==============================
+
+    override suspend fun fetchFilterData(): JsonElement = client.get("$API_URL/genres", Fetch.XHR)
+        .parseAs<ResponseDto<List<GenreDto>>>()
+        .data
+        .toJsonElement()
+
+    override fun getFilterList(data: JsonElement?) = getFilters(data?.parseAs<List<GenreDto>>())
 }
