@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.pt.blackoutcomics
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Serializable
 class SearchPayload(
@@ -24,6 +25,6 @@ class SearchItem(
     fun toSManga(baseUrl: String) = SManga.create().apply {
         title = name
         url = "/comics/$id"
-        thumbnail_url = imgUrl ?: ("$baseUrl/" + imgPr)
+        thumbnail_url = imgUrl ?: imgPr?.let { baseUrl.toHttpUrl().resolve(it)?.toString() }
     }
 }
