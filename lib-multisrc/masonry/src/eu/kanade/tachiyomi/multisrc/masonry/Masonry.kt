@@ -19,6 +19,7 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonString
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -50,6 +51,18 @@ abstract class Masonry : KeiSource() {
             ord = filters.firstInstance<OrderFilter>().selected,
         )
         return getGridPage(page, content.toJsonString(), "filter")
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (!url.host.endsWith(baseUrl.toHttpUrl().host.removePrefix("www.")) || url.pathSegments.count { it.isNotEmpty() } != 1) return null
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
+        val firstImage = document.selectFirst(".list-gallery a[href^=https://cdn.]") ?: return null
+        return parseMangaDetails(document, SManga.create()).apply {
+            setUrlWithoutDomain(url.toString())
+            title = document.selectFirst("header h1")!!.text()
+            thumbnail_url = firstImage.selectFirst("img")?.imgAttr()
+            initialized = true
+        }
     }
 
     override suspend fun fetchMangaUpdate(
