@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.pt.nexusmangas
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -33,17 +34,11 @@ class WorkDto(
         }
         author = this@WorkDto.author?.takeIf(String::isNotBlank)
         artist = this@WorkDto.artist?.takeIf(String::isNotBlank)
-        description = buildString {
-            this@WorkDto.description?.takeIf(String::isNotBlank)?.let(::append)
-            alternativeTitle?.takeIf(String::isNotBlank)?.let {
-                if (isNotEmpty()) append("\n\n")
-                append("Título alternativo: $it")
-            }
-            scan?.name?.takeIf(String::isNotBlank)?.let {
-                if (isNotEmpty()) append("\n\n")
-                append("Scan: $it")
-            }
-        }.takeIf(String::isNotBlank)
+        description = MarkdownDescription.Builder()
+            .description(this@WorkDto.description)
+            .altTitles(listOfNotNull(alternativeTitle), "Título alternativo")
+            .field("Scan", scan?.name)
+            .build()
         genre = buildList {
             type?.let(::add)
             demographic?.takeIf { it != "NONE" }?.let(::add)
