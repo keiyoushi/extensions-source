@@ -14,6 +14,7 @@ import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
@@ -107,7 +108,7 @@ abstract class BlackoutComics : KeiSource() {
     private fun parseDetails(document: Document) = SManga.create().apply {
         setUrlWithoutDomain(document.location())
         title = document.selectFirst(".project-title")!!.text()
-        thumbnail_url = document.selectFirst(".project-cover")?.absUrl("src")
+        thumbnail_url = document.selectFirst(".project-cover")?.attrOrNull("abs:src")
         author = document.selectFirst(".quick-info-item:has(.fa-pen-nib) strong")?.textOrNull()
         artist = document.selectFirst(".quick-info-item:has(.fa-palette) strong")?.textOrNull()
         description = MarkdownDescription.Builder()
@@ -182,7 +183,7 @@ abstract class BlackoutComics : KeiSource() {
     private fun Element.toSManga() = SManga.create().apply {
         setUrlWithoutDomain(absUrl("href"))
         title = selectFirst("h2, .card-title")!!.text()
-        thumbnail_url = selectFirst("img")?.absUrl("src")
+        thumbnail_url = selectFirst("img")?.attrOrNull("abs:src")
     }
 
     private fun Document.extractCsrf() = apply {
