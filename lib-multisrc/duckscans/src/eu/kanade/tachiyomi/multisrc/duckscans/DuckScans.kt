@@ -103,6 +103,10 @@ abstract class DuckScans : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
+        // The chapter API wants the dsv visitor cookie the chapter page sets
+        if (client.cookieJar.loadForRequest(baseUrl.toHttpUrl()).none { it.name == "dsv" }) {
+            client.get(chapterUrl, Fetch.DOCUMENT).close()
+        }
         val (_, series, _, number) = chapterUrl.toHttpUrl().pathSegments
         val url = apiUrl.newBuilder()
             .addPathSegment("chapters")
