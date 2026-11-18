@@ -36,7 +36,9 @@ open class MultiSelectFilter(name: String, val id: String, mapping: Map<String, 
     UriQueryFilter {
     override fun addToQuery(builder: HttpUrl.Builder) {
         for (checkbox in state) {
-            builder.addQueryParameter("$id[]", checkbox.id)
+            if (checkbox.state) {
+                builder.addQueryParameter("$id[]", checkbox.id)
+            }
         }
     }
 }

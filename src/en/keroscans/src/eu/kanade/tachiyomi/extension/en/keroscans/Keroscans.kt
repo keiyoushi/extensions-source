@@ -66,7 +66,7 @@ abstract class Keroscans :
     private suspend fun getMangasPage(pageUrl: HttpUrl): MangasPage {
         val document = client.get(pageUrl, Fetch.DOCUMENT).asJsoup()
         return MangasPage(
-            document.select("section[aria-label=\"Results\"] article").map {
+            document.select("article").map {
                 val a = it.selectFirst("a")!!
                 val cover = a.selectFirst(".ks-cover")!!
                 SManga.create().apply {
