@@ -9,5 +9,7 @@ abstract class ComicVerse : ZeistManga() {
 
     override fun getChapterFeedUrl(doc: Document, mangaTitle: String) = super.getChapterFeedUrl(doc, doc.selectFirst("[data-label]")?.attr("data-label")!!)
 
+    override val popularMangaSelector = "div.PopularPosts figure"
+
     override val pageListSelector = "#cvOriginal"
 }
