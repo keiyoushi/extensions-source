@@ -18,12 +18,15 @@ import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.string
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Source
 abstract class Yomonga : KeiSource() {
@@ -113,6 +116,8 @@ abstract class Yomonga : KeiSource() {
                 val link = it.selectFirst("a.button-type1")!!.absUrl("href").toHttpUrl()
                 url = link.queryParameter("cid")!!
                 name = it.selectFirst(".episode-name")!!.text()
+                chapter_number = it.attr("data-episode_no").toFloatOrNull() ?: -1f
+                date_upload = DATE_FORMAT.tryParseDate(it.selectFirst(".update-date")?.text())
                 memo = buildJsonObject {
                     put("title", link.pathSegments[1])
                 }
@@ -194,5 +199,6 @@ abstract class Yomonga : KeiSource() {
 
     companion object {
         private val AUTHOR_ROLE_REGEX = Regex("^(漫画|原作|キャラクター原案)：")
+        private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy/MM/dd").withZone(ZoneId.of("Asia/Tokyo"))
     }
 }
