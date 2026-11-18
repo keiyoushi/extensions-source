@@ -75,8 +75,12 @@ abstract class Dynasty :
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val data = client.get("$baseUrl/$CHAPTERS_DIR/added.json?page=${page - 1}", Fetch.XHR)
-            .parseAs<BrowseResponse>()
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment(CHAPTERS_DIR)
+            addPathSegment("added.json")
+            addQueryParameter("page", page.toString())
+        }.build()
+        val data = client.get(url, Fetch.XHR).parseAs<BrowseResponse>()
 
         val entries = LinkedHashSet<MangaEntry>()
 
