@@ -116,7 +116,10 @@ abstract class DuckScans : KeiSource() {
             .addQueryParameter("limit", "1")
             .build()
         val data = client.get(url, Fetch.XHR.from(chapterUrl)).parseAs<ChapterListDto>().data.firstOrNull()
-        if (data == null || data.locked) return emptyList()
+        if (data == null) return emptyList()
+        if (data.locked) {
+            throw Exception(data.lockedMessage(Clock.System.now().toEpochMilliseconds()))
+        }
 
         // The reader orders the files by the number at the end of their name
         return data.pages
