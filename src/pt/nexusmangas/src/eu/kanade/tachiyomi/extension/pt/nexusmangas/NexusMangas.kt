@@ -163,13 +163,11 @@ abstract class NexusMangas : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "obra") return null
+        if (url.host.removePrefix("www.") != SITE_HOST || url.pathSegments.firstOrNull() != "obra") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotBlank) ?: return null
         val manga = SManga.create().apply { this.url = slug }
 
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
-            .manga
-            .apply { initialized = true }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun fetchMangaUpdate(
@@ -267,6 +265,7 @@ abstract class NexusMangas : KeiSource() {
 
     companion object {
         private const val API_HOST = "supabase.nexusmangas.com"
+        private const val SITE_HOST = "nexusmangas.com"
         const val READ_PATH = "/read/"
         private const val PAGE_SIZE = 30
         private const val NOVEL_TYPE = "NOVEL"
