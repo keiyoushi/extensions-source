@@ -63,15 +63,9 @@ abstract class Wolf : KeiSource() {
         listOf("최신순" to "n", "신작순" to "r", "인기순" to "f")
     }
 
-    // ============================== Popular ==============================
-
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter(sortOptions, "f")))
 
-    // ============================== Latest ===============================
-
     override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter(sortOptions, "n")))
-
-    // ============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = if (query.isNotBlank()) {
@@ -107,8 +101,6 @@ abstract class Wolf : KeiSource() {
     }
 
     private fun Document.hasNextPage() = selectFirst(".pagi .pg-btn.on + a.pg-btn") != null
-
-    // ============================== Details ==============================
 
     override fun getMangaUrl(manga: SManga): String = baseUrl.toHttpUrl().newBuilder()
         .addPathSegment(entryPath)
@@ -161,8 +153,6 @@ abstract class Wolf : KeiSource() {
         return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    // ============================= Chapters ==============================
-
     @Serializable
     class ChapterUrl(
         val toon: String,
@@ -179,8 +169,6 @@ abstract class Wolf : KeiSource() {
             .toString()
     }
 
-    // =============================== Pages ===============================
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
@@ -188,8 +176,6 @@ abstract class Wolf : KeiSource() {
             Page(idx, imageUrl = img.absUrl("data-src"))
         }
     }
-
-    // ============================== Filters ==============================
 
     override val supportsFilterFetching get() = !isPhoto
 
