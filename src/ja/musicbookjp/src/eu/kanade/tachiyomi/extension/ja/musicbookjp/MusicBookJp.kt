@@ -157,8 +157,7 @@ abstract class MusicBookJp :
     }
 
     private suspend fun fetchSeriesPage(seriesId: String, page: Int): Document {
-        val url = "$baseUrl/comic/store/seriesDetails".toHttpUrl().newBuilder()
-            .addQueryParameter("seriesId", seriesId)
+        val url = seriesUrl(seriesId)
             .addQueryParameter("sort", "desc")
             .addQueryParameter("tab", "book")
             .addQueryParameter("page", page.toString())
@@ -166,7 +165,10 @@ abstract class MusicBookJp :
         return client.get(url, Fetch.DOCUMENT).asJsoup()
     }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/comic/store/seriesDetails?seriesId=${manga.url}"
+    private fun seriesUrl(seriesId: String) = "$baseUrl/comic/store/seriesDetails".toHttpUrl().newBuilder()
+        .addQueryParameter("seriesId", seriesId)
+
+    override fun getMangaUrl(manga: SManga): String = seriesUrl(manga.url).build().toString()
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/comic/bv/index.html?cid=${chapter.url}"
 
