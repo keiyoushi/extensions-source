@@ -145,7 +145,8 @@ abstract class Dynasty :
                 ?: throw Exception("Unknown Pairing: $pairing")
         }
 
-        val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("search")
             addQueryParameter("q", query.trim())
             filters.firstInstance<SortFilter>().also {
                 if (it.sort == SMART_SORT) {
@@ -271,7 +272,10 @@ abstract class Dynasty :
     }
 
     private suspend fun fetchTagId(query: String, type: String): Int? {
-        val url = "$baseUrl/tags/suggest"
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("tags")
+            .addPathSegment("suggest")
+            .build()
         val body = FormBody.Builder()
             .add("query", query)
             .build()
@@ -290,7 +294,7 @@ abstract class Dynasty :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val mangaPath = "$baseUrl${manga.url}".toHttpUrl().pathSegments
+        val mangaPath = getMangaUrl(manga).toHttpUrl().pathSegments
 
         assert(
             mangaPath.size == 2 &&
@@ -533,7 +537,7 @@ abstract class Dynasty :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterPath = "$baseUrl${chapter.url}".toHttpUrl().pathSegments
+        val chapterPath = getChapterUrl(chapter).toHttpUrl().pathSegments
 
         assert(
             chapterPath.size == 2 &&
@@ -549,8 +553,9 @@ abstract class Dynasty :
 
         val data = client.get(url, Fetch.XHR).parseAs<ChapterResponse>()
 
+        val base = baseUrl.toHttpUrl()
         return data.pages.mapIndexed { index, page ->
-            Page(index, imageUrl = baseUrl + page.url)
+            Page(index, imageUrl = base.resolve(page.url)!!.toString())
         }
     }
 
@@ -560,7 +565,11 @@ abstract class Dynasty :
             ?.randomOrNull()
             ?: return emptyList()
 
-        val data = client.get("$baseUrl/authors/$authorSlug.json", Fetch.XHR).parseAs<AuthorResponse>()
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("authors")
+            .addPathSegment("$authorSlug.json")
+            .build()
+        val data = client.get(url, Fetch.XHR).parseAs<AuthorResponse>()
         val related = LinkedHashSet<MangaEntry>()
 
         data.taggables.forEach { taggable ->
@@ -669,7 +678,7 @@ abstract class Dynasty :
     }
 
     private fun buildCoverUrl(file: String): String {
-        val path = "$baseUrl$file".toHttpUrl()
+        val path = baseUrl.toHttpUrl().resolve(file)!!
             .encodedPath
             .removePrefix("/")
 
