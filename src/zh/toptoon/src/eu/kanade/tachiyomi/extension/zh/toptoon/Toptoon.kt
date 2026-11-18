@@ -8,15 +8,20 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
+import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
+import okhttp3.OkHttpClient
 import java.time.format.DateTimeFormatter
 
 @Source
 abstract class Toptoon : KeiSource() {
+    // Set by the site's 18+ toggle
+    override fun OkHttpClient.Builder.configureClient() = addCookie("adultStatus" to "1")
+
     // Popular
 
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -67,12 +72,7 @@ abstract class Toptoon : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
-        if (response.request.url.pathSegments[0].isEmpty()) {
-            response.close()
-            throw Exception("请到WebView确认年满18岁")
-        }
-        val document = response.asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val details = SManga.create().apply {
             url = manga.url
@@ -111,10 +111,7 @@ abstract class Toptoon : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         val pathSegments = response.request.url.pathSegments
-        if (pathSegments[0].isEmpty()) {
-            response.close()
-            throw Exception("请到WebView确认年满18岁")
-        } else if (pathSegments.size < 2 || pathSegments[1] != "epView") {
+        if (pathSegments.size < 2 || pathSegments[1] != "epView") {
             response.close()
             throw Exception("请确认是否已登录解锁")
         }
