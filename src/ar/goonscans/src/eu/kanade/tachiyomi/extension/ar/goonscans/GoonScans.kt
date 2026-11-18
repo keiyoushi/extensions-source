@@ -79,6 +79,10 @@ abstract class GoonScans : MangaThemesia() {
 
     override val seriesDetailsSelector = ".webtoon-container"
     override val seriesTitleSelector = ".webtoon-title"
+    override val seriesAltNameSelector = ".webtoon-alternate-names"
+    override val seriesArtistSelector = ".creators-list a[href*=/artist/]:matchesOwn(\\p{L})"
+    override val seriesAuthorSelector = ".creators-list a[href*=/writer/]:matchesOwn(\\p{L})"
+    override val seriesTypeSelector = ".webtoon-type a"
     override val seriesThumbnailSelector = ".webtoon-cover"
     override val seriesDescriptionSelector = ".description-content"
     override val seriesGenreSelector = ".genre-tags a"
