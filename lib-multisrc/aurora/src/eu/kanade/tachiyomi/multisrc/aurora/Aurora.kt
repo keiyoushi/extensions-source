@@ -10,12 +10,15 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
+import keiyoushi.utils.toJsonRequestBody
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -23,6 +26,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 @Source
 abstract class Aurora : KeiSource() {
@@ -48,7 +52,7 @@ abstract class Aurora : KeiSource() {
 
     override fun getMangaUrl(manga: SManga): String = entryURL(manga.memo)
 
-    override fun getChapterUrl(chapter: SChapter) = "${entryURL(chapter.memo)}/${chapter.chapter_number}"
+    override fun getChapterUrl(chapter: SChapter) = "${entryURL(chapter.memo)}/${chapter.memo["number"]!!.string}"
 
     private fun entryURL(memo: JsonObject): String = "$baseUrl/${memo["type"]!!.string}/${memo["slug"]!!.string}"
 
@@ -90,30 +94,63 @@ abstract class Aurora : KeiSource() {
         }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val pageHeaders = headersBuilder()
+        val chapterUrl = getChapterUrl(chapter)
+        val entryUrl = entryURL(chapter.memo)
+        val rscHeaders = headersBuilder()
             .set("rsc", "1")
-            .set("Referer", entryURL(chapter.memo))
-            .set("next-url", entryURL(chapter.memo).toHttpUrl().encodedPath)
+            .set("next-url", entryUrl.toHttpUrl().encodedPath)
             .build()
-        val response = client
-            .newBuilder()
-            .addCookie("mnx_gate_${chapter.chapter_number}" to "1")
-            .build()
-            .get(getChapterUrl(chapter), pageHeaders, Fetch.XHR)
+        val pages = client.get(chapterUrl, rscHeaders, Fetch.XHR.from(entryUrl)).extractNextJs<PagesDto>()
+            ?: unlockChapter(chapterUrl, entryUrl, rscHeaders)
 
-        return response.extractNextJs<PagesDto>()?.toPageList { encodedUrl ->
-            decrypt(encodedUrl, getKey(encodedUrl))
+        return pages?.toPageList { encodedUrl ->
+            decrypt(encodedUrl, getKey(encodedUrl, chapterUrl))
         } ?: emptyList()
     }
 
+    // Following the gate link's redirects (link.amazon affiliate chain) failed the chapter
+    private val noRedirectClient by lazy { client.newBuilder().followRedirects(false).build() }
+
+    // The server only checks that the gate link was requested and that GATE_WAIT has passed since the start
+    private suspend fun unlockChapter(chapterUrl: String, entryUrl: String, rscHeaders: Headers): PagesDto? {
+        val startedAt = TimeSource.Monotonic.markNow()
+        val gate = client.post(
+            "$baseUrl/api/gate/start",
+            Fetch.XHR.from(chapterUrl),
+            GateStartDto(chapterUrl.toHttpUrl().encodedPath).toJsonRequestBody(),
+        ).parseAs<GateResponseDto>().data
+        noRedirectClient.get(gate.gateUrl, Fetch.DOCUMENT.from(chapterUrl), ensureSuccess = false).close()
+
+        val callbackUrl = "$baseUrl/gate/callback".toHttpUrl().newBuilder()
+            .addQueryParameter("token", gate.token)
+            .build()
+        delay(GATE_WAIT - startedAt.elapsedNow())
+        repeat(GATE_ATTEMPTS) { attempt ->
+            if (attempt > 0) delay(GATE_RETRY_DELAY)
+            val response = client.get(callbackUrl, rscHeaders, Fetch.XHR.from(entryUrl))
+            val error = response.request.url.queryParameter("gate_error")
+                ?: return response.extractNextJs<PagesDto>()
+            response.close()
+            if (error != "too_fast") throw Exception("Chapter gate failed: $error")
+        }
+        throw Exception("Chapter gate failed: too_fast")
+    }
+
     private var key: String? = null
-    suspend fun getKey(payload: String): String {
+    suspend fun getKey(payload: String, chapterUrl: String): String {
         if (!key.isNullOrBlank()) {
             return key!!
         }
         val (v, e) = getParams(payload)
-        return client.get("$baseUrl/api/atfield/key?v=$v&e=$e", Fetch.XHR).parseAs<KeyDto>().k.also {
+        return client.get("$baseUrl/api/atfield/key?v=$v&e=$e", Fetch.XHR.from(chapterUrl)).parseAs<KeyDto>().k.also {
             key = it
         }
+    }
+
+    companion object {
+        // minWaitSeconds says 0, but callbacks before ~10 s after the start get gate_error=too_fast
+        private val GATE_WAIT = 10.seconds
+        private val GATE_RETRY_DELAY = 2.seconds
+        private const val GATE_ATTEMPTS = 3
     }
 }

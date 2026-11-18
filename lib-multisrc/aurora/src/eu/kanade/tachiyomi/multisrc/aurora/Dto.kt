@@ -112,3 +112,19 @@ class ImageDto(
 class KeyDto(
     val k: String,
 )
+
+@Serializable
+class GateStartDto(
+    val returnTo: String,
+)
+
+@Serializable
+class GateResponseDto(
+    val data: GateDto,
+)
+
+@Serializable
+class GateDto(
+    val token: String,
+    val gateUrl: String,
+)
