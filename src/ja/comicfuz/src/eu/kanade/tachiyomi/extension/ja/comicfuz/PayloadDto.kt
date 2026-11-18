@@ -47,8 +47,8 @@ enum class DayOfWeek(private val dayNum: Int) {
 class SearchRequest(
     @ProtoNumber(1) private val deviceInfo: DeviceInfo,
     @ProtoNumber(2) private val query: String,
-    @ProtoNumber(3) private val pageIndexOfMangas: Int,
-    @ProtoNumber(4) private val pageIndexOfBooks: Int,
+    @ProtoNumber(4) private val pageIndexOfMangas: Int,
+    @ProtoNumber(5) private val pageIndexOfBooks: Int,
 )
 
 @Serializable
