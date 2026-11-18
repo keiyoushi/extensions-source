@@ -9,7 +9,11 @@ class GenreFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Category"
 internal fun getSortFilters(): Array<Pair<String?, String>> = arrayOf(
     Pair("latest", "Latest"),
     Pair("newest", "Newest"),
-    Pair("topview", "Top read"),
+    Pair("views", "Top read"),
+    Pair("az", "A → Z"),
+    Pair("chapters", "Chapters"),
+    Pair("follows", "Most followed"),
+    Pair("rating", "Top rated"),
 )
 
 internal fun getStatusFilters(): Array<Pair<String?, String>> = arrayOf(
@@ -171,6 +175,7 @@ internal fun getGenreFilters(): Array<Pair<String?, String>> = arrayOf(
     Pair("time-travel", "Time travel"),
     Pair("traditional-games", "Traditional games"),
     Pair("tragedy", "Tragedy"),
+    Pair("transmigration", "Transmigration"),
     Pair("vampires", "Vampires"),
     Pair("video-games", "Video games"),
     Pair("villainess", "Villainess"),
