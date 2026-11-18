@@ -81,7 +81,7 @@ abstract class Milftoon : KeiSource() {
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isBlank()) return getLatestUpdates(page)
         val url = "$baseUrl/search_result".toHttpUrl().newBuilder()
-            .addQueryParameter("q", query)
+            .addQueryParameter("keyword", query)
             .addQueryParameter("page", page.toString())
             .build()
         val html = client.get(url, Fetch.DOCUMENT).asJsoup().html()
