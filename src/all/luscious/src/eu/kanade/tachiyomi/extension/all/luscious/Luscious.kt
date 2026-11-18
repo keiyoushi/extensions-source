@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.luscious
 
 import android.content.SharedPreferences
-import androidx.preference.CheckBoxPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -19,10 +18,10 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -201,58 +200,21 @@ abstract class Luscious :
 
     // Chapters
 
-    private suspend fun getChapters(id: String, album: FullAlbum): List<SChapter> {
-        val totalPictures = album.numberOfPictures
-
-        val chapters = mutableListOf<SChapter>()
-        var page = 1
-        var hasMore = true
-
-        while (hasMore) {
-            val data = client.get(buildAlbumPicturesPageUrl(id, page), Fetch.XHR).parseAs<AlbumListOwnPicturesResponse>()
-            val pictureItems = parsePictures(data, withOriginals = false)
-
-            if (pictureItems.isEmpty()) {
-                hasMore = false
-            } else {
-                pictureItems.forEach {
-                    val chapter = SChapter.create().apply {
-                        chapter_number = it.index.toFloat()
-                        name = "${it.index} - ${it.title}"
-                        date_upload = (it.created ?: 0L) * 1000L
-                        setUrlWithoutDomain(it.url)
-                        val host = it.url.toHttpUrl().host
-                        if (host != cdnHost) memo = buildJsonObject { put("host", host) }
-                    }
-                    chapters.add(chapter)
-                }
-
-                // total_items stops at 1000
-                if (page * 50 >= totalPictures || data.data.picture.list.items.isEmpty()) {
-                    hasMore = false
-                } else {
-                    page++
-                }
-            }
-        }
-        return chapters.reversed()
-    }
-
-    private fun getMergedChapters(manga: SManga, album: FullAlbum): List<SChapter> {
-        val chunkCount = ceil(album.numberOfPictures / 1000.0).toInt().coerceAtLeast(1)
+    private fun getChapters(manga: SManga, album: FullAlbum): List<SChapter> {
+        val chunkCount = ceil(album.numberOfPictures / (PAGES_PER_CHUNK * 50.0)).toInt().coerceAtLeast(1)
 
         return (chunkCount downTo 1).map { i ->
             SChapter.create().apply {
                 url = "${manga.url}?chunk=$i"
-                name = if (chunkCount == 1) "Merged Chapter" else "Merged Chapter (Part $i)"
+                name = if (chunkCount == 1) "Chapter" else "Part $i"
                 chapter_number = i.toFloat()
                 date_upload = (album.created?.toLong() ?: 0L) * 1000L
             }
         }
     }
 
-    // signed original links expire, so they are only used for pages fetched on read
-    private fun getPictureUrl(picture: Picture, withOriginals: Boolean): HttpUrl = when {
+    // signed original links expire, so pages are fetched on read
+    private fun getPictureUrl(picture: Picture): String = when {
         getResolutionPref() != "-1" -> {
             picture.thumbnails[getResolutionPref().toInt()].url.resolved()
         }
@@ -267,18 +229,14 @@ abstract class Luscious :
                 .build()
         }
 
-        withOriginals && picture.urlToOriginal != null -> {
+        picture.urlToOriginal != null -> {
             picture.urlToOriginal.resolved()
         }
 
         else -> {
             picture.thumbnails.maxBy { it.height * it.width }.url.resolved()
         }
-    }
-
-    private fun parsePictures(data: AlbumListOwnPicturesResponse, withOriginals: Boolean): List<PictureItem> = data.data.picture.list.items.map {
-        PictureItem(it.position, getPictureUrl(it, withOriginals).toString(), it.title, it.created.toLong())
-    }
+    }.toString()
 
     private fun String.resolved(): HttpUrl = cdnBaseUrl.resolve(this)!!
 
@@ -304,38 +262,27 @@ abstract class Luscious :
             .build()
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> {
-        if (!chapter.url.startsWith("/albums/")) {
-            return listOf(Page(0, imageUrl = getChapterUrl(chapter)))
-        }
+    private suspend fun getPicturesPage(id: String, page: Int): AlbumListOwnPicturesList = client.get(buildAlbumPicturesPageUrl(id, page), Fetch.XHR).parseAs<AlbumListOwnPicturesResponse>().data.picture.list
 
-        val chunk = chapter.url.substringAfter("?chunk=", "1").substringBefore("#").toIntOrNull() ?: 1
+    override suspend fun getPageList(chapter: SChapter): List<Page> = coroutineScope {
+        val chunk = chapter.url.substringAfter("?chunk=", "1").toInt()
         val id = chapter.url.substringBefore("?").substringAfterLast("_").removeSuffix("/")
 
-        val pages = mutableListOf<Page>()
-        val startPage = (chunk - 1) * 20 + 1
-        val endPage = chunk * 20
+        val startPage = (chunk - 1) * PAGES_PER_CHUNK + 1
+        val first = getPicturesPage(id, startPage)
+        if (first.items.isEmpty()) throw Exception("Log in via WebView to view more than 1000 pictures")
 
-        for (page in startPage..endPage) {
-            val data = client.get(buildAlbumPicturesPageUrl(id, page), Fetch.XHR).parseAs<AlbumListOwnPicturesResponse>()
-            val pictureItems = parsePictures(data, withOriginals = true)
+        val endPage = minOf(chunk * PAGES_PER_CHUNK, first.info.totalPages)
+        val rest = (startPage + 1..endPage).map { page ->
+            async { getPicturesPage(id, page).items }
+        }.awaitAll()
 
-            if (pictureItems.isEmpty()) break
-
-            pictureItems.forEach {
-                pages.add(Page(pages.size, imageUrl = it.url))
-            }
-
-            if (pictureItems.size < 50) break
+        (listOf(first.items) + rest).flatten().mapIndexed { i, picture ->
+            Page(i, imageUrl = getPictureUrl(picture))
         }
-        return pages
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.startsWith("/albums/")) {
-        "$baseUrl${chapter.url.substringBefore("?")}"
-    } else {
-        "https://${chapter.memo["host"]?.jsonPrimitive?.content ?: cdnHost}${chapter.url}"
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url.substringBefore("?")}"
 
     // Details
 
@@ -348,11 +295,7 @@ abstract class Luscious :
         val id = manga.url.substringAfterLast("_").removeSuffix("/")
         val album = getAlbumInfo(id)
 
-        val chapterList = when {
-            getMergeChapterPref() -> getMergedChapters(manga, album)
-            fetchChapters -> getChapters(id, album)
-            else -> chapters
-        }
+        val chapterList = if (fetchChapters) getChapters(manga, album) else chapters
 
         return SMangaUpdate(detailsParse(album).apply { url = manga.url }, chapterList)
     }
@@ -446,18 +389,10 @@ abstract class Luscious :
             setDefaultValue(SORT_PREF_DEFAULT_VALUE)
             summary = "%s"
         }
-        val mergeChapterPref = CheckBoxPreference(screen.context).apply {
-            key = "${MERGE_CHAPTER_PREF_KEY}_$lang"
-            title = MERGE_CHAPTER_PREF_TITLE
-            summary = MERGE_CHAPTER_PREF_SUMMARY
-            setDefaultValue(MERGE_CHAPTER_PREF_DEFAULT_VALUE)
-        }
         screen.addPreference(resolutionPref)
         screen.addPreference(sortPref)
-        screen.addPreference(mergeChapterPref)
     }
 
-    private fun getMergeChapterPref(): Boolean = preferences.getBoolean("${MERGE_CHAPTER_PREF_KEY}_$lang", MERGE_CHAPTER_PREF_DEFAULT_VALUE)
     private fun getResolutionPref(): String = preferences.getString("${RESOLUTION_PREF_KEY}_$lang", RESOLUTION_PREF_DEFAULT_VALUE)!!
 
     // older versions stored "position", which the API no longer accepts (HTTP 400)
