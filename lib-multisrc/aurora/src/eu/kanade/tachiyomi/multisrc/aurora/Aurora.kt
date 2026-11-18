@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.aurora
 
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -59,12 +60,13 @@ abstract class Aurora : KeiSource() {
             .addPathSegment(segments[0])
             .addPathSegment(segments[1])
             .build()
-        val response = client.get(mangaUrl, Fetch.DOCUMENT, ensureSuccess = false)
-        if (!response.isSuccessful) {
-            response.close()
-            return null
+        return client.get(mangaUrl, Fetch.DOCUMENT, ensureSuccess = false).use { response ->
+            when {
+                response.code == 404 -> null
+                !response.isSuccessful -> throw HttpException(response.code)
+                else -> response.asJsoup().seriesDto()?.toSManga()?.apply { initialized = true }
+            }
         }
-        return response.asJsoup().seriesDto()?.toSManga()?.apply { initialized = true }
     }
 
     override fun getMangaUrl(manga: SManga): String = entryURL(manga.memo)
