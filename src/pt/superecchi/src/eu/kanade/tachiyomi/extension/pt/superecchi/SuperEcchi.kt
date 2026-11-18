@@ -57,7 +57,7 @@ abstract class SuperEcchi : KeiSource() {
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = coroutineScope {
         if (page > 1 || query.isBlank()) return@coroutineScope MangasPage(emptyList(), false)
         val body = FormBody.Builder().add("id", query).build()
-        val suggestions = client.post("$baseUrl/ajax_pesquisar.php", headers, Fetch.XHR, body).parseAs<List<String>>()
+        val suggestions = client.post("$baseUrl/ajax_pesquisar.php", headers, Fetch.XHR, body).parseAs<List<String>?>().orEmpty()
         val mangas = suggestions.map { async { suggestionResults(it) } }
             .awaitAll()
             .flatten()
