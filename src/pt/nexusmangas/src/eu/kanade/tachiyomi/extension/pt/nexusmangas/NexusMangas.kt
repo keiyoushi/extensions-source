@@ -53,6 +53,11 @@ abstract class NexusMangas : KeiSource() {
     override fun Headers.Builder.configureHeaders(): Headers.Builder = this
         .set("Accept", "application/json")
 
+    private val countHeaders: Headers
+        get() = headersBuilder()
+            .set("Prefer", "count=exact")
+            .build()
+
     private val readerHeaders: Headers
         get() = headersBuilder()
             .set("x-nexus-client", "reader-v3")
@@ -201,6 +206,7 @@ abstract class NexusMangas : KeiSource() {
 
     private suspend fun fetchChapters(slug: String): List<SChapter> {
         val chapters = mutableListOf<ChapterDto>()
+        var total: Int
         do {
             val url = "$apiUrl/chapters".toHttpUrl().newBuilder()
                 .addQueryParameter("select", "$CHAPTER_COLUMNS,works!work_id!inner()")
@@ -210,9 +216,11 @@ abstract class NexusMangas : KeiSource() {
                 .addQueryParameter("offset", chapters.size.toString())
                 .build()
 
-            val page = client.get(url, Fetch.XHR).parseAs<List<ChapterDto>>()
+            val response = client.get(url, countHeaders, Fetch.XHR)
+            val page = response.parseAs<List<ChapterDto>>()
+            total = response.header("Content-Range")!!.substringAfter('/').toInt()
             chapters += page
-        } while (page.size == CHAPTER_PAGE_SIZE)
+        } while (page.isNotEmpty() && chapters.size < total)
 
         return chapters.map { it.toSChapter(slug) }
     }
