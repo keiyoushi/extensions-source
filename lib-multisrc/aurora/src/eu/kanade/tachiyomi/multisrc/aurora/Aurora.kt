@@ -136,15 +136,14 @@ abstract class Aurora : KeiSource() {
         throw Exception("Chapter gate failed: too_fast")
     }
 
-    private var key: String? = null
-    suspend fun getKey(payload: String, chapterUrl: String): String {
-        if (!key.isNullOrBlank()) {
-            return key!!
-        }
+    private var key: KeyDto? = null
+
+    private suspend fun getKey(payload: String, chapterUrl: String): String {
         val (v, e) = getParams(payload)
-        return client.get("$baseUrl/api/atfield/key?v=$v&e=$e", Fetch.XHR.from(chapterUrl)).parseAs<KeyDto>().k.also {
-            key = it
-        }
+        key?.takeIf { it.v == v && it.e == e }?.let { return it.k }
+        return client.get("$baseUrl/api/atfield/key?v=$v&e=$e", Fetch.XHR.from(chapterUrl)).parseAs<KeyDto>()
+            .also { key = it }
+            .k
     }
 
     companion object {

@@ -110,6 +110,8 @@ class ImageDto(
 
 @Serializable
 class KeyDto(
+    val v: Int,
+    val e: Int,
     val k: String,
 )
 
