@@ -24,7 +24,7 @@ class Manga(
     @ProtoNumber(1) private val id: Int,
     @ProtoNumber(2) private val title: String,
     @ProtoNumber(4) private val cover: String,
-    @ProtoNumber(14) private val description: String,
+    @ProtoNumber(14) private val description: String = "",
 ) {
     fun toSManga(cdnUrl: String): SManga = SManga.create().apply {
         url = "/manga/$id"
