@@ -9,6 +9,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstance
@@ -16,6 +17,7 @@ import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MultipartBody
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 @Source
@@ -79,7 +81,6 @@ abstract class GoonScans : MangaThemesia() {
 
     override val seriesDetailsSelector = ".webtoon-container"
     override val seriesTitleSelector = ".webtoon-title"
-    override val seriesAltNameSelector = ".webtoon-alternate-names"
     override val seriesArtistSelector = ".creators-list a[href*=/artist/]:matchesOwn(\\p{L})"
     override val seriesAuthorSelector = ".creators-list a[href*=/writer/]:matchesOwn(\\p{L})"
     override val seriesTypeSelector = ".webtoon-type a"
@@ -87,6 +88,13 @@ abstract class GoonScans : MangaThemesia() {
     override val seriesDescriptionSelector = ".description-content"
     override val seriesGenreSelector = ".genre-tags a"
     override val seriesStatusSelector = ".cover-status-badge"
+
+    override fun mangaDetailsParse(document: Document) = super.mangaDetailsParse(document).apply {
+        description = MarkdownDescription.Builder()
+            .description(document.selectFirst(seriesDescriptionSelector))
+            .altTitles(listOfNotNull(document.selectFirst(".webtoon-alternate-names")?.attrOrNull("data-full-text")))
+            .build()
+    }
 
     override fun chapterListSelector() = "ul.chapter-list li"
 
