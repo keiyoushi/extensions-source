@@ -6,7 +6,8 @@ plugins {
 
 keiyoushi {
     name = "NihonKuni"
-    versionCode = 2
+    pkgName = "ja.mangagun"
+    versionCode = 3
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "fmreader"
@@ -14,7 +15,6 @@ keiyoushi {
     source {
         lang = "ja"
         baseUrl = "https://nihonkuni.com"
-        // Formerly "MangaGun(漫画軍)"
         id = 3811800324362294701L
     }
 }

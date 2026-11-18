@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ja.mangagun
+package eu.kanade.tachiyomi.extension.ja.nihonkuni
 
 import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
@@ -11,16 +11,21 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.util.Calendar
 
 @Source
-abstract class MangaGun : FMReader() {
+abstract class NihonKuni : FMReader() {
 
     override val infoElementSelector = "div.manga-detail-container"
-    override val mangaDetailsSelectorDescription = ".description-text-content, .manga-info-list > li:nth-child(1) .info-field-value"
+    override val mangaDetailsSelectorGenre = "li:has(.fa-tags) a.btn-danger"
+    override val mangaDetailsSelectorDescription = ".description-text-content"
+    override val mangaDetailsSelectorThumbnail = "img.manga-cover-image"
+    override val altNameSelector = "li:has(.fa-clone) .info-field-value"
+    override val altName = "Alternative Name: "
 
     // The title is base64 encoded and filled in by JS
     override fun parseMangaTitle(document: Document): String? = document.selectFirst("h1.manga-main-title")
@@ -71,42 +76,33 @@ abstract class MangaGun : FMReader() {
         else -> element.attr("abs:src")
     }
 
-    override suspend fun fetchChapterList(manga: SManga, mangaPage: Document): List<SChapter> {
-        val index = manga.url.indexOf("manga-")
-        // Handling version compatibility, previous version used the 'raw-' prefix.
-        val slug = if (index >= 0) {
-            manga.url.substring(index + 6)
-        } else {
-            manga.url.substringAfter("raw-")
-        }.substringBefore(".html")
+    // Map /manga/<slug>-<id>.html to the list's /manga-<slug>.html
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
 
-        return client.get("$baseUrl/app/manga/controllers/cont.Listchapter.php?slug=$slug", Fetch.DOCUMENT).asJsoup().select(".at-series a").map {
-            SChapter.create().apply {
-                name = it.select(".chapter-name").text()
-                url = it.attr("abs:href").substringAfter("controllers")
-                date_upload = parseChapterDate(it.select(".chapter-time").text())
-            }
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
+        val mangaTitle = parseMangaTitle(document) ?: return null
+        val slug = document.selectFirst(".h0rating[slug]")?.attr("slug")
+        return mangaDetailsParse(document).apply {
+            setUrlWithoutDomain(url.toString())
+            slug?.let { this.url = "/manga-$it.html" }
+            title = mangaTitle
         }
     }
 
-    private fun parseChapterDate(date: String): Long {
-        val value = date.split(' ')[dateValueIndex].toInt()
-        val chapterDate = Calendar.getInstance().apply {
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
+    // Drop the SEO blurb, alt names and "Show more" around the synopsis
+    override fun mangaDetailsParse(document: Document): SManga {
+        document.select(".description-text-content > p, .description-text-content > div").remove()
+        return super.mangaDetailsParse(document)
+    }
 
-        when (date.split(' ')[dateWordIndex]) {
-            "mins", "minutes" -> chapterDate.add(Calendar.MINUTE, -value)
-            "hours" -> chapterDate.add(Calendar.HOUR_OF_DAY, -value)
-            "days" -> chapterDate.add(Calendar.DATE, -value)
-            "weeks" -> chapterDate.add(Calendar.DATE, -value * 7)
-            "months" -> chapterDate.add(Calendar.MONTH, -value)
-            "years" -> chapterDate.add(Calendar.YEAR, -value)
-            else -> return 0
+    // Not abs:href, the page redirects under /manga/ and would change stored /read-*.html URLs
+    override suspend fun fetchChapterList(manga: SManga, mangaPage: Document): List<SChapter> = mangaPage.select("#chapters_raw_data > a").map {
+        SChapter.create().apply {
+            url = "/" + it.attr("href").removePrefix("/")
+            name = it.selectFirst(".chapter-name")!!.text()
+            date_upload = parseRelativeDate(it.attr("data-time").trim())
         }
-
-        return chapterDate.timeInMillis
     }
 
     override fun pageListParse(document: Document): List<Page> {
