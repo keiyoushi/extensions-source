@@ -14,4 +14,8 @@ keiyoushi {
         lang = "en"
         baseUrl = "https://milftoon.xxx"
     }
+
+    deeplink {
+        path("/comics/..*")
+    }
 }
