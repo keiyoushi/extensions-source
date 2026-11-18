@@ -11,5 +11,7 @@ abstract class ComicVerse : ZeistManga() {
 
     override val popularMangaSelector = "div.PopularPosts figure"
 
+    override val mangaDetailsSelectorGenres = ".cv-genres-above-story > a[rel=tag]"
+
     override val pageListSelector = "#cvOriginal"
 }
