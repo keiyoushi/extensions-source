@@ -7,11 +7,13 @@ open class UriPartFilter(displayName: String, private val vals: Array<Pair<Strin
 }
 
 class SortFilter : UriPartFilter("Sıralama", arrayOf("Ada Göre" to "name", "Popülerlik" to "views", "Son Güncelleme" to "last_update"), 2)
-class SortDirectionFilter : UriPartFilter("Yön", arrayOf("Z → A" to "DESC", "A → Z" to "ASC"))
+
+// ASC is A → Z for names but most viewed / newest first for views and last_update
+class SortDirectionFilter : UriPartFilter("Yön", arrayOf("Varsayılan" to "ASC", "Ters" to "DESC"))
 class StatusFilter : UriPartFilter("Yayın Durumu", arrayOf("Hepsi" to "", "Tamamlandı" to "1", "Devam Ediyor" to "2"))
 class TranslationStatusFilter : UriPartFilter("Çeviri Durumu", arrayOf("Hepsi" to "", "Tamamlanan" to "1", "Devam Eden" to "4", "Bırakılan" to "2", "Olmayan" to "3"))
 class AgeFilter : UriPartFilter("Yaş Sınırlaması", arrayOf("Hepsi" to "", "+16" to "16", "+18" to "18"))
-class ContentTypeFilter : UriPartFilter("İçerik", arrayOf("Hepsi" to "", "Manga" to "1", "Anime" to "4", "Çizgi Roman" to "5", "Novel" to "2", "Webtoon" to "3"))
+class ContentTypeFilter : UriPartFilter("İçerik", arrayOf("Hepsi" to "", "Manga" to "1", "Webtoon" to "3"))
 class GenreFilter : UriPartFilter("Tür", genrePairs)
 
 private val genrePairs = arrayOf(

@@ -1,10 +1,9 @@
 package eu.kanade.tachiyomi.extension.tr.mangatr
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
-import android.graphics.Rect
-import android.util.Base64
+import android.graphics.Color
+import android.graphics.Paint
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -18,13 +17,12 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.JSON_MEDIA_TYPE
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.attrOrNull
-import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha256
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonElement
+import okhttp3.CacheControl
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -33,7 +31,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Protocol
+import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
@@ -43,6 +42,7 @@ import java.io.IOException
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 import java.util.Locale
+import kotlin.time.Clock
 
 @Source
 abstract class MangaTR : KeiSource() {
@@ -51,27 +51,32 @@ abstract class MangaTR : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(::verifyChallengeInterceptor)
-        addInterceptor(::scrambledImageInterceptor)
+        addInterceptor(::brokenImageInterceptor)
         addInterceptor(DDoSGuardInterceptor(network.client))
+        rateLimit(10) { it.host == IMAGE_HOST }
         rateLimit(2)
     }
 
     // The chapter list endpoint mislabels its response as Brotli; request an identity
     // encoding so the shared decompression interceptor doesn't choke on it.
     private val ajaxHeaders get() = headersBuilder()
-        .add("X-Requested-With", "XMLHttpRequest")
+        .set("X-Requested-With", "XMLHttpRequest")
         .add("Accept-Encoding", "identity")
         .build()
 
     private var captchaUrl: String? = null
 
+    @Volatile
+    private var seed: Pair<String, Int>? = null
+
     // ============================== Popular ==============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, "$baseUrl/manga-list-sayfala.html?sort=views&sort_type=DESC&page=$page&listType=pagination")
+    // The site reads sort_type the other way round for views and last_update: ASC is most viewed / newest first
+    override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(page, "$baseUrl/manga-list-sayfala.html?sort=views&sort_type=ASC&page=$page&listType=pagination")
 
     // ============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList(page, "$baseUrl/manga-list-sayfala.html?sort=last_update&sort_type=DESC&page=$page&listType=pagination")
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList(page, "$baseUrl/manga-list-sayfala.html?sort=last_update&sort_type=ASC&page=$page&listType=pagination")
 
     // ============================== Search ===============================
 
@@ -82,17 +87,7 @@ abstract class MangaTR : KeiSource() {
                 .addQueryParameter("page", page.toString())
                 .build()
             val document = client.get(url, Fetch.DOCUMENT).asJsoup()
-
-            val mangas = document.select("div.arama-card")
-                .filterNot { it.selectFirst(".arama-badge")?.text()?.lowercase(Locale.ROOT)?.isExcludedType() == true }
-                .map {
-                    SManga.create().apply {
-                        val link = it.selectFirst("a.arama-card__title")!!
-                        setUrlWithoutDomain(link.absUrl("href"))
-                        title = link.text()
-                        thumbnail_url = it.selectFirst("img.arama-card__cover")?.absUrl("src")
-                    }
-                }
+            val mangas = document.mangaCards("div.arama-card", ".arama-badge", "a.arama-card__title", "img.arama-card__cover")
             return MangasPage(mangas, document.hasNextPage(page))
         }
 
@@ -118,22 +113,23 @@ abstract class MangaTR : KeiSource() {
 
     private suspend fun getMangaList(page: Int, url: HttpUrl): MangasPage {
         val document = client.get(url, Fetch.DOCUMENT).asJsoup()
-
-        val mangas = document.select("div.media-card")
-            .filterNot { it.selectFirst(".media-card__badge")?.text()?.lowercase(Locale.ROOT)?.isExcludedType() == true }
-            .map {
-                SManga.create().apply {
-                    val link = it.selectFirst("a.media-card__title")!!
-                    setUrlWithoutDomain(link.absUrl("href"))
-                    title = link.text()
-                    thumbnail_url = it.selectFirst("img.media-card__cover")?.absUrl("src")
-                }
-            }
-
+        val mangas = document.mangaCards("div.media-card", ".media-card__badge", "a.media-card__title", "img.media-card__cover")
         return MangasPage(mangas, document.hasNextPage(page))
     }
 
     private suspend fun getMangaList(page: Int, url: String) = getMangaList(page, url.toHttpUrl())
+
+    private fun Document.mangaCards(card: String, badge: String, title: String, cover: String): List<SManga> = select(card)
+        .filterNot { it.selectFirst(badge)?.text()?.lowercase(Locale.ROOT)?.isExcludedType() == true }
+        .mapNotNull { element ->
+            // Skips the nameless placeholder series ("manga-.html") the site keeps for misfiled uploads
+            val link = element.selectFirst(title)?.takeIf { it.text().isNotBlank() } ?: return@mapNotNull null
+            SManga.create().apply {
+                setUrlWithoutDomain(link.absUrl("href"))
+                this.title = link.text()
+                thumbnail_url = element.selectFirst(cover)?.absUrl("src")
+            }
+        }
 
     private fun String.isExcludedType() = contains("novel") || contains("anime")
 
@@ -158,11 +154,16 @@ abstract class MangaTR : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host && url.host != "www.${baseUrl.toHttpUrl().host}") return null
-        val path = url.pathSegments.singleOrNull() ?: return null
+        val segment = url.pathSegments.singleOrNull() ?: return null
+        // A chapter link (id-1-read-<slug>-chapter-2.html) leads to its series page
+        val path = CHAPTER_URL_REGEX.matchEntire(segment)?.let { "manga-${it.groupValues[1]}.html" } ?: segment
         if (!path.startsWith("manga-") || !path.endsWith(".html")) return null
 
         val document = client.get("$baseUrl/$path", Fetch.DOCUMENT).asJsoup()
-        return document.mangaDetails().apply { this.url = "/$path" }
+        return document.mangaDetails().apply {
+            this.url = "/$path"
+            initialized = true
+        }
     }
 
     override suspend fun fetchMangaUpdate(
@@ -172,7 +173,7 @@ abstract class MangaTR : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
-        val details = document.mangaDetails()
+        val details = if (fetchDetails) document.mangaDetails() else manga
         val chapterList = if (fetchChapters) getChapterList(document) else chapters
         return SMangaUpdate(details, chapterList)
     }
@@ -210,32 +211,54 @@ abstract class MangaTR : KeiSource() {
     // ============================= Chapters ==============================
 
     private suspend fun getChapterList(document: Document): List<SChapter> {
-        // The chapter list endpoint only accepts a signed key embedded in the series page
-        val key = CHAPTER_KEY_REGEX.find(document.html())?.groupValues?.get(1)
-            ?: throw Exception("Bölüm listesi anahtarı bulunamadı")
+        val results = document.selectFirst("#results[data-manga]")
+            ?: throw Exception("Bölüm listesi bulunamadı")
+        val slug = results.attr("data-manga")
+        val type = results.attr("data-tur")
+        val seed = document.signatureSeed()
+        val from = Fetch.XHR.from(document.location())
 
         val chapters = mutableListOf<SChapter>()
-        var offset: Int? = null
-
+        val seen = HashSet<String>()
+        var offset = 0
         while (true) {
+            val timestamp = Clock.System.now().epochSeconds
             val form = FormBody.Builder()
-                .add("chapter_list_key", key)
-                .apply { offset?.let { add("offset", it.toString()) } }
+                .add("manga", slug)
+                .add("tur", type)
+                .add("offset", offset.toString())
+                .add("_t", timestamp.toString())
+                .add("_sig", "${slug}_${seed}_$timestamp".sha256().toHexString())
                 .build()
-            val response = client.post("$baseUrl/cek/fetch_pages_manga.php", ajaxHeaders, Fetch.XHR, form)
+            val response = client.post("$baseUrl/cek/fetch_pages_manga.php", ajaxHeaders, from, form)
             // the chapter hrefs are relative, but this endpoint lives under /cek/
-            val elements = response.asJsoup()
-                .also { it.setBaseUri("$baseUrl/") }
-                .select("article.bento-ep-card")
-            if (elements.isEmpty()) break
+            val page = response.asJsoup().also { it.setBaseUri("$baseUrl/") }
+            val elements = page.select("article.bento-ep-card")
+            if (chapters.isEmpty() && elements.isEmpty() && page.selectFirst(".empty-state:contains(Türkçe basım)") != null) {
+                throw Exception("Türkçe basımı olduğu için bu seri sitede yayımlanmıyor")
+            }
+            offset += elements.size
+            val added = elements.map(::chapterFromElement).filter { seen.add(it.url) }
+            chapters += added
 
-            elements.mapTo(chapters, ::chapterFromElement)
-
-            // The site loads 20 entries initially, then 100 per "load more" request
-            offset = (offset ?: 0) + if (offset == null) 20 else 100
+            // Only the first response says whether more exist; later ones end with an empty page.
+            // Stopping on a page with nothing new also guards against the offset being ignored.
+            if (added.isEmpty() || page.selectFirst("#has-more-chapters")?.attr("value") == "0") break
         }
 
         return chapters
+    }
+
+    // The page's own script signs each chapter list request with the sum of two CSS custom
+    // properties, as read through getComputedStyle; they live in the versioned site stylesheet.
+    private suspend fun Document.signatureSeed(): Int {
+        val cssUrl = selectFirst("link[rel=stylesheet][href*=mtr.min.css]")!!.absUrl("href")
+        seed?.takeIf { it.first == cssUrl }?.let { return it.second }
+
+        val css = client.get(cssUrl, Fetch.NONE).body.string()
+        val values = SEED_REGEX.findAll(css).distinctBy { it.groupValues[1] }.toList()
+        if (values.size != 2) throw Exception("Bölüm listesi imzası bulunamadı")
+        return values.sumOf { it.groupValues[2].toInt() }.also { seed = cssUrl to it }
     }
 
     private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
@@ -244,9 +267,16 @@ abstract class MangaTR : KeiSource() {
 
         val number = link.selectFirst(".bento-ep-chapter-num")?.text()?.removeSuffix(".")
         val subtitle = element.selectFirst(".bento-ep-subtitle")?.textOrNull()
-        name = listOfNotNull("Bölüm $number", subtitle).joinToString(" - ")
+        name = listOfNotNull(number?.let { "Bölüm $it" }, subtitle).joinToString(" - ").ifEmpty { link.text() }
         chapter_number = number?.toFloatOrNull() ?: -1f
         date_upload = parseRelativeDate(element.selectFirst(".bento-ep-meta-time")?.text())
+        // Green dropdown entries are the translation groups, purple ones the uploading member
+        scanlator = element.select(".chapter-dropdown-content .dropdown-item-yesil")
+            .map { it.text() }
+            .ifEmpty { listOfNotNull(element.selectFirst(".chapter-dropdown-group-name")?.textOrNull()) }
+            .distinct()
+            .joinToString()
+            .ifEmpty { null }
     }
 
     // =============================== Pages ===============================
@@ -264,92 +294,60 @@ abstract class MangaTR : KeiSource() {
             throw IOException("Lütfen WebView'da Bot Korumasını geçin.")
         }
 
-        val configScript = document.selectFirst("script[type=application/json][id^=rdm-]")
-            ?: throw Exception("Sayfa verisi bulunamadı")
-        val pageKey = configScript.attributes().firstNotNullOf { it.value.takeIf(HEX_KEY_REGEX::matches) }
-        val gatePath = GATE_PATH_REGEX.find(document.html())?.groupValues?.get(1)
-            ?: throw Exception("Sayfa verisi bulunamadı")
-
-        // The gate token is single-use and its response key unlocks the config for this page load only
-        val gateKey = client.post("$baseUrl/$gatePath", Fetch.XHR, "{}".toRequestBody(JSON_MEDIA_TYPE))
-            .parseAs<ReaderGateDto>().k
-        val config = configScript.data()
-            .decrypt("gate|$gateKey|reader")
-            .decrypt("boot|$pageKey|reader")
-            .parseAs<ReaderConfigDto>().data
-
-        return document.select("[${config.parts}]")
-            .sortedBy { it.attr(config.pageIndex).toInt() }
-            .mapIndexed { index, element ->
-                val imageUrl = element.attr(config.parts).decrypt("attr|$pageKey|reader").parseAs<List<String>>().first()
-                val order = element.attrOrNull(config.order)?.decrypt("order|$pageKey|reader")?.parseAs<List<Int>>()
-                val url = if (order.isNullOrEmpty()) {
-                    imageUrl
-                } else {
-                    imageUrl.toHttpUrl().newBuilder().fragment(order.joinToString(",")).toString()
-                }
-                Page(index, imageUrl = url)
-            }
-    }
-
-    private fun String.decrypt(key: String): String {
-        val bytes = Base64.decode(replace('-', '+').replace('_', '/'), Base64.DEFAULT)
-        for (i in bytes.indices) {
-            bytes[i] = (bytes[i].toInt() xor key[i % key.length].code).toByte()
+        // Lazy-loaded pages keep their real URL in data-mtr-src until scrolled into view
+        return document.select("img.chapter-img").mapIndexed { index, img ->
+            Page(index, imageUrl = img.absUrl("data-mtr-src").ifEmpty { img.absUrl("src") })
         }
-        return String(bytes, Charsets.UTF_8)
     }
 
     // ============================= Utilities =============================
 
-    /**
-     * Images are served as N horizontal strips in shuffled order. Each entry of the fragment is
-     * `flip * 100 + destination` for the source strip at that index, where flip bit 1 mirrors
-     * horizontally and bit 2 mirrors vertically.
-     */
-    private fun scrambledImageInterceptor(chain: Interceptor.Chain): Response {
+    // Some pages are stored broken on the image CDN (an empty 200 or a 404); an empty one is
+    // sometimes fixed by retrying. A page still broken after that gets a notice image, instead
+    // of a 0-byte file the reader can't open or a download that can never finish.
+    private fun brokenImageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val response = chain.proceed(request)
-        val order = request.url.fragment
-            ?.takeIf { it.isNotEmpty() && it.all { c -> c.isDigit() || c == ',' } }
-            ?.split(',')
-            ?.map(String::toInt)
-            ?: return response
+        if (request.url.host != IMAGE_HOST) return chain.proceed(request)
 
-        val source = response.use {
-            BitmapFactory.decodeStream(it.body.byteStream())
-        } ?: throw IOException("Resim çözülemedi")
-
-        val stripHeight = source.height / order.size
-        val output = Bitmap.createBitmap(source.width, stripHeight * order.size, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(output)
-
-        order.forEachIndexed { sourceIndex, code ->
-            val flip = code / 100
-            val destination = code % 100
-            val src = Rect(0, sourceIndex * stripHeight, source.width, (sourceIndex + 1) * stripHeight)
-            val top = destination * stripHeight
-            val dst = Rect(0, top, source.width, top + stripHeight)
-
-            canvas.save()
-            canvas.scale(
-                if (flip and 1 != 0) -1f else 1f,
-                if (flip and 2 != 0) -1f else 1f,
-                source.width / 2f,
-                top + stripHeight / 2f,
-            )
-            canvas.drawBitmap(source, src, dst, null)
-            canvas.restore()
+        var attempt = 0
+        while (true) {
+            // Retries must reach the CDN, not an earlier answer from the HTTP cache
+            val attemptRequest = if (attempt == 0) request else request.newBuilder().cacheControl(CacheControl.FORCE_NETWORK).build()
+            val response = chain.proceed(attemptRequest)
+            val broken = try {
+                response.code == 404 || (response.isSuccessful && response.peekBody(1).contentLength() == 0L)
+            } catch (e: IOException) {
+                response.close()
+                throw e
+            }
+            if (!broken) return response
+            response.close()
+            if (++attempt == IMAGE_ATTEMPTS) return brokenPageResponse(request)
         }
-        source.recycle()
+    }
 
-        val buffer = Buffer().apply {
-            output.compress(Bitmap.CompressFormat.JPEG, 95, outputStream())
+    private fun brokenPageResponse(request: Request): Response {
+        val bitmap = Bitmap.createBitmap(800, 1130, Bitmap.Config.ARGB_8888)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.DKGRAY
+            textAlign = Paint.Align.CENTER
+            textSize = 40f
         }
-        output.recycle()
+        Canvas(bitmap).apply {
+            drawColor(Color.WHITE)
+            drawText("Bu sayfa kaynak sitede bozuk", 400f, 535f, paint)
+            drawText("ve yüklenemiyor.", 400f, 595f, paint)
+        }
+        val buffer = Buffer()
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, buffer.outputStream())
+        bitmap.recycle()
 
-        return response.newBuilder()
-            .body(buffer.asResponseBody("image/jpeg".toMediaType()))
+        return Response.Builder()
+            .request(request)
+            .protocol(Protocol.HTTP_1_1)
+            .code(200)
+            .message("OK")
+            .body(buffer.asResponseBody("image/png".toMediaType()))
             .build()
     }
 
@@ -363,6 +361,7 @@ abstract class MangaTR : KeiSource() {
             if (bodyString.contains("/cek/verify.php")) {
                 val challenge = CHALLENGE_REGEX.find(bodyString)?.groupValues?.get(1)
                 if (challenge != null) {
+                    response.close()
                     val verifyUrl = request.url.newBuilder().encodedPath("/cek/verify.php").build()
                     val verifyRequest = request.newBuilder()
                         .url(verifyUrl)
@@ -374,8 +373,6 @@ abstract class MangaTR : KeiSource() {
                         .build()
 
                     network.client.newCall(verifyRequest).execute().close()
-
-                    response.close()
                     return chain.proceed(request)
                 }
             }
@@ -383,28 +380,31 @@ abstract class MangaTR : KeiSource() {
         return response
     }
 
+    // Ages are shown compactly ("6y", "3a", "2h"); older markup spelled them out ("3 gün önce")
     private fun parseRelativeDate(dateString: String?): Long {
-        if (dateString == null) return 0L
-        val text = dateString.lowercase(Locale.ROOT)
-        val number = NUMBER_REGEX.find(text)?.value?.toLongOrNull() ?: return 0L
+        val match = dateString?.lowercase(TURKISH)?.let(RELATIVE_DATE_REGEX::find) ?: return 0L
+        val number = match.groupValues[1].toLong()
+        val unitText = match.groupValues[2]
         val unit = when {
-            text.contains("saniye") -> ChronoUnit.SECONDS
-            text.contains("dakika") || text.contains("dk") -> ChronoUnit.MINUTES
-            text.contains("saat") -> ChronoUnit.HOURS
-            text.contains("gün") -> ChronoUnit.DAYS
-            text.contains("hafta") -> ChronoUnit.WEEKS
-            text.contains("ay") -> ChronoUnit.MONTHS
-            text.contains("yıl") -> ChronoUnit.YEARS
+            unitText.startsWith("sn") || unitText.startsWith("san") -> ChronoUnit.SECONDS
+            unitText == "d" || unitText.startsWith("dk") || unitText.startsWith("dak") -> ChronoUnit.MINUTES
+            unitText == "s" || unitText.startsWith("sa") -> ChronoUnit.HOURS
+            unitText.startsWith("g") -> ChronoUnit.DAYS
+            unitText.startsWith("h") -> ChronoUnit.WEEKS
+            unitText.startsWith("a") -> ChronoUnit.MONTHS
+            unitText.startsWith("y") -> ChronoUnit.YEARS
             else -> return 0L
         }
         return ZonedDateTime.now().minus(number, unit).toInstant().toEpochMilli()
     }
 
     companion object {
-        private val NUMBER_REGEX = Regex("""\d+""")
+        private val TURKISH = Locale.forLanguageTag("tr")
+        private val RELATIVE_DATE_REGEX = Regex("""(\d+)\s*([a-zçğıöşü]+)""")
         private val CHALLENGE_REGEX = Regex("""challenge:\s*"([^"]+)"""")
-        private val CHAPTER_KEY_REGEX = Regex("""listKey:\s*'([^']+)'""")
-        private val GATE_PATH_REGEX = Regex("""_fpx\s*=\s*"([^"]+)"""")
-        private val HEX_KEY_REGEX = Regex("""[0-9a-f]{32}""")
+        private val CHAPTER_URL_REGEX = Regex("""id-\d+-read-(.+)-chapter-[^/]+\.html""")
+        private val SEED_REGEX = Regex("""--mdx-(white|black)\s*:\s*(-?\d+)""")
+        private const val IMAGE_HOST = "image.mngtr.site"
+        private const val IMAGE_ATTEMPTS = 3
     }
 }
