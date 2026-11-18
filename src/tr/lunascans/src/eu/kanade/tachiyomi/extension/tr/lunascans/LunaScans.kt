@@ -60,14 +60,9 @@ abstract class LunaScans : MadaraNoAjax() {
     }
 
     override fun parsePages(document: Document): List<Page> {
-        val pageList = super.parsePages(document)
-
-        if (
-            pageList.isEmpty() &&
-            document.select(".content-blocked, .login-required").isNotEmpty()
-        ) {
-            throw Exception("Okumak için WebView üzerinden giriş yapın")
+        if (document.selectFirst(".tuhaf-lock") != null) {
+            throw Exception("Log in via WebView to read this chapter")
         }
-        return pageList
+        return super.parsePages(document)
     }
 }
