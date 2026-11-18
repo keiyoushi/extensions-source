@@ -16,11 +16,14 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.aesCbc
 import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParseDate
@@ -53,7 +56,6 @@ abstract class Manwa :
     private val rewriteOctetStream: Interceptor = Interceptor { chain ->
         val originalResponse: Response = chain.proceed(chain.request())
         if (originalResponse.request.url.toString().endsWith("?v=20220724")) {
-            // Decrypt images in mangas
             val key = "my2ecret782ecret".toByteArray()
             originalResponse.aesDecrypt(
                 cipher = aesCbc(key, key, padding = false),
@@ -69,25 +71,22 @@ abstract class Manwa :
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addNetworkInterceptor(rewriteOctetStream)
         .addInterceptor(updateMirror)
 
-    // Popular
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/rank", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("#rankList_2 > a").map { element ->
             SManga.create().apply {
-                title = element.attr("title")
-                url = element.attr("href")
+                title = element.attrOrNull("title")!!
+                setUrlWithoutDomain(element.absUrl("href"))
                 thumbnail_url = element.selectFirst("img")?.attr("abs:data-original")
             }
         }
         return MangasPage(mangas, false)
     }
 
-    // Latest
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val currentOffset = page * 15 - 15
         val responseData = client.get("$baseUrl/getUpdate?page=$currentOffset&date=", Fetch.XHR).parseAs<LatestUpdatesDto>()
 
-        // Get image host
         val document = client.get("$baseUrl/update${preferences.getString(IMAGE_HOST_KEY, "")}", Fetch.DOCUMENT).asJsoup()
         val imgHost = document.selectFirst(".manga-list-2-cover-img")?.attr(":src")?.drop(1)?.substringBefore("'") ?: ""
 
@@ -96,7 +95,6 @@ abstract class Manwa :
         return MangasPage(mangas, responseData.total > currentOffset + 15)
     }
 
-    // Search
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val isBookList = query == "" || query.contains("-")
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -122,7 +120,7 @@ abstract class Manwa :
         val mangas = if (isBookList) {
             document.select("ul.manga-list-2 > li").map { li ->
                 SManga.create().apply {
-                    title = li.selectFirst("p.manga-list-2-title")?.text() ?: ""
+                    title = li.selectFirst("p.manga-list-2-title")!!.text()
                     setUrlWithoutDomain(li.selectFirst("a")!!.absUrl("href"))
                     thumbnail_url = li.selectFirst("img")?.attr("abs:src")
                 }
@@ -130,7 +128,7 @@ abstract class Manwa :
         } else {
             document.select("ul.book-list > li").map { li ->
                 SManga.create().apply {
-                    title = li.selectFirst("p.book-list-info-title")?.text() ?: ""
+                    title = li.selectFirst("p.book-list-info-title")!!.text()
                     setUrlWithoutDomain(li.selectFirst("a")!!.absUrl("href"))
                     thumbnail_url = li.selectFirst("img")?.attr("abs:data-original")
                 }
@@ -141,7 +139,6 @@ abstract class Manwa :
         return MangasPage(mangas, next)
     }
 
-    // Details & Chapters
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -151,21 +148,23 @@ abstract class Manwa :
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val details = SManga.create().apply {
             url = manga.url
-            title = document.selectFirst(".detail-main-info-title")?.text() ?: ""
+            title = document.selectFirst(".detail-main-info-title")!!.text()
             thumbnail_url = document.selectFirst("div.detail-main-cover > img")?.attr("abs:data-original")
-            author = document.select("p.detail-main-info-author > span.detail-main-info-value > a").text()
+            author = document.select("p.detail-main-info-author > span.detail-main-info-value > a").textOrNull()
             artist = author
             status = when (document.select("p.detail-main-info-author:contains(更新状态) > span.detail-main-info-value").text()) {
                 "连载中" -> SManga.ONGOING
                 "已完结" -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
-            genre = document.select("div.detail-main-info-class > a.info-tag").eachText().joinToString(", ")
-            description = document.selectFirst("#detail > p.detail-desc")?.text()
+            genre = document.select("div.detail-main-info-class > a.info-tag").eachText().joinToString()
+            description = MarkdownDescription.Builder()
+                .description(document.selectFirst("#detail > p.detail-desc"))
+                .build()
         }
         val chapterList = document.select("ul#detail-list-select > li > a").map { element ->
             SChapter.create().apply {
-                url = element.attr("href")
+                setUrlWithoutDomain(element.absUrl("href"))
                 name = element.text()
             }
         }.reversed()
@@ -176,10 +175,9 @@ abstract class Manwa :
         return SMangaUpdate(details, chapterList)
     }
 
-    // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         client.get("$baseUrl/static/images/pv.gif", Fetch.IMAGE, ensureSuccess = false).close()
-        val document = client.get("$baseUrl${chapter.url}${preferences.getString(IMAGE_HOST_KEY, "")}", Fetch.DOCUMENT).asJsoup()
+        val document = client.get(getChapterUrl(chapter) + preferences.getString(IMAGE_HOST_KEY, ""), Fetch.DOCUMENT).asJsoup()
         val imageHosts = document.select(".img-hosts > a").map { ImageSourceInfo(it.text(), it.attr("href")) }
         if (imageHosts.isNotEmpty()) {
             val hostList = listOf(ImageSourceInfo("None", "")) + imageHosts
@@ -190,7 +188,6 @@ abstract class Manwa :
         }
     }
 
-    // Filters
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
@@ -241,9 +238,6 @@ abstract class Manwa :
             key = APP_CUSTOMIZATION_URL_KEY
             title = "自定义URL"
             summary = "指定访问的目标URL，优先级高于选择的镜像URL"
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(APP_CUSTOMIZATION_URL_KEY, newValue as String).commit()
-            }
         }.let { screen.addPreference(it) }
 
         ListPreference(screen.context).apply {
@@ -268,9 +262,6 @@ abstract class Manwa :
             key = APP_REDIRECT_URL_KEY
             title = "重定向URL"
             summary = "该URL期望能够获取动态的目标URL列表"
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(APP_REDIRECT_URL_KEY, newValue as String).commit()
-            }
         }.let { screen.addPreference(it) }
     }
 

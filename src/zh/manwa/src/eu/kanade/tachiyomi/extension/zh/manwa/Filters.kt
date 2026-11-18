@@ -17,7 +17,7 @@ internal class EndFilter :
     UriPartFilter(
         "状态",
         listOf(
-            listOf("全部", "end=", ""),
+            listOf("全部", "end", ""),
             listOf("连载中", "end", "2"),
             listOf("完结", "end", "1"),
         ),
