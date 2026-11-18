@@ -112,7 +112,7 @@ abstract class Yupmanga : KeiSource() {
             description = MarkdownDescription.Builder()
                 .description(container.selectFirst("p#synopsisText")?.text())
                 .build()
-            author = container.selectFirst("i[title=Editorial] + span")?.text()
+            author = container.selectFirst("i[title=Autor] + span")?.text()
             status = container.selectFirst("span:has(i[title=Estado])").parseStatus()
             genre = container.select("a.genre-tag").joinToString { genre ->
                 genre.text().replaceFirstChar { it.uppercase() }
