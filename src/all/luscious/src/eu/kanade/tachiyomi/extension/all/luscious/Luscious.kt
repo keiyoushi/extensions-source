@@ -46,8 +46,29 @@ abstract class Luscious :
     private val cdnHost: String = "ah-img.luscious.net"
     private val cdnBaseUrl = "https://$cdnHost/".toHttpUrl()
 
-    override fun OkHttpClient.Builder.configureClient() = addNetworkInterceptor(rewriteOctetStream)
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(videoGifInterceptor)
+        .addNetworkInterceptor(rewriteOctetStream)
         .rateLimit(60, 1.minutes) { it.pathSegments.firstOrNull() == "graphql" }
+
+    // a video's gif is at .gif or .jpg, else the still frame passed in the fragment
+    private val videoGifInterceptor = Interceptor { chain ->
+        val request = chain.request()
+        val url = request.url
+        val name = url.pathSegments.last()
+        if (url.host != cdnHost || !name.endsWith(".gif")) return@Interceptor chain.proceed(request)
+
+        val alternatives = listOfNotNull(
+            url.newBuilder().setPathSegment(url.pathSize - 1, name.removeSuffix(".gif") + ".jpg").build(),
+            url.fragment?.toHttpUrl(),
+        )
+        var response = chain.proceed(request)
+        for (alternative in alternatives) {
+            if (response.code != 404) break
+            response.close()
+            response = chain.proceed(request.newBuilder().url(alternative).build())
+        }
+        response
+    }
 
     private val rewriteOctetStream: Interceptor = Interceptor { chain ->
         val originalResponse: Response = chain.proceed(chain.request())
@@ -334,27 +355,21 @@ abstract class Luscious :
     override fun getChapterUrl(chapter: SChapter): String = baseUrl.toHttpUrl().resolve(chapter.url)!!.newBuilder().query(null).build().toString()
 
     private fun getPictureUrl(picture: Picture): String = when {
-        // gif of a video on the image host, at the size-less thumbnail path for videos without an xMax rendition
+        // gif of a video, unsigned on the image host
         picture.urlToVideo != null -> {
-            val thumbnail = picture.thumbnails.firstOrNull()
-            if (thumbnail != null && picture.thumbnails.none { it.size == "xMax" }) {
-                val url = thumbnail.url.resolved()
-                url.newBuilder()
-                    .setPathSegment(url.pathSize - 1, url.pathSegments.last().replace(thumbnailSizeRegex, ""))
-                    .build()
-            } else {
-                val video = picture.urlToVideo.resolved()
-                video.newBuilder()
-                    .host(cdnHost)
-                    .query(null)
-                    .setPathSegment(video.pathSize - 1, video.pathSegments.last().removeSuffix(".mp4") + ".gif")
-                    .build()
-            }
+            val video = picture.urlToVideo.resolved()
+            val still = picture.thumbnails.largest()?.url?.resolved()
+            video.newBuilder()
+                .host(cdnHost)
+                .query(null)
+                .setPathSegment(video.pathSize - 1, video.pathSegments.last().removeSuffix(".mp4") + ".gif")
+                .fragment(still?.toString())
+                .build()
         }
 
         getResolutionPref() != "-1" -> {
             val size = RESOLUTION_SIZES.getValue(getResolutionPref())
-            (picture.thumbnails.find { it.size == size } ?: picture.thumbnails.maxBy { it.height * it.width }).url.resolved()
+            (picture.thumbnails.find { it.size == size } ?: picture.thumbnails.largest()!!).url.resolved()
         }
 
         picture.urlToOriginal != null -> {
@@ -362,11 +377,11 @@ abstract class Luscious :
         }
 
         else -> {
-            picture.thumbnails.maxBy { it.height * it.width }.url.resolved()
+            picture.thumbnails.largest()!!.url.resolved()
         }
     }.toString()
 
-    private val thumbnailSizeRegex = Regex("""\.\d+x\d+(?=\.\w+$)""")
+    private fun List<Cover>.largest(): Cover? = maxByOrNull { it.height * it.width }
 
     private fun String.resolved(): HttpUrl = cdnBaseUrl.resolve(this)!!
 
