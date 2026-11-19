@@ -6,14 +6,11 @@ import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 
 @Source
 abstract class YaoiChan : MultiChan() {
 
     override val siteDomains = listOf("yaoi-chan.me")
-
-    override suspend fun fetchBaseUrls(client: OkHttpClient) = fetchRobotsHost(client)
 
     override fun searchMangaUrl(page: Int, query: String, filters: FilterList): String {
         if (query.isNotEmpty()) {

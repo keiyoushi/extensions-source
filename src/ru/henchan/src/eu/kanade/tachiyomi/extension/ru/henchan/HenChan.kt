@@ -17,7 +17,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.format.DateTimeFormatter
@@ -27,8 +26,6 @@ import java.util.Locale
 abstract class HenChan : MultiChan() {
 
     override val siteDomains = listOf("hentaichan.live", "h-chan.me")
-
-    override suspend fun fetchBaseUrls(client: OkHttpClient) = fetchRobotsHost(client)
 
     override fun popularMangaUrl(page: Int) = "$baseUrl/manga/newest&n=favdesc?offset=${20 * (page - 1)}"
 

@@ -29,8 +29,8 @@ abstract class MultiChan : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
-    /** The current host named in robots.txt; each source overrides `fetchBaseUrls` with it, as the code generator only wires an override declared in the `@Source` class */
-    protected suspend fun fetchRobotsHost(client: OkHttpClient): List<String> {
+    /** The current host named in robots.txt */
+    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> {
         val robots = client.get("https://${siteDomains.first()}/robots.txt", Fetch.DOCUMENT).body.string()
         return listOf("https://" + robotsHostRegex.find(robots)!!.groupValues[1])
     }
