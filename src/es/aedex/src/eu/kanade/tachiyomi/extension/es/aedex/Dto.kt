@@ -4,6 +4,13 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
+class FreeReaderRequest(
+    private val slug: String,
+    private val chapter: String,
+    private val modo: String,
+)
+
+@Serializable
 class FreeReaderDto(
     @SerialName("ws_url") val wsUrl: String,
     @SerialName("ws_ticket") val wsTicket: String,
@@ -23,4 +30,23 @@ class FreeReaderAckDto(
     private val type: String,
     private val challenge: String,
     private val sig: String,
+)
+
+// The reader page's `window.__LECTOR__`
+@Serializable
+class LectorDto(
+    @SerialName("t") val token: String,
+    @SerialName("h") val liveKey: String,
+    val now: Long,
+)
+
+@Serializable
+class LiveRequest(
+    @SerialName("h") private val liveKey: String,
+)
+
+@Serializable
+class LiveTokenDto(
+    @SerialName("l") val token: String,
+    val ttl: Long,
 )
