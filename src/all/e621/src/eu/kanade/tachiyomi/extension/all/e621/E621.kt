@@ -23,14 +23,15 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Credentials
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.time.Instant
 
 private const val DELETED_PLACEHOLDER = "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Deleted"
 private const val BLACKLISTED_PLACEHOLDER = "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Blacklisted"
-private val WHITESPACE_REGEX = Regex("""\s+""")
-
 private const val NO_IMAGE_PLACEHOLDER = "https://placehold.co/256x256/cccccc/f66151.jpg?text=No%20Image"
+
+private val WHITESPACE_REGEX = Regex("""\s+""")
 
 @Source
 abstract class E621 :
@@ -194,6 +195,14 @@ abstract class E621 :
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/pools/${manga.url}"
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val segments = url.pathSegments
+        if (url.host != baseUrl.toHttpUrl().host || segments.size != 2 || segments[0] != "pools") return null
+        val poolId = segments[1].toIntOrNull() ?: return null
+        val manga = SManga.create().apply { this.url = poolId.toString() }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
