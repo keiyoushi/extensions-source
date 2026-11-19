@@ -32,6 +32,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.Cache
 import okhttp3.CacheControl
+import okhttp3.Dispatcher
+import okhttp3.Dns
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -40,6 +42,8 @@ import okhttp3.Request
 import okhttp3.Response
 import java.io.File
 import java.io.IOException
+import java.net.InetAddress
+import java.net.UnknownHostException
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -57,6 +61,29 @@ abstract class Pawchive :
     private var fileServersUnreachable = false
 
     override fun OkHttpClient.Builder.configureClient() = apply {
+        // Isolate from the app's shared Dispatcher so rate-limited file downloads cannot starve
+        // Mihon's DnsOverHttps client (which shares network.client's Dispatcher).
+        dispatcher(
+            Dispatcher().apply {
+                maxRequests = 16
+            },
+        )
+        val appDns = network.client.dns
+        if (appDns != Dns.SYSTEM) {
+            dns(
+                object : Dns {
+                    override fun lookup(hostname: String): List<InetAddress> = try {
+                        appDns.lookup(hostname)
+                    } catch (e: UnknownHostException) {
+                        try {
+                            Dns.SYSTEM.lookup(hostname)
+                        } catch (_: UnknownHostException) {
+                            throw e
+                        }
+                    }
+                },
+            )
+        }
         addInterceptor(::thumbnailFallbackInterceptor)
         cache(
             Cache(
@@ -521,10 +548,12 @@ abstract class Pawchive :
 
     override fun getImageRequest(page: Page): Request {
         val request = super.getImageRequest(page)
-        if (!preferences.getBoolean(USE_LOW_RES_IMG, false)) return request
-
-        val thumbnailUrl = request.url.toThumbnailUrl() ?: return request
-        return request.newBuilder().url(thumbnailUrl).build()
+        // Page images are cached by the app; keep them out of OkHttp's cache so they don't evict /creators
+        val builder = request.newBuilder().cacheControl(NO_STORE_CACHE_CONTROL)
+        if (preferences.getBoolean(USE_LOW_RES_IMG, false)) {
+            request.url.toThumbnailUrl()?.let { builder.url(it) }
+        }
+        return builder.build()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList = getDefaultFilterList()
@@ -574,6 +603,7 @@ abstract class Pawchive :
     companion object {
         private val services = setOf("patreon", "fanbox")
         private val FILE_PATHS = setOf("data", "f")
+        private val NO_STORE_CACHE_CONTROL = CacheControl.Builder().noStore().build()
 
         private const val PAGE_POST_LIMIT = 50
         private const val PAGE_CREATORS_LIMIT = 50
