@@ -121,7 +121,10 @@ class Reader(
     val chapterType: String,
     val pages: List<String>,
     val manifestUrl: String? = null,
-)
+    private val readerAccessRequired: Boolean = false,
+) {
+    val needsAccess get() = readerAccessRequired && pages.isEmpty() && manifestUrl == null
+}
 
 @Serializable
 class Manifest(
@@ -162,7 +165,14 @@ class SearchAccess(
 )
 
 @Serializable
-class SearchVerification(private val token: String)
+class ReaderAccess(
+    val enabled: Boolean,
+    val verified: Boolean,
+    val siteKey: String?,
+)
+
+@Serializable
+class TurnstileVerification(private val token: String)
 
 @Serializable
 class FilterData(
