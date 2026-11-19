@@ -1,10 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.komga
 
 import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
 import android.text.InputType
-import android.widget.Toast
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.AppInfo
@@ -23,21 +20,15 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha256
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Credentials
@@ -58,7 +49,7 @@ class Komga(
     ConfigurableSource,
     UnmeteredSource {
 
-    internal val preferences: SharedPreferences by getPreferencesLazy()
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val displayName by lazy { preferences.getString(PREF_DISPLAY_NAME, "")!! }
 
@@ -314,12 +305,15 @@ class Komga(
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val filterData = data?.parseAs<FilterData>()
+        // Cached for another address or account: KeiSource refetches when this throws
+        check(filterData == null || filterData.server == serverKey) { "Filters of another server" }
 
         val filters = mutableListOf<Filter<*>>(
+            TypeSelect(),
+            SeriesSort(),
             UnreadFilter(),
             InProgressFilter(),
             ReadFilter(),
-            TypeSelect(),
         ).apply {
             filterData?.collections?.takeIf { it.isNotEmpty() }
                 ?.map { CollectionFilterEntry(it.name, it.id, it.ordered) }
@@ -335,83 +329,58 @@ class Komga(
             addOptions("Tags", filterData?.tags?.map(::MultiSelectOption)) { ConditionDto(tag = OperatorDto("is", it)) }
             addOptions("Publishers", filterData?.publishers?.map(::MultiSelectOption), appliesToBooks = false) { ConditionDto(publisher = OperatorDto("is", it)) }
             addAll(filterData?.authors.orEmpty().map { (role, authors) -> AuthorGroup(role, authors.map { AuthorFilter(it) }) })
-            add(SeriesSort())
         }
 
         return FilterList(filters)
     }
 
-    private val SharedPreferences.libraries
-        get() = getString(PREF_LIBRARY_LIST, "[]")!!
+    @Serializable
+    class FilterData(
+        val server: String,
+        val libraries: List<LibraryDto> = emptyList(),
+        val collections: List<CollectionDto> = emptyList(),
+        val genres: Set<String> = emptySet(),
+        val tags: Set<String> = emptySet(),
+        val publishers: Set<String> = emptySet(),
+        val authors: Map<String, List<AuthorDto>> = emptyMap(), // roles to list of authors
+    )
 
-    private fun clearCredentials() {
-        preferences.edit()
-            .putString(PREF_LIBRARY_LIST, "[]")
-            .putStringSet(PREF_DEFAULT_LIBRARIES, emptySet<String>())
-            .apply()
+    override suspend fun fetchFilterData(): JsonElement {
+        val server = serverKey
+        if (baseUrl.isBlank()) return FilterData(server).toJsonElement()
+
+        return coroutineScope {
+            val libraries = async { client.get("$baseUrl/api/v1/libraries", Fetch.XHR).parseAs<List<LibraryDto>>() }
+            val collections = async { client.get("$baseUrl/api/v1/collections?unpaged=true", Fetch.XHR).parseAs<PageWrapperDto<CollectionDto>>().content }
+            val genres = async { client.get("$baseUrl/api/v1/genres", Fetch.XHR).parseAs<Set<String>>() }
+            val tags = async { client.get("$baseUrl/api/v1/tags", Fetch.XHR).parseAs<Set<String>>() }
+            val publishers = async { client.get("$baseUrl/api/v1/publishers", Fetch.XHR).parseAs<Set<String>>() }
+            val authors = async { client.get("$baseUrl/api/v1/authors", Fetch.XHR).parseAs<List<AuthorDto>>().groupBy { it.role } }
+
+            val libraryList = libraries.await()
+            val libraryIds = libraryList.map { it.id }.toSet()
+            preferences.edit()
+                .putString(PREF_LIBRARY_LIST, libraryList.toJsonString())
+                .putStringSet(PREF_DEFAULT_LIBRARIES, defaultLibraries.intersect(libraryIds))
+                .apply()
+
+            FilterData(
+                server = server,
+                libraries = libraryList,
+                collections = collections.await(),
+                genres = genres.await(),
+                tags = tags.await(),
+                publishers = publishers.await(),
+                authors = authors.await(),
+            ).toJsonElement()
+        }
     }
 
-    private var loginJob: Job? = null
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val handler = Handler(Looper.getMainLooper())
+    // Address and account the cached filters and library list belong to
+    private val serverKey
+        get() = "$baseUrl\n$username\n$apiKey".sha256().toHexString()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        fun defaultLibrarySummary(apiKey: String, username: String): String = if (apiKey.isNotBlank() || username.isNotBlank()) {
-            "Show content from selected libraries by default."
-        } else {
-            "Currently not logged in"
-        }
-        val libraries = preferences.libraries.parseAs<List<LibraryDto>>()
-        val defaultLibraryPref = MultiSelectListPreference(screen.context).apply {
-            key = PREF_DEFAULT_LIBRARIES
-            title = "Default libraries"
-            summary = defaultLibrarySummary(apiKey, username)
-            entries = libraries.map { it.name }.toTypedArray()
-            entryValues = libraries.map { it.id }.toTypedArray()
-            setDefaultValue(emptySet<String>())
-            setEnabled(preferences.libraries != "[]")
-        }
-
-        fun onCompleteLogin(result: Boolean) {
-            defaultLibraryPref.setEnabled(result)
-            defaultLibraryPref.summary = if (result) defaultLibrarySummary("unused", "unused") else "Failed to log in"
-            defaultLibraryPref.values = emptySet<String>()
-
-            if (result) {
-                val libraryList = preferences.libraries.parseAs<List<LibraryDto>>()
-                defaultLibraryPref.entries = libraryList.map { it.name }.toTypedArray()
-                defaultLibraryPref.entryValues = libraryList.map { it.id }.toTypedArray()
-            } else {
-                clearCredentials()
-            }
-        }
-
-        fun logIn() {
-            defaultLibraryPref.setEnabled(false)
-            defaultLibraryPref.summary = "Loading..."
-            clearCredentials()
-
-            loginJob?.cancel()
-            loginJob = scope.launch {
-                try {
-                    val libraries = client.get("$baseUrl/api/v1/libraries", Fetch.XHR).parseAs<List<LibraryDto>>()
-                    handler.post {
-                        preferences.edit()
-                            .putString(PREF_LIBRARY_LIST, libraries.toJsonString())
-                            .apply()
-                        onCompleteLogin(true)
-                    }
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-
-                    handler.post {
-                        Toast.makeText(applicationContext, e.message, Toast.LENGTH_SHORT).show()
-                        onCompleteLogin(false)
-                    }
-                }
-            }
-        }
-
         screen.addEditTextPreference(
             title = "Source display name",
             default = "",
@@ -420,32 +389,20 @@ class Komga(
             restartRequired = true,
         )
 
-        val addressSummary: (String) -> String = {
-            it.ifBlank { "The server address" }
-        }
+        val addressSummary: (String) -> String = { it.ifBlank { "The server address" } }
         screen.addEditTextPreference(
             title = "Address",
             default = "",
             summary = addressSummary(baseUrl),
             getSummary = addressSummary,
-            dialogMessage = "Komga sources on the same hostname share one login, even on different ports. To use another account on the same server, add it under another hostname (an extra DNS entry).",
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI,
             validate = { it.toHttpUrlOrNull() != null },
             validationMessage = "The URL is invalid or malformed",
             key = PREF_ADDRESS,
-        ) {
-            if (apiKey.isNotBlank() || (username.isNotBlank() && password.isNotBlank())) {
-                logIn()
-            }
-        }
+        )
 
-        // API key preference (takes precedence over username/password)
         val apiKeySummary: (String) -> String = {
-            if (it.isBlank()) {
-                "Optional: Use an API key for authentication"
-            } else {
-                "*".repeat(it.length)
-            }
+            if (it.isBlank()) "Optional, used instead of the username and password" else "*".repeat(it.length)
         }
         screen.addEditTextPreference(
             title = "API key",
@@ -454,44 +411,37 @@ class Komga(
             getSummary = apiKeySummary,
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
             key = PREF_API_KEY,
-        ) {
-            if (baseUrl.isNotBlank()) {
-                logIn()
-            }
-        }
-        // Only show username/password if API key is not set
-        if (apiKey.isBlank()) {
-            val usernameSummary: (String) -> String = { it.ifBlank { "The user account email" } }
-            screen.addEditTextPreference(
-                title = "Username",
-                default = "",
-                summary = usernameSummary(username),
-                getSummary = usernameSummary,
-                key = PREF_USERNAME,
-            ) {
-                if (baseUrl.isNotBlank() && apiKey.isBlank() && password.isNotBlank()) {
-                    logIn()
-                }
-            }
+        )
 
-            val passwordSummary: (String) -> String = {
-                if (it.isBlank()) "The user account password" else "*".repeat(it.length)
-            }
-            screen.addEditTextPreference(
-                title = "Password",
-                default = "",
-                summary = passwordSummary(password),
-                getSummary = passwordSummary,
-                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
-                key = PREF_PASSWORD,
-            ) {
-                if (baseUrl.isNotBlank() && apiKey.isBlank() && username.isNotBlank()) {
-                    logIn()
-                }
-            }
-        }
+        val usernameSummary: (String) -> String = { it.ifBlank { "The user account email" } }
+        screen.addEditTextPreference(
+            title = "Username",
+            default = "",
+            summary = usernameSummary(username),
+            getSummary = usernameSummary,
+            key = PREF_USERNAME,
+        )
 
-        screen.addPreference(defaultLibraryPref)
+        val passwordSummary: (String) -> String = { if (it.isBlank()) "The user account password" else "*".repeat(it.length) }
+        screen.addEditTextPreference(
+            title = "Password",
+            default = "",
+            summary = passwordSummary(password),
+            getSummary = passwordSummary,
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
+            key = PREF_PASSWORD,
+        )
+
+        val libraries = preferences.getString(PREF_LIBRARY_LIST, "[]")!!.parseAs<List<LibraryDto>>()
+        MultiSelectListPreference(screen.context).apply {
+            key = PREF_DEFAULT_LIBRARIES
+            title = "Default libraries"
+            summary = if (libraries.isEmpty()) "Open the source once to load the libraries" else "Show content from the selected libraries by default"
+            entries = libraries.map { it.name }.toTypedArray()
+            entryValues = libraries.map { it.id }.toTypedArray()
+            setDefaultValue(emptySet<String>())
+            setEnabled(libraries.isNotEmpty())
+        }.also(screen::addPreference)
 
         val values = hashMapOf(
             "title" to "",
@@ -544,34 +494,6 @@ class Komga(
             validate = { it.length == 1 },
             validationMessage = "Only one character",
         )
-    }
-
-    @Serializable
-    class FilterData(
-        val libraries: List<LibraryDto>,
-        val collections: List<CollectionDto>,
-        val genres: Set<String>,
-        val tags: Set<String>,
-        val publishers: Set<String>,
-        val authors: Map<String, List<AuthorDto>>, // roles to list of authors
-    )
-
-    override suspend fun fetchFilterData(): JsonElement = coroutineScope {
-        val libraries = async { client.get("$baseUrl/api/v1/libraries", Fetch.XHR).parseAs<List<LibraryDto>>() }
-        val collections = async { client.get("$baseUrl/api/v1/collections?unpaged=true", Fetch.XHR).parseAs<PageWrapperDto<CollectionDto>>().content }
-        val genres = async { client.get("$baseUrl/api/v1/genres", Fetch.XHR).parseAs<Set<String>>() }
-        val tags = async { client.get("$baseUrl/api/v1/tags", Fetch.XHR).parseAs<Set<String>>() }
-        val publishers = async { client.get("$baseUrl/api/v1/publishers", Fetch.XHR).parseAs<Set<String>>() }
-        val authors = async { client.get("$baseUrl/api/v1/authors", Fetch.XHR).parseAs<List<AuthorDto>>().groupBy { it.role } }
-
-        FilterData(
-            libraries = libraries.await(),
-            collections = collections.await(),
-            genres = genres.await(),
-            tags = tags.await(),
-            publishers = publishers.await(),
-            authors = authors.await(),
-        ).toJsonElement()
     }
 
     companion object {
