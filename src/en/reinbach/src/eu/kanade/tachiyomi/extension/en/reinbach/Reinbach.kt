@@ -147,7 +147,7 @@ abstract class Reinbach : KeiSource() {
             addQueryParameter("_fields", "id,date,title,link")
         }.build()
 
-        val markers = client.get(requestUrl, Fetch.XHR).parseAs<List<WpPost>>()
+        val markers = client.get(requestUrl, Fetch.XHR).parseAs<List<WpPostMarker>>()
             .filter { CHAPTER_TITLE.containsMatchIn(it.title.rendered.unescape()) }
             .sortedBy { parseDate(it.date) }
 
@@ -188,18 +188,18 @@ abstract class Reinbach : KeiSource() {
                 addQueryParameter("_fields", "id,title,content")
             }.build()
 
-            val posts = client.get(url, Fetch.XHR).parseAs<List<WpPost>>()
+            val posts = client.get(url, Fetch.XHR).parseAs<List<WpPostPage>>()
             for ((index, post) in posts.withIndex()) {
                 if (CHAPTER_TITLE.containsMatchIn(post.title.rendered.unescape())) {
                     // The first post of the window is this chapter's own title card.
                     if (firstBatch && index == 0) {
-                        post.imageUrl()?.let(imageUrls::add)
+                        imageUrl(post.content.rendered)?.let(imageUrls::add)
                         continue
                     }
                     done = true
                     break
                 }
-                post.imageUrl()?.let(imageUrls::add)
+                imageUrl(post.content.rendered)?.let(imageUrls::add)
             }
 
             firstBatch = false
@@ -254,9 +254,9 @@ abstract class Reinbach : KeiSource() {
             addQueryParameter("_fields", "content")
         }.build()
 
-        val cover = client.get(url, Fetch.XHR).parseAs<List<WpPost>>()
+        val cover = client.get(url, Fetch.XHR).parseAs<List<WpContent>>()
             .firstOrNull()
-            ?.imageUrl()
+            ?.let { imageUrl(it.content.rendered) }
 
         if (cover != null) coverCache[categoryId] = cover
         return cover
@@ -276,7 +276,7 @@ abstract class Reinbach : KeiSource() {
             addQueryParameter("_fields", "content")
         }.build()
 
-        val html = client.get(url, Fetch.XHR).parseAs<List<WpPost>>()
+        val html = client.get(url, Fetch.XHR).parseAs<List<WpContent>>()
             .firstOrNull()
             ?.content
             ?.rendered
@@ -291,8 +291,8 @@ abstract class Reinbach : KeiSource() {
             ?.joinToString("\n\n")
     }.getOrNull()
 
-    private fun WpPost.imageUrl(): String? {
-        val tag = IMG_TAG.find(content.rendered)?.value ?: return null
+    private fun imageUrl(html: String): String? {
+        val tag = IMG_TAG.find(html)?.value ?: return null
         val raw = DATA_SRC.find(tag)?.groupValues?.get(1)
             ?: SRC.find(tag)?.groupValues?.get(1)
             ?: return null

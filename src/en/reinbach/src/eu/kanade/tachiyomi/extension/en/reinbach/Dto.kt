@@ -4,24 +4,44 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 class Rendered(
-    val rendered: String = "",
+    val rendered: String,
 )
 
 @Serializable
 class WpCategory(
-    val id: Int = 0,
-    val name: String = "",
-    val slug: String = "",
-    val count: Int = 0,
-    val parent: Int = 0,
-    val link: String = "",
+    val id: Int,
+    val name: String,
+    val slug: String,
+    val count: Int,
+    val parent: Int,
+    val link: String,
 )
 
+/**
+ * `/posts?categories=…&search=Chapter&_fields=id,date,title,link`
+ */
 @Serializable
-class WpPost(
-    val id: Int = 0,
-    val date: String = "",
-    val link: String = "",
-    val title: Rendered = Rendered(),
-    val content: Rendered = Rendered(),
+class WpPostMarker(
+    val id: Int,
+    val date: String,
+    val title: Rendered,
+    val link: String,
+)
+
+/**
+ * `/posts?categories=…&after=…&_fields=id,title,content`
+ */
+@Serializable
+class WpPostPage(
+    val id: Int,
+    val title: Rendered,
+    val content: Rendered,
+)
+
+/**
+ * Requests made with `_fields=content` only.
+ */
+@Serializable
+class WpContent(
+    val content: Rendered,
 )
