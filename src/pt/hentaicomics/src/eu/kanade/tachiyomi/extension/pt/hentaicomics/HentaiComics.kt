@@ -12,7 +12,10 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 @Source
@@ -20,12 +23,15 @@ abstract class HentaiComics : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/top-hentais/", Fetch.DOCUMENT).asJsoup()
-        return MangasPage(document.select("article.w_item_b").map(::listingParse), false)
+        return MangasPage(document.select("div.post").map(::postParse), false)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = if (page == 1) baseUrl else "$baseUrl/page/$page/"
-        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
+        return listingParse(client.get(url, Fetch.DOCUMENT).asJsoup(), page)
+    }
+
+    private fun listingParse(document: Document, page: Int): MangasPage {
         val mangas = document.select("div.post").map(::postParse)
         val hasNextPage = document.selectFirst("a[href*=\"/page/${page + 1}/\"]") != null
         return MangasPage(mangas, hasNextPage)
@@ -39,28 +45,33 @@ abstract class HentaiComics : KeiSource() {
         }.trim()
         check(rawTitle.isNotBlank()) { "Empty title for entry: $url" }
         title = rawTitle
-        thumbnail_url = element.selectFirst("img")?.attr("src")?.ifEmpty { null }
-    }
-
-    private fun listingParse(element: Element): SManga = SManga.create().apply {
-        val link = element.selectFirst("a[href]")!!
-        url = link.attr("abs:href").toHttpUrl().encodedPath.removePrefix("/")
-        val rawTitle = link.attr("title").ifBlank {
-            element.selectFirst("h2")?.text().orEmpty()
-        }.trim()
-        check(rawTitle.isNotBlank()) { "Empty title for entry: $url" }
-        title = rawTitle
-        thumbnail_url = element.selectFirst(".image img")?.attr("src")?.ifEmpty { null }
+        thumbnail_url = element.selectFirst("img")?.attrOrNull("abs:src")
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        if (page > 1 || query.isBlank()) return MangasPage(emptyList(), false)
+        if (query.isBlank()) return MangasPage(emptyList(), false)
         val url = baseUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("s", query)
+            .addPathSegment("search")
+            .addPathSegment(query)
+            .apply { if (page > 1) addPathSegment("page").addPathSegment(page.toString()) }
+            .addPathSegment("")
             .build()
         val document = client.get(url, Fetch.DOCUMENT).asJsoup()
-        return MangasPage(document.select("div.post").map(::postParse), false)
+        if (document.selectFirst("div.pesquisadesc") != null) return MangasPage(emptyList(), false)
+        return listingParse(document, page)
     }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val segments = url.encodedPathSegments.filter { it.isNotEmpty() }
+        if (segments.size != 2 || segments[0] in setOf("page", "search")) return null
+        val manga = SManga.create().apply { this.url = segments.joinToString("/", postfix = "/") }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}"
+
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/${chapter.url}"
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -68,15 +79,15 @@ abstract class HentaiComics : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl/${manga.url}", Fetch.DOCUMENT).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = manga.apply {
-            val rawTitle = document.selectFirst("h1.post-title")?.text()?.trim().orEmpty()
+            val rawTitle = document.selectFirst("h1.post-title")?.text().orEmpty()
             check(rawTitle.isNotBlank()) { "Empty title for ${manga.url}" }
             title = rawTitle
-            thumbnail_url = document.select("div.single-post img[src*=\"/wp-content/uploads/\"]")
-                .firstOrNull()
-                ?.attr("src")?.ifEmpty { null }
+            thumbnail_url = document.selectFirst("div.single-post img[src*=\"/wp-content/uploads/\"]")
+                ?.attrOrNull("abs:src")
+            genre = document.select("div.video-category a[rel~=tag]").joinToString { it.text() }.ifEmpty { null }
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
 
@@ -90,8 +101,8 @@ abstract class HentaiComics : KeiSource() {
         return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$baseUrl/${chapter.url}", Fetch.DOCUMENT).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select("div.single-post img[src*=\"/wp-content/uploads/\"]")
-        .map { it.attr("src") }
+        .map { it.attr("abs:src") }
         .mapIndexed { index, url -> Page(index, imageUrl = url) }
 }

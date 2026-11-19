@@ -18,7 +18,7 @@ class BrowseResponse(
     @SerialName("current_page") private val currentPage: Int,
     @SerialName("total_pages") private val totalPages: Int,
 ) {
-    fun hasNextPage() = currentPage <= totalPages
+    fun hasNextPage() = currentPage < totalPages
 }
 
 @Serializable

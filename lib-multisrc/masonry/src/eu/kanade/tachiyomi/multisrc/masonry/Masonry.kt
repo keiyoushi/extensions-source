@@ -11,123 +11,60 @@ import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonString
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 abstract class Masonry : KeiSource() {
 
-    protected open fun popularMangaUrl(page: Int): String = when (page) {
-        1 -> baseUrl
-        2 -> "$baseUrl/archive/"
-        else -> "$baseUrl/archive/page/${page - 1}/"
-    }
+    override val supportsFilterFetching = true
 
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(popularMangaUrl(page), Fetch.DOCUMENT).asJsoup()
-        return parseMangaList(document)
-    }
+    override suspend fun getPopularManga(page: Int): MangasPage = getGridPage(page, "updates", "trending")
 
-    protected open fun parseMangaList(document: Document): MangasPage {
-        val mangas = document.select(".list-gallery:not(.static) figure:not(:has(a[href*=/video/]))")
-            .map { element ->
-                SManga.create().apply {
-                    element.selectFirst("a")!!.also {
-                        setUrlWithoutDomain(it.absUrl("href"))
-                        title = it.attr("title")
-                    }
-                    thumbnail_url = element.selectFirst("img")?.imgAttr()
-                }
-            }
-        val hasNextPage = document.selectFirst(".pagination-a li.next") != null
-        return MangasPage(mangas, hasNextPage)
-    }
-
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get("$baseUrl/updates/sort/newest/mpage/$page/", Fetch.DOCUMENT).asJsoup()
-        return parseMangaList(document)
-    }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getGridPage(page, "updates", "newest")
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val url = if (query.isNotEmpty()) {
-            "$baseUrl/search/post/".toHttpUrl().newBuilder()
+        if (query.isNotBlank()) {
+            val url = "$baseUrl/search/post/".toHttpUrl().newBuilder()
                 .addPathSegment(query.trim())
                 .addEncodedPathSegments("mpage/$page/")
                 .build()
-        } else {
-            val tagFilter = filters.firstInstanceOrNull<TagFilter>()
-            val sortFilter = filters.firstInstanceOrNull<SortFilter>()!!
-
-            baseUrl.toHttpUrl().newBuilder().apply {
-                if (tagFilter == null || tagFilter.selected == "") {
-                    addPathSegment("updates")
-                    sortFilter.getUriPartIfNeeded("search").also {
-                        if (it.isBlank()) {
-                            addEncodedPathSegments("page/$page/")
-                        } else {
-                            addEncodedPathSegments(it)
-                            addEncodedPathSegments("mpage/$page/")
-                        }
-                    }
-                } else {
-                    addPathSegment("tag")
-                    addPathSegment(tagFilter.selected)
-                    sortFilter.getUriPartIfNeeded("tag").also {
-                        if (it.isBlank()) {
-                            addEncodedPathSegments("page/$page/")
-                        } else {
-                            addEncodedPathSegments(it)
-                            addEncodedPathSegments("mpage/$page/")
-                        }
-                    }
-                }
-            }.build()
+            val document = client.get(url, Fetch.DOCUMENT).asJsoup()
+            val mangas = document.select(".list-gallery:not(.static) figure:not(:has(.icon-play))").mapNotNull(::mangaFromElement)
+            return MangasPage(mangas, document.selectFirst(".pagination-a li.next") != null)
         }
 
-        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
-        return parseMangaList(document)
-    }
-
-    /* Filters */
-
-    override val supportsFilterFetching = true
-
-    override suspend fun fetchFilterData(): JsonElement {
-        val tags = client.get("$baseUrl/updates/sort/newest/", Fetch.DOCUMENT).asJsoup()
-            .select("#filter-a span:has(> input)")
-            .map {
-                Tag(
-                    it.select("label").text(),
-                    it.select("input").attr("value"),
-                )
-            }.let {
-                listOf(Tag("", "")) + it
-            }
-        return tags.toJsonElement()
-    }
-
-    override fun getFilterList(data: JsonElement?): FilterList {
-        val filterData = data?.parseAs<List<Tag>>()
-
-        val filters = mutableListOf(
-            Filter.Header("Filters ignored with text search"),
-            Filter.Separator(),
-            SortFilter(),
+        val tags = filters.firstInstanceOrNull<TagFilter>()?.selected.orEmpty()
+        val content = GridFilter(
+            content = "pix",
+            quality = filters.firstInstance<QualityFilter>().selected,
+            label = tags.joinToString("+").ifEmpty { "0" },
+            ord = filters.firstInstance<OrderFilter>().selected,
         )
-
-        if (!filterData.isNullOrEmpty()) {
-            filters += TagFilter(filterData)
-        }
-
-        return FilterList(filters)
+        return getGridPage(page, content.toJsonString(), "filter")
     }
 
-    /* Manga details & chapters */
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host.removePrefix("www.")) return null
+        val slug = url.pathSegments.singleOrNull { it.isNotEmpty() } ?: return null
+        val document = client.get("$baseUrl/$slug/", Fetch.DOCUMENT).asJsoup()
+        val firstImage = document.selectFirst(".list-gallery a[href^=https://cdn.]") ?: return null
+        return parseMangaDetails(document, SManga.create()).apply {
+            this.url = "/$slug/"
+            title = document.selectFirst("header h1")!!.text()
+            thumbnail_url = firstImage.selectFirst("img")?.imgAttr()
+            initialized = true
+        }
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -148,7 +85,9 @@ abstract class Masonry : KeiSource() {
             genre = select("a[href*=/tag/]").eachText().joinToString()
             author = selectFirst("a")?.text()
         }
-        description = document.selectFirst("#content > p")?.text()
+        description = MarkdownDescription.Builder()
+            .description(document.selectFirst("#content > p"))
+            .build()
         status = SManga.COMPLETED
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
@@ -160,11 +99,56 @@ abstract class Masonry : KeiSource() {
         },
     )
 
-    /* Pages */
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(".list-gallery a[href^=https://cdn.]").mapIndexed { idx, img ->
             Page(idx, imageUrl = img.absUrl("href"))
+        }
+    }
+
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/sort/newest/", Fetch.DOCUMENT).asJsoup()
+        .select("#filter-a section[data-slot=tags] label")
+        .map { Tag(it.selectFirst(".txt")!!.text(), it.selectFirst("input")!!.attr("value")) }
+        .toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val tags = data?.parseAs<List<Tag>>()
+
+        val filters = mutableListOf(
+            Filter.Header("Filters ignored with text search"),
+            Filter.Separator(),
+            OrderFilter(),
+            QualityFilter(),
+        )
+
+        if (!tags.isNullOrEmpty()) {
+            filters += TagFilter(tags)
+        }
+
+        return FilterList(filters)
+    }
+
+    private suspend fun getGridPage(page: Int, content: String, sort: String): MangasPage {
+        val url = "$baseUrl/gridapi/".toHttpUrl().newBuilder()
+            .addQueryParameter("content", content)
+            .addQueryParameter("sort", sort)
+            .addQueryParameter("mpage", page.toString())
+            .build()
+        val document = client.get(url, Fetch.XHR).asJsoup()
+        val figures = document.select("figure")
+        val mangas = figures.filter { it.selectFirst(".icon-play") == null }.mapNotNull(::mangaFromElement)
+        return MangasPage(mangas, figures.size >= GRID_PAGE_SIZE)
+    }
+
+    private fun mangaFromElement(element: Element): SManga? {
+        val link = element.selectFirst("a")!!
+        // Some galleries have no title; the card then shows only the models
+        val name = link.attr("title").ifEmpty { element.select("a[href*=/model/]").eachText().joinToString() }
+            .ifEmpty { return null }
+        return SManga.create().apply {
+            setUrlWithoutDomain(link.absUrl("href"))
+            title = name
+            thumbnail_url = element.selectFirst("img")?.imgAttr()
         }
     }
 
@@ -174,5 +158,9 @@ abstract class Masonry : KeiSource() {
         hasAttr("data-src") -> attr("abs:data-src")
         hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
         else -> attr("abs:src")
+    }
+
+    companion object {
+        private const val GRID_PAGE_SIZE = 20
     }
 }

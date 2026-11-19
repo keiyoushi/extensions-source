@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.ja.comicfuz
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
@@ -22,14 +23,16 @@ class SearchResponse(
 class Manga(
     @ProtoNumber(1) private val id: Int,
     @ProtoNumber(2) private val title: String,
-    @ProtoNumber(4) private val cover: String,
-    @ProtoNumber(14) private val description: String,
+    @ProtoNumber(4) private val cover: String = "",
+    @ProtoNumber(14) private val description: String = "",
 ) {
     fun toSManga(cdnUrl: String): SManga = SManga.create().apply {
         url = "/manga/$id"
         title = this@Manga.title
-        thumbnail_url = cdnUrl + cover
-        description = this@Manga.description
+        thumbnail_url = cover.ifEmpty { null }?.let { cdnUrl + it }
+        description = MarkdownDescription.Builder()
+            .description(this@Manga.description)
+            .build()
     }
 }
 
@@ -41,8 +44,8 @@ class MangaDetailsResponse(
     @ProtoNumber(7) private val tags: List<Name>,
 ) {
     fun toSManga(cdnUrl: String) = manga.toSManga(cdnUrl).apply {
-        genre = tags.joinToString { it.name }
-        author = authors.joinToString { it.author.name }
+        genre = tags.ifEmpty { null }?.joinToString { it.name }
+        author = authors.ifEmpty { null }?.joinToString { it.author.name }
     }
 }
 

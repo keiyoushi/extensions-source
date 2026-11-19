@@ -122,28 +122,64 @@ class TitleDetailView(
     @ProtoNumber(8) val nonAppearanceInfo: String = "",
     @ProtoNumber(28) val chapterListGroup: List<ChapterListGroup> = emptyList(),
     @ProtoNumber(31) val genreList: List<TagName> = emptyList(),
+    @ProtoNumber(32) private val titleLabels: TitleLabels? = null,
+    @ProtoNumber(39) private val labelV2: LabelV2? = null,
 ) {
     val chapterList: List<Chapter>
         get() = chapterListGroup.flatMap { it.firstChapterList + it.lastChapterList }
-
-    private val isOneShot: Boolean
-        get() = genreList.any { it.slug == "one-shot" }
 
     fun toSManga(): SManga = title.toSManga().apply {
         description = listOf(overview, viewingPeriodDescription)
             .filter(String::isNotEmpty)
             .joinToString("\n\n")
-        genre = genreList.mapNotNull { it.name.takeIf(String::isNotEmpty) }.joinToString()
-        status = when {
-            isOneShot || nonAppearanceInfo.contains(COMPLETED_REGEX) || viewingPeriodDescription.contains("latest 0 chapters") -> SManga.COMPLETED
-            nonAppearanceInfo.contains(HIATUS_REGEX) -> SManga.ON_HIATUS
-            else -> SManga.ONGOING
+        genre = (genreList.map(TagName::name) + labelV2?.magazine)
+            .filterNot(String?::isNullOrEmpty)
+            .joinToString()
+        status = when (titleLabels?.releaseSchedule) {
+            SCHEDULE_COMPLETED, SCHEDULE_ONE_SHOT -> SManga.COMPLETED
+            SCHEDULE_HIATUS -> SManga.ON_HIATUS
+            else -> if (nonAppearanceInfo.contains(HIATUS_REGEX)) SManga.ON_HIATUS else SManga.ONGOING
         }
     }
 
     companion object {
-        private val COMPLETED_REGEX = "completado|completed?|completo".toRegex(RegexOption.IGNORE_CASE)
-        private val HIATUS_REGEX = "on a hiatus".toRegex(RegexOption.IGNORE_CASE)
+        // Some hiatus titles keep their regular schedule and only say so in this text
+        private val HIATUS_REGEX = "on (a )?hiatus|suspendid|suspendu".toRegex(RegexOption.IGNORE_CASE)
+        private const val SCHEDULE_COMPLETED = 8
+        private const val SCHEDULE_ONE_SHOT = 9
+        private const val SCHEDULE_HIATUS = 10
+    }
+}
+
+@Serializable
+class TitleLabels(
+    @ProtoNumber(1) val releaseSchedule: Int = 0,
+)
+
+@Serializable
+class LabelV2(
+    @ProtoNumber(1) val id: Int = -1,
+) {
+    val magazine: String?
+        get() = MAGAZINES[id]
+
+    companion object {
+        private val MAGAZINES = mapOf(
+            1 to "Weekly Shounen Jump",
+            2 to "Jump SQ.",
+            3 to "V Jump",
+            4 to "Weekly Young Jump",
+            5 to "Shounen Jump+",
+            8 to "MANGA Plus Creators",
+            9 to "Manga Mee",
+            12 to "Tonari no Young Jump",
+            16 to "Saikyou Jump",
+            19 to "Shounen Jump GIGA",
+            20 to "Ultra Jump",
+            21 to "Dash X Comic",
+            23 to "Bessatsu Margaret",
+            24 to "Young Jump+",
+        )
     }
 }
 

@@ -87,18 +87,24 @@ class ChapterDto(
     val pages: List<String> = emptyList(),
     val locked: Boolean = false,
 ) {
+    fun lockedMessage(now: Long): String = if (seriesId.allowUnauthenticated || isPaid(now)) {
+        "Unlock this chapter in WebView"
+    } else {
+        "Log in via WebView to read this chapter"
+    }
+
+    // Paid chapters become free earlyAccessDays after their release, as on the site
+    private fun isPaid(now: Long): Boolean = coinUnlockRequired && coinPrice > 0 &&
+        (earlyAccessDays <= 0 || now < Instant.tryParse(releaseDate) + earlyAccessDays * DAY_MILLIS)
+
     fun toSChapter(now: Long) = SChapter.create().apply {
         val number = chapterNumber.toString().removeSuffix(".0")
-        val released = Instant.tryParse(releaseDate)
-        // Paid chapters become free earlyAccessDays after their release, as on the site
-        val paid = coinUnlockRequired && coinPrice > 0 &&
-            (earlyAccessDays <= 0 || now < released + earlyAccessDays * DAY_MILLIS)
-        val lock = if (paid || !seriesId.allowUnauthenticated) "🔒 " else ""
+        val lock = if (isPaid(now) || !seriesId.allowUnauthenticated) "🔒 " else ""
 
         url = "/seri/$seriesSlug/bolum/$number"
         name = lock + (title ?: "Bölüm $number")
         chapter_number = chapterNumber
-        date_upload = released
+        date_upload = Instant.tryParse(releaseDate)
     }
 }
 

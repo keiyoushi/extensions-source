@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.multisrc.aurora
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.string
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.Serializable
@@ -29,30 +30,27 @@ class MangaDto(
     val coverUrl: String?,
     @JsonNames("url")
     val slug: String,
-    var type: String? = null,
-    val description: String? = null,
-    val author: Value? = null,
+    val type: String?,
+    val alternateName: String?,
+    val description: String?,
+    val author: Value?,
     val genre: List<String> = emptyList(),
 ) {
-    fun String.isUrl() = toHttpUrlOrNull() != null
     fun toSManga() = SManga.create().apply {
         title = this@MangaDto.title
         thumbnail_url = coverUrl
-        description = this@MangaDto.description
+        description = MarkdownDescription.Builder()
+            .description(this@MangaDto.description)
+            .altTitles(listOfNotNull(alternateName), "Títulos alternativos")
+            .build()
         author = this@MangaDto.author?.name
         genre = this@MangaDto.genre.joinToString()
-        url = when {
-            slug.isUrl() -> {
-                val location = slug.toHttpUrlOrNull()!!
-                type = location.pathSegments.first()
-                location.pathSegments.last()
-            }
-            else -> slug
-        }
+        val location = slug.toHttpUrlOrNull()
+        url = location?.pathSegments?.last() ?: slug
 
         memo = buildJsonObject {
             put("slug", url)
-            put("type", type?.lowercase())
+            put("type", (location?.pathSegments?.first() ?: type)?.lowercase())
         }
     }
 }
@@ -90,7 +88,7 @@ class ChapterDto(
     }
 
     companion object {
-        private val dateFormat = DateTimeFormatter.ofPattern("dd 'de' MMM 'de' yyyy", Locale("pt", "BR"))
+        private val dateFormat = DateTimeFormatter.ofPattern("d 'de' MMM 'de' yyyy", Locale.forLanguageTag("pt-BR"))
     }
 }
 
@@ -110,5 +108,23 @@ class ImageDto(
 
 @Serializable
 class KeyDto(
+    val v: Int,
+    val e: Int,
     val k: String,
+)
+
+@Serializable
+class GateStartDto(
+    val returnTo: String,
+)
+
+@Serializable
+class GateResponseDto(
+    val data: GateDto,
+)
+
+@Serializable
+class GateDto(
+    val token: String,
+    val gateUrl: String,
 )
