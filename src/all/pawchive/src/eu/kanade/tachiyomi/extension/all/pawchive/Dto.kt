@@ -5,10 +5,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.tryParse
 import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.doubleOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -124,7 +127,8 @@ class PawchivePostDto(
     private val title: String?,
     private val content: String?,
     private val substring: String?,
-    private val tags: List<String>?,
+    // Single-post responses return a JSON array; creator post listings return a Postgres array string
+    private val tags: JsonElement?,
     private val added: String?,
     private val published: String?,
     private val edited: String?,
@@ -168,9 +172,9 @@ class PawchivePostDto(
         description = MarkdownDescription.Builder()
             .description((content ?: substring)?.let { Jsoup.parseBodyFragment(it, baseUrl).body() }, keepNewlines = true)
             .build()
-        genre = tags?.mapNotNull { it.trim().takeIf(String::isNotEmpty) }
-            ?.distinct()
-            ?.takeIf { it.isNotEmpty() }
+        genre = tags.parseTags()
+            .distinct()
+            .takeIf { it.isNotEmpty() }
             ?.joinToString()
         thumbnail_url = images.firstOrNull()?.thumbnailUrl(imgUrl)
             ?: "$baseUrl/icons/$service/$user"
@@ -208,6 +212,29 @@ class PawchiveFileDto(
 private val FANBOX_ZONE: ZoneId = ZoneOffset.ofHours(9)
 private val chapterNameDateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd 'at' HH:mm:ss", Locale.ENGLISH)
 private val VALID_IMAGE_EXTENSIONS = setOf("png", "jpg", "gif", "jpeg", "webp")
+private val POSTGRES_ARRAY_ELEMENT_REGEX = Regex("""(?:^|,)\s*(?:"((?:[^"\\]|\\.)*)"\s*|([^,]*))""")
+private val POSTGRES_ESCAPE_REGEX = Regex("""\\(.)""")
+
+private fun JsonElement?.parseTags(): List<String> = when (this) {
+    is JsonArray -> mapNotNull { it.stringOrNull?.trim()?.takeIf(String::isNotEmpty) }
+    is JsonPrimitive -> if (isString) {
+        val inner = content.trim().removeSurrounding("{", "}")
+        if (inner.isEmpty()) {
+            emptyList()
+        } else {
+            POSTGRES_ARRAY_ELEMENT_REGEX.findAll(inner)
+                .mapNotNull { match ->
+                    val value = match.groups[1]?.value?.replace(POSTGRES_ESCAPE_REGEX, "$1")
+                        ?: match.groups[2]?.value
+                    value?.trim()?.takeIf(String::isNotEmpty)
+                }
+                .toList()
+        }
+    } else {
+        emptyList()
+    }
+    else -> emptyList()
+}
 
 private fun String?.parsePawchiveDate(zone: ZoneId): Long {
     if (this.isNullOrBlank()) return 0L
