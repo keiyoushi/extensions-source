@@ -18,7 +18,7 @@ class Post(
     val id: Int,
     val flags: Flags,
     val files: Files,
-    val tags: Tags,
+    val tags: Map<String, List<String>>,
     val stats: Stats,
     @SerialName("pools") val poolIds: List<Int>,
     @SerialName("created_at") val createdAt: String,
@@ -42,9 +42,15 @@ class Flags(
 
 @Serializable
 class Files(
+    val meta: FileMeta,
     val original: OriginalFile,
     val preview: ScaledFile,
     val sample: ScaledFile,
+)
+
+@Serializable
+class FileMeta(
+    val ext: String,
 )
 
 @Serializable
@@ -56,20 +62,6 @@ class OriginalFile(
 class ScaledFile(
     val webp: String?,
 )
-
-@Serializable
-class Tags(
-    val general: List<String>,
-    val artist: List<String>,
-    val copyright: List<String>,
-    val character: List<String>,
-    val species: List<String>,
-    val lore: List<String>,
-    val meta: List<String>,
-) {
-    val allTags: List<String>
-        get() = artist + character + copyright + general + lore + meta + species
-}
 
 @Serializable
 class UserMeResponse(

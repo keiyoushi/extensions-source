@@ -31,6 +31,8 @@ private const val DELETED_PLACEHOLDER = "https://placehold.co/256x256/cccccc/f66
 private const val BLACKLISTED_PLACEHOLDER = "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Blacklisted"
 private const val NO_IMAGE_PLACEHOLDER = "https://placehold.co/256x256/cccccc/f66151.jpg?text=No%20Image"
 
+private val VIDEO_EXTENSIONS = setOf("webm", "mp4")
+
 private val WHITESPACE_REGEX = Regex("""\s+""")
 
 @Source
@@ -227,7 +229,7 @@ abstract class E621 :
             emptyList()
         }
 
-        val artists = posts.flatMap { it.tags.artist }.toSet()
+        val artists = posts.flatMap { it.tags["artist"].orEmpty() }.toSet()
         val rating = when {
             posts.any { it.rating == "e" } -> "rating:Explicit, "
             posts.any { it.rating == "q" } -> "rating:Questionable, "
@@ -240,11 +242,11 @@ abstract class E621 :
 
         val tags = posts.flatMap { post ->
             listOf(
-                post.tags.lore.map { "lore" to it },
-                post.tags.general.map { "general" to it },
-                post.tags.species.map { "species" to it },
-                post.tags.character.map { "character" to it },
-                post.tags.copyright.map { "copyright" to it },
+                post.tags["lore"].orEmpty().map { "lore" to it },
+                post.tags["general"].orEmpty().map { "general" to it },
+                post.tags["species"].orEmpty().map { "species" to it },
+                post.tags["character"].orEmpty().map { "character" to it },
+                post.tags["copyright"].orEmpty().map { "copyright" to it },
             ).flatten()
         }.groupBy({ it.first }, { it.second })
             .map { (genre, tags) ->
@@ -409,11 +411,15 @@ abstract class E621 :
 
     private fun isBlacklisted(post: Post, blacklist: List<List<String>>): Boolean {
         if (blacklist.isEmpty()) return false
-        val allTags = post.tags.allTags
+        val allTags = post.tags.values.flatten()
         return blacklist.any { group -> group.all { tag -> tag in allTags } }
     }
 
-    private fun extractImageUrl(post: Post): String? = if (preferences.fullResolution) post.files.original.url else post.files.sample.webp
+    private fun extractImageUrl(post: Post): String? = if (preferences.fullResolution && post.files.meta.ext !in VIDEO_EXTENSIONS) {
+        post.files.original.url
+    } else {
+        post.files.sample.webp
+    }
 
     private suspend fun batchFetchPosts(postIds: List<Int>): List<Post> {
         if (postIds.isEmpty()) return emptyList()
