@@ -82,7 +82,7 @@ abstract class HenChan : MultiChan() {
     ): SMangaUpdate = coroutineScope {
         val isExHentai = manga.thumbnail_url?.endsWith("#") == true
         val related = if (fetchChapters && !isExHentai) {
-            async { client.get(getMangaUrl(manga).replace("/manga/", "/related/"), Fetch.DOCUMENT, ensureSuccess = false) }
+            async { client.get(sectionUrl("related", manga.url), Fetch.DOCUMENT, ensureSuccess = false) }
         } else {
             null
         }
@@ -166,7 +166,7 @@ abstract class HenChan : MultiChan() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val url = getChapterUrl(chapter).replace("/manga/", "/online/")
+        val url = sectionUrl("online", chapter.url)
         return pageListParse(client.get(url, Fetch.DOCUMENT).body.string())
     }
 
@@ -186,6 +186,9 @@ abstract class HenChan : MultiChan() {
         OrderBy(),
         GenreList(getGenreList()),
     )
+
+    // The same gallery under another section: /related/, /online/
+    private fun sectionUrl(section: String, path: String) = (baseUrl + path).toHttpUrl().newBuilder().setPathSegment(0, section).build()
 
     companion object {
         private val manganewThumbsRegex = """(?<=/)manganew_thumbs\w*?(?=/)""".toRegex(RegexOption.IGNORE_CASE)

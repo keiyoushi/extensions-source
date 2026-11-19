@@ -129,15 +129,6 @@ abstract class MultiChan : KeiSource() {
         thumbnail_url = document.selectFirst("img#cover")?.attr("abs:src")
     }
 
-    private fun parseStatus(text: String?): Int = when {
-        text == null -> SManga.UNKNOWN
-        text.contains("перевод завершен") -> SManga.COMPLETED
-        text.contains("перевод продолжается") -> SManga.ONGOING
-        else -> SManga.UNKNOWN
-    }
-
-    private fun Element.cleanText(): String? = text().replace("\uFEFF", "").trim().ifEmpty { null }
-
     open fun chapterListSelector() = "table.table_cha tr:gt(1)"
 
     open fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
@@ -158,6 +149,15 @@ abstract class MultiChan : KeiSource() {
 
         return pageUrls.mapIndexed { i, url -> Page(i, imageUrl = url) }
     }
+
+    private fun parseStatus(text: String?): Int = when {
+        text == null -> SManga.UNKNOWN
+        text.contains("перевод завершен") -> SManga.COMPLETED
+        text.contains("перевод продолжается") -> SManga.ONGOING
+        else -> SManga.UNKNOWN
+    }
+
+    private fun Element.cleanText(): String? = text().replace("\uFEFF", "").trim().ifEmpty { null }
 
     companion object {
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
