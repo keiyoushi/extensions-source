@@ -12,17 +12,17 @@ private const val TAG_MODE_ENABLE_PREF = "tag_mode_enable"
 private const val SPLIT_CHAPTERS_PREF = "split_chapters2"
 private const val POPULAR_MODE_PREF = "popular_mode"
 private const val CATEGORY_PREF = "category_filter"
-private const val BLACKLIST_PREF = "blacklist"
-private const val WHITELIST_PREF = "whitelist"
+private const val BLOCKED_TAGS_PREF = "blacklist"
+private const val REQUIRED_TAGS_PREF = "whitelist"
 private const val SCORE_THRESH_PREF = "score_thresh"
 private const val FULL_RESOLUTION_PREF = "first_end"
 private const val USERNAME_PREF = "username"
 private const val API_KEY_PREF = "api_key"
-private const val ACCOUNT_BLACKLIST_PREF = "account_blacklist"
+private const val ACCOUNT_BLOCKED_TAGS_PREF = "account_blacklist"
 
-private const val COMMON_BLACKLIST = "( gore necrophilia ) ( gore sex ) mutilation snuff torture gore_focus character_prepared_as_food castration feces urine diaper fart burp_cloud"
+private const val DEFAULT_BLOCKED_TAGS = "( gore necrophilia ) ( gore sex ) mutilation snuff torture gore_focus character_prepared_as_food castration feces urine diaper fart burp_cloud"
 
-private val BLACKLIST_TOKEN_REGEX = Regex("""\([^)]*\)|\S+""")
+private val TAG_TOKEN_REGEX = Regex("""\([^)]*\)|\S+""")
 private val WHITESPACE_REGEX = Regex("""\s+""")
 
 fun setupE621PreferenceScreen(screen: PreferenceScreen) {
@@ -67,9 +67,9 @@ fun setupE621PreferenceScreen(screen: PreferenceScreen) {
     }.also(screen::addPreference)
 
     SwitchPreferenceCompat(screen.context).apply {
-        key = ACCOUNT_BLACKLIST_PREF
-        title = "Apply account blacklist to posts"
-        summary = "Enables blacklisting posts when loading"
+        key = ACCOUNT_BLOCKED_TAGS_PREF
+        title = "Hide posts with your account's blocked tags"
+        summary = "Shows a placeholder for pages with tags blocked in your e621 account"
         setDefaultValue(false)
     }.also(screen::addPreference)
 
@@ -90,16 +90,16 @@ fun setupE621PreferenceScreen(screen: PreferenceScreen) {
     }.also(screen::addPreference)
 
     EditTextPreference(screen.context).apply {
-        key = BLACKLIST_PREF
-        title = "Blacklisted Tags"
-        summary = "Space separated blacklisted tags. WILL NOT FILTER OUT EVERYTHING! (Tag Search Mode only)"
-        setDefaultValue(COMMON_BLACKLIST)
+        key = BLOCKED_TAGS_PREF
+        title = "Blocked tags"
+        summary = "Space separated tags to leave out of searches. Not every match gets filtered (Tag Search Mode only)"
+        setDefaultValue(DEFAULT_BLOCKED_TAGS)
     }.also(screen::addPreference)
 
     EditTextPreference(screen.context).apply {
-        key = WHITELIST_PREF
-        title = "Whitelisted Tags"
-        summary = "Space separated whitelisted tags. This will be applied everywhere! (Tag Search Mode only)"
+        key = REQUIRED_TAGS_PREF
+        title = "Required tags"
+        summary = "Space separated tags every search result must match (Tag Search Mode only)"
         setDefaultValue("score:>10")
     }.also(screen::addPreference)
 
@@ -135,13 +135,13 @@ val SharedPreferences.splitChaptersPref: String
 val SharedPreferences.categoryPref: String
     get() = getString(CATEGORY_PREF, "series") ?: "series"
 
-val SharedPreferences.blacklistPref: String
-    get() = BLACKLIST_TOKEN_REGEX.findAll(
-        getString(BLACKLIST_PREF, COMMON_BLACKLIST)?.trim()?.replace(WHITESPACE_REGEX, " ") ?: COMMON_BLACKLIST,
+val SharedPreferences.blockedTagsPref: String
+    get() = TAG_TOKEN_REGEX.findAll(
+        getString(BLOCKED_TAGS_PREF, DEFAULT_BLOCKED_TAGS)?.trim()?.replace(WHITESPACE_REGEX, " ") ?: DEFAULT_BLOCKED_TAGS,
     ).joinToString(" ") { "-${it.value}" }
 
-val SharedPreferences.whitelistPref: String
-    get() = getString(WHITELIST_PREF, "score:>10")?.trim()?.replace(WHITESPACE_REGEX, " ") ?: "score:>10"
+val SharedPreferences.requiredTagsPref: String
+    get() = getString(REQUIRED_TAGS_PREF, "score:>10")?.trim()?.replace(WHITESPACE_REGEX, " ") ?: "score:>10"
 
 val SharedPreferences.popularModePref: String
     get() = getString(POPULAR_MODE_PREF, "order:score date:year") ?: "order:score date:year"
@@ -155,5 +155,5 @@ val SharedPreferences.usernamePref: String
 val SharedPreferences.apiKeyPref: String
     get() = getString(API_KEY_PREF, "") ?: ""
 
-val SharedPreferences.accountBlacklistPref: Boolean
-    get() = getBoolean(ACCOUNT_BLACKLIST_PREF, false)
+val SharedPreferences.accountBlockedTagsPref: Boolean
+    get() = getBoolean(ACCOUNT_BLOCKED_TAGS_PREF, false)

@@ -28,7 +28,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.time.Instant
 
 private const val DELETED_PLACEHOLDER = "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Deleted"
-private const val BLACKLISTED_PLACEHOLDER = "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Blacklisted"
+private const val BLOCKED_PLACEHOLDER = "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Blocked"
 private const val NO_IMAGE_PLACEHOLDER = "https://placehold.co/256x256/cccccc/f66151.jpg?text=No%20Image"
 
 private val VIDEO_EXTENSIONS = setOf("webm", "mp4")
@@ -42,9 +42,9 @@ abstract class E621 :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    @Volatile private var cachedAccountBlacklist: String? = null
+    @Volatile private var cachedAccountBlockedTags: String? = null
 
-    @Volatile private var cachedAccountBlacklistCredentials: String? = null
+    @Volatile private var cachedAccountBlockedTagsCredentials: String? = null
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = set("User-Agent", "E621/1.6.${BuildConfig.VERSION_CODE} Keiyoushi (https://github.com/keiyoushi/extensions-source)")
 
@@ -107,8 +107,8 @@ abstract class E621 :
         var endPage = false
         var dateTag = ""
 
-        val blacklist = preferences.blacklistPref
-        val whitelist = preferences.whitelistPref
+        val blockedTags = preferences.blockedTagsPref
+        val requiredTags = preferences.requiredTagsPref
 
         filters.forEach { filter ->
             when (filter) {
@@ -147,7 +147,7 @@ abstract class E621 :
                 url.addQueryParameter("search[description_matches]", description)
             }
         } else {
-            tags = "$tagsMandatory $whitelist $blacklist $tags".trim()
+            tags = "$tagsMandatory $requiredTags $blockedTags $tags".trim()
             if (query.isNotEmpty()) {
                 val search = "*${query.trim().replace(" ", "_")}*"
                 tags = "$tags $search"
@@ -370,8 +370,8 @@ abstract class E621 :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter).toHttpUrl()
 
-        val blacklist: List<List<String>> = if (preferences.accountBlacklistPref) {
-            fetchAccountBlacklist()
+        val accountBlockedTags: List<List<String>> = if (preferences.accountBlockedTagsPref) {
+            fetchAccountBlockedTags()
                 .lines()
                 .map { it.trim() }
                 .filter { it.isNotEmpty() }
@@ -398,7 +398,7 @@ abstract class E621 :
             val post = postMap[postId]
             val imageUrl = when {
                 post == null || post.flags.deleted -> DELETED_PLACEHOLDER
-                isBlacklisted(post, blacklist) -> BLACKLISTED_PLACEHOLDER
+                isBlocked(post, accountBlockedTags) -> BLOCKED_PLACEHOLDER
                 else -> extractImageUrl(post) ?: NO_IMAGE_PLACEHOLDER
             }
             Page(index, imageUrl = imageUrl)
@@ -409,10 +409,10 @@ abstract class E621 :
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) = setupE621PreferenceScreen(screen)
 
-    private fun isBlacklisted(post: Post, blacklist: List<List<String>>): Boolean {
-        if (blacklist.isEmpty()) return false
+    private fun isBlocked(post: Post, blockedTags: List<List<String>>): Boolean {
+        if (blockedTags.isEmpty()) return false
         val allTags = post.tags.values.flatten()
-        return blacklist.any { group -> group.all { tag -> tag in allTags } }
+        return blockedTags.any { group -> group.all { tag -> tag in allTags } }
     }
 
     private fun extractImageUrl(post: Post): String? = if (preferences.fullResolution && post.files.meta.ext !in VIDEO_EXTENSIONS) {
@@ -460,21 +460,21 @@ abstract class E621 :
         post.files.preview.webp?.let { post.id to it }
     }.toMap()
 
-    private suspend fun fetchAccountBlacklist(): String {
+    private suspend fun fetchAccountBlockedTags(): String {
         val username = preferences.usernamePref.trim()
         val apiKey = preferences.apiKeyPref.trim()
         if (username.isEmpty() || apiKey.isEmpty()) return ""
 
         val credentials = "$username:$apiKey"
-        val cached = cachedAccountBlacklist
-        if (cached != null && cachedAccountBlacklistCredentials == credentials) {
+        val cached = cachedAccountBlockedTags
+        if (cached != null && cachedAccountBlockedTagsCredentials == credentials) {
             return cached
         }
 
-        val blacklist = client.get("$baseUrl/users/me.json", apiHeaders(), Fetch.XHR).parseAs<UserMeResponse>().blacklistedTags ?: ""
+        val blockedTags = client.get("$baseUrl/users/me.json", apiHeaders(), Fetch.XHR).parseAs<UserMeResponse>().blockedTags ?: ""
 
-        cachedAccountBlacklist = blacklist
-        cachedAccountBlacklistCredentials = credentials
-        return blacklist
+        cachedAccountBlockedTags = blockedTags
+        cachedAccountBlockedTagsCredentials = credentials
+        return blockedTags
     }
 }

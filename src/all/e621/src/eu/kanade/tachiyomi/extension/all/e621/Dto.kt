@@ -65,14 +65,14 @@ class ScaledFile(
 
 @Serializable
 class UserMeResponse(
-    @SerialName("blacklisted_tags") private val _blacklistedTags: String?,
+    @SerialName("blacklisted_tags") private val _blockedTags: String?,
     private val user: UserMeData?,
 ) {
-    val blacklistedTags: String?
-        get() = _blacklistedTags ?: user?.blacklistedTags
+    val blockedTags: String?
+        get() = _blockedTags ?: user?.blockedTags
 }
 
 @Serializable
 class UserMeData(
-    @SerialName("blacklisted_tags") val blacklistedTags: String?,
+    @SerialName("blacklisted_tags") val blockedTags: String?,
 )
