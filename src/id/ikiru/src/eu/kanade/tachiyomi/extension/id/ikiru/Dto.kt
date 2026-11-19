@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.id.ikiru
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
@@ -39,16 +40,6 @@ class IkiruMangaItemDto(
     }
 }
 
-private fun String?.toPlainText(): String? {
-    this ?: return null
-    val document = Jsoup.parseBodyFragment(this)
-    return document.select("p")
-        .map { it.wholeText() }
-        .filter { it.isNotBlank() }
-        .joinToString("\n\n")
-        .ifEmpty { document.body().wholeText() }
-}
-
 @Serializable
 class IkiruMangaDetailDto(
     private val title: String,
@@ -62,23 +53,16 @@ class IkiruMangaDetailDto(
     fun toSManga(): SManga {
         // the site repeats the main title inside alternateTitles
         val altTitles = metadata?.alternateTitles.orEmpty()
-            .map { it.trim() }
-            .filter { it.isNotBlank() && !it.equals(title, ignoreCase = true) }
-            .distinct()
-        val plainDescription = description.toPlainText()
+            .filterNot { it.trim().equals(title, ignoreCase = true) }
 
         return SManga.create().apply {
             this.title = this@IkiruMangaDetailDto.title
             this.url = slug
             thumbnail_url = featuredImage
-            this.description = buildString {
-                if (!plainDescription.isNullOrBlank()) append(plainDescription)
-                if (altTitles.isNotEmpty()) {
-                    if (isNotEmpty()) append("\n\n")
-                    append("Alternative Names:\n")
-                    append(altTitles.joinToString("\n") { "- $it" })
-                }
-            }.trim()
+            this.description = MarkdownDescription.Builder()
+                .description(this@IkiruMangaDetailDto.description?.let { Jsoup.parseBodyFragment(it).body() })
+                .altTitles(altTitles)
+                .build()
             this.status = when (this@IkiruMangaDetailDto.status?.uppercase()) {
                 "ONGOING" -> SManga.ONGOING
                 "COMPLETED" -> SManga.COMPLETED
