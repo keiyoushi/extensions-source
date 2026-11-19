@@ -21,7 +21,7 @@ import java.util.Locale
 
 @Source
 abstract class TopManhuaFan : MadaraNoAjax() {
-    override val chapterDateFormat = DateTimeFormatter.ofPattern("MM/dd/yyyy", Locale.ENGLISH)
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("MM/dd/yyyy", Locale.ROOT)
     override val mangaSubString = "manhua"
     private var firstSearchPath: String? = null
 

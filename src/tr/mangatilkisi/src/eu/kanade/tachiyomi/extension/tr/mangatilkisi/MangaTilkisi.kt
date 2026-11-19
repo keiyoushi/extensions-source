@@ -12,7 +12,7 @@ import java.util.Locale
 
 @Source
 abstract class MangaTilkisi : Madara() {
-    override val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.forLanguageTag("tr"))
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
     override val chapterMode = ChapterMode.MangaAjax
 
     override val mangaDetailsSelectorTitle = "#mgcr-series-title"
@@ -27,6 +27,6 @@ abstract class MangaTilkisi : Madara() {
         val payload = FormBody.Builder()
             .add("verified", "1")
             .build()
-        return client.post(chapterUrl, headers, Fetch.DOCUMENT, payload).use { it.asJsoup() }
+        return client.post(chapterUrl, Fetch.DOCUMENT, payload).asJsoup()
     }
 }

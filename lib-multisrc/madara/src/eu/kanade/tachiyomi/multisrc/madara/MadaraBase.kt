@@ -14,15 +14,15 @@ import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toMarkdown
+import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.Call
 import okhttp3.Callback
@@ -119,7 +119,7 @@ abstract class MadaraBase : KeiSource() {
     protected open val mangaDetailsSelectorTag = "div.tags-content a"
     protected open val seriesTypeSelector = ".post-content_item:contains(Type) .summary-content"
     protected open val altNameSelector = ".post-content_item:contains(Alt) .summary-content"
-    protected open val updatingRegex = "Updating|Atualizando".toRegex(RegexOption.IGNORE_CASE)
+    protected open val updatingRegex = Regex("Updating|Atualizando", RegexOption.IGNORE_CASE)
     protected open fun chapterListSelector() = "li.wp-manga-chapter"
     protected open val chapterNameSelector: String? = null
     protected open val chapterUrlSelector = "a"
@@ -366,7 +366,7 @@ abstract class MadaraBase : KeiSource() {
 
     override fun getChapterUrl(chapter: SChapter): String {
         if (chapter.url.contains('/')) error("Refresh the chapter list.")
-        val mangaPath = chapter.memo["mangaPath"]?.jsonPrimitive?.content
+        val mangaPath = chapter.memo.getStringOrNull("mangaPath")
             ?: error("Refresh the chapter list.")
         return "$baseUrl${mangaPath.trimEnd('/')}/${chapter.url}/"
     }
@@ -392,13 +392,13 @@ abstract class MadaraBase : KeiSource() {
             ?.substringAfter("var manga = ", "")
             ?.substringBeforeLast(';')
             ?.takeIf(String::isNotBlank)
-            ?.runCatching { parseAs<JsonObject>() }
+            ?.runCatching { parseAs<MangaViewData>() }
             ?.getOrNull()
             ?: return
-        if (data["enable_manga_view"]?.jsonPrimitive?.content != "1") return
-        val mangaId = data["manga_id"]?.jsonPrimitive?.content?.takeIf(String::isNotBlank) ?: return
-        val chapterSlug = data["chapter_slug"]?.jsonPrimitive?.contentOrNull
-        val nonce = data["nonce"]?.jsonPrimitive?.contentOrNull?.takeIf(String::isNotBlank)
+        if (data.enableMangaView != "1") return
+        val mangaId = data.mangaId?.takeIf(String::isNotBlank) ?: return
+        val chapterSlug = data.chapterSlug
+        val nonce = data.nonce?.takeIf(String::isNotBlank)
         val body = FormBody.Builder()
             .add("action", "manga_views")
             .add("manga", mangaId)
@@ -506,9 +506,9 @@ abstract class MadaraBase : KeiSource() {
     }
 
     protected open fun mangaId(manga: SManga): String? = manga.url.takeIf { it.all(Char::isDigit) }
-        ?: manga.memo["id"]?.jsonPrimitive?.content
+        ?: manga.memo.getStringOrNull("id")
 
-    protected fun memoPath(manga: SManga): String? = manga.memo["path"]?.jsonPrimitive?.content
+    protected fun memoPath(manga: SManga): String? = manga.memo.getStringOrNull("path")
 
     protected fun mangaMemo(path: String, genres: List<GenreRoute>, legacyId: String? = null): JsonObject = buildJsonObject {
         put("path", path)
@@ -585,7 +585,7 @@ abstract class MadaraBase : KeiSource() {
             }
             if (unit != null) return ZonedDateTime.now(ZoneOffset.UTC).minus(amount, unit).toInstant().toEpochMilli()
         }
-        return runCatching { LocalDate.parse(value, chapterDateFormat).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli() }.getOrDefault(0)
+        return chapterDateFormat.tryParseDate(value, ZoneOffset.UTC)
     }
 
     protected fun isUpdating(value: String) = updatingRegex.containsMatchIn(value)
@@ -597,7 +597,7 @@ abstract class MadaraBase : KeiSource() {
         private val URL_REGEX = Regex("""^https?://[^\s/$.?#].[^\s]*$""")
         private val WHITESPACE_REGEX = Regex("""\s+""")
         private val IMAGE_DESCRIPTOR_REGEX = Regex("""^(\d+|\d+\.\d+)[wx]$""")
-        private val NUMBER_REGEX = Regex("\\d+")
+        private val NUMBER_REGEX = Regex("""\d+""")
 
         // Keywords must not be preceded by a letter, otherwise "ay" matches inside "mayıs", "may" and "days"
         private fun wordRegex(vararg words: String) = Regex("""(?<!\p{L})(?:${words.joinToString("|") { Regex.escape(it) }})""")
