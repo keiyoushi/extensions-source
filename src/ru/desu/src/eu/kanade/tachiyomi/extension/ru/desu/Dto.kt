@@ -108,3 +108,9 @@ class ChapterDataDto(
 class ChapterPageDto(
     val url: String,
 )
+
+// Відповідь пошуку /manga/search/: HTML-фрагмент у полі templateHtml
+@Serializable
+class SearchDto(
+    val templateHtml: String,
+)
