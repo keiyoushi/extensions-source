@@ -1,15 +1,11 @@
 package eu.kanade.tachiyomi.extension.es.aedex
 
-import android.text.InputType
 import android.util.LruCache
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.catharsis.Catharsis
 import eu.kanade.tachiyomi.multisrc.catharsis.ChapterDto
 import eu.kanade.tachiyomi.multisrc.catharsis.MangaDto
 import eu.kanade.tachiyomi.multisrc.catharsis.ReaderPassDto
 import eu.kanade.tachiyomi.multisrc.catharsis.ReaderPassRequest
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
@@ -19,7 +15,6 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParse
@@ -36,22 +31,7 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 
 @Source
-abstract class Aedex :
-    Catharsis(),
-    ConfigurableSource {
-
-    private val preferences by getPreferencesLazy()
-
-    // On non-Android hosts (Suwayomi), CloudflareInterceptor hijacks any 403 with Server: cloudflare
-    private val readerClient by lazy {
-        if (System.getProperty("java.vm.name") == "Dalvik") {
-            client
-        } else {
-            client.newBuilder()
-                .apply { interceptors().removeAll { it.javaClass.simpleName == "CloudflareInterceptor" } }
-                .build()
-        }
-    }
+abstract class Aedex : Catharsis() {
 
     override val apiUrl get() = "$baseUrl/api/backend"
 
@@ -71,87 +51,9 @@ abstract class Aedex :
     // fecha_publicacion has no offset; the site shows date_created
     override fun chapterDate(chapter: ChapterDto) = Instant.tryParse(chapter.dateCreated)
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = PREF_EMAIL
-            title = "Correo electrónico"
-            summary = "Correo de tu cuenta en Aedex"
-            setDefaultValue("")
-            setOnBindEditTextListener {
-                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
-            }
-        }.also(screen::addPreference)
-
-        EditTextPreference(screen.context).apply {
-            key = PREF_PASSWORD
-            title = "Contraseña"
-            summary = "Contraseña de tu cuenta en Aedex"
-            setDefaultValue("")
-            setOnBindEditTextListener {
-                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            }
-        }.also(screen::addPreference)
-    }
-
     // Signs the site's reader calls; its keys come with the chapter page
     @Volatile
     private var signer: ReaderSigner? = null
-
-    private val loginMutex = Mutex()
-
-    private fun storedSessionCookie(): String? = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
-        .firstOrNull { it.name == SESSION_COOKIE || it.name == LEGACY_SESSION_COOKIE }
-        ?.value
-
-    private suspend fun login(staleSession: String?) = loginMutex.withLock {
-        val current = storedSessionCookie()
-        if (current != null && current != staleSession) return@withLock
-
-        val email = preferences.getString(PREF_EMAIL, "").orEmpty().trim().lowercase()
-        val password = preferences.getString(PREF_PASSWORD, "").orEmpty()
-        if (email.isBlank() || password.isBlank()) {
-            throw IOException(LOGIN_REQUIRED_MESSAGE)
-        }
-
-        val authFetch = Fetch.XHR.from("$baseUrl/auth/login")
-        val csrfToken = readerClient.get("$baseUrl/api/auth/csrf", authFetch)
-            .parseAs<CsrfDto>()
-            .csrfToken
-
-        val form = FormBody.Builder()
-            .add("csrfToken", csrfToken)
-            .add("username", email)
-            .add("password", password)
-            .add("redirect", "false")
-            .add("callbackUrl", "$baseUrl/")
-            .add("json", "true")
-            .build()
-
-        readerClient.post(
-            "$baseUrl/api/auth/callback/credentials",
-            authFetch,
-            form,
-            ensureSuccess = false,
-        ).use { response ->
-            if (!response.isSuccessful) {
-                val errorUrl = if (response.header("Content-Type")?.startsWith("application/json") == true) {
-                    response.parseAs<LoginResponseDto>().url.orEmpty()
-                } else {
-                    ""
-                }
-                val message = if ("EmailNotVerified" in errorUrl) {
-                    "Verifica tu correo en Aedex para poder iniciar sesión."
-                } else {
-                    "Correo o contraseña incorrectos. Verifica tus credenciales en los ajustes de la extensión."
-                }
-                throw IOException(message)
-            }
-        }
-
-        if (storedSessionCookie() == null) {
-            throw IOException("No se pudo guardar la sesión de Aedex.")
-        }
-    }
 
     // The reader pass is the site's `ax_rp` cookie, bound to the connection's IP
     override fun storedReaderPass(): ReaderPassDto? = client.cookieJar.loadForRequest("$baseUrl/lector/".toHttpUrl())
@@ -161,7 +63,7 @@ abstract class Aedex :
     override suspend fun redeemReaderPass(capToken: String, sitekey: String, fetch: Fetch): ReaderPassDto {
         val signer = signer ?: throw IOException("Reader keys not found")
         val headers = headersBuilder().set(signer.buildName, signer.buildId).build()
-        readerClient.post(
+        client.post(
             "$baseUrl/lector/pase",
             headers,
             fetch,
@@ -195,7 +97,7 @@ abstract class Aedex :
                     .set(readerSigner.buildName, readerSigner.buildId)
                     .set(proofName, proof)
                     .build()
-                readerClient.post("$baseUrl/lector/capitulo", headers, fetch, body, ensureSuccess = false).use { response ->
+                client.post("$baseUrl/lector/capitulo", headers, fetch, body, ensureSuccess = false).use { response ->
                     when {
                         response.isSuccessful -> return response.parseAs<FreeReaderDto>()
                         response.code == 409 && retry -> signer = null
@@ -204,7 +106,7 @@ abstract class Aedex :
                             when {
                                 // The pass is gone, or was given to another IP: solve a new one
                                 response.code == 403 && code == "READER_PASS_REQUIRED" && retry -> renewPass = true
-                                code == "LOGIN_REQUIRED" -> throw LoginRequiredException()
+                                code == "LOGIN_REQUIRED" -> throw IOException(LOGIN_REQUIRED_MESSAGE)
                                 else -> throw response.siteError(code)
                             }
                         }
@@ -227,20 +129,6 @@ abstract class Aedex :
     }
 
     private suspend fun openReader(chapter: SChapter): Document {
-        var loggedIn = false
-        while (true) {
-            val sessionBefore = storedSessionCookie()
-            try {
-                return openReaderOnce(chapter)
-            } catch (_: LoginRequiredException) {
-                if (loggedIn) throw IOException(LOGIN_REQUIRED_MESSAGE)
-                login(sessionBefore)
-                loggedIn = true
-            }
-        }
-    }
-
-    private suspend fun openReaderOnce(chapter: SChapter): Document {
         val fetch = Fetch.XHR.from("${getChapterUrl(chapter)}?modo=gratis")
         val freeReader = FreeReader()
         val free = requestFreeReader(chapter, fetch, freeReader)
@@ -292,16 +180,9 @@ abstract class Aedex :
 
     companion object {
         private const val PASS_COOKIE = "ax_rp"
-        private const val SESSION_COOKIE = "__Secure-next-auth.session-token"
-        private const val LEGACY_SESSION_COOKIE = "next-auth.session-token"
-        private const val PREF_EMAIL = "pref_email"
-        private const val PREF_PASSWORD = "pref_password"
         private const val MAX_ATTEMPTS = 3
         private val LECTOR_REGEX = Regex("""window\.__LECTOR__\s*=\s*(\{.*?\});""")
     }
 }
 
-internal const val LOGIN_REQUIRED_MESSAGE =
-    "Inicia sesión en WebView o configura tu correo y contraseña en los ajustes de la extensión."
-
-internal class LoginRequiredException : IOException(LOGIN_REQUIRED_MESSAGE)
+internal const val LOGIN_REQUIRED_MESSAGE = "Inicia sesión en WebView para leer este capítulo"

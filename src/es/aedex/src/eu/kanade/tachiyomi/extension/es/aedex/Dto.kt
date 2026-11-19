@@ -17,16 +17,6 @@ class FreeReaderDto(
 )
 
 @Serializable
-class CsrfDto(
-    val csrfToken: String,
-)
-
-@Serializable
-class LoginResponseDto(
-    val url: String?,
-)
-
-@Serializable
 class FreeReaderFrameDto(
     val type: String,
     val challenge: String? = null,
