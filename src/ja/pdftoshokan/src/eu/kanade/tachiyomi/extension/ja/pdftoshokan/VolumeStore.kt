@@ -2,9 +2,21 @@ package eu.kanade.tachiyomi.extension.ja.pdftoshokan
 
 import keiyoushi.utils.inflate
 import keiyoushi.utils.md5
+import keiyoushi.utils.readIntBigEndian
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
 import java.io.File
+import java.io.FileNotFoundException
+import java.io.FileOutputStream
 import java.io.IOException
+import java.io.OutputStream
 import java.io.RandomAccessFile
 import java.util.concurrent.ConcurrentHashMap
 
@@ -26,27 +38,119 @@ class VolumeStore(private val dir: File) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, VolumeIndex>) = size > 4
     }
 
-    fun contains(url: HttpUrl): Boolean = File(dir, key(url)).exists()
+    /** A volume still downloading into [tmp]; [size] is how far it has got, or [DONE] / [FAILED]. */
+    private class Partial(val tmp: File) {
+        val size = MutableStateFlow(0L)
 
-    /** Stores the volume that [write] downloads into the file it's given. */
-    suspend fun save(url: HttpUrl, write: suspend (File) -> Unit) {
-        dir.mkdirs()
-        val file = File(dir, key(url))
-        val tmp = File(dir, "${file.name}.tmp")
-        try {
-            write(tmp)
-        } catch (e: Throwable) {
-            tmp.delete()
-            throw e
+        @Volatile
+        var error: Throwable? = null
+
+        /** Waits for [bytes] of the file; false when it's complete and in place instead. */
+        suspend fun await(bytes: Long): Boolean {
+            val reached = size.first { it >= bytes || it == FAILED }
+            if (reached == FAILED) throw error!!
+            return reached != DONE
         }
-        synchronized(locks.getOrPut(file.name) { Any() }) {
-            synchronized(indexes) { indexes.remove(file.name) }
-            if (!tmp.renameTo(file)) {
-                tmp.delete()
-                throw IOException("Failed to store volume")
+    }
+
+    private val partials = ConcurrentHashMap<String, Partial>()
+
+    /** Whether the volume is fully downloaded. */
+    fun contains(url: HttpUrl) = File(dir, key(url)).exists()
+
+    /** Starts downloading the volume in [scope], unless it's cached or already on its way. */
+    fun download(url: HttpUrl, scope: CoroutineScope, write: suspend (OutputStream) -> Unit) {
+        val key = key(url)
+        val file = File(dir, key)
+        if (file.exists()) return
+        val partial = Partial(File(dir, "$key.tmp"))
+        if (partials.putIfAbsent(key, partial) != null) return
+        dir.mkdirs()
+        scope.launch {
+            try {
+                Counting(FileOutputStream(partial.tmp), partial.size).use { write(it) }
+                synchronized(locks.getOrPut(key) { Any() }) {
+                    synchronized(indexes) { indexes.remove(key) }
+                    if (!partial.tmp.renameTo(file)) throw IOException("Failed to store volume")
+                }
+                partial.size.value = DONE
+                trim(file)
+            } catch (e: Throwable) {
+                partial.tmp.delete()
+                partial.error = e
+                partial.size.value = FAILED
+                if (e is CancellationException) throw e
+            } finally {
+                partials.remove(key, partial)
             }
         }
-        trim(file)
+    }
+
+    /** The volume's page count: from the header of an AVIF volume as soon as it's in, for a PDF once it's all there. */
+    suspend fun pageCount(url: HttpUrl): Int {
+        partials[key(url)]?.let { partial ->
+            if (partial.await(AVIF_HEADER)) {
+                val head = try {
+                    RandomAccessFile(partial.tmp, "r").use { it.readBytes(0, AVIF_HEADER.toInt()) }
+                } catch (_: FileNotFoundException) {
+                    null // finished in the meantime
+                }
+                if (head != null && head[0] == 'C'.code.toByte()) {
+                    return head.readIntBigEndian(16)
+                }
+                partial.await(DONE)
+            }
+        }
+        return withContext(Dispatchers.IO) { index(url).second.pages.size }
+    }
+
+    /** Whether the page is AVIF, and its image slices; waits for the page if the volume is still downloading. */
+    fun page(url: HttpUrl, page: Int): Pair<Boolean, List<ByteArray>> {
+        partials[key(url)]?.let { partial ->
+            runBlocking { partial.avifPage(page) }?.let { return true to listOf(it) }
+        }
+        val (file, index) = index(url)
+        val parts = RandomAccessFile(file, "r").use { raf ->
+            index.pages[page].map { raf.readBytes(it.offset, it.length) }
+        }
+        return index.isAvif to parts
+    }
+
+    /** Walks the AVIF entries as they arrive: each is width, height and length, then the image. */
+    private suspend fun Partial.avifPage(page: Int): ByteArray? = try {
+        if (!await(AVIF_HEADER)) return null
+        // An open file keeps working when the finished download is renamed
+        RandomAccessFile(tmp, "r").use { raf ->
+            if (raf.readBytes(0, 1)[0] != 'C'.code.toByte()) return null
+            var entry = AVIF_HEADER
+            repeat(page + 1) { i ->
+                if (!await(entry + 12)) return null
+                val length = raf.readBytes(entry + 8, 4).readIntBigEndian(0)
+                if (i == page) {
+                    if (!await(entry + 12 + length)) return null
+                    return raf.readBytes(entry + 12, length)
+                }
+                entry += 12 + length
+            }
+            null
+        }
+    } catch (_: FileNotFoundException) {
+        null
+    } catch (e: IOException) {
+        throw e
+    } catch (e: Throwable) {
+        throw IOException(e.message, e)
+    }
+
+    private class Counting(private val out: OutputStream, private val size: MutableStateFlow<Long>) : OutputStream() {
+        override fun write(b: Int) = write(byteArrayOf(b.toByte()))
+
+        override fun write(b: ByteArray, off: Int, len: Int) {
+            out.write(b, off, len)
+            size.value += len
+        }
+
+        override fun close() = out.close()
     }
 
     fun index(url: HttpUrl): Pair<File, VolumeIndex> {
@@ -205,6 +309,9 @@ class VolumeStore(private val dir: File) {
 
     companion object {
         private const val MAX_CACHE_BYTES = 300L * 1024 * 1024
+        private const val AVIF_HEADER = 20L
+        private const val DONE = Long.MAX_VALUE
+        private const val FAILED = -1L
 
         private val OBJ_REGEX = Regex("""(\d+)\s+0\s+obj""")
         private val LENGTH_REGEX = Regex("""/Length\s+(\d+)\b(?!\s+\d+\s+R)""")

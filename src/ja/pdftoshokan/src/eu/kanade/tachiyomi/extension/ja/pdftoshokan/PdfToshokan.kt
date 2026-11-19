@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.pdftoshokan
 
-import android.util.Base64
 import android.webkit.WebResourceResponse
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -10,20 +9,28 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.lib.cronet.cronet
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.NativeWebViewApi
 import keiyoushi.utils.WebViewScope
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.decodeHex
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import keiyoushi.utils.toJsonString
+import keiyoushi.utils.xor
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -31,11 +38,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
-import java.io.ByteArrayInputStream
-import java.io.File
 import java.io.IOException
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.minutes
+import java.io.OutputStream
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -45,25 +51,19 @@ abstract class PdfToshokan : KeiSource() {
 
     private val store by lazy { VolumeStore(applicationContext.cacheDir.resolve("source_$id/volumes")) }
 
+    private val downloads = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** Volumes download one at a time, the way a person reads them on the site. */
+    private val downloadLock = Mutex()
+
     private val baseHost get() = baseUrl.toHttpUrl().host
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = this
+        // The site answers bursts of page loads with 429, so pages are spaced out like a person browsing
+        .rateLimit(2, interval = 500.milliseconds) { it.host == baseHost }
+        // The site and its file host turn away clients that don't connect like a browser
+        .cronet()
         .addInterceptor(PageInterceptor(store) { it.host.endsWith(".$baseHost") })
-        .addInterceptor(ClientHintsInterceptor(baseUrl) { it.host == baseHost || it.host.endsWith(".$baseHost") })
-        // TEMP DEBUG: remove before PR
-        .addNetworkInterceptor { chain ->
-            val request = chain.request()
-            val response = chain.proceed(request)
-            if (request.url.host.endsWith(baseHost)) {
-                val sent = request.headers.names().filterNot { it.equals("Cookie", true) }.joinToString { "$it=${request.header(it)}" }
-                val cookies = request.header("Cookie")?.split(";")?.joinToString { it.substringBefore("=").trim() }
-                android.util.Log.d(
-                    "PdfToshokanDebug",
-                    "${request.method} ${request.url} -> ${response.code} cf-mitigated=${response.header("cf-mitigated")} cookies=[$cookies] headers=[$sent]",
-                )
-            }
-            response
-        }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getListing("popular", page)
 
@@ -110,7 +110,7 @@ abstract class PdfToshokan : KeiSource() {
         return document.select("article").mapNotNull { article ->
             if (article.classNames().any { it in hiddenClasses }) return@mapNotNull null
             val link = article.selectFirst(".entry-title a[$linkAttr]") ?: return@mapNotNull null
-            val id = MANGA_ID_REGEX.find(xorHex(link.attr(linkAttr), linkKey))?.groupValues?.get(1)
+            val id = MANGA_ID_REGEX.find(link.attr(linkAttr).decodeHex().xor(linkKey.encodeToByteArray()).decodeToString())?.groupValues?.get(1)
                 ?: return@mapNotNull null
             if (id in trapIds) return@mapNotNull null
 
@@ -145,9 +145,7 @@ abstract class PdfToshokan : KeiSource() {
                 chapter_number = label.toFloatOrNull() ?: -1f
             }
         }.reversed()
-        val details = parseDetails(document, manga.url)
-        preferences.edit().putString(titleKey(manga.url), details.title).apply()
-        return SMangaUpdate(details, chapterList)
+        return SMangaUpdate(parseDetails(document, manga.url), chapterList)
     }
 
     private fun parseDetails(document: Document, id: String) = SManga.create().apply {
@@ -172,46 +170,31 @@ abstract class PdfToshokan : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val id = chapter.url.substringBefore("/")
         val label = chapter.url.substringAfter("/")
-
-        val cached = preferences.getString(fileKey(id, label), null)?.toHttpUrl()
-        val (fileUrl, index) = cached?.let { url ->
-            runCatching { url to loadIndex(url) }.getOrNull()
-        } ?: run {
-            val url = resolveFile(id, label, guessFromFolder = cached == null)
-            url to loadIndex(url)
-        }
-        return List(index.pages.size) { Page(it, imageUrl = "$fileUrl#$it") }
-    }
-
-    private suspend fun loadIndex(url: HttpUrl): VolumeIndex {
-        if (!store.contains(url)) store.save(url) { download(url, it) }
-        return withContext(Dispatchers.IO) { store.index(url).second }
+        val (file, count) = openVolume(id, label)
+        return List(count) { Page(it, imageUrl = "$file#$it") }
     }
 
     /**
-     * decode.php sits behind Cloudflare's bot scoring, so it's the last resort. Volume files are
-     * `<file host>/<prefix>/<folder>/<volume>.pdf`, with one prefix for the whole site and a folder
-     * that is usually the title with its brackets spaced out, so a known or guessed folder is tried first.
+     * The file host lets a volume's file through only with the pass decode.php hands out along with it, so a volume
+     * that isn't stored yet is opened through decode.php, the way the site's read button does. A stored volume opens
+     * from its remembered file without going online.
      */
-    private suspend fun resolveFile(id: String, label: String, guessFromFolder: Boolean): HttpUrl {
-        if (guessFromFolder) {
-            val folders = listOfNotNull(
-                preferences.getString(folderKey(id), null),
-                preferences.getString(titleKey(id), null)?.let { title ->
-                    HttpUrl.Builder().scheme("https").host("n3.$baseHost")
-                        .addPathSegment(preferences.getString(PREFIX_KEY, DEFAULT_PREFIX)!!)
-                        .addPathSegment(title.replace(BRACKETS_REGEX, " ").replace(SPACES_RUN_REGEX, " ").trim())
-                        .addPathSegment("")
-                        .build().toString()
-                },
-            ).distinct()
-            for (folder in folders) {
-                val guess = folder.toHttpUrl().newBuilder().addPathSegment("$label.pdf").build()
-                if (fetchGuess(guess)) return guess.also { remember(id, label, it) }
-            }
-        }
+    private suspend fun openVolume(id: String, label: String): Pair<HttpUrl, Int> {
+        val known = preferences.getString(fileKey(id, label), null)?.toHttpUrl()
+            ?: preferences.getString(folderKey(id), null)?.toHttpUrl()?.volumeFile(label)
+        if (known != null && store.contains(known)) return known to open(known)
 
-        return decode("$baseUrl/manga/$id", label).also { remember(id, label, it) }
+        val file = decode("$baseUrl/manga/$id", label)
+        remember(id, label, file)
+        return file to open(file)
+    }
+
+    private fun HttpUrl.volumeFile(label: String) = newBuilder().removePathSegment(pathSize - 1).addPathSegment("$label.pdf").build()
+
+    /** Starts the volume's download if needed and returns its page count, which comes before the pages do. */
+    private suspend fun open(url: HttpUrl): Int {
+        store.download(url, downloads) { download(url, it) }
+        return store.pageCount(url)
     }
 
     private suspend fun decode(titleUrl: String, label: String): HttpUrl {
@@ -284,82 +267,36 @@ abstract class PdfToshokan : KeiSource() {
 
     private fun randomName() = List(12) { ('a'..'z').random() }.joinToString("")
 
-    /** Downloads a guessed volume file straight away: the file host allows few requests, so there's no separate check. */
-    private suspend fun fetchGuess(url: HttpUrl): Boolean = try {
-        store.save(url) { download(url, it) }
-        true
-    } catch (_: VolumeMissing) {
-        false
-    }
-
     /**
-     * Fetched in one request the way the site's PDF viewer does, and from one of the site's pages: the file host turns
-     * away requests from outside the site, and blocks for a while after a burst of requests.
+     * Fetched in one request the way the site's PDF viewer does, as its cross-site call from the site: the file host
+     * turns away requests from outside the site, and rate limits a burst of requests. The volume is written out as it
+     * arrives, so its first pages can be read before the rest is in.
      */
-    private suspend fun download(url: HttpUrl, file: File) = file.outputStream().buffered().use { out ->
-        runInSite<Unit>(DOWNLOAD_TIMEOUT, downloadScript(url)) { message ->
-            when {
-                message == "done" -> resolve(Unit)
-                message.startsWith("data:") -> out.write(Base64.decode(message.substring(5), Base64.DEFAULT))
-                message == "404" -> reject(VolumeMissing())
-                message == "403" || message == "429" -> reject(IOException("$RATE_LIMITED_MESSAGE (HTTP $message)"))
-                else -> reject(IOException("Volume download failed (HTTP $message)"))
+    private suspend fun download(url: HttpUrl, out: OutputStream) = downloadLock.withLock {
+        // Every request while rate limited makes the limit last longer, so none are sent until it's likely over
+        if (System.currentTimeMillis() < preferences.getLong(RATE_LIMITED_UNTIL_KEY, 0)) throw IOException(RATE_LIMITED_MESSAGE)
+        client.get(url, fetch = Fetch.XHR.from(baseUrl), ensureSuccess = false).use { response ->
+            when (response.code) {
+                200 -> withContext(Dispatchers.IO) { response.body.byteStream().use { it.copyTo(out) } }
+                // The file host also answers a file that isn't there with 403, only without Cloudflare's block page
+                403 -> throw if (response.body.string().contains("cloudflare", ignoreCase = true)) FileHostRefused() else VolumeMissing()
+                429 -> {
+                    preferences.edit().putLong(RATE_LIMITED_UNTIL_KEY, System.currentTimeMillis() + RATE_LIMIT_PAUSE.inWholeMilliseconds).apply()
+                    throw IOException(RATE_LIMITED_MESSAGE)
+                }
+                else -> throw IOException("Volume download failed (HTTP ${response.code})")
             }
         }
     }
 
-    /** Runs [script] on a page of the site, with a bridge it posts its results to; `BRIDGE` in it is the bridge's name. */
-    private suspend fun <T> runInSite(timeout: Duration, script: String, onMessage: WebViewScope<T>.(String) -> Unit): T = runWebView(timeout) {
-        setupSiteWebView(allowFileHost = true)
-        val bridge = randomName()
-        webMessageBridge(bridge, setOf(baseUrl)) { message -> onMessage(message) }
-        var started = false
-        onPageFinished { url ->
-            if (!started && url.toHttpUrlOrNull()?.encodedPath == "/robots.txt") {
-                started = true
-                evaluateJs(script.replace("BRIDGE", bridge))
-            }
-        }
-        loadUrl("$baseUrl/robots.txt")
-    }
-
-    // Streamed out in pieces as it arrives, so a whole volume never sits in one bridge message
-    private fun downloadScript(url: HttpUrl) = """
-        (async () => {
-            const response = await fetch(${url.toString().toJsonString()}, { credentials: 'include' });
-            // The file host also answers a file that isn't there with 403, only without Cloudflare's block page
-            if (response.status === 403 && !/cloudflare/i.test(await response.text())) return window.BRIDGE.postMessage('404');
-            if (response.status !== 200) return window.BRIDGE.postMessage(String(response.status));
-            const reader = response.body.getReader();
-            let parts = [], size = 0;
-            const flush = () => {
-                const bytes = new Uint8Array(size);
-                let at = 0;
-                for (const part of parts) { bytes.set(part, at); at += part.length; }
-                let binary = '';
-                for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-                window.BRIDGE.postMessage('data:' + btoa(binary));
-                parts = [];
-                size = 0;
-            };
-            for (;;) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                parts.push(value);
-                size += value.length;
-                if (size >= $BRIDGE_PIECE) flush();
-            }
-            if (size > 0) flush();
-            window.BRIDGE.postMessage('done');
-        })().catch(() => window.BRIDGE.postMessage('0'));
-    """.trimIndent()
-
+    /** Only a file that isn't named after its volume is kept, the folder covers the rest. */
     private fun remember(id: String, label: String, file: HttpUrl) {
         val folder = file.newBuilder().removePathSegment(file.pathSize - 1).addPathSegment("").build()
         preferences.edit()
-            .putString(fileKey(id, label), file.toString())
+            .apply {
+                if (file.pathSegments.last() == "$label.pdf") remove(fileKey(id, label)) else putString(fileKey(id, label), file.toString())
+            }
             .putString(folderKey(id), folder.toString())
-            .putString(PREFIX_KEY, file.pathSegments.first())
             .apply()
     }
 
@@ -367,15 +304,13 @@ abstract class PdfToshokan : KeiSource() {
 
     private fun folderKey(id: String) = "folder_$id"
 
-    private fun titleKey(id: String) = "title_$id"
-
     private suspend fun loadPage(url: String): Document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
     /**
-     * Only the site and its challenge load, and the file host with [allowFileHost]: ads hijack the page. A viewer
+     * Only the site and its challenge load: ads hijack the page. A viewer
      * run passes [onVolumeFile] to also let the reader library load and to catch its request for the volume file.
      */
-    private fun WebViewScope<*>.setupSiteWebView(onVolumeFile: ((HttpUrl) -> Unit)? = null, allowFileHost: Boolean = false) {
+    private fun WebViewScope<*>.setupSiteWebView(onVolumeFile: ((HttpUrl) -> Unit)? = null) {
         userAgent = headers["User-Agent"]!!
         blockImages = true
         // The firewall turns away requests that name the app, which WebView does unless told otherwise
@@ -384,7 +319,6 @@ abstract class PdfToshokan : KeiSource() {
             val url = request.url.toString().toHttpUrlOrNull() ?: return@interceptRequest emptyResponse()
             when {
                 url.host == baseHost || url.host == "challenges.cloudflare.com" -> null
-                allowFileHost && url.host.endsWith(".$baseHost") -> null
                 onVolumeFile != null && url.host in VIEWER_LIBRARY_HOSTS -> null
                 onVolumeFile != null && url.host.endsWith(".$baseHost") && url.pathSegments.last().substringAfterLast('.', "") !in ASSET_EXTENSIONS -> {
                     onVolumeFile(url)
@@ -395,7 +329,7 @@ abstract class PdfToshokan : KeiSource() {
         }
     }
 
-    private fun emptyResponse() = WebResourceResponse("text/plain", null, 204, "No Content", null, ByteArrayInputStream(ByteArray(0)))
+    private fun emptyResponse() = WebResourceResponse(null, null, null)
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("キーワード検索時はフィルターは無視されます"),
@@ -404,24 +338,14 @@ abstract class PdfToshokan : KeiSource() {
         CategoryFilter(),
     )
 
-    private fun xorHex(hex: String, key: String): String = buildString {
-        for (i in 0 until hex.length / 2) {
-            append((hex.substring(i * 2, i * 2 + 2).toInt(16) xor key[i % key.length].code).toChar())
-        }
-    }
-
     companion object {
         private const val TRAP_ID = "4973674"
         private const val DECODE_ATTEMPTS = 3
         private const val BLOCKED = "__blocked__"
         private const val MAINTENANCE = "__maintenance__"
-        private const val PREFIX_KEY = "file_prefix"
-        private const val BRIDGE_PIECE = 1024 * 1024
-        private const val RATE_LIMITED_MESSAGE = "The file host only allows a few downloads in a short time, try again in a few minutes"
-        private val DOWNLOAD_TIMEOUT = 10.minutes
-
-        // As seen in the site's volume URLs in November 2026; replaced by whatever decode.php last returned
-        private const val DEFAULT_PREFIX = "ghy6g4bujsw"
+        private const val RATE_LIMITED_MESSAGE = "The file host is limiting downloads after too many in a short time, try again in an hour"
+        private const val RATE_LIMITED_UNTIL_KEY = "rate_limited_until"
+        private val RATE_LIMIT_PAUSE = 1.hours
 
         // decode.php redirects to the viewer with the volume file in its `file` parameter
         private const val DECODE_STATE_JS = """(() => {
@@ -439,8 +363,6 @@ abstract class PdfToshokan : KeiSource() {
         // Script hosts the viewer loads its PDF reader from
         private val VIEWER_LIBRARY_HOSTS = setOf("cdnjs.cloudflare.com", "cdn.jsdelivr.net", "ajax.googleapis.com", "unpkg.com")
 
-        private val BRACKETS_REGEX = Regex("""[（）()［］\[\]【】「」『』〈〉《》]""")
-        private val SPACES_RUN_REGEX = Regex("""\s+""")
         private val SPACES_REGEX = Regex("""[　 ]""")
         private val HES_CONFIG_REGEX = Regex("""key\s*:\s*"([^"]+)"\s*,\s*randAttr\s*:\s*"([^"]+)"""")
         private val HIDDEN_CLASS_REGEX = Regex("""\.(category-\d+)\s*\{[^}]*?(?:display\s*:\s*none|opacity\s*:\s*0|(?<![-\w])width\s*:\s*0)""")
@@ -451,3 +373,6 @@ abstract class PdfToshokan : KeiSource() {
 }
 
 private class VolumeMissing : IOException("Volume not found")
+
+/** The file host only lets a volume's file through with the pass decode.php hands out along with it. */
+private class FileHostRefused : IOException("The file host turned the volume away, try again in a few minutes")

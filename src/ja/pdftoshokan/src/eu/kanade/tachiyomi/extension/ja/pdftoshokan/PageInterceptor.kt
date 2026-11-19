@@ -13,9 +13,8 @@ import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
-import java.io.RandomAccessFile
 
-/** Serves `<volume file url>#<page index>` by slicing the page out of the cached volume. */
+/** Serves `<volume file url>#<page index>` by slicing the page out of the cached volume, or the part of it downloaded so far. */
 class PageInterceptor(private val store: VolumeStore, private val isVolumeFile: (HttpUrl) -> Boolean) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -25,19 +24,9 @@ class PageInterceptor(private val store: VolumeStore, private val isVolumeFile: 
             return chain.proceed(request)
         }
 
-        val (file, index) = store.index(request.url)
-        val slices = index.pages[pageIndex]
-        val parts = RandomAccessFile(file, "r").use { raf ->
-            slices.map { slice ->
-                ByteArray(slice.length).also {
-                    raf.seek(slice.offset)
-                    raf.readFully(it)
-                }
-            }
-        }
-
+        val (isAvif, parts) = store.page(request.url, pageIndex)
         val body = when {
-            index.isAvif -> parts.single().toResponseBody(AVIF)
+            isAvif -> parts.single().toResponseBody(AVIF)
             parts.size == 1 -> parts.single().toResponseBody(JPEG)
             else -> stitch(parts)
         }
