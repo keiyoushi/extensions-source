@@ -82,19 +82,20 @@ class OcrPageDto(
 @Serializable
 class OcrBoxDto(
     @SerialName("r") private val box: List<Float>,
-    @SerialName("c") private val text: String,
+    @SerialName("c") private val text: String?,
 ) {
     fun toDialog(offset: IntArray) = Dialog(
         box[0] - offset[0],
         box[1] - offset[1],
         box[2] - offset[2],
         box[3] - offset[3],
-        textByLanguage = mapOf("text" to text),
+        textByLanguage = mapOf("text" to text.orEmpty()),
     )
 }
 
 @Serializable
 class ManifestEntryDto(
+    @SerialName("i") val index: Int,
     @SerialName("k") val token: String,
     @SerialName("tk") val ticket: String,
     @SerialName("ik") val imageKey: String,

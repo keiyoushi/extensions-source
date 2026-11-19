@@ -227,12 +227,16 @@ abstract class Manhuarm :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val session = sessionMutex.withLock { openChapter(chapter.url) } ?: return emptyList()
+        val chapterUrl = getChapterUrl(chapter)
+        val session = sessionMutex.withLock { openChapter(chapterUrl) }
         val language = settings
         return session.pages.mapIndexed { index, page ->
             val dialogues = session.dialogues[page.token].orEmpty().filter { it.getTextBy(language).isNotBlank() }
-            val imageUrl = session.keys.endpoint.toHttpUrl().newBuilder()
-                .fragment(PageFragment(chapter.url, index, dialogues).toJsonString())
+            // Off the site's host, so a reopen from pageInterceptor never waits behind the page loads it blocks
+            val imageUrl = HttpUrl.Builder()
+                .scheme("https")
+                .host(PAGE_HOST)
+                .fragment(PageFragment(chapterUrl, index, dialogues).toJsonString())
                 .build()
             Page(index, imageUrl = imageUrl.toString())
         }
@@ -246,47 +250,59 @@ abstract class Manhuarm :
     ) {
         private val openedAt = TimeSource.Monotonic.markNow()
         val isExpired get() = openedAt.elapsedNow() > SESSION_LIFETIME
+
+        fun imageRequest(request: Request, index: Int): Request {
+            val page = pages[index]
+            return request.newBuilder()
+                .url(keys.endpoint)
+                .headers(keys.imageHeaders(request.headers, page))
+                .post(ImageRequestDto("img", page.ticket).toJsonRequestBody())
+                .fetch(Fetch.XHR.from(chapterUrl))
+                .build()
+        }
+
+        fun image(response: Response, index: Int): Response {
+            if (!response.isSuccessful) return response
+            val image = keys.decryptImage(response.body.bytes(), pages[index])
+            return response.newBuilder()
+                .body(image.asResponseBody(image.imageType()?.toMediaType(), image.size))
+                .build()
+        }
     }
 
     private val sessionMutex = Mutex()
     private val chapterSessions = LruCache<String, ChapterSession>(3)
 
-    // Caller holds sessionMutex; null when the chapter has no pages
-    private suspend fun openChapter(chapterPath: String): ChapterSession? {
-        val chapterUrl = getChapterUrl(SChapter.create().apply { url = chapterPath })
+    // Caller holds sessionMutex
+    private suspend fun openChapter(chapterUrl: String): ChapterSession {
         // The reader's parameters in the page are single-use
         val document = client.get(chapterUrl, Fetch.DOCUMENT, cacheControl = CacheControl.FORCE_NETWORK).asJsoup()
-        val tokens = document.select("canvas.mrm-v9-canvas").map { it.attr("data-src") }
-        if (tokens.isEmpty()) return null
-
         val keys = ReaderKeys.from(document)
-        val readerHeaders = keys.initHeaders(headers)
-        val data = client.post(keys.endpoint, readerHeaders, Fetch.XHR.from(chapterUrl), keys.initRequest.toJsonRequestBody())
+        val data = client.post(keys.endpoint, keys.initHeaders(headers), Fetch.XHR.from(chapterUrl), keys.initRequest.toJsonRequestBody())
             .parseAs<SealedDto>()
             .let(keys::decryptInit)
         val offset = keys.boxOffset
         val session = ChapterSession(
             chapterUrl = chapterUrl,
             keys = keys,
-            pages = tokens.map { token -> data.pages.first { it.token == token } },
+            pages = data.pages.sortedBy { it.index },
             dialogues = data.ocr.associate { page -> page.token to page.boxes.map { it.toDialog(offset) } },
         )
-        chapterSessions.put(chapterPath, session)
+        chapterSessions.put(chapterUrl, session)
         return session
     }
 
     // The chapter's live session for pageInterceptor, reopened when expired or rejected
-    private suspend fun chapterSession(chapterPath: String, rejected: ChapterSession? = null): ChapterSession = sessionMutex.withLock {
-        chapterSessions[chapterPath]?.takeIf { it !== rejected && !it.isExpired }
-            ?: openChapter(chapterPath)
-            ?: throw IOException("Chapter has no pages")
+    private suspend fun chapterSession(chapterUrl: String, rejected: ChapterSession? = null): ChapterSession = sessionMutex.withLock {
+        chapterSessions[chapterUrl]?.takeIf { it !== rejected && !it.isExpired } ?: openChapter(chapterUrl)
     }
 
     // Page image: the page's ticket posted with the chapter's keys, decrypted and unshuffled
     private fun pageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val page = request.url.pageFragment() ?: return chain.proceed(request)
+        if (request.url.host != PAGE_HOST) return chain.proceed(request)
         return try {
+            val page = request.url.pageFragment()!!
             val session = runBlocking { chapterSession(page.chapter) }
             val response = chain.proceed(session.imageRequest(request, page.index))
             if (response.code != 403) return session.image(response, page.index)
@@ -296,33 +312,6 @@ abstract class Manhuarm :
         } catch (e: Exception) {
             throw e as? IOException ?: IOException(e.message, e)
         }
-    }
-
-    private fun ChapterSession.imageRequest(request: Request, index: Int): Request {
-        val page = pages[index]
-        return request.newBuilder()
-            .url(keys.endpoint)
-            .headers(keys.imageHeaders(request.headers, page))
-            .post(ImageRequestDto("img", page.ticket).toJsonRequestBody())
-            .fetch(Fetch.XHR.from(chapterUrl))
-            .build()
-    }
-
-    private fun ChapterSession.image(response: Response, index: Int): Response {
-        if (!response.isSuccessful) return response
-        val image = keys.decryptImage(response.body.bytes(), pages[index])
-        return response.newBuilder()
-            .body(image.asResponseBody(image.imageType()?.toMediaType(), image.size))
-            .build()
-    }
-
-    private fun Buffer.imageType(): String? = when {
-        rangeEquals(0, JPEG_MAGIC) -> "image/jpeg"
-        rangeEquals(0, PNG_MAGIC) -> "image/png"
-        rangeEquals(0, GIF_MAGIC) -> "image/gif"
-        rangeEquals(0, RIFF_MAGIC) && rangeEquals(8, WEBP_MAGIC) -> "image/webp"
-        rangeEquals(4, AVIF_MAGIC) -> "image/avif"
-        else -> null
     }
 
     protected fun Element.imageUrl(): String? {
@@ -460,15 +449,10 @@ abstract class Manhuarm :
     }
 
     companion object {
+        private const val PAGE_HOST = "manhuarm.invalid"
+
         // The reader's parameters last 900 s
         private val SESSION_LIFETIME = 14.minutes
-
-        private val JPEG_MAGIC = "ffd8ff".decodeHex()
-        private val PNG_MAGIC = "89504e47".decodeHex()
-        private val GIF_MAGIC = "GIF8".encodeUtf8()
-        private val RIFF_MAGIC = "RIFF".encodeUtf8()
-        private val WEBP_MAGIC = "WEBP".encodeUtf8()
-        private val AVIF_MAGIC = "ftypavif".encodeUtf8()
 
         // Manhuarm separates them with " / ", Manga MTL with " | "
         private val ALT_TITLE_SEPARATOR = Regex(""" [/|] """)
@@ -491,4 +475,20 @@ abstract class Manhuarm :
         private const val CUSTOM_UA_PREF = "customUserAgentPref"
         private const val DEFAULT_FONT_SIZE = "28"
     }
+}
+
+private val JPEG_MAGIC = "ffd8ff".decodeHex()
+private val PNG_MAGIC = "89504e47".decodeHex()
+private val GIF_MAGIC = "GIF8".encodeUtf8()
+private val RIFF_MAGIC = "RIFF".encodeUtf8()
+private val WEBP_MAGIC = "WEBP".encodeUtf8()
+private val AVIF_MAGIC = "ftypavif".encodeUtf8()
+
+private fun Buffer.imageType(): String? = when {
+    rangeEquals(0, JPEG_MAGIC) -> "image/jpeg"
+    rangeEquals(0, PNG_MAGIC) -> "image/png"
+    rangeEquals(0, GIF_MAGIC) -> "image/gif"
+    rangeEquals(0, RIFF_MAGIC) && rangeEquals(8, WEBP_MAGIC) -> "image/webp"
+    rangeEquals(4, AVIF_MAGIC) -> "image/avif"
+    else -> null
 }

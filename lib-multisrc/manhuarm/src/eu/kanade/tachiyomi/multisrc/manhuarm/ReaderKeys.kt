@@ -16,12 +16,12 @@ class ReaderKeys private constructor(
     private val answer: Long,
     private val splitKey: String,
 ) {
-    val endpoint get() = params.endpoint
+    val endpoint = params.endpoint
 
-    val initRequest get() = InitRequestDto("init", params.payload)
+    val initRequest = InitRequestDto("init", params.payload)
 
     // The reader subtracts these from each OCR box
-    val boxOffset get() = intArrayOf(
+    val boxOffset = intArrayOf(
         (answer and 0xFF).toInt() + 19,
         (answer shr 8 and 0xFF).toInt() + 37,
         (answer shr 16 and 0xFF).toInt() + 13,
@@ -65,10 +65,12 @@ class ReaderKeys private constructor(
         fun from(document: Document): ReaderKeys {
             val script = document.select("script").map(Element::data).first { "const _v9" in it }
             val params = PARAMS_REGEX.find(script)!!.groupValues[1].parseAs<ReaderParamsDto>()
-            val rule = document.select("style").firstNotNullOf { CSS_RULE_REGEX.find(it.data()) }.groupValues[1]
+            // The last rule wins, as in the browser
+            val rule = document.select("style").flatMap { CSS_RULE_REGEX.findAll(it.data()) }.last().groupValues[1]
+            val keyElement = document.selectFirst("#mrm-d2")!!
             val domSalt = document.selectFirst("#mrm-d1")!!.attr("data-u").toLong(16) and 0xFFFF shl 16 or
-                (document.selectFirst("#mrm-d2")!!.attr("data-v").toLong(16) and 0xFFFF)
-            val splitKey = (CSS_KEY_REGEX.find(rule)!!.groupValues[1] + document.selectFirst("#mrm-d2")!!.attr("data-w")).lowercase()
+                (keyElement.attr("data-v").toLong(16) and 0xFFFF)
+            val splitKey = (CSS_KEY_REGEX.find(rule)!!.groupValues[1] + keyElement.attr("data-w")).lowercase()
             val salts = mapOf(
                 "ds" to domSalt,
                 "cs" to Z_INDEX_REGEX.find(rule)!!.groupValues[1].toLong(),
