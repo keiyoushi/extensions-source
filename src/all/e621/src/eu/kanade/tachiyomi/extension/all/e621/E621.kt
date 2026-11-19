@@ -165,6 +165,7 @@ abstract class E621 :
 
             url.addQueryParameter("limit", "96")
             url.addQueryParameter("tags", tags)
+            url.addQueryParameter("mode", "extended")
         }
 
         val response = client.get(url.build(), apiHeaders(), Fetch.XHR)
@@ -173,7 +174,7 @@ abstract class E621 :
             val pools = response.parseAs<List<Pool>>()
             parsePoolListDirect(pools, pools.size >= 24)
         } else {
-            val posts = response.parseAs<PostsResponse>().posts
+            val posts = response.parseAs<List<Post>>()
             val poolIds = posts.flatMap { it.poolIds }
             val pools = batchFetchPools(poolIds)
             parsePoolListDirect(pools, posts.size >= 96)
@@ -231,7 +232,7 @@ abstract class E621 :
             else -> ""
         }
 
-        val medScore = posts.map { it.score.total }.sorted().getOrNull(posts.size / 2) ?: -99999
+        val medScore = posts.map { it.stats.score.total }.sorted().getOrNull(posts.size / 2) ?: -99999
         val score = if (medScore != -99999) "score:>${medScore - 1}, " else ""
 
         val tags = posts.flatMap { post ->
@@ -390,9 +391,10 @@ abstract class E621 :
                         addQueryParameter("tags", "id:$postId")
                         addQueryParameter("limit", "1")
                     }
+                    addQueryParameter("mode", "extended")
                 }.build()
 
-                val post = client.get(url, apiHeaders(), Fetch.XHR).parseAs<PostsResponse>().posts.firstOrNull()
+                val post = client.get(url, apiHeaders(), Fetch.XHR).parseAs<List<Post>>().firstOrNull()
                 val imageUrl = when {
                     post == null || isPostDeleted(post) -> DELETED_PLACEHOLDER
                     isBlacklisted(post, blacklist) -> BLACKLISTED_PLACEHOLDER
@@ -439,39 +441,15 @@ abstract class E621 :
         return blacklist.any { group -> group.all { tag -> tag in allTags } }
     }
 
-    private fun extractThumbnailUrl(post: Post): String? {
-        post.preview.url?.let {
-            if (it != "null" && it.isNotEmpty()) return it
-        }
-        post.sample.url?.let {
-            if (it != "null" && it.isNotEmpty()) return it
-        }
-        post.file.url?.let {
-            if (it != "null" && it.isNotEmpty()) return it
-        }
-        return null
-    }
+    private fun extractThumbnailUrl(post: Post): String? = post.files.preview.webp
 
     private fun extractImageUrl(post: Post): String? {
-        post.file.url
-            ?.takeIf {
-                preferences.fullResolution ||
-                    !post.sample.has ||
-                    post.sample.width < 800 ||
-                    post.sample.height < 1200
-            }
-            ?.let {
-                if (it != "null" && it.isNotEmpty()) return it
-            }
-
-        post.sample.url?.let {
-            if (it != "null" && it.isNotEmpty()) return it
-        }
-
-        post.preview.url?.let {
-            if (it != "null" && it.isNotEmpty()) return it
-        }
-        return null
+        val sample = post.files.sample
+        val original = preferences.fullResolution ||
+            !post.files.meta.hasSample ||
+            sample.width < 800 ||
+            sample.height < 1200
+        return if (original) post.files.original.url else sample.webp
     }
 
     private suspend fun batchFetchPosts(postIds: List<Int>): List<Post> {
@@ -483,12 +461,13 @@ abstract class E621 :
                 val url = "$baseUrl/posts.json".toHttpUrl().newBuilder()
                     .addQueryParameter("tags", tagQuery)
                     .addQueryParameter("limit", chunk.size.toString())
+                    .addQueryParameter("mode", "extended")
                     .build()
 
                 val data = client.get(url, apiHeaders(), Fetch.XHR)
-                    .parseAs<PostsResponse>()
+                    .parseAs<List<Post>>()
 
-                data.posts.sortedBy { chunk.indexOf(it.id) }
+                data.sortedBy { chunk.indexOf(it.id) }
             }.getOrDefault(emptyList())
         }
     }

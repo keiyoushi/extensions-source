@@ -14,40 +14,55 @@ class Pool(
 )
 
 @Serializable
-class PostsResponse(
-    val posts: List<Post> = emptyList(),
+class Post(
+    val id: Int,
+    val flags: Flags,
+    val files: Files,
+    val tags: Tags,
+    val stats: Stats,
+    @SerialName("pools") val poolIds: List<Int>,
+    @SerialName("created_at") val createdAt: String,
+    val rating: String,
 )
 
 @Serializable
-class Post(
-    val id: Int,
-    val flags: Flags = Flags(),
-    val preview: ImageData = ImageData(),
-    val sample: ImageData = ImageData(),
-    val file: ImageData = ImageData(),
-    val tags: Tags = Tags(),
-    @SerialName("pools") val poolIds: List<Int> = emptyList(),
-    @SerialName("created_at") val createdAt: String = "",
-    val rating: String = "",
-    val score: Score = Score(),
+class Stats(
+    val score: Score,
 )
 
 @Serializable
 class Score(
-    val total: Int = 0,
+    val total: Int,
 )
 
 @Serializable
 class Flags(
-    val deleted: Boolean = false,
+    val deleted: Boolean,
 )
 
 @Serializable
-class ImageData(
-    val url: String? = null,
-    val has: Boolean = true,
-    val width: Int = 0,
-    val height: Int = 0,
+class Files(
+    val meta: FileMeta,
+    val original: OriginalFile,
+    val preview: ScaledFile,
+    val sample: ScaledFile,
+)
+
+@Serializable
+class FileMeta(
+    @SerialName("has_sample") val hasSample: Boolean,
+)
+
+@Serializable
+class OriginalFile(
+    val url: String?,
+)
+
+@Serializable
+class ScaledFile(
+    val width: Int,
+    val height: Int,
+    val webp: String?,
 )
 
 @Serializable
