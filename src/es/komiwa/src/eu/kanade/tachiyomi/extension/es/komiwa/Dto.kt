@@ -122,7 +122,8 @@ class ReaderDto(
     val pages: List<String>,
     val imageSigs: Map<String, String> = emptyMap(),
     val manga: ReaderMangaDto,
-    val __r: String? = null,
+    @SerialName("__r")
+    val encryptedPages: String? = null,
 )
 
 @Serializable

@@ -120,8 +120,8 @@ abstract class Komiwa : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (reader, rk) = fetchReader(chapter.url)
-        val (pages, signatures) = if (!reader.__r.isNullOrEmpty() && !rk.isNullOrEmpty()) {
-            decryptReader(reader.__r, rk)
+        val (pages, signatures) = if (!reader.encryptedPages.isNullOrEmpty() && !rk.isNullOrEmpty()) {
+            decryptReader(reader.encryptedPages, rk)
         } else {
             reader.pages.filterNot { it.contains("/_mihon/") } to reader.imageSigs
         }
