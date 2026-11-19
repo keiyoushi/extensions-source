@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.manhuarm
 
-import android.util.Base64
-import android.webkit.WebResourceResponse
+import android.util.LruCache
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
@@ -22,6 +21,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.lib.i18n.Intl.Companion.createDefaultMessageFileName
 import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
@@ -29,31 +29,37 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.runWebView
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParseDate
-import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
+import okio.ByteString.Companion.decodeHex
+import okio.ByteString.Companion.encodeUtf8
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.io.ByteArrayInputStream
+import java.io.IOException
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
-import kotlin.random.Random
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 abstract class Manhuarm :
     KeiSource(),
@@ -101,9 +107,9 @@ abstract class Manhuarm :
         .readTimeout(2.minutes)
         .addInterceptor(TranslationInterceptor({ settings }, { translator }))
         .addInterceptor(ComposedImageInterceptor { settings })
+        .addInterceptor(::pageInterceptor)
         .rateLimit(3, 2.seconds) { it.host == BingTranslator.HOST || it.host == GoogleTranslator.HOST }
-        // The scripts of a chapter page load all at once, as in a browser
-        .rateLimit(2) { !it.encodedPath.endsWith(".js") }
+        .rateLimit(2)
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
         customUserAgent.takeIf(String::isNotEmpty)?.let { set("User-Agent", it) }
@@ -235,105 +241,102 @@ abstract class Manhuarm :
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterUrl = getChapterUrl(chapter)
-        // The OCR credentials embedded in the page are single-use
-        val document = client.get(chapterUrl, Fetch.DOCUMENT, cacheControl = CacheControl.FORCE_NETWORK).asJsoup()
-        val images = document.select("div.page-break img, img.wp-manga-chapter-img")
-            .mapNotNull { it.imageUrl() }
-            .distinct()
-
-        val dialogues = fetchDialogues(document, chapterUrl).associateBy(PageDto::imageUrl)
+        val session = sessionMutex.withLock { openChapter(chapter.url) } ?: return emptyList()
         val language = settings
-
-        return images.mapIndexed { index, imageUrl ->
-            val dialogs = dialogues[imageUrl.substringAfterLast('/')]
-                ?.dialogues
-                ?.filter { it.getTextBy(language).isNotBlank() }
-                .orEmpty()
-            if (dialogs.isEmpty()) {
-                Page(index, imageUrl = imageUrl)
-            } else {
-                // '#' would end the fragment early
-                Page(index, imageUrl = "$imageUrl#${dialogs.toJsonString().replace("#", "*")}")
-            }
+        return session.pages.mapIndexed { index, page ->
+            val dialogues = session.dialogues[page.token].orEmpty().filter { it.getTextBy(language).isNotBlank() }
+            val imageUrl = session.keys.endpoint.toHttpUrl().newBuilder()
+                .fragment(PageFragment(chapter.url, index, dialogues).toJsonString())
+                .build()
+            Page(index, imageUrl = imageUrl.toString())
         }
     }
 
-    /**
-     * The chapter page gets the text of its overlay from an OCR endpoint in one of two ways: it posts the credentials
-     * of its `_0xvault` array, or it answers a challenge that only its own JavaScript can and decrypts the reply.
-     */
-    private suspend fun fetchDialogues(document: Document, chapterUrl: String): List<PageDto> {
-        val scripts = document.select("script").map(Element::data)
-        // Pages are still readable without the translation overlay
+    private class ChapterSession(
+        val chapterUrl: String,
+        val keys: ReaderKeys,
+        val pages: List<ManifestEntryDto>,
+        val dialogues: Map<String, List<Dialog>>,
+    ) {
+        private val openedAt = TimeSource.Monotonic.markNow()
+        val isExpired get() = openedAt.elapsedNow() > SESSION_LIFETIME
+    }
+
+    private val sessionMutex = Mutex()
+    private val chapterSessions = LruCache<String, ChapterSession>(3)
+
+    // Caller holds sessionMutex; null when the chapter has no pages
+    private suspend fun openChapter(chapterPath: String): ChapterSession? {
+        val chapterUrl = getChapterUrl(SChapter.create().apply { url = chapterPath })
+        // The reader's parameters in the page are single-use
+        val document = client.get(chapterUrl, Fetch.DOCUMENT, cacheControl = CacheControl.FORCE_NETWORK).asJsoup()
+        val tokens = document.select("canvas.mrm-v9-canvas").map { it.attr("data-src") }
+        if (tokens.isEmpty()) return null
+
+        val keys = ReaderKeys.from(document)
+        val readerHeaders = keys.initHeaders(headers)
+        val data = client.post(keys.endpoint, readerHeaders, Fetch.XHR.from(chapterUrl), keys.initRequest.toJsonRequestBody())
+            .parseAs<SealedDto>()
+            .let(keys::decryptInit)
+        val offset = keys.boxOffset
+        val session = ChapterSession(
+            chapterUrl = chapterUrl,
+            keys = keys,
+            pages = tokens.map { token -> data.pages.first { it.token == token } },
+            dialogues = data.ocr.associate { page -> page.token to page.boxes.map { it.toDialog(offset) } },
+        )
+        chapterSessions.put(chapterPath, session)
+        return session
+    }
+
+    // The chapter's live session for pageInterceptor, reopened when expired or rejected
+    private suspend fun chapterSession(chapterPath: String, rejected: ChapterSession? = null): ChapterSession = sessionMutex.withLock {
+        chapterSessions[chapterPath]?.takeIf { it !== rejected && !it.isExpired }
+            ?: openChapter(chapterPath)
+            ?: throw IOException("Chapter has no pages")
+    }
+
+    // Page image: the page's ticket posted with the chapter's keys, decrypted and unshuffled
+    private fun pageInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val page = request.url.pageFragment() ?: return chain.proceed(request)
         return try {
-            val vaultScript = scripts.firstOrNull { "_0xvault[" in it }
-            when {
-                vaultScript != null -> fetchVaultDialogues(vaultScript, chapterUrl)
-                scripts.any { "crypto.subtle" in it && "fetch-ocr" in it } -> decryptDialogues(document)
-                else -> emptyList()
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            emptyList()
+            val session = runBlocking { chapterSession(page.chapter) }
+            val response = chain.proceed(session.imageRequest(request, page.index))
+            if (response.code != 403) return session.image(response, page.index)
+            response.close()
+            val reopened = runBlocking { chapterSession(page.chapter, rejected = session) }
+            reopened.image(chain.proceed(reopened.imageRequest(request, page.index)), page.index)
+        } catch (e: Exception) {
+            throw e as? IOException ?: IOException(e.message, e)
         }
     }
 
-    /**
-     * The vault is `[base64 chapter id, token, timestamp, nonce, endpoint]`. A vault the page never reads is a decoy
-     * whose token the server rejects and logs: it is never sent.
-     */
-    private suspend fun fetchVaultDialogues(script: String, chapterUrl: String): List<PageDto> {
-        val vault = VAULT_REGEX.find(script)
-            ?.groupValues?.get(1)
-            ?.parseAs<List<JsonPrimitive>>()
-            ?.map(JsonPrimitive::content)
-            ?.takeIf { it.size > 4 && !it[1].startsWith("decoy_") }
-            ?: return emptyList()
-
-        val ocrHeaders = headers.newBuilder()
-            .set("Referer", chapterUrl)
-            .set("X-Requested-With", "XMLHttpRequest")
-            .set("Cache-Control", "no-cache")
+    private fun ChapterSession.imageRequest(request: Request, index: Int): Request {
+        val page = pages[index]
+        return request.newBuilder()
+            .url(keys.endpoint)
+            .headers(keys.imageHeaders(request.headers, page))
+            .post(ImageRequestDto("img", page.ticket).toJsonRequestBody())
+            .fetch(Fetch.XHR.from(chapterUrl))
             .build()
-
-        val body = OcrRequestDto(String(Base64.decode(vault[0], Base64.DEFAULT)), vault[1], vault[2].toLong(), vault[3])
-        return client.post(vault[4], ocrHeaders, Fetch.XHR, body.toJsonRequestBody()).parseAs<List<PageDto>>()
     }
 
-    // One chapter page in a WebView at a time
-    private val webViewMutex = Mutex()
+    private fun ChapterSession.image(response: Response, index: Int): Response {
+        if (!response.isSuccessful) return response
+        val image = keys.decryptImage(response.body.bytes(), pages[index])
+        return response.newBuilder()
+            .body(image.asResponseBody(image.imageType()?.toMediaType(), image.size))
+            .build()
+    }
 
-    /**
-     * The challenge changes with every page load, so the chapter page already fetched runs in a WebView as the site's
-     * reader, its single-use credentials included, without images or other sites' requests. The text it decrypts for
-     * its overlay is passed on as it comes out.
-     */
-    private suspend fun decryptDialogues(document: Document): List<PageDto> = webViewMutex.withLock {
-        val bridge = "o" + Random.nextLong().toULong().toString(36)
-        val host = baseUrl.toHttpUrl().host
-        val text = runWebView<String>(timeout = 20.seconds) {
-            headers["User-Agent"]?.let { userAgent = it }
-            blockImages = true
-            // The page's own request sets X-Requested-With itself; anything else WebView sends gets the same value
-            setOriginMatchedHeader("X-Requested-With", "XMLHttpRequest", setOf("https://$host"))
-            val blocked = { WebResourceResponse("text/plain", null, 403, "Blocked", null, ByteArrayInputStream(ByteArray(0))) }
-            interceptRequest { request ->
-                when (request.url.host) {
-                    // The page itself is a data: URL, without a host
-                    null -> null
-                    // Its scripts load as in a browser, without X-Requested-With; its POST stays with the WebView
-                    host -> proxyRequest(request, client) { removeHeader("X-Requested-With") }
-                        ?: if (request.method == "GET") blocked() else null
-                    else -> blocked()
-                }
-            }
-            webMessageBridge(bridge, setOf(baseUrl)) { resolve(it) }
-            injectAtDocumentStart("($DECRYPT_HOOK)('$bridge')", setOf(baseUrl))
-            loadData(document.location(), document.outerHtml())
-        }
-        if (text.isEmpty()) emptyList() else text.parseAs<List<PageDto>>()
+    private fun Buffer.imageType(): String? = when {
+        rangeEquals(0, JPEG_MAGIC) -> "image/jpeg"
+        rangeEquals(0, PNG_MAGIC) -> "image/png"
+        rangeEquals(0, GIF_MAGIC) -> "image/gif"
+        rangeEquals(0, RIFF_MAGIC) && rangeEquals(8, WEBP_MAGIC) -> "image/webp"
+        rangeEquals(4, AVIF_MAGIC) -> "image/avif"
+        else -> null
     }
 
     // =============================== Utils ================================
@@ -475,38 +478,15 @@ abstract class Manhuarm :
     }
 
     companion object {
-        val PAGE_REGEX = Regex(".*?\\.(webp|png|jpg|jpeg)#\\[.*?]", RegexOption.IGNORE_CASE)
+        // The reader's parameters last 900 s
+        private val SESSION_LIFETIME = 14.minutes
 
-        private val VAULT_REGEX = Regex("""_0xvault\s*=\s*(\[.*?])""", RegexOption.DOT_MATCHES_ALL)
-
-        // Posts what the page decrypts, or an empty message when its gated request or the decryption fails
-        private const val DECRYPT_HOOK = """(bridge) => {
-            const post = (text) => window[bridge].postMessage(text);
-            const subtle = window.crypto && crypto.subtle;
-            if (!subtle) return;
-            const decrypt = subtle.decrypt;
-            subtle.decrypt = function () {
-                const result = decrypt.apply(subtle, arguments);
-                result.then((buffer) => {
-                    const text = new TextDecoder().decode(buffer);
-                    if (text.trimStart().startsWith('[')) post(text);
-                }, () => post(''));
-                return result;
-            };
-            const gated = new WeakSet();
-            const setRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
-            XMLHttpRequest.prototype.setRequestHeader = function (name) {
-                if (/^x-gate-/i.test(name)) gated.add(this);
-                return setRequestHeader.apply(this, arguments);
-            };
-            const send = XMLHttpRequest.prototype.send;
-            XMLHttpRequest.prototype.send = function () {
-                this.addEventListener('loadend', () => {
-                    if (gated.has(this) && (this.status < 200 || this.status >= 300)) post('');
-                });
-                return send.apply(this, arguments);
-            };
-        }"""
+        private val JPEG_MAGIC = "ffd8ff".decodeHex()
+        private val PNG_MAGIC = "89504e47".decodeHex()
+        private val GIF_MAGIC = "GIF8".encodeUtf8()
+        private val RIFF_MAGIC = "RIFF".encodeUtf8()
+        private val WEBP_MAGIC = "WEBP".encodeUtf8()
+        private val AVIF_MAGIC = "ftypavif".encodeUtf8()
 
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH)
 
