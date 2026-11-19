@@ -4,6 +4,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import eu.kanade.tachiyomi.multisrc.catharsis.TilePlan
 import eu.kanade.tachiyomi.multisrc.catharsis.descramble
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.xor
@@ -42,7 +44,7 @@ class ImageInterceptor(
             val session = renewSession(chapterKey, keys.seed)?.takeIf { index < it.pageCount } ?: throw OutdatedVisitException()
             val renewed = request.newBuilder()
                 .url(session.imageUrl(index, chapterKey))
-                .header("Referer", session.readerUrl)
+                .fetch(Fetch.XHR.from(session.readerUrl))
                 .build()
             proceedPage(chain, renewed, session.keys)
         }
