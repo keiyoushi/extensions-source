@@ -14,6 +14,7 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
@@ -107,6 +108,15 @@ abstract class Ikiru : KeiSource() {
         .addPathSegment(manga.slug())
         .build()
         .toString()
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        // links from earlier numbered domains still resolve
+        if (url.host != baseUrl.toHttpUrl().host && !url.host.endsWith(".$DOMAIN")) return null
+        val segments = url.pathSegments.filter { it.isNotEmpty() }
+        if (segments.size != 2 || segments[0] != "manga") return null
+        val manga = SManga.create().apply { this.url = segments[1] }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
