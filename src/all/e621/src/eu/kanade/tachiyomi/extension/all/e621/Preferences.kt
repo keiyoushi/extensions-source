@@ -22,8 +22,8 @@ private const val ACCOUNT_BLACKLIST_PREF = "account_blacklist"
 
 private const val COMMON_BLACKLIST = "( gore necrophilia ) ( gore sex ) mutilation snuff torture gore_focus character_prepared_as_food castration feces urine diaper fart burp_cloud"
 
-private const val RXPARENTH = "\\([^)]*\\)"
-private const val RXNOWHITE = "\\S+"
+private val BLACKLIST_TOKEN_REGEX = Regex("""\([^)]*\)|\S+""")
+private val WHITESPACE_REGEX = Regex("""\s+""")
 
 fun setupE621PreferenceScreen(screen: PreferenceScreen) {
     SwitchPreferenceCompat(screen.context).apply {
@@ -136,18 +136,18 @@ val SharedPreferences.categoryPref: String
     get() = getString(CATEGORY_PREF, "series") ?: "series"
 
 val SharedPreferences.blacklistPref: String
-    get() = Regex("(?=$RXPARENTH)$RXPARENTH|$RXNOWHITE").findAll(
-        getString(BLACKLIST_PREF, COMMON_BLACKLIST)?.trim()?.replace(Regex("\\s+"), " ") ?: COMMON_BLACKLIST,
+    get() = BLACKLIST_TOKEN_REGEX.findAll(
+        getString(BLACKLIST_PREF, COMMON_BLACKLIST)?.trim()?.replace(WHITESPACE_REGEX, " ") ?: COMMON_BLACKLIST,
     ).joinToString(" ") { "-${it.value}" }
 
 val SharedPreferences.whitelistPref: String
-    get() = getString(WHITELIST_PREF, "score:>10")?.trim()?.replace(Regex("\\s+"), " ") ?: "score:>10"
+    get() = getString(WHITELIST_PREF, "score:>10")?.trim()?.replace(WHITESPACE_REGEX, " ") ?: "score:>10"
 
 val SharedPreferences.popularModePref: String
     get() = getString(POPULAR_MODE_PREF, "order:score date:year") ?: "order:score date:year"
 
 val SharedPreferences.scoreThreshPref: String
-    get() = getString(SCORE_THRESH_PREF, "20")?.replace(Regex("\\s+"), " ") ?: "20"
+    get() = getString(SCORE_THRESH_PREF, "20")?.replace(WHITESPACE_REGEX, " ") ?: "20"
 
 val SharedPreferences.usernamePref: String
     get() = getString(USERNAME_PREF, "") ?: ""

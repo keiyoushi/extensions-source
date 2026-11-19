@@ -14,6 +14,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -27,6 +28,8 @@ import kotlin.time.Instant
 
 private const val DELETED_PLACEHOLDER = "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Deleted"
 private const val BLACKLISTED_PLACEHOLDER = "https://placehold.co/256x256/cccccc/f66151.jpg?text=Post%20Blacklisted"
+private val WHITESPACE_REGEX = Regex("""\s+""")
+
 private const val NO_IMAGE_PLACEHOLDER = "https://placehold.co/256x256/cccccc/f66151.jpg?text=No%20Image"
 
 @Source
@@ -46,11 +49,9 @@ abstract class E621 :
         val username = preferences.usernamePref.trim()
         val apiKey = preferences.apiKeyPref.trim()
         if (username.isNotEmpty() && apiKey.isNotEmpty()) {
-            add("Authorization", Credentials.basic(username, apiKey))
+            set("Authorization", Credentials.basic(username, apiKey))
         }
     }.build()
-
-    // ============================== Popular ==============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val searchMode = preferences.searchModePref
@@ -69,8 +70,6 @@ abstract class E621 :
         )
     }
 
-    // ============================== Latest ===============================
-
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val searchMode = preferences.searchModePref
         val category = preferences.categoryPref
@@ -87,8 +86,6 @@ abstract class E621 :
             ),
         )
     }
-
-    // ============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder()
@@ -183,7 +180,7 @@ abstract class E621 :
     private suspend fun parsePoolListDirect(pools: List<Pool>, hasNextPage: Boolean): MangasPage {
         val thumbnailMap = batchFetchPostSamples(
             pools.mapNotNull { it.postIds.firstOrNull() },
-        ).takeIf { it.isNotEmpty() } ?: emptyMap()
+        )
 
         val poolList = pools.map { pool ->
             SManga.create().apply {
@@ -195,8 +192,6 @@ abstract class E621 :
 
         return MangasPage(poolList, hasNextPage)
     }
-
-    // ============================== Details ==============================
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/pools/${manga.url}"
 
@@ -264,24 +259,18 @@ abstract class E621 :
         return manga.apply {
             url = pool.id.toString()
             title = pool.name.replace("_", " ")
-            description = if (pool.description.length > 400) {
-                pool.description.take(400) + " ..."
-            } else {
-                pool.description
-            }
+            description = MarkdownDescription.Builder()
+                .description(pool.description)
+                .build()
             status = when (pool.isActive) {
                 true -> SManga.ONGOING
                 false -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
-            genre = "$rating$score" + tags.joinToString()
-            author = artists.filter { it !in tagFilter }.joinToString()
+            genre = ("$rating$score" + tags.joinToString()).ifEmpty { null }
+            author = artists.filter { it !in tagFilter }.joinToString().ifEmpty { null }
         }
     }
-
-    // ============================= Chapters ==============================
-
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     private suspend fun chapterListParse(pool: Pool): List<SChapter> {
         val postIds = pool.postIds
@@ -296,10 +285,10 @@ abstract class E621 :
         return when (splitChaptersPref) {
             "chapters" -> {
                 val posts = batchFetchPosts(postIds)
-                val poolIds = posts.flatMap { it.poolIds }.toSet().toList()
-                val subPools = batchFetchPools(poolIds)
+                val poolIds = posts.flatMap { it.poolIds }.toSet() - pool.id
+                val subPools = batchFetchPools(poolIds.toList())
                     .associateBy { it.id }
-                    .filterValues { it.postIds.size <= pool.postIds.size && it.id != pool.id }
+                    .filterValues { it.postIds.size <= pool.postIds.size }
 
                 val usedPools = mutableMapOf<Int, Pool>()
                 var n = 0
@@ -367,40 +356,21 @@ abstract class E621 :
         }
     }
 
-    // =============================== Pages ===============================
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterUrl = "$baseUrl${chapter.url}".toHttpUrl()
+        val chapterUrl = getChapterUrl(chapter).toHttpUrl()
 
         val blacklist: List<List<String>> = if (preferences.accountBlacklistPref) {
             fetchAccountBlacklist()
                 .lines()
                 .map { it.trim() }
                 .filter { it.isNotEmpty() }
-                .map { line -> line.split(Regex("\\s+")).filter { it.isNotEmpty() } }
+                .map { it.split(WHITESPACE_REGEX) }
         } else {
             emptyList()
         }
 
         val postIds = when (chapterUrl.pathSegments.getOrNull(0)) {
-            "posts" -> {
-                val postId = chapterUrl.pathSegments.last().toIntOrNull()
-                val url = "$baseUrl/posts.json".toHttpUrl().newBuilder().apply {
-                    if (postId != null) {
-                        addQueryParameter("tags", "id:$postId")
-                        addQueryParameter("limit", "1")
-                    }
-                    addQueryParameter("mode", "extended")
-                }.build()
-
-                val post = client.get(url, apiHeaders(), Fetch.XHR).parseAs<List<Post>>().firstOrNull()
-                val imageUrl = when {
-                    post == null || isPostDeleted(post) -> DELETED_PLACEHOLDER
-                    isBlacklisted(post, blacklist) -> BLACKLISTED_PLACEHOLDER
-                    else -> extractImageUrl(post) ?: NO_IMAGE_PLACEHOLDER
-                }
-                return listOf(Page(0, imageUrl = imageUrl))
-            }
+            "posts" -> listOf(chapterUrl.pathSegments.last().toInt())
             "pools" -> {
                 val poolId = chapterUrl.pathSegments.last()
                 client.get("$baseUrl/pools/$poolId.json", apiHeaders(), Fetch.XHR).parseAs<Pool>().postIds
@@ -416,7 +386,7 @@ abstract class E621 :
         return postIds.mapIndexed { index, postId ->
             val post = postMap[postId]
             val imageUrl = when {
-                post == null || isPostDeleted(post) -> DELETED_PLACEHOLDER
+                post == null || post.flags.deleted -> DELETED_PLACEHOLDER
                 isBlacklisted(post, blacklist) -> BLACKLISTED_PLACEHOLDER
                 else -> extractImageUrl(post) ?: NO_IMAGE_PLACEHOLDER
             }
@@ -424,23 +394,15 @@ abstract class E621 :
         }
     }
 
-    // ============================== Filters ==============================
-
     override fun getFilterList(data: JsonElement?): FilterList = getE621FilterList(preferences.categoryPref)
 
-    // ============================= Utilities =============================
-
     override fun setupPreferenceScreen(screen: PreferenceScreen) = setupE621PreferenceScreen(screen)
-
-    private fun isPostDeleted(post: Post): Boolean = post.flags.deleted
 
     private fun isBlacklisted(post: Post, blacklist: List<List<String>>): Boolean {
         if (blacklist.isEmpty()) return false
         val allTags = post.tags.allTags
         return blacklist.any { group -> group.all { tag -> tag in allTags } }
     }
-
-    private fun extractThumbnailUrl(post: Post): String? = post.files.preview.webp
 
     private fun extractImageUrl(post: Post): String? {
         val sample = post.files.sample
@@ -455,19 +417,17 @@ abstract class E621 :
         if (postIds.isEmpty()) return emptyList()
 
         return postIds.chunked(200).flatMap { chunk ->
-            runCatching {
-                val tagQuery = "status:all id:" + chunk.joinToString(",")
-                val url = "$baseUrl/posts.json".toHttpUrl().newBuilder()
-                    .addQueryParameter("tags", tagQuery)
-                    .addQueryParameter("limit", chunk.size.toString())
-                    .addQueryParameter("mode", "extended")
-                    .build()
+            val tagQuery = "status:all id:" + chunk.joinToString(",")
+            val url = "$baseUrl/posts.json".toHttpUrl().newBuilder()
+                .addQueryParameter("tags", tagQuery)
+                .addQueryParameter("limit", chunk.size.toString())
+                .addQueryParameter("mode", "extended")
+                .build()
 
-                val data = client.get(url, apiHeaders(), Fetch.XHR)
-                    .parseAs<List<Post>>()
+            val data = client.get(url, apiHeaders(), Fetch.XHR)
+                .parseAs<List<Post>>()
 
-                data.sortedBy { chunk.indexOf(it.id) }
-            }.getOrDefault(emptyList())
+            data.sortedBy { chunk.indexOf(it.id) }
         }
     }
 
@@ -475,32 +435,24 @@ abstract class E621 :
         if (poolIds.isEmpty()) return emptyList()
 
         return poolIds.distinct().chunked(100).flatMap { chunk ->
-            runCatching {
-                val url = "$baseUrl/pools.json".toHttpUrl().newBuilder()
-                    .addQueryParameter("search[order]", "id_desc")
-                    .addQueryParameter("search[id]", chunk.joinToString(","))
-                    .addQueryParameter("limit", chunk.size.toString())
-                    .build()
+            val url = "$baseUrl/pools.json".toHttpUrl().newBuilder()
+                .addQueryParameter("search[order]", "id_desc")
+                .addQueryParameter("search[id]", chunk.joinToString(","))
+                .addQueryParameter("limit", chunk.size.toString())
+                .build()
 
-                val data = client.get(url, apiHeaders(), Fetch.XHR)
-                    .parseAs<List<Pool>>()
+            val data = client.get(url, apiHeaders(), Fetch.XHR)
+                .parseAs<List<Pool>>()
 
-                data.sortedBy { chunk.indexOf(it.id) }
-            }.getOrDefault(emptyList())
+            data.sortedBy { chunk.indexOf(it.id) }
         }
     }
 
-    private suspend fun batchFetchPostSamples(postIds: List<Int>): Map<Int, String> {
-        if (postIds.isEmpty()) return emptyMap()
-
-        return batchFetchPosts(postIds).mapNotNull { post ->
-            extractThumbnailUrl(post)?.let { post.id to it }
-        }.toMap()
-    }
+    private suspend fun batchFetchPostSamples(postIds: List<Int>): Map<Int, String> = batchFetchPosts(postIds).mapNotNull { post ->
+        post.files.preview.webp?.let { post.id to it }
+    }.toMap()
 
     private suspend fun fetchAccountBlacklist(): String {
-        if (!preferences.accountBlacklistPref) return ""
-
         val username = preferences.usernamePref.trim()
         val apiKey = preferences.apiKeyPref.trim()
         if (username.isEmpty() || apiKey.isEmpty()) return ""
@@ -511,9 +463,7 @@ abstract class E621 :
             return cached
         }
 
-        val blacklist = runCatching {
-            client.get("$baseUrl/users/me.json", apiHeaders(), Fetch.XHR).parseAs<UserMeResponse>().blacklistedTags ?: ""
-        }.getOrDefault("")
+        val blacklist = client.get("$baseUrl/users/me.json", apiHeaders(), Fetch.XHR).parseAs<UserMeResponse>().blacklistedTags ?: ""
 
         cachedAccountBlacklist = blacklist
         cachedAccountBlacklistCredentials = credentials

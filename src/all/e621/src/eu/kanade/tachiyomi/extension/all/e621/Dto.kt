@@ -7,10 +7,10 @@ import kotlinx.serialization.Serializable
 class Pool(
     val id: Int,
     val name: String,
-    val description: String = "",
-    @SerialName("post_ids") val postIds: List<Int> = emptyList(),
-    @SerialName("is_active") val isActive: Boolean? = null,
-    @SerialName("updated_at") val updatedAt: String = "",
+    val description: String?,
+    @SerialName("post_ids") val postIds: List<Int>,
+    @SerialName("is_active") val isActive: Boolean?,
+    @SerialName("updated_at") val updatedAt: String,
 )
 
 @Serializable
@@ -67,13 +67,13 @@ class ScaledFile(
 
 @Serializable
 class Tags(
-    val general: List<String> = emptyList(),
-    val artist: List<String> = emptyList(),
-    val copyright: List<String> = emptyList(),
-    val character: List<String> = emptyList(),
-    val species: List<String> = emptyList(),
-    val lore: List<String> = emptyList(),
-    val meta: List<String> = emptyList(),
+    val general: List<String>,
+    val artist: List<String>,
+    val copyright: List<String>,
+    val character: List<String>,
+    val species: List<String>,
+    val lore: List<String>,
+    val meta: List<String>,
 ) {
     val allTags: List<String>
         get() = artist + character + copyright + general + lore + meta + species
@@ -81,8 +81,8 @@ class Tags(
 
 @Serializable
 class UserMeResponse(
-    @SerialName("blacklisted_tags") private val _blacklistedTags: String? = null,
-    private val user: UserMeData? = null,
+    @SerialName("blacklisted_tags") private val _blacklistedTags: String?,
+    private val user: UserMeData?,
 ) {
     val blacklistedTags: String?
         get() = _blacklistedTags ?: user?.blacklistedTags
@@ -90,5 +90,5 @@ class UserMeResponse(
 
 @Serializable
 class UserMeData(
-    @SerialName("blacklisted_tags") val blacklistedTags: String? = null,
+    @SerialName("blacklisted_tags") val blacklistedTags: String?,
 )

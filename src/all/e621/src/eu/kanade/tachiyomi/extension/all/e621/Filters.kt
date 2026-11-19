@@ -136,8 +136,8 @@ class ModeFilter(defaultIndex: Int = 0) :
     UriPartFilter(
         "Search Mode",
         arrayOf(
-            Pair("Pools", "pools.json"),
-            Pair("Tags", "posts.json"),
+            "Pools" to "pools.json",
+            "Tags" to "posts.json",
         ),
         defaultIndex,
     )
@@ -146,10 +146,10 @@ class OrderFilter(defaultIndex: Int = 0) :
     UriPartFilter(
         "Order by",
         arrayOf(
-            Pair("Recently Updated", "updated_at"),
-            Pair("Most Posts", "post_count"),
-            Pair("Name (A-Z)", "name"),
-            Pair("Newest First", "created_at"),
+            "Recently Updated" to "updated_at",
+            "Most Posts" to "post_count",
+            "Name (A-Z)" to "name",
+            "Newest First" to "created_at",
         ),
         defaultIndex,
     )
@@ -158,13 +158,13 @@ class OrderTagFilter(defaultIndex: Int = 0) :
     UriPartFilter(
         "Order by",
         arrayOf(
-            Pair("Default", ""),
-            Pair("Newest", "id_desc"),
-            Pair("Oldest", "id"),
-            Pair("Score", "score"),
-            Pair("Hot", "hot"),
-            Pair("Favorites", "favcount"),
-            Pair("Random", "random"),
+            "Default" to "",
+            "Newest" to "id_desc",
+            "Oldest" to "id",
+            "Score" to "score",
+            "Hot" to "hot",
+            "Favorites" to "favcount",
+            "Random" to "random",
         ),
         defaultIndex,
     )
@@ -173,11 +173,11 @@ class DateFilter(defaultIndex: Int = 0) :
     UriPartFilter(
         "Filter Date by",
         arrayOf(
-            Pair("All Time", ""),
-            Pair("Day", "day"),
-            Pair("Week", "week"),
-            Pair("Month", "month"),
-            Pair("Year", "year"),
+            "All Time" to "",
+            "Day" to "day",
+            "Week" to "week",
+            "Month" to "month",
+            "Year" to "year",
         ),
         defaultIndex,
     )
@@ -186,9 +186,9 @@ class CategoryFilter(defaultIndex: Int = 0) :
     UriPartFilter(
         "Category",
         arrayOf(
-            Pair("Any", ""),
-            Pair("Series", "series"),
-            Pair("Collection", "collection"),
+            "Any" to "",
+            "Series" to "series",
+            "Collection" to "collection",
         ),
         defaultIndex,
     )
