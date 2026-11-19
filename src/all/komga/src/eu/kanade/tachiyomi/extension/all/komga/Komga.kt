@@ -43,10 +43,10 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.Credentials
 import okhttp3.Dns
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
-import okhttp3.Response
 import org.apache.commons.text.StringSubstitutor
 import java.util.Locale
 
@@ -168,7 +168,8 @@ class Komga(
             val libraryIds = libraryFilter?.selectedIds ?: defaultLibraries
             url.addQueryParameter("search", searchTerm)
             if (libraryIds.isNotEmpty()) url.addQueryParameter("library_id", libraryIds.joinToString(","))
-            return processSeriesPage(client.get(url.build(), Fetch.XHR), baseUrl)
+            val data = client.get(url.build(), Fetch.XHR).parseAs<PageWrapperDto<ReadListDto>>()
+            return MangasPage(data.content.map { it.toSManga(baseUrl) }, !data.last)
         }
 
         val conditions = buildList {
@@ -192,19 +193,23 @@ class Komga(
             // Servers before the list API answer 405
             if (e.code == 405) throw Exception("Update Komga to 1.19 or newer") else throw e
         }
-        return processSeriesPage(response, baseUrl)
+        return if (type == TYPE_BOOKS) {
+            val data = response.parseAs<PageWrapperDto<BookDto>>()
+            MangasPage(data.content.map { it.toSManga(baseUrl) }, !data.last)
+        } else {
+            val data = response.parseAs<PageWrapperDto<SeriesDto>>()
+            MangasPage(data.content.map { it.toSManga(baseUrl) }, !data.last)
+        }
     }
 
-    private fun processSeriesPage(response: Response, baseUrl: String): MangasPage {
-        val data = if (response.isFromReadList()) {
-            response.parseAs<PageWrapperDto<ReadListDto>>()
-        } else if (response.isFromBook()) {
-            response.parseAs<PageWrapperDto<BookDto>>()
-        } else {
-            response.parseAs<PageWrapperDto<SeriesDto>>()
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val server = baseUrl.toHttpUrlOrNull() ?: return null
+        if (url.host != server.host || url.port != server.port) return null
+        val (type, id) = WEB_URL.find(url.encodedPath)?.destructured ?: return null
+        val manga = SManga.create().apply {
+            this.url = "$baseUrl/api/v1/${if (type.startsWith("book")) "books" else type}/$id"
         }
-
-        return MangasPage(data.content.map { it.toSManga(baseUrl) }, !data.last)
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun fetchMangaUpdate(
@@ -213,27 +218,74 @@ class Komga(
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val (manga, chapters) = coroutineScope {
-            val mangaD = async { if (fetchDetails) getMangaDetails(manga) else manga }
-            val chaptersD = async { if (fetchChapters) getChapterList(manga) else chapters }
-            mangaD.await() to chaptersD.await()
+        val url = manga.url
+        return when {
+            url.contains("/api/v1/books/") -> {
+                val book = client.get(url, Fetch.XHR).parseAs<BookDto>()
+                SMangaUpdate(book.toSManga(baseUrl), listOf(book.toSChapter(isFromReadList = true, book.metadata.title, chapterNumber = 1F)))
+            }
+            url.contains("/api/v1/readlists/") -> coroutineScope {
+                val details = async { if (fetchDetails) client.get(url, Fetch.XHR).parseAs<ReadListDto>().toSManga(baseUrl) else manga }
+                val books = async {
+                    if (fetchChapters) {
+                        val booksUrl = url.toHttpUrl().newBuilder()
+                            .addPathSegment("books")
+                            .addQueryParameter("unpaged", "true")
+                            .addQueryParameter("media_status", "READY")
+                            .addQueryParameter("deleted", "false")
+                            .build()
+                        client.get(booksUrl, Fetch.XHR)
+                            .parseAs<PageWrapperDto<BookDto>>().content
+                            .toSChapters(isFromReadList = true, manga.title)
+                    } else {
+                        chapters
+                    }
+                }
+                SMangaUpdate(details.await(), books.await())
+            }
+            else -> coroutineScope {
+                val details = async { if (fetchDetails) client.get(url, Fetch.XHR).parseAs<SeriesDto>().toSManga(baseUrl) else manga }
+                val books = async { if (fetchChapters) getSeriesChapters(manga) else chapters }
+                SMangaUpdate(details.await(), books.await())
+            }
         }
-
-        return SMangaUpdate(manga, chapters)
     }
 
-    override fun getMangaUrl(manga: SManga) = manga.url.replace("/api/v1", "")
+    private suspend fun getSeriesChapters(manga: SManga): List<SChapter> {
+        val seriesId = manga.url.toHttpUrl().pathSegments.last()
+        val url = "$baseUrl/api/v1/books/list".toHttpUrl().newBuilder()
+            .addQueryParameter("unpaged", "true")
+            .addQueryParameter("sort", "metadata.numberSort,asc")
+            .build()
+        val body = SearchDto(
+            ConditionDto(
+                allOf = listOf(
+                    ConditionDto(seriesId = OperatorDto("is", seriesId)),
+                    ConditionDto(mediaStatus = OperatorDto("is", "READY")),
+                    ConditionDto(deleted = OperatorDto("isFalse")),
+                ),
+            ),
+        ).toJsonRequestBody()
+        return client.post(url, Fetch.XHR, body).parseAs<PageWrapperDto<BookDto>>().content
+            .toSChapters(isFromReadList = false, manga.title)
+    }
 
-    private suspend fun getMangaDetails(manga: SManga): SManga {
-        val response = client.get(manga.url, Fetch.XHR)
+    override fun getMangaUrl(manga: SManga) = manga.url.replace("/api/v1/books/", "/book/").replace("/api/v1/", "/")
 
-        return if (response.isFromReadList()) {
-            response.parseAs<ReadListDto>().toSManga(baseUrl)
-        } else if (response.isFromBook()) {
-            response.parseAs<BookDto>().toSManga(baseUrl)
-        } else {
-            response.parseAs<SeriesDto>().toSManga(baseUrl)
+    override fun getChapterUrl(chapter: SChapter) = chapter.url.replace("/api/v1/books/", "/book/")
+
+    private fun List<BookDto>.toSChapters(isFromReadList: Boolean, mangaTitle: String) = filter { it.media?.mediaProfile != "EPUB" || it.media.epubDivinaCompatible }
+        .mapIndexed { index, book ->
+            book.toSChapter(isFromReadList, mangaTitle, chapterNumber = if (isFromReadList) index + 1F else book.metadata.numberSort)
         }
+        .reversed()
+
+    private fun BookDto.toSChapter(isFromReadList: Boolean, mangaTitle: String, chapterNumber: Float?) = SChapter.create().apply {
+        url = "$baseUrl/api/v1/books/$id"
+        name = getChapterName(chapterNameTemplate, isFromReadList, mangaTitle)
+        chapter_number = chapterNumber ?: -1F
+        scanlator = getScanlator(separator)
+        date_upload = date?.let(::parseDate) ?: 0L
     }
 
     private val chapterNameTemplate
@@ -243,74 +295,17 @@ class Komga(
         get() = preferences.getString(PREF_SCANLATOR_SEP, PREF_SCANLATOR_SEP_DEFAULT)!!
             .let { if (it == ",") "$it " else " $it " }
 
-    override fun getChapterUrl(chapter: SChapter) = chapter.url.replace("/api/v1/books", "/book")
-
-    private suspend fun getChapterList(manga: SManga): List<SChapter> {
-        val url = when {
-            manga.url.isFromBook() -> "${manga.url}?unpaged=true&media_status=READY&deleted=false"
-            else -> "${manga.url}/books?unpaged=true&media_status=READY&deleted=false"
-        }
-        val response = client.get(url, Fetch.XHR)
-
-        if (response.isFromBook()) {
-            val book = response.parseAs<BookDto>()
-            return listOf(
-                SChapter.create().apply {
-                    chapter_number = 1F
-                    this.url = "$baseUrl/api/v1/books/${book.id}"
-                    name = book.getChapterName(chapterNameTemplate, isFromReadList = true, manga.title)
-                    scanlator = book.metadata.authors
-                        .filter { it.role == "translator" }
-                        .joinToString(separator) { it.name }
-                    date_upload = parseDate(
-                        book.metadata.releaseDate
-                            ?: book.created
-                            ?: book.fileLastModified,
-                    )
-                },
-            )
-        }
-        val page = response.parseAs<PageWrapperDto<BookDto>>().content
-        val isFromReadList = response.isFromReadList()
-        val chapterNameTemplate = chapterNameTemplate
-
-        return page
-            .filter {
-                it.media.mediaProfile != "EPUB" || it.media.epubDivinaCompatible
-            }
-            .mapIndexed { index, book ->
-                SChapter.create().apply {
-                    chapter_number = if (!isFromReadList) book.metadata.numberSort else index + 1F
-                    this.url = "$baseUrl/api/v1/books/${book.id}"
-                    name = book.getChapterName(chapterNameTemplate, isFromReadList, manga.title)
-                    scanlator = book.metadata.authors
-                        .filter { it.role == "translator" }
-                        .joinToString(separator) { it.name }
-                    // XXX: `Book.fileLastModified` actually uses the server's running timezone,
-                    // not UTC, even if the timestamp ends with a Z! We cannot determine the
-                    // server's timezone, which is why this is a last resort option.
-                    date_upload = parseDate(
-                        book.metadata.releaseDate
-                            ?: book.created
-                            ?: book.fileLastModified,
-                    )
-                }
-            }
-            .sortedByDescending { it.chapter_number }
-    }
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val pages = client.get("${chapter.url}/pages", Fetch.XHR).parseAs<List<PageDto>>()
+        val bookUrl = chapter.url.toHttpUrl()
+        val pages = client.get(bookUrl.newBuilder().addPathSegment("pages").build(), Fetch.XHR).parseAs<List<PageDto>>()
 
         return pages.map {
-            val url = "${chapter.url}/pages/${it.number}" +
-                if (!SUPPORTED_IMAGE_TYPES.contains(it.mediaType)) {
-                    "?convert=png"
-                } else {
-                    ""
-                }
-
-            Page(it.number, imageUrl = url)
+            val url = bookUrl.newBuilder()
+                .addPathSegment("pages")
+                .addPathSegment(it.number.toString())
+                .apply { if (it.mediaType !in SUPPORTED_IMAGE_TYPES) addQueryParameter("convert", "png") }
+                .build()
+            Page(it.number, imageUrl = url.toString())
         }
     }
 
@@ -579,14 +574,6 @@ class Komga(
         ).toJsonElement()
     }
 
-    fun String.isFromReadList() = contains("/api/v1/readlists")
-
-    fun String.isFromBook() = contains("/api/v1/books")
-
-    fun Response.isFromReadList() = request.url.toString().isFromReadList()
-
-    fun Response.isFromBook() = request.url.toString().isFromBook()
-
     companion object {
         internal const val TYPE_SERIES = "Series"
         internal const val TYPE_READLISTS = "Read lists"
@@ -594,6 +581,9 @@ class Komga(
 
         // Lucene syntax, escaped so search terms match literally
         private val LUCENE_RESERVED = Regex("""[-+&|!(){}\[\]^"~*?:\\/]""")
+
+        // Web UI and API paths of an entry
+        private val WEB_URL = Regex("""/(?:api/v1/)?(series|books?|readlists)/(\w+)""")
         private val LUCENE_OPERATOR = Regex("""(?<![^\s\u3000])(AND|OR|NOT)(?![^\s\u3000])""")
     }
 }
