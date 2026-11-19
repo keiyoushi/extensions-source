@@ -146,25 +146,44 @@ abstract class Webtoons :
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        fun group(key: String, label: String) = data?.jsonObject?.get(key)?.jsonObject.orEmpty()
-            .map { (path, name) -> "$label: ${name.jsonPrimitive.content}" to path }
-        val days = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
-            .map { "Originals: $it" to "originals/${it.lowercase()}" } +
-            ("Originals: Completed" to "originals/complete")
+        // Originals and Canvas name the same genre "slice_of_life" and "SLICE_OF_LIFE"
+        fun group(key: String, slug: (String) -> String?) = data?.jsonObject?.get(key)?.jsonObject.orEmpty()
+            .mapNotNull { (path, name) -> slug(path)?.let { it.lowercase() to (path to name.jsonPrimitive.content) } }
+            .toMap()
+        val originals = group("originals") { it.removePrefix("genres/") }
+        val canvas = group("canvas") { path -> path.substringAfter("genreTab=").takeIf { it != "ALL" } }
+        val genres = (originals.keys + canvas.keys).map { slug ->
+            Genre(
+                name = (originals[slug] ?: canvas[slug])!!.second,
+                originals = originals[slug]?.first,
+                canvas = canvas[slug]?.first,
+            )
+        }.sortedBy { it.name }
 
         return FilterList(
+            Filter.Header("Text search uses Type only"),
             SearchType(),
             Filter.Separator(),
-            Filter.Header("Browse and Sort are ignored when searching by text"),
-            BrowseFilter(days + group("originals", "Originals") + group("canvas", "Canvas")),
+            UpdateDayFilter(),
+            GenreFilter(genres),
+            Filter.Header("Update day is used instead of Genre when both are set"),
             SortFilter(),
         )
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val browsePath = filters.firstInstanceOrNull<BrowseFilter>()?.selected
-        if (query.isBlank() && browsePath != null) {
-            return browseManga(browsePath, filters.firstInstanceOrNull<SortFilter>()?.selected, page)
+        if (query.isBlank()) {
+            val type = filters.firstInstanceOrNull<SearchType>()?.selected
+            val day = filters.firstInstanceOrNull<UpdateDayFilter>()?.selected
+            val genre = filters.firstInstanceOrNull<GenreFilter>()?.selected
+            val path = when {
+                day != null -> "originals/$day"
+                genre != null -> if ((type == "canvas" && genre.canvas != null) || genre.originals == null) genre.canvas else genre.originals
+                type == "canvas" -> "canvas/list?genreTab=ALL"
+                type == "originals" -> "ranking/originals"
+                else -> return getPopularManga(page)
+            }!!
+            return browseManga(path, filters.firstInstanceOrNull<SortFilter>()?.selected, page)
         }
 
         val url = baseUrl.toHttpUrl().newBuilder().apply {
