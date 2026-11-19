@@ -11,7 +11,7 @@ import keiyoushi.utils.tryParseDate
 import java.time.format.DateTimeFormatter
 import kotlin.time.Instant
 
-private val formatterDate = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+private val formatterDate = DateTimeFormatter.ISO_LOCAL_DATE
 
 fun parseDate(date: String) = formatterDate.tryParseDate(date).takeIf {
     it != 0L
@@ -28,7 +28,6 @@ fun PreferenceScreen.addEditTextPreference(
     validationMessage: String? = null,
     key: String = title,
     restartRequired: Boolean = false,
-    onComplete: (String) -> Unit = {},
 ) {
     EditTextPreference(context).apply {
         this.key = key
@@ -67,23 +66,15 @@ fun PreferenceScreen.addEditTextPreference(
         }
 
         setOnPreferenceChangeListener { _, newValue ->
-            try {
-                val text = newValue as String
-                val result = text.isBlank() || validate?.invoke(text) ?: true
-
-                if (restartRequired && result) {
+            val text = newValue as String
+            val result = text.isBlank() || validate?.invoke(text) ?: true
+            if (result) {
+                if (restartRequired) {
                     Toast.makeText(context, "Restart the app to apply the new setting", Toast.LENGTH_LONG).show()
                 }
-
-                if (result) {
-                    onComplete(text)
-                    this.summary = getSummary(text)
-                }
-                result
-            } catch (e: Exception) {
-                e.printStackTrace()
-                false
+                this.summary = getSummary(text)
             }
+            result
         }
     }.also(::addPreference)
 }
