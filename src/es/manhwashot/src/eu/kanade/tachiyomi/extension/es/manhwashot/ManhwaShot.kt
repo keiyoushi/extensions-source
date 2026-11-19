@@ -86,6 +86,7 @@ abstract class ManhwaShot :
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        if (!fetchChapters) return SMangaUpdate(document.toSManga(manga.url), chapters)
         return SMangaUpdate(document.toSManga(manga.url), document.toChapters())
     }
 
