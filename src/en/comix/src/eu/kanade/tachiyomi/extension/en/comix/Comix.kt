@@ -22,6 +22,7 @@ import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.NativeWebViewApi
+import keiyoushi.utils.TURNSTILE_AREA
 import keiyoushi.utils.booleanOrNull
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
@@ -39,7 +40,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -48,7 +48,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -82,6 +82,10 @@ abstract class Comix :
 
     private val siteCheckMutex = Mutex()
     private val siteCheckPasses = AtomicInteger()
+
+    // Cloudflare's check in front of the site's pages: one run at a time holds it
+    private val cloudflareCheckHeldUntil = AtomicLong()
+    private val cloudflareCheckPasses = AtomicInteger()
 
     // Reader captures by chapter url, LRU; only finished ones are dropped
     private val captureScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -616,12 +620,15 @@ abstract class Comix :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
         val capture = capture(chapterUrl)
-        val total = try {
-            withTimeout(READER_FIRST_PAGE_SECONDS.seconds) { capture.total.await() }
-        } catch (_: TimeoutCancellationException) {
-            throw Exception("The reader didn't load any pages")
+        // Time on Cloudflare's check doesn't count against the first page
+        var passes = cloudflareCheckPasses.get()
+        while (true) {
+            val total = withTimeoutOrNull(READER_FIRST_PAGE_SECONDS.seconds) { capture.total.await() }
+            if (total != null) return List(total) { Page(it, url = chapterUrl) }
+            val checked = System.nanoTime() < cloudflareCheckHeldUntil.get() || cloudflareCheckPasses.get() != passes
+            if (!checked) throw Exception("The reader didn't load any pages")
+            passes = cloudflareCheckPasses.get()
         }
-        return List(total) { Page(it, url = chapterUrl) }
     }
 
     override suspend fun getImageUrl(page: Page): String {
@@ -802,6 +809,13 @@ abstract class Comix :
         val dataRequests = AtomicInteger()
         val (bridgeName, errorBridgeName, passPayloadName, rejectName) = List(4) { randomName() }
         val (touchBridgeName, touchName) = List(2) { randomName() }
+        // Main thread only
+        var onCloudflareCheck = false
+        var cloudflareCheckSince = 0L
+        var cloudflarePassesBefore = 0
+        var holdingCloudflareCheck = false
+        var showingCloudflareCheck = false
+        var waitingOnCloudflareCheck = false
         return runWebView(timeout = Duration.INFINITE) {
             userAgent = headers["User-Agent"].orEmpty()
             blockImages = !loadImages
@@ -883,20 +897,76 @@ abstract class Comix :
                     val target = challengeUrl.queryParameter("return")
                         ?.takeIf { it.startsWith("/") && !it.startsWith("//") && !it.startsWith("/\\") }
                         ?: "/"
-                    evaluateJs("location.replace(${JSONObject.quote(target)})")
+                    evaluateJs("location.replace(${target.toJsonString()})")
                 }
             }
 
-            // Nothing runs on the site's check page
+            // Nothing runs on the site's or Cloudflare's check page
             val captureScript = buildScript?.invoke(passPayloadName)
-                ?.let { "location.pathname === '$WAF_CHALLENGE_PATH' ? null : $it" }
+                ?.let { "location.pathname === '$WAF_CHALLENGE_PATH' || '_cf_chl_opt' in window ? null : $it" }
             if (captureScript != null) {
                 onPageStarted { evaluateJs(captureScript) }
                 onPageFinished { evaluateJs(captureScript) }
             }
             poll(SCRIPT_RETRY_INTERVAL_MS.milliseconds) {
-                if (System.nanoTime() >= timeoutDeadline.get()) {
+                val now = System.nanoTime()
+                // Null while the page navigates
+                evaluateJs(CLOUDFLARE_CHECK_SCRIPT) { it.toBooleanStrictOrNull()?.let { onCheck -> onCloudflareCheck = onCheck } }
+                // One run at a time holds the check and shows it; the others wait on a blank page, then load theirs again
+                when {
+                    waitingOnCloudflareCheck -> {
+                        val passed = cloudflareCheckPasses.get() != cloudflarePassesBefore
+                        if (passed || now >= cloudflareCheckHeldUntil.get()) {
+                            waitingOnCloudflareCheck = false
+                            onCloudflareCheck = false
+                            cloudflareCheckSince = 0L
+                            if (passed) timeoutDeadline.set(now + timeoutSeconds.seconds.inWholeNanoseconds)
+                            evaluateJs("location.replace(${url.toJsonString()})")
+                        }
+                    }
+                    onCloudflareCheck && !holdingCloudflareCheck -> {
+                        if (cloudflareCheckSince == 0L) {
+                            cloudflareCheckSince = now
+                            cloudflarePassesBefore = cloudflareCheckPasses.get()
+                            timeoutDeadline.set(now + CLOUDFLARE_CHECK_WAIT_SECONDS.seconds.inWholeNanoseconds)
+                        }
+                        val heldUntil = cloudflareCheckHeldUntil.get()
+                        if (now >= heldUntil && cloudflareCheckHeldUntil.compareAndSet(heldUntil, now + CLOUDFLARE_HOLD_SECONDS.seconds.inWholeNanoseconds)) {
+                            holdingCloudflareCheck = true
+                            // The check fails with its images blocked
+                            blockImages = false
+                        } else {
+                            waitingOnCloudflareCheck = true
+                            evaluateJs("location.replace('about:blank')")
+                        }
+                    }
+                    onCloudflareCheck -> {
+                        cloudflareCheckHeldUntil.set(now + CLOUDFLARE_HOLD_SECONDS.seconds.inWholeNanoseconds)
+                        if (!showingCloudflareCheck && now - cloudflareCheckSince >= CLOUDFLARE_SELF_PASS_SECONDS.seconds.inWholeNanoseconds) {
+                            if (!showToUser(TURNSTILE_AREA)) {
+                                cloudflareCheckHeldUntil.set(0L)
+                                reject(Exception(CLOUDFLARE_CHECK_ERROR))
+                                return@poll
+                            }
+                            showingCloudflareCheck = true
+                            // A check that started off screen fails the user's tap
+                            evaluateJs("location.reload()")
+                        }
+                    }
+                    holdingCloudflareCheck -> {
+                        cloudflareCheckPasses.incrementAndGet()
+                        cloudflareCheckHeldUntil.set(0L)
+                        holdingCloudflareCheck = false
+                        cloudflareCheckSince = 0L
+                        hideFromUser()
+                        showingCloudflareCheck = false
+                        blockImages = !loadImages
+                        timeoutDeadline.set(now + timeoutSeconds.seconds.inWholeNanoseconds)
+                    }
+                }
+                if (now >= timeoutDeadline.get()) {
                     val message = when {
+                        onCloudflareCheck || waitingOnCloudflareCheck -> CLOUDFLARE_CHECK_ERROR
                         isDataRequest == null -> "Timed out waiting for WebView"
                         dataRequests.get() == 0 -> "Site never requested the data"
                         else -> "Nothing read from ${dataRequests.get()} site requests"
@@ -904,6 +974,7 @@ abstract class Comix :
                     reject(Exception(message))
                     return@poll
                 }
+                if (onCloudflareCheck || waitingOnCloudflareCheck) return@poll
                 if (captureScript != null) evaluateJs(captureScript)
                 pollScript?.let { evaluateJs(it()) }
             }
@@ -914,6 +985,8 @@ abstract class Comix :
             val bootstrapScript = """
                 (() => {
                 if (window.top !== window || location.pathname === '$WAF_CHALLENGE_PATH' || $startFlagName) return;
+                // Cloudflare's check page comes with a 403
+                if (performance.getEntriesByType('navigation')[0]?.responseStatus === 403) return;
                 $startFlagName = true;
                 try { localStorage.setItem("__pu1", "[" + Date.now() + "]"); } catch (e) {}
                 window.$passPayloadName = payload => window.$bridgeName.postMessage(payload);
@@ -923,8 +996,15 @@ abstract class Comix :
                 })();
             """.trimIndent()
             injectAtDocumentStart(bootstrapScript, setOf(siteOrigin))
-            // The reader route refuses an app package here
-            if (loadImages) loadUrl(url, mapOf("X-Requested-With" to "com.android.chrome")) else loadUrl(url)
+            // The reader route refuses an app package here, also on the page's own navigations (Cloudflare's, the site check's)
+            when {
+                !loadImages -> loadUrl(url)
+                originMatchedHeaderSupported -> {
+                    setOriginMatchedHeader("X-Requested-With", "com.android.chrome", setOf(siteOrigin))
+                    loadUrl(url)
+                }
+                else -> loadUrl(url, mapOf("X-Requested-With" to "com.android.chrome"))
+            }
         }
     }
 
@@ -1150,6 +1230,14 @@ abstract class Comix :
         private const val WAF_VERIFY_PATH = "/@waf/verify"
         private const val SITE_CHECK_WAIT_SECONDS = 180L
         private const val SITE_CHECK_ERROR = "Open in WebView to pass the site's check"
+
+        // Cloudflare's own check page, in front of any of the site's pages
+        // Null until the page has parsed: a check page that's still loading has no _cf_chl_opt yet
+        private const val CLOUDFLARE_CHECK_SCRIPT = "document.readyState === 'loading' ? null : '_cf_chl_opt' in window"
+        private const val CLOUDFLARE_SELF_PASS_SECONDS = 10L
+        private const val CLOUDFLARE_CHECK_WAIT_SECONDS = CLOUDFLARE_SELF_PASS_SECONDS + SITE_CHECK_WAIT_SECONDS
+        private const val CLOUDFLARE_HOLD_SECONDS = 2L
+        private const val CLOUDFLARE_CHECK_ERROR = "Open in WebView to pass Cloudflare's check"
         private val TURNSTILE_SITE_KEY = Regex("""sitekey:\s*["']([^"']+)["']""")
     }
 }
