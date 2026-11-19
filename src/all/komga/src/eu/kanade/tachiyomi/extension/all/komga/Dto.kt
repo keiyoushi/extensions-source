@@ -24,9 +24,9 @@ class SeriesDto(
     private val metadata: SeriesMetadataDto,
     private val booksMetadata: BookMetadataAggregationDto?,
 ) {
-    fun toSManga(baseUrl: String) = SManga.create().apply {
+    fun toSManga(apiRoot: String) = SManga.create().apply {
         title = metadata.title
-        url = "$baseUrl/api/v1/series/$id"
+        url = "$apiRoot/v1/series/$id"
         thumbnail_url = "$url/thumbnail"
         status = when (metadata.status) {
             "ENDED" -> if (metadata.totalBookCount != null && booksCount != null && booksCount < metadata.totalBookCount) SManga.PUBLISHING_FINISHED else SManga.COMPLETED
@@ -86,9 +86,9 @@ class BookDto(
     val media: MediaDto?,
     val metadata: BookMetadataDto,
 ) {
-    fun toSManga(baseUrl: String) = SManga.create().apply {
+    fun toSManga(apiRoot: String) = SManga.create().apply {
         title = metadata.title
-        url = "$baseUrl/api/v1/books/$id"
+        url = "$apiRoot/v1/books/$id"
         thumbnail_url = "$url/thumbnail"
         genre = metadata.tags.joinToString().ifEmpty { null }
         description = MarkdownDescription.Builder()
@@ -172,9 +172,9 @@ class ReadListDto(
     private val name: String,
     private val summary: String?,
 ) {
-    fun toSManga(baseUrl: String) = SManga.create().apply {
+    fun toSManga(apiRoot: String) = SManga.create().apply {
         title = name
-        url = "$baseUrl/api/v1/readlists/$id"
+        url = "$apiRoot/v1/readlists/$id"
         thumbnail_url = "$url/thumbnail"
         description = MarkdownDescription.Builder().description(summary).build()
     }

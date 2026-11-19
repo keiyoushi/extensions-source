@@ -38,8 +38,11 @@ import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Response
 import org.apache.commons.text.StringSubstitutor
+import java.io.IOException
 import java.util.Locale
 
 @Source
@@ -84,25 +87,106 @@ class Komga(
     private val defaultLibraries
         get() = preferences.getStringSet(PREF_DEFAULT_LIBRARIES, emptySet())!!
 
+    private val cfAccessClientId
+        get() = preferences.getString(PREF_CF_ACCESS_CLIENT_ID, "")!!
+
+    private val cfAccessClientSecret
+        get() = preferences.getString(PREF_CF_ACCESS_CLIENT_SECRET, "")!!
+
     override fun Headers.Builder.configureHeaders() = apply {
         set("User-Agent", "TachiyomiKomga/${AppInfo.getVersionName()}")
         if (apiKey.isNotBlank()) {
             set("X-API-Key", apiKey)
         }
+        if (cfAccessClientId.isNotBlank()) {
+            set("CF-Access-Client-Id", cfAccessClientId)
+            set("CF-Access-Client-Secret", cfAccessClientSecret)
+        }
     }
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        // One session cookie per host, shared with the app's Komga tracker, so one user per host
-        authenticator { _, response ->
-            if (apiKey.isNotBlank() || response.request.header("Authorization") != null) {
-                null // Give up if API key is set or we've already failed to authenticate.
-            } else {
-                response.request.newBuilder()
-                    .addHeader("Authorization", Credentials.basic(username, password))
-                    .build()
-            }
-        }
+        addInterceptor(::toCurrentAddress)
+        addInterceptor(::authenticate)
+        addNetworkInterceptor(::withoutKomgaCookies)
         dns(Dns.SYSTEM) // don't use DNS over HTTPS as it breaks IP addressing
+    }
+
+    private fun toCurrentAddress(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        return chain.proceed(request.newBuilder().url(request.url.atCurrentAddress()).build())
+    }
+
+    // Stored urls keep the address the entry was added with
+    private fun HttpUrl.atCurrentAddress(): HttpUrl {
+        val api = pathSegments.lastIndexOf("api")
+        val server = baseUrl.toHttpUrlOrNull()
+        if (api < 0 || server == null) return this
+        return server.newBuilder()
+            .apply { encodedPathSegments.drop(api).forEach(::addEncodedPathSegment) }
+            .encodedQuery(encodedQuery)
+            .build()
+    }
+
+    // An empty token: Komga keeps no session for this API key (1.29+)
+    private class Session(val account: String, val token: String)
+
+    @Volatile
+    private var session: Session? = null
+    private val loginLock = Any()
+
+    // Each source keeps its own Komga session in X-Auth-Token
+    private fun authenticate(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        fun withToken(token: String) = request.newBuilder().header("X-Auth-Token", token).build()
+
+        val account = "$baseUrl\n$apiKey\n$username\n$password"
+        val token = session?.takeIf { it.account == account }?.token
+        if (token != null) {
+            val response = chain.proceed(withToken(token))
+            if (response.code != 401) {
+                // Komga before 1.29 replaces a dead token for an API key
+                response.newSessionToken()?.takeIf { response.isSuccessful && it != token }?.let { session = Session(account, it) }
+                return response
+            }
+            if (apiKey.isNotBlank()) response.ensureAuthorized()
+            response.close()
+        }
+
+        synchronized(loginLock) {
+            // Another request may have logged in while this one waited
+            val latest = session?.takeIf { it.account == account && it.token != token }?.token
+            if (latest != null) return chain.proceed(withToken(latest))
+
+            // An empty X-Auth-Token asks Komga to return the new session in that header
+            val login = withToken("").newBuilder()
+                .apply { if (apiKey.isBlank()) header("Authorization", Credentials.basic(username, password)) }
+                .build()
+            val response = chain.proceed(login)
+            response.ensureAuthorized()
+            if (response.isSuccessful) session = Session(account, response.newSessionToken().orEmpty())
+            return response
+        }
+    }
+
+    // Komga's login cookies from the WebView would pick the account (remember-me even over a dead token)
+    private fun withoutKomgaCookies(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val cookies = request.header("Cookie") ?: return chain.proceed(request)
+        val kept = cookies.split("; ").filterNot { it.substringBefore("=") in KOMGA_COOKIES }
+        val stripped = request.newBuilder()
+            .apply { if (kept.isEmpty()) removeHeader("Cookie") else header("Cookie", kept.joinToString("; ")) }
+            .build()
+        return chain.proceed(stripped)
+    }
+
+    // From the server only: a 304 from the app's shared cache carries the headers, token included, of whichever source cached it
+    private fun Response.newSessionToken() = networkResponse?.header("X-Auth-Token")
+
+    private fun Response.ensureAuthorized() {
+        if (code == 401) {
+            close()
+            throw IOException("Check the username, password or API key in Settings")
+        }
     }
 
     private val defaultType
@@ -119,7 +203,8 @@ class Komga(
         val type = if (collection != null) TYPE_SERIES else filters.firstInstanceOrNull<TypeSelect>()?.type ?: defaultType
         val libraryFilter = filters.firstInstanceOrNull<LibraryFilter>()
 
-        val url = "$baseUrl/api/v1".toHttpUrl().newBuilder()
+        val apiRoot = "$baseUrl/api"
+        val url = "$apiRoot/v1".toHttpUrl().newBuilder()
             .addPathSegments(
                 when (type) {
                     TYPE_READLISTS -> "readlists"
@@ -165,7 +250,7 @@ class Komga(
             if (searchTerm.isNotEmpty()) url.addQueryParameter("search", searchTerm)
             if (libraryIds.isNotEmpty()) url.addQueryParameter("library_id", libraryIds.joinToString(","))
             val data = client.get(url.build(), Fetch.XHR).parseAs<PageWrapperDto<ReadListDto>>()
-            return MangasPage(data.content.map { it.toSManga(baseUrl) }, !data.last)
+            return MangasPage(data.content.map { it.toSManga(apiRoot) }, !data.last)
         }
 
         val conditions = buildList {
@@ -191,10 +276,10 @@ class Komga(
         }
         return if (type == TYPE_BOOKS) {
             val data = response.parseAs<PageWrapperDto<BookDto>>()
-            MangasPage(data.content.map { it.toSManga(baseUrl) }, !data.last)
+            MangasPage(data.content.map { it.toSManga(apiRoot) }, !data.last)
         } else {
             val data = response.parseAs<PageWrapperDto<SeriesDto>>()
-            MangasPage(data.content.map { it.toSManga(baseUrl) }, !data.last)
+            MangasPage(data.content.map { it.toSManga(apiRoot) }, !data.last)
         }
     }
 
@@ -218,10 +303,10 @@ class Komga(
         return when {
             url.contains("/api/v1/books/") -> {
                 val book = client.get(url, Fetch.XHR).parseAs<BookDto>()
-                SMangaUpdate(book.toSManga(baseUrl), listOf(book.toSChapter(isFromReadList = true, book.metadata.title, chapterNumber = 1F)))
+                SMangaUpdate(book.toSManga(manga.apiRoot), listOf(book.toSChapter(url, isFromReadList = true, book.metadata.title, chapterNumber = 1F)))
             }
             url.contains("/api/v1/readlists/") -> coroutineScope {
-                val details = async { if (fetchDetails) client.get(url, Fetch.XHR).parseAs<ReadListDto>().toSManga(baseUrl) else manga }
+                val details = async { if (fetchDetails) client.get(url, Fetch.XHR).parseAs<ReadListDto>().toSManga(manga.apiRoot) else manga }
                 val books = async {
                     if (fetchChapters) {
                         val booksUrl = url.toHttpUrl().newBuilder()
@@ -232,7 +317,7 @@ class Komga(
                             .build()
                         client.get(booksUrl, Fetch.XHR)
                             .parseAs<PageWrapperDto<BookDto>>().content
-                            .toSChapters(isFromReadList = true, manga.title)
+                            .toSChapters(manga, isFromReadList = true)
                     } else {
                         chapters
                     }
@@ -240,7 +325,7 @@ class Komga(
                 SMangaUpdate(details.await(), books.await())
             }
             else -> coroutineScope {
-                val details = async { if (fetchDetails) client.get(url, Fetch.XHR).parseAs<SeriesDto>().toSManga(baseUrl) else manga }
+                val details = async { if (fetchDetails) client.get(url, Fetch.XHR).parseAs<SeriesDto>().toSManga(manga.apiRoot) else manga }
                 val books = async { if (fetchChapters) getSeriesChapters(manga) else chapters }
                 SMangaUpdate(details.await(), books.await())
             }
@@ -263,21 +348,42 @@ class Komga(
             ),
         ).toJsonRequestBody()
         return client.post(url, Fetch.XHR, body).parseAs<PageWrapperDto<BookDto>>().content
-            .toSChapters(isFromReadList = false, manga.title)
+            .toSChapters(manga, isFromReadList = false)
     }
 
-    override fun getMangaUrl(manga: SManga) = manga.url.replace("/api/v1/books/", "/book/").replace("/api/v1/", "/")
+    override fun getMangaUrl(manga: SManga) = manga.url.toWebUrl()
 
-    override fun getChapterUrl(chapter: SChapter) = chapter.url.replace("/api/v1/books/", "/book/")
+    override fun getChapterUrl(chapter: SChapter) = chapter.url.toWebUrl()
 
-    private fun List<BookDto>.toSChapters(isFromReadList: Boolean, mangaTitle: String) = filter { it.media?.mediaProfile != "EPUB" || it.media.epubDivinaCompatible }
-        .mapIndexed { index, book ->
-            book.toSChapter(isFromReadList, mangaTitle, chapterNumber = if (isFromReadList) index + 1F else book.metadata.numberSort)
+    private fun String.toWebUrl() = toHttpUrl().atCurrentAddress().toString()
+        .replace("/api/v1/books/", "/book/")
+        .replace("/api/v1/", "/")
+
+    private fun List<BookDto>.toSChapters(manga: SManga, isFromReadList: Boolean): List<SChapter> {
+        val apiRoot = manga.apiRoot
+        return filter { it.media?.mediaProfile != "EPUB" || it.media.epubDivinaCompatible }
+            .mapIndexed { index, book ->
+                val url = "$apiRoot/v1/books/${book.id}"
+                book.toSChapter(url, isFromReadList, manga.title, chapterNumber = if (isFromReadList) index + 1F else book.metadata.numberSort)
+            }
+            .reversed()
+    }
+
+    // The entry's chapters and details keep the address it was stored with, so the app still matches them
+    private val SManga.apiRoot: String
+        get() {
+            val url = url.toHttpUrl()
+            val prefix = url.encodedPathSegments.take(url.pathSegments.lastIndexOf("api") + 1)
+            return url.newBuilder()
+                .encodedPath("/")
+                .query(null)
+                .apply { prefix.forEach(::addEncodedPathSegment) }
+                .build()
+                .toString()
         }
-        .reversed()
 
-    private fun BookDto.toSChapter(isFromReadList: Boolean, mangaTitle: String, chapterNumber: Float?) = SChapter.create().apply {
-        url = "$baseUrl/api/v1/books/$id"
+    private fun BookDto.toSChapter(url: String, isFromReadList: Boolean, mangaTitle: String, chapterNumber: Float?) = SChapter.create().apply {
+        this.url = url
         name = getChapterName(chapterNameTemplate, isFromReadList, mangaTitle)
         chapter_number = chapterNumber ?: -1F
         scanlator = getScanlator(separator)
@@ -292,7 +398,7 @@ class Komga(
             .let { if (it == ",") "$it " else " $it " }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val bookUrl = chapter.url.toHttpUrl()
+        val bookUrl = chapter.url.toHttpUrl().atCurrentAddress()
         val pages = client.get(bookUrl.newBuilder().addPathSegment("pages").build(), Fetch.XHR).parseAs<List<PageDto>>()
 
         return pages.map {
@@ -446,6 +552,26 @@ class Komga(
             setDefaultValue(TYPE_SERIES)
         }.also(screen::addPreference)
 
+        val cfAccessIdSummary: (String) -> String = { it.ifBlank { "Optional, for a server behind Cloudflare Access" } }
+        screen.addEditTextPreference(
+            title = "Cloudflare Access client ID",
+            default = "",
+            summary = cfAccessIdSummary(cfAccessClientId),
+            getSummary = cfAccessIdSummary,
+            dialogMessage = "The ID and secret of a Cloudflare Access service token",
+            key = PREF_CF_ACCESS_CLIENT_ID,
+        )
+        val cfAccessSecretSummary: (String) -> String = { if (it.isBlank()) "Optional, for a server behind Cloudflare Access" else "*".repeat(it.length) }
+        screen.addEditTextPreference(
+            title = "Cloudflare Access client secret",
+            default = "",
+            summary = cfAccessSecretSummary(cfAccessClientSecret),
+            getSummary = cfAccessSecretSummary,
+            dialogMessage = "The ID and secret of a Cloudflare Access service token",
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
+            key = PREF_CF_ACCESS_CLIENT_SECRET,
+        )
+
         val libraries = preferences.getString(PREF_LIBRARY_LIST, "[]")!!.parseAs<List<LibraryDto>>()
         MultiSelectListPreference(screen.context).apply {
             key = PREF_DEFAULT_LIBRARIES
@@ -533,6 +659,8 @@ private const val PREF_ADDRESS = "Address"
 private const val PREF_USERNAME = "Username"
 private const val PREF_PASSWORD = "Password"
 private const val PREF_API_KEY = "API key"
+private const val PREF_CF_ACCESS_CLIENT_ID = "cf_access_client_id"
+private const val PREF_CF_ACCESS_CLIENT_SECRET = "cf_access_client_secret"
 private const val PREF_LIBRARY_LIST = "library_list"
 private const val PREF_DEFAULT_LIBRARIES = "Default libraries"
 private const val PREF_DEFAULT_TYPE = "Default type"
@@ -540,5 +668,7 @@ private const val PREF_CHAPTER_NAME_TEMPLATE = "Chapter name template"
 private const val PREF_CHAPTER_NAME_TEMPLATE_DEFAULT = "{number} - {title} ({size})"
 private const val PREF_SCANLATOR_SEP = "Scanlator seperator"
 private const val PREF_SCANLATOR_SEP_DEFAULT = ","
+
+private val KOMGA_COOKIES = setOf("KOMGA-SESSION", "komga-remember-me")
 
 private val SUPPORTED_IMAGE_TYPES = listOf("image/jpeg", "image/png", "image/gif", "image/webp", "image/jxl", "image/heif", "image/avif")
