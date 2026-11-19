@@ -9,15 +9,9 @@ internal interface ConditionFilter {
     fun alternatives(): List<ConditionDto>
 }
 
-internal class TypeSelect :
-    Filter.Select<String>(
-        "Search for",
-        arrayOf(
-            Komga.TYPE_SERIES,
-            Komga.TYPE_READLISTS,
-            Komga.TYPE_BOOKS,
-        ),
-    )
+internal class TypeSelect(default: String) : Filter.Select<String>("Search for", Komga.TYPES, Komga.TYPES.indexOf(default).coerceAtLeast(0)) {
+    val type get() = values[state]
+}
 
 internal class SeriesSort(selection: Selection? = null) :
     Filter.Sort(

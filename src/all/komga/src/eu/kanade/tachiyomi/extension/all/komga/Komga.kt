@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.komga
 
 import android.content.SharedPreferences
 import android.text.InputType
+import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.AppInfo
@@ -104,19 +105,18 @@ class Komga(
         dns(Dns.SYSTEM) // don't use DNS over HTTPS as it breaks IP addressing
     }
 
-    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SeriesSort(Filter.Sort.Selection(1, true))))
+    private val defaultType
+        get() = preferences.getString(PREF_DEFAULT_TYPE, TYPE_SERIES)!!
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SeriesSort(Filter.Sort.Selection(3, false))))
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(TypeSelect(defaultType), SeriesSort(Filter.Sort.Selection(1, true))))
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(TypeSelect(defaultType), SeriesSort(Filter.Sort.Selection(3, false))))
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (baseUrl.isBlank()) throw Exception("Set Address in Settings")
 
         val collection = filters.firstInstanceOrNull<CollectionSelect>()?.let { it.collections[it.state] }?.takeIf { it.id != null }
-        val type = when (filters.firstInstanceOrNull<TypeSelect>()?.state?.takeIf { collection == null }) {
-            1 -> TYPE_READLISTS
-            2 -> TYPE_BOOKS
-            else -> TYPE_SERIES
-        }
+        val type = if (collection != null) TYPE_SERIES else filters.firstInstanceOrNull<TypeSelect>()?.type ?: defaultType
         val libraryFilter = filters.firstInstanceOrNull<LibraryFilter>()
 
         val url = "$baseUrl/api/v1".toHttpUrl().newBuilder()
@@ -129,7 +129,12 @@ class Komga(
             )
             .addQueryParameter("page", (page - 1).toString())
 
-        val searchTerm = query.trim().replace(LUCENE_RESERVED, """\\$0""").replace(LUCENE_OPERATOR) { it.value.lowercase() }
+        val term = query.trim().replace(LUCENE_RESERVED, """\\$0""").replace(LUCENE_OPERATOR) { it.value.lowercase() }
+        val searchTerm = when {
+            term.isEmpty() || type == TYPE_READLISTS -> term
+            // A tapped author, genre or tag searches for its name
+            else -> "(($term) OR author:($term) OR genre:($term) OR tag:($term))"
+        }
         val sort = filters.firstInstanceOrNull<SeriesSort>()?.state
         val sortCriteria = when {
             // Komga shows a collection in its own order whatever the sort
@@ -157,7 +162,7 @@ class Komga(
 
         if (type == TYPE_READLISTS) {
             val libraryIds = libraryFilter?.selectedIds ?: defaultLibraries
-            url.addQueryParameter("search", searchTerm)
+            if (searchTerm.isNotEmpty()) url.addQueryParameter("search", searchTerm)
             if (libraryIds.isNotEmpty()) url.addQueryParameter("library_id", libraryIds.joinToString(","))
             val data = client.get(url.build(), Fetch.XHR).parseAs<PageWrapperDto<ReadListDto>>()
             return MangasPage(data.content.map { it.toSManga(baseUrl) }, !data.last)
@@ -309,7 +314,7 @@ class Komga(
         check(filterData == null || filterData.server == serverKey) { "Filters of another server" }
 
         val filters = mutableListOf<Filter<*>>(
-            TypeSelect(),
+            TypeSelect(defaultType),
             SeriesSort(),
             UnreadFilter(),
             InProgressFilter(),
@@ -432,6 +437,15 @@ class Komga(
             key = PREF_PASSWORD,
         )
 
+        ListPreference(screen.context).apply {
+            key = PREF_DEFAULT_TYPE
+            title = "Default type"
+            summary = "Listed in Popular and Latest, and preselected in the filters: %s"
+            entries = TYPES
+            entryValues = TYPES
+            setDefaultValue(TYPE_SERIES)
+        }.also(screen::addPreference)
+
         val libraries = preferences.getString(PREF_LIBRARY_LIST, "[]")!!.parseAs<List<LibraryDto>>()
         MultiSelectListPreference(screen.context).apply {
             key = PREF_DEFAULT_LIBRARIES
@@ -500,6 +514,7 @@ class Komga(
         internal const val TYPE_SERIES = "Series"
         internal const val TYPE_READLISTS = "Read lists"
         internal const val TYPE_BOOKS = "Books"
+        internal val TYPES = arrayOf(TYPE_SERIES, TYPE_READLISTS, TYPE_BOOKS)
 
         // Lucene syntax, escaped so search terms match literally
         private val LUCENE_RESERVED = Regex("""[-+&|!(){}\[\]^"~*?:\\/]""")
@@ -520,6 +535,7 @@ private const val PREF_PASSWORD = "Password"
 private const val PREF_API_KEY = "API key"
 private const val PREF_LIBRARY_LIST = "library_list"
 private const val PREF_DEFAULT_LIBRARIES = "Default libraries"
+private const val PREF_DEFAULT_TYPE = "Default type"
 private const val PREF_CHAPTER_NAME_TEMPLATE = "Chapter name template"
 private const val PREF_CHAPTER_NAME_TEMPLATE_DEFAULT = "{number} - {title} ({size})"
 private const val PREF_SCANLATOR_SEP = "Scanlator seperator"
