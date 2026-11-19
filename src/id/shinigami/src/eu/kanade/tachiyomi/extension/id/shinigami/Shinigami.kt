@@ -32,7 +32,7 @@ import kotlin.time.Instant
 @Source
 abstract class Shinigami : KeiSource() {
     private val apiUrl = "https://api.shinigami.io"
-    private val siteDomain = baseUrl.toHttpUrl().host.substringAfter(".")
+    private val siteDomain get() = baseUrl.toHttpUrl().host.substringAfter(".")
 
     private val apiHeaders: Headers
         get() = headersBuilder()
@@ -121,7 +121,7 @@ abstract class Shinigami : KeiSource() {
         val manga = SManga.create().apply {
             this.url = id
         }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun fetchMangaUpdate(
