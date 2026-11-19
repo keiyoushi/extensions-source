@@ -12,8 +12,10 @@ import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toMarkdown
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
@@ -222,12 +224,11 @@ abstract class MadaraBase : KeiSource() {
         title = document.selectFirst(mangaDetailsSelectorTitle)!!.ownText()
         author = document.select(mangaDetailsSelectorAuthor).eachText().filterNot(::isUpdating).joinToString().ifBlank { null }
         artist = document.select(mangaDetailsSelectorArtist).eachText().filterNot(::isUpdating).joinToString().ifBlank { null }
-        description = document.selectFirst(mangaDetailsSelectorDescription)?.let { element ->
-            element.select("p").takeIf(List<Element>::isNotEmpty)?.joinToString("\n\n") { it.text() } ?: element.text()
-        }
-        document.selectFirst(altNameSelector)?.ownText()?.takeIf { it.isNotEmpty() && !isUpdating(it) }?.let { alternative ->
-            description = listOfNotNull(description, "${intl["alt_names_heading"]} $alternative").joinToString("\n\n")
-        }
+        val alternative = document.selectFirst(altNameSelector)?.ownText()?.takeIf { it != title && !isUpdating(it) }
+        description = MarkdownDescription.Builder()
+            .apply { descriptionParagraphs(document).forEach(::markdown) }
+            .altTitles(listOfNotNull(alternative), intl["alt_names_heading"].removeSuffix(":"))
+            .build()
         thumbnail_url = document.selectFirst(mangaDetailsSelectorThumbnail)?.let { processThumbnail(imageFromElement(it)) }
         status = document.select(mangaDetailsSelectorStatus).lastOrNull()?.text()?.toStatus() ?: SManga.UNKNOWN
         val genres = document.select(mangaDetailsSelectorGenre).mapNotNull { element ->
@@ -246,6 +247,12 @@ abstract class MadaraBase : KeiSource() {
             genres = genres,
             legacyId = id.takeIf { preserveUrl?.all(Char::isDigit) == false },
         )
+    }
+
+    /** The synopsis as Markdown paragraphs: the description's `p` elements, or the whole element without any */
+    protected open fun descriptionParagraphs(document: Document): List<String> {
+        val element = document.selectFirst(mangaDetailsSelectorDescription) ?: return emptyList()
+        return element.select("p").ifEmpty { listOf(element) }.map { it.toMarkdown() }
     }
 
     protected open suspend fun fetchChapters(mangaPath: String, id: String, mangaPage: Document? = null): List<SChapter> = when (chapterMode) {
