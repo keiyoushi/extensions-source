@@ -12,8 +12,20 @@ class FreeReaderRequest(
 
 @Serializable
 class FreeReaderDto(
-    @SerialName("ws_url") val wsUrl: String,
-    @SerialName("ws_ticket") val wsTicket: String,
+    @SerialName("ws_url") val wsUrl: String?,
+    @SerialName("ws_ticket") val wsTicket: String?,
+    @SerialName("redirect_url") val redirectUrl: String?,
+    @SerialName("redirect_data") val redirectData: String?,
+)
+
+@Serializable
+class CsrfDto(
+    val csrfToken: String,
+)
+
+@Serializable
+class LoginResponseDto(
+    val url: String?,
 )
 
 @Serializable

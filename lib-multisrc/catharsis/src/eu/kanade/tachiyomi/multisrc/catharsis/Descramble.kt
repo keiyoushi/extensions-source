@@ -20,7 +20,12 @@ fun descramble(bitmap: Bitmap, gutter: Int = 0, plan: (width: Int, height: Int) 
 
     val output = Bitmap.createBitmap(outputWidth, outputHeight, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(output)
-    val paint = Paint().apply { isFilterBitmap = false }
+    // Suwayomi's android-compat stubs Paint.setFilterBitmap
+    val paint = if (System.getProperty("java.vm.name") == "Dalvik") {
+        Paint().apply { isFilterBitmap = false }
+    } else {
+        null
+    }
     for (row in 0 until GRID) {
         for (col in 0 until GRID) {
             val width = tiles.cols[col + 1] - tiles.cols[col]
