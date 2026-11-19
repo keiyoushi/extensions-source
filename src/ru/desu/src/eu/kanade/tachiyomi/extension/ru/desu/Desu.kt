@@ -12,17 +12,17 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.ratingStars
 import keiyoushi.utils.string
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -31,7 +31,6 @@ import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -120,22 +119,20 @@ abstract class Desu :
         // Текстовий пошук: окремий запит /manga/search/, фільтри в ньому не діють
         if (query.isNotEmpty()) return searchByQuery(page, query)
 
-        var order = ORDER_VALUES[ORDER_POPULAR]
-        val types = mutableListOf<String>()
-        val statuses = mutableListOf<String>()
+        val order = filters.firstInstanceOrNull<OrderBy>()?.value ?: ORDER_VALUES[ORDER_POPULAR]
+        val types = filters.firstInstanceOrNull<TypeList>()?.state.orEmpty()
+            .filter { it.state }
+            .map { it.id }
+        val statuses = filters.firstInstanceOrNull<StatusList>()?.state.orEmpty()
+            .filter { it.state }
+            .map { it.id }
         // жанри і теги разом: "id-slug" або "id-!slug" (виключення)
-        val genreParams = mutableListOf<String>()
-
-        filters.forEach { filter ->
-            when (filter) {
-                is OrderBy -> order = filter.value
-                is TypeList -> filter.state.forEach { if (it.state) types.add(it.id) }
-                is StatusList -> filter.state.forEach { if (it.state) statuses.add(it.id) }
-                is GenreList -> filter.state.forEach { if (!it.isIgnored()) genreParams.add(it.toParam()) }
-                is TagList -> filter.state.forEach { if (!it.isIgnored()) genreParams.add(it.toParam()) }
-                else -> {}
-            }
-        }
+        val genreParams = (
+            filters.firstInstanceOrNull<GenreList>()?.state.orEmpty() +
+                filters.firstInstanceOrNull<TagList>()?.state.orEmpty()
+            )
+            .filterNot { it.isIgnored() }
+            .map { it.toParam() }
 
         // Каталог (фільтри / сортування): парсинг HTML сторінки /manga/
         val url = "$baseUrl/manga/".toHttpUrl().newBuilder().apply {
@@ -164,21 +161,15 @@ abstract class Desu :
             .add("_xfResponseType", "json")
             .build()
 
-        val request = Request.Builder()
-            .url("$baseUrl/manga/search/")
-            .post(body)
-            .header("Accept", "application/json, text/javascript, */*; q=0.01")
-            .header("X-Requested-With", "XMLHttpRequest")
-            .header("X-Ajax-Referer", "$baseUrl/manga/")
-            .header("Referer", "$baseUrl/manga/")
-            .build()
-
-        val result = withContext(Dispatchers.IO) {
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) throw Exception("HTTP ${response.code}")
-                response.parseAs<SearchDto>()
-            }
-        }
+        val result = client.post(
+            url = "$baseUrl/manga/search/",
+            headers = headers.newBuilder()
+                .set("X-Requested-With", "XMLHttpRequest")
+                .set("X-Ajax-Referer", "$baseUrl/manga/")
+                .build(),
+            fetch = Fetch.XHR.from("/manga/"),
+            body = body,
+        ).parseAs<SearchDto>()
 
         val doc = Jsoup.parseBodyFragment(result.templateHtml, baseUrl)
         val mangas = doc.select("li.AniMangaSearchCard").mapNotNull { it.toSearchManga() }
