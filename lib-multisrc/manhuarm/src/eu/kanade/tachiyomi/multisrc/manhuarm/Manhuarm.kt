@@ -26,6 +26,7 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -115,11 +116,7 @@ abstract class Manhuarm :
         customUserAgent.takeIf(String::isNotEmpty)?.let { set("User-Agent", it) }
     }
 
-    // ============================== Popular ===============================
-
     override suspend fun getPopularManga(page: Int): MangasPage = archive(page, "trending")
-
-    // =============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = archive(page, "latest")
 
@@ -128,8 +125,6 @@ abstract class Manhuarm :
         val document = client.get("$baseUrl$path?sort=$sort", Fetch.DOCUMENT).asJsoup()
         return MangasPage(document.parseMangaList(), document.selectFirst("a.next") != null)
     }
-
-    // =============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -159,8 +154,6 @@ abstract class Manhuarm :
             thumbnail_url = element.selectFirst(".mrm-r-item__art img")?.imageUrl()
         }
     }
-
-    // =============================== Details ==============================
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -198,15 +191,10 @@ abstract class Manhuarm :
             addAll(select(".tags-content a").eachText())
             summaryContent("Type")?.let(::add)
         }.distinctBy(String::lowercase).joinToString().ifEmpty { null }
-        description = buildString {
-            selectFirst(".summary__content")?.let { summary ->
-                append(summary.select("p").takeIf { it.isNotEmpty() }?.joinToString("\n\n") { it.text() } ?: summary.text())
-            }
-            selectFirst("#mrm-hero-alt-text")?.text()?.takeIf(String::isNotEmpty)?.let {
-                if (isNotEmpty()) append("\n\n")
-                append("Alternative names: ", it)
-            }
-        }.ifEmpty { null }
+        description = MarkdownDescription.Builder()
+            .description(selectFirst(".summary__content"))
+            .altTitles(selectFirst("#mrm-hero-alt-text")?.text()?.split(ALT_TITLE_SEPARATOR).orEmpty())
+            .build()
         status = when (summaryContent("Status")?.lowercase()) {
             "ongoing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
@@ -237,8 +225,6 @@ abstract class Manhuarm :
         }
         return DATE_FORMAT.tryParseDate(date)
     }
-
-    // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val session = sessionMutex.withLock { openChapter(chapter.url) } ?: return emptyList()
@@ -339,8 +325,6 @@ abstract class Manhuarm :
         else -> null
     }
 
-    // =============================== Utils ================================
-
     protected fun Element.imageUrl(): String? {
         val key = listOf("data-src", "data-lazy-src", "src").firstOrNull { attr(it).isNotBlank() } ?: return null
         val value = attr(key).trim()
@@ -350,8 +334,6 @@ abstract class Manhuarm :
             else -> absUrl(key)
         }
     }
-
-    // ============================= Preferences ============================
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val language = language
@@ -487,6 +469,9 @@ abstract class Manhuarm :
         private val RIFF_MAGIC = "RIFF".encodeUtf8()
         private val WEBP_MAGIC = "WEBP".encodeUtf8()
         private val AVIF_MAGIC = "ftypavif".encodeUtf8()
+
+        // Manhuarm separates them with " / ", Manga MTL with " | "
+        private val ALT_TITLE_SEPARATOR = Regex(""" [/|] """)
 
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH)
 
