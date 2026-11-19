@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.aedex
 
 import android.text.InputType
+import android.util.LruCache
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.catharsis.Catharsis
@@ -17,6 +18,7 @@ import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
@@ -30,7 +32,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import java.io.IOException
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -41,12 +42,15 @@ abstract class Aedex :
 
     private val preferences by getPreferencesLazy()
 
-    // Reader and auth JSON endpoints return HTTP 403/401 behind Cloudflare; keep CloudflareInterceptor
-    // from hijacking API errors like LOGIN_REQUIRED or READER_PASS_REQUIRED.
+    // On non-Android hosts (Suwayomi), CloudflareInterceptor hijacks any 403 with Server: cloudflare
     private val readerClient by lazy {
-        client.newBuilder()
-            .apply { interceptors().removeAll { it.javaClass.simpleName == "CloudflareInterceptor" } }
-            .build()
+        if (System.getProperty("java.vm.name") == "Dalvik") {
+            client
+        } else {
+            client.newBuilder()
+                .apply { interceptors().removeAll { it.javaClass.simpleName == "CloudflareInterceptor" } }
+                .build()
+        }
     }
 
     override val apiUrl get() = "$baseUrl/api/backend"
@@ -156,9 +160,10 @@ abstract class Aedex :
 
     override suspend fun redeemReaderPass(capToken: String, sitekey: String, fetch: Fetch): ReaderPassDto {
         val signer = signer ?: throw IOException("Reader keys not found")
+        val headers = headersBuilder().set(signer.buildName, signer.buildId).build()
         readerClient.post(
             "$baseUrl/lector/pase",
-            headersBuilder().set(signer.buildName, signer.buildId).build(),
+            headers,
             fetch,
             ReaderPassRequest(capToken, sitekey).toJsonRequestBody(),
             ensureSuccess = false,
@@ -214,8 +219,11 @@ abstract class Aedex :
     }
 
     private suspend fun loadSigner(chapter: SChapter): ReaderSigner {
-        val vault = client.get(getChapterUrl(chapter), headersBuilder().build(), Fetch.DOCUMENT).asJsoup().getElementById("aedex-reader-vault")
-        return ReaderSigner("ax", vault?.attr("data-t").orEmpty(), vault?.attr("data-s").orEmpty())
+        val vault = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup().getElementById("aedex-reader-vault")
+            ?: throw IOException("Reader keys not found")
+        val token = vault.attrOrNull("data-t") ?: throw IOException("Reader keys not found")
+        val seed = vault.attrOrNull("data-s") ?: throw IOException("Reader keys not found")
+        return ReaderSigner("ax", token, seed)
     }
 
     private suspend fun openReader(chapter: SChapter): Document {
@@ -236,25 +244,19 @@ abstract class Aedex :
         val fetch = Fetch.XHR.from("${getChapterUrl(chapter)}?modo=gratis")
         val freeReader = FreeReader()
         val free = requestFreeReader(chapter, fetch, freeReader)
-        val (redirectUrl, redirectData) = if (free.wsUrl != null && free.wsTicket != null) {
-            // WebSockets stay on OkHttp: Cronet can't upgrade a connection
-            val ready = freeReader.countdown(network.client, headersBuilder().set("Origin", baseUrl).build(), free.wsUrl, free.wsTicket)
-            (ready.redirectUrl ?: throw IOException("Couldn't open the reader")) to
-                (ready.redirectData ?: throw IOException("Couldn't open the reader"))
-        } else {
-            (free.redirectUrl ?: throw IOException("Couldn't open the reader")) to
-                (free.redirectData ?: throw IOException("Couldn't open the reader"))
-        }
+        // WebSockets stay on OkHttp: Cronet can't upgrade a connection
+        val wsHeaders = headersBuilder().set("Origin", baseUrl).build()
+        val ready = freeReader.countdown(network.client, wsHeaders, free.wsUrl, free.wsTicket)
         return client.post(
-            redirectUrl,
+            ready.redirectUrl!!,
             Fetch.DOCUMENT.from(getChapterUrl(chapter)),
-            FormBody.Builder().add("data", redirectData).build(),
+            FormBody.Builder().add("data", ready.redirectData!!).build(),
         ).asJsoup()
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val session = readerSession(openReader(chapter))
-        sessions[chapter.url] = session
+        sessions.put(chapter.url, session)
         return List(session.pageCount) { index ->
             Page(index, url = session.readerUrl, imageUrl = session.imageUrl(index, chapter.url))
         }
@@ -272,7 +274,7 @@ abstract class Aedex :
         )
     }
 
-    private val sessions = ConcurrentHashMap<String, ReaderSession>()
+    private val sessions = LruCache<String, ReaderSession>(10)
     private val sessionLock = Mutex()
 
     // The page list Mihon caches can hold the keys of a visit the site forgot:
@@ -280,7 +282,7 @@ abstract class Aedex :
     private fun renewSession(chapterKey: String, staleSeed: String): ReaderSession? = runBlocking {
         sessionLock.withLock {
             sessions[chapterKey]?.takeIf { it.keys.seed != staleSeed }
-                ?: readerSession(openReader(SChapter.create().apply { url = chapterKey })).also { sessions[chapterKey] = it }
+                ?: readerSession(openReader(SChapter.create().apply { url = chapterKey })).also { sessions.put(chapterKey, it) }
         }
     }
 
@@ -300,6 +302,6 @@ abstract class Aedex :
 }
 
 internal const val LOGIN_REQUIRED_MESSAGE =
-    "Este capítulo requiere iniciar sesión. Configura tu correo y contraseña en los ajustes de la extensión."
+    "Inicia sesión en WebView o configura tu correo y contraseña en los ajustes de la extensión."
 
 internal class LoginRequiredException : IOException(LOGIN_REQUIRED_MESSAGE)
