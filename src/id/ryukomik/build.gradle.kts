@@ -6,12 +6,12 @@ plugins {
 
 keiyoushi {
     name = "Ryukomik"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
     source {
-        baseUrl = "https://ryukomik.my.id"
+        baseUrl = "https://ryukomik.com"
         lang = "id"
     }
 

@@ -30,7 +30,7 @@ import java.util.Locale
 @Source
 abstract class Ryukomik : KeiSource() {
 
-    private val apiUrl = "https://api.ryukomik.web.id"
+    private val apiUrl get() = "https://api.${baseUrl.toHttpUrl().host}"
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2)
 
