@@ -6,13 +6,15 @@ plugins {
 
 keiyoushi {
     name = "Lavinia Fansub"
-    versionCode = 6
+    versionCode = 7
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     theme = "madara"
 
     source {
         lang = "tr"
-        baseUrl = "https://laviniafansub.shop"
+        baseUrl {
+            custom("https://laviniafansub.my")
+        }
     }
 }
