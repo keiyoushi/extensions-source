@@ -6,6 +6,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.utils.MarkdownDescription
 import org.jsoup.nodes.Document
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @Source
 abstract class SacGuzellik : Madara() {
@@ -21,7 +22,7 @@ abstract class SacGuzellik : Madara() {
     override val seriesTypeSelector = ".mgcr-modern-card__fact:has(span:containsOwn(Tür)) strong"
 
     override val chapterUrlSelector = "a:not(:has(img))"
-    override val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy")
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
 
     override fun processThumbnail(url: String?, fromSearch: Boolean) = url?.replace(THUMBNAIL_SIZE_REGEX, "$1")
 
