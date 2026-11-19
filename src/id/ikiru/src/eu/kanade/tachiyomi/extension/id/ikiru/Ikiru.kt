@@ -16,6 +16,7 @@ import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.net.URLEncoder
 
@@ -23,6 +24,11 @@ import java.net.URLEncoder
 abstract class Ikiru : KeiSource() {
     // support sugesttion komikku
     override val supportRelatedMangasBySearch = true
+
+    // ikiru.wtf redirects to the current domain
+    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = listOfNotNull(
+        client.get(HUB_URL, Fetch.DOCUMENT).use { it.request.url.takeIf { url -> url.host != DOMAIN }?.toString() },
+    )
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/api/public/library/search".toHttpUrl().newBuilder()
@@ -124,9 +130,12 @@ abstract class Ikiru : KeiSource() {
         )
     }
 
-    // legacy library entries stored the absolute web URL
+    // legacy library entries stored the absolute web URL on an earlier domain
     override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.startsWith("http")) {
-        chapter.url
+        chapter.url.toHttpUrl().newBuilder()
+            .host(baseUrl.toHttpUrl().host)
+            .build()
+            .toString()
     } else {
         "$baseUrl/${chapter.url.trim('/').encodePathSegments()}"
     }
@@ -151,6 +160,8 @@ abstract class Ikiru : KeiSource() {
 
     companion object {
         private const val PROJECT_PAGE_SIZE = 24
+        private const val DOMAIN = "ikiru.wtf"
+        private const val HUB_URL = "https://$DOMAIN/"
     }
 }
 
