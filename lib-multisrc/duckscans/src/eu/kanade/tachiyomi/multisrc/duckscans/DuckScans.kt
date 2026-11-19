@@ -103,6 +103,10 @@ abstract class DuckScans : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
+        // The chapter API wants the dsv visitor cookie the chapter page sets
+        if (client.cookieJar.loadForRequest(baseUrl.toHttpUrl()).none { it.name == "dsv" }) {
+            client.get(chapterUrl, Fetch.DOCUMENT).close()
+        }
         val (_, series, _, number) = chapterUrl.toHttpUrl().pathSegments
         val url = apiUrl.newBuilder()
             .addPathSegment("chapters")
@@ -112,7 +116,10 @@ abstract class DuckScans : KeiSource() {
             .addQueryParameter("limit", "1")
             .build()
         val data = client.get(url, Fetch.XHR.from(chapterUrl)).parseAs<ChapterListDto>().data.firstOrNull()
-        if (data == null || data.locked) return emptyList()
+        if (data == null) return emptyList()
+        if (data.locked) {
+            throw Exception(data.lockedMessage(Clock.System.now().toEpochMilliseconds()))
+        }
 
         // The reader orders the files by the number at the end of their name
         return data.pages
