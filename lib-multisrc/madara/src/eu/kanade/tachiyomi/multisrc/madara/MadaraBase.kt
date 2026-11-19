@@ -600,7 +600,7 @@ abstract class MadaraBase : KeiSource() {
         private val DAY_WORDS = wordRegex("day", "día", "dia", "jour", "hari", "gün", "ngày", "giorni", "أيام", "天")
         private val HOUR_WORDS = wordRegex("hour", "hora", "heure", "jam", "saat", "giờ", "ore", "ساعة", "ساعات", "小时")
         private val MINUTE_WORDS = wordRegex("minute", "minuto", "min", "menit", "dakika", "phút", "دقيقة", "دقائق")
-        private val SECOND_WORDS = wordRegex("second", "segundo", "sec", "detik", "giây", "ثانية", "ثوان")
+        private val SECOND_WORDS = wordRegex("second", "segundo", "sec", "detik", "saniye", "giây", "ثانية", "ثوان")
 
         private val ARABIC_DUALS = mapOf(
             "ثانيتين" to "2 ثوان",
