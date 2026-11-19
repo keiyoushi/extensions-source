@@ -11,6 +11,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.async
@@ -120,7 +121,7 @@ abstract class HenChan : MultiChan() {
         if (responseUrl.contains("/manga/")) {
             val chap = SChapter.create()
             chap.setUrlWithoutDomain(responseUrl)
-            chap.name = relatedPage.select("a.title_top_a").text()
+            chap.name = relatedPage.selectFirst("a.title_top_a")!!.text()
             chap.chapter_number = 1F
             chap.date_upload = uploadDate
             return listOf(chap)
@@ -160,7 +161,7 @@ abstract class HenChan : MultiChan() {
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         val aElement = element.selectFirst("h2 a")!!
         setUrlWithoutDomain(aElement.attr("abs:href"))
-        name = aElement.attr("title")
+        name = aElement.attrOrNull("title")!!
         chapter_number = chapterNumberRegex.find(name)?.groupValues?.get(2)?.toFloat() ?: -1F
     }
 
