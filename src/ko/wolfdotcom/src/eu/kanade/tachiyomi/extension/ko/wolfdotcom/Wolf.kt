@@ -11,6 +11,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -20,6 +21,7 @@ import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import java.net.URLEncoder
 import java.time.format.DateTimeFormatter
@@ -48,21 +50,22 @@ abstract class Wolf : KeiSource() {
         else -> "view"
     }
 
+    // Old domains serve a notice linking the current one
+    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = listOfNotNull(
+        client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
+            .selectFirst(".card a.main-btn")
+            ?.absUrl("href"),
+    )
+
     private val sortOptions get() = if (isComic) {
         listOf("최신순" to "n", "인기순" to "f")
     } else {
         listOf("최신순" to "n", "신작순" to "r", "인기순" to "f")
     }
 
-    // ============================== Popular ==============================
-
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter(sortOptions, "f")))
 
-    // ============================== Latest ===============================
-
     override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter(sortOptions, "n")))
-
-    // ============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = if (query.isNotBlank()) {
@@ -99,8 +102,6 @@ abstract class Wolf : KeiSource() {
 
     private fun Document.hasNextPage() = selectFirst(".pagi .pg-btn.on + a.pg-btn") != null
 
-    // ============================== Details ==============================
-
     override fun getMangaUrl(manga: SManga): String = baseUrl.toHttpUrl().newBuilder()
         .addPathSegment(entryPath)
         .addQueryParameter("toon", manga.url)
@@ -117,7 +118,9 @@ abstract class Wolf : KeiSource() {
         val updatedManga = manga.apply {
             title = document.selectFirst("h1.w-title")!!.text()
             thumbnail_url = document.selectFirst(".thumb-wrap img")?.absUrl("src")
-            description = document.selectFirst(".summary")?.text()
+            description = MarkdownDescription.Builder()
+                .description(document.selectFirst(".summary"))
+                .build()
             genre = document.select(".genre-tags a.gtag").joinToString { it.text().removePrefix("#") }
         }
 
@@ -150,8 +153,6 @@ abstract class Wolf : KeiSource() {
         return SMangaUpdate(updatedManga, updatedChapters)
     }
 
-    // ============================= Chapters ==============================
-
     @Serializable
     class ChapterUrl(
         val toon: String,
@@ -168,8 +169,6 @@ abstract class Wolf : KeiSource() {
             .toString()
     }
 
-    // =============================== Pages ===============================
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
@@ -177,8 +176,6 @@ abstract class Wolf : KeiSource() {
             Page(idx, imageUrl = img.absUrl("data-src"))
         }
     }
-
-    // ============================== Filters ==============================
 
     override val supportsFilterFetching get() = !isPhoto
 
