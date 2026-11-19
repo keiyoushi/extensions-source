@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.yupmanga
 
-import app.cash.quickjs.QuickJs
+import android.webkit.WebResourceResponse
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -13,16 +13,16 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
+import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.serialization.json.addJsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
-import kotlinx.serialization.json.putJsonObject
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -32,6 +32,10 @@ import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.io.ByteArrayInputStream
+import java.io.IOException
+import kotlin.coroutines.cancellation.CancellationException
+import kotlin.random.Random
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -42,7 +46,7 @@ abstract class Yupmanga : KeiSource() {
 
     private val apiHeaders: Headers
         get() = headers.newBuilder()
-            .add("X-Requested-With", "XMLHttpRequest")
+            .set("X-Requested-With", "XMLHttpRequest")
             .build()
 
     override suspend fun getPopularManga(page: Int): MangasPage = parseSeriesList(client.get("$baseUrl/top", Fetch.DOCUMENT).asJsoup())
@@ -105,8 +109,10 @@ abstract class Yupmanga : KeiSource() {
 
             title = container.selectFirst("h1")?.text()
                 ?: throw Exception("Título del manga no encontrado")
-            description = container.selectFirst("p#synopsisText")?.text()
-            author = container.selectFirst("i[title=Editorial] + span")?.text()
+            description = MarkdownDescription.Builder()
+                .description(container.selectFirst("p#synopsisText")?.text())
+                .build()
+            author = container.selectFirst("i[title=Autor] + span")?.text()
             status = container.selectFirst("span:has(i[title=Estado])").parseStatus()
             genre = container.select("a.genre-tag").joinToString { genre ->
                 genre.text().replaceFirstChar { it.uppercase() }
@@ -177,7 +183,7 @@ abstract class Yupmanga : KeiSource() {
 
         // Each visit of the series page renders anew the hidden element whose styles the challenge reads
         val seriesUrl = getChapterUrl(chapter)
-        val seriesPage = client.get(seriesUrl, Fetch.DOCUMENT).asJsoup()
+        val seriesPage = client.get(seriesUrl, Fetch.DOCUMENT).body.string()
         val challenge = client.post("$baseUrl/ajax/get_challenge.php", apiHeaders, Fetch.XHR.from(seriesUrl), chapterForm(chapterKey, seriesId).build())
             .parseAs<ChallengeDto>()
         val challengeId = challenge.challengeId
@@ -186,7 +192,7 @@ abstract class Yupmanga : KeiSource() {
 
         val form = chapterForm(chapterKey, seriesId)
             .add("challenge_id", challengeId)
-            .add("answer", solveChallenge(challengeJs, seriesPage))
+            .add("answer", solveChallenge(challengeJs, seriesUrl, seriesPage))
             .build()
         val response = client.post("$baseUrl/ajax/open_chapter.php", apiHeaders, Fetch.XHR.from(seriesUrl), form, ensureSuccess = false)
         val access = response.parseAs<TokenDto>()
@@ -248,69 +254,34 @@ abstract class Yupmanga : KeiSource() {
         }
     }
 
-    // The challenge sorts the children of a hidden element by their CSS order and reads their flex values. The page's
-    // rules are made to mislead a plain reading (decoys for missing classes, !important, two classes over one), so the
-    // cascade is worked out here, and the challenge runs against a stand-in for document and window.
-    private fun solveChallenge(challengeJs: String, page: Document): String {
-        val script = """
-            var dom = ${hiddenStyles(page)};
-            var defaults = { "order": "0", "flex-grow": "0", "flex-shrink": "1" };
-            function node(o) { return { children: (o.children || []).map(node), style: o.style || {} }; }
-            var document = { getElementById: function(id) { return dom[id] ? node(dom[id]) : null; } };
-            var window = {
-                getComputedStyle: function(e) {
-                    return { getPropertyValue: function(p) { return p in e.style ? e.style[p] : (defaults[p] || ""); } };
-                }
-            };
-            (function() { $challengeJs })();
-        """.trimIndent()
-        return QuickJs.create().use { it.evaluate(script)?.toString() } ?: throw Exception("Failed to solve challenge")
-    }
+    // One challenge WebView at a time
+    private val challengeMutex = Mutex()
 
-    // For each element that the page's rules target by id, the declarations its children end up with
-    private fun hiddenStyles(page: Document): String {
-        val css = page.select("style").joinToString("\n") { it.data() }.replace(CSS_COMMENT_REGEX, "")
-        val declarations = CSS_RULE_REGEX.findAll(css).withIndex().flatMap { (index, rule) ->
-            val properties = rule.groupValues[2].split(';').mapNotNull { declaration ->
-                val parts = declaration.split(':', limit = 2).takeIf { it.size == 2 } ?: return@mapNotNull null
-                Triple(parts[0].trim().lowercase(), parts[1].replace("!important", "").trim(), "!important" in parts[1])
-            }
-            rule.groupValues[1].split(',').mapNotNull { CSS_SELECTOR_REGEX.matchEntire(it.trim()) }.flatMap { selector ->
-                val (id, tag, classes) = selector.destructured
-                properties.map { (name, value, important) ->
-                    CssDeclaration(id, tag, classes.split('.').filter(String::isNotEmpty).toSet(), name, value, important, index)
-                }
-            }
-        }.toList()
-        return buildJsonObject {
-            for ((id, rules) in declarations.groupBy { it.id }) {
-                val element = page.getElementById(id) ?: continue
-                putJsonObject(id) {
-                    putJsonArray("children") {
-                        for (child in element.children()) {
-                            val classes = child.classNames()
-                            val winners = rules.filter { (it.tag.isEmpty() || it.tag == child.tagName()) && classes.containsAll(it.classes) }
-                                .groupBy { it.name }
-                                .mapValues { (_, candidates) -> candidates.maxWith(compareBy({ it.important }, { it.specificity }, { it.index })).value }
-                            addJsonObject { putJsonObject("style") { winners.forEach { (name, value) -> put(name, value) } } }
-                        }
+    // The challenge reads the computed styles of the series page's hidden elements, so it runs on that page
+    private suspend fun solveChallenge(challengeJs: String, seriesUrl: String, seriesPage: String): String = challengeMutex.withLock {
+        val bridge = "y" + Random.nextLong().toULong().toString(36)
+        val script = "(${javaClass.getResource("/assets/challenge.js")!!.readText()})(${challengeJs.toJsonString()})" +
+            ".then((answer) => $bridge.postMessage(answer), () => $bridge.postMessage(''))"
+        val answer = try {
+            runWebView<String> {
+                interceptRequest { request ->
+                    // Only the page's own inline styles matter: everything it loads gets an empty answer
+                    if (request.isForMainFrame || request.url.host == null) {
+                        null
+                    } else {
+                        WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
                     }
                 }
+                webMessageBridge(bridge, setOf(baseUrl)) { resolve(it) }
+                onPageFinished { evaluateJs(script) }
+                loadData(seriesUrl, seriesPage)
             }
-        }.toString()
-    }
-
-    private class CssDeclaration(
-        val id: String,
-        val tag: String,
-        val classes: Set<String>,
-        val name: String,
-        val value: String,
-        val important: Boolean,
-        val index: Int,
-    ) {
-        // Every rule here starts with the same id, so the classes and the tag decide
-        val specificity get() = classes.size * 10 + if (tag.isEmpty()) 0 else 1
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            throw IOException(e.message, e)
+        }
+        answer.ifEmpty { throw Exception("Error solving challenge") }
     }
 
     companion object {
@@ -319,8 +290,5 @@ abstract class Yupmanga : KeiSource() {
         private val TOTAL_PAGES_REGEX = Regex("""totalPages:\s*(\d+)""")
         private val AD_TICKET_REGEX = Regex("""adTicket\s*=\s*(\{[^}]*\})""")
         private val COUNTDOWN_REGEX = Regex("""let\s+countdown\s*=\s*(\d+)""")
-        private val CSS_COMMENT_REGEX = Regex("""/\*[\s\S]*?\*/""")
-        private val CSS_RULE_REGEX = Regex("""([^{}]+)\{([^{}]*)\}""")
-        private val CSS_SELECTOR_REGEX = Regex("""#([\w-]+)\s*>?\s*([a-z]*)((?:\.[\w-]+)+)""")
     }
 }
