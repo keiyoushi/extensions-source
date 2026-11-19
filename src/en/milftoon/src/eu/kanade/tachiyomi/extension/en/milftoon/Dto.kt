@@ -22,26 +22,43 @@ class ComicItem(
 )
 
 @Serializable
-class DetailWrapper(val data: DetailData)
+class DetailWrapper(
+    val data: DetailData,
+    val auxiliary: ComicDetail,
+)
+
+@Serializable
+class PageWrapper(val data: DetailData)
 
 @Serializable
 class DetailData(
-    val comic: ComicDetail,
     val chapter: ChapterDetail? = null,
     val pages: List<PageDto> = emptyList(),
 )
 
 @Serializable
 class ComicDetail(
-    val slug: String,
     val title: String,
     val coverPath: String? = null,
+    val synopsisHtml: String? = null,
+    val status: String? = null,
+    val author: String? = null,
+    val genres: List<Term>,
+    val tags: List<Term>,
+    val chapters: List<ChapterItem>,
 )
 
 @Serializable
-class ChapterDetail(
-    val slug: String? = null,
-    val name: String = "",
+class Term(val name: String)
+
+@Serializable
+class ChapterDetail(val slug: String)
+
+@Serializable
+class ChapterItem(
+    val slug: String,
+    val name: String,
+    val nameExtend: String? = null,
     val publishedAt: String? = null,
 )
 
