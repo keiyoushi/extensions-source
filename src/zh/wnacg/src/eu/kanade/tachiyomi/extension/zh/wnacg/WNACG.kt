@@ -15,10 +15,12 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.MirrorPreferences
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -43,18 +45,26 @@ abstract class WNACG :
     ConfigurableSource {
     private val preferences = getPreferences { preferenceMigration() }
 
-    // The domain list, like the site's address page, leaves out some mirrors
-    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = (client.get(DOMAIN_LIST_URL, Fetch.DOCUMENT).body.string().split(',') + UNLISTED_MIRRORS).distinct()
+    // The site's release page leaves out some mirrors
+    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = client.get(RELEASE_PAGE_URL, Fetch.DOCUMENT).asJsoup()
+        .selectFirst("script:containsData(window.__INITIAL_CONFIG__=)")!!.data()
+        .substringAfter("__INITIAL_CONFIG__=").substringBeforeLast(";")
+        .parseAs<ReleasePageConfig>().sites.map { it.url } + UNLISTED_MIRRORS
+
+    // Hosts without "www.", which links can leave out
+    private val mirrorHosts: List<String>
+        get() = (fetchableBaseUrl as MirrorPreferences).mirrors.map { it.second.toHttpUrl().host.removePrefix("www.") }
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(::loginHintInterceptor)
         // Cloudflare answers 429 past 60 page requests a minute
-        rateLimit(50, 1.minutes) { mirrorHostRegex.containsMatchIn(it.host) }
+        rateLimit(50, 1.minutes) { it.host.removePrefix("www.") in mirrorHosts }
     }
 
     // Mobile user agents get a mobile layout
-    override fun Headers.Builder.configureHeaders() = apply {
-        set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0")
+    override fun Headers.Builder.configureHeaders(): Headers.Builder {
+        val chromeVersion = chromeVersionRegex.find(get("User-Agent").orEmpty())?.groupValues?.get(1) ?: "156"
+        return set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$chromeVersion.0.0.0 Safari/537.36")
     }
 
     // Guests get 404 on some galleries and on login-only categories
@@ -158,8 +168,8 @@ abstract class WNACG :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        // Links point at the live mirror, which can be newer than the selected baseUrl
-        if (url.host != baseUrl.toHttpUrl().host && !mirrorHostRegex.containsMatchIn(url.host)) return null
+        // Links can come from any of the site's mirrors
+        if (url.host.removePrefix("www.") !in mirrorHosts) return null
         val (aid, sid) = mangaUrlRegex.matchEntire(url.encodedPath)?.destructured ?: return null
         val path = "/photos-index-aid-${sid.ifEmpty { aid }}.html"
 
@@ -344,7 +354,7 @@ abstract class WNACG :
 
     companion object {
         private const val LOGIN_HINT = "内容不存在或需要登录，请在 WebView 中登录后重试"
-        private const val DOMAIN_LIST_URL = "https://stevenyomi.github.io/source-domains/wnacg.txt"
+        private const val RELEASE_PAGE_URL = "https://wnacglink.com/"
         private val UNLISTED_MIRRORS = listOf("https://www.wn01.cfd", "https://www.wnacg.com")
         private const val CHAPTER_SELECTOR = "div.sr_compact a.tagshow[data-chid]"
         private val pageImageRegex = Regex(
@@ -354,7 +364,7 @@ abstract class WNACG :
 
         // Gallery page, reader and chapter links; a chapter's sid is its collection
         private val mangaUrlRegex = Regex("""/photos-(?:index|slide|list|gallery)(?:-page-\d+)?-aid-(\d+)(?:-sid-(\d+))?(?:-page-\d+)?\.html""")
-        private val mirrorHostRegex = Regex("""^(?:www\.)?wn(?:acg\w*|\d+)\.""")
+        private val chromeVersionRegex = Regex("""Chrome/(\d+)""")
         private val mangaAidRegex = Regex("""photos-index-aid-(\d+)""")
         private val chapterListPageRegex = Regex("""photos-index-aid-\d+-page-(\d+)\.html""")
         private val chapterDateRegex = Regex("""\d{4}-\d{2}-\d{2}""")
