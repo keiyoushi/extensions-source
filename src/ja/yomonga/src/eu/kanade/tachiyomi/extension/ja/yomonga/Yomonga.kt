@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.yomonga
 
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,16 +14,19 @@ import keiyoushi.lib.speedbinb.fetchPages
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.string
-import keiyoushi.utils.textOrNull
+import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Response
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Source
 abstract class Yomonga : KeiSource() {
@@ -30,7 +34,13 @@ abstract class Yomonga : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(SpeedBinbInterceptor())
 
-    override suspend fun getPopularManga(page: Int): MangasPage = client.get("$baseUrl/titles/?page_num=$page", Fetch.DOCUMENT).toMangasPage()
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val url = "$baseUrl/titles/".toHttpUrl().newBuilder()
+            .addQueryParameter("page_num", page.toString())
+            .build()
+
+        return fetchMangasPage(url)
+    }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
@@ -50,11 +60,22 @@ abstract class Yomonga : KeiSource() {
             }
         }
 
-        return client.get(url.build(), Fetch.DOCUMENT).toMangasPage()
+        return fetchMangasPage(url.build())
     }
 
-    private fun Response.toMangasPage(): MangasPage {
-        val document = this.asJsoup()
+    private suspend fun fetchMangasPage(url: HttpUrl): MangasPage {
+        val response = client.get(url, Fetch.DOCUMENT, ensureSuccess = false)
+        // An empty listing is answered with a 404
+        if (response.code == 404) {
+            response.close()
+            return MangasPage(emptyList(), false)
+        }
+        if (!response.isSuccessful) {
+            response.close()
+            throw HttpException(response.code)
+        }
+
+        val document = response.asJsoup()
         val mangas = document.select("div.book-box4").map {
             SManga.create().apply {
                 title = it.selectFirst("div.book-box4-title")!!.text()
@@ -77,9 +98,11 @@ abstract class Yomonga : KeiSource() {
             title = document.selectFirst(".intr-title")!!.text()
             author = document.select(".intr-writer").joinToString {
                 it.text().replace(AUTHOR_ROLE_REGEX, "").trim()
-            }
-            description = document.selectFirst(".intr-text > .intr-desc")?.textOrNull()
-            genre = document.select(".tag-wrapper .tag").joinToString { it.text() }
+            }.ifEmpty { null }
+            description = MarkdownDescription.Builder()
+                .description(document.selectFirst(".intr-text > .intr-desc"))
+                .build()
+            genre = document.select(".tag-wrapper .tag").joinToString { it.text() }.ifEmpty { null }
             status = when {
                 genre?.contains("連載中") == true -> SManga.ONGOING
                 genre?.contains("連載終了") == true -> SManga.COMPLETED
@@ -93,6 +116,8 @@ abstract class Yomonga : KeiSource() {
                 val link = it.selectFirst("a.button-type1")!!.absUrl("href").toHttpUrl()
                 url = link.queryParameter("cid")!!
                 name = it.selectFirst(".episode-name")!!.text()
+                chapter_number = it.attr("data-episode_no").toFloatOrNull() ?: -1f
+                date_upload = DATE_FORMAT.tryParseDate(it.selectFirst(".update-date")?.text())
                 memo = buildJsonObject {
                     put("title", link.pathSegments[1])
                 }
@@ -174,5 +199,6 @@ abstract class Yomonga : KeiSource() {
 
     companion object {
         private val AUTHOR_ROLE_REGEX = Regex("^(漫画|原作|キャラクター原案)：")
+        private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy/MM/dd").withZone(ZoneId.of("Asia/Tokyo"))
     }
 }
