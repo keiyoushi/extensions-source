@@ -18,11 +18,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import java.net.URLEncoder
 
 @Source
 abstract class Ikiru : KeiSource() {
-    // support sugesttion komikku
+    // support suggestions in Komikku
     override val supportRelatedMangasBySearch = true
 
     // ikiru.wtf redirects to the current domain
@@ -104,10 +103,10 @@ abstract class Ikiru : KeiSource() {
         }.trim('/')
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        val slug = manga.slug()
-        return "$baseUrl/manga/${slug.encodePathSegments()}"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga".toHttpUrl().newBuilder()
+        .addPathSegment(manga.slug())
+        .build()
+        .toString()
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -137,7 +136,10 @@ abstract class Ikiru : KeiSource() {
             .build()
             .toString()
     } else {
-        "$baseUrl/${chapter.url.trim('/').encodePathSegments()}"
+        baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments(chapter.url.trim('/'))
+            .build()
+            .toString()
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -145,7 +147,7 @@ abstract class Ikiru : KeiSource() {
         val document = response.asJsoup()
         val images = document.select("img[src*='cdn.ikiru.id']")
 
-        return images.mapIndexed { idx, img -> Page(idx, imageUrl = img.attr("src")) }
+        return images.mapIndexed { idx, img -> Page(idx, imageUrl = img.absUrl("src")) }
     }
 
     // the API returns HTTP 200 with a failure envelope for bad input, so the flag must be checked explicitly
@@ -164,6 +166,3 @@ abstract class Ikiru : KeiSource() {
         private const val HUB_URL = "https://$DOMAIN/"
     }
 }
-
-// the API only accepts percent-encoded slugs, and some slugs contain spaces or non-ASCII characters
-private fun String.encodePathSegments(): String = split('/').joinToString("/") { URLEncoder.encode(it, "UTF-8").replace("+", "%20") }

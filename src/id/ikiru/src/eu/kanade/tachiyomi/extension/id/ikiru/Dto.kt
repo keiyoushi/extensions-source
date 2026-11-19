@@ -69,9 +69,9 @@ class IkiruMangaDetailDto(
                 "HIATUS" -> SManga.ON_HIATUS
                 else -> SManga.UNKNOWN
             }
-            author = metadata?.author?.mapNotNull { it.name }?.joinToString(", ")
-            artist = metadata?.artist?.mapNotNull { it.name }?.joinToString(", ")
-            genre = metadata?.genre?.mapNotNull { it.name }?.joinToString(", ")
+            author = metadata?.author?.mapNotNull { it.name }?.joinToString()?.ifEmpty { null }
+            artist = metadata?.artist?.mapNotNull { it.name }?.joinToString()?.ifEmpty { null }
+            genre = metadata?.genre?.mapNotNull { it.name }?.joinToString()?.ifEmpty { null }
         }
     }
 }
@@ -79,7 +79,7 @@ class IkiruMangaDetailDto(
 // the previous multisrc persisted manga urls as JSON blobs holding the slug
 @Serializable
 class IkiruLegacyMangaUrlDto(
-    val slug: String = "",
+    val slug: String,
 )
 
 @Serializable
@@ -134,6 +134,6 @@ class IkiruChapterItemDto(
     private fun formatChapterNumber(number: Float): String = if (number % 1 == 0f) number.toInt().toString() else number.toString()
 
     companion object {
-        private val chapterTitleRegex = Regex("(Chapter\\s*[\\d.]+(?:\\s*[:\\-].*)?)", RegexOption.IGNORE_CASE)
+        private val chapterTitleRegex = Regex("""(Chapter\s*[\d.]+(?:\s*[:\-].*)?)""", RegexOption.IGNORE_CASE)
     }
 }
