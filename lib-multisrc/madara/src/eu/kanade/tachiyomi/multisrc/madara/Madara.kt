@@ -144,7 +144,7 @@ abstract class Madara : MadaraBase() {
                     add("vars[meta_query][$metaQueryIndex][compare]", if (filter.state == 1) "not exists" else "exists")
                     metaQueryIndex++
                 }
-                is GenreConditionFilter -> if (filter.state == 1 && genres.isNotEmpty()) add("vars[tax_query][$taxonomyQueryIndex][operation]", "AND")
+                is GenreConditionFilter -> if (filter.state == 1 && genres.isNotEmpty()) add("vars[tax_query][$taxonomyQueryIndex][operator]", "AND")
                 is GenreList -> if (genres.isNotEmpty()) {
                     add("vars[tax_query][$taxonomyQueryIndex][taxonomy]", "wp-manga-genre")
                     add("vars[tax_query][$taxonomyQueryIndex][field]", "slug")
