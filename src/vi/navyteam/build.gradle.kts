@@ -13,7 +13,7 @@ keiyoushi {
     source {
         lang = "vi"
         baseUrl {
-            custom("https://navyteamz.com")
+            custom("https://navyteams.com")
         }
     }
 
