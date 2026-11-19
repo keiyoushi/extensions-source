@@ -25,9 +25,9 @@ abstract class Ikiru : KeiSource() {
     // support suggestions in Komikku
     override val supportRelatedMangasBySearch = true
 
-    // ikiru.wtf redirects to the current domain
+    // ikiru.wtf redirects to the current subdomain
     override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = listOfNotNull(
-        client.get(HUB_URL, Fetch.DOCUMENT).use { it.request.url.takeIf { url -> url.host != DOMAIN }?.toString() },
+        client.get(HUB_URL, Fetch.DOCUMENT).use { it.request.url.takeIf { url -> url.host.endsWith(".$DOMAIN") }?.toString() },
     )
 
     override suspend fun getPopularManga(page: Int): MangasPage {
