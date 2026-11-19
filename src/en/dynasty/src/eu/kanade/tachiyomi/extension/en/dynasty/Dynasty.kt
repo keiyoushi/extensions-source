@@ -20,6 +20,7 @@ import keiyoushi.network.head
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getArrayOrNull
@@ -75,8 +76,12 @@ abstract class Dynasty :
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val data = client.get("$baseUrl/$CHAPTERS_DIR/added.json?page=${page - 1}", Fetch.XHR)
-            .parseAs<BrowseResponse>()
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment(CHAPTERS_DIR)
+            addPathSegment("added.json")
+            addQueryParameter("page", page.toString())
+        }.build()
+        val data = client.get(url, Fetch.XHR).parseAs<BrowseResponse>()
 
         val entries = LinkedHashSet<MangaEntry>()
 
@@ -141,7 +146,8 @@ abstract class Dynasty :
                 ?: throw Exception("Unknown Pairing: $pairing")
         }
 
-        val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("search")
             addQueryParameter("q", query.trim())
             filters.firstInstance<SortFilter>().also {
                 if (it.sort == SMART_SORT) {
@@ -267,7 +273,10 @@ abstract class Dynasty :
     }
 
     private suspend fun fetchTagId(query: String, type: String): Int? {
-        val url = "$baseUrl/tags/suggest"
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("tags")
+            .addPathSegment("suggest")
+            .build()
         val body = FormBody.Builder()
             .add("query", query)
             .build()
@@ -286,7 +295,7 @@ abstract class Dynasty :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val mangaPath = "$baseUrl${manga.url}".toHttpUrl().pathSegments
+        val mangaPath = getMangaUrl(manga).toHttpUrl().pathSegments
 
         assert(
             mangaPath.size == 2 &&
@@ -377,39 +386,28 @@ abstract class Dynasty :
                 authors.joinToString { it.first }
             }
             artist = author
-            description = buildString {
-                val prefChapterFetchLimit = preferences.chapterFetchLimit
-                if (prefChapterFetchLimit < data.totalPages) {
-                    append("IMPORTANT: Only first $prefChapterFetchLimit pages of chapter list will be fetched. You can change this in extension settings.\n\n")
+            if (authors.size > AUTHORS_UPPER_LIMIT) {
+                others.addAll(authors.map { "Author" to it.first })
+            }
+            val prefChapterFetchLimit = preferences.chapterFetchLimit
+            description = MarkdownDescription.Builder()
+                .description(
+                    "IMPORTANT: Only first $prefChapterFetchLimit pages of chapter list will be fetched. You can change this in extension settings."
+                        .takeIf { prefChapterFetchLimit < data.totalPages },
+                )
+                .description(
+                    data.description?.let { html ->
+                        Jsoup.parseBodyFragment(decodeUnicode(html)).body().apply { select("a").remove() }
+                    },
+                )
+                .field("Type", data.type)
+                .apply {
+                    for ((type, values) in others.groupBy { it.first }) {
+                        field(type, values.map { it.second })
+                    }
                 }
-
-                data.description?.let {
-                    val desc = Jsoup.parseBodyFragment(
-                        decodeUnicode(it),
-                    )
-                    desc.select("a").remove()
-
-                    append(desc.wholeText().trim())
-                    append("\n\n")
-                }
-
-                append("Type: ", data.type, "\n\n")
-
-                if (authors.size > AUTHORS_UPPER_LIMIT) {
-                    others.addAll(authors.map { "Author" to it.first })
-                }
-
-                for ((type, values) in others.groupBy { it.first }) {
-                    append(type, ":\n")
-                    values.forEach { append("• ", it.second, "\n") }
-                    append("\n")
-                }
-                if (data.aliases.isNotEmpty()) {
-                    append("Aliases:\n")
-                    data.aliases.forEach { append("• ", it, "\n") }
-                    append("\n")
-                }
-            }.trim()
+                .altTitles(data.aliases, "Aliases")
+                .build()
             genre = tags.joinToString()
             status = when {
                 publishingStatus.contains("Ongoing") -> SManga.ONGOING
@@ -469,15 +467,15 @@ abstract class Dynasty :
             title = data.title
             author = authors.joinToString { it.first }
             artist = author
-            description = buildString {
-                append("Type: ", CHAPTER_TYPE, "\n\n")
-                for ((type, values) in others.groupBy { it.first }) {
-                    append(type, ":\n")
-                    values.forEach { append("• ", it.second, "\n") }
-                    append("\n")
+            description = MarkdownDescription.Builder()
+                .field("Type", CHAPTER_TYPE)
+                .apply {
+                    for ((type, values) in others.groupBy { it.first }) {
+                        field(type, values.map { it.second })
+                    }
                 }
-                append("Released: ", data.releasedOn)
-            }.trim()
+                .field("Released", data.releasedOn)
+                .build()
             genre = tags.joinToString()
             thumbnail_url = buildCoverUrl(data.pages.first().url)
             status = SManga.COMPLETED
@@ -529,7 +527,7 @@ abstract class Dynasty :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterPath = "$baseUrl${chapter.url}".toHttpUrl().pathSegments
+        val chapterPath = getChapterUrl(chapter).toHttpUrl().pathSegments
 
         assert(
             chapterPath.size == 2 &&
@@ -545,8 +543,9 @@ abstract class Dynasty :
 
         val data = client.get(url, Fetch.XHR).parseAs<ChapterResponse>()
 
+        val base = baseUrl.toHttpUrl()
         return data.pages.mapIndexed { index, page ->
-            Page(index, imageUrl = baseUrl + page.url)
+            Page(index, imageUrl = base.resolve(page.url)!!.toString())
         }
     }
 
@@ -556,7 +555,11 @@ abstract class Dynasty :
             ?.randomOrNull()
             ?: return emptyList()
 
-        val data = client.get("$baseUrl/authors/$authorSlug.json", Fetch.XHR).parseAs<AuthorResponse>()
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("authors")
+            .addPathSegment("$authorSlug.json")
+            .build()
+        val data = client.get(url, Fetch.XHR).parseAs<AuthorResponse>()
         val related = LinkedHashSet<MangaEntry>()
 
         data.taggables.forEach { taggable ->
@@ -665,7 +668,7 @@ abstract class Dynasty :
     }
 
     private fun buildCoverUrl(file: String): String {
-        val path = "$baseUrl$file".toHttpUrl()
+        val path = baseUrl.toHttpUrl().resolve(file)!!
             .encodedPath
             .removePrefix("/")
 
