@@ -58,7 +58,7 @@ abstract class Pawchive :
                     response.close()
 
                     val fallbackRequest = request.newBuilder()
-                        .url(request.url.toString().toThumbnailUrl())
+                        .url("$imgUrl/thumbnail${request.url.encodedPath}")
                         .build()
                     response = chain.proceed(fallbackRequest)
                 }
@@ -246,21 +246,12 @@ abstract class Pawchive :
         val postData = apiClient.get(url, Fetch.XHR).parseAs<PawchivePostDto>()
         val useLowRes = preferences.getBoolean(USE_LOW_RES_IMG, false)
 
-        return postData.images.mapIndexed { i, url ->
-            Page(i, imageUrl = if (useLowRes) url.toThumbnailUrl() else url)
+        return postData.images.mapIndexed { i, file ->
+            Page(i, imageUrl = if (useLowRes) file.thumbnailUrl(imgUrl) else file.imageUrl(imgUrl))
         }
     }
 
     override fun getFilterList(data: JsonElement?): FilterList = getDefaultFilterList()
-
-    private fun String.toThumbnailUrl(): String {
-        val pathIndex = this.indexOf('/', 8) // Skips the `https://`
-        return buildString {
-            append(imgUrl)
-            append("/thumbnail")
-            append(this@toThumbnailUrl.substring(pathIndex))
-        }
-    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
