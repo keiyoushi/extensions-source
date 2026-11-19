@@ -23,6 +23,8 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -33,6 +35,8 @@ abstract class WebtoonLib :
     KeiSource(),
     ConfigurableSource {
     private val preferences by getPreferencesLazy()
+
+    private val readerAccessMutex = Mutex()
 
     private val hideAdult get() = preferences.getBoolean(PREF_HIDE_ADULT, false)
 
@@ -102,7 +106,12 @@ abstract class WebtoonLib :
             .addPathSegments(chapter.url)
             .addQueryParameter("languageCode", "en")
             .build()
-        val reader = client.get(url, Fetch.XHR).parseAs<Reader>()
+        var reader = client.get(url, Fetch.XHR).parseAs<Reader>()
+        if (reader.needsAccess) {
+            openReader()
+            reader = client.get(url, Fetch.XHR).parseAs<Reader>()
+            check(!reader.needsAccess) { "Open a chapter in WebView to pass the site's check" }
+        }
         if (reader.chapterType != "SOFTSUB") {
             return reader.pages.mapIndexed { index, image -> Page(index, imageUrl = image) }
         }
@@ -183,11 +192,19 @@ abstract class WebtoonLib :
         searchCatalogue(url)
     }
 
+    // Session-wide grant, set as a cookie by the POST reply
+    private suspend fun openReader() = readerAccessMutex.withLock {
+        val access = client.get("$API_URL/reader-content/access", Fetch.XHR).parseAs<ReaderAccess>()
+        if (!access.enabled || access.verified) return@withLock
+        val token = getTurnstileToken(baseUrl, access.siteKey!!, action = "reader-content")
+        client.post("$API_URL/reader-content/access", Fetch.XHR, body = TurnstileVerification(token).toJsonRequestBody()).close()
+    }
+
     private suspend fun openSearch() {
         val access = client.get("$API_URL/search/access", Fetch.XHR).parseAs<SearchAccess>()
         if (access.challengeRequired) {
             val token = getTurnstileToken(baseUrl, access.siteKey, action = "reader-search")
-            client.post("$API_URL/search/access/verify", Fetch.XHR, body = SearchVerification(token).toJsonRequestBody()).close()
+            client.post("$API_URL/search/access/verify", Fetch.XHR, body = TurnstileVerification(token).toJsonRequestBody()).close()
         }
     }
 
