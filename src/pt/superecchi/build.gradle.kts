@@ -6,12 +6,17 @@ plugins {
 
 keiyoushi {
     name = "Super Ecchi"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
     source {
         lang = "pt-BR"
         baseUrl = "https://superecchi.com"
+    }
+
+    deeplink {
+        path("/livro.php")
+        path("/leitor.php")
     }
 }
