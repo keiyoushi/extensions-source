@@ -17,7 +17,7 @@ internal class EndFilter :
     UriPartFilter(
         "状态",
         listOf(
-            listOf("全部", "end=", ""),
+            listOf("全部", "end", ""),
             listOf("连载中", "end", "2"),
             listOf("完结", "end", "1"),
         ),
@@ -32,6 +32,7 @@ internal class CGenderFilter :
             listOf("BL向", "gender", "0"),
             listOf("禁漫", "gender", "1"),
             listOf("TL向", "gender", "3"),
+            listOf("GL向", "gender", "4"),
         ),
     )
 
