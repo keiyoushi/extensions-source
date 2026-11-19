@@ -404,14 +404,7 @@ abstract class E621 :
         return blacklist.any { group -> group.all { tag -> tag in allTags } }
     }
 
-    private fun extractImageUrl(post: Post): String? {
-        val sample = post.files.sample
-        val original = preferences.fullResolution ||
-            !post.files.meta.hasSample ||
-            sample.width < 800 ||
-            sample.height < 1200
-        return if (original) post.files.original.url else sample.webp
-    }
+    private fun extractImageUrl(post: Post): String? = if (preferences.fullResolution) post.files.original.url else post.files.sample.webp
 
     private suspend fun batchFetchPosts(postIds: List<Int>): List<Post> {
         if (postIds.isEmpty()) return emptyList()

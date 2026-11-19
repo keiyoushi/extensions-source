@@ -42,15 +42,9 @@ class Flags(
 
 @Serializable
 class Files(
-    val meta: FileMeta,
     val original: OriginalFile,
     val preview: ScaledFile,
     val sample: ScaledFile,
-)
-
-@Serializable
-class FileMeta(
-    @SerialName("has_sample") val hasSample: Boolean,
 )
 
 @Serializable
@@ -60,8 +54,6 @@ class OriginalFile(
 
 @Serializable
 class ScaledFile(
-    val width: Int,
-    val height: Int,
     val webp: String?,
 )
 
