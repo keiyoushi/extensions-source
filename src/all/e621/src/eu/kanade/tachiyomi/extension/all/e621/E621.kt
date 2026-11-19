@@ -56,7 +56,6 @@ abstract class E621 :
         val searchMode = preferences.searchModePref
         val category = preferences.categoryPref
         val popularMode = preferences.popularModePref
-        val firstEnd = preferences.firstEndPref
 
         return getSearchMangaList(
             page,
@@ -65,7 +64,7 @@ abstract class E621 :
                 ModeFilter(getDefaultModeIndex(searchMode)),
                 CategoryFilter(getDefaultCategoryIndex(category)),
                 OrderFilter(getDefaultOrderIndex("post_count")),
-                TagsFilter("$popularMode $firstEnd".trim()),
+                TagsFilter(popularMode),
             ),
         )
     }
@@ -159,7 +158,7 @@ abstract class E621 :
             tags = when {
                 firstPage && endPage -> "$tags ( ~first_page ~end_page )"
                 firstPage -> "$tags first_page"
-                endPage -> "$tags first_page"
+                endPage -> "$tags end_page"
                 else -> tags
             }
 

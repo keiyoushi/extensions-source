@@ -15,7 +15,6 @@ private const val CATEGORY_PREF = "category_filter"
 private const val BLACKLIST_PREF = "blacklist"
 private const val WHITELIST_PREF = "whitelist"
 private const val SCORE_THRESH_PREF = "score_thresh"
-private const val FIRST_END_PREF = "first_end"
 private const val FULL_RESOLUTION_PREF = "first_end"
 private const val USERNAME_PREF = "username"
 private const val API_KEY_PREF = "api_key"
@@ -129,9 +128,6 @@ val SharedPreferences.fullResolution: Boolean
 
 val SharedPreferences.searchModePref: String
     get() = if (getBoolean(TAG_MODE_ENABLE_PREF, true)) "tags" else "pools"
-
-val SharedPreferences.firstEndPref: String
-    get() = if (getBoolean(FIRST_END_PREF, false)) "( ~first_page ~end_page )" else ""
 
 val SharedPreferences.splitChaptersPref: String
     get() = getString(SPLIT_CHAPTERS_PREF, "chapters") ?: "chapters"
