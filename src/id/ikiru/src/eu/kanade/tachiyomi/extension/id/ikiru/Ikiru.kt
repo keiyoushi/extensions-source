@@ -22,7 +22,6 @@ import okhttp3.Response
 
 @Source
 abstract class Ikiru : KeiSource() {
-    // support suggestions in Komikku
     override val supportRelatedMangasBySearch = true
 
     // ikiru.wtf redirects to the current subdomain
