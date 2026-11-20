@@ -70,10 +70,11 @@ abstract class AquaManga : MadaraNoAjax() {
     override val mangaDetailsSelectorTitle = ".aqua-series-info__title"
     override val mangaDetailsSelectorThumbnail = ".aqua-series-cover__img"
     override val mangaDetailsSelectorDescription = ".aqua-series-synopsis"
-    override val mangaDetailsSelectorStatus = ".aqua-series-meta__status"
+    override val mangaDetailsSelectorStatus = ".aqua-sp-status"
     override val mangaDetailsSelectorGenre = ".aqua-series-genre-pill"
-    override val mangaDetailsSelectorAuthor = ".aqua-series-info__creator-value a"
-    override val mangaDetailsSelectorArtist = ".aqua-series-info__creator-value a"
+    override val mangaDetailsSelectorAuthor = ".aqua-sp-fact a[href*=/manga-author/]"
+    override val mangaDetailsSelectorArtist = ".aqua-sp-fact a[href*=/manga-artist/]"
+    override val seriesTypeSelector = ".aqua-sp-tag"
 
     override fun chapterListSelector() = ".aqua-ch-item"
 
