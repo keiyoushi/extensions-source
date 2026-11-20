@@ -10,6 +10,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl
@@ -33,6 +34,7 @@ abstract class BanglaManga : KeiSource() {
     }
 
     private suspend fun apiGet(url: HttpUrl): okhttp3.Response = client.get(url, apiHeaders, Fetch.XHR)
+
     private val apiBaseUrl =
         "https://wgeydzfmtehdkosxwnai.supabase.co/rest/v1/"
 
@@ -49,7 +51,7 @@ abstract class BanglaManga : KeiSource() {
         val url = (apiBaseUrl + "mangas").toHttpUrl().newBuilder()
             .addQueryParameter(
                 "select",
-                "id,slug,title_bn,title_en,author,artist,status,synopsis_bn,cover_url,genres,release_year",
+                "id,slug,title_bn,author,artist,status,synopsis_bn,cover_url,genres",
             )
             .addQueryParameter(
                 "or",
@@ -60,28 +62,7 @@ abstract class BanglaManga : KeiSource() {
         val results = apiGet(url)
             .parseAs<List<MangaDto>>()
 
-        val mangaList = results.map { manga ->
-            SManga.create().apply {
-                title = manga.titleBn
-
-                this.url = manga.id
-                thumbnail_url = manga.coverUrl.orEmpty()
-                author = manga.author
-                artist = manga.artist
-                description = manga.synopsisBn
-                genre = manga.genres?.joinToString(", ")
-
-                status = when (manga.status?.lowercase()) {
-                    "ongoing" -> SManga.ONGOING
-                    "completed", "complete" -> SManga.COMPLETED
-                    "hiatus" -> SManga.ON_HIATUS
-                    "cancelled", "canceled" -> SManga.CANCELLED
-                    else -> SManga.UNKNOWN
-                }
-            }
-        }
-
-        return MangasPage(mangaList, false)
+        return MangasPage(results.map { it.toSManga() }, false)
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage = fetchPage(page, "views.desc")
@@ -95,7 +76,7 @@ abstract class BanglaManga : KeiSource() {
         val url = (apiBaseUrl + "mangas").toHttpUrl().newBuilder()
             .addQueryParameter(
                 "select",
-                "id,slug,title_bn,title_en,author,artist,status,synopsis_bn,cover_url,genres,release_year",
+                "id,slug,title_bn,author,artist,status,synopsis_bn,cover_url,genres",
             )
             .addQueryParameter("limit", pageSize.toString())
             .addQueryParameter("offset", offset.toString())
@@ -105,28 +86,25 @@ abstract class BanglaManga : KeiSource() {
         val results = apiGet(url)
             .parseAs<List<MangaDto>>()
 
-        val mangaList = results.map { manga ->
-            SManga.create().apply {
-                title = manga.titleBn
-                this.url = manga.id
-                thumbnail_url = manga.coverUrl.orEmpty()
-                author = manga.author
-                artist = manga.artist
-                description = manga.synopsisBn
-                genre = manga.genres?.joinToString(", ")
-
-                status = when (manga.status?.lowercase()) {
-                    "ongoing" -> SManga.ONGOING
-                    "completed", "complete" -> SManga.COMPLETED
-                    "hiatus" -> SManga.ON_HIATUS
-                    "cancelled", "canceled" -> SManga.CANCELLED
-                    else -> SManga.UNKNOWN
-                }
-            }
-        }
-
-        return MangasPage(mangaList, results.size == pageSize)
+        return MangasPage(
+            results.map { it.toSManga() },
+            results.size == pageSize,
+        )
     }
+
+    private val uuidRegex = Regex(
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+    )
+    private val preferences by getPreferencesLazy()
+
+    override fun getMangaUrl(manga: SManga): String {
+        val mangaUrl = manga.url.removePrefix("/")
+        if (!uuidRegex.matches(mangaUrl)) return "$baseUrl/manga/$mangaUrl"
+
+        val slug = preferences.getString("legacy_slug_$mangaUrl", null) ?: return "$baseUrl/browse"
+        return "$baseUrl/manga/$slug"
+    }
+
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? = null
 
     override suspend fun fetchMangaUpdate(
@@ -135,36 +113,22 @@ abstract class BanglaManga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val mangaId = manga.url
-
+        val mangaUrl = manga.url.removePrefix("/")
         val url = (apiBaseUrl + "mangas").toHttpUrl().newBuilder()
             .addQueryParameter(
                 "select",
-                "id,slug,title_bn,title_en,author,artist,status,synopsis_bn,cover_url,genres,release_year,chapters(id,number,title_bn,status,volume,number_end,publish_at,views,reading_mode,credits)",
+                "id,slug,title_bn,author,artist,status,synopsis_bn,cover_url,genres,chapters(id,number,title_bn,publish_at)",
             )
-            .addQueryParameter("id", "eq.$mangaId")
+            .addQueryParameter(if (uuidRegex.matches(mangaUrl)) "id" else "slug", "eq.$mangaUrl")
             .build()
 
         val result = apiGet(url)
-            .parseAs<List<MangaDetailsDto>>()
+            .parseAs<List<MangaDto>>()
             .firstOrNull()
             ?: throw Exception("Manga not found")
 
-        val updatedManga = SManga.create().apply {
-            this.url = manga.url
-            title = result.titleBn
-            thumbnail_url = result.coverUrl.orEmpty()
-            author = result.author
-            artist = result.artist
-            description = result.synopsisBn
-            genre = result.genres?.joinToString()
-            status = when (result.status?.lowercase()) {
-                "ongoing" -> SManga.ONGOING
-                "completed", "complete" -> SManga.COMPLETED
-                "hiatus" -> SManga.ON_HIATUS
-                "cancelled", "canceled" -> SManga.CANCELLED
-                else -> SManga.UNKNOWN
-            }
+        if (uuidRegex.matches(mangaUrl)) {
+            preferences.edit().putString("legacy_slug_$mangaUrl", result.slug).apply()
         }
 
         val chapterList = result.chapters.orEmpty()
@@ -179,7 +143,7 @@ abstract class BanglaManga : KeiSource() {
             }
 
         return SMangaUpdate(
-            manga = updatedManga,
+            manga = result.toSManga(),
             chapters = chapterList,
         )
     }
@@ -197,5 +161,24 @@ abstract class BanglaManga : KeiSource() {
         return result?.pages.orEmpty().mapIndexed { index, page ->
             Page(index, page.url, page.url)
         }
+    }
+
+    private fun MangaDto.toSManga(): SManga = SManga.create().apply {
+        title = this@toSManga.titleBn
+        url = this@toSManga.slug
+        thumbnail_url = this@toSManga.coverUrl.orEmpty()
+        author = this@toSManga.author
+        artist = this@toSManga.artist
+        description = this@toSManga.synopsisBn
+        genre = this@toSManga.genres?.joinToString(", ")
+        status = this@toSManga.status.toSMangaStatus()
+    }
+
+    private fun String?.toSMangaStatus(): Int = when (this?.lowercase()) {
+        "ongoing" -> SManga.ONGOING
+        "completed", "complete" -> SManga.COMPLETED
+        "hiatus" -> SManga.ON_HIATUS
+        "cancelled", "canceled" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
     }
 }
