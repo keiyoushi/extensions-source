@@ -22,6 +22,7 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.sha256
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonRequestBody
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import okhttp3.CacheControl
@@ -288,7 +289,7 @@ abstract class MangaTR : KeiSource() {
         val document = response.asJsoup()
 
         if (document.selectFirst("div#uyari:contains(üye girişi), body :containsOwn(Giriş Yapmalısınız)") != null) {
-            throw IOException("Bu bölümü okuyabilmek için WebView üzerinden üye girişi yapmanız gerekmektedir.")
+            throw IOException(LOGIN_REQUIRED)
         }
 
         if (document.selectFirst("canvas#sliderCanvas, div.box h2:contains(Güvenlik Doğrulaması), div.cf-turnstile") != null) {
@@ -296,6 +297,22 @@ abstract class MangaTR : KeiSource() {
             throw IOException("Lütfen WebView'da Bot Korumasını geçin.")
         }
 
+        // The site changes its reader often; when the known layouts give nothing, let the site's own reader show the chapter
+        val urls = try {
+            readerPageUrls(document)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
+        }.ifEmpty { readPagesInWebView(document.location(), headers["User-Agent"]!!, baseUrl) }
+
+        if (urls.isEmpty()) {
+            throw IOException("Sayfalar bulunamadı; site okuyucusunu değiştirmiş olabilir. Bölümü WebView'da açmayı deneyin.")
+        }
+        return urls.mapIndexed { index, url -> Page(index, imageUrl = url) }
+    }
+
+    private suspend fun readerPageUrls(document: Document): List<String> {
         // The reader asks /a/<token> for each batch of three pages, keyed by the batch's first page index
         val routes = document.select("script:not([src])").firstNotNullOfOrNull { ROUTES_REGEX.find(it.data()) }
         if (routes != null) {
@@ -305,13 +322,11 @@ abstract class MangaTR : KeiSource() {
                 .sortedBy { it.key.toInt() }
                 .flatMap { client.get("$baseUrl/a/${it.value}", headers, from).body.string().parseAs<RouteBatch>().pages }
                 .sortedBy { it.index }
-                .mapIndexed { index, page -> Page(index, imageUrl = page.url) }
+                .map { it.url }
         }
 
         // Lazy-loaded pages keep their real URL in data-mtr-src until scrolled into view
-        return document.select("img.chapter-img").mapIndexed { index, img ->
-            Page(index, imageUrl = img.absUrl("data-mtr-src").ifEmpty { img.absUrl("src") })
-        }
+        return document.select("img.chapter-img").map { img -> img.absUrl("data-mtr-src").ifEmpty { img.absUrl("src") } }
     }
 
     @Serializable
