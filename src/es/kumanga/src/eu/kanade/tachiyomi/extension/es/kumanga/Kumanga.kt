@@ -15,12 +15,14 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.decodeHex
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import keiyoushi.utils.textOrNull
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import java.io.ByteArrayInputStream
@@ -176,7 +178,12 @@ abstract class Kumanga : KeiSource() {
             throw IOException(e.message, e)
         }
         val base = readerUrl.toHttpUrl()
-        return paths.mapIndexed { index, path -> Page(index, imageUrl = base.resolve(path)!!.toString()) }
+        return paths.mapIndexed { index, path ->
+            val url = base.resolve(path)!!
+            // The site's image proxy carries the image url hex-encoded in src
+            val image = url.queryParameter("src")?.takeIf(HEX_REGEX::matches)?.decodeHex()?.decodeToString()?.toHttpUrlOrNull() ?: url
+            Page(index, imageUrl = image.toString())
+        }
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(
@@ -200,6 +207,7 @@ abstract class Kumanga : KeiSource() {
                 return data[list];
             })()
         """
+        private val HEX_REGEX = Regex("(?:[0-9A-Fa-f]{2})+")
         private val OTHER_CHAPTERS_REGEX = Regex("""OTHER_CHAPTERS\s*=\s*(\[.*])\s*;""", RegexOption.DOT_MATCHES_ALL)
     }
 }
