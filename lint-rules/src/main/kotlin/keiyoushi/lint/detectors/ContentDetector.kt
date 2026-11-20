@@ -58,7 +58,7 @@ class ContentDetector :
                     MANUAL_DESCRIPTION,
                     node,
                     context.getLocation(node),
-                    "Build descriptions with `MarkdownDescription.Builder` (`field`, `info`, `altTitles`, `links`) instead of hand-written Markdown",
+                    "Build descriptions with `describe { }` (`field`, `info`, `altTitles`, `links`) instead of hand-written Markdown",
                 )
                 value == "show_nsfw_source" -> context.report(
                     APP_PREFERENCE,
@@ -118,6 +118,15 @@ class ContentDetector :
             }
         }
 
+        if (field == "memo" && context.uastFile?.packageName?.let { pkg -> CORE_PACKAGES.any(pkg::startsWith) } != true) {
+            context.report(
+                MEMO_ASSIGNED,
+                node,
+                context.getLocation(node),
+                "Add memo keys with `putMemo { put(\"key\", value) }`; assigning `memo` drops the keys set elsewhere",
+            )
+        }
+
         if (owner == SCHAPTER && field == "name" && TITLE_STRIP.containsMatchIn(value)) {
             context.report(
                 STRIP_MANGA_TITLE,
@@ -154,7 +163,7 @@ class ContentDetector :
                         COLLAPSED_TEXT,
                         node,
                         context.loc(node),
-                        "`text()` collapses the paragraphs; use `toMarkdown()` (or `MarkdownDescription.Builder().description(...)`) or `wholeText()`",
+                        "`text()` collapses the paragraphs; use `toMarkdown()` (or `describe { description(...) }`) or `wholeText()`",
                     )
                 }
             }
@@ -189,6 +198,8 @@ class ContentDetector :
     }
 
     companion object {
+        // Core keeps memo["meta"] and implements putMemo
+        private val CORE_PACKAGES = listOf("keiyoushi.utils", "keiyoushi.source")
         private val MARKDOWN_LABEL = Regex("""^\*\*[^*\n]{1,40}:?\*\*:?\s""")
         private val ABSOLUTE = Regex("""^"(https?://|\$\{?baseUrl\b)""")
 
@@ -237,7 +248,7 @@ class ContentDetector :
         val MANUAL_DESCRIPTION = issue<ContentDetector>(
             "KeiManualDescription",
             "Description Markdown written by hand",
-            "Use `MarkdownDescription.Builder` (`rating`, `info`, `field`, `altTitles`, `links`); improve the builder if something is missing.",
+            "Use `describe { }` (`rating`, `info`, `field`, `altTitles`, `links`); improve the builder if something is missing.",
         )
 
         val APP_PREFERENCE = issue<ContentDetector>(
@@ -265,9 +276,16 @@ class ContentDetector :
             "`client.zipDirectory` and `client.readZipEntry` read the central directory and single entries with Range requests.",
         )
 
+        val MEMO_ASSIGNED = issue<ContentDetector>(
+            "KeiMemoAssigned",
+            "`memo` assigned directly",
+            "Assigning `SManga.memo` or `SChapter.memo` replaces every key, `memo[\"meta\"]` included; `putMemo { }` adds keys and keeps the rest.",
+        )
+
         val ISSUES = listOf(
             ABSOLUTE_URL, URL_FRAGMENT, STRIP_MANGA_TITLE, HARDCODED_HOST, URL_STRING_SPLIT, COLLAPSED_TEXT,
             MANUAL_DESCRIPTION, APP_PREFERENCE, NEXT_FLIGHT_REGEX, CUSTOM_TURNSTILE, ZIP_INPUT_STREAM,
+            MEMO_ASSIGNED,
         )
     }
 }

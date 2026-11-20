@@ -32,7 +32,10 @@ class MangaAttributesDto(
     val contentRating: ContentRatingDto? = null,
     val publicationDemographic: PublicationDemographicDto? = null,
     val status: StatusDto? = null,
+    val year: Int? = null,
     val tags: List<TagDto>,
+    @Serializable(with = LocalizedStringSerializer::class)
+    val links: LocalizedString = emptyMap(),
 ) : AttributesDto()
 
 @Serializable

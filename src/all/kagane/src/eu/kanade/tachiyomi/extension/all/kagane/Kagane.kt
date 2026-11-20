@@ -22,6 +22,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.putMemo
 import keiyoushi.utils.string
 import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
@@ -391,7 +392,7 @@ abstract class Kagane :
         val updatedManga = if (fetchDetails) {
             val dto = getMangaById(seriesId)
             parseMangaDetails(dto).apply {
-                memo = buildJsonObject {
+                putMemo {
                     if (!dto.trackerId.isNullOrEmpty()) {
                         put("trackerId", dto.trackerId)
                     }

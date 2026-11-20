@@ -135,10 +135,10 @@ object MDConstants {
     private const val INCLUDE_UNAVAILABLE_PREF = "includeUnavailable"
     fun getIncludeUnavailablePrefKey(dexLang: String): String = "${INCLUDE_UNAVAILABLE_PREF}_$dexLang"
 
-    private const val TAG_GROUP_CONTENT = "content"
-    private const val TAG_GROUP_FORMAT = "format"
-    private const val TAG_GROUP_GENRE = "genre"
-    private const val TAG_GROUP_THEME = "theme"
+    const val TAG_GROUP_CONTENT = "content"
+    const val TAG_GROUP_FORMAT = "format"
+    const val TAG_GROUP_GENRE = "genre"
+    const val TAG_GROUP_THEME = "theme"
     val TAG_GROUPS_ORDER = arrayOf(TAG_GROUP_CONTENT, TAG_GROUP_FORMAT, TAG_GROUP_GENRE, TAG_GROUP_THEME)
 
     const val TAG_ANTHOLOGY_UUID = "51d83883-4103-437c-b4b1-731cb73d786c"

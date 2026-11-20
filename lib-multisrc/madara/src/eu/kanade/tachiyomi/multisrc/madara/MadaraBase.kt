@@ -12,10 +12,11 @@ import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.describe
 import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.putMemo
 import keiyoushi.utils.toMarkdown
 import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.async
@@ -224,11 +225,9 @@ abstract class MadaraBase : KeiSource() {
         title = document.selectFirst(mangaDetailsSelectorTitle)!!.ownText()
         author = document.select(mangaDetailsSelectorAuthor).eachText().filterNot(::isUpdating).joinToString().ifBlank { null }
         artist = document.select(mangaDetailsSelectorArtist).eachText().filterNot(::isUpdating).joinToString().ifBlank { null }
-        val alternative = document.selectFirst(altNameSelector)?.ownText()?.takeIf { it != title && !isUpdating(it) }
-        description = MarkdownDescription.Builder()
-            .apply { descriptionParagraphs(document).forEach(::markdown) }
-            .altTitles(listOfNotNull(alternative), intl["alt_names_heading"].removeSuffix(":"))
-            .build()
+        val altNames = document.selectFirst(altNameSelector)?.ownText()?.takeUnless(::isUpdating)
+            ?.split(ALT_TITLE_SEPARATOR).orEmpty().filter { it.trim() != title }
+        val seriesType = document.selectFirst(seriesTypeSelector)?.text()?.takeIf(String::isNotEmpty)
         thumbnail_url = document.selectFirst(mangaDetailsSelectorThumbnail)?.let { processThumbnail(imageFromElement(it)) }
         status = document.select(mangaDetailsSelectorStatus).lastOrNull()?.text()?.toStatus() ?: SManga.UNKNOWN
         val genres = document.select(mangaDetailsSelectorGenre).mapNotNull { element ->
@@ -237,16 +236,29 @@ abstract class MadaraBase : KeiSource() {
             val slug = path.trimEnd('/').substringAfterLast('/').takeIf(String::isNotEmpty) ?: return@mapNotNull null
             GenreRoute(element.text(), slug, path)
         }
+        val tags = document.select(mangaDetailsSelectorTag).eachText()
         genre = buildList {
             addAll(genres.map(GenreRoute::name))
-            addAll(document.select(mangaDetailsSelectorTag).eachText())
-            document.selectFirst(seriesTypeSelector)?.text()?.takeIf(String::isNotEmpty)?.let(::add)
+            addAll(tags)
+            seriesType?.let(::add)
         }.distinctBy(String::lowercase).joinToString().ifBlank { null }
-        memo = mangaMemo(
-            path = mangaPath,
-            genres = genres,
-            legacyId = id.takeIf { preserveUrl?.all(Char::isDigit) == false },
+        putMemo(
+            mangaMemo(
+                path = mangaPath,
+                genres = genres,
+                legacyId = id.takeIf { preserveUrl?.all(Char::isDigit) == false },
+            ),
         )
+        describe {
+            descriptionParagraphs(document).forEach(::markdown)
+            altTitles(altNames, intl["alt_names_heading"])
+            meta {
+                field("Type", seriesType, summary = true)
+                primaryTags = genres.map(GenreRoute::name)
+                chips("Genres", primaryTags)
+                chips("Tags", tags)
+            }
+        }
     }
 
     /** The synopsis as Markdown paragraphs: the description's `p` elements, or the whole element without any */
@@ -335,7 +347,7 @@ abstract class MadaraBase : KeiSource() {
             url = id.takeIf { it.isNotEmpty() && supportsPostId } ?: mangaPath
             title = archiveTitleSelector?.let { element.selectFirst(it)?.text() } ?: link.text()
             thumbnail_url = element.selectFirst("img")?.let { processThumbnail(imageFromElement(it), true) }
-            memo = mangaMemo(mangaPath, emptyList())
+            putMemo(mangaMemo(mangaPath, emptyList()))
         }
     }
 
@@ -360,7 +372,7 @@ abstract class MadaraBase : KeiSource() {
                     ?: element.selectFirst("span a")?.attr("title")?.takeIf(String::isNotBlank)
                     ?: element.selectFirst(chapterDateSelector)?.text(),
             )
-            memo = buildJsonObject { put("mangaPath", mangaPath) }
+            putMemo { put("mangaPath", mangaPath) }
         }
     }
 
@@ -596,6 +608,9 @@ abstract class MadaraBase : KeiSource() {
         private val GENERIC_GENRES = setOf("manga", "manhwa", "manhua", "webtoon")
         private val URL_REGEX = Regex("""^https?://[^\s/$.?#].[^\s]*$""")
         private val WHITESPACE_REGEX = Regex("""\s+""")
+
+        // Commas stay: titles hold them too
+        private val ALT_TITLE_SEPARATOR = Regex("""\s*[;|]\s*|\s+[/•]\s+""")
         private val IMAGE_DESCRIPTOR_REGEX = Regex("""^(\d+|\d+\.\d+)[wx]$""")
         private val NUMBER_REGEX = Regex("""\d+""")
 

@@ -15,8 +15,9 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.MangaMeta
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.describe
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -34,6 +35,9 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
+import org.jsoup.nodes.Node
+import org.jsoup.nodes.TextNode
 import java.io.IOException
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -149,8 +153,9 @@ abstract class Webnex :
             artist = document.select(".series-credits a[href*=artist=]").joinToString { it.text() }.ifEmpty { null }
             // Every genre and tag, including those behind the tag cloud's "+N more"
             val tags = document.extractNextJs<TagsDto> { it is JsonObject && "genres" in it && "tags" in it }!!
-            genre = (document.select(".series-badges a[href*=kind=], .series-badges a[href*=demographic=]").map { it.text() } + tags.genres + tags.tags)
-                .distinct().joinToString().ifEmpty { null }
+            val seriesType = document.selectFirst(".series-badges a[href*=kind=]")?.text()
+            val demographic = document.selectFirst(".series-badges a[href*=demographic=]")?.text()
+            genre = (listOfNotNull(seriesType, demographic) + tags.genres + tags.tags).distinct().joinToString().ifEmpty { null }
             status = when (document.selectFirst(".series-badges li:has(.dot)")?.text()?.lowercase()) {
                 "ongoing" -> SManga.ONGOING
                 "completed" -> SManga.COMPLETED
@@ -160,13 +165,43 @@ abstract class Webnex :
             }
             // Year, original language and content rating; type and demographic are in genres
             val facts = document.select(".series-badges > li:not(:has(.dot, a[href*=kind=], a[href*=demographic=]))").map { it.text() }
-            description = MarkdownDescription.Builder().apply {
+            val year = facts.firstNotNullOfOrNull { it.toIntOrNull()?.takeIf { year -> year in 1900..2100 } }
+            val language = facts.firstNotNullOfOrNull(LANGUAGES::get)
+            val contentRating = facts.firstNotNullOfOrNull { CONTENT_RATINGS[it.lowercase()] }
+            describe {
                 rating(document.selectFirst(".cover-score strong")?.text()?.toDoubleOrNull())
-                info(*facts.toTypedArray())
-                document.select(".series-desc p").forEach { description(it) }
+                facts.forEach { fact ->
+                    val label = when {
+                        year != null && fact.toIntOrNull() == year -> "Year"
+                        fact in LANGUAGES -> "Original language"
+                        CONTENT_RATINGS[fact.lowercase()] != null -> "Content rating"
+                        else -> null
+                    }
+                    if (label != null) field(label, fact, summary = true) else info(fact)
+                }
+                // A copy, so the official edition links can be taken out of the synopsis
+                val synopsis = document.selectFirst(".series-desc")?.clone()
+                val editions = synopsis?.takeOfficialLinks().orEmpty()
+                synopsis?.select("p")?.forEach { description(it) }
+                editions.forEach { (label, runLinks) -> links(runLinks, label) }
                 altTitles(document.select(".series-alt-name").map { it.text() }.filter { it != title }.distinct())
-                links(document.select(".tracker-row a").map { it.attr("title") to it.absUrl("href") })
-            }.build()
+                val (trackerPages, otherLinks) = document.select(".tracker-row a").partition { MangaMeta.Tracker.fromUrl(it.absUrl("href")) != null }
+                trackers(trackerPages.map { it.absUrl("href") })
+                links(otherLinks.map { it.attr("title") to it.absUrl("href") })
+                meta {
+                    field("Type", seriesType, summary = true)
+                    field("Demographic", demographic)
+                    this.contentRating = contentRating
+                    // The page's genre and tag chips; the payload's other names sit behind the tag cloud's "+N more"
+                    val pageGenres = document.select("a[href*=?genre=]").map { it.text() }
+                    val pageTags = document.select("a[href*=?tag=]").map { it.text() }
+                    val onPage = (pageGenres + pageTags).map(String::lowercase).toSet()
+                    primaryTags = pageGenres
+                    chips("Genres", pageGenres)
+                    chips("Tags", pageTags)
+                    chips("More tags", (tags.genres + tags.tags).filterNot { it.lowercase() in onPage }.distinctBy(String::lowercase), collapsed = true)
+                }
+            }
         }
         if (!fetchChapters) return SMangaUpdate(details, chapters)
 
@@ -351,7 +386,39 @@ abstract class Webnex :
         }
     }
 
+    // Removes the synopsis' runs of an "Original Webtoon:" or "Official Translations:" bold label and its comma-separated links, and returns each label with its links
+    private fun Element.takeOfficialLinks(): List<Pair<String, List<Pair<String, String>>>> = select("strong").filter { OFFICIAL_LABEL.matches(it.text()) }.mapNotNull { strong ->
+        var linked = false
+        // A <br> may sit between the label and its links; after a link it ends the run
+        val run = generateSequence(strong.nextSibling()) { it.nextSibling() }
+            .takeWhile { node ->
+                when (node) {
+                    is Element -> (node.tagName() == "a").also { if (it) linked = true } || (node.tagName() == "br" && !linked)
+                    is TextNode -> node.wholeText.trim().let { it.isEmpty() || it == "," }
+                    else -> false
+                }
+            }
+            .toList()
+        val links = run.filterIsInstance<Element>().filter { it.tagName() == "a" && it.absUrl("href").isNotEmpty() }
+            .map { it.text() to it.absUrl("href") }
+        // Only a label whose links end the line is taken out; one followed by more text stays as it is
+        val end = (run.lastOrNull() ?: strong).nextSibling()
+        val clean = end == null || (end is Element && (end.tagName() == "strong" || end.tagName() == "br"))
+        if (links.isEmpty() || !clean) return@mapNotNull null
+        (run + strong).forEach(Node::remove)
+        strong.text().removeSuffix(":") to links
+    }
+
     companion object {
+        private val OFFICIAL_LABEL = Regex("""^(?:Original\b.*|Official\b.*Translations?):$""", RegexOption.IGNORE_CASE)
+
+        private val LANGUAGES = ORIGINAL_LANGUAGES.toMap()
+        private val CONTENT_RATINGS = mapOf(
+            "safe" to MangaMeta.ContentRating.SAFE,
+            "suggestive" to MangaMeta.ContentRating.SUGGESTIVE,
+            "erotica" to MangaMeta.ContentRating.ADULT,
+            "pornographic" to MangaMeta.ContentRating.ADULT,
+        )
         private const val PREF_RATING = "pref_rating"
         private const val PREF_CHAPTER_LIST = "pref_chapter_list"
         private const val PREF_PREFERRED_GROUPS = "pref_preferred_groups"

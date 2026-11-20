@@ -52,7 +52,7 @@ class KotlinIdiomDetector :
                 STRING_BUILDER,
                 node,
                 context.loc(node),
-                "Use `buildString { }` (or `MarkdownDescription.Builder` for descriptions)",
+                "Use `buildString { }` (or `describe { }` for descriptions)",
             )
 
             "eu.kanade.tachiyomi.source.model.Page" -> {
@@ -271,7 +271,7 @@ class KotlinIdiomDetector :
                     MARKDOWN_BULLET,
                     node,
                     context.loc(node),
-                    "Descriptions are Markdown: use `- ` list items, or `MarkdownDescription.Builder`",
+                    "Descriptions are Markdown: use `- ` list items, or `describe { }`",
                 )
             }
         }
@@ -392,7 +392,7 @@ class KotlinIdiomDetector :
         val STRING_BUILDER = issue<KotlinIdiomDetector>(
             "KeiStringBuilder",
             "`StringBuilder()` instead of `buildString`",
-            "Use `buildString { }`; for manga descriptions use `MarkdownDescription.Builder`.",
+            "Use `buildString { }`; for manga descriptions use `describe { }`.",
         )
 
         val PAGE_EMPTY_URL = issue<KotlinIdiomDetector>(
@@ -417,7 +417,7 @@ class KotlinIdiomDetector :
         val MARKDOWN_BULLET = issue<KotlinIdiomDetector>(
             "KeiMarkdownBullet",
             "`•` bullet in a Markdown description",
-            "`SManga.description` is Markdown: use `- ` list items, or `MarkdownDescription.Builder`.",
+            "`SManga.description` is Markdown: use `- ` list items, or `describe { }`.",
         )
 
         val HTTP_EXCEPTION = issue<KotlinIdiomDetector>(

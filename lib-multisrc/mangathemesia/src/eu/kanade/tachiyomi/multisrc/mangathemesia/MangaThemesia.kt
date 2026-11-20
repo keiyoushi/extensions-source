@@ -15,14 +15,14 @@ import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.describe
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.putMemo
 import keiyoushi.utils.string
-import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.Call
 import okhttp3.Callback
@@ -172,7 +172,7 @@ abstract class MangaThemesia : KeiSource() {
             sendView(postId)
             val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
             SMangaUpdate(
-                mangaDetailsParse(doc).apply { memo = manga.memo },
+                mangaDetailsParse(doc).apply { putMemo { put("postId", postId) } },
                 chapterListParse(doc),
             )
         } else {
@@ -181,7 +181,7 @@ abstract class MangaThemesia : KeiSource() {
             sendView(postId)
             SMangaUpdate(
                 mangaDetailsParse(doc).apply {
-                    if (postId != null) memo = buildJsonObject { put("postId", postId) }
+                    if (postId != null) putMemo { put("postId", postId) }
                 },
                 chapterListParse(doc),
             )
@@ -285,26 +285,23 @@ abstract class MangaThemesia : KeiSource() {
             title = seriesDetails.selectFirst(seriesTitleSelector)!!.text()
             artist = seriesDetails.selectFirst(seriesArtistSelector)?.ownText().removeEmptyPlaceholder()
             author = seriesDetails.selectFirst(seriesAuthorSelector)?.ownText().removeEmptyPlaceholder()
-            description = seriesDetails.selectFirst(seriesDescriptionSelector)?.textOrNull()
-            // Add alternative name to manga description
-            val altName = seriesDetails.selectFirst(seriesAltNameSelector)?.ownText()
-            if (!altName.isNullOrBlank()) {
-                val names = altName.split(ALT_NAME_SEPARATOR).joinToString("\n") { "- ${it.trim()}" }
-                description = description?.let { "$it\n\n" }.orEmpty() + "$altNamePrefix\n$names".trim()
+            val altNames = seriesDetails.selectFirst(seriesAltNameSelector)?.ownText().removeEmptyPlaceholder()?.split(ALT_NAME_SEPARATOR).orEmpty()
+            val seriesType = seriesDetails.selectFirst(seriesTypeSelector)?.ownText()?.takeIf(String::isNotBlank)
+            val locale = Locale.forLanguageTag(lang)
+            val genres = seriesDetails.select(seriesGenreSelector).map { element ->
+                element.text().lowercase(locale).replaceFirstChar { it.titlecase(locale) }
             }
-            val genres = seriesDetails.select(seriesGenreSelector).map { it.text() }.toMutableList()
             // Add series type (manga/manhwa/manhua/other) to genre
-            seriesDetails.selectFirst(seriesTypeSelector)?.ownText().takeIf { it.isNullOrBlank().not() }?.let { genres.add(it) }
-            genre = genres.map { genre ->
-                genre.lowercase(Locale.forLanguageTag(lang)).replaceFirstChar { char ->
-                    if (char.isLowerCase()) {
-                        char.titlecase(Locale.forLanguageTag(lang))
-                    } else {
-                        char.toString()
-                    }
+            genre = (genres + listOfNotNull(seriesType?.lowercase(locale)?.replaceFirstChar { it.titlecase(locale) })).joinToString()
+            describe {
+                description(seriesDetails.selectFirst(seriesDescriptionSelector))
+                altTitles(altNames.filterNot { it.trim() == title }, altNamePrefix)
+                meta {
+                    field("Type", seriesType, summary = true)
+                    primaryTags = genres
+                    chips("Genres", genres)
                 }
             }
-                .joinToString { it.trim() }
 
             status = seriesDetails.selectFirst(seriesStatusSelector)?.text().parseStatus()
             thumbnail_url = seriesDetails.select(seriesThumbnailSelector).imgAttr()
