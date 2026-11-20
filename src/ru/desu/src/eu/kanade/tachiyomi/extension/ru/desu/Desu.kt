@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.ru.desu
 import android.widget.Toast
 import androidx.preference.ListPreference
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -13,20 +12,28 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.ratingStars
 import keiyoushi.utils.string
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -109,47 +116,129 @@ abstract class Desu :
 
     // ============================== Search ===============================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val url = "$baseUrl$API_URL/catalog/?page=$page".toHttpUrl().newBuilder()
-            .addQueryParameter("limit", "20")
-            .addQueryParameter("page", page.toString())
-        val types = mutableListOf<Type>()
-        val statuses = mutableListOf<Status>()
-        val genres = mutableListOf<Genre>()
-        filters.forEach { filter ->
-            when (filter) {
-                is OrderBy -> url.addQueryParameter("order_by", arrayOf("popular", "updated", "id", "name")[filter.state])
-                is TypeList -> filter.state.forEach { type -> if (type.state) types.add(type) }
-                is StatusList -> filter.state.forEach { status -> if (status.state) statuses.add(status) }
-                is GenreList -> filter.state.forEach { genre -> if (genre.state) genres.add(genre) }
-                else -> {}
-            }
-        }
+        // Текстовий пошук: окремий запит /manga/search/, фільтри в ньому не діють
+        if (query.isNotEmpty()) return searchByQuery(page, query)
 
-        if (types.isNotEmpty()) {
-            url.addQueryParameter("kinds", types.joinToString(",") { it.id })
-        }
-        if (genres.isNotEmpty()) {
-            url.addQueryParameter("genres", genres.joinToString(",") { it.id })
-        }
-        if (statuses.isNotEmpty()) {
-            url.addQueryParameter("status", statuses.joinToString(",") { it.id })
-        }
-        if (query.isNotEmpty()) {
-            url.addQueryParameter("search", query)
-        }
+        val order = filters.firstInstanceOrNull<OrderBy>()?.value ?: ORDER_VALUES[ORDER_POPULAR]
+        val types = filters.firstInstanceOrNull<TypeList>()?.state.orEmpty()
+            .filter { it.state }
+            .map { it.id }
+        val statuses = filters.firstInstanceOrNull<StatusList>()?.state.orEmpty()
+            .filter { it.state }
+            .map { it.id }
+        // жанри і теги разом: "id-slug" або "id-!slug" (виключення)
+        val genreParams = (
+            filters.firstInstanceOrNull<GenreList>()?.state.orEmpty() +
+                filters.firstInstanceOrNull<TagList>()?.state.orEmpty()
+            )
+            .filterNot { it.isIgnored() }
+            .map { it.toParam() }
 
-        val response = client.get(url.build(), Fetch.XHR)
+        // Каталог (фільтри / сортування): парсинг HTML сторінки /manga/
+        val url = "$baseUrl/manga/".toHttpUrl().newBuilder().apply {
+            if (page > 1) addQueryParameter("page", page.toString())
+            if (statuses.isNotEmpty()) addQueryParameter("status", statuses.joinToString(","))
+            if (types.isNotEmpty()) addQueryParameter("kinds", types.joinToString(","))
+            if (genreParams.isNotEmpty()) addQueryParameter("genres", genreParams.joinToString(","))
+            addQueryParameter("order_by", order)
+        }.build()
 
-        val page = response.parseAs<PageWrapperDto<MangaDetDto>>()
-
-        val mangas = page.mangas.map { it.toSManga() }
-
-        return MangasPage(mangas, page.pagination.last_page > page.pagination.current_page)
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
+        return parseCatalog(document)
     }
 
-    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", getFilterList(null))
+    // ============================== Text search ===============================
+    private suspend fun searchByQuery(page: Int, query: String): MangasPage {
+        // Сайт повертає всі результати одним списком, без пагінації
+        if (page > 1) return MangasPage(emptyList(), false)
 
-    override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", getFilterList(null))
+        val body = FormBody.Builder()
+            .add("q", query)
+            .add("type", "manga")
+            .add("_xfToken", "")
+            .add("_xfRequestUri", "/manga/")
+            .add("_xfNoRedirect", "1")
+            .add("_xfResponseType", "json")
+            .build()
+
+        val result = client.post(
+            url = "$baseUrl/manga/search/",
+            headers = headers.newBuilder()
+                .set("X-Requested-With", "XMLHttpRequest")
+                .set("X-Ajax-Referer", "$baseUrl/manga/")
+                .build(),
+            fetch = Fetch.XHR.from("/manga/"),
+            body = body,
+        ).parseAs<SearchDto>()
+
+        val doc = Jsoup.parseBodyFragment(result.templateHtml, baseUrl)
+        val mangas = doc.select("li.AniMangaSearchCard").mapNotNull { it.toSearchManga() }
+        return MangasPage(mangas, false)
+    }
+
+    private fun Element.toSearchManga(): SManga? {
+        val link = selectFirst("a.AniMangaSearchCard__link") ?: return null
+        // href: manga/slug.6423/ -> id = 6423
+        val id = link.attr("href").substringBefore('?').trimEnd('/').substringAfterLast('.')
+        if (id.isEmpty() || !id.all { it.isDigit() }) return null
+
+        val russianName = selectFirst(".AniMangaSearchCard__title")?.text()?.trim().orEmpty()
+        val originalName = selectFirst(".AniMangaSearchCard__subtitle")?.text()?.trim().orEmpty()
+
+        // x120 -> preview, щоб обкладинка була такою ж, як у каталозі
+        val cover = selectFirst("img.AniMangaSearchCard__cover")?.attr("src")
+            ?.replace("/covers/x120/", "/covers/preview/")
+            ?.takeIf { it.isNotEmpty() }
+
+        return SManga.create().apply {
+            url = "/$id"
+            title = if (isEng.equals("rus")) {
+                russianName.ifEmpty { originalName }
+            } else {
+                originalName.ifEmpty { russianName }
+            }
+            thumbnail_url = cover
+        }
+    }
+
+    // ============================== Catalog parsing ===============================
+    private fun parseCatalog(document: Document): MangasPage {
+        val mangas = document.select("ol.memberList > li.memberListItem").mapNotNull { it.toCatalogManga() }
+
+        val hasNext = PAGE_COUNTER_REGEX.find(document.selectFirst("span.pageNavHeader")?.text() ?: document.text())?.let {
+            val (current, last) = it.destructured
+            current.toInt() < last.toInt()
+        } ?: (document.selectFirst("a:containsOwn(Вперёд)") != null)
+
+        return MangasPage(mangas, hasNext)
+    }
+
+    private fun Element.toCatalogManga(): SManga? {
+        val link = selectFirst("h3 a.animeTitle") ?: selectFirst("h3 a") ?: return null
+        // href відносний: manga/out.3365/ -> id = 3365
+        val id = link.attr("href").substringBefore('?').trimEnd('/').substringAfterLast('.')
+        if (id.isEmpty() || !id.all { it.isDigit() }) return null
+
+        val originalName = link.text().trim()
+        // <div class="dimmed"><span>Русское название</span></div>; запасний варіант: title="Русское (Original)"
+        val russianName = selectFirst("div.dimmed span")?.text()?.trim()?.takeIf { it.isNotEmpty() }
+            ?: link.attr("title").removeSuffix(" ($originalName)").ifEmpty { originalName }
+
+        // <span class="img" style="background-image: url('https://static.desu.uno/.../3674.jpg?1722258191');">
+        val cover = selectFirst("span.img")?.attr("style")
+            ?.let { COVER_REGEX.find(it)?.groupValues?.get(1) }
+            ?.let { if (it.startsWith("/")) baseUrl + it else it }
+
+        return SManga.create().apply {
+            url = "/$id"
+            title = if (isEng.equals("rus")) russianName else originalName
+            thumbnail_url = cover
+        }
+    }
+
+    override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", FilterList(OrderBy(ORDER_POPULAR)))
+
+    override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", FilterList(OrderBy(ORDER_UPDATED)))
 
     // ============================== Manga/Chapters ===============================
     override suspend fun fetchMangaUpdate(
@@ -230,90 +319,12 @@ abstract class Desu :
     }
 
     // ============================== Filters ===============================
-    private class OrderBy :
-        Filter.Select<String>(
-            "Сортировка",
-            arrayOf("По популярности", "По обновлению", "По добавлению", "По алфавиту"),
-        )
-
-    private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Жанр", genres)
-
-    private class TypeList(types: List<Type>) : Filter.Group<Type>("Тип", types)
-
-    private class StatusList(statuses: List<Status>) : Filter.Group<Status>("Статус", statuses)
-
-    private class Genre(name: String, val id: String) : Filter.CheckBox(name)
-    private class Type(name: String, val id: String) : Filter.CheckBox(name)
-    private class Status(name: String, val id: String) : Filter.CheckBox(name)
-
-//    override fun getFilterList() = FilterList(
-//        OrderBy(),
-//        TypeList(getTypeList()),
-//        GenreList(getGenreList()),
-//        StatusList(getStatusList()),
-//    )
-
-    private fun getTypeList() = listOf(
-        Type("Манга", "manga"),
-        Type("Манхва", "manhwa"),
-        Type("Маньхуа", "manhua"),
-        Type("Ваншот", "one_shot"),
-        Type("Комикс", "comics"),
-    )
-
-    private fun getStatusList() = listOf(
-        Status("Выходит", "ongoing"),
-        Status("Издано", "released"),
-        Status("Переводится", "continued"),
-        Status("Завершено", "completed"),
-    )
-
-    private fun getGenreList() = listOf(
-        Genre("Безумие", "Dementia"),
-        Genre("Боевые искусства", "Martial Arts"),
-        Genre("Вампиры", "Vampire"),
-        Genre("Военное", "Military"),
-        Genre("Гарем", "Harem"),
-        Genre("Демоны", "Demons"),
-        Genre("Детектив", "Mystery"),
-        Genre("Детское", "Kids"),
-        Genre("Дзёсей", "Josei"),
-        Genre("Додзинси", "Doujinshi"),
-        Genre("Драма", "Drama"),
-        Genre("Игры", "Game"),
-        Genre("Исторический", "Historical"),
-        Genre("Комедия", "Comedy"),
-        Genre("Космос", "Space"),
-        Genre("Магия", "Magic"),
-        Genre("Машины", "Cars"),
-        Genre("Меха", "Mecha"),
-        Genre("Музыка", "Music"),
-        Genre("Пародия", "Parody"),
-        Genre("Повседневность", "Slice of Life"),
-        Genre("Полиция", "Police"),
-        Genre("Приключения", "Adventure"),
-        Genre("Психологическое", "Psychological"),
-        Genre("Романтика", "Romance"),
-        Genre("Самураи", "Samurai"),
-        Genre("Сверхъестественное", "Supernatural"),
-        Genre("Сёдзе", "Shoujo"),
-        Genre("Сёдзе Ай", "Shoujo Ai"),
-        Genre("Сейнен", "Seinen"),
-        Genre("Сёнен", "Shounen"),
-        Genre("Сёнен Ай", "Shounen Ai"),
-        Genre("Смена пола", "Gender Bender"),
-        Genre("Спорт", "Sports"),
-        Genre("Супер сила", "Super Power"),
-        Genre("Триллер", "Thriller"),
-        Genre("Ужасы", "Horror"),
-        Genre("Фантастика", "Sci-Fi"),
-        Genre("Фэнтези", "Fantasy"),
-        Genre("Хентай", "Hentai"),
-        Genre("Школа", "School"),
-        Genre("Экшен", "Action"),
-        Genre("Этти", "Ecchi"),
-        Genre("Юри", "Yuri"),
-        Genre("Яой", "Yaoi"),
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        OrderBy(),
+        TypeList(getTypeList()),
+        StatusList(getStatusList()),
+        GenreList(getGenreList()),
+        TagList(getTagList()),
     )
 
     // ============================== Preference ===============================
@@ -338,5 +349,7 @@ abstract class Desu :
     companion object {
         private const val LANGUAGE_PREF = "DesuTitleLanguage"
         private const val API_URL = "/api/manga/"
+        private val PAGE_COUNTER_REGEX = Regex("""Страница\s+(\d+)\s+из\s+(\d+)""")
+        private val COVER_REGEX = Regex("""url\(['"]?([^'")]+)""")
     }
 }

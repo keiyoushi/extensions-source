@@ -4,12 +4,12 @@ import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.escapeMarkdown
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -21,7 +21,7 @@ import java.util.Locale
 
 @Source
 abstract class TopManhuaFan : MadaraNoAjax() {
-    override val chapterDateFormat = DateTimeFormatter.ofPattern("MM/dd/yyyy", Locale.ENGLISH)
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("MM/dd/yyyy", Locale.ROOT)
     override val mangaSubString = "manhua"
     private var firstSearchPath: String? = null
 
@@ -50,13 +50,15 @@ abstract class TopManhuaFan : MadaraNoAjax() {
         return MangasPage(mangas.filterNotNull(), page < LAST_SEARCH_PAGE && document.selectFirst(nextPageSelector()) != null)
     }
 
-    override fun parseDetails(document: Document, id: String, preserveUrl: String?): SManga = super.parseDetails(document, id, preserveUrl).apply {
-        description = description?.split("\n\n")
-            ?.filterNot { it.isBlank() || it == title || it == "${intl["alt_names_heading"]} $title" }
-            ?.joinToString("\n\n")
-            ?.removePrefix("Read manga $title")
-            ?.trim()
-            ?.ifEmpty { null }
+    // The first paragraph repeats the title, and the synopsis can open with a "Read <title>" line
+    override fun descriptionParagraphs(document: Document): List<String> {
+        val title = document.selectFirst(mangaDetailsSelectorTitle)?.ownText()
+        val seoLines = setOf("Read manga $title", "Read $title Manhua")
+        val paragraphs = document.selectFirst(mangaDetailsSelectorDescription)?.select("p") ?: return emptyList()
+        return paragraphs
+            .map { it.wholeText().trim().lines().dropWhile { line -> line.trim() in seoLines }.joinToString("\n").trim() }
+            .filterNot { it.isEmpty() || it == title }
+            .map(String::escapeMarkdown)
     }
 
     override fun chapterListSelector() = "div.wp-manga-chapter"

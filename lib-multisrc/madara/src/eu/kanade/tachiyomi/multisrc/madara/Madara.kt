@@ -9,6 +9,9 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 
@@ -24,7 +27,17 @@ abstract class Madara : MadaraBase() {
 
     override suspend fun getPopularManga(page: Int) = ajaxList(page, BrowseMode.Popular)
     override suspend fun getLatestUpdates(page: Int) = ajaxList(page, BrowseMode.Latest)
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = ajaxList(page, BrowseMode.Search, query, filters)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (query.isBlank()) return ajaxList(page, BrowseMode.Search, query, filters)
+        // WordPress search skips alternative names, which WP Manga keeps in post meta
+        val pages = coroutineScope {
+            awaitAll(
+                async { ajaxList(page, BrowseMode.Search, query, filters) },
+                async { ajaxList(page, BrowseMode.Search, query, filters, byAltName = true) },
+            )
+        }
+        return MangasPage(pages.flatMap(MangasPage::mangas).distinctBy(SManga::url), pages.any(MangasPage::hasNextPage))
+    }
     override fun getHomeUrl() = "$baseUrl/$mangaSubString/?m_orderby=views"
 
     override fun getFilterList(data: JsonElement?): FilterList {
@@ -49,7 +62,7 @@ abstract class Madara : MadaraBase() {
 
     protected open val ajaxTemplate = "madara-core/content/content-archive"
 
-    private suspend fun ajaxList(page: Int, mode: BrowseMode, query: String = "", filters: FilterList = FilterList()): MangasPage {
+    private suspend fun ajaxList(page: Int, mode: BrowseMode, query: String = "", filters: FilterList = FilterList(), byAltName: Boolean = false): MangasPage {
         val body = FormBody.Builder().apply {
             add("action", "madara_load_more")
             add("page", (page - 1).toString())
@@ -67,7 +80,14 @@ abstract class Madara : MadaraBase() {
             when (mode) {
                 BrowseMode.Popular -> sort("_wp_manga_views")
                 BrowseMode.Latest -> sort("_latest_update")
-                BrowseMode.Search -> addFilters(query, filters, if (filterNonMangaItems) 1 else 0)
+                BrowseMode.Search -> addFilters(filters, if (filterNonMangaItems) 1 else 0)
+            }
+            if (byAltName) {
+                add("vars[meta_query][alternative][key]", "_wp_manga_alternative")
+                add("vars[meta_query][alternative][value]", query)
+                add("vars[meta_query][alternative][compare]", "LIKE")
+            } else if (query.isNotBlank()) {
+                add("vars[s]", query)
             }
         }.build()
         val mangas = parseArchive(client.post("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, Fetch.XHR, body).asJsoup())
@@ -80,8 +100,7 @@ abstract class Madara : MadaraBase() {
         add("vars[order]", "DESC")
     }
 
-    private fun FormBody.Builder.addFilters(query: String, filters: FilterList, initialMetaQueryIndex: Int) {
-        if (query.isNotBlank()) add("vars[s]", query)
+    private fun FormBody.Builder.addFilters(filters: FilterList, initialMetaQueryIndex: Int) {
         var metaQueryIndex = initialMetaQueryIndex
         var taxonomyQueryIndex = 0
         val genres = filters.firstInstanceOrNull<GenreList>()?.state?.filter { it.state }?.map { it.slug }.orEmpty()
@@ -125,7 +144,7 @@ abstract class Madara : MadaraBase() {
                     add("vars[meta_query][$metaQueryIndex][compare]", if (filter.state == 1) "not exists" else "exists")
                     metaQueryIndex++
                 }
-                is GenreConditionFilter -> if (filter.state == 1 && genres.isNotEmpty()) add("vars[tax_query][$taxonomyQueryIndex][operation]", "AND")
+                is GenreConditionFilter -> if (filter.state == 1 && genres.isNotEmpty()) add("vars[tax_query][$taxonomyQueryIndex][operator]", "AND")
                 is GenreList -> if (genres.isNotEmpty()) {
                     add("vars[tax_query][$taxonomyQueryIndex][taxonomy]", "wp-manga-genre")
                     add("vars[tax_query][$taxonomyQueryIndex][field]", "slug")
