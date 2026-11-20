@@ -19,7 +19,7 @@ class ImageHostInterceptor : Interceptor {
         val host = workingHost ?: url.host
         val response = try {
             chain.proceed(request.withHost(host))
-        } catch (e: IOException) {
+        } catch (_: IOException) {
             null
         }
         if (response?.isSuccessful == true) return response
@@ -31,11 +31,7 @@ class ImageHostInterceptor : Interceptor {
         }
     }
 
-    private fun Request.withHost(host: String): Request = if (url.host == host) {
-        this
-    } else {
-        newBuilder().url(url.newBuilder().host(host).build()).build()
-    }
+    private fun Request.withHost(host: String): Request = newBuilder().url(url.newBuilder().host(host).build()).build()
 
     companion object {
         private val HOSTS = listOf("rus.com-x.life", "img.com-x.life")
