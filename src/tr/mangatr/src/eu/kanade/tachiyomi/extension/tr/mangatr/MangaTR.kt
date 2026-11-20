@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.util.Base64
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -297,11 +296,16 @@ abstract class MangaTR : KeiSource() {
             throw IOException("Lütfen WebView'da Bot Korumasını geçin.")
         }
 
-        val matrix = document.select("script:not([src])").firstNotNullOfOrNull { MATRIX_REGEX.find(it.data()) }
-        if (matrix != null) {
-            return matrix.groupValues[1].parseAs<List<MatrixPage>>().mapIndexed { index, page ->
-                Page(index, imageUrl = page.decode())
-            }
+        // The reader asks /a/<token> for each batch of three pages, keyed by the batch's first page index
+        val routes = document.select("script:not([src])").firstNotNullOfOrNull { ROUTES_REGEX.find(it.data()) }
+        if (routes != null) {
+            val from = Fetch.XHR.from(document.location())
+            val headers = ajaxHeaders.newBuilder().set("Accept", "application/json").build()
+            return routes.groupValues[1].parseAs<Map<String, String>>().entries
+                .sortedBy { it.key.toInt() }
+                .flatMap { client.get("$baseUrl/a/${it.value}", headers, from).body.string().parseAs<RouteBatch>().pages }
+                .sortedBy { it.index }
+                .mapIndexed { index, page -> Page(index, imageUrl = page.url) }
         }
 
         // Lazy-loaded pages keep their real URL in data-mtr-src until scrolled into view
@@ -310,18 +314,11 @@ abstract class MangaTR : KeiSource() {
         }
     }
 
-    // The reader script builds each page from window.__MTR_MATRIX__, with its url encoded one of three ways
     @Serializable
-    private class MatrixPage(private val m: Int, private val s: Int, private val d: String) {
-        fun decode(): String = when (m) {
-            0 -> d.base64Bytes().map { ((it.toInt() and 0xFF) xor (s and 0xFF)).toChar() }.joinToString("")
-            1 -> d.split('.').map { it.base64Bytes().decodeToString() }.let { (a, b, c) -> c + a + b }
-            2 -> d.base64Bytes().map { ((it.toInt() and 0xFF) - (s % 25 + 1)).toChar() }.joinToString("")
-            else -> throw IOException("Bilinmeyen sayfa kodlaması: $m")
-        }
+    private class RouteBatch(val pages: List<RoutePage>)
 
-        private fun String.base64Bytes() = Base64.decode(this, Base64.DEFAULT)
-    }
+    @Serializable
+    private class RoutePage(val index: Int, val url: String)
 
     // ============================= Utilities =============================
 
@@ -426,7 +423,7 @@ abstract class MangaTR : KeiSource() {
         private val RELATIVE_DATE_REGEX = Regex("""(\d+)\s*([a-zçğıöşü]+)""")
         private val CHALLENGE_REGEX = Regex("""challenge:\s*"([^"]+)"""")
         private val CHAPTER_URL_REGEX = Regex("""id-\d+-read-(.+)-chapter-[^/]+\.html""")
-        private val MATRIX_REGEX = Regex("""__MTR_MATRIX__\s*=\s*\{.*?\bm\s*:\s*(\[.*\])\s*\}\s*;""", RegexOption.DOT_MATCHES_ALL)
+        private val ROUTES_REGEX = Regex("""MTR_READER_ROUTES\s*=\s*(\{[^;]*\})\s*;""")
         private val SEED_REGEX = Regex("""--mdx-(white|black)\s*:\s*(-?\d+)""")
         private const val IMAGE_HOST = "image.mngtr.site"
         private const val IMAGE_ATTEMPTS = 3
