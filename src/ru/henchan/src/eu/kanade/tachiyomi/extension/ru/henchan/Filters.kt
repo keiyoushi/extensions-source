@@ -17,9 +17,9 @@ class OrderBy :
         arrayOf("Дата", "Популярность", "Алфавит"),
         arrayOf("&n=dateasc" to "", "&n=favasc" to "&n=favdesc", "&n=abcdesc" to "&n=abcasc"),
         arrayOf(
-            "manga/new&n=dateasc" to "manga/new",
-            "manga/new&n=favasc" to "mostfavorites&sort=manga",
-            "manga/new&n=abcdesc" to "manga/new&n=abcasc",
+            "manga/newest&n=dateasc" to "manga/newest",
+            "manga/newest&n=favasc" to "manga/newest&n=favdesc",
+            "manga/newest&n=abcdesc" to "manga/newest&n=abcasc",
         ),
     )
 

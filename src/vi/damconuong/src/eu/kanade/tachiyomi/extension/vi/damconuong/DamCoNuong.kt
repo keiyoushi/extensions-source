@@ -19,6 +19,8 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -296,12 +298,9 @@ abstract class DamCoNuong : KeiSource() {
         }
 
         val path = "$mangaSlug/$chapterSlug"
-        PagesCrypto.ensureLoaded(client, baseUrl, preferences)
-        val token = PagesCrypto.token(mangaSlug, chapterSlug)
-        val response = fetchPagesJson(mangaSlug, chapterSlug, token)
-            .parseAs<PagesResponse>()
+        val chapterPage = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
+        val payload = fetchPagesPayload(mangaSlug, chapterSlug, path, chapterPage)
 
-        val payload = PagesCrypto.decryptPages(response.encrypted, token, path)
         return payload.pages.mapIndexedNotNull { index, src ->
             if (src.isBlank()) return@mapIndexedNotNull null
             val key = payload.scrambleKeys?.getOrNull(index)?.takeIf { it.isNotEmpty() }
@@ -310,11 +309,41 @@ abstract class DamCoNuong : KeiSource() {
         }
     }
 
+    private suspend fun fetchPagesPayload(
+        mangaSlug: String,
+        chapterSlug: String,
+        path: String,
+        chapterPage: Document,
+    ): PagesPayload {
+        val secret = loadSecret(chapterPage)
+        val (token, body) = try {
+            fetchPages(mangaSlug, chapterSlug, secret)
+        } catch (_: InvalidPagesTokenException) {
+            fetchPages(mangaSlug, chapterSlug, loadSecret(chapterPage, knownStale = true))
+        }
+        return PagesCrypto.decryptPages(body.parseAs<PagesResponse>().encrypted, token, path)
+    }
+
+    private suspend fun loadSecret(chapterPage: Document, knownStale: Boolean = false): ByteArray = withContext(Dispatchers.IO) {
+        DecoderSecret.load(client, baseUrl, chapterPage, headers, preferences, knownStale)
+    }
+
+    private suspend fun fetchPages(mangaSlug: String, chapterSlug: String, secret: ByteArray): Pair<String, String> {
+        PagesCrypto.load(secret)
+        val token = PagesCrypto.token(mangaSlug, chapterSlug)
+        return token to fetchPagesJson(mangaSlug, chapterSlug, token)
+    }
+
+    private class InvalidPagesTokenException : Exception("Pages token rejected by the site")
+
     private suspend fun fetchPagesJson(mangaSlug: String, chapterSlug: String, token: String): String {
         val cUrl = "$baseUrl/_c/mangas/$mangaSlug/chapters/$chapterSlug/pages?_=$token"
-        val text = client.get(cUrl, Fetch.DOCUMENT, ensureSuccess = false).use { it.body.string() }
+        val text = client.get(cUrl, Fetch.XHR, ensureSuccess = false).use { it.body.string() }
         if (text.contains("\"e\":")) {
             return text
+        }
+        if (text.contains("invalid_token")) {
+            throw InvalidPagesTokenException()
         }
         if (isLoginRequired(text)) {
             throw Exception("Truyện này cần đăng nhập webview bằng tài khoản phù hợp để xem")

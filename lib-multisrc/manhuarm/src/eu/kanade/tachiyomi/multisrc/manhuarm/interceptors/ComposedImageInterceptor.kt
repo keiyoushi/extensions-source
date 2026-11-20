@@ -13,8 +13,7 @@ import android.text.StaticLayout
 import android.text.TextPaint
 import eu.kanade.tachiyomi.multisrc.manhuarm.Dialog
 import eu.kanade.tachiyomi.multisrc.manhuarm.Language
-import eu.kanade.tachiyomi.multisrc.manhuarm.Manhuarm.Companion.PAGE_REGEX
-import keiyoushi.utils.parseAs
+import eu.kanade.tachiyomi.multisrc.manhuarm.pageFragment
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
@@ -22,6 +21,7 @@ import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.Buffer
 import org.jsoup.Jsoup
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 
 // Draws the OCR dialogues onto the page image.
@@ -33,22 +33,22 @@ class ComposedImageInterceptor(
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val url = request.url.toString()
+        val dialogues = request.url.pageFragment()?.dialogues
 
-        if (!PAGE_REGEX.containsMatchIn(url)) {
+        if (dialogues.isNullOrEmpty()) {
             return chain.proceed(request)
         }
 
-        val dialogues = request.url.fragment?.parseAs<List<Dialog>>().orEmpty()
         val response = chain.proceed(request)
 
-        if (!response.isSuccessful || dialogues.isEmpty()) {
+        if (!response.isSuccessful) {
             return response
         }
 
         val language = settings()
         val options = BitmapFactory.Options().apply { inMutable = true }
-        val bitmap = response.body.byteStream().use { BitmapFactory.decodeStream(it, null, options) }!!
+        val bitmap = response.body.byteStream().use { BitmapFactory.decodeStream(it, null, options) }
+            ?: throw IOException("Unsupported image")
         val canvas = Canvas(bitmap)
         val font = selectFontFamily(language)
 
@@ -60,9 +60,9 @@ class ComposedImageInterceptor(
             canvas.draw(textPaint, dialogBox, dialog, dialog.x, y)
         }
 
-        val (format, mediaType) = when (url.substringBefore("#").substringAfterLast(".").lowercase()) {
+        val (format, mediaType) = when (response.body.contentType()?.subtype) {
             "png" -> Bitmap.CompressFormat.PNG to "image/png"
-            "jpeg", "jpg" -> Bitmap.CompressFormat.JPEG to "image/jpeg"
+            "jpeg" -> Bitmap.CompressFormat.JPEG to "image/jpeg"
             else -> Bitmap.CompressFormat.WEBP to "image/webp"
         }
 

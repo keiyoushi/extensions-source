@@ -57,7 +57,12 @@ class FreeReader {
                             }
                             "error", "early_access" -> {
                                 webSocket.close(1000, null)
-                                continuation.resumeWithException(IOException(frame.code ?: frame.type))
+                                val message = if (frame.code == "LOGIN_REQUIRED") {
+                                    LOGIN_REQUIRED_MESSAGE
+                                } else {
+                                    frame.code ?: frame.type
+                                }
+                                continuation.resumeWithException(IOException(message))
                             }
                         }
                     }

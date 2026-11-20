@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.id.kaguya
+package eu.kanade.tachiyomi.multisrc.aesir
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -29,26 +29,28 @@ class MetaDto(
 
 @Serializable
 class ComicDto(
-    private val slug: String,
+    val slug: String,
     private val title: String,
-    private val cover: String? = null,
+    private val cover: String?,
     private val altTitles: List<String> = emptyList(),
-    private val description: String? = null,
-    private val author: String? = null,
-    private val artist: String? = null,
-    private val type: String? = null,
-    private val status: String? = null,
+    private val description: String?,
+    private val author: String?,
+    private val artist: String?,
+    private val type: String?,
+    private val year: Int?,
+    private val status: String?,
     private val genres: List<GenreDto> = emptyList(),
     val chapters: List<ChapterDto> = emptyList(),
 ) {
-    fun toSManga() = SManga.create().apply {
+    fun toSManga(cdnUrl: String) = SManga.create().apply {
         url = "/comic/$slug"
         title = this@ComicDto.title
-        thumbnail_url = cover?.let { CDN_URL.toHttpUrl().newBuilder().addPathSegments(it).build().toString() }
+        thumbnail_url = cover?.let { cdnUrl.toHttpUrl().newBuilder().addPathSegments(it).build().toString() }
         author = this@ComicDto.author
         artist = this@ComicDto.artist
         description = MarkdownDescription.Builder()
             .description(this@ComicDto.description)
+            .field("Year", year?.toString())
             .altTitles(altTitles)
             .build()
         genre = (listOfNotNull(type?.lowercase()?.replaceFirstChar(Char::uppercase)) + genres.map { it.name })
@@ -56,13 +58,12 @@ class ComicDto(
             .ifEmpty { null }
         status = when (this@ComicDto.status) {
             "ONGOING" -> SManga.ONGOING
-            "END", "END_SEASON" -> SManga.COMPLETED
+            "END" -> SManga.COMPLETED
+            "END_SEASON" -> SManga.ON_HIATUS
             "DROP" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
     }
-
-    fun toSChapters() = chapters.map { it.toSChapter(slug) }
 }
 
 @Serializable
@@ -73,33 +74,39 @@ class GenreDto(
 
 @Serializable
 class ChapterDto(
-    private val id: String,
-    private val number: String,
-    private val title: String? = null,
+    val id: String,
+    val number: String,
+    private val title: String?,
     private val isLocked: Boolean = false,
-    private val publishedAt: String? = null,
+    private val publishedAt: String?,
 ) {
-    fun toSChapter(comicSlug: String) = SChapter.create().apply {
-        url = "/comic/$comicSlug/chapter/$id"
+    fun toSChapter(chapterUrl: String) = SChapter.create().apply {
+        url = chapterUrl
         name = buildString {
             if (isLocked) append("🔒 ")
             append("Chapter ")
             append(number)
             title?.takeIf(String::isNotBlank)?.let { append(": ").append(it) }
         }
-        chapter_number = number.toFloatOrNull() ?: -1f
+        number.toFloatOrNull()?.let { chapter_number = it }
         date_upload = Instant.tryParse(publishedAt)
     }
 }
 
 @Serializable
+class ReaderPropsDto(
+    val readerTicket: String,
+)
+
+@Serializable
 class ReaderDto(
-    val locked: Boolean = false,
-    val pages: List<PageDto> = emptyList(),
+    val locked: Boolean,
+    val pages: List<PageDto>,
 )
 
 @Serializable
 class PageDto(
     val order: Int,
     val token: String,
+    val scrambleSeed: String?,
 )
