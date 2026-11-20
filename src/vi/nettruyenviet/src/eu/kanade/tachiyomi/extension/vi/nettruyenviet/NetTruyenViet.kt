@@ -16,7 +16,6 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import java.time.ZoneId
 
 @Source
@@ -65,14 +64,6 @@ abstract class NetTruyenViet : WPComics() {
         val slug = url.pathSegments.getOrNull(1)?.ifEmpty { null } ?: return null
         val manga = SManga.create().apply { this.url = "/truyen-tranh/$slug" }
         return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
-    }
-
-    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
-        description = document.selectFirst("article#item-detail div.detail-content")
-            ?.clone()
-            ?.apply { select("h2.list-title, a.morelink, script, style").remove() }
-            ?.text()
-            ?.takeUnless { it.isBlank() }
     }
 
     override val pageListSelector = "#chapter-content img, .reading-detail .page-chapter img, .chapter-content img, .page-chapter img"

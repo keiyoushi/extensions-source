@@ -11,7 +11,6 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
-import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstanceOrNull
@@ -96,9 +95,6 @@ abstract class LuotTruyen : WPComics() {
             author = infoElement.selectFirst("li.author p.col-xs-8, li.author p.col-xs-10")?.text()
             status = infoElement.selectFirst("li.status p.col-xs-8, li.status p.col-xs-10")?.text().toStatus()
             genre = infoElement.select("li.kind p.col-xs-8 a, li.kind p.col-xs-12 a").joinToString { it.text() }.ifEmpty { null }
-            description = MarkdownDescription.Builder().apply {
-                infoElement.select("div.detail-content p").forEach { description(it) }
-            }.build()
         }
     }
 

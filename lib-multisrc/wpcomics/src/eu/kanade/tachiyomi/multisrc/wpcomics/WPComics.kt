@@ -11,6 +11,7 @@ import keiyoushi.lib.i18n.Intl
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
@@ -143,9 +144,12 @@ abstract class WPComics : KeiSource() {
             status = info.select("li.status p.col-xs-8").text().toStatus()
             genre = info.select("li.kind p.col-xs-8 a").joinToString { it.text() }
             thumbnail_url = imageOrNull(info.selectFirst("div.col-image img")!!)
-            val otherName = info.select("h2.other-name").text()
-            description = info.select("div.detail-content p").joinToString("\n") { it.wholeText().trim() } +
-                if (otherName.isNotBlank()) "\n\n${intl["OTHER_NAME"]}: $otherName" else ""
+            description = MarkdownDescription.Builder().apply {
+                info.select("div.detail-content div.shortened > *")
+                    .ifEmpty { info.select("div.detail-content p") }
+                    .forEach { description(it) }
+                field(intl["OTHER_NAME"], info.selectFirst("h2.other-name")?.text())
+            }.build()
         }
     }
 
