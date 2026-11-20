@@ -32,8 +32,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.Cache
 import okhttp3.CacheControl
-import okhttp3.Dispatcher
-import okhttp3.Dns
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -42,8 +40,6 @@ import okhttp3.Request
 import okhttp3.Response
 import java.io.File
 import java.io.IOException
-import java.net.InetAddress
-import java.net.UnknownHostException
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -61,29 +57,6 @@ abstract class Pawchive :
     private var fileServersUnreachable = false
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        // Isolate from the app's shared Dispatcher so rate-limited file downloads cannot starve
-        // Mihon's DnsOverHttps client (which shares network.client's Dispatcher).
-        dispatcher(
-            Dispatcher().apply {
-                maxRequests = 16
-            },
-        )
-        val appDns = network.client.dns
-        if (appDns != Dns.SYSTEM) {
-            dns(
-                object : Dns {
-                    override fun lookup(hostname: String): List<InetAddress> = try {
-                        appDns.lookup(hostname)
-                    } catch (e: UnknownHostException) {
-                        try {
-                            Dns.SYSTEM.lookup(hostname)
-                        } catch (_: UnknownHostException) {
-                            throw e
-                        }
-                    }
-                },
-            )
-        }
         addInterceptor(::thumbnailFallbackInterceptor)
         cache(
             Cache(
@@ -95,9 +68,8 @@ abstract class Pawchive :
             ),
         )
         readTimeout(5.minutes)
-        rateLimit(1) { it.pathSegments.firstOrNull() in FILE_PATHS }
-        rateLimit(2) { it.pathSegments.firstOrNull() == "api" }
-        rateLimit(4)
+        rateLimit(5) { it.pathSegments.firstOrNull() == "api" }
+        rateLimit(5) { it.pathSegments.firstOrNull() in FILE_PATHS }
     }
 
     private fun thumbnailFallbackInterceptor(chain: Interceptor.Chain): Response {
@@ -541,8 +513,9 @@ abstract class Pawchive :
         }
 
         val postData = client.get(url, Fetch.XHR).parseAs<PawchivePostDto>()
+        val fallbackToThumbnail = preferences.getBoolean(FALLBACK_LOW_RES_IMG, true)
         return postData.images.mapIndexed { i, file ->
-            Page(i, imageUrl = file.imageUrl(imgUrl))
+            Page(i, imageUrl = file.imageUrl(imgUrl, postData.hasFull, fallbackToThumbnail))
         }
     }
 

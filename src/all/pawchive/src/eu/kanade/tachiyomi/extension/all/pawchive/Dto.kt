@@ -134,6 +134,7 @@ class PawchivePostDto(
     private val edited: String?,
     private val file: PawchiveFileDto?,
     private val attachments: List<PawchiveFileDto> = emptyList(),
+    @SerialName("has_full") val hasFull: Boolean?,
 ) {
     val images: List<PawchiveFileDto>
         get() = (listOfNotNull(file) + attachments)
@@ -197,8 +198,8 @@ class PawchiveFileDto(
 ) {
     fun thumbnailUrl(imgUrl: String) = "$imgUrl/thumbnail/data${path.orEmpty()}"
 
-    fun imageUrl(imgUrl: String) = when {
-        !server.isNullOrBlank() -> "$server/data${path.orEmpty()}"
+    fun imageUrl(imgUrl: String, hasFull: Boolean? = null, fallbackToThumbnail: Boolean = true) = when {
+        !server.isNullOrBlank() && (hasFull != false || !fallbackToThumbnail) -> "$server/data${path.orEmpty()}"
         !tempUrl.isNullOrBlank() -> tempUrl.toHttpUrlOrNull()
             ?.newBuilder()
             ?.fragment(path)
