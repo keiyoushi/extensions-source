@@ -10,7 +10,9 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.describe
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.setMeta
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -164,19 +166,13 @@ abstract class Keyoapp : KeyoappBase() {
             document.select(genreSelector).forEach { add(it.text().trim(',', ' ')) }
         }.filter(String::isNotBlank).joinToString()
 
-        val synopsis = document.selectFirst(descriptionSelector)?.text().orEmpty()
         val altNames = document.select(altNameSelector)
             .map { it.text() }
-            .filter { it.isNotEmpty() && it != "No alternative titles." }
-        description = buildString {
-            append(synopsis)
-            if (altNames.isNotEmpty()) {
-                if (isNotEmpty()) append("\n\n")
-                append(altNamePrefix.trim())
-                append("\n")
-                altNames.joinTo(this, "\n") { "- $it" }
-            }
-        }.takeIf { it.isNotEmpty() }
+            .filter { it != "No alternative titles." }
+        describe {
+            description(document.selectFirst(descriptionSelector))
+            altTitles(altNames, altNamePrefix)
+        }
     }
 
     protected open val paidChapterSelector: String = "img[alt~=Coin]"
@@ -196,9 +192,7 @@ abstract class Keyoapp : KeyoappBase() {
         element.selectFirst(dateSelector)?.run {
             date_upload = text().parseDate()
         }
-        if (element.select(paidChapterSelector).isNotEmpty()) {
-            name = "🔒 $name"
-        }
+        setMeta { locked = element.select(paidChapterSelector).isNotEmpty() }
     }
 
     // =============================== Pages ===============================

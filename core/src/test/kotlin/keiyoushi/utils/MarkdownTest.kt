@@ -6,6 +6,8 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class MarkdownTest {
+    private fun describe(block: MangaDescription.() -> Unit) = MangaDescription(emptySet()).apply(block).build()
+
     @Test
     fun `plain text is unchanged`() {
         listOf(
@@ -116,16 +118,16 @@ class MarkdownTest {
 
     @Test
     fun `description sections in order`() {
-        val description = MarkdownDescription.Builder()
-            .rating(8.25, votes = 12)
-            .info("2019", null, " ", "Manhwa")
-            .description("# Intro\nSecond line")
-            .field("Publisher", "A_B")
-            .field("Year", null)
-            .field("Parodies", listOf("x", " ", "y"))
-            .altTitles(listOf("One", " ", "One", "*Two*"))
-            .links(listOf("AniList" to "https://anilist.co/manga/1", "MAL" to null, "My (List)" to "https://x.test/a b", "AniList" to "https://anilist.co/manga/2"))
-            .build()
+        val description = describe {
+            rating(8.25, votes = 12)
+            info("2019", null, " ", "Manhwa")
+            description("# Intro\nSecond line")
+            field("Publisher", "A_B")
+            field("Year", null)
+            field("Parodies", listOf("x", " ", "y"))
+            altTitles(listOf("One", " ", "One", "*Two*"))
+            links(listOf("AniList" to "https://anilist.co/manga/1", "MAL" to null, "My (List)" to "https://x.test/a b", "AniList" to "https://anilist.co/manga/2"))
+        }
         assertEquals(
             """
             ★★★★☆ 8.25 (12)
@@ -152,41 +154,41 @@ class MarkdownTest {
     @Test
     fun `description builder skips empty input`() {
         assertNull(
-            MarkdownDescription.Builder()
-                .rating(null)
-                .info(null, "")
-                .description(null as String?)
-                .description(Jsoup.parseBodyFragment("<img src=a>").body())
-                .markdown(" ")
-                .field("A", " ")
-                .altTitles(emptyList())
-                .links(listOf("C" to ""))
-                .rating(Double.NaN)
-                .build(),
+            describe {
+                rating(null)
+                info(null, "")
+                description(null as String?)
+                description(Jsoup.parseBodyFragment("<img src=a>").body())
+                markdown(" ")
+                field("A", " ")
+                altTitles(emptyList())
+                links(listOf("C" to ""))
+                rating(Double.NaN)
+            },
         )
     }
 
     @Test
     fun `description builder takes html and markdown`() {
-        val description = MarkdownDescription.Builder()
-            .field("A", "1")
-            .description(Jsoup.parseBodyFragment("<p>a <b>b</b></p>").body())
-            .field("B", "2")
-            .markdown("**kept**")
-            .rating(85, max = 100)
-            .build()
+        val description = describe {
+            field("A", "1")
+            description(Jsoup.parseBodyFragment("<p>a <b>b</b></p>").body())
+            field("B", "2")
+            markdown("**kept**")
+            rating(85, max = 100)
+        }
         assertEquals("**A:** 1\n\na **b**\n\n**B:** 2\n\n**kept**\n\n★★★★☆ 85", description)
     }
 
     @Test
     fun `description builder with fields and separator`() {
-        val description = MarkdownDescription.Builder()
-            .rating(8.5, votes = 100)
-            .field("Year", "2021")
-            .field("Chapters", "231")
-            .separator()
-            .description("Manga description.")
-            .build()
+        val description = describe {
+            rating(8.5, votes = 100)
+            field("Year", "2021")
+            field("Chapters", "231")
+            separator()
+            description("Manga description.")
+        }
         assertEquals(
             """
             ★★★★☆ 8.5 (100)
@@ -202,26 +204,26 @@ class MarkdownTest {
 
     @Test
     fun `rating starts its own line`() {
-        val description = MarkdownDescription.Builder()
-            .info("2021")
-            .rating(8.0)
-            .info("Manhwa")
-            .field("A", "1")
-            .build()
+        val description = describe {
+            info("2021")
+            rating(8.0)
+            info("Manhwa")
+            field("A", "1")
+        }
         assertEquals("2021\n\n★★★★☆ 8\nManhwa · **A:** 1", description)
     }
 
     @Test
     fun `separators are dropped first, last and doubled`() {
-        val description = MarkdownDescription.Builder()
-            .separator()
-            .description("a")
-            .separator()
-            .separator()
-            .description("b")
-            .separator()
-            .build()
+        val description = describe {
+            separator()
+            description("a")
+            separator()
+            separator()
+            description("b")
+            separator()
+        }
         assertEquals("a\n\n---\n\nb", description)
-        assertNull(MarkdownDescription.Builder().separator().separator().build())
+        assertNull(describe { repeat(2) { separator() } })
     }
 }

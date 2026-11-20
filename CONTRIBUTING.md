@@ -52,7 +52,7 @@ or fix them directly by submitting a Pull Request.
         - [JsonElement accessor helpers](#jsonelement-accessor-helpers)
         - [ZIP streaming - `zipDirectory` / `readZipEntry`](#zip-streaming---zipdirectory--readzipentry)
         - [Jsoup helpers - `asJsoup` / `attrOrNull` / `textOrNull`](#jsoup-helpers---asjsoup--attrornull--textornull)
-        - [Description builder - `MarkdownDescription` / `toMarkdown` / `escapeMarkdown` / `ratingStars`](#description-builder---markdowndescription--tomarkdown--escapemarkdown--ratingstars)
+        - [Description builder - `describe` / `setMeta` / `putMemo` / `toMarkdown` / `escapeMarkdown` / `ratingStars`](#description-builder---describe--setmeta--putmemo--tomarkdown--escapemarkdown--ratingstars)
         - [Cryptography - `decodeHex` / `rc4` / AES helpers](#cryptography---decodehex--rc4--aes-helpers)
         - [Binary endian helpers](#binary-endian-helpers)
         - [Decompression - `Inflater.inflate`](#decompression---inflaterinflate)
@@ -1180,25 +1180,38 @@ val title = element.textOrNull()
 val directText = element.ownTextOrNull() // excludes text of nested child elements
 ```
 
-##### Description builder - `MarkdownDescription` / `toMarkdown` / `escapeMarkdown` / `ratingStars`
+##### Description builder - `describe` / `setMeta` / `putMemo` / `toMarkdown` / `escapeMarkdown` / `ratingStars`
 
-`SManga.description` is Markdown. `MarkdownDescription.Builder` adds sections in call order, escapes site text and skips empty input:
+`SManga.description` is Markdown. `describe { }` adds sections in call order, escapes site text and skips empty input. It also stores the rating, alternative titles, tracker ids and links in `memo["meta"]`, so apps can show them properly instead of parsing the text:
 
 ```kotlin
-import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.MangaMeta
+import keiyoushi.utils.describe
 
-description = MarkdownDescription.Builder()
-    .rating(score) // out of 10, or set `max`; optional `votes`. On its own line
-    .info(year, type) // a run of info and fields shares one line, right under the rating
-    .separator() // a horizontal rule, dropped when it would come first, last or doubled
-    .description(document.selectFirst(".synopsis")) // HTML or plain text; `markdown()` for site Markdown
-    .field("Publisher", publisher)
-    .altTitles(altTitles)
-    .links(listOf("AniList" to anilistUrl, "MyAnimeList" to malUrl))
-    .build() // null when empty
+describe {
+    rating(score) // out of 10, or set `max`; optional `votes`. On its own line
+    field("Type", type) // a run of fields and info shares one line
+    separator() // a horizontal rule, dropped when it would come first, last or doubled
+    description(document.selectFirst(".synopsis")) // HTML or plain text; `markdown()` for site Markdown
+    field("Publisher", publisher)
+    altTitles(altTitles)
+    trackers(MangaMeta.Tracker.ANILIST to anilistId, MangaMeta.Tracker.MANGAUPDATES to muId)
+    links(listOf("Webtoon" to officialUrl), label = "Official", language = "en") // language: of the linked edition
+    meta { contentRating = MangaMeta.ContentRating.ADULT } // stored, not printed; also `rating`, `altTitles`, `trackers`, `links`
+}
 ```
 
-Outside the builder, `Element.toMarkdown()`, `String.escapeMarkdown()` and `ratingStars()` do the same for one piece.
+An app that shows a key itself lists it in `AppInfo.getShownMetaKeys()` (`rating`, `altTitles`, `trackers`, `links`), and `describe` leaves that section out of the description.
+
+Tracker ids go to `trackers(...)`, or `trackers(urls)` for tracker pages (other urls are skipped, so pass those to `links`), not to `links`: apps read them to link trackers.
+
+Never assign `memo`: add keys with `putMemo { put("slug", slug) }`, which keeps the others, `memo["meta"]` included (lint: `KeiMemoAssigned`).
+
+For chapters, set `name` first, then `setMeta { locked = isLocked }`; a locked chapter gets the `🔒` in its name unless the app lists `locked`.
+
+The stored JSON is specified by [memo-meta.schema.json](https://github.com/keiyoushi/extensions-lib/blob/main/schema/memo-meta.schema.json) in extensions-lib.
+
+Outside `describe`, `Element.toMarkdown()`, `String.escapeMarkdown()` and `ratingStars()` do the same for one piece.
 
 ##### Cryptography - `decodeHex` / `rc4` / `xor` / AES helpers
 
@@ -1601,20 +1614,18 @@ open class UriPartFilter(displayName: String, private val vals: Array<Pair<Strin
 
 ### Misc notes
 
-- **Passing state via `memo` instead of URL fragments:** Instead of hacking URL fragments (`#data`) into `SManga.url` or `SChapter.url` to preserve internal IDs or metadata (which corrupts URLs and breaks when URLs are stripped or parsed), use the `memo: JsonObject` property on `SManga` and `SChapter`. You can attach structured JSON via `buildJsonObject { put("key", value) }` during search or popular listings, and read it back cleanly in `fetchMangaUpdate`, `getChapterList`, or `getPageList` via `manga.memo["key"]?.stringOrNull` or `chapter.memo["key"]?.stringOrNull`. URL fragments should only be used on `Page.url` to pass transient parameters to OkHttp image interceptors:
+- **Passing state via `memo` instead of URL fragments:** Instead of hacking URL fragments (`#data`) into `SManga.url` or `SChapter.url` to preserve internal IDs or metadata (which corrupts URLs and breaks when URLs are stripped or parsed), use the `memo: JsonObject` property on `SManga` and `SChapter`. Attach structured JSON with `putMemo { put("key", value) }`, never by assigning `memo` (it would drop the other keys), during search or popular listings, and read it back cleanly in `fetchMangaUpdate`, `getChapterList`, or `getPageList` via `manga.memo["key"]?.stringOrNull` or `chapter.memo["key"]?.stringOrNull`. The `meta` key belongs to `describe` and `setMeta` (see the description builder). URL fragments should only be used on `Page.url` to pass transient parameters to OkHttp image interceptors:
 
   ```kotlin
   import keiyoushi.utils.stringOrNull
-  import kotlinx.serialization.json.buildJsonObject
+  import keiyoushi.utils.putMemo
   import kotlinx.serialization.json.put
 
   // Setting memo when building SManga or SChapter:
   val manga = SManga.create().apply {
       url = "/manga/$slug"
       title = titleText
-      memo = buildJsonObject {
-          put("internal_id", id)
-      }
+      putMemo { put("internal_id", id) }
   }
 
   // Reading memo back in fetchMangaUpdate, getChapterList, or getPageList:

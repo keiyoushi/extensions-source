@@ -21,6 +21,8 @@ import eu.kanade.tachiyomi.extension.all.mangadex.dto.ListDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.MangaDataDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.MangaDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.MangaListDto
+import eu.kanade.tachiyomi.extension.all.mangadex.dto.MangaStatisticsDto
+import eu.kanade.tachiyomi.extension.all.mangadex.dto.StatisticsDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -39,6 +41,7 @@ import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
@@ -447,13 +450,15 @@ class MangaDex(
      *
      * @throws Exception if the url is the old format so people migrate
      */
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga {
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga = coroutineScope {
         if (!helper.containsUuid(url.toString())) {
             throw Exception(helper.intl["migrate_warning"])
         }
 
+        val id = url.pathSegments[1]
+        val statistics = async { fetchStatistics(id) }
         val manga = client.get(
-            url = "${MDConstants.API_URL}/manga/${url.pathSegments[1]}"
+            url = "${MDConstants.API_URL}/manga/$id"
                 .toHttpUrl()
                 .newBuilder()
                 .addQueryParameter("includes[]", MDConstants.COVER_ART)
@@ -464,10 +469,11 @@ class MangaDex(
             cacheControl = CacheControl.FORCE_NETWORK,
         ).parseAs<MangaDto>(helper.json)
 
-        return helper.createManga(
+        helper.createManga(
             manga.data!!,
             fetchSimpleChapterList(manga),
             fetchFirstVolumeCover(manga),
+            statistics.await(),
             dexLang,
             preferences.coverQuality,
             preferences.altTitlesInDesc,
@@ -491,6 +497,17 @@ class MangaDex(
 
         return runCatching { response.parseAs<AggregateDto>(helper.json) }
             .getOrNull()?.volumes.orEmpty()
+    }
+
+    private suspend fun fetchStatistics(id: String): MangaStatisticsDto? {
+        val url = "${MDConstants.API_URL}/statistics/manga".toHttpUrl().newBuilder().addPathSegment(id).build()
+        // The rating is optional: the details load without it
+        return try {
+            client.get(url, Fetch.XHR).parseAs<StatisticsDto>(helper.json).statistics[id]
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            null
+        }
     }
 
     /**

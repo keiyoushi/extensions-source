@@ -21,6 +21,7 @@ import eu.kanade.tachiyomi.extension.all.mangadex.dto.ListAttributesDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.ListDataDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.MangaAttributesDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.MangaDataDto
+import eu.kanade.tachiyomi.extension.all.mangadex.dto.MangaStatisticsDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.ScanlationGroupAttributes
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.ScanlationGroupDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.StatusDto
@@ -36,6 +37,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
+import keiyoushi.utils.MangaMeta
+import keiyoushi.utils.describe
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
@@ -316,6 +319,7 @@ class MangaDexHelper(private val lang: String) {
         mangaDataDto: MangaDataDto,
         chapters: Map<String, AggregateVolume>,
         firstVolumeCover: String?,
+        statistics: MangaStatisticsDto?,
         lang: String,
         coverSuffix: String?,
         altTitlesInDesc: Boolean,
@@ -362,50 +366,75 @@ class MangaDexHelper(private val lang: String) {
 
         val genreList = MDConstants.TAG_GROUPS_ORDER.flatMap { genresMap[it].orEmpty() } + nonGenres
 
-        // Build description
-        val desc = mutableListOf<String>()
-
-        (attr.description[lang] ?: attr.description["en"])
-            ?.removeEntitiesAndMarkdown()
-            ?.let { desc.add(it) }
-
-        if (altTitlesInDesc) {
-            val romanizedOriginalLang = MDConstants.romanizedLangCodes[attr.originalLanguage].orEmpty()
-            val allLanguages = lang == MDConstants.ALL_LANGUAGES
-            val altTitles = attr.altTitles
-                .filter { allLanguages || it.containsKey(lang) || it.containsKey(romanizedOriginalLang) }
-                .mapNotNull { it.entries.singleOrNull() }
-                .filter { it.value.isNotEmpty() }
-                .map { (code, title) -> if (allLanguages) "[$code] $title" else title }
-
-            if (altTitles.isNotEmpty()) {
-                val altTitlesDesc = altTitles
-                    .joinToString("\n", "${intl["alternative_titles"]}\n") { "• $it" }
-                desc.add(altTitlesDesc.removeEntities())
-            }
-        }
-
-        if (finalChapterInDesc) {
-            val finalChapter = mutableListOf<String>()
-            attr.lastVolume?.takeIf { it.isNotEmpty() }?.let { finalChapter.add("Vol.$it") }
-            attr.lastChapter?.takeIf { it.isNotEmpty() }?.let { finalChapter.add("Ch.$it") }
-
-            if (finalChapter.isNotEmpty()) {
-                val finalChapterDesc = finalChapter
-                    .joinToString(" ", "${intl["final_chapter"]}\n")
-                desc.add(finalChapterDesc.removeEntities())
-            }
-        }
-
         return createBasicManga(mangaDataDto, coverFileName, coverSuffix, lang, preferExtensionLangTitle).apply {
-            description = desc.joinToString("\n\n")
             author = authors.joinToString()
             artist = artists.joinToString()
             status = getPublicationStatus(attr, chapters)
             genre = genreList
                 .filter(String::isNotEmpty)
                 .joinToString()
+            describe {
+                // An unrated title still has MangaDex's starting score
+                statistics?.rating?.let { stats -> stats.distribution.values.sum().takeIf { it > 0 }?.let { votes -> rating(stats.bayesian, votes = votes) } }
+                description((attr.description[lang] ?: attr.description["en"])?.removeEntitiesAndMarkdown())
+                if (altTitlesInDesc) {
+                    val romanizedOriginalLang = MDConstants.romanizedLangCodes[attr.originalLanguage].orEmpty()
+                    val allLanguages = lang == MDConstants.ALL_LANGUAGES
+                    altTitles(
+                        attr.altTitles
+                            .filter { allLanguages || it.containsKey(lang) || it.containsKey(romanizedOriginalLang) }
+                            .mapNotNull { it.entries.singleOrNull() }
+                            .filter { it.value.isNotEmpty() }
+                            .map { (code, title) -> (if (allLanguages) "[$code] $title" else title).removeEntities() },
+                        intl["alternative_titles"],
+                    )
+                }
+                if (finalChapterInDesc) {
+                    val finalChapter = listOfNotNull(
+                        attr.lastVolume?.takeIf { it.isNotEmpty() }?.let { "Vol.$it" },
+                        attr.lastChapter?.takeIf { it.isNotEmpty() }?.let { "Ch.$it" },
+                    ).joinToString(" ").removeEntities()
+                    field(intl["final_chapter"], finalChapter)
+                }
+                meta {
+                    // Every language's, whatever the setting prints
+                    altTitles = attr.altTitles.flatMap { it.values }.map { it.removeEntities() }
+                    contentRating = when (attr.contentRating) {
+                        ContentRatingDto.SAFE -> MangaMeta.ContentRating.SAFE
+                        ContentRatingDto.SUGGESTIVE -> MangaMeta.ContentRating.SUGGESTIVE
+                        ContentRatingDto.EROTICA, ContentRatingDto.PORNOGRAPHIC -> MangaMeta.ContentRating.ADULT
+                        null -> null
+                    }
+                    trackers(
+                        MangaMeta.Tracker.ANILIST to attr.links["al"],
+                        MangaMeta.Tracker.ANIMEPLANET to attr.links["ap"],
+                        MangaMeta.Tracker.KITSU to attr.links["kt"],
+                        MangaMeta.Tracker.MANGAUPDATES to attr.links["mu"],
+                        MangaMeta.Tracker.NOVELUPDATES to attr.links["nu"],
+                        MangaMeta.Tracker.MYANIMELIST to attr.links["mal"],
+                    )
+                    links(
+                        listOf(
+                            "BookWalker" to attr.links["bw"]?.takeIf(String::isNotBlank)?.let { "https://bookwalker.jp/$it" },
+                            "Amazon" to attr.links["amz"],
+                            "eBookJapan" to attr.links["ebj"],
+                            "CDJapan" to attr.links["cdj"],
+                        ),
+                    )
+                    links(listOf("Raw" to attr.links["raw"]), language = attr.originalLanguage?.toLanguageTag())
+                    links(listOf("English" to attr.links["engtl"]), language = "en")
+                }
+            }
         }
+    }
+
+    // MangaDex's language codes as BCP 47 tags
+    private fun String.toLanguageTag() = when (this) {
+        "es-la" -> "es-419"
+        "ja-ro" -> "ja-Latn"
+        "ko-ro" -> "ko-Latn"
+        "zh-ro" -> "zh-Latn"
+        else -> this
     }
 
     /**

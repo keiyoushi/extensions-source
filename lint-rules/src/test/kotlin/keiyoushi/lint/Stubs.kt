@@ -129,12 +129,14 @@ object Stubs {
             var initialized: Boolean
             var thumbnail_url: String?
             var description: String?
+            var memo: kotlinx.serialization.json.JsonObject
             companion object { fun create(): SManga = TODO() }
         }
         interface SChapter {
             var url: String
             var name: String
             var chapter_number: Float
+            var memo: kotlinx.serialization.json.JsonObject
             companion object { fun create(): SChapter = TODO() }
         }
         class Page(val index: Int, val url: String = "", var imageUrl: String? = null)
@@ -213,6 +215,15 @@ object Stubs {
         package uy.kohesive.injekt
 
         fun <T> injectLazy(): Lazy<T> = TODO()
+        """,
+    ).indented()
+
+    val buildJson: TestFile = kotlin(
+        """
+        package kotlinx.serialization.json
+
+        class JsonObjectBuilder
+        fun buildJsonObject(block: JsonObjectBuilder.() -> Unit): JsonObject = TODO()
         """,
     ).indented()
 

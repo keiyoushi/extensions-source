@@ -23,6 +23,7 @@ import keiyoushi.network.kind
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.jsonInstance
+import keiyoushi.utils.keepMetaOf
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -430,7 +431,11 @@ abstract class KeiSource : HttpSource() {
             val update = fetchMangaUpdate(manga, chapters, fetchDetails, fetchChapters)
 
             return SMangaUpdate(
-                manga = update.manga.apply { initialized = true },
+                manga = update.manga.apply {
+                    initialized = true
+                    // Keep the stored `memo["meta"]` when a chapters-only refresh returns none
+                    if (!fetchDetails) keepMetaOf(manga)
+                },
                 chapters = update.chapters,
             )
         } finally {

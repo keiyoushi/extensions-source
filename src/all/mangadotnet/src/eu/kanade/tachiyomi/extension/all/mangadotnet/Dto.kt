@@ -1,7 +1,8 @@
 package eu.kanade.tachiyomi.extension.all.mangadotnet
 
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.MangaMeta
+import keiyoushi.utils.describe
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -177,7 +178,6 @@ class Manga(
     private val animeNewsNetworkId: Long? = null,
     @SerialName("mangadex_id")
     private val mangadexID: String? = null,
-    @SerialName("year")
     private val year: Int? = null,
     @SerialName("chapter_count")
     private val chapterCount: Int? = null,
@@ -237,7 +237,7 @@ class Manga(
                 else -> SManga.UNKNOWN
             }
         }
-        description = MarkdownDescription.Builder().apply {
+        describe {
             rating(this@Manga.rating, votes = ratingCount?.takeIf { it > 0 })
             field("Year", year?.toString())
             field("Chapters", chapterCount?.toString())
@@ -250,22 +250,33 @@ class Manga(
                     ?.replace(multipleNewlinesRegex, "\n\n")
                     ?.replace(listRegex, "\n$1"),
             )
+            trackers(
+                MangaMeta.Tracker.ANILIST to anilistID,
+                MangaMeta.Tracker.MANGAUPDATES to mangaupdatesID,
+                MangaMeta.Tracker.MANGABAKA to mangabakaID,
+                MangaMeta.Tracker.MYANIMELIST to malID,
+                MangaMeta.Tracker.KITSU to kitsuID,
+                MangaMeta.Tracker.ANIMEPLANET to animePlanetId,
+                MangaMeta.Tracker.SHIKIMORI to shikimoriId,
+            )
             links(
                 listOf(
-                    "AniList" to anilistID?.let { "https://anilist.co/manga/$it" },
-                    "MangaUpdates" to mangaupdatesID?.let { "https://www.mangaupdates.com/series/$it" },
-                    "MangaBaka" to mangabakaID?.let { "https://mangabaka.org/$it" },
-                    "MyAnimeList" to malID?.let { "https://myanimelist.net/manga/$it" },
-                    "Kitsu" to kitsuID?.let { "https://kitsu.app/manga/$it" },
-                    "AnimePlanet" to animePlanetId?.let { "https://www.anime-planet.com/manga/$it" },
-                    "Shikimori" to shikimoriId?.let { "https://shikimori.io/mangas/$it" },
                     "AnimeNewsNetwork" to animeNewsNetworkId?.let { "https://www.animenewsnetwork.com/encyclopedia/manga.php?id=$it" },
                     "MangaDex" to mangadexID?.let { "https://mangadex.org/title/$it" },
+                    // The site's source is where it gets its chapters, not a publisher
                     "Source" to sourceUrl,
                 ),
             )
             altTitles(altTitles)
-        }.build()
+            meta {
+                contentRating = when (this@Manga.contentRating) {
+                    "safe" -> MangaMeta.ContentRating.SAFE
+                    "suggestive" -> MangaMeta.ContentRating.SUGGESTIVE
+                    "erotica", "pornographic" -> MangaMeta.ContentRating.ADULT
+                    else -> null
+                }
+            }
+        }
         initialized = true
     }
 }
