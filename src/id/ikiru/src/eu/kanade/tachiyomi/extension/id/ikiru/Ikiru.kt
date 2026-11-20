@@ -14,15 +14,20 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.OkHttpClient
 import okhttp3.Response
-import java.net.URLEncoder
 
 @Source
 abstract class Ikiru : KeiSource() {
-    // support sugesttion komikku
     override val supportRelatedMangasBySearch = true
+
+    // ikiru.wtf redirects to the current subdomain
+    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = listOfNotNull(
+        client.get(HUB_URL, Fetch.DOCUMENT).use { it.request.url.takeIf { url -> url.host.endsWith(".$DOMAIN") }?.toString() },
+    )
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/api/public/library/search".toHttpUrl().newBuilder()
@@ -98,9 +103,18 @@ abstract class Ikiru : KeiSource() {
         }.trim('/')
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        val slug = manga.slug()
-        return "$baseUrl/manga/${slug.encodePathSegments()}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga".toHttpUrl().newBuilder()
+        .addPathSegment(manga.slug())
+        .build()
+        .toString()
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        // links from earlier numbered domains still resolve
+        if (url.host != baseUrl.toHttpUrl().host && !url.host.endsWith(".$DOMAIN")) return null
+        val segments = url.pathSegments.filter { it.isNotEmpty() }
+        if (segments.size != 2 || segments[0] != "manga") return null
+        val manga = SManga.create().apply { this.url = segments[1] }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun fetchMangaUpdate(
@@ -124,11 +138,17 @@ abstract class Ikiru : KeiSource() {
         )
     }
 
-    // legacy library entries stored the absolute web URL
+    // legacy library entries stored the absolute web URL on an earlier domain
     override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.startsWith("http")) {
-        chapter.url
+        chapter.url.toHttpUrl().newBuilder()
+            .host(baseUrl.toHttpUrl().host)
+            .build()
+            .toString()
     } else {
-        "$baseUrl/${chapter.url.trim('/').encodePathSegments()}"
+        baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments(chapter.url.trim('/'))
+            .build()
+            .toString()
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -136,7 +156,7 @@ abstract class Ikiru : KeiSource() {
         val document = response.asJsoup()
         val images = document.select("img[src*='cdn.ikiru.id']")
 
-        return images.mapIndexed { idx, img -> Page(idx, imageUrl = img.attr("src")) }
+        return images.mapIndexed { idx, img -> Page(idx, imageUrl = img.absUrl("src")) }
     }
 
     // the API returns HTTP 200 with a failure envelope for bad input, so the flag must be checked explicitly
@@ -151,8 +171,7 @@ abstract class Ikiru : KeiSource() {
 
     companion object {
         private const val PROJECT_PAGE_SIZE = 24
+        private const val DOMAIN = "ikiru.wtf"
+        private const val HUB_URL = "https://$DOMAIN/"
     }
 }
-
-// the API only accepts percent-encoded slugs, and some slugs contain spaces or non-ASCII characters
-private fun String.encodePathSegments(): String = split('/').joinToString("/") { URLEncoder.encode(it, "UTF-8").replace("+", "%20") }

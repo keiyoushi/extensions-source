@@ -1,5 +1,8 @@
 package eu.kanade.tachiyomi.extension.es.manhwashot
 
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,6 +17,7 @@ import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
@@ -22,7 +26,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 
 @Source
-abstract class ManhwaShot : KeiSource() {
+abstract class ManhwaShot :
+    KeiSource(),
+    ConfigurableSource {
+
+    private val preferences by getPreferencesLazy()
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/ranking/", Fetch.DOCUMENT).asJsoup()
@@ -78,6 +86,7 @@ abstract class ManhwaShot : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        if (!fetchChapters) return SMangaUpdate(document.toSManga(manga.url), chapters)
         return SMangaUpdate(document.toSManga(manga.url), document.toChapters())
     }
 
@@ -107,13 +116,16 @@ abstract class ManhwaShot : KeiSource() {
         if (rows.isEmpty()) return emptyList()
         // The page shows relative dates only: the chapter list's data has the exact ones, and the lock levels
         val data = extractNextJs<ChapterListDto>()!!
-        return rows.map { row ->
+        val showLocked = preferences.getBoolean(PREF_SHOW_LOCKED, false)
+        return rows.mapNotNull { row ->
             val href = row.absUrl("href")
             val number = href.trimEnd('/').substringAfterLast("capitulo-")
+            val level = data.levelOf(number)?.takeIf { it in LOCK_LEVELS }
+            if (level != null && !showLocked) return@mapNotNull null
             val title = row.selectFirst(".ch-num")!!.ownText()
             SChapter.create().apply {
                 setUrlWithoutDomain(href)
-                name = when (data.levelOf(number)) {
+                name = when (level) {
                     null -> title
                     "vip" -> "🔒 $title (VIP)"
                     "pago" -> "🔒 $title (VIP de pago)"
@@ -129,6 +141,15 @@ abstract class ManhwaShot : KeiSource() {
         val reader = client.get(getChapterUrl(chapter), rscHeaders, Fetch.XHR).extractNextJs<ReaderDto>()!!
         if (reader.locked) return emptyList()
         return reader.toPages()
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_SHOW_LOCKED
+            title = "Mostrar capítulos bloqueados"
+            summary = "Muestra con 🔒 los capítulos para usuarios registrados o VIP. Se abren tras iniciar sesión en WebView con una cuenta que pueda leerlos."
+            setDefaultValue(false)
+        }.also(screen::addPreference)
     }
 
     override val supportsFilterFetching = true
@@ -175,4 +196,11 @@ abstract class ManhwaShot : KeiSource() {
         .setQueryParameter("f", "webp")
         .build()
         .toString()
+
+    private companion object {
+        const val PREF_SHOW_LOCKED = "pref_show_locked"
+
+        // Lock levels the site's chapter list shows a badge for
+        val LOCK_LEVELS = setOf("login", "vip", "pago")
+    }
 }
