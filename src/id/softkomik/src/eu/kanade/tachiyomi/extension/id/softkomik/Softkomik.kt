@@ -58,14 +58,18 @@ abstract class Softkomik : KeiSource() {
     // ======================== Search ========================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotEmpty()) {
-            val url = "$apiUrl/komik".toHttpUrl().newBuilder()
-                .addQueryParameter("name", query)
-                .addQueryParameter("search", "true")
-                .addQueryParameter("limit", "20")
-                .addQueryParameter("page", page.toString())
+            // The site's search returns at most 30 titles, with no cover and no paging.
+            val searchUrl = "$baseUrl/api/content/search".toHttpUrl().newBuilder()
+                .addQueryParameter("name", query.trim().take(100))
                 .build()
 
-            return client.get(url, Fetch.XHR).parseAs<LibDataDto>().toMangasPage()
+            val mangas = client.get(searchUrl, Fetch.XHR).parseAs<SearchDto>().data.map { manga ->
+                SManga.create().apply {
+                    url = manga.titleSlug
+                    title = manga.title
+                }
+            }
+            return MangasPage(mangas, false)
         }
 
         val url = libraryUrlBuilder(page)
