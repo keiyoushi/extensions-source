@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.ar.kawiimanga
 import android.util.Base64
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.aesGcm
 import keiyoushi.utils.parseAs
@@ -30,6 +31,9 @@ class Manga(
     private val type: String? = null,
     private val status: String? = null,
     private val genres: List<String> = emptyList(),
+    private val titleAr: String? = null,
+    private val altTitles: List<String> = emptyList(),
+    private val rating: Double? = null,
     val chapters: List<Chapter> = emptyList(),
 ) {
 
@@ -39,7 +43,11 @@ class Manga(
         thumbnail_url = coverUrl
         author = this@Manga.author.takeIfValid()
         artist = this@Manga.artist.takeIfValid()
-        description = this@Manga.description?.takeUnless { it.isEmpty() }
+        description = MarkdownDescription.Builder()
+            .rating(rating?.takeIf { it > 0 }, max = 5)
+            .description(this@Manga.description)
+            .altTitles((listOfNotNull(titleAr) + altTitles).filterNot { it.equals(title, ignoreCase = true) })
+            .build()
         genre = getGenres()
         status = getStatus()
         initialized = true
@@ -97,7 +105,8 @@ class Box(
     fun decrypt(token: String): List<String> {
         val key = "$BOX_KEY|${token.takeLast(24)}".sha256()
         val iv = Base64.decode(i, Base64.DEFAULT)
-        return Base64.decode(d, Base64.DEFAULT).aesDecrypt(aesGcm(key, iv)).decodeToString().parseAs<Pages>().pages
+        val plaintext = Base64.decode(d, Base64.DEFAULT).aesDecrypt(aesGcm(key, iv))
+        return plaintext.decodeToString().parseAs<Pages>().pages
     }
 }
 
