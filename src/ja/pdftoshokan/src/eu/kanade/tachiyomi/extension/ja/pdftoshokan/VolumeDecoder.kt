@@ -13,9 +13,8 @@ import java.io.IOException
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Finds a volume's file the way a reader does: the site's firewall only lets decode.php through for a real tap on the
- * title page's read button, which opens it in place of the page. decode.php hands the viewer an opaque token along with
- * the pass the file host asks for, so the viewer is left to run and its request for the volume file is caught.
+ * The site's firewall only lets decode.php through for a real tap on the read button, and decode.php hands the viewer
+ * an opaque token, so the viewer is left to run and its request for the volume file is caught.
  */
 internal class VolumeDecoder(private val baseUrl: String, private val userAgent: String) {
 
@@ -116,7 +115,7 @@ internal class VolumeDecoder(private val baseUrl: String, private val userAgent:
         const val BLOCKED = "__blocked__"
         const val MAINTENANCE = "__maintenance__"
 
-        // Where the tap has taken the page; the viewer it ends on needs nothing, its file request is caught
+        // Where the tap has taken the page. It runs in the WebView, where the app's own Cloudflare handling can't help
         const val STATE_JS = """(() => {
             if (location.pathname === '/maintenance.html') return '$MAINTENANCE';
             if (/Just a moment/.test(document.title)) return '$CHALLENGE';

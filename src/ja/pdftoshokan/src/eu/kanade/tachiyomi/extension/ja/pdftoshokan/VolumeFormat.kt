@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.ja.pdftoshokan
 
 import keiyoushi.utils.inflate
 import keiyoushi.utils.readIntBigEndian
-import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaType
 import java.io.IOException
 import java.io.RandomAccessFile
@@ -12,54 +11,30 @@ internal class Slice(val offset: Long, val length: Int)
 /** Each page is a list of image slices; legacy PDF pages are split into strips stacked top to bottom. */
 internal class VolumeIndex(val isAvif: Boolean, val pages: List<List<Slice>>)
 
-/** A page of a volume: one image, or JPEG strips to stack top to bottom. */
-internal sealed interface PageImage {
-    class Whole(val bytes: ByteArray, val type: MediaType) : PageImage
-    class Strips(val jpegs: List<ByteArray>) : PageImage
-}
-
-/**
- * The two volume file formats: a "CUSTOM_A" container of AVIF images, and an older image-only PDF (sometimes with its
- * header stripped) whose pages are drawn from JPEG strips.
- */
+/** Volume files: a "CUSTOM_A" container of AVIF images, or an older image-only PDF whose pages are JPEG strips. */
 internal object VolumeFormat {
 
     // "CUSTOM_A" container: 16-byte magic, page count, then per page width, height and length before the image
     private const val AVIF_MAGIC = 'C'.code.toByte()
     private const val AVIF_COUNT_OFFSET = 16L
     private const val AVIF_ENTRY_HEADER = 12L
-
-    private val AVIF = "image/avif".toMediaType()
-    private val JPEG = "image/jpeg".toMediaType()
-
-    // Bytes that tell the format apart and hold an AVIF container's page count
     private const val HEADER_SIZE = AVIF_COUNT_OFFSET + 4
 
-    /** The page made of [slices], read from a volume with this [index]. */
-    fun page(index: VolumeIndex, slices: List<ByteArray>): PageImage = when {
-        index.isAvif -> PageImage.Whole(slices.single(), AVIF)
-        slices.size == 1 -> PageImage.Whole(slices.single(), JPEG)
-        else -> PageImage.Strips(slices)
-    }
+    val AVIF = "image/avif".toMediaType()
+    val JPEG = "image/jpeg".toMediaType()
 
-    fun index(raf: RandomAccessFile): VolumeIndex = if (raf.readBytes(0, 1).isAvifContainer()) indexAvif(raf) else indexPdf(raf)
+    fun index(raf: RandomAccessFile): VolumeIndex = if (raf.isAvifContainer()) indexAvif(raf) else indexPdf(raf)
 
-    /**
-     * The page count of an AVIF container that is still being written to [raf], as soon as its header is in: [await]
-     * suspends until that many bytes are in, and is false once the whole file is in place instead. Null when that
-     * happens first, or for a PDF, which needs the whole file.
-     */
+    // The streamed reads below take the download's `await`: true once that many bytes are in, false once the whole file
+    // has moved into place instead, when the stored file is read. A PDF needs the whole file anyway.
+
     suspend fun streamedPageCount(raf: RandomAccessFile, await: suspend (Long) -> Boolean): Int? {
-        if (!await(HEADER_SIZE) || !raf.readBytes(0, 1).isAvifContainer()) return null
+        if (!await(HEADER_SIZE) || !raf.isAvifContainer()) return null
         return raf.pageCount()
     }
 
-    /**
-     * Page [page] of an AVIF container that is still being written to [raf]: [await] suspends until that many bytes are
-     * in, and is false once the whole file is in place instead. Null when that happens first, or for a PDF.
-     */
-    suspend fun streamedPage(raf: RandomAccessFile, page: Int, await: suspend (Long) -> Boolean): PageImage? {
-        if (!await(HEADER_SIZE) || !raf.readBytes(0, 1).isAvifContainer()) return null
+    suspend fun streamedPage(raf: RandomAccessFile, page: Int, await: suspend (Long) -> Boolean): Slice? {
+        if (!await(HEADER_SIZE) || !raf.isAvifContainer()) return null
         var entry = HEADER_SIZE
         repeat(page) {
             if (!await(imageOffset(entry))) return null
@@ -68,7 +43,7 @@ internal object VolumeFormat {
         if (!await(imageOffset(entry))) return null
         val length = raf.imageLength(entry)
         if (!await(imageOffset(entry) + length)) return null
-        return PageImage.Whole(raf.readBytes(imageOffset(entry), length), AVIF)
+        return Slice(imageOffset(entry), length)
     }
 
     private fun indexAvif(raf: RandomAccessFile): VolumeIndex {
@@ -80,7 +55,8 @@ internal object VolumeFormat {
         return VolumeIndex(isAvif = true, pages)
     }
 
-    // Each entry is width, height and length, then the image
+    private fun RandomAccessFile.isAvifContainer() = readBytes(0, 1).first() == AVIF_MAGIC
+
     private fun RandomAccessFile.pageCount() = readBytes(AVIF_COUNT_OFFSET, 4).readIntBigEndian(0)
 
     private fun RandomAccessFile.imageLength(entry: Long) = readBytes(entry + 8, 4).readIntBigEndian(0)
@@ -162,8 +138,6 @@ internal object VolumeFormat {
         }
         return VolumeIndex(isAvif = false, pages)
     }
-
-    private fun ByteArray.isAvifContainer() = first() == AVIF_MAGIC
 
     private val OBJ_REGEX = Regex("""(\d+)\s+0\s+obj""")
     private val LENGTH_REGEX = Regex("""/Length\s+(\d+)\b(?!\s+\d+\s+R)""")

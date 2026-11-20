@@ -11,7 +11,7 @@ import org.jsoup.nodes.Document
  */
 internal fun Document.parseListing(): List<SManga> {
     val scripts = select("script:not([src])").joinToString("\n") { it.data() }
-    val (linkKey, linkAttr) = HES_CONFIG_REGEX.find(scripts)!!.destructured
+    val (linkKey, linkAttr) = LINK_KEY_REGEX.find(scripts)!!.destructured
 
     // A honeypot is a collapsed article, or one the scripts single out. Its link only ever gets read here, from the
     // raw HTML: the page hooks getAttribute on it to navigate there.
@@ -30,7 +30,7 @@ internal fun Document.parseListing(): List<SManga> {
         SManga.create().apply {
             url = id
             title = link.text()
-            thumbnail_url = article.selectFirst(".entry-content img")?.absUrl("src")
+            thumbnail_url = article.selectFirst(COVER)?.absUrl("src")
         }
     }
 }
@@ -42,7 +42,7 @@ internal fun Document.hasPageAfter(page: Int): Boolean = select("a[href*=page/${
 internal fun Document.parseDetails(id: String) = SManga.create().apply {
     url = id
     title = selectFirst("h1.entry-title")!!.text()
-    thumbnail_url = selectFirst(".entry-content img")?.absUrl("src")
+    thumbnail_url = selectFirst(COVER)?.absUrl("src")
         ?: selectFirst("meta[property=og:image]")?.attr("content")
     description = select(".entry-content > p")
         .filter { it.selectFirst("img, select, input") == null }
@@ -60,9 +60,11 @@ internal fun Document.volumeLabels(): List<String> = select("select.vi13 option"
 /** The title id in a site path, unless it's the honeypot's. */
 internal fun mangaIdOf(path: String): String? = MANGA_ID_REGEX.find(path)?.groupValues?.get(1)?.takeIf { it != TRAP_ID }
 
+private const val COVER = ".entry-content img"
+
 private const val TRAP_ID = "4973674"
 
-private val HES_CONFIG_REGEX = Regex("""key\s*:\s*"([^"]+)"\s*,\s*randAttr\s*:\s*"([^"]+)"""")
+private val LINK_KEY_REGEX = Regex("""key\s*:\s*"([^"]+)"\s*,\s*randAttr\s*:\s*"([^"]+)"""")
 private val HIDDEN_CLASS_REGEX = Regex("""\.(category-\d+)\s*\{[^}]*?(?:display\s*:\s*none|opacity\s*:\s*0|(?<![-\w])width\s*:\s*0)""")
 private val TRAP_CLASS_REGEX = Regex("""querySelector\(\s*["']\.(category-\d+)\s+a["']""")
 private val TRAP_REGEX = Regex("""location\.href\s*=\s*['"]/manga/(\d+)""")

@@ -7,11 +7,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
-/**
- * Opens volumes for reading. A volume stored or on its way opens from the store. Any other goes through decode.php,
- * which hands out the volume's file along with the pass the file host asks for, the way the site's read button does.
- */
-internal class Volumes(
+/** Opens a volume from the store, or through decode.php, which hands out its file and the pass the file host asks for. */
+internal class VolumeOpener(
     private val store: VolumeStore,
     private val decoder: VolumeDecoder,
     private val fileHost: FileHost,
@@ -22,7 +19,6 @@ internal class Volumes(
     // coming in
     private val decodeLock = Mutex()
 
-    /** The addresses of the volume's pages, served by the store's [PageInterceptor]. */
     suspend fun open(titleUrl: String, label: String): List<String> {
         // Stands for the volume in the store; never requested from the site
         val address = titleUrl.toHttpUrl().newBuilder().addPathSegment("volume").addPathSegment(label).build()

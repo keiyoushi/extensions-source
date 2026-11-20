@@ -12,7 +12,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
+import okhttp3.MediaType
+import okio.Buffer
+import okio.BufferedSource
+import okio.ForwardingSource
+import okio.Source
+import okio.buffer
+import okio.source
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.IOException
@@ -21,26 +29,29 @@ import java.io.RandomAccessFile
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.minutes
 
-/**
- * Volumes downloaded into [dir], which it owns, up to 300 MB. A volume is one file, known by an address of the
- * caller's choosing, and its pages are read out of it as `<address>#<page index>`, even while it's still downloading.
- */
+/** A page read straight off disk: one image, or JPEG strips to stack top to bottom. */
+internal sealed interface PageImage {
+    class Whole(val image: BufferedSource, val type: MediaType, val length: Long) : PageImage
+    class Strips(val strips: List<() -> BufferedSource>) : PageImage
+}
+
+/** Volumes in [dir], up to 300 MB, keyed by an address of the caller's; pages are `<address>#<page index>`. */
 internal class VolumeStore(private val dir: File) {
 
-    private val locks = ConcurrentHashMap<String, Any>()
+    private val lock = Any()
 
-    private val indexes = object : LinkedHashMap<String, VolumeIndex>(4, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, VolumeIndex>) = size > 4
-    }
+    private val indexes = lru<VolumeIndex>(4)
+
+    private val failures = lru<Throwable>(16)
 
     /** A volume still downloading into [tmp]; [size] is how far it has got, or [DONE] / [FAILED]. */
-    internal class Partial(val tmp: File) {
+    class PartialDownload(val tmp: File) {
         val size = MutableStateFlow(0L)
 
         @Volatile
         var error: Throwable? = null
 
-        /** Waits for [bytes] of the file; false when it's complete and in place instead. */
+        /** Waits for [bytes] of the file; false once it's complete and moved into place instead. */
         suspend fun await(bytes: Long): Boolean {
             val reached = size.first { it >= bytes || it == FAILED }
             if (reached == FAILED) throw error!!
@@ -48,23 +59,19 @@ internal class VolumeStore(private val dir: File) {
         }
     }
 
-    private val partials = ConcurrentHashMap<String, Partial>()
-
-    // Why a volume's last download failed, for pages asked for after it's gone
-    private val failures = ConcurrentHashMap<String, Throwable>()
+    private val partials = ConcurrentHashMap<String, PartialDownload>()
 
     /** A volume stored or on its way. */
-    inner class Volume internal constructor(private val address: HttpUrl, private val partial: Partial?) {
+    inner class Volume(private val address: HttpUrl, private val partial: PartialDownload?) {
 
-        /** Waits until the first bytes are in, rethrowing the download's failure. */
+        /** Rethrows the download's failure. */
         suspend fun awaitStarted() {
             partial?.await(1)
         }
 
-        /** The addresses of the pages, served by [PageInterceptor]; for a PDF, once it's all in. */
+        /** For a PDF, once the whole file is in. */
         suspend fun pageUrls(): List<String> = List(pageCount()) { "$address#$it" }
 
-        /** From the header of an AVIF volume as soon as it's in, for a PDF once it's all there. */
         private suspend fun pageCount(): Int {
             if (partial != null) {
                 val streamed = try {
@@ -86,7 +93,6 @@ internal class VolumeStore(private val dir: File) {
         dir.listFiles { file -> file.name.endsWith(".tmp") }?.forEach(File::delete)
     }
 
-    /** The volume, when it's stored or on its way. */
     fun find(address: HttpUrl): Volume? {
         val key = key(address)
         partials[key]?.let { return Volume(address, it) }
@@ -98,15 +104,15 @@ internal class VolumeStore(private val dir: File) {
         find(address)?.let { return it }
         val key = key(address)
         val stored = File(dir, key)
-        val partial = Partial(File(dir, "$key.tmp"))
+        val partial = PartialDownload(File(dir, "$key.tmp"))
         partials.putIfAbsent(key, partial)?.let { return Volume(address, it) }
-        failures.remove(key)
+        synchronized(failures) { failures.remove(key) }
         scope.launch {
             try {
                 dir.mkdirs()
-                Counting(FileOutputStream(partial.tmp), partial.size).use { write(it) }
-                synchronized(lock(key)) {
-                    synchronized(indexes) { indexes.remove(key) }
+                CountingOutputStream(FileOutputStream(partial.tmp), partial.size).use { write(it) }
+                synchronized(lock) {
+                    indexes.remove(key)
                     if (!partial.tmp.renameTo(stored)) throw IOException("Failed to store volume")
                 }
                 partial.size.value = DONE
@@ -114,7 +120,7 @@ internal class VolumeStore(private val dir: File) {
             } catch (e: Throwable) {
                 partial.tmp.delete()
                 partial.error = e
-                failures[key] = e
+                synchronized(failures) { failures[key] = e }
                 partial.size.value = FAILED
                 if (e is CancellationException) throw e
             } finally {
@@ -124,26 +130,35 @@ internal class VolumeStore(private val dir: File) {
         return Volume(address, partial)
     }
 
-    /**
-     * The page a `<address>#<page index>` points to, waiting for it while the volume is still downloading unless
-     * [isCanceled]. Null for a URL that isn't a page address.
-     */
+    /** Waits for the page while the volume is still downloading, unless [isCanceled]. Null for other URLs. */
     fun page(url: HttpUrl, isCanceled: () -> Boolean): PageImage? {
         val page = url.fragment?.toIntOrNull() ?: return null
         partials[key(url)]?.let { partial ->
-            runBlocking { partial.streamedPage(page, isCanceled) }?.let { return it }
+            runBlocking { partial.streamedSlice(page, isCanceled) }?.let { slice ->
+                try {
+                    return PageImage.Whole(partial.tmp.open(slice), VolumeFormat.AVIF, slice.length.toLong())
+                } catch (_: FileNotFoundException) {
+                    // Moved into place in the meantime
+                }
+            }
         }
         val (file, index) = index(url)
-        val slices = try {
-            RandomAccessFile(file, "r").use { raf -> index.pages[page].map { raf.readBytes(it.offset, it.length) } }
+        val slices = index.pages[page]
+        return try {
+            when {
+                slices.size == 1 -> {
+                    val type = if (index.isAvif) VolumeFormat.AVIF else VolumeFormat.JPEG
+                    PageImage.Whole(file.open(slices.single()), type, slices.single().length.toLong())
+                }
+                else -> PageImage.Strips(slices.map { slice -> { file.open(slice) } })
+            }
         } catch (_: FileNotFoundException) {
             throw IOException(NOT_STORED) // trimmed just now
         }
-        return VolumeFormat.page(index, slices)
     }
 
-    private suspend fun Partial.streamedPage(page: Int, isCanceled: () -> Boolean): PageImage? = try {
-        // An open file keeps working when the finished download is renamed
+    private suspend fun PartialDownload.streamedSlice(page: Int, isCanceled: () -> Boolean): Slice? = try {
+        // An open file keeps working when the finished download is moved
         RandomAccessFile(tmp, "r").use { raf ->
             withContext(Dispatchers.IO) {
                 val read = async { VolumeFormat.streamedPage(raf, page, ::await) }
@@ -161,7 +176,7 @@ internal class VolumeStore(private val dir: File) {
         null
     }
 
-    private class Counting(private val out: OutputStream, private val size: MutableStateFlow<Long>) : OutputStream() {
+    private class CountingOutputStream(private val out: OutputStream, private val size: MutableStateFlow<Long>) : OutputStream() {
         override fun write(b: Int) = write(byteArrayOf(b.toByte()))
 
         override fun write(b: ByteArray, off: Int, len: Int) {
@@ -172,20 +187,20 @@ internal class VolumeStore(private val dir: File) {
         override fun close() = out.close()
     }
 
-    /** The stored file and its index. Reading a volume keeps it from being trimmed for a while. */
+    /** Reading a volume keeps it from being trimmed for a while. */
     private fun index(url: HttpUrl): Pair<File, VolumeIndex> {
         val key = key(url)
-        synchronized(lock(key)) {
+        synchronized(lock) {
             val file = File(dir, key)
             if (!file.exists()) {
-                throw when (val failure = failures[key]) {
+                throw when (val failure = synchronized(failures) { failures[key] }) {
                     is IOException -> failure
                     null -> IOException(NOT_STORED)
                     else -> IOException(failure.message, failure)
                 }
             }
             file.setLastModified(System.currentTimeMillis())
-            synchronized(indexes) { indexes[key] }?.let { return file to it }
+            indexes[key]?.let { return file to it }
 
             val index = try {
                 RandomAccessFile(file, "r").use(VolumeFormat::index).also { check(it.pages.isNotEmpty()) { "No pages" } }
@@ -194,16 +209,14 @@ internal class VolumeStore(private val dir: File) {
                 file.delete()
                 throw IOException("Unsupported volume file", e)
             }
-            synchronized(indexes) { indexes[key] = index }
+            indexes[key] = index
             return file to index
         }
     }
 
-    private fun lock(key: String) = locks.getOrPut(key) { Any() }
-
     private fun key(url: HttpUrl) = url.newBuilder().fragment(null).build().toString().md5().toHexString()
 
-    /** Keeps the cache under its cap, oldest read first, sparing volumes read lately: someone may be reading them. */
+    /** Oldest read first, sparing volumes read lately: someone may be reading them. */
     private fun trim(keep: File) {
         val recent = System.currentTimeMillis() - IN_USE.inWholeMilliseconds
         val files = dir.listFiles()?.filter { it != keep && !it.name.endsWith(".tmp") } ?: return
@@ -215,11 +228,36 @@ internal class VolumeStore(private val dir: File) {
         }
     }
 
+    private class LimitedSource(delegate: Source, private var remaining: Long) : ForwardingSource(delegate) {
+        override fun read(sink: Buffer, byteCount: Long): Long {
+            if (remaining == 0L) return -1
+            val read = super.read(sink, minOf(byteCount, remaining))
+            if (read > 0) remaining -= read
+            return read
+        }
+    }
+
     private companion object {
         const val MAX_CACHE_BYTES = 300L * 1024 * 1024
         val IN_USE = 10.minutes
         const val DONE = Long.MAX_VALUE
         const val FAILED = -1L
         const val NOT_STORED = "Volume is no longer cached, open the chapter again"
+
+        fun <T> lru(capacity: Int) = object : LinkedHashMap<String, T>(capacity, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, T>) = size > capacity
+        }
+
+        // The open file keeps working if it's moved or deleted meanwhile
+        fun File.open(slice: Slice): BufferedSource {
+            val input = FileInputStream(this)
+            try {
+                input.channel.position(slice.offset)
+            } catch (e: Throwable) {
+                input.close()
+                throw e
+            }
+            return LimitedSource(input.source(), slice.length.toLong()).buffer()
+        }
     }
 }

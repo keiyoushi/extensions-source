@@ -5,16 +5,15 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
 import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.asResponseBody
-import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
+import okio.BufferedSource
 import java.io.IOException
 
-/** Answers the store's page addresses with the page, stacking a legacy page's strips into one image. */
+/** Answers the store's page addresses, stacking a legacy page's strips into one image. */
 internal class PageInterceptor(private val store: VolumeStore) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -22,8 +21,8 @@ internal class PageInterceptor(private val store: VolumeStore) : Interceptor {
         val body = try {
             when (val page = store.page(request.url, chain.call()::isCanceled)) {
                 null -> null
-                is PageImage.Whole -> page.bytes.toResponseBody(page.type)
-                is PageImage.Strips -> stitch(page.jpegs)
+                is PageImage.Whole -> page.image.asResponseBody(page.type, page.length)
+                is PageImage.Strips -> stitch(page.strips)
             }
         } catch (e: IOException) {
             throw e
@@ -40,12 +39,12 @@ internal class PageInterceptor(private val store: VolumeStore) : Interceptor {
             .build()
     }
 
-    /** Draws the strips one at a time, so only one is decoded at once next to the result. */
-    private fun stitch(strips: List<ByteArray>): ResponseBody {
-        val sizes = strips.map { strip ->
+    /** Only one strip is decoded at a time next to the result. */
+    private fun stitch(strips: List<() -> BufferedSource>): ResponseBody {
+        val sizes = strips.map { open ->
             BitmapFactory.Options().apply {
                 inJustDecodeBounds = true
-                BitmapFactory.decodeByteArray(strip, 0, strip.size, this)
+                open().use { BitmapFactory.decodeStream(it.inputStream(), null, this) }
             }
         }
         if (sizes.any { it.outWidth <= 0 || it.outHeight <= 0 }) throw IOException("Unsupported page image")
@@ -55,21 +54,17 @@ internal class PageInterceptor(private val store: VolumeStore) : Interceptor {
         try {
             val canvas = Canvas(result)
             var top = 0
-            strips.forEachIndexed { i, strip ->
-                val bitmap = BitmapFactory.decodeByteArray(strip, 0, strip.size) ?: throw IOException("Unsupported page image")
+            strips.forEachIndexed { i, open ->
+                val bitmap = open().use { BitmapFactory.decodeStream(it.inputStream()) } ?: throw IOException("Unsupported page image")
                 canvas.drawBitmap(bitmap, null, Rect(0, top, width, top + heights[i]), null)
                 bitmap.recycle()
                 top += heights[i]
             }
             val buffer = Buffer()
             result.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
-            return buffer.asResponseBody(JPEG)
+            return buffer.asResponseBody(VolumeFormat.JPEG)
         } finally {
             result.recycle()
         }
-    }
-
-    private companion object {
-        val JPEG = "image/jpeg".toMediaType()
     }
 }

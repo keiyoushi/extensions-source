@@ -33,8 +33,8 @@ abstract class PdfToshokan : KeiSource() {
 
     private val store by lazy { VolumeStore(applicationContext.cacheDir.resolve("source_$id/volumes")) }
 
-    private val volumes by lazy {
-        Volumes(
+    private val opener by lazy {
+        VolumeOpener(
             store,
             VolumeDecoder(baseUrl, headers["User-Agent"]!!),
             // A volume takes minutes to come in; a stall still hits the read timeout
@@ -48,7 +48,7 @@ abstract class PdfToshokan : KeiSource() {
         // Bursts of page loads raise Cloudflare's bot score until decode.php gets challenged
         .rateLimit(2, interval = 500.milliseconds) { it.host == baseHost }
         // Well under the burst of downloads the file host was seen to take
-        .rateLimit(3, 1.minutes) { it.host.endsWith(".$baseHost") }
+        .rateLimit(3, period = 1.minutes) { it.host.endsWith(".$baseHost") }
         // Ahead of Cronet, which can take seconds to load, since pages come from disk
         .addInterceptor(PageInterceptor(store))
         // Cloudflare in front of the site turns away clients that don't connect like a browser
@@ -62,7 +62,7 @@ abstract class PdfToshokan : KeiSource() {
         // Same normalization and limits as the site's own search box
         val keyword = query.replace(SPACES_REGEX, " ").trim()
         if (keyword.isNotEmpty()) {
-            if (keyword.length !in 2..20) throw Exception("キーワードは2〜20文字で入力してください")
+            if (keyword.length !in 2..20) throw Exception("Enter a keyword of 2 to 20 characters")
             // One path segment, slashes included
             return getListing(listOf("search", keyword), page)
         }
@@ -112,8 +112,14 @@ abstract class PdfToshokan : KeiSource() {
 
     override fun getChapterUrl(chapter: SChapter): String = titleUrl(chapter.url.substringBefore("/"))
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = volumes.open(titleUrl(chapter.url.substringBefore("/")), chapter.url.substringAfter("/"))
-        .mapIndexed { index, url -> Page(index, imageUrl = url) }
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val pages = try {
+            opener.open(getChapterUrl(chapter), chapter.url.substringAfter("/"))
+        } catch (_: VolumeMissing) {
+            return emptyList()
+        }
+        return pages.mapIndexed { index, url -> Page(index, imageUrl = url) }
+    }
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("キーワード検索時はフィルターは無視されます"),
@@ -126,7 +132,7 @@ abstract class PdfToshokan : KeiSource() {
 
     private suspend fun loadPage(url: String): Document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
-    companion object {
-        private val SPACES_REGEX = Regex("""[　 ]""")
+    private companion object {
+        val SPACES_REGEX = Regex("""[　 ]""")
     }
 }

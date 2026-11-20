@@ -16,25 +16,20 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 
-/**
- * The site's file host. A volume is fetched in one request the way the site's PDF viewer does, as its cross-site call
- * from the site, and written out as it arrives so its first pages can be read before the rest is in. None go out while
- * the host is rate limiting: every request then makes the limit last longer.
- */
+/** Fetches a volume in one request, the way the site's PDF viewer does; nothing goes out while it's rate limiting. */
 internal class FileHost(
     private val client: OkHttpClient,
     private val headers: Headers,
     private val siteUrl: String,
     private val preferences: SharedPreferences,
 ) {
-    /** Throws while the host is rate limiting, so nothing is fetched (or decoded for it) in vain. */
+    // Every request while rate limited makes the limit last longer
     fun checkNotPaused() {
         val pausedUntil = preferences.getLong(PAUSED_UNTIL_KEY, 0)
         if (System.currentTimeMillis() < pausedUntil) throw rateLimited(pausedUntil)
     }
 
     suspend fun download(url: HttpUrl, out: OutputStream) {
-        checkNotPaused()
         // A volume is far too big for the HTTP cache, and is stored by the caller anyway
         client.get(url, headers, Fetch.XHR.from(siteUrl), NO_STORE, ensureSuccess = false).use { response ->
             when (response.code) {
