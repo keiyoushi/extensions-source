@@ -15,14 +15,12 @@ abstract class KaijiMangaOnline : SoloManga() {
 
     override val imageHosts = listOf("img.kaijimanga.com", "kaijimanga.com/wp-content/uploads")
 
-    // The site hosts four arcs sharing chapter numbers. Offsets keep the arcs
-    // apart so a descending sort reproduces the site order: kaiji, datenroku,
-    // hakairoku, mokushiroku.
+    // Four arcs share chapter numbers, so each arc starts after the older ones end (older arcs are finished)
     private val arcOffsets = mapOf(
-        "kaiji" to 0f,
-        "tobaku-datenroku-kaiji" to -1000f,
-        "tobaku-hakairoku-kaiji" to -2000f,
-        "tobaku-mokushiroku-kaiji" to -3000f,
+        "tobaku-mokushiroku-kaiji" to 0f,
+        "tobaku-hakairoku-kaiji" to 38f,
+        "tobaku-datenroku-kaiji" to 172f,
+        "kaiji" to 303f,
     )
 
     override fun chapterFromMatch(href: String, match: MatchResult): SChapter = SChapter.create().apply {
@@ -31,7 +29,7 @@ abstract class KaijiMangaOnline : SoloManga() {
         setUrlWithoutDomain(href)
         name = if (arc == "kaiji") "Chapter $num" else "${arcTitle(arc)} Chapter $num"
         // Chapter 0 is a prologue the site lists last.
-        chapter_number = if (number == 0f) -9999f else (arcOffsets[arc] ?: -4000f) + number
+        chapter_number = if (number == 0f) 0f else arcOffsets[arc]?.plus(number) ?: -1f
     }
 
     private fun arcTitle(arc: String): String = arc.split("-").joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
