@@ -99,6 +99,7 @@ abstract class NetTruyenS : WPComics() {
         }
 
         return images.mapNotNull(::imageOrNull)
+            .filterNot { AD_IMAGE_PATH in it }
             .distinct()
             .mapIndexed { i, url -> Page(i, imageUrl = url) }
     }
@@ -124,6 +125,9 @@ abstract class NetTruyenS : WPComics() {
 
     companion object {
         private val CHAPTER_ID_REGEX = Regex("""CHAPTER_ID\s*=\s*(\d+)""")
+
+        // The site's ad banner, shown before and after the pages of every chapter
+        private const val AD_IMAGE_PATH = "/uploads/tmp/"
     }
 }
 
