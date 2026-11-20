@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.time.Instant
 
@@ -121,6 +122,16 @@ class ReaderDto(
     val pages: List<String>,
     val imageSigs: Map<String, String> = emptyMap(),
     val manga: ReaderMangaDto,
+    @SerialName("__r")
+    val encryptedPages: String? = null,
+)
+
+@Serializable
+class ReaderDecryptedDto(
+    @SerialName("p")
+    val pages: List<String>,
+    @SerialName("s")
+    val signatures: Map<String, String> = emptyMap(),
 )
 
 @Serializable

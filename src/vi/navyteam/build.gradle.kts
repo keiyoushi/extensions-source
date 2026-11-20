@@ -6,14 +6,14 @@ plugins {
 
 keiyoushi {
     name = "NavyTeam"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
         lang = "vi"
         baseUrl {
-            custom("https://navyteamz.com")
+            custom("https://navyteams.com")
         }
     }
 
