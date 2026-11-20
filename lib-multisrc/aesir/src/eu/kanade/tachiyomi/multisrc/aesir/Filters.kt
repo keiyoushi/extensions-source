@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.id.kaguya
+package eu.kanade.tachiyomi.multisrc.aesir
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -12,17 +12,23 @@ fun getFilters(genres: List<GenreDto>?) = FilterList(
     ),
 )
 
-open class QueryFilter(
+interface QueryFilter {
+    val param: String
+    val value: String?
+}
+
+open class SelectFilter(
     name: String,
-    val param: String,
+    override val param: String,
     private val options: List<Pair<String, String>>,
     state: Int = 0,
-) : Filter.Select<String>(name, options.map { it.first }.toTypedArray(), state) {
-    val value get() = options[state].second.ifEmpty { null }
+) : Filter.Select<String>(name, options.map { it.first }.toTypedArray(), state),
+    QueryFilter {
+    override val value get() = options[state].second.ifEmpty { null }
 }
 
 class SortFilter :
-    QueryFilter(
+    SelectFilter(
         "Urutkan",
         "sort",
         listOf(
@@ -39,7 +45,7 @@ class SortFilter :
     )
 
 class TypeFilter :
-    QueryFilter(
+    SelectFilter(
         "Tipe",
         "type",
         listOf(
@@ -51,7 +57,7 @@ class TypeFilter :
     )
 
 class StatusFilter :
-    QueryFilter(
+    SelectFilter(
         "Status",
         "status",
         listOf(
@@ -63,9 +69,11 @@ class StatusFilter :
         ),
     )
 
+class GenreOption(name: String, val slug: String) : Filter.CheckBox(name)
+
 class GenreFilter(genres: List<GenreDto>) :
-    QueryFilter(
-        "Genre",
-        "genre",
-        listOf("Semua" to "") + genres.map { it.name to it.slug },
-    )
+    Filter.Group<GenreOption>("Genre", genres.map { GenreOption(it.name, it.slug) }),
+    QueryFilter {
+    override val param = "genre"
+    override val value get() = state.filter { it.state }.joinToString(",") { it.slug }.ifEmpty { null }
+}

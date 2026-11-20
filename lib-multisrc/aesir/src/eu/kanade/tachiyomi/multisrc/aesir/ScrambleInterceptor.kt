@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.id.kaguya
+package eu.kanade.tachiyomi.multisrc.aesir
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
