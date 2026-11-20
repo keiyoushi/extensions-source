@@ -11,4 +11,6 @@ abstract class NhatTruyen : WPComics() {
     override val useChapterListApi = true
 
     override fun getSortList() = netTruyenSortList()
+
+    override val mangaUrlDirectory = "truyen-tranh"
 }

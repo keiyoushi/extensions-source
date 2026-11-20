@@ -5,14 +5,12 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -28,6 +26,10 @@ abstract class NetTruyenViet : WPComics() {
     override val useChapterListApi = true
 
     override fun getSortList() = netTruyenSortList()
+
+    override val mangaUrlDirectory = "truyen-tranh"
+
+    override fun isSiteHost(host: String) = super.isSiteHost(host) || host.removePrefix("www.") in SITE_HOSTS
 
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(
         client.get("$baseUrl/$searchPath?sort=10&page=$page", Fetch.DOCUMENT),
@@ -55,15 +57,6 @@ abstract class NetTruyenViet : WPComics() {
         }.addQueryParameter("page", page.toString()).build()
 
         return parseMangaPage(client.get(url, Fetch.DOCUMENT), searchMangaSelector(), ::searchMangaFromElement)
-    }
-
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if ((url.host != baseUrl.toHttpUrl().host && url.host !in SITE_HOSTS) || url.pathSegments.firstOrNull() != "truyen-tranh") {
-            return null
-        }
-        val slug = url.pathSegments.getOrNull(1)?.ifEmpty { null } ?: return null
-        val manga = SManga.create().apply { this.url = "/truyen-tranh/$slug" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override val pageListSelector = "#chapter-content img, .reading-detail .page-chapter img, .chapter-content img, .page-chapter img"
@@ -118,11 +111,8 @@ abstract class NetTruyenViet : WPComics() {
         // The site serves the same pages on these domains, so their links open with the chosen base URL
         private val SITE_HOSTS = setOf(
             "nettruyenviet10.com",
-            "www.nettruyenviet10.com",
             "nettruyenviet11.com",
-            "www.nettruyenviet11.com",
             "hinettruyen.com",
-            "www.hinettruyen.com",
         )
     }
 }

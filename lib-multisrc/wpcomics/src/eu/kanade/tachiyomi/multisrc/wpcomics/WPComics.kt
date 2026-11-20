@@ -120,6 +120,23 @@ abstract class WPComics : KeiSource() {
         thumbnail_url = imageOrNull(element.select("div.image a img").first()!!)
     }
 
+    protected open val mangaUrlDirectory: String? = null
+
+    protected open fun isSiteHost(host: String): Boolean {
+        val baseHost = baseUrl.toHttpUrl().host
+        return host == baseHost || host.endsWith(".$baseHost")
+    }
+
+    // Only manga and chapter links map to a manga url, longer paths carry ids the manga url needs
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val directory = mangaUrlDirectory ?: return null
+        val segments = url.pathSegments
+        if (!isSiteHost(url.host) || segments.size !in 2..3 || segments[0] != directory) return null
+
+        val manga = SManga.create().apply { this.url = "/$directory/${segments[1]}" }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
+
     // ============================== Details ======================================
 
     override suspend fun fetchMangaUpdate(

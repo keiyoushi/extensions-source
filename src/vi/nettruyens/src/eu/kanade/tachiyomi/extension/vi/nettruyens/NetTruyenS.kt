@@ -38,6 +38,8 @@ abstract class NetTruyenS : WPComics() {
 
     override fun popularMangaNextPageSelector() = "ul.pagination li.active + li a"
 
+    override val mangaUrlDirectory = "manga"
+
     private suspend fun parseMangaList(url: HttpUrl): MangasPage = parseMangaPage(client.get(url, Fetch.DOCUMENT), popularMangaSelector(), ::popularMangaFromElement)
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {

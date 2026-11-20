@@ -15,6 +15,8 @@ abstract class NetTruyenCO : WPComics() {
 
     override fun getSortList() = netTruyenSortList()
 
+    override val mangaUrlDirectory = "truyen-tranh"
+
     override fun chapterListApiUrl(manga: SManga): HttpUrl = super.chapterListApiUrl(manga).newBuilder()
         .setQueryParameter("slug", manga.slug())
         .addQueryParameter("comicId", manga.url.substringAfterLast("-"))

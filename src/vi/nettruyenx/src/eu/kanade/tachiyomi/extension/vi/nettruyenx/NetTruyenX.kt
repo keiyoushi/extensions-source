@@ -8,4 +8,5 @@ abstract class NetTruyenX : WPComics() {
     override val popularPath = "truyen-tranh-hot"
     override val useChapterListApi = true
     override fun getSortList() = netTruyenSortList()
+    override val mangaUrlDirectory = "truyen-tranh"
 }
