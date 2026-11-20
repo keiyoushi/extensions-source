@@ -14,10 +14,10 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -148,9 +148,11 @@ abstract class Kensscan :
         artist = card.select(".mg_artists .summary-content a").eachText().joinToString().ifBlank { null }
         card.select(".mg_genres a").eachText().joinToString().ifBlank { null }?.let { genre = it }
         card.selectFirst(".mg_status .summary-content")?.text()?.let { status = it.toStatus() }
-        card.selectFirst(".mg_alternative .summary-content")?.textOrNull()?.let { alternative ->
-            description = listOfNotNull(description, "${intl["alt_names_heading"]} $alternative").joinToString("\n\n")
-        }
+        val alternative = card.selectFirst(".mg_alternative .summary-content")?.text()?.takeIf { it != title && !isUpdating(it) }
+        description = MarkdownDescription.Builder()
+            .markdown(description)
+            .altTitles(listOfNotNull(alternative), intl["alt_names_heading"].removeSuffix(":"))
+            .build()
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
