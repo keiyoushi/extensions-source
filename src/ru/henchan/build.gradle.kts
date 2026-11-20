@@ -18,4 +18,12 @@ keiyoushi {
         lang = "ru"
         id = 5504588601186153612L
     }
+
+    deeplink {
+        host("h-chan.me")
+        host("*.h-chan.me")
+        host("hentaichan.live")
+        host("*.hentaichan.live")
+        path("/manga/..*\\.html")
+    }
 }
