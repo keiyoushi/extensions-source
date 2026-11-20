@@ -98,7 +98,7 @@ abstract class LuotTruyen : WPComics() {
         }
     }
 
-    override suspend fun chapterListParse(document: Document, manga: SManga): List<SChapter> {
+    override suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val headers = headersBuilder().set("X-Requested-With", "XMLHttpRequest").build()
         val body = FormBody.Builder().add("StoryID", manga.url.substringAfterLast("-")).build()
         return client.post("$baseUrl/Story/ListChapterByStoryID", headers, Fetch.XHR.from(getMangaUrl(manga)), body).asJsoup()

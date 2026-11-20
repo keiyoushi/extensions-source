@@ -144,12 +144,15 @@ abstract class WPComics : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = mangaUpdateParse(client.get(getMangaUrl(manga), Fetch.DOCUMENT), manga, chapters)
+    ): SMangaUpdate {
+        if (!fetchDetails) fetchChapterList(manga)?.let { return SMangaUpdate(manga, it) }
+        return mangaUpdateParse(client.get(getMangaUrl(manga), Fetch.DOCUMENT), manga, chapters)
+    }
 
     protected open suspend fun mangaUpdateParse(response: Response, manga: SManga, chapters: List<SChapter>): SMangaUpdate {
         val document = response.asJsoup()
         val updatedManga = mangaDetailsParse(document).apply { url = manga.url }
-        val updatedChapters = chapterListParse(document, manga)
+        val updatedChapters = fetchChapterList(manga) ?: document.select(chapterListSelector()).map(::chapterFromElement)
 
         return SMangaUpdate(updatedManga, updatedChapters)
     }
@@ -187,11 +190,8 @@ abstract class WPComics : KeiSource() {
 
     protected open val useChapterListApi = false
 
-    protected open suspend fun chapterListParse(document: Document, manga: SManga): List<SChapter> = if (useChapterListApi) {
-        fetchChapterListApi(manga)
-    } else {
-        document.select(chapterListSelector()).map(::chapterFromElement)
-    }
+    // Chapters that come from their own request, null when they are on the manga page
+    protected open suspend fun fetchChapterList(manga: SManga): List<SChapter>? = if (useChapterListApi) fetchChapterListApi(manga) else null
 
     protected open fun chapterListApiUrl(manga: SManga): HttpUrl = "$baseUrl/Comic/Services/ComicService.asmx/ChapterList".toHttpUrl().newBuilder()
         .addQueryParameter("slug", manga.url.substringAfterLast("/"))
