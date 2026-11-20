@@ -46,6 +46,7 @@ abstract class ComX :
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(DleGuardResolver.interceptor(baseUrl))
+        addInterceptor(ImageHostInterceptor())
         rateLimit(3)
     }
 
