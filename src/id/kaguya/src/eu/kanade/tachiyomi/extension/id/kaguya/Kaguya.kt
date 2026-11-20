@@ -10,13 +10,18 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.aesDecrypt
+import keiyoushi.utils.aesGcm
+import keiyoushi.utils.decodeHex
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha256
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 
 const val CDN_URL = "https://storage.kaguyacdn.my.id"
 private const val API_URL = "https://tsuki.kaguya.re/api/v1"
@@ -25,6 +30,8 @@ private const val API_URL = "https://tsuki.kaguya.re/api/v1"
 abstract class Kaguya : KeiSource() {
 
     override val supportsFilterFetching = true
+
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(ScrambleInterceptor())
 
     // ============================== Popular ==============================
 
@@ -95,9 +102,16 @@ abstract class Kaguya : KeiSource() {
         return dto.pages.sortedBy(PageDto::order).mapIndexed { index, page ->
             val imageUrl = "$API_URL/media/chapter/deliver".toHttpUrl().newBuilder()
                 .addQueryParameter("token", page.token)
+                .fragment(page.scrambleSeed?.let { decryptSeed(it, dto.readerTicket!!, chapterId) })
                 .build()
             Page(index, imageUrl = imageUrl.toString())
         }
+    }
+
+    // Scramble seed: hex "iv.ciphertext.tag", AES-GCM keyed on the pages response's reader ticket and the chapter id
+    private fun decryptSeed(seed: String, ticket: String, chapterId: String): String {
+        val (iv, ciphertext, tag) = seed.split('.').map(String::decodeHex)
+        return (ciphertext + tag).aesDecrypt(aesGcm("$ticket:$chapterId".sha256(), iv)).decodeToString()
     }
 
     // ============================== Filters ==============================

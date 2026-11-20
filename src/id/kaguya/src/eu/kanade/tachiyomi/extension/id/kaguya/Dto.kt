@@ -101,10 +101,12 @@ class ReaderPropsDto(
 class ReaderDto(
     val locked: Boolean = false,
     val pages: List<PageDto> = emptyList(),
+    val readerTicket: String? = null,
 )
 
 @Serializable
 class PageDto(
     val order: Int,
     val token: String,
+    val scrambleSeed: String? = null,
 )
