@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Kaguya"
     pkgName = "id.yubikiri"
-    versionCode = 66
+    versionCode = 67
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

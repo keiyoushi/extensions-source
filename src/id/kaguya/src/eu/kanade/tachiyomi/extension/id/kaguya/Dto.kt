@@ -93,6 +93,11 @@ class ChapterDto(
 }
 
 @Serializable
+class ReaderPropsDto(
+    val readerTicket: String,
+)
+
+@Serializable
 class ReaderDto(
     val locked: Boolean = false,
     val pages: List<PageDto> = emptyList(),

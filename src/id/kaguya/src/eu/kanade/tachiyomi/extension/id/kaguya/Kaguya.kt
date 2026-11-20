@@ -10,9 +10,11 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
@@ -78,8 +80,14 @@ abstract class Kaguya : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.url.substringAfterLast('/')
-        // Without the chapter page as Referer the site answers with placeholder pages
-        val dto = client.get("$baseUrl/api/reader/$chapterId/pages", Fetch.XHR.from(getChapterUrl(chapter)))
+        val chapterUrl = getChapterUrl(chapter)
+        val ticket = client.get(chapterUrl, Fetch.DOCUMENT)
+            .extractNextJs<ReaderPropsDto> { it is JsonObject && "readerTicket" in it && "initialChapter" in it }
+            ?.readerTicket
+            ?: error("Reader ticket not found")
+        // Without the page's reader ticket the site answers with placeholder pages
+        val readerHeaders = headers.newBuilder().set("x-reader-ticket", ticket).build()
+        val dto = client.get("$baseUrl/api/reader/$chapterId/pages", readerHeaders, Fetch.XHR.from(chapterUrl))
             .parseAs<ResponseDto<ReaderDto>>()
             .data
         if (dto.locked) error("This chapter is locked")
