@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.kumanga
 
-import android.util.Base64
 import android.webkit.WebResourceResponse
 import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -18,8 +17,6 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import keiyoushi.utils.textOrNull
-import keiyoushi.utils.xor
-import keiyoushi.utils.xorInPlace
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -158,10 +155,9 @@ abstract class Kumanga : KeiSource() {
         }
         val html = client.get(readerUrl, Fetch.DOCUMENT).body.string()
         val readerHost = readerUrl.toHttpUrl().host
-        // The page list is whatever the reader page's scripts leave in rpics
-        val encoded = try {
-            runWebView<String> {
-                // The site's own scripts, which rpics may depend on
+        // The site keeps renaming its page list variable: read the list the reader's x-for template loops over
+        val paths = try {
+            runWebView<List<String>> {
                 interceptRequest { request ->
                     if (request.url.host == readerHost && request.url.path.orEmpty().endsWith(".js")) {
                         proxyRequest(request, client)
@@ -170,8 +166,8 @@ abstract class Kumanga : KeiSource() {
                     }
                 }
                 onPageFinished {
-                    evaluateJs("typeof rpics == 'string' ? rpics : null") { result ->
-                        result.parseAs<String?>()?.let(::resolve) ?: reject(Exception("No page list"))
+                    evaluateJs(PAGES_SCRIPT) { result ->
+                        result.parseAs<List<String>?>()?.takeIf { it.isNotEmpty() }?.let(::resolve) ?: reject(Exception("No page list"))
                     }
                 }
                 loadData(readerUrl, html)
@@ -181,8 +177,6 @@ abstract class Kumanga : KeiSource() {
         } catch (e: Throwable) {
             throw IOException(e.message, e)
         }
-        val cipher = Base64.decode(encoded, Base64.DEFAULT)
-        val paths = cipher.xor(cipher.pagesKey()).decodeToString().parseAs<List<String>>()
         val base = readerUrl.toHttpUrl()
         return paths.mapIndexed { index, path -> Page(index, imageUrl = base.resolve(path)!!.toString()) }
     }
@@ -195,16 +189,19 @@ abstract class Kumanga : KeiSource() {
 
     private fun String.toMangaId() = "$baseUrl$this".toHttpUrl().pathSegments[1].toInt()
 
-    // The reader's XOR key, recovered from the page list's known opening
-    private fun ByteArray.pagesKey(): ByteArray {
-        val known = copyOf(PAGES_PREFIX.size).xorInPlace(PAGES_PREFIX)
-        val period = (1..known.size).first { period -> known.indices.all { known[it] == known[it % period] } }
-        return known.copyOf(period)
-    }
-
     companion object {
-        // Opening of every page list (JSON-escaped): img.php with the hex of an "http" url
-        private val PAGES_PREFIX = """["\/img.php?src=68747470""".toByteArray()
+        private const val PAGES_SCRIPT = """
+            (() => {
+                const loop = [...document.querySelectorAll('template[x-for]')].find((t) => t.content.querySelector('img'));
+                const list = loop
+                    .getAttribute('x-for')
+                    .split(/\s+(?:in|of)\s+/)
+                    .pop()
+                    .trim();
+                const data = new Function(`return ${'$'}{loop.closest('[x-data]').getAttribute('x-data')}`)();
+                return data[list];
+            })()
+        """
         private val OTHER_CHAPTERS_REGEX = Regex("""OTHER_CHAPTERS\s*=\s*(\[.*])\s*;""", RegexOption.DOT_MATCHES_ALL)
     }
 }
