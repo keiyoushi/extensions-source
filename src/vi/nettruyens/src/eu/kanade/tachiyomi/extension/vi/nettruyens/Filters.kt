@@ -6,14 +6,6 @@ class Genre(name: String, val id: String) : Filter.TriState(name)
 
 class GenreGroupFilter(genres: List<Genre>) : Filter.Group<Genre>("Thể loại", genres)
 
-class StatusFilter :
-    Filter.Select<String>(
-        "Trạng thái",
-        STATUS_LIST.map { it.first }.toTypedArray(),
-    ) {
-    fun toValue() = STATUS_LIST[state].second
-}
-
 class GenderFilter :
     Filter.Select<String>(
         "Dành cho",
@@ -37,14 +29,6 @@ class SortFilter :
     ) {
     fun toValue() = SORT_LIST[state].second
 }
-
-private val STATUS_LIST = listOf(
-    "Tất cả" to "",
-    "Hoàn thành" to "completed",
-    "Đang tiến hành" to "on-going",
-    "Tạm ngưng" to "on-hold",
-    "Đã hủy" to "canceled",
-)
 
 private val GENDER_LIST = listOf(
     "Tất cả" to "All",
