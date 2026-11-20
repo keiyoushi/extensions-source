@@ -24,6 +24,8 @@ abstract class SoloManga : KeiSource() {
 
     protected open val chapterRegex by lazy { Regex("""$chapterSlug(\d+)/?$""") }
 
+    protected open val chapterListSelector = "#ceo_latest_comics_widget-3"
+
     protected abstract val imageHosts: List<String>
 
     protected open val pageSelector = ".entry-content img"
@@ -75,11 +77,10 @@ abstract class SoloManga : KeiSource() {
 
     // ============================== Chapters ==============================
 
-    protected open fun chapterListParse(document: Document): List<SChapter> = document.select("a[href*='$chapterSlug']")
+    protected open fun chapterListParse(document: Document): List<SChapter> = document.select("$chapterListSelector a[href*='$chapterSlug']")
         .map { it.attr("abs:href") }
         .mapNotNull { href -> chapterRegex.find(href)?.let { chapterFromMatch(href, it) } }
         .distinctBy { it.name }
-        .sortedByDescending { it.chapter_number }
 
     protected open fun chapterFromMatch(href: String, match: MatchResult): SChapter = SChapter.create().apply {
         val number = match.groupValues[1]
