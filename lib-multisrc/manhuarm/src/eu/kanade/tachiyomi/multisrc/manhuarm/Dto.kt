@@ -1,26 +1,19 @@
 package eu.kanade.tachiyomi.multisrc.manhuarm
 
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonTransformingSerializer
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import java.io.IOException
+import okhttp3.HttpUrl
 
 @Serializable
-class PageDto(
-    @SerialName("image")
-    val imageUrl: String,
-    @SerialName("texts")
-    @Serializable(with = DialogListSerializer::class)
-    val dialogues: List<Dialog> = emptyList(),
+class PageFragment(
+    val chapter: String,
+    val index: Int,
+    val dialogues: List<Dialog>,
 )
+
+// Page image urls carry their page in the fragment
+fun HttpUrl.pageFragment(): PageFragment? = fragment?.takeIf { it.startsWith("{") }?.parseAs<PageFragment>()
 
 @Serializable
 data class Dialog(
@@ -44,69 +37,67 @@ data class Dialog(
     val centerX get() = width / 2 + x
 }
 
-private object DialogListSerializer :
-    JsonTransformingSerializer<List<Dialog>>(ListSerializer(Dialog.serializer())) {
+@Serializable
+class ReaderParamsDto(
+    @SerialName("p") val payload: String,
+    @SerialName("t") val timestamp: Long,
+    @SerialName("n") val nonce: String,
+    @SerialName("s") val seed: String,
+    @SerialName("g") val signature: String,
+    @SerialName("cs") val canvasSeed: Long,
+    @SerialName("u") val endpoint: String,
+)
 
-    override fun transformDeserialize(element: JsonElement): JsonElement {
-        if (element !is JsonArray) {
-            return JsonArray(emptyList())
-        }
+@Serializable
+class InitRequestDto(
+    @SerialName("m") private val mode: String,
+    @SerialName("p") private val payload: String,
+)
 
-        if (element.jsonArray.isEmpty()) {
-            return JsonArray(emptyList())
-        }
+@Serializable
+class ImageRequestDto(
+    @SerialName("m") private val mode: String,
+    @SerialName("tk") private val ticket: String,
+)
 
-        return JsonArray(
-            element.jsonArray.mapNotNull { jsonElement ->
-                try {
-                    val coordinates = getCoordinates(jsonElement) ?: return@mapNotNull null
-                    val textByLanguage = getDialogs(jsonElement)
+@Serializable
+class SealedDto(
+    @SerialName("u") val iv: String,
+    @SerialName("v") val data: String,
+    @SerialName("w") val tag: String,
+)
 
-                    // Validate coordinates array has at least 4 elements
-                    if (coordinates.size < 4) return@mapNotNull null
+@Serializable
+class ChapterDataDto(
+    @SerialName("d") val ocr: List<OcrPageDto>,
+    @SerialName("m") val pages: List<ManifestEntryDto>,
+)
 
-                    buildJsonObject {
-                        put("x", coordinates[0])
-                        put("y", coordinates[1])
-                        put("_width", coordinates[2])
-                        put("_height", coordinates[3])
-                        put("textByLanguage", textByLanguage)
-                    }
-                } catch (e: Exception) {
-                    null
-                }
-            },
-        )
-    }
+@Serializable
+class OcrPageDto(
+    @SerialName("f") val token: String,
+    @SerialName("b") val boxes: List<OcrBoxDto>,
+)
 
-    private fun getCoordinates(element: JsonElement): JsonArray = when (element) {
-        is JsonArray -> element.jsonArray[0].jsonArray
-
-        else -> element.jsonObject["box"]?.jsonArray
-            ?: throw IOException("Dialog box position not found")
-    }
-
-    private fun getDialogs(element: JsonElement): JsonObject = buildJsonObject {
-        when (element) {
-            is JsonArray -> put("text", element.jsonArray[1])
-
-            else -> {
-                element.jsonObject.entries
-                    .filter { it.value.isString }
-                    .forEach { put(it.key, it.value) }
-            }
-        }
-    }
-
-    private val JsonElement.isArray get() = this is JsonArray
-    private val JsonElement.isObject get() = this is JsonObject
-    private val JsonElement.isString get() = this.isObject.not() && this.isArray.not() && this.jsonPrimitive.isString
+@Serializable
+class OcrBoxDto(
+    @SerialName("r") private val box: List<Float>,
+    @SerialName("c") private val text: String?,
+) {
+    fun toDialog(offset: IntArray) = Dialog(
+        box[0] - offset[0],
+        box[1] - offset[1],
+        box[2] - offset[2],
+        box[3] - offset[3],
+        textByLanguage = mapOf("text" to text.orEmpty()),
+    )
 }
 
 @Serializable
-class OcrRequestDto(
-    private val ch: String,
-    private val tk: String,
-    private val ts: Long,
-    private val nc: String,
+class ManifestEntryDto(
+    @SerialName("i") val index: Int,
+    @SerialName("k") val token: String,
+    @SerialName("tk") val ticket: String,
+    @SerialName("ik") val imageKey: String,
+    @SerialName("is") val imageSeed: Long,
 )

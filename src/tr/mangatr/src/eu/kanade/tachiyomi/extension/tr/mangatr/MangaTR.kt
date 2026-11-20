@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.util.Base64
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -18,9 +19,11 @@ import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.sha256
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonRequestBody
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import okhttp3.CacheControl
 import okhttp3.FormBody
@@ -285,7 +288,7 @@ abstract class MangaTR : KeiSource() {
         val response = client.get(baseUrl + chapter.url, Fetch.DOCUMENT)
         val document = response.asJsoup()
 
-        if (document.selectFirst("div#uyari:contains(üye girişi)") != null) {
+        if (document.selectFirst("div#uyari:contains(üye girişi), body :containsOwn(Giriş Yapmalısınız)") != null) {
             throw IOException("Bu bölümü okuyabilmek için WebView üzerinden üye girişi yapmanız gerekmektedir.")
         }
 
@@ -294,10 +297,30 @@ abstract class MangaTR : KeiSource() {
             throw IOException("Lütfen WebView'da Bot Korumasını geçin.")
         }
 
+        val matrix = document.select("script:not([src])").firstNotNullOfOrNull { MATRIX_REGEX.find(it.data()) }
+        if (matrix != null) {
+            return matrix.groupValues[1].parseAs<List<MatrixPage>>().mapIndexed { index, page ->
+                Page(index, imageUrl = page.decode())
+            }
+        }
+
         // Lazy-loaded pages keep their real URL in data-mtr-src until scrolled into view
         return document.select("img.chapter-img").mapIndexed { index, img ->
             Page(index, imageUrl = img.absUrl("data-mtr-src").ifEmpty { img.absUrl("src") })
         }
+    }
+
+    // The reader script builds each page from window.__MTR_MATRIX__, with its url encoded one of three ways
+    @Serializable
+    private class MatrixPage(private val m: Int, private val s: Int, private val d: String) {
+        fun decode(): String = when (m) {
+            0 -> d.base64Bytes().map { ((it.toInt() and 0xFF) xor (s and 0xFF)).toChar() }.joinToString("")
+            1 -> d.split('.').map { it.base64Bytes().decodeToString() }.let { (a, b, c) -> c + a + b }
+            2 -> d.base64Bytes().map { ((it.toInt() and 0xFF) - (s % 25 + 1)).toChar() }.joinToString("")
+            else -> throw IOException("Bilinmeyen sayfa kodlaması: $m")
+        }
+
+        private fun String.base64Bytes() = Base64.decode(this, Base64.DEFAULT)
     }
 
     // ============================= Utilities =============================
@@ -403,6 +426,7 @@ abstract class MangaTR : KeiSource() {
         private val RELATIVE_DATE_REGEX = Regex("""(\d+)\s*([a-zçğıöşü]+)""")
         private val CHALLENGE_REGEX = Regex("""challenge:\s*"([^"]+)"""")
         private val CHAPTER_URL_REGEX = Regex("""id-\d+-read-(.+)-chapter-[^/]+\.html""")
+        private val MATRIX_REGEX = Regex("""__MTR_MATRIX__\s*=\s*\{.*?\bm\s*:\s*(\[.*\])\s*\}\s*;""", RegexOption.DOT_MATCHES_ALL)
         private val SEED_REGEX = Regex("""--mdx-(white|black)\s*:\s*(-?\d+)""")
         private const val IMAGE_HOST = "image.mngtr.site"
         private const val IMAGE_ATTEMPTS = 3

@@ -12,6 +12,7 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -80,7 +81,7 @@ abstract class Komiwa : KeiSource() {
         if (url.host.removePrefix("www.") != host || segments.size != 2) return null
         val slug = when (segments[0]) {
             "manga" -> segments[1]
-            "chapter" -> fetchReader(segments[1]).manga.slug
+            "chapter" -> fetchReader(segments[1]).first.manga.slug
             else -> return null
         }
         return fetchMangaPage(slug).manga.toSMangaDetails().apply { initialized = true }
@@ -118,13 +119,32 @@ abstract class Komiwa : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val reader = fetchReader(chapter.url)
-        return reader.pages.mapIndexed { index, url -> Page(index, imageUrl = proxyUrl(url, reader.imageSigs[url])) }
+        val (reader, rk) = fetchReader(chapter.url)
+        val (pages, signatures) = if (!reader.encryptedPages.isNullOrEmpty() && !rk.isNullOrEmpty()) {
+            decryptReader(reader.encryptedPages, rk)
+        } else {
+            reader.pages.filterNot { it.contains("/_mihon/") } to reader.imageSigs
+        }
+        return pages.mapIndexed { index, url -> Page(index, imageUrl = proxyUrl(url, signatures[url])) }
     }
 
     // The chapter API serves placeholder pages; the reader page carries the real ones
-    private suspend fun fetchReader(chapterId: String) = client.get("$baseUrl/chapter/$chapterId", Fetch.DOCUMENT)
-        .extractNextJs<ReaderDto>()!!
+    private suspend fun fetchReader(chapterId: String): Pair<ReaderDto, String?> {
+        val document = client.get("$baseUrl/chapter/$chapterId", Fetch.DOCUMENT).asJsoup()
+        val reader = document.extractNextJs<ReaderDto>()!!
+        val rk = RK_REGEX.find(document.html())?.groupValues?.get(1)?.trim('"', '\'', '\\', ' ')
+        return reader to rk
+    }
+
+    private fun decryptReader(encrypted: String, rk: String): Pair<List<String>, Map<String, String>> {
+        val rBytes = Base64.decode(encrypted, Base64.URL_SAFE)
+        val keyBytes = rk.toByteArray()
+        val decrypted = ByteArray(rBytes.size) { i ->
+            (rBytes[i].toInt() xor keyBytes[i % keyBytes.size].toInt() xor (i and 0xFF)).toByte()
+        }
+        val dto = decrypted.decodeToString().parseAs<ReaderDecryptedDto>()
+        return dto.pages to dto.signatures
+    }
 
     // The site's reader loads every page through its image proxy, signed, on the server its script picks for the URL
     private fun proxyUrl(url: String, signature: String?): String {
@@ -155,6 +175,7 @@ abstract class Komiwa : KeiSource() {
     }
 
     companion object {
+        private val RK_REGEX = Regex("""--rk:\s*\\?"?([^;\s"\\{}]+)""")
         private const val API_URL = "https://b78sk.komiwa.net"
         private const val PAGE_SIZE = 24
         private val LIST_PATHS = setOf("genero", "tipo", "demografia")
