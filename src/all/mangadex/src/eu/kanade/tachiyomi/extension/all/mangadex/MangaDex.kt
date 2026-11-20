@@ -39,8 +39,6 @@ import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.CacheControl
 import okhttp3.Headers
@@ -765,16 +763,14 @@ class MangaDex(
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val mangaDeferred = async {
-            if (fetchDetails) getMangaByUrl(getMangaUrl(manga).toHttpUrl()) else manga
-        }
-        val chaptersDeferred = async {
-            if (fetchChapters) getChapterList(manga) else chapters
-        }
-
-        SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { getMangaByUrl(getMangaUrl(manga).toHttpUrl()) },
+        chapterList = { getChapterList(manga) },
+    )
 
     private fun HttpUrl.Builder.addQueryParameter(name: String, value: Set<String>?) = apply {
         value?.forEach { addQueryParameter(name, it) }

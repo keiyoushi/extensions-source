@@ -70,8 +70,7 @@ abstract class Rumanhua : KeiSource() {
             "show" -> "/news/" + client.get("$baseUrl${url.encodedPath}", Fetch.DOCUMENT).asJsoup().params().comicId
             else -> return null
         }
-        val manga = SManga.create().apply { this.url = mangaPath }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(mangaPath)
     }
 
     override suspend fun fetchMangaUpdate(

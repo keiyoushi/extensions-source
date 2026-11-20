@@ -55,8 +55,7 @@ abstract class OrckuMangas : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.encodedPath != "/ficha") return null
         val id = url.queryParameter("id")?.toIntOrNull() ?: return null
-        val manga = SManga.create().apply { this.url = "/ficha?id=$id" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/ficha?id=$id")
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -92,11 +91,14 @@ abstract class OrckuMangas : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ) = coroutineScope {
-        val details = async { if (fetchDetails) getDetails(manga) else manga }
-        val chapters = async { if (fetchChapters) getChapters(manga) else chapters }
-        SMangaUpdate(details.await(), chapters.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { getDetails(manga) },
+        chapterList = { getChapters(manga) },
+    )
 
     private suspend fun getDetails(manga: SManga): SManga {
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()

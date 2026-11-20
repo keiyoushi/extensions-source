@@ -103,19 +103,14 @@ abstract class Kodansha :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async {
-            if (fetchDetails) {
-                client.get("$API_URL/manga/${manga.url}/v0", Fetch.XHR).parseAs<SeriesDto>().toSMangaDetails()
-            } else {
-                manga
-            }
-        }
-        val chapterList = async {
-            if (fetchChapters) fetchChapterList(manga) else chapters
-        }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { client.get("$API_URL/manga/${manga.url}/v0", Fetch.XHR).parseAs<SeriesDto>().toSMangaDetails() },
+        chapterList = { fetchChapterList(manga) },
+    )
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> = coroutineScope {
         val slug = manga.memo["slug"]!!.stringOrNull!!

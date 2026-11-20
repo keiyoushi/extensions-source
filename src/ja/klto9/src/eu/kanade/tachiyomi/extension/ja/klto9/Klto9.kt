@@ -18,8 +18,6 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -144,11 +142,14 @@ abstract class Klto9 : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val mangaDeferred = async { if (fetchDetails) fetchMangaDetails(manga) else manga }
-        val chaptersDeferred = async { if (fetchChapters) fetchChapterList(manga) else chapters }
-        SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { fetchMangaDetails(manga) },
+        chapterList = { fetchChapterList(manga) },
+    )
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()

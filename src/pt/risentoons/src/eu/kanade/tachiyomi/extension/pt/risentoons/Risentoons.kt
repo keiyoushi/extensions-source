@@ -15,8 +15,6 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -71,11 +69,14 @@ abstract class Risentoons : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) fetchMangaDetails(manga.url) else manga }
-        val chapterList = async { if (fetchChapters) fetchChapterList(manga.url) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { fetchMangaDetails(manga.url) },
+        chapterList = { fetchChapterList(manga.url) },
+    )
 
     private suspend fun fetchMangaDetails(slug: String): SManga = client.get("$apiUrl/mangas/$slug", Fetch.XHR)
         .parseAs<DataDto<MangaDto>>().data.toSManga(baseUrl)

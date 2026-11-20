@@ -97,8 +97,7 @@ abstract class PieComics : KeiSource() {
             }
             else -> null
         } ?: return null
-        val manga = SManga.create().apply { this.url = seriesPath(seriesUrl) ?: return null }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(seriesPath(seriesUrl) ?: return null)
     }
 
     private fun seriesPath(url: HttpUrl): String? {

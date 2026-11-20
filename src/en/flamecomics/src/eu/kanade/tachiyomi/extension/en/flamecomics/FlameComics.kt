@@ -56,8 +56,7 @@ abstract class FlameComics : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "series") return null
         val seriesId = url.pathSegments.getOrNull(1)?.toIntOrNull() ?: return null
-        val manga = SManga.create().apply { this.url = "/series/$seriesId" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/series/$seriesId")
     }
 
     override suspend fun fetchMangaUpdate(

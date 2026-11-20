@@ -92,11 +92,7 @@ abstract class Viz :
 
         if (service != servicePath) return null
 
-        val manga = SManga.create().apply {
-            this.url = seriesSlug
-        }
-
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(seriesSlug)
     }
 
     private fun mangaFromElement(element: Element): SManga = SManga.create().apply {

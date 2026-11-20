@@ -87,8 +87,7 @@ abstract class MangaKo : KeiSource() {
             "chapter" -> getReader(id.toString()).titleId
             else -> return null
         }
-        val manga = SManga.create().apply { this.url = "/title/$titleId" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/title/$titleId")
     }
 
     // Details come with the first page of chapters, 20 per page

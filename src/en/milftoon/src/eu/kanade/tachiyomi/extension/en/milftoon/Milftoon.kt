@@ -94,8 +94,7 @@ abstract class Milftoon : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "comics") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
-        val manga = SManga.create().apply { this.url = "/comics/$slug" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/comics/$slug")
     }
 
     override suspend fun fetchMangaUpdate(

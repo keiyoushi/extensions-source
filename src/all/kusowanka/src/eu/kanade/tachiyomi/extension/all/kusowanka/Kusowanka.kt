@@ -85,8 +85,7 @@ abstract class Kusowanka : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments[0] != "post") return null
-        val manga = SManga.create().apply { this.url = url.pathSegments[1] }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(url.pathSegments[1])
     }
 
     override suspend fun fetchMangaUpdate(

@@ -17,8 +17,6 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -108,21 +106,20 @@ abstract class TomiloLib :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val titleId = manga.titleId()
-        val details = async {
-            if (fetchDetails) {
+
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = {
                 client.get("$apiUrl/titles/$titleId", apiHeaders, Fetch.XHR)
                     .parseAs<ApiResponse<TitleDto>>().data.toSManga(baseUrl)
-            } else {
-                manga
-            }
-        }
-        val chapterList = async {
-            if (fetchChapters) getChapters(titleId) else chapters
-        }
-
-        SMangaUpdate(details.await(), chapterList.await())
+            },
+            chapterList = { getChapters(titleId) },
+        )
     }
 
     // ============================== Chapters ==============================

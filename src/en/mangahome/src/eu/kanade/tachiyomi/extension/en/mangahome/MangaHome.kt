@@ -96,8 +96,7 @@ abstract class MangaHome : KeiSource() {
         if (url.host.removePrefix("www.").removePrefix("m.") != baseUrl.toHttpUrl().host.removePrefix("www.")) return null
         if (url.pathSegments.firstOrNull() != "manga") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
-        val manga = SManga.create().apply { this.url = slug }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(slug)
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"

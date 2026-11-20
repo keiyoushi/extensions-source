@@ -14,8 +14,6 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -98,14 +96,14 @@ abstract class EZManhwa :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async {
-            if (fetchDetails) client.get("$apiUrl/series/${manga.url}", Fetch.XHR).parseAs<EZManhwaSeriesDto>().toSManga() else manga
-        }
-        val chapterList = async { if (fetchChapters) fetchChapterList(manga.url) else chapters }
-
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { client.get("$apiUrl/series/${manga.url}", Fetch.XHR).parseAs<EZManhwaSeriesDto>().toSManga() },
+        chapterList = { fetchChapterList(manga.url) },
+    )
 
     // ── Chapters ─────────────────────────────────────────────────────────────
 

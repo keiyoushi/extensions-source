@@ -13,8 +13,6 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -64,8 +62,7 @@ abstract class Chikari : KeiSource() {
         if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host) return null
         if (url.pathSegments.firstOrNull() != "series") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
-        val manga = SManga.create().apply { this.url = "/series/$slug" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/series/$slug")
     }
 
     override suspend fun fetchMangaUpdate(
@@ -73,11 +70,14 @@ abstract class Chikari : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) getDetails(manga) else manga }
-        val chapterList = async { if (fetchChapters) getChapters(manga) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { getDetails(manga) },
+        chapterList = { getChapters(manga) },
+    )
 
     private suspend fun getDetails(manga: SManga): SManga {
         val url = apiUrl.newBuilder().addPathSegments(manga.url.removePrefix("/")).build()

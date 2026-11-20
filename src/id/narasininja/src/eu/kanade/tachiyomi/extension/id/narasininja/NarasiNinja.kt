@@ -195,9 +195,8 @@ abstract class NarasiNinja : KeiSource() {
         val slug = url.pathSegments[komikIdx + 1]
         if (slug.isEmpty()) return null
 
-        val manga = SManga.create().apply { this.url = "/komik/$slug" }
         return runCatching {
-            fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+            getMangaDetailsByUrl("/komik/$slug")
         }.getOrNull()
     }
 

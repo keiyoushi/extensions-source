@@ -12,8 +12,6 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -61,20 +59,14 @@ abstract class MangaSwat : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val mangaDeferred = async {
-            if (fetchDetails) getMangaDetails(manga.url) else manga
-        }
-
-        val chaptersDeferred = async {
-            if (fetchChapters) getChapterList(manga) else chapters
-        }
-
-        SMangaUpdate(
-            manga = mangaDeferred.await(),
-            chapters = chaptersDeferred.await(),
-        )
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { getMangaDetails(manga.url) },
+        chapterList = { getChapterList(manga) },
+    )
 
     private suspend fun getMangaDetails(id: String): SManga = client.get(api("series/$id/").build(), Fetch.XHR)
         .parseAs<MangaDetailsDto>()

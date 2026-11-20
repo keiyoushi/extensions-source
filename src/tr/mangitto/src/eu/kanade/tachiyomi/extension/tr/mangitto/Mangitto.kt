@@ -14,8 +14,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getString
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -114,16 +112,14 @@ abstract class Mangitto : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async {
-            if (fetchDetails) client.get("$apiUrl/${manga.url}", Fetch.XHR).parseAs<MangttoDetailData>().toSManga() else manga
-        }
-        val chapterList = async {
-            if (fetchChapters) fetchAllChapters(manga.url) else chapters
-        }
-
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { client.get("$apiUrl/${manga.url}", Fetch.XHR).parseAs<MangttoDetailData>().toSManga() },
+        chapterList = { fetchAllChapters(manga.url) },
+    )
 
     private suspend fun fetchAllChapters(slug: String): List<SChapter> {
         val allChapters = mutableListOf<SChapter>()

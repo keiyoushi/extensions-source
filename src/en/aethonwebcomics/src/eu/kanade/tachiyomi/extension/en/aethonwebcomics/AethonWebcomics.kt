@@ -87,17 +87,14 @@ abstract class AethonWebcomics :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async {
-            if (fetchDetails) {
-                fetchSeries(seriesUrl().addQueryParameter("slug", manga.url), 1).mangas.first()
-            } else {
-                manga
-            }
-        }
-        val chapterList = async { if (fetchChapters) getChapters(manga) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { fetchSeries(seriesUrl().addQueryParameter("slug", manga.url), 1).mangas.first() },
+        chapterList = { getChapters(manga) },
+    )
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/comic-episode/${chapter.url}/"
 

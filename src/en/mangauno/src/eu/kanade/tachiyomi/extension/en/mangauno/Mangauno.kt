@@ -93,8 +93,7 @@ abstract class Mangauno :
         if (url.host != baseUrl.toHttpUrl().host) return null
         if (url.pathSegments.firstOrNull() !in setOf("m", "r")) return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
-        val manga = SManga.create().apply { this.url = slug }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(slug)
     }
 
     override suspend fun fetchMangaUpdate(

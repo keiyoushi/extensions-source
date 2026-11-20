@@ -91,12 +91,7 @@ abstract class XlecX : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (!postRegex.matches(url.encodedPath)) return null
 
-        val manga = SManga.create().apply {
-            this.url = url.encodedPath
-        }
-
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
-            .manga
+        return getMangaDetailsByUrl(url.encodedPath)
             .apply {
                 initialized = true
                 this.url = url.encodedPath

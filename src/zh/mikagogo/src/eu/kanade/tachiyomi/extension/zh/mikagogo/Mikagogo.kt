@@ -81,8 +81,7 @@ abstract class Mikagogo : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host) return null
         val id = url.pathSegments[0].takeIf { it.isNotEmpty() && it.all(Char::isDigit) } ?: return null
-        val manga = SManga.create().apply { this.url = id }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(id)
     }
 
     override suspend fun fetchMangaUpdate(

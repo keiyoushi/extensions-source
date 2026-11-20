@@ -92,8 +92,7 @@ abstract class Yiimanga : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != mangaPath) return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
-        val manga = SManga.create().apply { this.url = "/$mangaPath/$slug/" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/$mangaPath/$slug/")
     }
 
     override suspend fun fetchMangaUpdate(

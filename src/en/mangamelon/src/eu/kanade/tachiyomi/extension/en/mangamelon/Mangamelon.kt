@@ -14,8 +14,6 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonString
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
@@ -78,15 +76,14 @@ abstract class Mangamelon : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async {
-            if (fetchDetails) fetchMangaDetails(manga.url) else manga
-        }
-        val chapterList = async {
-            if (fetchChapters) fetchChapters(manga.url) else chapters
-        }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { fetchMangaDetails(manga.url) },
+        chapterList = { fetchChapters(manga.url) },
+    )
 
     private suspend fun fetchMangaDetails(mangaId: String): SManga {
         val response = api("api/manga/get", MangaGetRequest(target = mangaId)).parseAs<MangaGetResponse>()

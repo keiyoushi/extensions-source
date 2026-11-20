@@ -82,8 +82,7 @@ abstract class BudingManhua : KeiSource() {
                 .selectFirst("a.view-fix-bottom-bar-item[href^=/manhua/]")?.absUrl("href")?.toHttpUrl()?.encodedPath
             else -> null
         } ?: return null
-        val manga = SManga.create().apply { this.url = path }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(path)
     }
 
     override suspend fun fetchMangaUpdate(

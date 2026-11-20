@@ -76,11 +76,14 @@ abstract class DropeScan : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) getMangaDetails(manga) else manga }
-        val chapterList = async { if (fetchChapters) getChapterList(manga) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { getMangaDetails(manga) },
+        chapterList = { getChapterList(manga) },
+    )
 
     private suspend fun getMangaDetails(manga: SManga): SManga = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         .extractNextJs<ObraDto> { it is JsonObject && "ObraId" in it && "Chapters" in it }!!

@@ -50,10 +50,7 @@ abstract class Cartoon18 :
         if (url.host.removePrefix("www.") != baseHost) return null
         val path = url.encodedPath
         if (!path.startsWith("/v/") && !path.startsWith("/zh-hans/v/")) return null
-        val manga = SManga.create().apply {
-            this.url = path
-        }
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(path)
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {

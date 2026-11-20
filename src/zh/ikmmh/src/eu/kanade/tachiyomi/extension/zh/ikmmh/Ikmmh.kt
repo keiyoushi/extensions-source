@@ -15,8 +15,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -134,18 +132,17 @@ abstract class Ikmmh : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async {
-            if (fetchDetails) {
-                warmupSession()
-                client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup().parseDetails(manga)
-            } else {
-                manga
-            }
-        }
-        val chapterList = async { if (fetchChapters) fetchChapterList(manga) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = {
+            warmupSession()
+            client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup().parseDetails(manga)
+        },
+        chapterList = { fetchChapterList(manga) },
+    )
 
     private fun Document.parseDetails(manga: SManga): SManga = manga.apply {
         title = selectFirst("meta[property=og:title]")?.attr("content") ?: title

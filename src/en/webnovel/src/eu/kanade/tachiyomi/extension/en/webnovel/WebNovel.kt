@@ -75,15 +75,7 @@ abstract class WebNovel : KeiSource() {
             return null
         }
 
-        val manga = SManga.create().apply {
-            this.url = url.pathSegments[1].substringAfterLast("_")
-        }
-
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
-            .manga
-            .apply {
-                initialized = true
-            }
+        return getMangaDetailsByUrl(url.pathSegments[1].substringAfterLast("_"))
     }
 
     // Filters

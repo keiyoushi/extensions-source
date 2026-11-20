@@ -86,8 +86,7 @@ abstract class Xsnvshen : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (!url.isSiteUrl() || url.pathSegments.firstOrNull() != "album") return null
         val id = url.pathSegments.getOrNull(1)?.takeIf { ALBUM_ID_REGEX.matches(it) } ?: return null
-        val manga = SManga.create().apply { this.url = "/album/$id" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/album/$id")
     }
 
     override suspend fun getMangasByUrl(url: HttpUrl, page: Int): MangasPage {

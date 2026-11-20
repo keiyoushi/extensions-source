@@ -153,8 +153,7 @@ abstract class Toonkotsu :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (!url.isSiteUrl() || url.pathSegments.firstOrNull() != "title") return null
         val hid = url.pathSegments.getOrNull(1)?.let { HID_REGEX.find(it) }?.value ?: return null
-        val manga = SManga.create().apply { this.url = "/title/$hid" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/title/$hid")
     }
 
     private fun HttpUrl.isSiteUrl() = host.removePrefix("www.") == baseUrl.toHttpUrl().host.removePrefix("www.")

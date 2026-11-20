@@ -107,8 +107,7 @@ abstract class MangaReader : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
-        val manga = SManga.create().apply { this.url = url.encodedPath }
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga.takeIf { it.title.isNotEmpty() }
+        return getMangaDetailsByUrl(url.encodedPath).takeIf { it.title.isNotEmpty() }
     }
 
     private val authorText: String = when (lang) {

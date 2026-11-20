@@ -157,14 +157,7 @@ abstract class Akuma :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val id = url.pathSegments.getOrNull(1) ?: return null
-        return fetchMangaUpdate(
-            SManga.create().apply {
-                this.url = "/g/$id"
-            },
-            emptyList(),
-            true,
-            false,
-        ).manga
+        return getMangaDetailsByUrl("/g/$id")
     }
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val finalQuery: MutableList<String> = mutableListOf(query)

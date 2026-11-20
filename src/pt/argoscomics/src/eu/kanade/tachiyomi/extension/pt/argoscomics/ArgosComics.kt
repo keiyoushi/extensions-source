@@ -20,8 +20,6 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -136,37 +134,30 @@ abstract class ArgosComics : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val detailsDeferred = async {
-            if (fetchDetails) {
-                val url = getMangaUrl(manga)
-                val payload = url.toHttpUrl().pathSegments.toJsonRequestBody()
-                val detailsHeaders = headers.newBuilder()
-                    .set("Next-Action", getDetailsToken(url) ?: throw Exception(WARNING))
-                    .build()
-                client.post(url, detailsHeaders, Fetch.XHR, payload).extractNextJs<MangaDetailsDto>()!!.toSManga()
-            } else {
-                manga
-            }
-        }
-
-        val chaptersDeferred = async {
-            if (fetchChapters) {
-                val url = getMangaUrl(manga)
-                val payload = url.toHttpUrl().pathSegments.toJsonRequestBody()
-                val chaptersHeaders = headers.newBuilder()
-                    .set("Next-Action", getChapterToken(url) ?: throw Exception(WARNING))
-                    .build()
-                val response = client.post(url, chaptersHeaders, Fetch.XHR, payload)
-                val pathSegment = url.substringAfter(baseUrl)
-                response.extractNextJs<VolumeChapterDto>()!!.toChapterList(pathSegment)
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = {
+            val url = getMangaUrl(manga)
+            val payload = url.toHttpUrl().pathSegments.toJsonRequestBody()
+            val detailsHeaders = headers.newBuilder()
+                .set("Next-Action", getDetailsToken(url) ?: throw Exception(WARNING))
+                .build()
+            client.post(url, detailsHeaders, Fetch.XHR, payload).extractNextJs<MangaDetailsDto>()!!.toSManga()
+        },
+        chapterList = {
+            val url = getMangaUrl(manga)
+            val payload = url.toHttpUrl().pathSegments.toJsonRequestBody()
+            val chaptersHeaders = headers.newBuilder()
+                .set("Next-Action", getChapterToken(url) ?: throw Exception(WARNING))
+                .build()
+            val response = client.post(url, chaptersHeaders, Fetch.XHR, payload)
+            val pathSegment = url.substringAfter(baseUrl)
+            response.extractNextJs<VolumeChapterDto>()!!.toChapterList(pathSegment)
+        },
+    )
 
     // ======================== Pages =============================
 

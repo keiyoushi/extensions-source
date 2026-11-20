@@ -86,8 +86,7 @@ abstract class MangaThNet : KeiSource() {
             "chapter" -> getChapterData(id).takeIf { it.contentType in TYPES }?.path ?: return null
             else -> return null
         }
-        val manga = SManga.create().apply { this.url = path }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(path)
     }
 
     // The series page has the details and every chapter

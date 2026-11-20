@@ -57,11 +57,7 @@ abstract class YomuComics : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.pathSegments.firstOrNull() !in MANGA_PATH_SEGMENTS) return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotEmpty) ?: return null
-        val manga = SManga.create().apply { this.url = "/obra/$slug" }
-
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
-            .manga
-            .apply { initialized = true }
+        return getMangaDetailsByUrl("/obra/$slug")
     }
 
     override suspend fun fetchMangaUpdate(

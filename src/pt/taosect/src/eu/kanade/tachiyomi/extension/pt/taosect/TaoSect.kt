@@ -14,8 +14,6 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDateTime
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -161,17 +159,18 @@ abstract class TaoSect : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val projectSlug = manga.url
             .substringAfterLast("projeto/")
             .substringBefore("/")
 
-        val details = if (fetchDetails) async { fetchMangaDetails(manga, projectSlug) } else null
-        val chapterList = if (fetchChapters) async { fetchChapterList(projectSlug) } else null
-
-        SMangaUpdate(
-            manga = details?.await() ?: manga,
-            chapters = chapterList?.await() ?: chapters,
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = { fetchMangaDetails(manga, projectSlug) },
+            chapterList = { fetchChapterList(projectSlug) },
         )
     }
 

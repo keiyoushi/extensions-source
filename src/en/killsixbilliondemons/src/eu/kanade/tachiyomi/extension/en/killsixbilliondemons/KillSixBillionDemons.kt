@@ -125,16 +125,14 @@ abstract class KillSixBillionDemons :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async {
-            if (fetchDetails) fetchBooksAsMangas().find { manga.title == it.title } ?: manga else manga
-        }
-        val chapterList = async {
-            if (fetchChapters) fetchChapterList(manga) else chapters
-        }
-
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { fetchBooksAsMangas().find { manga.title == it.title } ?: manga },
+        chapterList = { fetchChapterList(manga) },
+    )
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val doc = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()

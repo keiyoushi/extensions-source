@@ -146,11 +146,17 @@ abstract class MangaFire :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val hid = getHid(manga.url)
-        val detailsDeferred = async { if (fetchDetails) fetchMangaDetails(hid) else manga }
-        val chaptersDeferred = async { if (fetchChapters) fetchChapters(manga) else chapters }
-        SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
+
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = { fetchMangaDetails(hid) },
+            chapterList = { fetchChapters(manga) },
+        )
     }
 
     private suspend fun fetchMangaDetails(hid: String): SManga = client.get("$baseUrl/api/titles/$hid", Fetch.XHR).parseAs<MangaDetailsResponse>().data.toSManga()

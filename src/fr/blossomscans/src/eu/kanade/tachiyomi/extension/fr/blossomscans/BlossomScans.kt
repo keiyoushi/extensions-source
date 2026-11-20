@@ -92,9 +92,7 @@ abstract class BlossomScans :
             return null
         }
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotBlank() } ?: return null
-        val manga = SManga.create().apply { this.url = slug }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
-            .manga
+        return getMangaDetailsByUrl(slug)
             .apply { this.url = slug }
     }
 

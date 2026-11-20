@@ -14,8 +14,6 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getBooleanOrNull
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -66,8 +64,7 @@ abstract class Lemoon : KeiSource() {
         val index = url.pathSegments.indexOf("series")
         if (index == -1) return null
         val id = url.pathSegments.getOrNull(index + 1)?.substringBefore('-')?.takeIf(String::isNotEmpty) ?: return null
-        val manga = SManga.create().apply { this.url = id }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(id)
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
@@ -77,11 +74,14 @@ abstract class Lemoon : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = if (fetchDetails) async { getDetails(manga.url) } else null
-        val episodes = if (fetchChapters) async { getEpisodes(manga.url) } else null
-        SMangaUpdate(details?.await() ?: manga, episodes?.await() ?: chapters)
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { getDetails(manga.url) },
+        chapterList = { getEpisodes(manga.url) },
+    )
 
     private suspend fun getDetails(id: String): SManga = client.get("$API_URL/comic/$id", apiHeaders, Fetch.XHR).parseAs<ComicDetailsDto>().toSManga()
 

@@ -13,8 +13,6 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -78,11 +76,14 @@ abstract class Newxtoon : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) parseMangaDetails(manga, client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()) else manga }
-        val chapterList = async { if (fetchChapters) getChapterList(manga) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { parseMangaDetails(manga, client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()) },
+        chapterList = { getChapterList(manga) },
+    )
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/comics/${manga.url}"
 

@@ -16,8 +16,6 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.parseGraphQLAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseZonedDateTime
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.OkHttpClient
@@ -174,11 +172,17 @@ abstract class Senkuro : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val mangaId = manga.url.split(",,").first()
-        val details = async { if (fetchDetails) fetchMangaDetails(mangaId) else manga }
-        val chapterList = async { if (fetchChapters) fetchChapterList(manga, mangaId) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
+
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = { fetchMangaDetails(mangaId) },
+            chapterList = { fetchChapterList(manga, mangaId) },
+        )
     }
 
     private suspend fun fetchMangaDetails(mangaId: String): SManga = graphQL(

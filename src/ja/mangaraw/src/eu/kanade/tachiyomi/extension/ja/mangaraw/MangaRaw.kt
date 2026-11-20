@@ -14,8 +14,6 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -82,33 +80,26 @@ abstract class MangaRaw : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details =
-            async {
-                if (fetchDetails) {
-                    client
-                        .get("$apiUrl/manga/${manga.url}", Fetch.XHR)
-                        .parseAs<ApiResponse<MangaDto>>()
-                        .data
-                        .toSManga()
-                } else {
-                    manga
-                }
-            }
-        val chapterList =
-            async {
-                if (fetchChapters) {
-                    client
-                        .get("$apiUrl/manga/${manga.url}/chapters?order=desc", Fetch.XHR)
-                        .parseAs<ApiResponse<List<ChapterDto>>>()
-                        .data
-                        .map { it.toSChapter() }
-                } else {
-                    chapters
-                }
-            }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = {
+            client
+                .get("$apiUrl/manga/${manga.url}", Fetch.XHR)
+                .parseAs<ApiResponse<MangaDto>>()
+                .data
+                .toSManga()
+        },
+        chapterList = {
+            client
+                .get("$apiUrl/manga/${manga.url}/chapters?order=desc", Fetch.XHR)
+                .parseAs<ApiResponse<List<ChapterDto>>>()
+                .data
+                .map { it.toSChapter() }
+        },
+    )
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/chapter/${chapter.url}"
 

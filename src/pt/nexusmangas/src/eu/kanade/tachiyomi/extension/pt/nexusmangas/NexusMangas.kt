@@ -175,9 +175,7 @@ abstract class NexusMangas : KeiSource() {
         val siteHost = baseUrl.toHttpUrl().host.removePrefix("www.")
         if (url.host.removePrefix("www.") != siteHost || url.pathSegments.firstOrNull() != "obra") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotBlank) ?: return null
-        val manga = SManga.create().apply { this.url = slug }
-
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(slug)
             .takeUnless { "Novel" in it.genre.orEmpty().split(", ") }
     }
 

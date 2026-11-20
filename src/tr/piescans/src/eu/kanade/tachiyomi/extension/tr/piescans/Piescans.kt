@@ -129,7 +129,7 @@ abstract class Piescans : KeiSource() {
                 ?: return null
             else -> return null
         }
-        return getMangaUpdate(SManga.create().apply { this.url = seriesPath }, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(seriesPath)
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()

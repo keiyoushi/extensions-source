@@ -86,8 +86,7 @@ abstract class BookLive :
             else -> null
         }
         if (titleId.isNullOrEmpty()) return null
-
-        return getMangaUpdate(SManga.create().apply { this.url = titleId }, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(titleId)
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/product/index/title_id/${manga.url}"

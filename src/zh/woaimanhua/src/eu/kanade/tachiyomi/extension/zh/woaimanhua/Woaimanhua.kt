@@ -83,8 +83,7 @@ abstract class Woaimanhua : KeiSource() {
                 .selectFirst("a.view-fix-bottom-bar-item[href^=/book/]")?.absUrl("href")?.toHttpUrl()?.encodedPath
             else -> null
         } ?: return null
-        val manga = SManga.create().apply { this.url = bookPath }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(bookPath)
     }
 
     override suspend fun fetchMangaUpdate(

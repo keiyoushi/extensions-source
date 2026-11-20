@@ -33,13 +33,7 @@ abstract class OppaiStream : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val slug = url.queryParameter("m") ?: return null
-
-        return fetchMangaUpdate(
-            manga = SManga.create().apply { this.url = "/manhwa?m=$slug" },
-            chapters = emptyList(),
-            fetchDetails = true,
-            fetchChapters = false,
-        ).manga
+        return getMangaDetailsByUrl("/manhwa?m=$slug")
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {

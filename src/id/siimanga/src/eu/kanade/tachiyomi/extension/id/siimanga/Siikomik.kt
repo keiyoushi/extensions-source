@@ -72,8 +72,7 @@ abstract class Siikomik :
         if (url.host != baseUrl.toHttpUrl().host && url.host != OLD_HOST) return null
         val segments = url.pathSegments.filter(String::isNotEmpty)
         if (segments.size !in 2..3 || segments[0] != "komik") return null
-        val manga = SManga.create().apply { this.url = mangaPath(segments[1]) }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(mangaPath(segments[1]))
     }
 
     override suspend fun fetchMangaUpdate(

@@ -125,8 +125,12 @@ abstract class Bbato : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val updatedManga = if (fetchDetails) {
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = {
             val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
             SManga.create().apply {
                 url = manga.url
@@ -138,21 +142,14 @@ abstract class Bbato : KeiSource() {
                 thumbnail_url = document.selectFirst(".poster img")?.getImageUrl()
                 initialized = true
             }
-        } else {
-            manga
-        }
-
-        val updatedChapters = if (fetchChapters) {
+        },
+        chapterList = {
             val slug = manga.url.removeSuffix("/").substringAfterLast("/")
             val chapterHeaders = headersBuilder().add("X-Requested-With", "XMLHttpRequest").build()
             val responseDto = client.get("$baseUrl/get-chapter-list?slug=$slug", chapterHeaders, Fetch.XHR).parseAs<ChapterListResponse>()
             responseDto.toSChapterList(slug, dateTimeFormat)
-        } else {
-            chapters
-        }
-
-        return SMangaUpdate(updatedManga, updatedChapters)
-    }
+        },
+    )
 
     private fun String?.toStatus(): Int = when (this?.trim()?.lowercase(Locale.ENGLISH)) {
         "ongoing", "releasing" -> SManga.ONGOING

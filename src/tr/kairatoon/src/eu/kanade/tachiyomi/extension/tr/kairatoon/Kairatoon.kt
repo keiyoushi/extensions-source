@@ -78,8 +78,7 @@ abstract class Kairatoon : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val slug = url.pathSegments.getOrNull(1)
         if (!url.isSite() || url.pathSegments[0] != "webtoon" || slug.isNullOrEmpty()) return null
-        val manga = SManga.create().apply { this.url = "/webtoon/$slug" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/webtoon/$slug")
     }
 
     override suspend fun fetchMangaUpdate(
@@ -87,21 +86,21 @@ abstract class Kairatoon : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val webtoonUrl = apiUrl.newBuilder().addPathSegment("webtoons").addPathSegment(manga.url.substringAfterLast('/')).build()
-        val details = async {
-            if (fetchDetails) client.get(webtoonUrl, Fetch.XHR).parseAs<WebtoonDto>().toSManga(baseUrl.toHttpUrl()) else manga
-        }
-        val chapterList = async {
-            if (fetchChapters) {
+
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = { client.get(webtoonUrl, Fetch.XHR).parseAs<WebtoonDto>().toSManga(baseUrl.toHttpUrl()) },
+            chapterList = {
                 client.get(webtoonUrl.newBuilder().addPathSegment("chapters").build(), Fetch.XHR).parseAs<List<ChapterDto>>()
                     .map { it.toSChapter(manga.url) }
                     .reversed()
-            } else {
-                chapters
-            }
-        }
-        SMangaUpdate(details.await(), chapterList.await())
+            },
+        )
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {

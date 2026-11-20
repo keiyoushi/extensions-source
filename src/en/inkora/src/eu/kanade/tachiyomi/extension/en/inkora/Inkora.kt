@@ -45,7 +45,7 @@ abstract class Inkora : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val id = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() }
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments[0] !in LINK_PATHS || id == null) return null
-        return getMangaUpdate(SManga.create().apply { this.url = id }, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(id)
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/title/${manga.url}"

@@ -57,12 +57,7 @@ abstract class LuraToon : KeiSource() {
     // Search
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val slug = url.pathSegments.getOrNull(0) ?: return null
-        return fetchMangaUpdate(
-            SManga.create().apply { this.url = slug },
-            emptyList(),
-            true,
-            false,
-        ).manga
+        return getMangaDetailsByUrl(slug)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = client.get(

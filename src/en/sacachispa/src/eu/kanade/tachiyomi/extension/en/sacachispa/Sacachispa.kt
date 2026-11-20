@@ -19,8 +19,6 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -105,15 +103,14 @@ abstract class Sacachispa :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = if (fetchDetails) async { fetchMangaDetails(manga).toSManga(manga.url) } else null
-        val chapterList = if (fetchChapters) async { fetchChapterList(manga) } else null
-
-        SMangaUpdate(
-            manga = details?.await() ?: manga,
-            chapters = chapterList?.await() ?: chapters,
-        )
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { fetchMangaDetails(manga).toSManga(manga.url) },
+        chapterList = { fetchChapterList(manga) },
+    )
 
     private suspend fun fetchMangaDetails(manga: SManga): MangaDetailDto = client.get("$API_URL/manga/${manga.url}", Fetch.XHR)
         .parseAs<Data<MangaDetailDto>>().data

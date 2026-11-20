@@ -89,12 +89,7 @@ abstract class TeamShadowi : KeiSource() {
         }
 
         val mangaUrl = "/series/${url.pathSegments[1]}"
-        val manga = SManga.create().apply {
-            this.url = mangaUrl
-        }
-
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
-            .manga
+        return getMangaDetailsByUrl(mangaUrl)
             .apply {
                 initialized = true
                 this.url = mangaUrl

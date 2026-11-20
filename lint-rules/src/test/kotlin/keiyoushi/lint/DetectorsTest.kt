@@ -808,8 +808,15 @@ class DetectorsTest {
                 private fun parseDetails(s: String): SManga = SManga.create().apply { initialized = true }
                 override suspend fun getMangaByUrl(url: HttpUrl): SManga? = parseDetails("x")
             }
+            abstract class D : KeiSource() {
+                override suspend fun getMangaByUrl(url: HttpUrl): SManga? = getMangaDetailsByUrl(url.encodedPath)
+            }
+            abstract class E : KeiSource() {
+                private fun parseDetails(s: String): SManga = TODO()
+                override suspend fun getMangaByUrl(url: HttpUrl): SManga? = if (url.encodedPath == "/") parseDetails("x") else getMangaDetailsByUrl(url.encodedPath)
+            }
             """,
-        ).count(1)
+        ).count(2)
     }
 
     @Test

@@ -38,13 +38,7 @@ abstract class YomuMangas : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val id = url.pathSegments.getOrNull(1) ?: return null
         if (!id.all(Char::isDigit)) return null
-
-        return fetchMangaUpdate(
-            SManga.create().apply { this.url = id },
-            emptyList(),
-            true,
-            false,
-        ).manga
+        return getMangaDetailsByUrl(id)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -97,35 +91,28 @@ abstract class YomuMangas : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val id = manga.url.substringBefore("#")
         val slug = manga.url.substringAfter("#", "")
 
-        val updatedManga = async {
-            if (fetchDetails) {
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = {
                 client.get("$apiUrl/mangas/$id", Fetch.XHR)
                     .parseAs<MangaDetailsResponse>()
                     .manga
                     .toSManga()
-            } else {
-                manga
-            }
-        }
-        val updatedChapters = async {
-            if (fetchChapters) {
+            },
+            chapterList = {
                 client.get("$apiUrl/mangas/$id/chapters", Fetch.XHR)
                     .parseAs<ChaptersResponse>()
                     .chapters
                     .map { it.toSChapter(id, slug) }
                     .reversed()
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(
-            updatedManga.await(),
-            updatedChapters.await(),
+            },
         )
     }
 

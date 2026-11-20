@@ -60,12 +60,14 @@ abstract class QuestionableContent :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val details = if (fetchDetails) createManga() else manga
-        val chapterList = if (fetchChapters) fetchChapterList(manga) else chapters
-
-        return SMangaUpdate(details, chapterList)
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { createManga() },
+        chapterList = { fetchChapterList(manga) },
+    )
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()

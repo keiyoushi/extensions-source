@@ -13,8 +13,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -101,21 +99,17 @@ abstract class ComicKFan : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ) = coroutineScope {
-        val detailsDeferred = async {
-            if (fetchDetails) {
-                val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
-                parseDetails(doc)
-            } else {
-                manga
-            }
-        }
-        val chaptersDeferred = async { if (fetchChapters) getChapters(manga) else chapters }
-        SMangaUpdate(
-            detailsDeferred.await(),
-            chaptersDeferred.await(),
-        )
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = {
+            val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+            parseDetails(doc)
+        },
+        chapterList = { getChapters(manga) },
+    )
 
     private fun parseDetails(document: Document): SManga {
         val infoRoot = document.selectFirst("div[class=bg-card-section]")

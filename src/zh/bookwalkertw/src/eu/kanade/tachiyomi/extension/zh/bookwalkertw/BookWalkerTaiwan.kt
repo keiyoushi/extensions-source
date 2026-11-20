@@ -64,7 +64,7 @@ abstract class BookWalkerTaiwan : KeiSource() {
         val id = segments.getOrNull(1)
         return when (segments.first()) {
             "search" -> url.queryParameter("series")?.let {
-                getMangaUpdate(SManga.create().apply { this.url = seriesUrl(it) }, emptyList(), fetchDetails = true, fetchChapters = false).manga
+                getMangaDetailsByUrl(seriesUrl(it))
             }
             "serial" -> id?.let { pageManga("$baseUrl/serial/$it") }
             "product", "browserViewer" -> id?.takeIf { it.all(Char::isDigit) }?.let { pageManga("$baseUrl/product/$it") }

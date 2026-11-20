@@ -123,13 +123,7 @@ abstract class Webnex :
                 ?.series?.href?.let { baseUrl.toHttpUrl().resolve(it)!!.pathSegments[1] } ?: return null
             else -> return null
         }
-
-        return getMangaUpdate(
-            manga = SManga.create().apply { this.url = slug },
-            chapters = emptyList(),
-            fetchDetails = true,
-            fetchChapters = false,
-        ).manga
+        return getMangaDetailsByUrl(slug)
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"

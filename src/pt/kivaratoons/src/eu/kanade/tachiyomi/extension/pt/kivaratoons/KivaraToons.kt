@@ -95,11 +95,7 @@ abstract class KivaraToons :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != siteUrl.host || url.pathSegments.firstOrNull() !in MANGA_PATH_SEGMENTS) return null
         val mangaId = url.pathSegments.getOrNull(1)?.takeIf(String::isNotEmpty)?.decodeMangaId() ?: return null
-        val manga = SManga.create().apply { this.url = mangaId }
-
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
-            .manga
-            .apply { initialized = true }
+        return getMangaDetailsByUrl(mangaId)
     }
 
     // Details and pages always ask for adult content, otherwise entries already saved by the user stop working.

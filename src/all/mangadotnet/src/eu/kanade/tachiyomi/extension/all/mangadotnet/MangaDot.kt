@@ -329,9 +329,7 @@ abstract class MangaDot :
             }
             else -> return null
         }
-
-        val tmpManga = SManga.create().apply { this.url = mangaUrl }
-        return fetchMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(mangaUrl)
     }
 
     // ============================== Filters ==============================
@@ -478,23 +476,18 @@ abstract class MangaDot :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val detailsDeferred = async {
-            if (fetchDetails) {
-                val url = "$baseUrl/manga/${manga.url}.data?_routes=pages/MangaDetailPage".toHttpUrl()
-                val data = client.get(url, Fetch.XHR).use { it.decodeRscAs<Data<MangaData>>().data }
-                data.mangaData.manga.toSManga(baseUrl, showTagsPref(), data.mangaData.volumeCount)
-            } else {
-                manga
-            }
-        }
-
-        val chaptersDeferred = async {
-            if (fetchChapters) fetchChapterListInternal(manga) else chapters
-        }
-
-        SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = {
+            val url = "$baseUrl/manga/${manga.url}.data?_routes=pages/MangaDetailPage".toHttpUrl()
+            val data = client.get(url, Fetch.XHR).use { it.decodeRscAs<Data<MangaData>>().data }
+            data.mangaData.manga.toSManga(baseUrl, showTagsPref(), data.mangaData.volumeCount)
+        },
+        chapterList = { fetchChapterListInternal(manga) },
+    )
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = coroutineScope {
         val url = "$baseUrl/manga/${manga.url}.data?_routes=pages/MangaDetailPage".toHttpUrl()

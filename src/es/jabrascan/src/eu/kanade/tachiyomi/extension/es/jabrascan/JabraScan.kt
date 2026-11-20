@@ -17,8 +17,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.CacheControl
@@ -78,11 +76,14 @@ abstract class JabraScan : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) getWorks().first { it.id == manga.url }.toSManga() else manga }
-        val chapterList = async { if (fetchChapters) getChapters(manga.url) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { getWorks().first { it.id == manga.url }.toSManga() },
+        chapterList = { getChapters(manga.url) },
+    )
 
     // Like the site: the chapters out by today, newest first, and the PDFs only, as the .txt chapters are text
     private suspend fun getChapters(workId: String): List<SChapter> {

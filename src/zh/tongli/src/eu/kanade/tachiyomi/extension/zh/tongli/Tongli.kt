@@ -19,8 +19,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -96,15 +94,17 @@ abstract class Tongli :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val id = manga.url.substringBefore(",")
         val isSerial = manga.url.substringAfter(",")
 
-        val updatedManga = async {
-            if (fetchDetails) getMangaDetails(id, isSerial) else manga
-        }
-        val updatedChapters = async {
-            if (fetchChapters) {
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = { getMangaDetails(id, isSerial) },
+            chapterList = {
                 client.get(
                     "$apiUrl/Book/BookVol/$id?bookID=null&isSerial=$isSerial",
                     headersBuilder().addToken(getToken()),
@@ -112,11 +112,8 @@ abstract class Tongli :
                 ).parseAs<List<ChapterDto>>().mapNotNull {
                     it.toSChapter()
                 }.reversed()
-            } else {
-                chapters
-            }
-        }
-        SMangaUpdate(updatedManga.await(), updatedChapters.await())
+            },
+        )
     }
 
     private suspend fun getMangaDetails(id: String, isSerial: String) = client.get(

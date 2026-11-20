@@ -99,8 +99,7 @@ abstract class HentaiForce : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrlHost || url.pathSegments.firstOrNull() != "view") return null
         val id = url.pathSegments.getOrNull(1)?.toIntOrNull() ?: return null
-        val manga = SManga.create().apply { this.url = id.toString() }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(id.toString())
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/view/${manga.url}"

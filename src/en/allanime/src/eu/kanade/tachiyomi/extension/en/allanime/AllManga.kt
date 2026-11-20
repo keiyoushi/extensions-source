@@ -117,11 +117,7 @@ abstract class AllManga :
         val id = url.pathSegments.getOrNull(1)
             ?: throw Exception("Unsupported url")
 
-        val tmpManga = SManga.create().apply {
-            this.url = id
-        }
-
-        return fetchMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(id)
     }
 
     override fun getFilterList(data: JsonElement?) = getFilters()

@@ -39,16 +39,14 @@ abstract class TheGirlFromRandomChattingMangaOnline : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val updatedManga = if (fetchDetails) createManga() else manga
-        val updatedChapters = if (fetchChapters) {
-            client.get("$baseUrl/wp-json/mg/v1/chapters-list", Fetch.XHR).parseAs<ChaptersListDto>().map(ChapterDto::toSChapter)
-        } else {
-            chapters
-        }
-
-        return SMangaUpdate(updatedManga, updatedChapters)
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { createManga() },
+        chapterList = { client.get("$baseUrl/wp-json/mg/v1/chapters-list", Fetch.XHR).parseAs<ChaptersListDto>().map(ChapterDto::toSChapter) },
+    )
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/manga/${chapter.url}"
 

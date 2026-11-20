@@ -16,8 +16,6 @@ import keiyoushi.utils.booleanOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -57,19 +55,18 @@ abstract class Seitoon : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val slug = manga.url.substringAfterLast('/')
         val from = Fetch.XHR.from(getMangaUrl(manga))
-        val details = if (fetchDetails) {
-            async {
-                client.get(seriesUrl(slug), from).parseAs<SeriesResponse>().data.series.toSMangaDetails(baseUrl.toHttpUrl())
-            }
-        } else {
-            null
-        }
-        val chapterList = if (fetchChapters) async { fetchChapters(slug, from).map { it.toSChapter() } } else null
 
-        SMangaUpdate(details?.await() ?: manga, chapterList?.await() ?: chapters)
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = { client.get(seriesUrl(slug), from).parseAs<SeriesResponse>().data.series.toSMangaDetails(baseUrl.toHttpUrl()) },
+            chapterList = { fetchChapters(slug, from).map { it.toSChapter() } },
+        )
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {

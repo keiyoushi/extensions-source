@@ -12,8 +12,6 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -71,41 +69,34 @@ abstract class MangaRw : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val detailsDeferred = async {
-            if (fetchDetails) {
-                val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
-                manga.apply {
-                    title = document.selectFirst("h1")?.text()?.trim() ?: title
-                    thumbnail_url = document.selectFirst("img[src*=covers]")?.absUrl("src")
-                    description = document.selectFirst("div.description, p.synopsis")?.text()?.trim()
-                    genre = document.select("a[href*=genre]").joinToString { it.text().trim() }
-                }
-            } else {
-                manga
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = {
+            val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
+            manga.apply {
+                title = document.selectFirst("h1")?.text()?.trim() ?: title
+                thumbnail_url = document.selectFirst("img[src*=covers]")?.absUrl("src")
+                description = document.selectFirst("div.description, p.synopsis")?.text()?.trim()
+                genre = document.select("a[href*=genre]").joinToString { it.text().trim() }
             }
-        }
-
-        val chaptersDeferred = async {
-            if (fetchChapters) {
-                val mangaId = "$baseUrl${manga.url}".toHttpUrl().pathSegments.last()
-                val response = client.get("$baseUrl/api/v1/chapters?id=$mangaId", Fetch.XHR).asJsoup()
-                response.select("option").mapNotNull { option ->
-                    val name = option.text().trim()
-                    if (name.isEmpty() || option.attr("value").isEmpty()) return@mapNotNull null
-                    SChapter.create().apply {
-                        url = "/read?id=${option.attr("value")}"
-                        this.name = name
-                        parseChapterNumber(name)?.let { chapter_number = it }
-                    }
+        },
+        chapterList = {
+            val mangaId = "$baseUrl${manga.url}".toHttpUrl().pathSegments.last()
+            val response = client.get("$baseUrl/api/v1/chapters?id=$mangaId", Fetch.XHR).asJsoup()
+            response.select("option").mapNotNull { option ->
+                val name = option.text().trim()
+                if (name.isEmpty() || option.attr("value").isEmpty()) return@mapNotNull null
+                SChapter.create().apply {
+                    url = "/read?id=${option.attr("value")}"
+                    this.name = name
+                    parseChapterNumber(name)?.let { chapter_number = it }
                 }
-            } else {
-                chapters
             }
-        }
-
-        SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
-    }
+        },
+    )
 
     private fun parseChapterNumber(name: String): Float? {
         val match = Regex("第(\\d+(?:\\.\\d+)?)話").find(name) ?: return null

@@ -17,8 +17,6 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -87,10 +85,7 @@ abstract class DGManga :
     // =========================== Deeplink ============================
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "title") {
-            val tmpManga = SManga.create().apply {
-                this.url = url.pathSegments[1]
-            }
-            return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+            return getMangaDetailsByUrl(url.pathSegments[1])
         }
         return null
     }
@@ -104,28 +99,21 @@ abstract class DGManga :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val mangaAsync = async {
-            if (fetchDetails) {
-                val url = "$apiUrl/titles/${manga.url}"
-                client.get(url, Fetch.XHR).use { it.parseAs<SMangaDto>().toSManga() }
-            } else {
-                manga
-            }
-        }
-
-        val chaptersAsync = async {
-            if (fetchChapters) {
-                val chaptersUrl = "$apiUrl/chapters/title/${manga.url}"
-                val data = client.get(chaptersUrl, Fetch.XHR).use { it.parseAs<List<ChapterResponseDto>>() }
-                data.map { it.toSChapter() }
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(mangaAsync.await(), chaptersAsync.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = {
+            val url = "$apiUrl/titles/${manga.url}"
+            client.get(url, Fetch.XHR).use { it.parseAs<SMangaDto>().toSManga() }
+        },
+        chapterList = {
+            val chaptersUrl = "$apiUrl/chapters/title/${manga.url}"
+            val data = client.get(chaptersUrl, Fetch.XHR).use { it.parseAs<List<ChapterResponseDto>>() }
+            data.map { it.toSChapter() }
+        },
+    )
 
     // ============================== Manga/Chapters ===============================
     // WebView url

@@ -49,29 +49,25 @@ abstract class KodokuStudio :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val slug = manga.url.substringBefore('/')
         val lang = manga.url.substringAfter('/', "en")
-        val details = async {
-            if (fetchDetails) {
-                client.get("$baseUrl/api/series/$slug", Fetch.XHR).parseAs<SeriesDto>().toSManga(lang)
-            } else {
-                manga
-            }
-        }
-        val chapterList = async {
-            if (fetchChapters) {
+
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = { client.get("$baseUrl/api/series/$slug", Fetch.XHR).parseAs<SeriesDto>().toSManga(lang) },
+            chapterList = {
                 val showLocked = preferences.getBoolean(SHOW_LOCKED, false)
                 client.get("$baseUrl/api/series/$slug/chapters", Fetch.XHR)
                     .parseAs<List<ChapterEntryDto>>()
                     .filter { it.languageCode == lang && (showLocked || it.available) }
                     .map { it.toSChapter() }
                     .sortedByDescending { it.chapter_number }
-            } else {
-                chapters
-            }
-        }
-        SMangaUpdate(details.await(), chapterList.await())
+            },
+        )
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {

@@ -105,8 +105,7 @@ abstract class Kanman : KeiSource() {
         val domain = baseUrl.toHttpUrl().host.removePrefix("www.")
         if (url.host != domain && !url.host.endsWith(".$domain")) return null
         val comicId = url.pathSegments.first().takeIf { it.isNotEmpty() && it.all(Char::isDigit) } ?: return null
-        val manga = SManga.create().apply { this.url = "/$comicId/" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/$comicId/")
     }
 
     // Unlike the mobile site, the desktop page also lists the paid chapters, with a lock

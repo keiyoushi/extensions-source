@@ -76,13 +76,7 @@ abstract class FuryoSquad : KeiSource() {
             }
             else -> return null
         }
-
-        return fetchMangaUpdate(
-            manga = SManga.create().apply { this.url = path },
-            chapters = emptyList(),
-            fetchDetails = true,
-            fetchChapters = false,
-        ).manga
+        return getMangaDetailsByUrl(path)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {

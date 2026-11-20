@@ -68,8 +68,7 @@ abstract class Longjinman : KeiSource() {
         val segments = url.pathSegments
         if (segments.firstOrNull() != "manhua") return null
         val id = segments.getOrNull(1)?.removeSuffix(".html")?.toIntOrNull() ?: return null
-        val manga = SManga.create().apply { this.url = "/manhua/$id.html" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/manhua/$id.html")
     }
 
     override suspend fun fetchMangaUpdate(

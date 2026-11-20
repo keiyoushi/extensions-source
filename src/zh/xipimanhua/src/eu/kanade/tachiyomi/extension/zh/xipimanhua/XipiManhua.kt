@@ -94,8 +94,7 @@ abstract class XipiManhua :
         }
         // Links can carry anything; only a base64 "m:<id>" is a series
         if (mid.isNullOrEmpty() || runCatching { decode(mid) }.getOrNull()?.startsWith("m:") != true) return null
-        val manga = SManga.create().apply { this.url = mid }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(mid)
     }
 
     override suspend fun fetchMangaUpdate(
@@ -103,11 +102,14 @@ abstract class XipiManhua :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = if (fetchDetails) async { mangaDetails(manga.url) } else null
-        val chapterList = if (fetchChapters) async { chapterList(manga.url) } else null
-        SMangaUpdate(details?.await() ?: manga, chapterList?.await() ?: chapters)
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { mangaDetails(manga.url) },
+        chapterList = { chapterList(manga.url) },
+    )
 
     private suspend fun mangaDetails(mid: String): SManga {
         val url = "$API_URL/v1/manga".toHttpUrl().newBuilder()

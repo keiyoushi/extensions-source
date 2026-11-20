@@ -79,8 +79,7 @@ abstract class MangaMori : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "truyen") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotBlank) ?: return null
-        val manga = SManga.create().apply { this.url = slug }
-        return fetchMangaUpdate(manga, emptyList(), true, false).manga
+        return getMangaDetailsByUrl(slug)
     }
 
     override suspend fun fetchMangaUpdate(

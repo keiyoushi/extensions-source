@@ -20,8 +20,6 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -96,8 +94,7 @@ abstract class CuuTruyen :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "mangas") return null
         val mangaId = url.pathSegments.getOrNull(1)?.toIntOrNull() ?: return null
-        val manga = SManga.create().apply { this.url = mangaId.toString() }
-        return fetchMangaUpdate(manga, emptyList(), true, false).manga
+        return getMangaDetailsByUrl(mangaId.toString())
     }
 
     override suspend fun fetchMangaUpdate(
@@ -105,29 +102,27 @@ abstract class CuuTruyen :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val mangaId = manga.url.substringAfterLast('/')
-        val updatedManga = async {
-            if (fetchDetails) {
+
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = {
                 client.get("$baseUrl/api/v2/mangas/$mangaId", Fetch.XHR)
                     .parseAs<MangaDetailResponse>()
                     .data
                     .toSManga(useMobileCover)
-            } else {
-                manga
-            }
-        }
-        val updatedChapters = async {
-            if (fetchChapters) {
+            },
+            chapterList = {
                 client.get("$baseUrl/api/v2/mangas/$mangaId/chapters", Fetch.XHR)
                     .parseAs<ChapterListResponse>()
                     .data
                     .map { it.toSChapter(mangaId) }
-            } else {
-                chapters
-            }
-        }
-        SMangaUpdate(updatedManga.await(), updatedChapters.await())
+            },
+        )
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/mangas/${manga.url.substringAfterLast('/')}"

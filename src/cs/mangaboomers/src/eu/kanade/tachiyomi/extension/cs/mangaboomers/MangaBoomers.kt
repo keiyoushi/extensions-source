@@ -17,8 +17,6 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -72,11 +70,14 @@ abstract class MangaBoomers : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) getDetails(manga.url.toInt()) else manga }
-        val chapterList = async { if (fetchChapters) getChapters(manga.url) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { getDetails(manga.url.toInt()) },
+        chapterList = { getChapters(manga.url) },
+    )
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl$READER_PATH?m=${chapter.mangaId}&c=${chapter.url}"
 

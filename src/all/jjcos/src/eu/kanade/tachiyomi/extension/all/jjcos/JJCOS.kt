@@ -52,11 +52,7 @@ abstract class JJCOS : KeiSource() {
             return null
         }
 
-        val manga = SManga.create().apply {
-            this.url = normalizePath(url.encodedPath)
-        }
-
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(normalizePath(url.encodedPath))
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {

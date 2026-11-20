@@ -17,8 +17,6 @@ import keiyoushi.network.get
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.Jsoup
@@ -68,17 +66,14 @@ abstract class HibonBlScanlation : ZeistManga() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async {
-            if (fetchDetails) {
-                mangaDetailsParse(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()).apply { url = manga.url }
-            } else {
-                manga
-            }
-        }
-        val chapterList = async { if (fetchChapters) getChapters(manga.url) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { mangaDetailsParse(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()).apply { url = manga.url } },
+        chapterList = { getChapters(manga.url) },
+    )
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         val heading = document.selectFirst("h1[itemprop=name]")!!

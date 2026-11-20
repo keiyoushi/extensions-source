@@ -130,9 +130,7 @@ abstract class Baozi :
         } else {
             url.pathSegments.getOrNull(comicIndex + 1)
         } ?: return null
-
-        val manga = SManga.create().apply { this.url = "/comic/$id" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/comic/$id")
     }
 
     override fun getMangaUrl(manga: SManga): String = siteBaseUrl + manga.url

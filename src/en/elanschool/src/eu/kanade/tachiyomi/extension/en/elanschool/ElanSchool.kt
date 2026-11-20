@@ -38,12 +38,14 @@ abstract class ElanSchool : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val details = if (fetchDetails) mangaInfo(1) else manga
-        val chapterList = if (fetchChapters) fetchChapterList(manga) else chapters
-
-        return SMangaUpdate(details, chapterList)
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { mangaInfo(1) },
+        chapterList = { fetchChapterList(manga) },
+    )
 
     private fun chapterNextPageSelector() = "a.next"
 

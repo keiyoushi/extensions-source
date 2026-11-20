@@ -14,8 +14,6 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -51,7 +49,7 @@ abstract class MangaAR : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (!isSiteUrl(url) || url.pathSegments.firstOrNull() != "manga") return null
         val id = url.pathSegments.getOrNull(1)?.substringBefore('-')?.takeIf { it.isNotEmpty() && it.all(Char::isDigit) } ?: return null
-        return getMangaUpdate(SManga.create().apply { this.url = id }, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(id)
     }
 
     override suspend fun getMangasByUrl(url: HttpUrl, page: Int): MangasPage {
@@ -76,23 +74,14 @@ abstract class MangaAR : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async {
-            if (fetchDetails) {
-                client.get("$apiUrl/public/manga/${manga.url}", Fetch.XHR).parseAs<MangaDetailsDto>().toSManga(baseUrl.toHttpUrl())
-            } else {
-                manga
-            }
-        }
-        val chapterList = async {
-            if (fetchChapters) {
-                client.get("$apiUrl/public/manga/${manga.url}/chapters", Fetch.XHR).parseAs<ChapterListDto>().toSChapterList(manga.url)
-            } else {
-                chapters
-            }
-        }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { client.get("$apiUrl/public/manga/${manga.url}", Fetch.XHR).parseAs<MangaDetailsDto>().toSManga(baseUrl.toHttpUrl()) },
+        chapterList = { client.get("$apiUrl/public/manga/${manga.url}/chapters", Fetch.XHR).parseAs<ChapterListDto>().toSChapterList(manga.url) },
+    )
 
     // Chapters from MangaDex come through the site's image proxy, its own translations from its server
     override suspend fun getPageList(chapter: SChapter): List<Page> {

@@ -15,8 +15,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.tryParseDate
 import keiyoushi.utils.tryParseZonedDateTime
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.time.format.DateTimeFormatter
@@ -186,12 +184,14 @@ abstract class DarthsDroids : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val updatedManga = async { if (fetchDetails) fetchMangaDetails(manga) else manga }
-        val updatedChapters = async { if (fetchChapters) fetchChapterList(manga) else chapters }
-
-        SMangaUpdate(updatedManga.await(), updatedChapters.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { fetchMangaDetails(manga) },
+        chapterList = { fetchChapterList(manga) },
+    )
 
     // Not efficient, but the simplest way for me to refresh.
     // We also can’t really use the `mangaDetailsRequest + mangaDetailsParse`

@@ -11,8 +11,6 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -111,10 +109,7 @@ abstract class MangaPoisk : KeiSource() {
     // =========================== Deeplink ============================
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "manga") {
-            val tmpManga = SManga.create().apply {
-                this.url = url.encodedPath
-            }
-            return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+            return getMangaDetailsByUrl(url.encodedPath)
         }
         return null
     }
@@ -125,10 +120,15 @@ abstract class MangaPoisk : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val mangaSlug = manga.url
-        val mangaAsync = async {
-            if (fetchDetails) {
+
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = {
                 val requestUrl = "$baseUrl${manga.url}"
                 val document = client.get(requestUrl, Fetch.DOCUMENT).use { it.asJsoup() }
                 val infoElement = document.selectFirst("div.card:has(header)") ?: throw Exception("Не получилось найти информацию о манге")
@@ -141,13 +141,8 @@ abstract class MangaPoisk : KeiSource() {
                     status = parseStatus(infoElement.selectFirst("span:contains(Статус:)")?.text() ?: "")
                     thumbnail_url = infoElement.selectFirst("img.w-full")?.attr("abs:src")
                 }
-            } else {
-                manga
-            }
-        }
-
-        val chaptersAsync = async {
-            if (fetchChapters) {
+            },
+            chapterList = {
                 val document = client.get("${baseUrl}$mangaSlug?tab=chapters", Fetch.DOCUMENT).use { it.asJsoup() }
                 if (document.selectFirst(".text-md:contains(Главы удалены по требованию правообладателя)") != null) {
                     throw Exception("Лицензировано - Нет глав")
@@ -167,12 +162,8 @@ abstract class MangaPoisk : KeiSource() {
                     chaptersList.addAll(response.select(".chapter-item").mapNotNull { chapterFromElement(it) })
                 }
                 chaptersList
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(mangaAsync.await(), chaptersAsync.await())
+            },
+        )
     }
 
     // =========================== Chapters ============================

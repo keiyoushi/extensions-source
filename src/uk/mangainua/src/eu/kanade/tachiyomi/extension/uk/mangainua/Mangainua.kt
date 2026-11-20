@@ -139,10 +139,7 @@ abstract class Mangainua :
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "mangas") {
-            val tmpManga = SManga.create().apply {
-                this.url = url.encodedPath
-            }
-            return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+            return getMangaDetailsByUrl(url.encodedPath)
         }
         return null
     }

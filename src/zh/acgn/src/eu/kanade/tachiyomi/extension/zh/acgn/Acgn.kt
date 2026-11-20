@@ -148,8 +148,7 @@ abstract class Acgn : KeiSource() {
                     .selectFirst("#breadcrumb a[href*=/manhua-]")!!.absUrl("href").toHttpUrl().pageId("manhua-")!!
             }
             ?: return null
-        val manga = SManga.create().apply { this.url = slug }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(slug)
     }
 
     override suspend fun fetchMangaUpdate(

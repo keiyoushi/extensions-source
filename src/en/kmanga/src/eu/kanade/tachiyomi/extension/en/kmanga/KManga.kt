@@ -120,10 +120,7 @@ abstract class KManga :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != domain) throw Exception("Unsupported Url")
         val titleId = url.pathSegments.getOrNull(1) ?: throw Exception("Unsupported Url")
-        val manga = SManga.create().apply {
-            this.url = "/title/$titleId"
-        }
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/title/$titleId")
     }
 
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url

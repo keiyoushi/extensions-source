@@ -10,8 +10,6 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.textOrNull
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.FormBody
 
 @Source
@@ -24,11 +22,14 @@ abstract class AstralScans : MangaThemesia() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val detailsDeferred = async { if (fetchDetails) getMangaDetails(manga) else manga }
-        val chaptersDeferred = async { if (fetchChapters) getChapterList(manga) else chapters }
-        SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { getMangaDetails(manga) },
+        chapterList = { getChapterList(manga) },
+    )
 
     private suspend fun getChapterList(manga: SManga): List<SChapter> {
         val body = FormBody.Builder()

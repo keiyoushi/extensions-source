@@ -72,9 +72,7 @@ abstract class Kuaikanmanhua : KeiSource() {
             "www.kuaikanmanhua.com" -> url.pathSegments.getOrNull(2)
             else -> null
         } ?: return null
-
-        val manga = SManga.create().apply { this.url = "/web/topic/$id" }
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/web/topic/$id")
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {

@@ -130,10 +130,7 @@ abstract class MangaUp :
         val host = baseUrl.toHttpUrl().host
         if (url.host != host && url.host != "www.$host") throw Exception("Unsupported URL")
         val titleId = url.pathSegments.getOrNull(1) ?: return null
-        val manga = SManga.create().apply {
-            this.url = titleId
-        }
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(titleId)
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url.substringAfterLast("/")}"

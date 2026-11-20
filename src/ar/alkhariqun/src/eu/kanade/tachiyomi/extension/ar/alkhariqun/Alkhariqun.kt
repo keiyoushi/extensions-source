@@ -54,8 +54,7 @@ abstract class Alkhariqun : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host) return null
         if (url.pathSegments.first() !in setOf("comics", "share")) return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
-        val manga = SManga.create().apply { this.url = "/comics/$slug" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/comics/$slug")
     }
 
     override suspend fun fetchMangaUpdate(

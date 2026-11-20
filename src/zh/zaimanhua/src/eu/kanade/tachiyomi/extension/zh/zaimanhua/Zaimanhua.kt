@@ -27,8 +27,6 @@ import keiyoushi.utils.getPreferences
 import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.CacheControl
 import okhttp3.FormBody
@@ -194,11 +192,14 @@ abstract class Zaimanhua :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = if (fetchDetails) async { fetchMangaDetails(manga.url) } else null
-        val chapterList = if (fetchChapters) async { fetchChapterList(manga.url) } else null
-        SMangaUpdate(details?.await() ?: manga, chapterList?.await() ?: chapters)
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { fetchMangaDetails(manga.url) },
+        chapterList = { fetchChapterList(manga.url) },
+    )
 
     // PageList
     override fun getChapterUrl(chapter: SChapter): String {

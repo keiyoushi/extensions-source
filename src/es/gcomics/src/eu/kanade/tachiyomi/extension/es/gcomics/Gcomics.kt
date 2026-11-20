@@ -65,7 +65,7 @@ abstract class Gcomics : KeiSource() {
             segments[0] == "serie" || segments[0] == "comic" || segments.size == 1 -> "/${segments.joinToString("/")}/"
             else -> return null
         }
-        return getMangaUpdate(SManga.create().apply { this.url = path }, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(path)
     }
 
     override suspend fun fetchMangaUpdate(

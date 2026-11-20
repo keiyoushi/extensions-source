@@ -15,8 +15,6 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -136,12 +134,14 @@ abstract class MangaToshokanZ : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) getMangaDetails(manga) else manga }
-        val chapterList = async { if (fetchChapters) getChapterList(manga) else chapters }
-
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { getMangaDetails(manga) },
+        chapterList = { getChapterList(manga) },
+    )
 
     // in this manga details section we use book/detail/id since it have tags over series/detail/id
     override fun getMangaUrl(manga: SManga): String {

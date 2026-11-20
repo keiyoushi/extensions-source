@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.all.comicklive
 
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -211,17 +210,14 @@ abstract class Comick :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val detailsDeferred = async {
-            if (fetchDetails) {
-                parseDetails(client.get(getMangaUrl(manga), Fetch.DOCUMENT))
-            } else {
-                manga
-            }
-        }
-        val chaptersDeferred = async { if (fetchChapters) getChapterList(manga) else chapters }
-        SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { parseDetails(client.get(getMangaUrl(manga), Fetch.DOCUMENT)) },
+        chapterList = { getChapterList(manga) },
+    )
 
     private fun parseDetails(response: Response): SManga {
         val data = response.asJsoup()

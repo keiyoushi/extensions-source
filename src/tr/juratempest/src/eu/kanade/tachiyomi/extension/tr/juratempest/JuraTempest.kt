@@ -35,9 +35,7 @@ abstract class JuraTempest : KeiSource() {
         if (segments.size < 2 || segments[0] != "explore") return null
 
         val slug = segments[1]
-        val manga = SManga.create().apply { this.url = slug }
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
-            .manga
+        return getMangaDetailsByUrl(slug)
             .apply {
                 initialized = true
                 this.url = slug
@@ -139,36 +137,28 @@ abstract class JuraTempest : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val slug = manga.url.removePrefix("/explore/").trim('/')
 
-        val detailsDeferred = if (fetchDetails) {
-            async {
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = {
                 client.post(
                     "$baseUrl/api/rpc/manga/bySlug",
                     fetch = Fetch.XHR,
                     body = RpcRequest(MangaSlugPayload(slug)).toJsonRequestBody(),
                 ).parseAs<RpcResponse<MangaDto>>().json.toSMangaDetails()
-            }
-        } else {
-            null
-        }
-
-        val chaptersDeferred = if (fetchChapters) {
-            async {
+            },
+            chapterList = {
                 client.post(
                     "$baseUrl/api/rpc/chapter/byMangaSlug",
                     fetch = Fetch.XHR,
                     body = RpcRequest(MangaSlugPayload(slug)).toJsonRequestBody(),
                 ).parseAs<RpcResponse<List<ChapterDto>>>().json.map { it.toSChapter(slug) }
-            }
-        } else {
-            null
-        }
-
-        SMangaUpdate(
-            manga = detailsDeferred?.await() ?: manga,
-            chapters = chaptersDeferred?.await() ?: chapters,
+            },
         )
     }
 

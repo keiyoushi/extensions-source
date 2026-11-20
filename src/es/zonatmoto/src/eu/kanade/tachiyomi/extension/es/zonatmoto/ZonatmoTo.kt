@@ -52,13 +52,7 @@ abstract class ZonatmoTo : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host.removePrefix("www.") !in MIRROR_HOSTS || url.pathSegments[0] != "manga") return null
         val mangaSlug = url.pathSegments.getOrNull(1)?.ifEmpty { null } ?: return null
-
-        return getMangaUpdate(
-            SManga.create().apply { this.url = mangaSlug },
-            emptyList(),
-            fetchDetails = true,
-            fetchChapters = false,
-        ).manga
+        return getMangaDetailsByUrl(mangaSlug)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = apiUrl.newBuilder().apply {
@@ -109,22 +103,21 @@ abstract class ZonatmoTo : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ) = coroutineScope {
+    ): SMangaUpdate {
         val mangaUrl = "$apiUrl/single/manga/${manga.url}"
 
-        val updatedManga = async {
-            if (fetchDetails) {
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = {
                 client.get(mangaUrl, Fetch.XHR).parseAs<SingleMangaResponseDto>()
                     .data
                     ?.toSManga()
                     ?: throw Exception("Unable to parse manga details")
-            } else {
-                manga
-            }
-        }
-
-        val updatedChapters = async {
-            if (fetchChapters) {
+            },
+            chapterList = {
                 val chaptersUrl = mangaUrl.toHttpUrl().newBuilder()
                     .addPathSegment("chapters")
                     .addQueryParameter("page", "1")
@@ -133,12 +126,8 @@ abstract class ZonatmoTo : KeiSource() {
                     .build()
 
                 getChapters(chaptersUrl, manga.url)
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(updatedManga.await(), updatedChapters.await())
+            },
+        )
     }
 
     override fun getChapterUrl(chapter: SChapter): String {

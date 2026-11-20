@@ -48,8 +48,7 @@ abstract class Cookmana : KeiSource() {
             path.size == 2 && path[0] == "detail" -> parentEpisodeId(path[1]) ?: return null
             else -> return null
         }
-        val manga = SManga.create().apply { this.url = "/episode/$id" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/episode/$id")
     }
 
     // A /detail/<chapter> link resolves to its episode via the chapter's parentId.

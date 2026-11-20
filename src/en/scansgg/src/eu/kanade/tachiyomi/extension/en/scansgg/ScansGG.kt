@@ -12,8 +12,6 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
@@ -98,14 +96,14 @@ abstract class ScansGG : KeiSource() {
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
-    override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate = coroutineScope {
-        val mangaDeferred = async { if (fetchDetails) getMangaDetails(manga) else manga }
-        val chaptersDeferred = async { if (fetchChapters) getChapterList(manga) else chapters }
-        SMangaUpdate(
-            manga = mangaDeferred.await(),
-            chapters = chaptersDeferred.await(),
-        )
-    }
+    override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { getMangaDetails(manga) },
+        chapterList = { getChapterList(manga) },
+    )
 
     private suspend fun getMangaDetails(manga: SManga): SManga {
         val url = "$apiUrl/series".toHttpUrl().newBuilder()

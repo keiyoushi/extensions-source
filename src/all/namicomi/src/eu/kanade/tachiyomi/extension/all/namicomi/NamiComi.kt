@@ -275,15 +275,7 @@ abstract class NamiComi :
         }
 
         val slug = url.pathSegments[2]
-
-        return fetchMangaUpdate(
-            manga = SManga.create().apply {
-                this.url = slug
-            },
-            chapters = emptyList(),
-            fetchDetails = true,
-            fetchChapters = false,
-        ).manga
+        return getMangaDetailsByUrl(slug)
     }
 
     override val supportRelatedMangasBySearch = true

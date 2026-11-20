@@ -12,8 +12,6 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -124,21 +122,20 @@ abstract class StoneScape : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val slug = manga.url.substringAfterLast("/")
 
-        val details = async {
-            if (fetchDetails) {
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = {
                 client.get("$apiUrl/series/by-slug/$slug", Fetch.XHR)
                     .parseAs<SeriesDto>()
                     .toSMangaDetails(baseUrl)
-            } else {
-                manga
-            }
-        }
-
-        val chapterList = async {
-            if (fetchChapters) {
+            },
+            chapterList = {
                 client.get("$apiUrl/series/by-slug/$slug/chapters", Fetch.XHR)
                     .parseAs<ChapterListResponse>()
                     .chapters
@@ -146,12 +143,8 @@ abstract class StoneScape : KeiSource() {
                         it.toSChapter(slug)
                     }
                     .reversed()
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(details.await(), chapterList.await())
+            },
+        )
     }
 
     // ============================= Chapters ==============================

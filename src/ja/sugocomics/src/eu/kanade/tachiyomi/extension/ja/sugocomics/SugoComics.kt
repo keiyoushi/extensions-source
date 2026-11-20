@@ -118,8 +118,7 @@ abstract class SugoComics :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.encodedPath != "/products/detail.php") return null
         val productId = url.queryParameter("product_id")?.toIntOrNull() ?: return null
-        val manga = SManga.create().apply { this.url = productId.toString() }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(productId.toString())
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/products/detail.php?product_id=${manga.url}"

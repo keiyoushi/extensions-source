@@ -92,13 +92,7 @@ abstract class Vomic :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val mangaId = url.pathSegments.getOrNull(1) ?: return null
         mangaId.toIntOrNull() ?: return null
-
-        return fetchMangaUpdate(
-            SManga.create().apply { this.url = mangaId },
-            emptyList(),
-            true,
-            false,
-        ).manga
+        return getMangaDetailsByUrl(mangaId)
     }
 
     // MangaUpdate

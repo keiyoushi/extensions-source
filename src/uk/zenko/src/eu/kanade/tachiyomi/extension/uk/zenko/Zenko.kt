@@ -18,8 +18,6 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -127,11 +125,7 @@ abstract class Zenko :
         if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "titles") {
             val mangaId = url.pathSegments[1]
 
-            val tmpManga = SManga.create().apply {
-                this.url = "/titles/$mangaId"
-            }
-
-            return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+            return getMangaDetailsByUrl("/titles/$mangaId")
         }
 
         return null
@@ -143,34 +137,29 @@ abstract class Zenko :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val mangaId = manga.url.substringAfter("titles/")
 
-        val mangaAsync = async {
-            if (fetchDetails) {
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = {
                 val lang = isEng()
                 val url = "$apiUrl/titles/$mangaId"
                 val data = client.get(url, Fetch.XHR).use { it.parseAs<MangaDetailsResponse>() }
                 data.toSManga(lang, imgUrl)
-            } else {
-                manga
-            }
-        }
-
-        val chaptersAsync = async {
-            if (fetchChapters) {
+            },
+            chapterList = {
                 val chaptersUrl = "$apiUrl/titles/$mangaId/chapters"
                 val data = client.get(chaptersUrl, Fetch.XHR).use { it.parseAs<List<ChapterResponseItem>>() }
                 data.sortedByDescending { item ->
                     val id = StringProcessor.generateId(item.name)
                     if (id > 0) id else item.id.toDouble()
                 }.map { it.toSChapter() }
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(mangaAsync.await(), chaptersAsync.await())
+            },
+        )
     }
 
     // =========================== Related Manga (Komikku) ============================

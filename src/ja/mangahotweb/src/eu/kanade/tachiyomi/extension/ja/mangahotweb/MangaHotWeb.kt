@@ -65,8 +65,7 @@ abstract class MangaHotWeb : KeiSource() {
         val workCode = url.queryParameter("work_code")
             ?: url.queryParameter("story_id")?.let { getWorkCode(it) }
             ?: return null
-        val manga = SManga.create().apply { this.url = workCode }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(workCode)
     }
 
     // An episode's reader links to its work, and a locked episode redirects to it
@@ -83,11 +82,14 @@ abstract class MangaHotWeb : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) getDetails(manga) else manga }
-        val chapterList = async { if (fetchChapters) getChapters(manga) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { getDetails(manga) },
+        chapterList = { getChapters(manga) },
+    )
 
     private suspend fun getDetails(manga: SManga): SManga {
         val work = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup().selectFirst("div.work_box")!!

@@ -88,13 +88,7 @@ abstract class WebtoonClub :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments[0] != "webtoon") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotEmpty) ?: return null
-
-        return getMangaUpdate(
-            manga = SManga.create().apply { this.url = slug },
-            chapters = emptyList(),
-            fetchDetails = true,
-            fetchChapters = false,
-        ).manga
+        return getMangaDetailsByUrl(slug)
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/webtoon/${manga.url}"

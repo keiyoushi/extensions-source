@@ -152,8 +152,7 @@ abstract class Atsumaru :
         if (url.host != baseUrl.toHttpUrl().host) return null
         if (url.pathSegments.getOrNull(0) !in listOf("manga", "read")) return null
         val id = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
-
-        return getMangaUpdate(SManga.create().apply { this.url = id }, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(id)
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"

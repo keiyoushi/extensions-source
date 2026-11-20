@@ -51,8 +51,7 @@ abstract class EightMusesXxx : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (!isSiteUrl(url)) return null
-        val manga = SManga.create().apply { this.url = comicSlug(url) ?: return null }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(comicSlug(url) ?: return null)
     }
 
     private fun isSiteUrl(url: HttpUrl) = url.host.removePrefix("www.") == baseUrl.toHttpUrl().host

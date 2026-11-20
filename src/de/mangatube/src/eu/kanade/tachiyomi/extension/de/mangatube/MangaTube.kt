@@ -11,8 +11,6 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -77,21 +75,21 @@ abstract class MangaTube : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val slug = manga.url.substringAfterLast("/")
 
-        val details = async { if (fetchDetails) fetchMangaDetails(slug) else manga }
-        val chapterList = async {
-            if (fetchChapters) {
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = { fetchMangaDetails(slug) },
+            chapterList = {
                 client.get("$baseUrl/api/manga/$slug/chapters", mangaApiHeaders(slug), Fetch.XHR)
                     .parseAs<MangaChaptersResponse>()
                     .toSChapters(slug)
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(details.await(), chapterList.await())
+            },
+        )
     }
 
     private suspend fun fetchMangaDetails(slug: String): SManga = client.get("$baseUrl/api/manga/$slug", mangaApiHeaders(slug), Fetch.XHR)

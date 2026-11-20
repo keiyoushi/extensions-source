@@ -79,8 +79,7 @@ abstract class BabesRater : KeiSource() {
                 .selectFirst(".allLink a[href^=/person/]")?.absUrl("href")?.toHttpUrl()?.encodedPath ?: return null
             else -> return null
         }
-        val manga = SManga.create().apply { this.url = personPath }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(personPath)
     }
 
     override suspend fun fetchMangaUpdate(

@@ -130,13 +130,7 @@ abstract class Reimanga :
         if (url.host != baseUrl.toHttpUrl().host) return null
         if (url.pathSegments.firstOrNull() != "manga") return null
         val slug = url.pathSegments.getOrNull(1) ?: return null
-
-        return getMangaUpdate(
-            SManga.create().apply { this.url = slug },
-            emptyList(),
-            fetchDetails = true,
-            fetchChapters = false,
-        ).manga
+        return getMangaDetailsByUrl(slug)
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"

@@ -39,8 +39,7 @@ abstract class ManhwaRead : KeiSource() {
         val slug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotEmpty) ?: return null
 
         // Rewrite to strip suffixes after slug
-        val manga = SManga.create().apply { this.url = "/manhwa/$slug/" }
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/manhwa/$slug/")
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {

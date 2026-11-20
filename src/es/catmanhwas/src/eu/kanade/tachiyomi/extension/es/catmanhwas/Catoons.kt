@@ -93,11 +93,14 @@ abstract class Catoons : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val mangaDeferred = async { if (fetchDetails) fetchMangaDetails(manga) else manga }
-        val chaptersDeferred = async { if (fetchChapters) fetchChapterList(manga) else chapters }
-        SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { fetchMangaDetails(manga) },
+        chapterList = { fetchChapterList(manga) },
+    )
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga = coroutineScope {
         // Independent of the remote chunk discovery, so start it before the WebView run.

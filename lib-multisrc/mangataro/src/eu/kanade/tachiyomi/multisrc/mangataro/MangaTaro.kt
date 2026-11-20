@@ -27,8 +27,6 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Callback
 import okhttp3.HttpUrl
@@ -179,13 +177,14 @@ abstract class MangaTaro : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async {
-            if (fetchDetails) fetchMangaDetails(manga.url.parseAs<MangaUrl>().id, manga.status) else manga
-        }
-        val chapterList = async { if (fetchChapters) fetchChapterList(manga) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { fetchMangaDetails(manga.url.parseAs<MangaUrl>().id, manga.status) },
+        chapterList = { fetchChapterList(manga) },
+    )
 
     private suspend fun fetchMangaDetails(id: String, status: Int): SManga {
         val url = baseUrl.toHttpUrl().newBuilder().apply {

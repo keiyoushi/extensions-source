@@ -97,15 +97,7 @@ abstract class VoraToon : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host) return null
         if (url.pathSegments.getOrNull(0) != "series") return null
         val slug = url.pathSegments.getOrNull(1) ?: return null
-        val manga = SManga.create().apply {
-            this.url = "/series/$slug"
-        }
-        return getMangaUpdate(
-            manga,
-            emptyList(),
-            fetchDetails = true,
-            fetchChapters = false,
-        ).manga
+        return getMangaDetailsByUrl("/series/$slug")
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {

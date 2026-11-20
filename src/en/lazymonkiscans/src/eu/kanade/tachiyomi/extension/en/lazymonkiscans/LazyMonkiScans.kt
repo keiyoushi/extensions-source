@@ -67,27 +67,25 @@ abstract class LazyMonkiScans : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val id = getMangaUrl(manga).toHttpUrl().queryParameter("manga")!!
-        val details = if (fetchDetails) {
-            async {
+
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = {
                 val document = client.get(documentUrl("mangas/$id"), Fetch.XHR).parseAs<DocumentDto>()
                 document.toSMangaDetails(document.coverUrl())
-            }
-        } else {
-            null
-        }
-        val chapterList = if (fetchChapters) {
-            async {
+            },
+            chapterList = {
                 fetchDocuments("chapters", CHAPTER_FIELDS)
                     .filter { it.text("mangaId") == id }
                     .map { it.toSChapter(id) }
                     .sortedByDescending { it.chapter_number }
-            }
-        } else {
-            null
-        }
-        SMangaUpdate(details?.await() ?: manga, chapterList?.await() ?: chapters)
+            },
+        )
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {

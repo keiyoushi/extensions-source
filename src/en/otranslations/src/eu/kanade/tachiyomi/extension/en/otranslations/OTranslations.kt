@@ -68,8 +68,7 @@ abstract class OTranslations : KeiSource() {
         if (url.host != siteUrl.host) return null
         if (url.pathSegments.firstOrNull() !in setOf("series", "read")) return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
-        val manga = SManga.create().apply { this.url = slug }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(slug)
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}/"

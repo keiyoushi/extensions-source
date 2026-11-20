@@ -18,8 +18,6 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -115,28 +113,26 @@ abstract class Mangahub : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val mangaUrl = manga.url
-        val mangaAsync = async {
-            if (fetchDetails) {
+
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = {
                 val url = "$baseUrl$mangaUrl"
                 val document = client.get(url, Fetch.DOCUMENT).asJsoup()
                 mangaDetailsParse(document, mangaUrl)
-            } else {
-                manga
-            }
-        }
-        val chaptersAsync = async {
-            if (fetchChapters) {
+            },
+            chapterList = {
                 val url = "$baseUrl$mangaUrl/chapters"
                 val document = client.get(url, Fetch.DOCUMENT).asJsoup()
                 val translators = manga.memo["translators"]?.string
                 chapterListParse(document, translators)
-            } else {
-                chapters
-            }
-        }
-        SMangaUpdate(mangaAsync.await(), chaptersAsync.await())
+            },
+        )
     }
 
     // =============================== Manga Utilities ===============================

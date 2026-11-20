@@ -119,10 +119,7 @@ abstract class Faust :
     // =========================== Deeplink ============================
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "manga") {
-            val tmpManga = SManga.create().apply {
-                this.url = url.pathSegments[1]
-            }
-            return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+            return getMangaDetailsByUrl(url.pathSegments[1])
         }
         return null
     }

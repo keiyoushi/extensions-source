@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Arab Toons"
-    versionCode = 58
+    versionCode = 59
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 

@@ -50,11 +50,14 @@ abstract class ElVosque : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) series().first { it.url == manga.url } else manga }
-        val chapterList = async { if (fetchChapters) chapterList(manga) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { series().first { it.url == manga.url } },
+        chapterList = { chapterList(manga) },
+    )
 
     // Every page of the comic is a chapter, as each one has its own title and date on the site
     private suspend fun chapterList(manga: SManga): List<SChapter> {

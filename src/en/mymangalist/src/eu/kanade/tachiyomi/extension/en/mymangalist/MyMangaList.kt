@@ -68,8 +68,7 @@ abstract class MyMangaList : KeiSource() {
             path.startsWith("s-") -> path.removePrefix("s-").substringBeforeLast("--")
             else -> return null
         }
-        val manga = SManga.create().apply { this.url = "/t-$slug" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/t-$slug")
     }
 
     // The chapters come from the API, which needs the permalink of the title page, kept in the memo

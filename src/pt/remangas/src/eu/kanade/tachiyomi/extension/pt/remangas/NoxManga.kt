@@ -14,8 +14,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -79,19 +77,16 @@ abstract class NoxManga : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val slug = manga.slug
 
-        val details = async {
-            if (fetchDetails) {
-                client.get("$apiUrl/comics/slug/$slug", Fetch.XHR).parseAs<MangaDto>().toSManga()
-            } else {
-                manga
-            }
-        }
-
-        val chapterList = async {
-            if (fetchChapters) {
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = { client.get("$apiUrl/comics/slug/$slug", Fetch.XHR).parseAs<MangaDto>().toSManga() },
+            chapterList = {
                 val url = "$apiUrl/comics/slug/$slug/chapters".toHttpUrl().newBuilder()
                     .addQueryParameter("page", "1")
                     .addQueryParameter("per_page", CHAPTER_PAGE_SIZE.toString())
@@ -99,12 +94,8 @@ abstract class NoxManga : KeiSource() {
                     .build()
 
                 client.get(url, Fetch.XHR).parseAs<ChapterListDto>().chapters.map { it.toSChapter(slug) }
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(manga = details.await(), chapters = chapterList.await())
+            },
+        )
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/chapters/${chapter.url}?skip_view=true", Fetch.XHR)

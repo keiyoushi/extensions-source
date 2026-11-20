@@ -130,12 +130,7 @@ abstract class HentaiZoneBeta : KeiSource() {
             segments.size == 1 -> segments[0]
             else -> return null
         }
-        return fetchMangaUpdate(
-            SManga.create().apply { this.url = slug },
-            emptyList(),
-            fetchDetails = true,
-            fetchChapters = false,
-        ).manga
+        return getMangaDetailsByUrl(slug)
     }
 
     // ============================== Filters ===============================

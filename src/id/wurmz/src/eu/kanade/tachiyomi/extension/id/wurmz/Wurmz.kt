@@ -115,9 +115,8 @@ abstract class Wurmz : KeiSource() {
         val slug = url.pathSegments[detailIdx + 2]
         if (type.isEmpty() || slug.isEmpty()) return null
 
-        val manga = SManga.create().apply { this.url = "/detail/$type/$slug" }
         return runCatching {
-            fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+            getMangaDetailsByUrl("/detail/$type/$slug")
         }.getOrNull()
     }
 

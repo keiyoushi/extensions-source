@@ -45,12 +45,7 @@ abstract class Roxinha :
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val id = url.pathSegments.getOrNull(1) ?: return null
-        return fetchMangaUpdate(
-            SManga.create().apply { this.url = id },
-            emptyList(),
-            true,
-            false,
-        ).manga
+        return getMangaDetailsByUrl(id)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {

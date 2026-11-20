@@ -70,8 +70,7 @@ abstract class LHentaiUnoriginal : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments[0] != "g") return null
         val id = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
-
-        return getMangaUpdate(SManga.create().apply { this.url = "/g/$id" }, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/g/$id")
     }
 
     private suspend fun getListing(path: String, page: Int): MangasPage {

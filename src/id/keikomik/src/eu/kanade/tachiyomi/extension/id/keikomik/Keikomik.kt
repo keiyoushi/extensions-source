@@ -42,8 +42,7 @@ abstract class Keikomik : KeiSource() {
             "chapter" -> id.substringBeforeLast("-chapter-")
             else -> return null
         }
-        val manga = SManga.create().apply { this.url = "/komik/$slug" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/komik/$slug")
     }
 
     override suspend fun fetchMangaUpdate(

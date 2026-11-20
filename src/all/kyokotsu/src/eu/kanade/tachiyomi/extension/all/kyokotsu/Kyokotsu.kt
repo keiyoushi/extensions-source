@@ -97,11 +97,7 @@ abstract class Kyokotsu : KeiSource() {
 
         if (!STATUS.contains(type)) return null
         if (slug.isEmpty()) return null
-
-        val tmpManga = SManga.create().apply {
-            this.url = slug
-        }
-        return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(slug)
     }
 
     // ============================== Manga ===============================

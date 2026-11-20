@@ -69,7 +69,7 @@ abstract class MangaCherri : KeiSource() {
             }
             else -> return null
         }
-        return getMangaUpdate(SManga.create().apply { this.url = slug }, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(slug)
     }
 
     override suspend fun fetchMangaUpdate(

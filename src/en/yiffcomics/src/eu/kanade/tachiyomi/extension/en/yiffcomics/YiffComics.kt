@@ -78,8 +78,7 @@ abstract class YiffComics : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val slug = url.pathSegments.getOrNull(1)
         if (!url.isSite() || url.pathSegments[0] != "yiff" || slug.isNullOrEmpty()) return null
-        val manga = SManga.create().apply { this.url = "/yiff/$slug/" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/yiff/$slug/")
     }
 
     override suspend fun fetchMangaUpdate(

@@ -15,8 +15,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -107,24 +105,22 @@ abstract class MangaToon : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val contentId = manga.contentId
-        val details = if (fetchDetails) {
-            async { api<DetailDto>("/api/content/detail", contentId)!!.toSManga() }
-        } else {
-            null
-        }
-        val episodes = if (fetchChapters) {
-            async {
+
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = { api<DetailDto>("/api/content/detail", contentId)!!.toSManga() },
+            chapterList = {
                 api<List<EpisodeDto>>("/api/content/episodes", contentId)!!
                     .filterNot { it.isFee }
                     .map { it.toSChapter(urlLang, contentId) }
                     .reversed()
-            }
-        } else {
-            null
-        }
-        SMangaUpdate(details?.await() ?: manga, episodes?.await() ?: chapters)
+            },
+        )
     }
 
     override fun getChapterUrl(chapter: SChapter): String {

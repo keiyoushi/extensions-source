@@ -160,9 +160,7 @@ abstract class Origines : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.pathSegments.firstOrNull() !in knownPaths) return null
 
-        val manga = SManga.create().apply { this.url = url.encodedPath.toMangaSlug() }
-
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(url.encodedPath.toMangaSlug())
     }
 
     override suspend fun fetchMangaUpdate(

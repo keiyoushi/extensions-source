@@ -108,11 +108,14 @@ abstract class ParadiseScans :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val updatedManga = if (fetchDetails) getMangaDetails(manga) else manga
-        val updatedChapters = if (fetchChapters) getChapterList(manga) else chapters
-        return SMangaUpdate(updatedManga, updatedChapters)
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { getMangaDetails(manga) },
+        chapterList = { getChapterList(manga) },
+    )
 
     private suspend fun getMangaDetails(manga: SManga): SManga {
         val slug = manga.url.removePrefix("/series/").trimEnd('/')

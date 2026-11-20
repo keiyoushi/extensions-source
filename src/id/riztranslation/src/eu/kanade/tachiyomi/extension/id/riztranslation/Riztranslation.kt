@@ -11,8 +11,6 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -147,30 +145,23 @@ abstract class Riztranslation : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = if (fetchDetails) {
-            async {
-                val books = client.get("$apiUrl/Book?select=*%2Cgenres%3A_BookGenre%28genre%3AGenre%28*%29%29&type=not.ilike.*novel*&id=eq.${manga.url}", apiHeaders, Fetch.XHR)
-                    .parseAs<List<BookDto>>()
-                if (books.isEmpty()) throw Exception("Manga not found")
-                books.first().toSMangaDetails().apply { url = manga.url }
-            }
-        } else {
-            null
-        }
-
-        val chapterList = if (fetchChapters) {
-            async {
-                client.get("$apiUrl/Chapter?select=id,bookId,chapter,nama,created_at&bookId=eq.${manga.url}&order=chapter.desc", apiHeaders, Fetch.XHR)
-                    .parseAs<List<ChapterDto>>()
-                    .map { it.toSChapter() }
-            }
-        } else {
-            null
-        }
-
-        SMangaUpdate(details?.await() ?: manga, chapterList?.await() ?: chapters)
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = {
+            val books = client.get("$apiUrl/Book?select=*%2Cgenres%3A_BookGenre%28genre%3AGenre%28*%29%29&type=not.ilike.*novel*&id=eq.${manga.url}", apiHeaders, Fetch.XHR)
+                .parseAs<List<BookDto>>()
+            if (books.isEmpty()) throw Exception("Manga not found")
+            books.first().toSMangaDetails().apply { url = manga.url }
+        },
+        chapterList = {
+            client.get("$apiUrl/Chapter?select=id,bookId,chapter,nama,created_at&bookId=eq.${manga.url}&order=chapter.desc", apiHeaders, Fetch.XHR)
+                .parseAs<List<ChapterDto>>()
+                .map { it.toSChapter() }
+        },
+    )
 
     // ========================= Chapters =========================
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/view/${chapter.url}"

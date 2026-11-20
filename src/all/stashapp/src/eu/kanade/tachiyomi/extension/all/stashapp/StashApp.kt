@@ -19,8 +19,6 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.graphQLBody
 import keiyoushi.utils.parseGraphQLAs
 import keiyoushi.utils.tryParse
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.Headers
 import okhttp3.Request
 import kotlin.time.Instant
@@ -64,11 +62,15 @@ abstract class StashApp :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val id = urlLast(manga.url)
 
-        val details = if (fetchDetails) {
-            async {
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = {
                 client.post(
                     url = "$baseUrl/graphql",
                     headers = graphQlHeaders,
@@ -79,20 +81,8 @@ abstract class StashApp :
                         variables = MangaDetailsVariables(id = id),
                     ),
                 ).parseGraphQLAs<MangaDetailsData>().findGallery.toMangaDetails(baseUrl)!!
-            }
-        } else {
-            null
-        }
-
-        val chapterList = if (fetchChapters) {
-            async { getChapterList(id) }
-        } else {
-            null
-        }
-
-        SMangaUpdate(
-            manga = details?.await() ?: manga,
-            chapters = chapterList?.await() ?: chapters,
+            },
+            chapterList = { getChapterList(id) },
         )
     }
 

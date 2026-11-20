@@ -72,8 +72,7 @@ abstract class Hypercomic : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.pathSegments.getOrNull(0) != "Webtoon" || url.pathSegments.getOrNull(1) !in SERIES_PATHS) return null
         val id = url.pathSegments.getOrNull(2)?.toIntOrNull() ?: return null
-        val manga = SManga.create().apply { this.url = "/Webtoon/episode/$id/1/" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/Webtoon/episode/$id/1/")
     }
 
     override suspend fun fetchMangaUpdate(

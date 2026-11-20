@@ -51,7 +51,7 @@ abstract class Asgardscans : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "manga") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotEmpty) ?: return null
-        return getMangaUpdate(SManga.create().apply { this.url = "/manga/$slug" }, emptyList(), true, false).manga
+        return getMangaDetailsByUrl("/manga/$slug")
     }
 
     override suspend fun fetchMangaUpdate(

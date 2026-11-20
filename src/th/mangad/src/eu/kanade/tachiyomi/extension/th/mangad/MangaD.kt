@@ -65,8 +65,7 @@ abstract class MangaD : KeiSource() {
         }
         val slug = segments.getOrNull(index)?.takeIf { it.isNotEmpty() } ?: return null
         // Decoded, like the paths setUrlWithoutDomain keeps
-        val manga = SManga.create().apply { this.url = "/category/$MANGA_LIST_NAME/$slug/" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/category/$MANGA_LIST_NAME/$slug/")
     }
 
     override suspend fun fetchMangaUpdate(

@@ -77,11 +77,7 @@ abstract class HoraHentai : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val slug = url.pathSegments.firstOrNull()?.takeIf { it.isNotEmpty() } ?: return null
 
-        val manga = SManga.create().apply { this.url = "/$slug/" }
-
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
-            .manga
-            .apply { initialized = true }
+        return getMangaDetailsByUrl("/$slug/")
     }
 
     override suspend fun fetchMangaUpdate(

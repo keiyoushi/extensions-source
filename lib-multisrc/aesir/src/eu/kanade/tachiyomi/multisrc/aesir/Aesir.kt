@@ -52,8 +52,7 @@ abstract class Aesir : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host !in siteHosts || url.pathSegments.getOrNull(0) != "comic") return null
         val slug = url.pathSegments.getOrNull(1)?.ifEmpty { null } ?: return null
-        val manga = SManga.create().apply { this.url = "/comic/$slug" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/comic/$slug")
     }
 
     override suspend fun fetchMangaUpdate(

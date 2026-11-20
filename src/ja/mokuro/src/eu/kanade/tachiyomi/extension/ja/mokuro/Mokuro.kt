@@ -173,8 +173,12 @@ abstract class Mokuro :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val updatedManga = if (fetchDetails) {
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = {
             val catalog = getCatalog()
             val catalogEntry = catalog.series.find { it.seriesTitle == manga.url }
                 ?: throw Exception("Series not found")
@@ -183,19 +187,12 @@ abstract class Mokuro :
             manga.apply {
                 catalogEntry.fillDetails(this, titleLang, cover)
             }
-        } else {
-            manga
-        }
-
-        val chapterList = if (fetchChapters) {
+        },
+        chapterList = {
             val detail = getSeriesDetail(manga.url)
             detail.volumes.asReversed().map { it.toSChapter(detail.seriesTitle) }
-        } else {
-            chapters
-        }
-
-        return SMangaUpdate(updatedManga, chapterList)
-    }
+        },
+    )
 
     override fun getMangaUrl(manga: SManga): String {
         val encoded = URLEncoder.encode(manga.url, "UTF-8").replace("+", "%20")

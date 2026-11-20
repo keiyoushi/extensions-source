@@ -67,8 +67,7 @@ abstract class Toptoon : KeiSource() {
         if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host.removePrefix("www.")) return null
         if (segments.getOrNull(0) != "comic" || segments.getOrNull(1) !in listOf("epList", "epView")) return null
         val id = segments.getOrNull(2)?.toIntOrNull() ?: return null
-        val manga = SManga.create().apply { this.url = "/comic/epList/$id" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/comic/epList/$id")
     }
 
     override suspend fun fetchMangaUpdate(

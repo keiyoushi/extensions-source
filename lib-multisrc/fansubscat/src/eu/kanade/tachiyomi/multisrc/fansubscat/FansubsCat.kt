@@ -13,8 +13,6 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -79,12 +77,17 @@ abstract class FansubsCat : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val slug = manga.url.substringAfterLast('/')
-        val details = async { if (fetchDetails) fetchMangaDetails(slug) else manga }
-        val chapterList = async { if (fetchChapters) fetchChapterList(slug) else chapters }
 
-        SMangaUpdate(details.await(), chapterList.await())
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = { fetchMangaDetails(slug) },
+            chapterList = { fetchChapterList(slug) },
+        )
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}"

@@ -81,8 +81,7 @@ abstract class YiqiqiManhua : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host.removePrefix("www.")) return null
         val id = url.queryParameter("p") ?: POST_ID.find(url.encodedPath)?.groupValues?.get(1) ?: return null
-        val manga = SManga.create().apply { this.url = id }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(id)
     }
 
     override suspend fun fetchMangaUpdate(

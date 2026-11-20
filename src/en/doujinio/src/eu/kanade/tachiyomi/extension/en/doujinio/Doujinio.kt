@@ -17,8 +17,6 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -113,19 +111,20 @@ abstract class Doujinio : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val id = getIdFromUrl(manga.url)
 
-        val mangaDeferred = async { if (fetchDetails) fetchMangaDetails(id) else manga }
-        val chaptersDeferred = async {
-            if (fetchChapters) {
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = { fetchMangaDetails(id) },
+            chapterList = {
                 val response = client.get("$baseUrl/api/chapters?manga_id=$id", Fetch.XHR)
                 response.parseData<List<Chapter>>().map { it.toSChapter() }.reversed()
-            } else {
-                chapters
-            }
-        }
-        SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
+            },
+        )
     }
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/${chapter.url}"

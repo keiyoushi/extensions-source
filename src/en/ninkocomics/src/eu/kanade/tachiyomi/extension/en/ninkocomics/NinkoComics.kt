@@ -85,8 +85,7 @@ abstract class NinkoComics :
                 .selectFirst("a[href^=/comic/]")!!.absUrl("href").toHttpUrl().encodedPath
             else -> return null
         }
-        val manga = SManga.create().apply { this.url = path }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(path)
     }
 
     // Details and chapters come from the same page

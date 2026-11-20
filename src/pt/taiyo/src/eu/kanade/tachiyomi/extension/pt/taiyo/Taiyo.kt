@@ -29,8 +29,6 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -124,19 +122,14 @@ abstract class Taiyo : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = if (fetchDetails) {
-            async { parseMangaDetails(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()) }
-        } else {
-            null
-        }
-        val chapterList = if (fetchChapters) async { fetchChapterList(manga) } else null
-
-        SMangaUpdate(
-            manga = details?.await() ?: manga,
-            chapters = chapterList?.await() ?: chapters,
-        )
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { parseMangaDetails(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()) },
+        chapterList = { fetchChapterList(manga) },
+    )
 
     private fun parseMangaDetails(document: Document) = SManga.create().apply {
         setUrlWithoutDomain(document.location())

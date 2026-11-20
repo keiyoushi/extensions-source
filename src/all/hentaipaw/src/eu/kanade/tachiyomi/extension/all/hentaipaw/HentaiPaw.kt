@@ -61,8 +61,7 @@ abstract class HentaiPaw : KeiSource() {
             "viewer" -> url.queryParameter("articleId")
             else -> null
         }?.takeIf { it.isNotEmpty() && it.all(Char::isDigit) } ?: return null
-        val manga = SManga.create().apply { this.url = "/articles/$id" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/articles/$id")
     }
 
     override suspend fun fetchMangaUpdate(

@@ -62,14 +62,16 @@ abstract class ILikeComix : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val updatedManga = if (fetchDetails) {
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = {
             val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
             parseMangaDetails(document, manga)
-        } else {
-            manga
-        }
-        val chapterList = if (fetchChapters) {
+        },
+        chapterList = {
             listOf(
                 SChapter.create().apply {
                     url = manga.url
@@ -77,11 +79,8 @@ abstract class ILikeComix : KeiSource() {
                     chapter_number = 1f
                 },
             )
-        } else {
-            chapters
-        }
-        return SMangaUpdate(updatedManga, chapterList)
-    }
+        },
+    )
 
     private fun parseMangaDetails(document: Document, manga: SManga): SManga = manga.apply {
         val rawTitle = document.selectFirst("h1.post-title")?.text().orEmpty().trim()

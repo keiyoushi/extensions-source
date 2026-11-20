@@ -128,11 +128,14 @@ abstract class ManwaManhua :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) comicDetails(manga.url) else manga }
-        val chapterList = async { if (fetchChapters) chapterList(manga) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { comicDetails(manga.url) },
+        chapterList = { chapterList(manga) },
+    )
 
     private suspend fun comicDetails(id: String): SManga = client.get("$baseUrl/api/comic/$id", Fetch.XHR.from("/comic/$id"))
         .parseAs<ResponseDto<ComicDto>>().data.toSManga()

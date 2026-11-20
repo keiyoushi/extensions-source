@@ -115,12 +115,7 @@ abstract class TodayManga : KeiSource() {
         }
 
         val mangaUrl = "/book/${url.pathSegments[1]}"
-        val manga = SManga.create().apply {
-            this.url = mangaUrl
-        }
-
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
-            .manga
+        return getMangaDetailsByUrl(mangaUrl)
             .apply {
                 this.url = mangaUrl
                 initialized = true

@@ -13,8 +13,6 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -73,19 +71,20 @@ abstract class DuckScans : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val slug = manga.url.substringAfterLast('/')
         val from = Fetch.XHR.from(getMangaUrl(manga))
-        val details = if (fetchDetails) {
-            async {
+
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = {
                 val url = apiUrl.newBuilder().addPathSegment("series").addPathSegment(slug).build()
                 client.get(url, from).parseAs<SeriesDetailsDto>().data.toSMangaDetails(baseUrl.toHttpUrl())
-            }
-        } else {
-            null
-        }
-        val chapterList = if (fetchChapters) {
-            async {
+            },
+            chapterList = {
                 val url = apiUrl.newBuilder()
                     .addPathSegment("chapters")
                     .addQueryParameter("series", slug)
@@ -93,12 +92,8 @@ abstract class DuckScans : KeiSource() {
                     .build()
                 val now = Clock.System.now().toEpochMilliseconds()
                 client.get(url, from).parseAs<ChapterListDto>().data.map { it.toSChapter(now) }
-            }
-        } else {
-            null
-        }
-
-        SMangaUpdate(details?.await() ?: manga, chapterList?.await() ?: chapters)
+            },
+        )
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {

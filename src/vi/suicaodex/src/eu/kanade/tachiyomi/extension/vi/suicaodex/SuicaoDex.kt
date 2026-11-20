@@ -152,23 +152,14 @@ abstract class SuicaoDex : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val detailsDeferred = if (fetchDetails) {
-            async { client.get("$apiUrl/v1/manga/${manga.url}", Fetch.XHR).parseAs<MangaDto>().toSManga() }
-        } else {
-            null
-        }
-        val chaptersDeferred = if (fetchChapters) {
-            async { fetchAllChapters(manga.url) }
-        } else {
-            null
-        }
-
-        SMangaUpdate(
-            manga = detailsDeferred?.await() ?: manga,
-            chapters = chaptersDeferred?.await() ?: chapters,
-        )
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { client.get("$apiUrl/v1/manga/${manga.url}", Fetch.XHR).parseAs<MangaDto>().toSManga() },
+        chapterList = { fetchAllChapters(manga.url) },
+    )
 
     private suspend fun fetchAllChapters(mangaId: String): List<SChapter> = coroutineScope {
         fun chapterUrl(page: Int) = "$apiUrl/v1/manga/$mangaId/chapters".toHttpUrl().newBuilder()

@@ -11,8 +11,6 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.parser.Parser
 
@@ -58,27 +56,21 @@ abstract class AralosBD : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val id = manga.url.toHttpUrl().queryParameter("id")!!
 
-        val details = async {
-            if (fetchDetails) {
-                client.get("$baseUrl/manga/api?get=manga&id=$id", Fetch.XHR).parseAs<AralosBDManga>().toSManga(manga)
-            } else {
-                manga
-            }
-        }
-        val chapterList = async {
-            if (fetchChapters) {
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = { client.get("$baseUrl/manga/api?get=manga&id=$id", Fetch.XHR).parseAs<AralosBDManga>().toSManga(manga) },
+            chapterList = {
                 client.get("$baseUrl/manga/api?get=chapters&manga=$id", Fetch.XHR).parseAs<List<AralosBDChapter>>()
                     .filter { it.isReleased }
                     .map { it.toSChapter(baseUrl) }
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(details.await(), chapterList.await())
+            },
+        )
     }
 
     private fun AralosBDManga.toSManga(manga: SManga) = manga.apply {

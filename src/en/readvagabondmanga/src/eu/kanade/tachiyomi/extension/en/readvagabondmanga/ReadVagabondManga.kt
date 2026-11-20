@@ -11,8 +11,6 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
@@ -40,27 +38,21 @@ abstract class ReadVagabondManga : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val mangaId = "$baseUrl${manga.url}".toHttpUrl().fragment
 
-        val details = async {
-            if (fetchDetails) {
-                client.get("$baseUrl/api/mihon/mangas/$mangaId", Fetch.XHR).parseAs<MangaDto>().toSManga()
-            } else {
-                manga
-            }
-        }
-        val chapterList = async {
-            if (fetchChapters) {
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = { client.get("$baseUrl/api/mihon/mangas/$mangaId", Fetch.XHR).parseAs<MangaDto>().toSManga() },
+            chapterList = {
                 client.get("$baseUrl/api/mihon/mangas/$mangaId/chapters", Fetch.XHR)
                     .parseAs<List<ChapterDto>>()
                     .map { chapter -> chapter.toSChapter() }
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(details.await(), chapterList.await())
+            },
+        )
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {

@@ -138,22 +138,18 @@ abstract class UniComics : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val updatedManga = async {
-            if (fetchDetails) {
-                mangaDetailsParse(
-                    client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup(),
-                )
-            } else {
-                manga
-            }
-        }
-        val updatedChapters = async {
-            if (fetchChapters) getChapters(manga) else chapters
-        }
-
-        SMangaUpdate(updatedManga.await(), updatedChapters.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = {
+            mangaDetailsParse(
+                client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup(),
+            )
+        },
+        chapterList = { getChapters(manga) },
+    )
 
     private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         val isIssue = document.selectFirst(".issue-info-grid") != null

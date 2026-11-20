@@ -13,8 +13,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.Response
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -95,29 +93,21 @@ abstract class NaverComic : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val titleId = manga.titleId()
 
-        val details = if (fetchDetails) {
-            async {
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = {
                 client.get("$baseUrl/api/article/list/info?titleId=$titleId", Fetch.XHR)
                     .parseAs<Manga>()
                     .toSManga(mType)
                     .apply { url = manga.url }
-            }
-        } else {
-            null
-        }
-
-        val chapterList = if (fetchChapters) {
-            async { fetchChapterList(titleId) }
-        } else {
-            null
-        }
-
-        SMangaUpdate(
-            details?.await() ?: manga,
-            chapterList?.await() ?: chapters,
+            },
+            chapterList = { fetchChapterList(titleId) },
         )
     }
 

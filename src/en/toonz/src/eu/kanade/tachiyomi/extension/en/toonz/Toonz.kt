@@ -95,10 +95,7 @@ abstract class Toonz : KeiSource() {
         val type = url.pathSegments.firstOrNull() ?: return null
         if (type !in types) return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
-        val manga = SManga.create().apply {
-            this.url = mangaPath(type, slug)
-        }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(mangaPath(type, slug))
     }
 
     override suspend fun fetchMangaUpdate(

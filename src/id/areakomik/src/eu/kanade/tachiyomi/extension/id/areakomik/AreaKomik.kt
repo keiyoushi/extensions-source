@@ -84,9 +84,7 @@ abstract class AreaKomik : KeiSource() {
                 ?: return null
             else -> return null
         }
-
-        val manga = SManga.create().apply { this.url = mangaPath }
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(mangaPath)
     }
 
     override suspend fun fetchMangaUpdate(

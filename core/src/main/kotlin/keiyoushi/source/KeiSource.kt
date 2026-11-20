@@ -26,6 +26,8 @@ import keiyoushi.utils.jsonInstance
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -239,6 +241,21 @@ abstract class KeiSource : HttpSource() {
     protected open suspend fun getMangaByUrl(url: HttpUrl): SManga? = throw Exception("getMangaByUrl not implemented")
 
     /**
+     * Fetches the details of the manga stored as [url].
+     *
+     * [fetchMangaUpdate] receives an [SManga] with only [SManga.url] set, an empty chapter list and only
+     * `fetchDetails` set.
+     *
+     * @param url The [SManga.url] the source stores for the manga.
+     * @return The manga's details, with [SManga.initialized] set.
+     */
+    protected suspend fun getMangaDetailsByUrl(url: String): SManga {
+        val manga = SManga.create().apply { this.url = url }
+
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
+
+    /**
      * Fetches a page of manga list from given url.
      * Not needed for most sources
      *
@@ -412,6 +429,33 @@ abstract class KeiSource : HttpSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate
+
+    /**
+     * Builds the [SMangaUpdate] for [fetchMangaUpdate] from separate details and chapter list requests.
+     *
+     * Runs [details] only when [fetchDetails] is set and [chapterList] only when [fetchChapters] is set, concurrently
+     * when both are; whatever is not fetched is returned as given.
+     *
+     * @param manga The manga passed to [fetchMangaUpdate].
+     * @param chapters The chapters passed to [fetchMangaUpdate].
+     * @param fetchDetails Whether to run [details].
+     * @param fetchChapters Whether to run [chapterList].
+     * @param details Fetches the manga's details.
+     * @param chapterList Fetches the manga's chapters.
+     */
+    protected suspend fun mangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+        details: suspend () -> SManga,
+        chapterList: suspend () -> List<SChapter>,
+    ): SMangaUpdate = coroutineScope {
+        val newDetails = if (fetchDetails) async { details() } else null
+        val newChapters = if (fetchChapters) async { chapterList() } else null
+
+        SMangaUpdate(newDetails?.await() ?: manga, newChapters?.await() ?: chapters)
+    }
 
     private val updatesInFlight = ConcurrentHashMap<String, Boolean>()
 

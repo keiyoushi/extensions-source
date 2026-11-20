@@ -126,7 +126,7 @@ abstract class SanyTeam : KeiSource() {
                 ?: return null
             else -> return null
         }
-        return getMangaUpdate(SManga.create().apply { this.url = seriesPath }, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(seriesPath)
     }
 
     private fun HttpUrl.sitePath() = encodedPathSegments.filter(String::isNotEmpty)

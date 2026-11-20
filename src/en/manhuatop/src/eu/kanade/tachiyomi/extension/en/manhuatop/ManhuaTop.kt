@@ -58,13 +58,7 @@ abstract class ManhuaTop : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments[0] != "manhua") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotEmpty) ?: return null
         val path = baseUrl.toHttpUrl().newBuilder().addPathSegment("manhua").addPathSegment(slug).addPathSegment("").build().encodedPath
-
-        return getMangaUpdate(
-            manga = SManga.create().apply { this.url = path },
-            chapters = emptyList(),
-            fetchDetails = true,
-            fetchChapters = false,
-        ).manga
+        return getMangaDetailsByUrl(path)
     }
 
     // Entries saved by the Madara version can store the WordPress post id, with the path in memo
@@ -77,12 +71,14 @@ abstract class ManhuaTop : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) parseDetails(manga, client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()) else manga }
-        val chapterList = async { if (fetchChapters) fetchChapters(mangaPath(manga)) else chapters }
-
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { parseDetails(manga, client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()) },
+        chapterList = { fetchChapters(mangaPath(manga)) },
+    )
 
     private fun parseDetails(manga: SManga, document: Document): SManga = manga.apply {
         title = document.selectFirst("h1#manga-title")!!.text()

@@ -52,13 +52,7 @@ abstract class ManhwaOnline : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments[0] != "manga") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotEmpty) ?: return null
-
-        return getMangaUpdate(
-            manga = SManga.create().apply { this.url = "/manga/$slug/" },
-            chapters = emptyList(),
-            fetchDetails = true,
-            fetchChapters = false,
-        ).manga
+        return getMangaDetailsByUrl("/manga/$slug/")
     }
 
     // Entries saved by the Madara version store the WordPress post id, with the path in memo

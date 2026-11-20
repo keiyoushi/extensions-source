@@ -18,8 +18,6 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDateTime
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -95,24 +93,22 @@ abstract class Manhastro :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val mangaId = manga.url.substringAfterLast("/")
 
-        val details = async {
-            if (fetchDetails) {
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = {
                 client.get("$apiUrl/dados?manga_id=$mangaId", Fetch.XHR)
                     .parseAs<ApiResponse<List<MangaDto>>>(transform = ::cleanJsonResponse)
                     .data.firstOrNull()?.toSManga()
                     ?: throw Exception("Manga not found")
-            } else {
-                manga
-            }
-        }
-        val chapterList = async {
-            if (fetchChapters) fetchChapterList(mangaId) else chapters
-        }
-
-        SMangaUpdate(details.await(), chapterList.await())
+            },
+            chapterList = { fetchChapterList(mangaId) },
+        )
     }
 
     // ============================== Chapters ==============================

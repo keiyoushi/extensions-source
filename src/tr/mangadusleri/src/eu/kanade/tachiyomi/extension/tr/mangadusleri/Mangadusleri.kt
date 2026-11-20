@@ -63,12 +63,7 @@ abstract class Mangadusleri : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.pathSegments.count(String::isNotBlank) < 2) return null
-        return fetchMangaUpdate(
-            SManga.create().apply { this.url = url.encodedPath },
-            emptyList(),
-            true,
-            false,
-        ).manga
+        return getMangaDetailsByUrl(url.encodedPath)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {

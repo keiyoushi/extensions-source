@@ -88,8 +88,7 @@ abstract class Mangacix : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host) return null
         if (url.pathSegments.firstOrNull() != "books") return null
         val id = url.pathSegments.getOrNull(1)?.toLongOrNull() ?: return null
-        val manga = SManga.create().apply { this.url = id.toString() }
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(id.toString())
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/books/${manga.url}"

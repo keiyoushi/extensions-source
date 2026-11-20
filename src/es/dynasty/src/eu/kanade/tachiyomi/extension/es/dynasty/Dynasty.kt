@@ -13,8 +13,6 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
@@ -79,14 +77,16 @@ abstract class Dynasty : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val mangaId = manga.url.substringBefore("|")
-        val details = if (fetchDetails) async { fetchDetails(mangaId) } else null
-        val chapterList = if (fetchChapters) async { fetchChapterList(mangaId) } else null
 
-        SMangaUpdate(
-            details?.await() ?: manga,
-            chapterList?.await() ?: chapters,
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = { fetchDetails(mangaId) },
+            chapterList = { fetchChapterList(mangaId) },
         )
     }
 

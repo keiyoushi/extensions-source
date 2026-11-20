@@ -65,11 +65,7 @@ abstract class EgoToons : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host.removePrefix("www.") || url.pathSegments.firstOrNull() != "obra") return null
         val mangaId = url.pathSegments.getOrNull(1)?.toIntOrNull() ?: return null
-        val manga = SManga.create().apply { this.url = "/obra/$mangaId" }
-
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga.apply {
-            initialized = true
-        }
+        return getMangaDetailsByUrl("/obra/$mangaId")
     }
 
     override suspend fun fetchMangaUpdate(
@@ -77,23 +73,21 @@ abstract class EgoToons : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val mangaId = manga.url.mangaId()
-        val details = if (fetchDetails) {
-            async {
+
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = {
                 client.get("$baseUrl/api/obras/$mangaId", Fetch.XHR)
                     .parseAs<MangaDetailsDto>()
                     .manga
                     .toSManga(baseUrl)
-            }
-        } else {
-            null
-        }
-        val chapterList = if (fetchChapters) async { getChapterList(mangaId) } else null
-
-        SMangaUpdate(
-            manga = details?.await() ?: manga,
-            chapters = chapterList?.await() ?: chapters,
+            },
+            chapterList = { getChapterList(mangaId) },
         )
     }
 

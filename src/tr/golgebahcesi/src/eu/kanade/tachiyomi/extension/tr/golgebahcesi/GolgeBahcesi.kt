@@ -18,8 +18,6 @@ import keiyoushi.utils.runWebView
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -46,12 +44,7 @@ abstract class GolgeBahcesi : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val slug = url.pathSegments.getOrNull(1) ?: return null
-        return fetchMangaUpdate(
-            SManga.create().apply { this.url = slug },
-            emptyList(),
-            true,
-            false,
-        ).manga
+        return getMangaDetailsByUrl(slug)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -92,31 +85,23 @@ abstract class GolgeBahcesi : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val updatedManga = async {
-            if (fetchDetails) {
-                client.get("$apiBaseUrl/series/${manga.url}", Fetch.XHR).parseAs<SeriesDto>().toSManga()
-            } else {
-                manga
-            }
-        }
-        val updatedChapters = async {
-            if (fetchChapters) {
-                client.get("$apiBaseUrl/series/${manga.url}/chapters", Fetch.XHR).parseAs<List<ChapterDto>>().map { chapter ->
-                    SChapter.create().apply {
-                        url = "/${chapter.id}/${chapter.seriesSlug}/${chapter.slug}"
-                        name = chapter.title
-                        chapter_number = chapter.number
-                        date_upload = Instant.tryParse(chapter.releaseDate ?: chapter.createdAt)
-                    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { client.get("$apiBaseUrl/series/${manga.url}", Fetch.XHR).parseAs<SeriesDto>().toSManga() },
+        chapterList = {
+            client.get("$apiBaseUrl/series/${manga.url}/chapters", Fetch.XHR).parseAs<List<ChapterDto>>().map { chapter ->
+                SChapter.create().apply {
+                    url = "/${chapter.id}/${chapter.seriesSlug}/${chapter.slug}"
+                    name = chapter.title
+                    chapter_number = chapter.number
+                    date_upload = Instant.tryParse(chapter.releaseDate ?: chapter.createdAt)
                 }
-            } else {
-                chapters
             }
-        }
-
-        SMangaUpdate(updatedManga.await(), updatedChapters.await())
-    }
+        },
+    )
 
     override fun getChapterUrl(chapter: SChapter): String {
         val segments = "$baseUrl${chapter.url}".toHttpUrl().pathSegments

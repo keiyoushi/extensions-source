@@ -140,12 +140,7 @@ abstract class PornPics :
         ) {
             return null
         }
-        return fetchMangaUpdate(
-            SManga.create().apply { this.url = url.encodedPath },
-            emptyList(),
-            true,
-            false,
-        ).manga
+        return getMangaDetailsByUrl(url.encodedPath)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {

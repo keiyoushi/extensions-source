@@ -94,8 +94,7 @@ abstract class KhoManhwa : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val slug = url.pathSegments.firstOrNull() ?: return null
-        val manga = SManga.create().apply { this.url = "/$slug" }
-        return fetchMangaUpdate(manga, emptyList(), true, false).manga
+        return getMangaDetailsByUrl("/$slug")
     }
 
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url

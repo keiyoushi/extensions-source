@@ -108,8 +108,7 @@ abstract class OneReader :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.first().removeSuffix(".html") !in MANGA_PATHS) return null
         val mangaKey = url.queryParameter("id")?.takeIf(String::isNotEmpty) ?: return null
-
-        return getMangaUpdate(SManga.create().apply { this.url = mangaKey }, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(mangaKey)
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/obra".toHttpUrl().newBuilder()

@@ -13,8 +13,6 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -141,32 +139,24 @@ abstract class MiMi : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val id = manga.url.substringAfterLast("/")
 
-        val detailsDeferred = if (fetchDetails) {
-            async {
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = {
                 client.get("$apiUrl/manga/$id", Fetch.XHR).use {
                     it.parseAs<MangaDto>().toSManga()
                 }
-            }
-        } else {
-            null
-        }
-
-        val chaptersDeferred = if (fetchChapters) {
-            async {
+            },
+            chapterList = {
                 client.get("$apiUrl/manga/$id/chapters", Fetch.XHR).use { response ->
                     response.parseAs<List<ChapterDto>>().map { it.toSChapter(id) }
                 }
-            }
-        } else {
-            null
-        }
-
-        SMangaUpdate(
-            manga = detailsDeferred?.await() ?: manga,
-            chapters = chaptersDeferred?.await() ?: chapters,
+            },
         )
     }
 

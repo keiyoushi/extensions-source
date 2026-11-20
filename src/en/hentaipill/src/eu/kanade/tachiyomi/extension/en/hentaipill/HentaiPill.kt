@@ -70,9 +70,7 @@ abstract class HentaiPill : KeiSource() {
         if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host) return null
         if (url.pathSegments.getOrNull(0) != "gallery") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
-
-        val manga = SManga.create().apply { this.url = slug }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(slug)
     }
 
     override suspend fun fetchMangaUpdate(

@@ -251,9 +251,7 @@ abstract class Seikowo : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || !url.encodedPath.endsWith(".html")) return null
-
-        val manga = SManga.create().apply { this.url = url.encodedPath }
-        return fetchMangaUpdate(manga, emptyList(), true, false).manga
+        return getMangaDetailsByUrl(url.encodedPath)
     }
 
     override suspend fun fetchMangaUpdate(

@@ -123,8 +123,7 @@ abstract class BabeSource : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments[0] != "galleries" || url.pathSegments.size != 2 || !url.pathSegments[1].endsWith(".html")) return null
-        val manga = SManga.create().apply { this.url = url.encodedPath }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(url.encodedPath)
     }
 
     override suspend fun fetchMangaUpdate(

@@ -114,8 +114,7 @@ abstract class NekoHentai : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val segments = url.pathSegments.filter { it.isNotEmpty() }
         if (segments.size !in 1..2 || segments[0] in RESERVED_PATHS) return null
-        val manga = SManga.create().apply { this.url = segments[0] }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(segments[0])
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/${manga.url}/"

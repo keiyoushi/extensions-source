@@ -100,9 +100,7 @@ abstract class HentaiVNx : KeiSource() {
                 ?.encodedPath
                 ?: return null
         }
-
-        val manga = SManga.create().apply { this.url = mangaPath }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(mangaPath)
     }
 
     // ============================== Filters ===============================

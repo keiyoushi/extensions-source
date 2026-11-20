@@ -105,9 +105,7 @@ abstract class YellowNote :
         if (url.host != baseUrl.toHttpUrl().host) return null
         val type = url.pathSegments.getOrNull(0)?.takeIf { it == "photo" || it == "amateur" } ?: return null
         val id = url.pathSegments.getOrNull(1)?.takeIf(idRegex::matches) ?: return null
-
-        val manga = SManga.create().apply { this.url = "/$type/$id" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/$type/$id")
     }
 
     override suspend fun fetchMangaUpdate(

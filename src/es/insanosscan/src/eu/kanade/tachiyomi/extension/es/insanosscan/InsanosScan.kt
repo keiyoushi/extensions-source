@@ -15,8 +15,6 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl
 import java.lang.UnsupportedOperationException
 
@@ -47,13 +45,7 @@ abstract class InsanosScan :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val seriesId = url.pathSegments.getOrNull(1) ?: return null
         seriesId.toIntOrNull() ?: return null
-
-        return fetchMangaUpdate(
-            SManga.create().apply { this.url = seriesId },
-            emptyList(),
-            true,
-            false,
-        ).manga
+        return getMangaDetailsByUrl(seriesId)
     }
 
     override suspend fun fetchMangaUpdate(
@@ -61,29 +53,22 @@ abstract class InsanosScan :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ) = coroutineScope {
-        val updatedManga = async {
-            if (fetchDetails) {
-                client.get("$baseUrl/series/${manga.url}", Fetch.XHR)
-                    .parseAs<Series>().toSManga(baseUrl)
-            } else {
-                manga
-            }
-        }
-
-        val updatedChapters = async {
-            if (fetchChapters) {
-                client.get("$baseUrl/series/${manga.url}/chapters", Fetch.XHR)
-                    .parseAs<List<Chapter>>().mapNotNull {
-                        it.toSChapter(showPaidChapters)
-                    }.reversed()
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(updatedManga.await(), updatedChapters.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = {
+            client.get("$baseUrl/series/${manga.url}", Fetch.XHR)
+                .parseAs<Series>().toSManga(baseUrl)
+        },
+        chapterList = {
+            client.get("$baseUrl/series/${manga.url}/chapters", Fetch.XHR)
+                .parseAs<List<Chapter>>().mapNotNull {
+                    it.toSChapter(showPaidChapters)
+                }.reversed()
+        },
+    )
 
     override fun getChapterUrl(chapter: SChapter) = chapter.url.split("/").let { (seriesId, cid) ->
         "$baseUrl/reader?series=$seriesId&chapter=$cid"

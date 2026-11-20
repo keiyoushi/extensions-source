@@ -15,8 +15,6 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -133,23 +131,14 @@ abstract class Otakusic : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val mangaDeferred = if (fetchDetails) {
-            async { parseMangaDetails(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup(), manga) }
-        } else {
-            null
-        }
-        val chaptersDeferred = if (fetchChapters) {
-            async { loadChapterList(manga) }
-        } else {
-            null
-        }
-
-        SMangaUpdate(
-            manga = mangaDeferred?.await() ?: manga,
-            chapters = chaptersDeferred?.await() ?: chapters,
-        )
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { parseMangaDetails(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup(), manga) },
+        chapterList = { loadChapterList(manga) },
+    )
 
     private fun parseMangaDetails(document: Document, manga: SManga): SManga = SManga.create().apply {
         setUrlWithoutDomain(manga.url)

@@ -13,8 +13,6 @@ import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -102,28 +100,22 @@ abstract class KeyoappV2 : KeyoappBase() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val slug = manga.url.removePrefix("/")
-        val detailsDeferred = if (fetchDetails) {
-            async {
+
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = {
                 val document = client.get(seriesUrl(slug), Fetch.DOCUMENT).asJsoup()
                 if (document.selectFirst("[data-series-uid]") == null) {
                     throw Exception("Series not found")
                 }
                 parseMangaDetails(document, slug)
-            }
-        } else {
-            null
-        }
-        val chaptersDeferred = if (fetchChapters) {
-            async { fetchChapterList(slug) }
-        } else {
-            null
-        }
-
-        SMangaUpdate(
-            detailsDeferred?.await() ?: manga,
-            chaptersDeferred?.await() ?: chapters,
+            },
+            chapterList = { fetchChapterList(slug) },
         )
     }
 

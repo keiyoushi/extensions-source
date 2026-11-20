@@ -55,12 +55,7 @@ abstract class XoManga :
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val id = url.queryParameter("id") ?: return null
-        val manga = SManga.create().apply {
-            this.url = id
-        }
-
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
-            .manga
+        return getMangaDetailsByUrl(id)
             .apply {
                 initialized = true
                 this.url = id

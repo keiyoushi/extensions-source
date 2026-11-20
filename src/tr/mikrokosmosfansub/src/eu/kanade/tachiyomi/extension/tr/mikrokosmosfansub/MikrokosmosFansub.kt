@@ -12,8 +12,6 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -47,25 +45,18 @@ abstract class MikrokosmosFansub : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async {
-            if (fetchDetails) {
-                fetchSeries().first { it.slug == manga.url }.toSManga()
-            } else {
-                manga
-            }
-        }
-        val chapterList = async {
-            if (fetchChapters) {
-                fetchChapters(manga.url)
-                    .sortedWith(compareByDescending<ChapterDto> { it.number }.thenByDescending { it.publishedDate })
-                    .map { it.toSChapter(manga.url) }
-            } else {
-                chapters
-            }
-        }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { fetchSeries().first { it.slug == manga.url }.toSManga() },
+        chapterList = {
+            fetchChapters(manga.url)
+                .sortedWith(compareByDescending<ChapterDto> { it.number }.thenByDescending { it.publishedDate })
+                .map { it.toSChapter(manga.url) }
+        },
+    )
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (slug, id) = chapter.url.split('/', limit = 2)

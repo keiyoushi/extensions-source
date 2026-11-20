@@ -125,12 +125,7 @@ abstract class Tapastic :
             "/series/$id"
         }
 
-        val manga = SManga.create().apply {
-            this.url = mangaUrl
-        }
-
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
-            .manga
+        return getMangaDetailsByUrl(mangaUrl)
             .apply {
                 initialized = true
                 this.url = mangaUrl

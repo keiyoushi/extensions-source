@@ -15,8 +15,6 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -93,19 +91,16 @@ abstract class Mangalix : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val slug = manga.url
 
-        val updatedManga = if (fetchDetails) {
-            async {
-                loadCatalog().firstOrNull { it.slug == slug }?.toSManga(baseUrl) ?: manga
-            }
-        } else {
-            null
-        }
-
-        val updatedChapters = if (fetchChapters) {
-            async {
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = { loadCatalog().firstOrNull { it.slug == slug }?.toSManga(baseUrl) ?: manga },
+            chapterList = {
                 readChapters(slug).distinctBy { it.id to it.number }.map { chapter ->
                     SChapter.create().apply {
                         val number = chapter.number.toString().removeSuffix(".0")
@@ -119,14 +114,7 @@ abstract class Mangalix : KeiSource() {
                         date_upload = chapter.releaseDate.toMangaTimestamp()
                     }
                 }
-            }
-        } else {
-            null
-        }
-
-        SMangaUpdate(
-            manga = updatedManga?.await() ?: manga,
-            chapters = updatedChapters?.await() ?: chapters,
+            },
         )
     }
 

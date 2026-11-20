@@ -100,8 +100,7 @@ abstract class Swarm :
         if (url.host != baseUrl.toHttpUrl().host) return null
         val segments = url.pathSegments
         if (segments.size < 2 || segments[0] != "comic" || segments[1].isBlank()) return null
-        val manga = SManga.create().apply { this.url = segments[1] }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(segments[1])
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/comic/${manga.url}"

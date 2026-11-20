@@ -87,8 +87,7 @@ abstract class MegaHentai : KeiSource() {
                 .absUrl("href").toHttpUrl().pathSegments[1]
             else -> return null
         }
-        val manga = SManga.create().apply { this.url = mangaSlug }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(mangaSlug)
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/ler-online/${manga.url}/"

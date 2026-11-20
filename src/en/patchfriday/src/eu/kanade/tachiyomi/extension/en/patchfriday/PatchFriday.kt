@@ -46,12 +46,14 @@ abstract class PatchFriday : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val details = if (fetchDetails) createManga() else manga
-        val chapterList = if (fetchChapters) fetchChapterList() else chapters
-
-        return SMangaUpdate(details, chapterList)
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { createManga() },
+        chapterList = { fetchChapterList() },
+    )
 
     private suspend fun fetchChapterList(): List<SChapter> {
         val chapters = mutableListOf<SChapter>()

@@ -12,8 +12,6 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -53,17 +51,14 @@ abstract class StreamexUnoriginal : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) getDetails(manga.url) else manga }
-        val chapterList = async {
-            if (fetchChapters) {
-                client.get("$apiUrl/chapters?id=${manga.url}", Fetch.XHR).parseAs<ChaptersDto>().chapters.map { it.toSChapter(manga.url) }
-            } else {
-                chapters
-            }
-        }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { getDetails(manga.url) },
+        chapterList = { client.get("$apiUrl/chapters?id=${manga.url}", Fetch.XHR).parseAs<ChaptersDto>().chapters.map { it.toSChapter(manga.url) } },
+    )
 
     private suspend fun getDetails(id: String) = client.get("$apiUrl/info/$id", Fetch.XHR).parseAs<MediaDto>().toSManga()
 

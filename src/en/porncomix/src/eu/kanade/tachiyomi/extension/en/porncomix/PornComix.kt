@@ -74,21 +74,21 @@ abstract class PornComix : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val details = if (fetchDetails) fetchMangaDetails(manga) else manga
-        val chapterList = if (fetchChapters) {
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { fetchMangaDetails(manga) },
+        chapterList = {
             listOf(
                 SChapter.create().apply {
                     name = "CHAPTER"
                     setUrlWithoutDomain(manga.url)
                 },
             )
-        } else {
-            chapters
-        }
-
-        return SMangaUpdate(details, chapterList)
-    }
+        },
+    )
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()

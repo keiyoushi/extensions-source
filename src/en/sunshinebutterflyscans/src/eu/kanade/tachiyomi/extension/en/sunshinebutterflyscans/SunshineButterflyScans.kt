@@ -124,12 +124,7 @@ abstract class SunshineButterflyScans : KeiSource() {
         }
 
         val mangaUrl = "/projects?n=${url.queryParameter("n")}"
-        val manga = SManga.create().apply {
-            this.url = mangaUrl
-        }
-
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
-            .manga
+        return getMangaDetailsByUrl(mangaUrl)
             .apply {
                 initialized = true
                 this.url = mangaUrl

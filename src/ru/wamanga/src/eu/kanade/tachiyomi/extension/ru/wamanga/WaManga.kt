@@ -125,11 +125,7 @@ abstract class WaManga : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host) return null
         if (url.pathSegments.size < 2) return null
 
-        val manga = SManga.create().apply {
-            this.url = url.pathSegments.take(2).joinToString("/")
-        }
-
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(url.pathSegments.take(2).joinToString("/"))
     }
 
     override val supportsRelatedMangas get() = true

@@ -12,8 +12,6 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -85,12 +83,14 @@ abstract class ToonSpace : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = if (fetchDetails) async { getToon("urlSlug", manga.url)!!.toSManga() } else null
-        val chapterList = if (fetchChapters) async { getChapters(manga.url) } else null
-
-        SMangaUpdate(details?.await() ?: manga, chapterList?.await() ?: chapters)
-    }
+    ): SMangaUpdate = mangaUpdate(
+        manga,
+        chapters,
+        fetchDetails,
+        fetchChapters,
+        details = { getToon("urlSlug", manga.url)!!.toSManga() },
+        chapterList = { getChapters(manga.url) },
+    )
 
     private suspend fun getToon(field: String, value: String): ToonDto? {
         val url = apiUrl("toons")

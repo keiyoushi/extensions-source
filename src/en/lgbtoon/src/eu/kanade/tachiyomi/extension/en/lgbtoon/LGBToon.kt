@@ -41,8 +41,7 @@ abstract class LGBToon : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "title") return null
         val series = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
-        val manga = SManga.create().apply { this.url = "/title/$series" }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl("/title/$series")
     }
 
     private fun titlesUrl(page: Int, sort: String) = baseUrl.toHttpUrl().newBuilder()

@@ -90,11 +90,7 @@ abstract class AstraManga : KeiSource() {
     // =========================== Deeplink ============================
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host == domain && url.pathSegments[0] == "manga" && url.pathSegments[1].length > 1) {
-            val tmpManga = SManga.create().apply {
-                this.url = url.pathSegments[1]
-            }
-
-            return fetchMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+            return getMangaDetailsByUrl(url.pathSegments[1])
         }
 
         return null

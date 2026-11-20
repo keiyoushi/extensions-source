@@ -109,24 +109,17 @@ abstract class Azuki :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val url = "$baseUrl/${manga.url}".toHttpUrl()
         val slug = url.pathSegments.first()
 
-        val details = if (fetchDetails) {
-            async { client.get("$apiUrl/manga/slug/$slug/v0", apiHeaders(), Fetch.XHR).parseAs<DetailsDto>().toSManga() }
-        } else {
-            null
-        }
-        val chapterList = if (fetchChapters) {
-            async { getChapterList(slug, url.fragment!!) }
-        } else {
-            null
-        }
-
-        SMangaUpdate(
-            manga = details?.await() ?: manga,
-            chapters = chapterList?.await() ?: chapters,
+        return mangaUpdate(
+            manga,
+            chapters,
+            fetchDetails,
+            fetchChapters,
+            details = { client.get("$apiUrl/manga/slug/$slug/v0", apiHeaders(), Fetch.XHR).parseAs<DetailsDto>().toSManga() },
+            chapterList = { getChapterList(slug, url.fragment!!) },
         )
     }
 

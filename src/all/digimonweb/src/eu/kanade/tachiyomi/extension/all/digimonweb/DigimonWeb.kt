@@ -60,8 +60,7 @@ abstract class DigimonWeb : KeiSource() {
         val path = url.encodedPath
         val mangaUrl = listOf(COMIC_URL_REGEX, DREAMERS_URL_REGEX, AWARD_URL_REGEX).firstNotNullOfOrNull { it.find(path)?.value }
         if (mangaUrl == null || mangaUrl.language() != lang) return null
-        val manga = SManga.create().apply { this.url = mangaUrl }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(mangaUrl)
     }
 
     // Details and episodes are on the page that lists the work

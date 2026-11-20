@@ -124,10 +124,7 @@ abstract class Toonkor : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val path = url.encodedPath
         if (path.isBlank() || path == "/" || path.startsWith("/bbs/") || path.startsWith("/css/") || path.startsWith("/js/")) return null
-        val manga = SManga.create().apply {
-            this.url = path
-        }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return getMangaDetailsByUrl(path)
     }
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
