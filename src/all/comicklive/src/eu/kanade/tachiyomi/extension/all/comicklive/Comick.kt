@@ -95,7 +95,11 @@ abstract class Comick :
     private var searchNextCursor: String? = null
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        if (page == 1) latestNextCursor = null
+        if (page == 1) {
+            latestNextCursor = null
+        } else {
+            checkNotNull(latestNextCursor) { "Can't load page $page before page 1" }
+        }
 
         val url = "$baseUrl/api/chapters/latest".toHttpUrl().newBuilder().apply {
             addQueryParameter("order", "new")
@@ -117,7 +121,11 @@ abstract class Comick :
 
     private val spaceSlashRegex = Regex("[ /]")
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        if (page == 1) searchNextCursor = null
+        if (page == 1) {
+            searchNextCursor = null
+        } else {
+            checkNotNull(searchNextCursor) { "Can't load page $page before page 1" }
+        }
 
         val url = "$baseUrl/api/search".toHttpUrl().newBuilder().apply {
             filters.firstInstance<SortFilter>().let {

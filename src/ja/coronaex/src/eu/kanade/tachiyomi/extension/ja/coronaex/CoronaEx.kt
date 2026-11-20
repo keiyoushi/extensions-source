@@ -65,7 +65,12 @@ abstract class CoronaEx :
     override fun Headers.Builder.configureHeaders() = set("X-Api-Environment-Key", API_KEY)
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        if (page == 1) cursor = null
+        if (page == 1) {
+            cursor = null
+        } else {
+            checkNotNull(cursor) { "Can't load page $page before page 1" }
+        }
+
         val url = "$apiUrl/comics".toHttpUrl().newBuilder()
             .addQueryParameter("limit", "24")
             .addQueryParameter("order", "asc")
