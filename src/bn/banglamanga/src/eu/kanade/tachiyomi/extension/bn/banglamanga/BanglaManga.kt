@@ -11,16 +11,13 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import kotlin.time.Instant
 
 @Source
-class BanglaManga(
-    override val lang: String,
-    override val id: Long,
-) : KeiSource() {
+abstract class BanglaManga : KeiSource() {
 
     override val name = "Bangla Manga"
     override val baseUrl = "https://www.banglamanga.com"
@@ -28,18 +25,14 @@ class BanglaManga(
     private val apiKey =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndnZXlkemZtdGVoZGtvc3h3bmFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzMzQyMDcsImV4cCI6MjEwNzkxMDIwN30.o7MQCNzwmVKUv_L9sGgsueLl68bpRdjeaHmZT2Gxn18"
 
-    private val apiClient by lazy {
-        client.newBuilder()
-            .addInterceptor { chain ->
-                val request = chain.request().newBuilder()
-                    .header("apikey", apiKey)
-                    .header("Authorization", "Bearer $apiKey")
-                    .build()
-                chain.proceed(request)
-            }
+    private val apiHeaders by lazy {
+        headers.newBuilder()
+            .set("apikey", apiKey)
+            .set("Authorization", "Bearer $apiKey")
             .build()
     }
 
+    private suspend fun apiGet(url: HttpUrl): okhttp3.Response = client.get(url, apiHeaders, Fetch.XHR)
     private val apiBaseUrl =
         "https://wgeydzfmtehdkosxwnai.supabase.co/rest/v1/"
 
@@ -64,16 +57,14 @@ class BanglaManga(
             )
             .build()
 
-        val results = apiClient.get(url, Fetch.XHR)
+        val results = apiGet(url)
             .parseAs<List<MangaDto>>()
 
         val mangaList = results.map { manga ->
             SManga.create().apply {
                 title = manga.titleBn
-                    ?: manga.titleEn
-                    ?: "Unknown"
 
-                this.url = "/${manga.id}"
+                this.url = manga.id
                 thumbnail_url = manga.coverUrl.orEmpty()
                 author = manga.author
                 artist = manga.artist
@@ -111,13 +102,13 @@ class BanglaManga(
             .addQueryParameter("order", order)
             .build()
 
-        val results = apiClient.get(url, Fetch.XHR)
+        val results = apiGet(url)
             .parseAs<List<MangaDto>>()
 
         val mangaList = results.map { manga ->
             SManga.create().apply {
-                title = manga.titleBn ?: manga.titleEn ?: "Unknown"
-                this.url = "/${manga.id}"
+                title = manga.titleBn
+                this.url = manga.id
                 thumbnail_url = manga.coverUrl.orEmpty()
                 author = manga.author
                 artist = manga.artist
@@ -144,7 +135,7 @@ class BanglaManga(
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val mangaId = manga.url.removePrefix("/")
+        val mangaId = manga.url
 
         val url = (apiBaseUrl + "mangas").toHttpUrl().newBuilder()
             .addQueryParameter(
@@ -154,14 +145,14 @@ class BanglaManga(
             .addQueryParameter("id", "eq.$mangaId")
             .build()
 
-        val result = apiClient.get(url, Fetch.XHR)
+        val result = apiGet(url)
             .parseAs<List<MangaDetailsDto>>()
             .firstOrNull()
             ?: throw Exception("Manga not found")
 
         val updatedManga = SManga.create().apply {
             this.url = manga.url
-            title = result.titleBn ?: result.titleEn ?: manga.title
+            title = result.titleBn
             thumbnail_url = result.coverUrl.orEmpty()
             author = result.author
             artist = result.artist
@@ -177,17 +168,13 @@ class BanglaManga(
         }
 
         val chapterList = result.chapters.orEmpty()
-            .sortedByDescending { it.number ?: 0.0 }
+            .sortedByDescending { it.number }
             .map { chapter ->
                 SChapter.create().apply {
-                    this.url = chapter.id.orEmpty()
+                    this.url = chapter.id
                     name = chapter.titleBn
-                        ?: "Chapter ${chapter.number ?: ""}"
-                    chapter_number = chapter.number?.toFloat() ?: -1f
-                    date_upload = runCatching {
-                        java.time.Instant.parse(chapter.publishAt)
-                            .toEpochMilli()
-                    }.getOrDefault(0L)
+                    chapter_number = chapter.number.toFloat()
+                    date_upload = Instant.tryParse(chapter.publishAt)
                 }
             }
 
@@ -203,85 +190,12 @@ class BanglaManga(
             .addQueryParameter("id", "eq.${chapter.url}")
             .build()
 
-        val result = apiClient.get(url, Fetch.XHR)
+        val result = apiGet(url)
             .parseAs<List<ChapterPagesDto>>()
             .firstOrNull()
 
         return result?.pages.orEmpty().mapIndexed { index, page ->
-            val imageUrl = page.url.orEmpty()
-            Page(index, imageUrl, imageUrl)
+            Page(index, page.url, page.url)
         }
     }
-
-    @Serializable
-    private data class MangaDto(
-        val id: String? = null,
-        val slug: String? = null,
-        @SerialName("title_bn")
-        val titleBn: String? = null,
-        @SerialName("title_en")
-        val titleEn: String? = null,
-        val author: String? = null,
-        val artist: String? = null,
-        val status: String? = null,
-        @SerialName("synopsis_bn")
-        val synopsisBn: String? = null,
-        @SerialName("cover_url")
-        val coverUrl: String? = null,
-        val genres: List<String>? = null,
-        @SerialName("release_year")
-        val releaseYear: Int? = null,
-    )
-
-    @Serializable
-    private data class MangaDetailsDto(
-        val id: String? = null,
-        val slug: String? = null,
-        @SerialName("title_bn")
-        val titleBn: String? = null,
-        @SerialName("title_en")
-        val titleEn: String? = null,
-        val author: String? = null,
-        val artist: String? = null,
-        val status: String? = null,
-        @SerialName("synopsis_bn")
-        val synopsisBn: String? = null,
-        @SerialName("cover_url")
-        val coverUrl: String? = null,
-        val genres: List<String>? = null,
-        @SerialName("release_year")
-        val releaseYear: Int? = null,
-        val chapters: List<ChapterDto>? = null,
-    )
-
-    @Serializable
-    private data class ChapterDto(
-        val id: String? = null,
-        val number: Double? = null,
-        @SerialName("title_bn")
-        val titleBn: String? = null,
-        val status: String? = null,
-        val volume: Int? = null,
-        @SerialName("number_end")
-        val numberEnd: Double? = null,
-        @SerialName("publish_at")
-        val publishAt: String? = null,
-        val views: Int? = null,
-        @SerialName("reading_mode")
-        val readingMode: String? = null,
-        val credits: kotlinx.serialization.json.JsonElement? = null,
-    )
-
-    @Serializable
-    private data class ChapterPagesDto(
-        val pages: List<ChapterPageDto>? = null,
-    )
-
-    @Serializable
-    private data class ChapterPageDto(
-        val url: String? = null,
-        val name: String? = null,
-        val w: Int? = null,
-        val h: Int? = null,
-    )
 }
