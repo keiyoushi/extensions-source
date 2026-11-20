@@ -381,10 +381,11 @@ class LunarSimilarDto(
     }
 }
 
+// Member order as the site's client writes it into the proof header
 @Serializable
 class SerenityJwk(
-    val crv: String,
     val kty: String,
+    val crv: String,
     val x: String,
     val y: String,
 )

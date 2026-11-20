@@ -92,15 +92,11 @@ class LunarSerenity(
      * decrypting a chapter's session data.
      */
     val thumbprint: String
-        get() {
-            return jwk().toJsonString().sha256().base64Url()
-        }
-
-    /** Members in RFC 7638 order, as the thumbprint hashes them. */
-    private fun jwk() = SerenityJwk(crv = "P-256", kty = "EC", x = coordinateX, y = coordinateY)
+        get() = """{"crv":"P-256","kty":"EC","x":"$coordinateX","y":"$coordinateY"}""".sha256().base64Url()
 
     fun proof(method: String, url: HttpUrl): String {
-        val header = SerenityProofHeader(alg = "ES256", typ = "dpop+jwt", jwk = jwk())
+        val jwk = SerenityJwk(kty = "EC", crv = "P-256", x = coordinateX, y = coordinateY)
+        val header = SerenityProofHeader(alg = "ES256", typ = "dpop+jwt", jwk = jwk)
         val payload = SerenityProofPayload(
             htu = "${url.scheme}://${url.host}${url.encodedPath}",
             htm = method.uppercase(),
