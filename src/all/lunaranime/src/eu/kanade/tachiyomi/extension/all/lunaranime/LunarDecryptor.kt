@@ -1,12 +1,12 @@
 package eu.kanade.tachiyomi.extension.all.lunaranime
 
 import android.util.Base64
+import keiyoushi.utils.aesCbc
+import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.sha256
 import org.jsoup.nodes.Document
-import javax.crypto.Cipher
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
+import java.security.GeneralSecurityException
 import kotlin.random.Random
 import kotlin.time.Clock
 
@@ -63,11 +63,8 @@ class LunarDecryptor(private val serenity: LunarSerenity) {
 
         for (material in listOf(base + THUMBPRINT_SEPARATOR + serenity.thumbprint, base)) {
             val plaintext = try {
-                Cipher.getInstance("AES/CBC/PKCS5Padding").run {
-                    init(Cipher.DECRYPT_MODE, SecretKeySpec(material.sha256(), "AES"), IvParameterSpec(ByteArray(16)))
-                    String(doFinal(ciphertext), Charsets.UTF_8)
-                }
-            } catch (_: Exception) {
+                ciphertext.aesDecrypt(aesCbc(material.sha256(), ByteArray(16))).decodeToString()
+            } catch (_: GeneralSecurityException) {
                 continue
             }
 
