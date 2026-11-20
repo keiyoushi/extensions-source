@@ -11,9 +11,13 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
@@ -22,15 +26,17 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import java.util.Locale
 import kotlin.time.Instant
 
 @Source
 abstract class Shinigami : KeiSource() {
-    private val apiUrl = "https://api.shngm.io"
+    private val apiUrl = "https://api.shinigami.io"
+    private val siteDomain get() = baseUrl.toHttpUrl().host.substringAfter(".")
 
     private val apiHeaders: Headers
         get() = headersBuilder()
-            .add("Accept", "application/json")
+            .set("Accept", "application/json")
             .add("DNT", "1")
             .add("Sec-GPC", "1")
             .build()
@@ -41,8 +47,8 @@ abstract class Shinigami : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$apiUrl/v1/manga/list".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("page_size", "30")
+            .addQueryParameter("offset", ((page - 1) * 30).toString())
+            .addQueryParameter("limit", "30")
             .addQueryParameter("sort", "popularity")
             .build()
 
@@ -54,8 +60,8 @@ abstract class Shinigami : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$apiUrl/v1/manga/list".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("page_size", "30")
+            .addQueryParameter("offset", ((page - 1) * 30).toString())
+            .addQueryParameter("limit", "30")
             .addQueryParameter("sort", "latest")
             .build()
 
@@ -67,11 +73,16 @@ abstract class Shinigami : KeiSource() {
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$apiUrl/v1/manga/list".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("page_size", "30")
+            .addQueryParameter("offset", ((page - 1) * 30).toString())
+            .addQueryParameter("limit", "30")
 
         if (query.isNotEmpty()) {
             url.addQueryParameter("q", query)
+        }
+
+        filters.firstInstanceOrNull<SortFilter>()?.let {
+            url.addQueryParameter("sort", it.sort)
+            url.addQueryParameter("sort_order", it.order)
         }
 
         filters.filterIsInstance<UriFilter>().forEach {
@@ -84,25 +95,16 @@ abstract class Shinigami : KeiSource() {
 
     private fun parseMangaList(response: Response): MangasPage {
         val rootObject = response.parseAs<ShinigamiBrowseDto>()
-        val projectList = rootObject.data.map(::popularMangaFromObject)
-        val hasNextPage = rootObject.meta.totalPage?.let { rootObject.meta.page < it } ?: false
+        val projectList = rootObject.data.map(::mangaFromObject)
+        val hasNextPage = rootObject.meta.hasNext
         return MangasPage(projectList, hasNextPage)
     }
 
-    private fun popularMangaFromObject(obj: ShinigamiBrowseDataDto): SManga = SManga.create().apply {
-        title = obj.title.orEmpty()
+    private fun mangaFromObject(obj: ShinigamiBrowseDataDto): SManga = SManga.create().apply {
+        title = obj.title
         thumbnail_url = obj.thumbnail
-        url = obj.mangaId.orEmpty()
+        url = obj.mangaId
     }
-
-    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
-        SortFilter(),
-        SortOrderFilter(),
-        StatusFilter(),
-        FormatFilter(),
-        TypeFilter(),
-        GenreFilter(),
-    )
 
     // ====================== Manga Details & Chapters ======================
 
@@ -111,7 +113,7 @@ abstract class Shinigami : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter/${chapter.url}"
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != "shinigami.asia" && !url.host.endsWith(".shinigami.asia")) return null
+        if (url.host != siteDomain && !url.host.endsWith(".$siteDomain")) return null
         val firstSegment = url.pathSegments.firstOrNull()
         if (firstSegment != "series") return null
         val id = url.pathSegments.getOrNull(1)?.takeIf { it.isNotBlank() } ?: return null
@@ -119,7 +121,7 @@ abstract class Shinigami : KeiSource() {
         val manga = SManga.create().apply {
             this.url = id
         }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun fetchMangaUpdate(
@@ -161,17 +163,26 @@ abstract class Shinigami : KeiSource() {
             author = mangaDetails.taxonomy["Author"]?.joinToString { it.name }.orEmpty()
             artist = mangaDetails.taxonomy["Artist"]?.joinToString { it.name }.orEmpty()
             status = mangaDetails.status.toStatus()
-            description = buildString {
-                append(mangaDetails.description)
-                mangaDetails.altTitle?.takeIf { it.isNotBlank() }?.let {
-                    if (isNotEmpty()) append("\n\n")
-                    append("Alternative Title: ").append(it)
-                }
-            }
+            val format = mangaDetails.taxonomy["Format"]?.joinToString { it.name }
+            description = MarkdownDescription.Builder()
+                .description(mangaDetails.description)
+                .rating(
+                    mangaDetails.weightedScore
+                        ?.takeIf { it > 0 }
+                        ?.let { String.format(Locale.US, "%.1f", it).toDouble() },
+                    votes = mangaDetails.ratingCount?.takeIf { it > 0 },
+                )
+                .field("Bookmark", mangaDetails.bookmarkCount?.let(::compactCount))
+                .field("Views", mangaDetails.viewCount?.let(::compactCount))
+                .info(format)
+                .altTitles(
+                    mangaDetails.altTitle?.split("|").orEmpty(),
+                    label = "Alternative Title(s)",
+                )
+                .build()
 
             val genres = mangaDetails.taxonomy["Genre"]?.joinToString { it.name }.orEmpty()
-            val type = mangaDetails.taxonomy["Format"]?.joinToString { it.name }.orEmpty()
-            genre = listOf(genres, type).filter { it.isNotBlank() }.joinToString()
+            genre = listOf(genres, format.orEmpty()).filter { it.isNotBlank() }.joinToString()
         }
     }
 
@@ -183,9 +194,22 @@ abstract class Shinigami : KeiSource() {
     }
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
-        val response = client.get("$apiUrl/v1/chapter/${manga.url}/list?page_size=3000", apiHeaders, Fetch.XHR)
-        val result = response.parseAs<ShinigamiChapterListDto>()
-        return result.chapterList.map(::chapterFromObject)
+        val chapters = mutableListOf<SChapter>()
+        var cursor: String? = null
+
+        while (true) {
+            val url = "$apiUrl/v1/chapter/${manga.url}/list".toHttpUrl().newBuilder()
+                .apply { cursor?.let { addQueryParameter("cursor", it) } }
+                .build()
+
+            val result = client.get(url, apiHeaders, Fetch.XHR).parseAs<ShinigamiChapterListDto>()
+            chapters.addAll(result.chapterList.map(::chapterFromObject))
+
+            cursor = result.meta.nextCursor?.takeIf { it.isNotBlank() }
+            if (!result.meta.hasNext || cursor == null) break
+        }
+
+        return chapters
     }
 
     private fun chapterFromObject(obj: ShinigamiChapterListDataDto): SChapter = SChapter.create().apply {
@@ -222,4 +246,49 @@ abstract class Shinigami : KeiSource() {
             .get()
             .build()
     }
+
+    // ====================== Filters ======================
+
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement = coroutineScope {
+        suspend fun fetchTaxonomy(type: String): TaxonomyListDto = client.get(
+            "$apiUrl/v1/taxonomy/list?type=$type&limit=100&offset=0",
+            apiHeaders,
+            Fetch.XHR,
+        ).parseAs<TaxonomyListDto>()
+
+        val (genres, themes) = listOf(
+            async { fetchTaxonomy("genre") },
+            async { fetchTaxonomy("theme") },
+        ).awaitAll()
+
+        FilterDataDto(
+            genres = genres.data,
+            themes = themes.data,
+        ).toJsonElement()
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val filterData = data?.parseAs<FilterDataDto>() ?: FilterDataDto()
+        fun terms(list: List<TaxonomyTermDto>): Array<Pair<String, String>> = list.map { it.name to it.slug }.toTypedArray()
+
+        return FilterList(
+            SortFilter(),
+            FormatFilter(),
+            TypeFilter(),
+            StatusFilter(),
+            GenreFilter(terms(filterData.genres)),
+            ThemeFilter(terms(filterData.themes)),
+            SubFormatFilter(),
+            ChapterRangeFilter(),
+        )
+    }
+}
+
+private fun compactCount(value: Long): String = when {
+    value < 1_000 -> value.toString()
+    value < 1_000_000 -> String.format(Locale.US, "%.1f", value / 1e3) + "K"
+    value < 1_000_000_000 -> String.format(Locale.US, "%.1f", value / 1e6) + "M"
+    else -> String.format(Locale.US, "%.1f", value / 1e9) + "B"
 }
