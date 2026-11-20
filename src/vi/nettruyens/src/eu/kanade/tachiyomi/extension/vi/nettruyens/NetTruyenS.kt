@@ -89,15 +89,10 @@ abstract class NetTruyenS : WPComics() {
             val chapterId = CHAPTER_ID_REGEX.find(document.html())?.groupValues?.get(1)
                 ?: return emptyList()
 
-            val ajaxHeaders = headers.newBuilder()
-                .add("X-Requested-With", "XMLHttpRequest")
-                .set("Referer", chapterUrl)
-                .build()
-
             val html = client.post(
                 "$baseUrl/ajax/image/list/chap/$chapterId?cache=0",
-                ajaxHeaders,
-                Fetch.DOCUMENT,
+                headersBuilder().set("X-Requested-With", "XMLHttpRequest").build(),
+                Fetch.XHR.from(chapterUrl),
                 FormBody.Builder().build(),
             ).parseAs<AjaxImageListDto>().html
             Jsoup.parseBodyFragment(html, baseUrl).select(pageListSelector)
