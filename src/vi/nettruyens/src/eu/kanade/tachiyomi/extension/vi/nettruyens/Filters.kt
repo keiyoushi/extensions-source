@@ -22,14 +22,6 @@ class MinChapterFilter :
     fun toValue() = MIN_CHAPTER_LIST[state].second
 }
 
-class SortFilter :
-    Filter.Select<String>(
-        "Sắp xếp",
-        SORT_LIST.map { it.first }.toTypedArray(),
-    ) {
-    fun toValue() = SORT_LIST[state].second
-}
-
 private val GENDER_LIST = listOf(
     "Tất cả" to "All",
     "Con trai" to "Boy",
@@ -48,20 +40,6 @@ private val MIN_CHAPTER_LIST = listOf(
     ">= 300 chapter" to "300",
     ">= 400 chapter" to "400",
     ">= 500 chapter" to "500",
-)
-
-private val SORT_LIST = listOf(
-    "Mới cập nhật" to "latest-updated",
-    "Xem nhiều nhất" to "views",
-    "Xem nhiều nhất tháng" to "views_month",
-    "Xem nhiều nhất tuần" to "views_week",
-    "Xem nhiều nhất ngày" to "views_day",
-    "Đánh giá cao" to "score",
-    "Từ A-Z" to "az",
-    "Từ Z-A" to "za",
-    "Số chương nhiều nhất" to "chapters",
-    "Mới nhất" to "new",
-    "Cũ nhất" to "old",
 )
 
 fun getGenreList() = listOf(

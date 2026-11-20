@@ -32,6 +32,8 @@ abstract class LuotTruyen : WPComics() {
 
     override val searchPath = "tim-truyen-nang-cao"
 
+    override fun getSortList() = netTruyenSortList()
+
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(
         client.get("$baseUrl/tim-truyen?status=-1&sort=10&page=$page", Fetch.DOCUMENT),
         popularMangaSelector(),
@@ -124,32 +126,6 @@ abstract class LuotTruyen : WPComics() {
             val value = input.attrOrNull("value") ?: return@mapNotNull null
             Pair(value, name)
         }.distinctBy { it.first }
-
-    override fun getFilterList(genres: List<Pair<String?, String>>): FilterList = FilterList(
-        buildList {
-            if (genres.isNotEmpty()) {
-                add(GenreFilter(intl["GENRE"], genres))
-            }
-            add(SortFilter())
-            add(StatusFilter(intl["STATUS"], getStatusList()))
-        },
-    )
-
-    private class SortFilter :
-        UriPartFilter(
-            "Sắp xếp",
-            listOf(
-                Pair("0", "Mới cập nhật"),
-                Pair("15", "Truyện mới"),
-                Pair("10", "Top all"),
-                Pair("11", "Top tháng"),
-                Pair("12", "Top tuần"),
-                Pair("13", "Top ngày"),
-                Pair("20", "Theo dõi"),
-                Pair("25", "Bình luận"),
-                Pair("30", "Số chapter"),
-            ),
-        )
 
     private fun Response.asLoggedInJsoup(): Document {
         if (request.url.encodedPath == "/Account/Login") {

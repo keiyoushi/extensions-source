@@ -98,12 +98,12 @@ abstract class WPComics : KeiSource() {
                 when (filter) {
                     is GenreFilter -> filter.toUriPart()?.let { addPathSegment(it) }
                     is StatusFilter -> filter.toUriPart()?.let { addQueryParameter("status", it) }
+                    is SortFilter -> filter.toUriPart()?.let { addQueryParameter("sort", it) }
                     else -> {}
                 }
             }
             addQueryParameter(queryParam, query)
             addQueryParameter("page", page.toString())
-            addQueryParameter("sort", "0")
         }.build()
 
         return parseMangaPage(client.get(url, Fetch.DOCUMENT), searchMangaSelector(), ::searchMangaFromElement)
@@ -293,10 +293,28 @@ abstract class WPComics : KeiSource() {
 
     protected class GenreFilter(name: String, pairs: List<Pair<String?, String>>) : UriPartFilter(name, pairs)
 
+    protected class SortFilter(name: String, pairs: List<Pair<String?, String>>) : UriPartFilter(name, pairs)
+
     protected open fun getStatusList(): List<Pair<String?, String>> = listOf(
         Pair(null, intl["STATUS_ALL"]),
         Pair("1", intl["STATUS_ONGOING"]),
         Pair("2", intl["STATUS_COMPLETED"]),
+    )
+
+    protected open fun getSortList(): List<Pair<String?, String>> = emptyList()
+
+    // sort=0 is "Top all" on these sites, the latest updated list is no sort at all
+    protected fun netTruyenSortList(): List<Pair<String?, String>> = listOf(
+        Pair(null, intl["SORT_UPDATED"]),
+        Pair("15", intl["SORT_NEW"]),
+        Pair("10", intl["SORT_TOP_ALL"]),
+        Pair("11", intl["SORT_TOP_MONTH"]),
+        Pair("12", intl["SORT_TOP_WEEK"]),
+        Pair("13", intl["SORT_TOP_DAY"]),
+        Pair("19", intl["SORT_TOP_FOLLOW"]),
+        Pair("20", intl["SORT_FOLLOW"]),
+        Pair("25", intl["SORT_COMMENT"]),
+        Pair("30", intl["SORT_CHAPTER"]),
     )
 
     override val supportsFilterFetching = true
@@ -332,6 +350,7 @@ abstract class WPComics : KeiSource() {
     protected open fun getFilterList(genres: List<Pair<String?, String>>): FilterList = FilterList(
         buildList {
             add(StatusFilter(intl["STATUS"], getStatusList()))
+            getSortList().takeIf { it.isNotEmpty() }?.let { add(SortFilter(intl["SORT"], it)) }
             if (genres.isNotEmpty()) {
                 add(GenreFilter(intl["GENRE"], genres))
             }

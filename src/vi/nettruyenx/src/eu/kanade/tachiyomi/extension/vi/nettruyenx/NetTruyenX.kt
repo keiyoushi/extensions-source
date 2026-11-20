@@ -9,6 +9,7 @@ import org.jsoup.nodes.Document
 abstract class NetTruyenX : WPComics() {
     override val popularPath = "truyen-tranh-hot"
     override val useChapterListApi = true
+    override fun getSortList() = netTruyenSortList()
 
     // Details
     override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {

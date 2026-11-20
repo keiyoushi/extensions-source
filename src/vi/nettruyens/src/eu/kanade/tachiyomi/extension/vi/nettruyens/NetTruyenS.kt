@@ -74,8 +74,8 @@ abstract class NetTruyenS : WPComics() {
         filters.firstInstanceOrNull<MinChapterFilter>()?.let {
             url.addQueryParameter("chapter_count", it.toValue())
         }
-        filters.firstInstanceOrNull<SortFilter>()?.let {
-            url.addQueryParameter("sort", it.toValue())
+        filters.firstInstanceOrNull<SortFilter>()?.toUriPart()?.let {
+            url.addQueryParameter("sort", it)
         }
 
         return parseMangaList(url.build())
@@ -114,13 +114,27 @@ abstract class NetTruyenS : WPComics() {
         Pair("canceled", "Đã hủy"),
     )
 
+    override fun getSortList(): List<Pair<String?, String>> = listOf(
+        Pair("latest-updated", "Mới cập nhật"),
+        Pair("views", "Xem nhiều nhất"),
+        Pair("views_month", "Xem nhiều nhất tháng"),
+        Pair("views_week", "Xem nhiều nhất tuần"),
+        Pair("views_day", "Xem nhiều nhất ngày"),
+        Pair("score", "Đánh giá cao"),
+        Pair("az", "Từ A-Z"),
+        Pair("za", "Từ Z-A"),
+        Pair("chapters", "Số chương nhiều nhất"),
+        Pair("new", "Mới nhất"),
+        Pair("old", "Cũ nhất"),
+    )
+
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         Filter.Header("Bộ lọc không dùng được khi tìm kiếm bằng từ khóa"),
         GenreGroupFilter(getGenreList()),
         StatusFilter(intl["STATUS"], getStatusList()),
         GenderFilter(),
         MinChapterFilter(),
-        SortFilter(),
+        SortFilter(intl["SORT"], getSortList()),
     )
 
     companion object {

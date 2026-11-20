@@ -28,6 +28,8 @@ abstract class NetTruyenViet : WPComics() {
 
     override val useChapterListApi = true
 
+    override fun getSortList() = netTruyenSortList()
+
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaPage(
         client.get("$baseUrl/$searchPath?sort=10&page=$page", Fetch.DOCUMENT),
         popularMangaSelector(),
@@ -89,7 +91,7 @@ abstract class NetTruyenViet : WPComics() {
                 add(GenreFilter(intl["GENRE"], genres))
             }
             add(WebsiteFilter())
-            add(SortFilter())
+            add(SortFilter(intl["SORT"], getSortList()))
             add(StatusFilter(intl["STATUS"], getStatusList()))
         },
     )
@@ -115,23 +117,6 @@ abstract class NetTruyenViet : WPComics() {
                 Pair("/tag/soaicacomic", "Soái Ca Comic"),
                 Pair("/tag/vlogtruyen", "VlogTruyen"),
                 Pair("/tag/toptruyen", "TopTruyện"),
-            ),
-        )
-
-    private class SortFilter :
-        UriPartFilter(
-            "Sắp xếp",
-            listOf(
-                Pair(null, "Ngày cập nhật"),
-                Pair("15", "Truyện mới"),
-                Pair("10", "Top all"),
-                Pair("11", "Top tháng"),
-                Pair("12", "Top tuần"),
-                Pair("13", "Top ngày"),
-                Pair("20", "Theo dõi"),
-                Pair("25", "Bình luận"),
-                Pair("30", "Số chapter"),
-                Pair("19", "Top Follow"),
             ),
         )
 
