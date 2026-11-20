@@ -24,6 +24,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.jsoup.nodes.Document
 import java.io.ByteArrayInputStream
 import java.io.IOException
@@ -184,6 +185,13 @@ abstract class Kumanga : KeiSource() {
             val image = url.queryParameter("src")?.takeIf(HEX_REGEX::matches)?.decodeHex()?.decodeToString()?.toHttpUrlOrNull() ?: url
             Page(index, imageUrl = image.toString())
         }
+    }
+
+    override fun getImageRequest(page: Page): Request {
+        val url = page.imageUrl!!.toHttpUrl()
+        if (!url.host.endsWith(".googleusercontent.com")) return super.getImageRequest(page)
+        // googleusercontent answers 429 to the site's Referer
+        return Request.Builder().url(url).headers(headers.newBuilder().removeAll("Referer").build()).build()
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(
