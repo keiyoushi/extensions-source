@@ -3,33 +3,19 @@ package eu.kanade.tachiyomi.extension.vi.nhattruyen
 import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
-import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
-import keiyoushi.utils.asJsoup
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParseDateTime
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Response
 import org.jsoup.nodes.Document
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 @Source
 abstract class NhatTruyen : WPComics() {
 
-    override val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yy", Locale.getDefault())
-
-    override val gmtOffset = null
-
-    override val searchPath = "tim-truyen"
-
     override val popularPath = "truyen-tranh-hot"
+
+    override val useChapterListApi = true
 
     /**
      * NetTruyen/NhatTruyen redirect back to catalog page if searching query is not found.
@@ -83,42 +69,4 @@ abstract class NhatTruyen : WPComics() {
             }
         },
     )
-
-    override suspend fun mangaUpdateParse(response: Response, manga: SManga, chapters: List<SChapter>): SMangaUpdate {
-        val slug = manga.url.substringAfterLast("/") // slug
-
-        val updatedManga = mangaDetailsParse(response.asJsoup())
-
-        val updatedChapters = run {
-            val url = baseUrl.toHttpUrl().newBuilder()
-                .addPathSegment("Comic/Services/ComicService.asmx/ChapterList")
-                .addQueryParameter("slug", slug)
-                .build()
-            val response = client.get(url, Fetch.XHR.from(manga.url))
-            val json = response.parseAs<ChapterDTO>()
-            json.data.map {
-                SChapter.create().apply {
-                    setUrlWithoutDomain("$baseUrl/truyen-tranh/$slug/${it.chapterSlug}")
-                    name = it.chapterName
-                    date_upload = dateFormatChapter.tryParseDateTime(it.updatedAt)
-                }
-            }
-        }
-
-        return SMangaUpdate(updatedManga, updatedChapters)
-    }
-
-    @Serializable
-    class ChapterDTO(
-        val data: List<Data> = emptyList(),
-    )
-
-    @Serializable
-    class Data(
-        @SerialName("chapter_name") val chapterName: String,
-        @SerialName("chapter_slug") val chapterSlug: String,
-        @SerialName("updated_at") val updatedAt: String,
-    )
-
-    private val dateFormatChapter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)
 }

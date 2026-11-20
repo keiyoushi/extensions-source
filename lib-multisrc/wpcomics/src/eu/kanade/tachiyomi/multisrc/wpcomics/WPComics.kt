@@ -18,6 +18,7 @@ import keiyoushi.utils.tryParseDate
 import keiyoushi.utils.tryParseDateTime
 import keiyoushi.utils.tryParseZonedDateTime
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -129,13 +130,14 @@ abstract class WPComics : KeiSource() {
 
     protected open suspend fun mangaUpdateParse(response: Response, manga: SManga, chapters: List<SChapter>): SMangaUpdate {
         val document = response.asJsoup()
-        val updatedManga = mangaDetailsParse(document)
-        val updatedChapters = document.select(chapterListSelector()).map(::chapterFromElement)
+        val updatedManga = mangaDetailsParse(document).apply { url = manga.url }
+        val updatedChapters = chapterListParse(document, manga)
 
         return SMangaUpdate(updatedManga, updatedChapters)
     }
 
     protected open fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        document.selectFirst("h1.title-detail")?.let { title = it.text() }
         document.selectFirst("article#item-detail")?.let { info ->
             author = info.select("li.author p.col-xs-8").text()
             status = info.select("li.status p.col-xs-8").text().toStatus()
@@ -161,6 +163,29 @@ abstract class WPComics : KeiSource() {
     }
 
     // ============================== Chapters ======================================
+
+    protected open val useChapterListApi = false
+
+    protected open suspend fun chapterListParse(document: Document, manga: SManga): List<SChapter> = if (useChapterListApi) {
+        fetchChapterListApi(manga)
+    } else {
+        document.select(chapterListSelector()).map(::chapterFromElement)
+    }
+
+    protected open fun chapterListApiUrl(manga: SManga): HttpUrl = "$baseUrl/Comic/Services/ComicService.asmx/ChapterList".toHttpUrl().newBuilder()
+        .addQueryParameter("slug", manga.url.substringAfterLast("/"))
+        .build()
+
+    protected open fun chapterListApiChapterUrl(manga: SManga, chapter: ChapterDto): String = "/truyen-tranh/${manga.url.substringAfterLast("/")}/${chapter.chapterSlug}"
+
+    private suspend fun fetchChapterListApi(manga: SManga): List<SChapter> {
+        val headers = headersBuilder().set("X-Requested-With", "XMLHttpRequest").build()
+        return client.get(chapterListApiUrl(manga), headers, Fetch.XHR.from(getMangaUrl(manga)))
+            .parseAs<ChapterListDto>().data
+            .map { it.toSChapter(chapterListApiChapterUrl(manga, it), chapterListApiDateFormat, dateZone) }
+    }
+
+    private val chapterListApiDateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
 
     protected open fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         element.select("a").let {
