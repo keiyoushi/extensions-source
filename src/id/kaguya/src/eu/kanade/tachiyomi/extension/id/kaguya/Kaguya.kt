@@ -33,15 +33,9 @@ abstract class Kaguya : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(ScrambleInterceptor())
 
-    // ============================== Popular ==============================
-
     override suspend fun getPopularManga(page: Int) = getComicList(comicsUrl(page).addQueryParameter("sort", "popular").build())
 
-    // ============================== Latest ===============================
-
     override suspend fun getLatestUpdates(page: Int) = getComicList(comicsUrl(page).addQueryParameter("sort", "latest").build())
-
-    // ============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = comicsUrl(page).apply {
@@ -68,8 +62,6 @@ abstract class Kaguya : KeiSource() {
         return MangasPage(dto.data.map(ComicDto::toSManga), dto.hasNextPage)
     }
 
-    // =========================== Manga Update ============================
-
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -82,8 +74,6 @@ abstract class Kaguya : KeiSource() {
     }
 
     private suspend fun getComic(slug: String) = client.get("$API_URL/comics/$slug", Fetch.XHR).parseAs<ResponseDto<ComicDto>>().data
-
-    // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.url.substringAfterLast('/')
@@ -113,8 +103,6 @@ abstract class Kaguya : KeiSource() {
         val (iv, ciphertext, tag) = seed.split('.').map(String::decodeHex)
         return (ciphertext + tag).aesDecrypt(aesGcm("$ticket:$chapterId".sha256(), iv)).decodeToString()
     }
-
-    // ============================== Filters ==============================
 
     override suspend fun fetchFilterData(): JsonElement = client.get("$API_URL/genres", Fetch.XHR)
         .parseAs<ResponseDto<List<GenreDto>>>()
