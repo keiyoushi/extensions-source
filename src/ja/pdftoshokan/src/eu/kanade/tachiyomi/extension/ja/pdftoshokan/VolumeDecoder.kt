@@ -54,7 +54,7 @@ internal class VolumeDecoder(private val baseUrl: String, private val userAgent:
         val bridge = List(12) { ('a'..'z').random() }.joinToString("")
         webMessageBridge(bridge, setOf(baseUrl)) { message ->
             if (message == MISSING) {
-                reject(IOException("Volume not found"))
+                reject(VolumeMissing())
             } else {
                 val (x, y) = message.split(',').map(String::toFloat)
                 tap(x, y)

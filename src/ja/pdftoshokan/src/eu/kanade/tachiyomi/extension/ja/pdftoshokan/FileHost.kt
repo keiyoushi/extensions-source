@@ -5,6 +5,7 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
@@ -26,11 +27,16 @@ internal class FileHost(
     private val siteUrl: String,
     private val preferences: SharedPreferences,
 ) {
-    suspend fun download(url: HttpUrl, out: OutputStream) {
+    /** Throws while the host is rate limiting, so nothing is fetched (or decoded for it) in vain. */
+    fun checkNotPaused() {
         val pausedUntil = preferences.getLong(PAUSED_UNTIL_KEY, 0)
         if (System.currentTimeMillis() < pausedUntil) throw rateLimited(pausedUntil)
+    }
 
-        client.get(url, headers, Fetch.XHR.from(siteUrl), ensureSuccess = false).use { response ->
+    suspend fun download(url: HttpUrl, out: OutputStream) {
+        checkNotPaused()
+        // A volume is far too big for the HTTP cache, and is stored by the caller anyway
+        client.get(url, headers, Fetch.XHR.from(siteUrl), NO_STORE, ensureSuccess = false).use { response ->
             when (response.code) {
                 200 -> withContext(Dispatchers.IO) { response.body.byteStream().use { it.copyTo(out) } }
                 // The host also answers a file that isn't there with 403, only without Cloudflare's block page
@@ -54,6 +60,7 @@ internal class FileHost(
     private companion object {
         const val PAUSED_UNTIL_KEY = "rate_limited_until"
         val DEFAULT_PAUSE: Duration = 1.hours
+        val NO_STORE: CacheControl = CacheControl.Builder().noStore().build()
     }
 }
 

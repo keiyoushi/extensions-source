@@ -1,11 +1,11 @@
 package eu.kanade.tachiyomi.extension.ja.pdftoshokan
 
-import keiyoushi.utils.inflate
 import keiyoushi.utils.md5
-import keiyoushi.utils.readIntBigEndian
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -19,18 +19,13 @@ import java.io.IOException
 import java.io.OutputStream
 import java.io.RandomAccessFile
 import java.util.concurrent.ConcurrentHashMap
-
-class Slice(val offset: Long, val length: Int)
-
-/** Each page is a list of image slices; legacy PDF pages are split into strips stacked top to bottom. */
-class VolumeIndex(val isAvif: Boolean, val pages: List<List<Slice>>)
+import kotlin.time.Duration.Companion.minutes
 
 /**
- * Volumes are served as one big file, either a custom container of AVIF images
- * ("CUSTOM_A" magic) or an older image-only PDF (sometimes with its header stripped).
- * The whole file is downloaded once and individual pages are sliced out of it.
+ * Volumes downloaded into [dir], which it owns, up to 300 MB. A volume is one file, known by an address of the
+ * caller's choosing, and its pages are read out of it as `<address>#<page index>`, even while it's still downloading.
  */
-class VolumeStore(private val dir: File) {
+internal class VolumeStore(private val dir: File) {
 
     private val locks = ConcurrentHashMap<String, Any>()
 
@@ -39,7 +34,7 @@ class VolumeStore(private val dir: File) {
     }
 
     /** A volume still downloading into [tmp]; [size] is how far it has got, or [DONE] / [FAILED]. */
-    private class Partial(val tmp: File) {
+    internal class Partial(val tmp: File) {
         val size = MutableStateFlow(0L)
 
         @Volatile
@@ -55,91 +50,115 @@ class VolumeStore(private val dir: File) {
 
     private val partials = ConcurrentHashMap<String, Partial>()
 
-    /** Whether the volume is fully downloaded. */
-    fun contains(url: HttpUrl) = File(dir, key(url)).exists()
+    // Why a volume's last download failed, for pages asked for after it's gone
+    private val failures = ConcurrentHashMap<String, Throwable>()
 
-    /** Starts downloading the volume in [scope], unless it's cached or already on its way. */
-    fun download(url: HttpUrl, scope: CoroutineScope, write: suspend (OutputStream) -> Unit) {
-        val key = key(url)
-        val file = File(dir, key)
-        if (file.exists()) return
+    /** A volume stored or on its way. */
+    inner class Volume internal constructor(private val address: HttpUrl, private val partial: Partial?) {
+
+        /** Waits until the first bytes are in, rethrowing the download's failure. */
+        suspend fun awaitStarted() {
+            partial?.await(1)
+        }
+
+        /** The addresses of the pages, served by [PageInterceptor]; for a PDF, once it's all in. */
+        suspend fun pageUrls(): List<String> = List(pageCount()) { "$address#$it" }
+
+        /** From the header of an AVIF volume as soon as it's in, for a PDF once it's all there. */
+        private suspend fun pageCount(): Int {
+            if (partial != null) {
+                val streamed = try {
+                    withContext(Dispatchers.IO) {
+                        RandomAccessFile(partial.tmp, "r").use { VolumeFormat.streamedPageCount(it, partial::await) }
+                    }
+                } catch (_: FileNotFoundException) {
+                    null // finished in the meantime
+                }
+                streamed?.let { return it }
+                partial.await(DONE)
+            }
+            return withContext(Dispatchers.IO) { index(address).second.pages.size }
+        }
+    }
+
+    init {
+        // Downloads cut short by the app closing; none can be running yet
+        dir.listFiles { file -> file.name.endsWith(".tmp") }?.forEach(File::delete)
+    }
+
+    /** The volume, when it's stored or on its way. */
+    fun find(address: HttpUrl): Volume? {
+        val key = key(address)
+        partials[key]?.let { return Volume(address, it) }
+        return if (File(dir, key).exists()) Volume(address, null) else null
+    }
+
+    /** Starts downloading the volume in [scope], unless it's stored or already on its way. */
+    fun download(address: HttpUrl, scope: CoroutineScope, write: suspend (OutputStream) -> Unit): Volume {
+        find(address)?.let { return it }
+        val key = key(address)
+        val stored = File(dir, key)
         val partial = Partial(File(dir, "$key.tmp"))
-        if (partials.putIfAbsent(key, partial) != null) return
-        dir.mkdirs()
+        partials.putIfAbsent(key, partial)?.let { return Volume(address, it) }
+        failures.remove(key)
         scope.launch {
             try {
+                dir.mkdirs()
                 Counting(FileOutputStream(partial.tmp), partial.size).use { write(it) }
-                synchronized(locks.getOrPut(key) { Any() }) {
+                synchronized(lock(key)) {
                     synchronized(indexes) { indexes.remove(key) }
-                    if (!partial.tmp.renameTo(file)) throw IOException("Failed to store volume")
+                    if (!partial.tmp.renameTo(stored)) throw IOException("Failed to store volume")
                 }
                 partial.size.value = DONE
-                trim(file)
+                trim(stored)
             } catch (e: Throwable) {
                 partial.tmp.delete()
                 partial.error = e
+                failures[key] = e
                 partial.size.value = FAILED
                 if (e is CancellationException) throw e
             } finally {
                 partials.remove(key, partial)
             }
         }
+        return Volume(address, partial)
     }
 
-    /** The volume's page count: from the header of an AVIF volume as soon as it's in, for a PDF once it's all there. */
-    suspend fun pageCount(url: HttpUrl): Int {
+    /**
+     * The page a `<address>#<page index>` points to, waiting for it while the volume is still downloading unless
+     * [isCanceled]. Null for a URL that isn't a page address.
+     */
+    fun page(url: HttpUrl, isCanceled: () -> Boolean): PageImage? {
+        val page = url.fragment?.toIntOrNull() ?: return null
         partials[key(url)]?.let { partial ->
-            if (partial.await(AVIF_HEADER)) {
-                val head = try {
-                    RandomAccessFile(partial.tmp, "r").use { it.readBytes(0, AVIF_HEADER.toInt()) }
-                } catch (_: FileNotFoundException) {
-                    null // finished in the meantime
-                }
-                if (head != null && head[0] == 'C'.code.toByte()) {
-                    return head.readIntBigEndian(16)
-                }
-                partial.await(DONE)
-            }
-        }
-        return withContext(Dispatchers.IO) { index(url).second.pages.size }
-    }
-
-    /** Whether the page is AVIF, and its image slices; waits for the page if the volume is still downloading. */
-    fun page(url: HttpUrl, page: Int): Pair<Boolean, List<ByteArray>> {
-        partials[key(url)]?.let { partial ->
-            runBlocking { partial.avifPage(page) }?.let { return true to listOf(it) }
+            runBlocking { partial.streamedPage(page, isCanceled) }?.let { return it }
         }
         val (file, index) = index(url)
-        val parts = RandomAccessFile(file, "r").use { raf ->
-            index.pages[page].map { raf.readBytes(it.offset, it.length) }
+        val slices = try {
+            RandomAccessFile(file, "r").use { raf -> index.pages[page].map { raf.readBytes(it.offset, it.length) } }
+        } catch (_: FileNotFoundException) {
+            throw IOException(NOT_STORED) // trimmed just now
         }
-        return index.isAvif to parts
+        return VolumeFormat.page(index, slices)
     }
 
-    /** Walks the AVIF entries as they arrive: each is width, height and length, then the image. */
-    private suspend fun Partial.avifPage(page: Int): ByteArray? = try {
-        if (!await(AVIF_HEADER)) return null
+    private suspend fun Partial.streamedPage(page: Int, isCanceled: () -> Boolean): PageImage? = try {
         // An open file keeps working when the finished download is renamed
         RandomAccessFile(tmp, "r").use { raf ->
-            if (raf.readBytes(0, 1)[0] != 'C'.code.toByte()) return null
-            var entry = AVIF_HEADER
-            repeat(page + 1) { i ->
-                if (!await(entry + 12)) return null
-                val length = raf.readBytes(entry + 8, 4).readIntBigEndian(0)
-                if (i == page) {
-                    if (!await(entry + 12 + length)) return null
-                    return raf.readBytes(entry + 12, length)
+            withContext(Dispatchers.IO) {
+                val read = async { VolumeFormat.streamedPage(raf, page, ::await) }
+                while (!read.isCompleted) {
+                    if (isCanceled()) {
+                        read.cancel()
+                        throw IOException("Canceled")
+                    }
+                    delay(250)
                 }
-                entry += 12 + length
+                read.await()
             }
-            null
         }
     } catch (_: FileNotFoundException) {
         null
-    } catch (e: IOException) {
-        throw e
-    } catch (e: Throwable) {
-        throw IOException(e.message, e)
     }
 
     private class Counting(private val out: OutputStream, private val size: MutableStateFlow<Long>) : OutputStream() {
@@ -153,17 +172,25 @@ class VolumeStore(private val dir: File) {
         override fun close() = out.close()
     }
 
-    fun index(url: HttpUrl): Pair<File, VolumeIndex> {
+    /** The stored file and its index. Reading a volume keeps it from being trimmed for a while. */
+    private fun index(url: HttpUrl): Pair<File, VolumeIndex> {
         val key = key(url)
-        synchronized(locks.getOrPut(key) { Any() }) {
+        synchronized(lock(key)) {
             val file = File(dir, key)
-            if (!file.exists()) throw IOException("Volume is no longer cached, open the chapter again")
+            if (!file.exists()) {
+                throw when (val failure = failures[key]) {
+                    is IOException -> failure
+                    null -> IOException(NOT_STORED)
+                    else -> IOException(failure.message, failure)
+                }
+            }
             file.setLastModified(System.currentTimeMillis())
             synchronized(indexes) { indexes[key] }?.let { return file to it }
 
             val index = try {
-                RandomAccessFile(file, "r").use(::parse)
+                RandomAccessFile(file, "r").use(VolumeFormat::index).also { check(it.pages.isNotEmpty()) { "No pages" } }
             } catch (e: Exception) {
+                // Something other than a volume, such as an error page, would otherwise stay stored as an empty one
                 file.delete()
                 throw IOException("Unsupported volume file", e)
             }
@@ -172,158 +199,27 @@ class VolumeStore(private val dir: File) {
         }
     }
 
+    private fun lock(key: String) = locks.getOrPut(key) { Any() }
+
     private fun key(url: HttpUrl) = url.newBuilder().fragment(null).build().toString().md5().toHexString()
 
+    /** Keeps the cache under its cap, oldest read first, sparing volumes read lately: someone may be reading them. */
     private fun trim(keep: File) {
+        val recent = System.currentTimeMillis() - IN_USE.inWholeMilliseconds
         val files = dir.listFiles()?.filter { it != keep && !it.name.endsWith(".tmp") } ?: return
         var total = files.sumOf { it.length() } + keep.length()
-        for (f in files.sortedBy { it.lastModified() }) {
+        for (f in files.filter { it.lastModified() < recent }.sortedBy { it.lastModified() }) {
             if (total <= MAX_CACHE_BYTES) break
             total -= f.length()
             f.delete()
         }
     }
 
-    private fun parse(raf: RandomAccessFile): VolumeIndex {
-        val head = ByteArray(16)
-        raf.seek(0)
-        raf.readFully(head)
-        return if (head[0] == 'C'.code.toByte()) parseAvif(raf) else parsePdf(raf)
-    }
-
-    private fun parseAvif(raf: RandomAccessFile): VolumeIndex {
-        raf.seek(16)
-        val count = raf.readInt()
-        val pages = List(count) {
-            raf.readInt() // width
-            raf.readInt() // height
-            val length = raf.readInt()
-            val slice = Slice(raf.filePointer, length)
-            raf.seek(raf.filePointer + length)
-            listOf(slice)
-        }
-        return VolumeIndex(isAvif = true, pages)
-    }
-
-    private class PdfObject(val dict: String, val streamOffset: Long, val streamLength: Int)
-
-    private fun parsePdf(raf: RandomAccessFile): VolumeIndex {
-        val objects = HashMap<Int, PdfObject>()
-        val order = ArrayList<Int>()
-        val size = raf.length()
-        var pos = 0L
-
-        while (pos < size) {
-            var window = 4096
-            var text: String
-            var match: MatchResult?
-            var end: Int
-            while (true) {
-                text = raf.readString(pos, window)
-                match = OBJ_REGEX.find(text)
-                end = match?.let { m -> text.indexOfAny(listOf("stream", "endobj"), m.range.last) } ?: -1
-                if (match == null || end >= 0 || pos + window >= size || window >= 1 shl 20) break
-                window *= 4
-            }
-            if (match == null || end < 0) break
-
-            val num = match.groupValues[1].toInt()
-            val bodyStart = match.range.last + 1
-            val dict = text.substring(bodyStart, end)
-            if (text.startsWith("stream", end)) {
-                var dataStart = pos + end + "stream".length
-                if (raf.byteAt(dataStart) == '\r'.code) dataStart++
-                if (raf.byteAt(dataStart) == '\n'.code) dataStart++
-                val length = LENGTH_REGEX.find(dict)?.groupValues?.get(1)?.toInt()
-                    ?: raf.indexOf("endstream", dataStart).let { (it - dataStart).toInt() }
-                objects[num] = PdfObject(dict, dataStart, length)
-                val after = dataStart + length
-                pos = raf.indexOf("endobj", after) + "endobj".length
-            } else {
-                objects[num] = PdfObject(dict, -1, 0)
-                pos += end + "endobj".length
-            }
-            order += num
-        }
-
-        val pageNumbers = objects.values.firstOrNull { PAGES_REGEX.containsMatchIn(it.dict) }
-            ?.let { KIDS_REGEX.find(it.dict) }
-            ?.let { REF_REGEX.findAll(it.groupValues[1]).map { r -> r.groupValues[1].toInt() }.toList() }
-            ?: order.filter { PAGE_REGEX.containsMatchIn(objects[it]!!.dict) }.sorted()
-
-        val pages = pageNumbers.mapNotNull { pageNumber ->
-            val page = objects[pageNumber] ?: return@mapNotNull null
-            val xObjectDict = XOBJECT_REGEX.find(page.dict)?.let { m ->
-                m.groupValues[2].ifEmpty { objects[m.groupValues[3].toInt()]?.dict.orEmpty() }
-            }.orEmpty()
-            val images = NAMED_REF_REGEX.findAll(xObjectDict)
-                .associate { it.groupValues[1] to it.groupValues[2].toInt() }
-                .filterValues { objects[it]?.dict?.contains("/Image") == true }
-
-            val drawOrder = CONTENTS_REGEX.find(page.dict)
-                ?.let { objects[it.groupValues[1].toInt()] }
-                ?.let { content ->
-                    val bytes = raf.readBytes(content.streamOffset, content.streamLength)
-                    val ops = if (content.dict.contains("/FlateDecode")) bytes.inflate() else bytes
-                    DRAW_REGEX.findAll(String(ops, Charsets.ISO_8859_1))
-                        .map { it.groupValues[2] to it.groupValues[1].toFloat() }
-                        .sortedByDescending { it.second } // PDF y axis points up
-                        .mapNotNull { images[it.first] }
-                        .toList()
-                }
-                ?.takeIf { it.isNotEmpty() }
-                ?: images.values.toList()
-
-            drawOrder.map { objects[it]!!.let { img -> Slice(img.streamOffset, img.streamLength) } }
-                .takeIf { it.isNotEmpty() }
-        }
-        return VolumeIndex(isAvif = false, pages)
-    }
-
-    private fun RandomAccessFile.readBytes(offset: Long, length: Int): ByteArray {
-        seek(offset)
-        return ByteArray(length).also { readFully(it) }
-    }
-
-    private fun RandomAccessFile.readString(offset: Long, max: Int): String {
-        val length = minOf(max.toLong(), length() - offset).toInt()
-        return String(readBytes(offset, length), Charsets.ISO_8859_1)
-    }
-
-    private fun RandomAccessFile.byteAt(offset: Long): Int {
-        seek(offset)
-        return read()
-    }
-
-    private fun RandomAccessFile.indexOf(token: String, from: Long): Long {
-        var pos = from
-        while (pos < length()) {
-            val chunk = readString(pos, 65536)
-            val i = chunk.indexOf(token)
-            if (i >= 0) return pos + i
-            if (chunk.length < 65536) break
-            pos += chunk.length - token.length
-        }
-        throw IOException("Missing $token")
-    }
-
-    companion object {
-        private const val MAX_CACHE_BYTES = 300L * 1024 * 1024
-        private const val AVIF_HEADER = 20L
-        private const val DONE = Long.MAX_VALUE
-        private const val FAILED = -1L
-
-        private val OBJ_REGEX = Regex("""(\d+)\s+0\s+obj""")
-        private val LENGTH_REGEX = Regex("""/Length\s+(\d+)\b(?!\s+\d+\s+R)""")
-        private val PAGES_REGEX = Regex("""/Type\s*/Pages\b""")
-        private val PAGE_REGEX = Regex("""/Type\s*/Page(?![a-zA-Z])""")
-        private val KIDS_REGEX = Regex("""/Kids\s*\[([^\]]*)]""")
-        private val REF_REGEX = Regex("""(\d+)\s+0\s+R""")
-        private val XOBJECT_REGEX = Regex("""/XObject\s*(<<(.*?)>>|(\d+)\s+0\s+R)""", RegexOption.DOT_MATCHES_ALL)
-        private val NAMED_REF_REGEX = Regex("""/([^\s/<>\[\]]+)\s+(\d+)\s+0\s+R""")
-        private val CONTENTS_REGEX = Regex("""/Contents\s+(\d+)\s+0\s+R""")
-        private val DRAW_REGEX = Regex(
-            """[-\d.]+\s+[-\d.]+\s+[-\d.]+\s+[-\d.]+\s+[-\d.]+\s+([-\d.]+)\s+cm\s*/([^\s/]+)\s+Do""",
-        )
+    private companion object {
+        const val MAX_CACHE_BYTES = 300L * 1024 * 1024
+        val IN_USE = 10.minutes
+        const val DONE = Long.MAX_VALUE
+        const val FAILED = -1L
+        const val NOT_STORED = "Volume is no longer cached, open the chapter again"
     }
 }
