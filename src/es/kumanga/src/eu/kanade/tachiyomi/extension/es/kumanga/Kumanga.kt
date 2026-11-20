@@ -13,6 +13,7 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
@@ -75,13 +76,13 @@ abstract class Kumanga : KeiSource() {
         val segment = url.pathSegments.getOrNull(1) ?: return null
         val mangaUrl = when {
             segment == "c" || segment == "leer" ->
-                client.get(url, Fetch.DOCUMENT).asJsoup().selectFirst("a[href~=manga/\\d+/]")?.absUrl("href") ?: return null
-            segment.toIntOrNull() != null -> "$baseUrl/manga/$segment"
+                client.get(url, Fetch.DOCUMENT).asJsoup().selectFirst("a[href~=manga/\\d+/]")?.absUrl("href")?.toHttpUrl() ?: return null
+            segment.toIntOrNull() != null -> baseUrl.toHttpUrl().newBuilder().addPathSegment("manga").addPathSegment(segment).build()
             else -> return null
         }
         val document = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
         return parseDetails(document).apply {
-            setUrlWithoutDomain(document.selectFirst("meta[property=og:url]")!!.attr("content"))
+            setUrlWithoutDomain(document.selectFirst("meta[property=og:url]")!!.absUrl("content"))
             initialized = true
         }
     }
@@ -100,13 +101,10 @@ abstract class Kumanga : KeiSource() {
     private fun parseDetails(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1.media-name__main")!!.ownText()
         thumbnail_url = document.selectFirst("img.lazy-loaded")?.absUrl("data-src")
-        description = buildString {
-            document.selectFirst("#idesc")?.textOrNull()?.takeIf { it != "Sin descripción." }?.let(::append)
-            document.selectFirst(".media-name__alt")?.textOrNull()?.let {
-                if (isNotEmpty()) append("\n\n")
-                append("Nombres alternativos: $it")
-            }
-        }.ifEmpty { null }
+        description = MarkdownDescription.Builder()
+            .description(document.selectFirst("#idesc")?.textOrNull()?.takeIf { it != "Sin descripción." })
+            .altTitles(document.selectFirst(".media-name__alt")?.text()?.split(", ").orEmpty(), "Nombres alternativos")
+            .build()
         genre = (listOfNotNull(document.infoValue("Tipo")) + document.select(".media-cats a").map { it.text() })
             .joinToString().ifEmpty { null }
         status = when (document.infoValue("Estado")?.lowercase()) {
@@ -144,7 +142,7 @@ abstract class Kumanga : KeiSource() {
             val upload = redirectClient.get(getChapterUrl(chapter), Fetch.DOCUMENT, ensureSuccess = false).use { response ->
                 response.header("Location") ?: run {
                     if (!response.isSuccessful) throw HttpException(response.code)
-                    response.asJsoup().selectFirst("a.readButton")?.absUrl("href") ?: throw Exception("Chapter not found")
+                    response.asJsoup().selectFirst("a.readButton")?.absUrl("href") ?: return emptyList()
                 }
             }
             baseUrl.toHttpUrl().newBuilder()
@@ -187,7 +185,7 @@ abstract class Kumanga : KeiSource() {
         GenreFilter(),
     )
 
-    private fun String.toMangaId() = "$baseUrl$this".toHttpUrl().pathSegments[1].toInt()
+    private fun String.toMangaId() = baseUrl.toHttpUrl().resolve(this)!!.pathSegments[1].toInt()
 
     companion object {
         private const val PAGES_SCRIPT = """

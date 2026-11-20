@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 class OtherChapterDto(
     @SerialName("NumCap") private val number: String,
-    private val title: String? = null,
+    private val title: String?,
 ) {
     fun toSChapter(mangaId: Int) = SChapter.create().apply {
         url = "/manga/$mangaId/capitulo/$number"
