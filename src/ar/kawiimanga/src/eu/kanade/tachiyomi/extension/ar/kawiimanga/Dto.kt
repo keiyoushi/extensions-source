@@ -1,7 +1,12 @@
 package eu.kanade.tachiyomi.extension.ar.kawiimanga
 
+import android.util.Base64
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.aesDecrypt
+import keiyoushi.utils.aesGcm
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha256
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
@@ -80,8 +85,32 @@ class Chapter(
 }
 
 @Serializable
+class PagesBox(
+    val box: Box,
+)
+
+@Serializable
+class Box(
+    private val i: String,
+    private val d: String,
+) {
+    fun decrypt(token: String): List<String> {
+        val key = "$BOX_KEY|${token.takeLast(24)}".sha256()
+        val iv = Base64.decode(i, Base64.DEFAULT)
+        return Base64.decode(d, Base64.DEFAULT).aesDecrypt(aesGcm(key, iv)).decodeToString().parseAs<Pages>().pages
+    }
+}
+
+private const val BOX_KEY = "1153b3c534368ded1f8386fe03beaa5ebb166a15f4275e25"
+
+@Serializable
 class Pages(
     val pages: List<String>,
+)
+
+@Serializable
+class ApiError(
+    val error: String? = null,
 )
 
 @Serializable

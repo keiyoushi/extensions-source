@@ -11,6 +11,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
 import okhttp3.Headers
@@ -38,8 +39,9 @@ abstract class KawiiManga : KeiSource() {
         return headers.newBuilder().set("x-app-token", current).build()
     }
 
-    private suspend fun fetchToken(): String {
-        val data = client.get("$apiUrl/token", headers, Fetch.XHR).parseAs<Token>()
+    private suspend fun fetchToken(turnstile: String? = null): String {
+        val tokenHeaders = turnstile?.let { headers.newBuilder().set("x-turnstile", it).build() } ?: headers
+        val data = client.get("$apiUrl/token", tokenHeaders, Fetch.XHR).parseAs<Token>()
         token = data.token
         tokenExpiry = Clock.System.now() + (data.expiresIn - 120).seconds
         return data.token
@@ -48,8 +50,12 @@ abstract class KawiiManga : KeiSource() {
     private suspend fun apiGet(url: String): Response {
         var response = client.get(url, authHeaders(), Fetch.XHR, ensureSuccess = false)
         if (response.code == 401) {
+            val turnstileRequired = response.isJson() && response.parseAs<ApiError>().error == "turnstile_required"
             response.close()
             token = null
+            if (turnstileRequired) {
+                fetchToken(getTurnstileToken(baseUrl, TURNSTILE_SITE_KEY, action = "mint"))
+            }
             response = client.get(url, authHeaders(), Fetch.XHR, ensureSuccess = false)
         }
         if (!response.isSuccessful) throw HttpException(response.code)
@@ -111,8 +117,15 @@ abstract class KawiiManga : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.memo["id"]?.stringOrNull ?: return emptyList()
         val response = apiGet("$apiUrl/own?action=pages&chapterId=$chapterId")
-        return response.parseAs<Pages>().pages.mapIndexed { idx, img ->
+        val pageToken = response.request.header("x-app-token")!!
+        return response.parseAs<PagesBox>().box.decrypt(pageToken).mapIndexed { idx, img ->
             Page(idx, imageUrl = img)
         }
+    }
+
+    private fun Response.isJson() = body.contentType()?.subtype == "json"
+
+    companion object {
+        private const val TURNSTILE_SITE_KEY = "0x4AAAAAAF9JEsXEe0GOy47z"
     }
 }
