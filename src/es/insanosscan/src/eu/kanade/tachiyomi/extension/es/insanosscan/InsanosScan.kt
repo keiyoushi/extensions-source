@@ -8,15 +8,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl
 import java.lang.UnsupportedOperationException
 
@@ -53,7 +51,7 @@ abstract class InsanosScan :
             emptyList(),
             true,
             false,
-        ).manga
+        ).manga()
     }
 
     override suspend fun fetchMangaUpdate(
@@ -61,17 +59,16 @@ abstract class InsanosScan :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ) = coroutineScope {
-        val updatedManga = async {
+    ): SMangaUpdate = SMangaUpdate(
+        manga = {
             if (fetchDetails) {
                 client.get("$baseUrl/series/${manga.url}", Fetch.XHR)
                     .parseAs<Series>().toSManga(baseUrl)
             } else {
                 manga
             }
-        }
-
-        val updatedChapters = async {
+        },
+        chapters = {
             if (fetchChapters) {
                 client.get("$baseUrl/series/${manga.url}/chapters", Fetch.XHR)
                     .parseAs<List<Chapter>>().mapNotNull {
@@ -80,10 +77,8 @@ abstract class InsanosScan :
             } else {
                 chapters
             }
-        }
-
-        SMangaUpdate(updatedManga.await(), updatedChapters.await())
-    }
+        },
+    )
 
     override fun getChapterUrl(chapter: SChapter) = chapter.url.split("/").let { (seriesId, cid) ->
         "$baseUrl/reader?series=$seriesId&chapter=$cid"

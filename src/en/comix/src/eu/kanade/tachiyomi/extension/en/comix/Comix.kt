@@ -14,13 +14,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.NativeWebViewApi
 import keiyoushi.utils.TURNSTILE_AREA
 import keiyoushi.utils.booleanOrNull
@@ -286,7 +286,7 @@ abstract class Comix :
             this.url = "/$mangaSlug"
             memo = buildJsonObject { put(MANGA_ID_MEMO, mangaId) }
         }
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga.apply {
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga().apply {
             this.url = manga.url
         }
     }

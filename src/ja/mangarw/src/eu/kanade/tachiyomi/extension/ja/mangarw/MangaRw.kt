@@ -5,15 +5,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -71,8 +69,8 @@ abstract class MangaRw : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val detailsDeferred = async {
+    ): SMangaUpdate = SMangaUpdate(
+        manga = {
             if (fetchDetails) {
                 val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
                 manga.apply {
@@ -84,9 +82,8 @@ abstract class MangaRw : KeiSource() {
             } else {
                 manga
             }
-        }
-
-        val chaptersDeferred = async {
+        },
+        chapters = {
             if (fetchChapters) {
                 val mangaId = "$baseUrl${manga.url}".toHttpUrl().pathSegments.last()
                 val response = client.get("$baseUrl/api/v1/chapters?id=$mangaId", Fetch.XHR).asJsoup()
@@ -102,10 +99,8 @@ abstract class MangaRw : KeiSource() {
             } else {
                 chapters
             }
-        }
-
-        SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
-    }
+        },
+    )
 
     private fun parseChapterNumber(name: String): Float? {
         val match = Regex("第(\\d+(?:\\.\\d+)?)話").find(name) ?: return null

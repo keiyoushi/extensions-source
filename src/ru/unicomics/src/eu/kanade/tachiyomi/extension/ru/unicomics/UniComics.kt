@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -138,8 +138,8 @@ abstract class UniComics : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val updatedManga = async {
+    ): SMangaUpdate = SMangaUpdate(
+        manga = {
             if (fetchDetails) {
                 mangaDetailsParse(
                     client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup(),
@@ -147,13 +147,9 @@ abstract class UniComics : KeiSource() {
             } else {
                 manga
             }
-        }
-        val updatedChapters = async {
-            if (fetchChapters) getChapters(manga) else chapters
-        }
-
-        SMangaUpdate(updatedManga.await(), updatedChapters.await())
-    }
+        },
+        chapters = { if (fetchChapters) getChapters(manga) else chapters },
+    )
 
     private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         val isIssue = document.selectFirst(".issue-info-grid") != null

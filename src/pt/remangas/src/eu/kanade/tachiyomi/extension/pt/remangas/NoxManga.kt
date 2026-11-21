@@ -5,17 +5,15 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -70,7 +68,7 @@ abstract class NoxManga : KeiSource() {
         val manga = SManga.create().apply { this.url = "/manga/$slug" }
 
         return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
-            .manga
+            .manga()
             .apply { initialized = true }
     }
 
@@ -79,32 +77,25 @@ abstract class NoxManga : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val slug = manga.slug
 
-        val details = async {
-            if (fetchDetails) {
-                client.get("$apiUrl/comics/slug/$slug", Fetch.XHR).parseAs<MangaDto>().toSManga()
-            } else {
-                manga
-            }
-        }
+        return SMangaUpdate(
+            manga = { if (fetchDetails) client.get("$apiUrl/comics/slug/$slug", Fetch.XHR).parseAs<MangaDto>().toSManga() else manga },
+            chapters = {
+                if (fetchChapters) {
+                    val url = "$apiUrl/comics/slug/$slug/chapters".toHttpUrl().newBuilder()
+                        .addQueryParameter("page", "1")
+                        .addQueryParameter("per_page", CHAPTER_PAGE_SIZE.toString())
+                        .addQueryParameter("sort", "newest")
+                        .build()
 
-        val chapterList = async {
-            if (fetchChapters) {
-                val url = "$apiUrl/comics/slug/$slug/chapters".toHttpUrl().newBuilder()
-                    .addQueryParameter("page", "1")
-                    .addQueryParameter("per_page", CHAPTER_PAGE_SIZE.toString())
-                    .addQueryParameter("sort", "newest")
-                    .build()
-
-                client.get(url, Fetch.XHR).parseAs<ChapterListDto>().chapters.map { it.toSChapter(slug) }
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(manga = details.await(), chapters = chapterList.await())
+                    client.get(url, Fetch.XHR).parseAs<ChapterListDto>().chapters.map { it.toSChapter(slug) }
+                } else {
+                    chapters
+                }
+            },
+        )
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/chapters/${chapter.url}?skip_view=true", Fetch.XHR)

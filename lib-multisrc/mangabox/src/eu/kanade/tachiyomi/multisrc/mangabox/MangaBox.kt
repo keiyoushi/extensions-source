@@ -17,13 +17,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.network.Fetch
 import keiyoushi.network.call
 import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -659,16 +659,10 @@ abstract class MangaBox :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val mangaDeferred = async {
-            if (fetchDetails) getMangaByUrl(getMangaUrl(manga).toHttpUrl()) ?: manga else manga
-        }
-        val chaptersDeferred = async {
-            if (fetchChapters) parseChapterList(manga) else chapters
-        }
-
-        SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) getMangaByUrl(getMangaUrl(manga).toHttpUrl()) ?: manga else manga },
+        chapters = { if (fetchChapters) parseChapterList(manga) else chapters },
+    )
 
     // ============================== Filters ==============================
 
