@@ -20,18 +20,14 @@ import kotlin.time.Instant
 @Source
 abstract class BanglaManga : KeiSource() {
 
-    override val name = "Bangla Manga"
-    override val baseUrl = "https://www.banglamanga.com"
-
     private val apiKey =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndnZXlkemZtdGVoZGtvc3h3bmFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzMzQyMDcsImV4cCI6MjEwNzkxMDIwN30.o7MQCNzwmVKUv_L9sGgsueLl68bpRdjeaHmZT2Gxn18"
 
-    private val apiHeaders by lazy {
-        headers.newBuilder()
+    private val apiHeaders
+        get() = headers.newBuilder()
             .set("apikey", apiKey)
             .set("Authorization", "Bearer $apiKey")
             .build()
-    }
 
     private suspend fun apiGet(url: HttpUrl): okhttp3.Response = client.get(url, apiHeaders, Fetch.XHR)
 
