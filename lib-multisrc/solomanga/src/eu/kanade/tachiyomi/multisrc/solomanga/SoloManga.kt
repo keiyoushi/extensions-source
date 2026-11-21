@@ -70,7 +70,7 @@ abstract class SoloManga : KeiSource() {
         )
     }
 
-    private fun mangaDetailsParse(document: Document): SManga = singleManga().apply {
+    protected open fun mangaDetailsParse(document: Document): SManga = singleManga().apply {
         thumbnail_url = document.selectFirst("meta[property='og:image']")?.attr("content")
         description = document.selectFirst("meta[property='og:description']")?.attr("content")
     }
