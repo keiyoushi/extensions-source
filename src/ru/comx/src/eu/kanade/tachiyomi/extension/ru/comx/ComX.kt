@@ -183,7 +183,7 @@ abstract class ComX :
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT, ensureSuccess = false).use { response ->
             if (!response.isSuccessful) {
                 if (response.code == 403) {
-                    throw Exception("Content unavailable, try logging in via WebView")
+                    throw Exception("Контент не доступен. Возможно может помочь авторизация через WebView")
                 } else {
                     throw HttpException(response.code)
                 }
@@ -251,9 +251,9 @@ abstract class ComX :
     }
 
     private fun parseChapterList(document: Document): List<SChapter> {
-        if (document.selectFirst(".message-info__content:contains(не имеют доступа)") != null) throw Exception("Log in via WebView to view this content")
+        if (document.selectFirst(".message-info__content:contains(не имеют доступа)") != null) throw Exception("Авторизируйтесь для просмотра контента")
         val script = document.selectFirst("script:containsData(window.__DATA__)")?.data()
-            ?: throw Exception("Chapter data script not found")
+            ?: throw Exception("Не найдены данные глав")
 
         val data = script
             .substringAfter("window.__DATA__ = ")
@@ -337,21 +337,21 @@ abstract class ComX :
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT, ensureSuccess = false).use { response ->
             if (!response.isSuccessful) {
                 if (response.code == 304 || response.code == 302 || response.code == 403) {
-                    throw Exception("Chapter unavailable, try logging in via WebView")
+                    throw Exception("Глава не доступна. Возможно может помочь авторизация через WebView")
                 } else {
                     throw HttpException(response.code)
                 }
             }
             if (response.request.url.encodedPath == "/404.html") {
-                throw Exception("Chapter unavailable, try logging in via WebView")
+                throw Exception("Глава не доступна. Возможно может помочь авторизация через WebView")
             }
             response.asJsoup()
         }
 
-        if (document.html().contains("Выпуск был удален по требованию правообладателя")) throw Exception("Licensed, try logging in via WebView")
+        if (document.html().contains("Выпуск был удален по требованию правообладателя")) throw Exception("Лицензировано. Возможно может помочь авторизация через WebView")
 
         val script = document.selectFirst("script:containsData(window.__DATA__)")?.data()
-            ?: throw Exception("Pages data script not found")
+            ?: throw Exception("Не найдены данные страниц")
 
         val data = script
             .substringAfter("window.__DATA__ = ")
