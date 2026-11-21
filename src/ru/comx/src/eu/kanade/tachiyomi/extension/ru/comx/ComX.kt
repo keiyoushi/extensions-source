@@ -161,11 +161,19 @@ abstract class ComX :
 
         return MangasPage(mangas, hasNextPage)
     }
-    private fun Element.imgAttr(): String = when {
-        hasAttr("data-src") && absUrl("data-src").isNotBlank() && absUrl("data-src").contains("://") -> absUrl("data-src")
-        hasAttr("data-src") && absUrl("data-src").isNotBlank() && !absUrl("data-src").contains("://") -> baseUrl + absUrl("data-src")
-        absUrl("src").contains("://") -> absUrl("src")
-        else -> baseUrl + absUrl("src")
+    private fun Element.imgAttr(): String {
+        val url = when {
+            hasAttr("data-src") && absUrl("data-src").isNotBlank() && absUrl("data-src").contains("://") -> absUrl("data-src")
+            hasAttr("data-src") && absUrl("data-src").isNotBlank() && !absUrl("data-src").contains("://") -> baseUrl + absUrl("data-src")
+            absUrl("src").contains("://") -> absUrl("src")
+            else -> baseUrl + absUrl("src")
+        }
+
+        return if (baseUrl.contains("https://ru.")) {
+            url
+        } else {
+            url.replace("://rus.com-x.life/", "://img.com-x.life/")
+        }
     }
 
     // ============================== Manga ===============================
