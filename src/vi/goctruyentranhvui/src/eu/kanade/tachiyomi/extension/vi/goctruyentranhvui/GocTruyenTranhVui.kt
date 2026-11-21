@@ -222,20 +222,9 @@ abstract class GocTruyenTranhVui :
                 poll(1.seconds) {
                     pollAttempts++
                     evaluateJs(script) { jsonResult ->
-                        val rawJson = runCatching {
-                            jsonResult.parseAs<String>()
-                        }.getOrElse { jsonResult }
+                        val rawJson = jsonResult.parseAs<String>()
 
-                        val res = runCatching {
-                            rawJson.parseAs<WebViewResultDto>()
-                        }.getOrNull()
-
-                        if (res == null) {
-                            if (pollAttempts >= 12) {
-                                reject(Exception("Không thể giải mã dữ liệu từ WebView!"))
-                            }
-                            return@evaluateJs
-                        }
+                        val res = rawJson.parseAs<WebViewResultDto>()
 
                         if (res.needLogin || res.needLevel2) {
                             val message = if (res.needLogin) {
@@ -255,16 +244,12 @@ abstract class GocTruyenTranhVui :
                                 stableCount = 0
                             }
                         } else if (pollAttempts >= 12) {
-                            reject(Exception("Chương này không có ảnh hoặc yêu cầu đăng nhập trong WebView!"))
+                            reject(Exception("Không thể giải mã dữ liệu từ WebView!"))
                         }
                     }
                 }
 
                 loadUrl(chapterPageUrl)
-            }
-
-            if (imageUrls.isEmpty()) {
-                throw Exception("WebView không trích xuất được danh sách ảnh nào!")
             }
 
             return imageUrls.mapIndexed { i, imgUrl ->
@@ -290,25 +275,34 @@ abstract class GocTruyenTranhVui :
             Fetch.XHR.from(chapterPageUrl),
             body,
         ).use { response ->
-            val result = runCatching { response.parseAs<ResultDto<ImageListDto>>() }.getOrNull()
-                ?: return@use null
-            val imageResult = result.result ?: return@use null
+            val result = response.parseAs<ResultDto<ImageListDto>>()
 
-            val accessError = when (imageResult.codeState) {
+            val imageResult = result.result
+            val imageList = imageResult?.data?.takeIf { it.isNotEmpty() }
+
+            // Nếu API đã trả danh sách ảnh, dùng danh sách đó bất kể codeState.
+            if (imageList != null) {
+                return imageList.mapIndexed { i, imgUrl ->
+                    val finalUrl = if (imgUrl.startsWith("/image/")) {
+                        baseUrl + imgUrl
+                    } else {
+                        imgUrl
+                    }
+                    Page(i, imageUrl = finalUrl)
+                }
+            }
+
+            // Không có ảnh thì trả lỗi cụ thể nếu API cung cấp.
+            val accessError = when (imageResult?.codeState) {
                 "01" -> "Trang web yêu cầu đăng nhập để đọc chương này."
                 "02" -> "Chương này yêu cầu tài khoản cấp 2+."
                 "03" -> "Trang web từ chối tải chương này (mã 03)."
-                else -> null
+                else -> result.errorMessage
             }
+
             if (accessError != null) throw Exception(accessError)
 
-            if (result.status != true || imageResult.state != true || imageResult.codeState != "00") return@use null
-            val imageList = imageResult.data?.takeIf(List<String>::isNotEmpty) ?: return@use null
-
-            imageList.mapIndexed { i, imgUrl ->
-                val finalUrl = if (imgUrl.startsWith("/image/")) baseUrl + imgUrl else imgUrl
-                Page(i, imageUrl = finalUrl)
-            }
+            null
         }
 
         // Thử lần 1
@@ -322,7 +316,7 @@ abstract class GocTruyenTranhVui :
             pages = requestImages()
         }
 
-        return pages ?: throw Exception("Không thể tải danh sách ảnh bằng API. Vui lòng kiểm tra đăng nhập hoặc bật lại WebView Loader!")
+        return pages ?: throw Exception("Không thể tải danh sách ảnh bằng API. Vui lòng kiểm tra đăng nhập")
     }
 
     private var tokenCache: String? = null
@@ -396,8 +390,8 @@ abstract class GocTruyenTranhVui :
 
         SwitchPreferenceCompat(screen.context).apply {
             key = USE_WEBVIEW_LOADER
-            title = "Sử dụng WebView loader"
-            summary = "Tự động mở WebView để lấy danh sách ảnh và làm mới phiên làm việc. Tắt nếu muốn gọi API trực tiếp."
+            title = "WebView Loader"
+            summary = "Đề xuất bật cho Mihon. Tải ảnh qua WebView giảm trường hợp khóa tài khoản"
             setDefaultValue(USE_WEBVIEW_LOADER_DEFAULT)
             setOnPreferenceChangeListener { _, newValue ->
                 val isWebViewEnabled = newValue as Boolean
@@ -411,7 +405,7 @@ abstract class GocTruyenTranhVui :
 
     companion object {
         private const val USE_WEBVIEW_LOADER = "use_webview_loader"
-        private const val USE_WEBVIEW_LOADER_DEFAULT = true
+        private const val USE_WEBVIEW_LOADER_DEFAULT = false
         private const val CUSTOM_TOKEN = "custom_token"
         private val COMIC_ID_REGEX = Regex("""id:\s*"([^"]+)"""")
         private val COMIC_NAME_EN_REGEX = Regex("""nameEn:\s*`([^`]+)`""")
