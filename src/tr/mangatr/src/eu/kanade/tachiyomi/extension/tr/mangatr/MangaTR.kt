@@ -24,7 +24,6 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.sha256
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonRequestBody
-import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import okhttp3.CacheControl
@@ -302,17 +301,9 @@ abstract class MangaTR : KeiSource() {
             throw IOException("Lütfen WebView'da Bot Korumasını geçin.")
         }
 
-        // The site changes its reader often; when the known layouts give nothing, let the site's own reader show the chapter
-        val urls = try {
-            readerPageUrls(document)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            emptyList()
-        }.ifEmpty { readPagesInWebView(document.location(), headers["User-Agent"]!!, baseUrl) }
-
+        val urls = readerPageUrls(document)
         if (urls.isEmpty()) {
-            throw IOException("Sayfalar bulunamadı; site okuyucusunu değiştirmiş olabilir. Bölümü WebView'da açmayı deneyin.")
+            throw IOException("Sayfalar bulunamadı; site okuyucusunu değiştirmiş olabilir.")
         }
         return urls.mapIndexed { index, url -> Page(index, imageUrl = url) }
     }
@@ -322,38 +313,33 @@ abstract class MangaTR : KeiSource() {
 
         // The reader asks /reader/pages/ for each batch of three pages. The images are stored with their left and
         // right parts swapped; each page's tk, mixed with the page index and the chapter's seed, gives where to cut.
-        val readerId = SCRAMBLE_ID_REGEX.find(scripts)?.groupValues?.get(1)
-        if (readerId != null) {
-            val seed = READER_SEED_REGEX.find(scripts)?.groupValues?.get(1).orEmpty()
-            val slots = document.select(".reader-page-wrap, .reader-webtoon-wrap").size
-            val from = Fetch.XHR.from(document.location())
-            val headers = ajaxHeaders.newBuilder().set("Accept", "application/json").build()
-            val pages = mutableListOf<RoutePage>()
-            val limit = if (slots > 0) slots else MAX_PAGES
-            var start = 0
-            while (start < limit) {
-                val url = "$baseUrl/reader/pages/".toHttpUrl().newBuilder()
-                    .addQueryParameter("reader", readerId)
-                    .addQueryParameter("start", start.toString())
-                    .build()
-                val response = client.get(url, headers, from, ensureSuccess = slots > 0)
-                // Without slots to count, the batch after the last page is a 404
-                if (response.code == 404 && slots == 0) {
-                    response.close()
-                    break
-                }
-                val batch = response.body.string().parseAs<RouteBatch>().pages
-                if (batch.isEmpty()) break
-                pages += batch
-                start += 3
+        val readerId = SCRAMBLE_ID_REGEX.find(scripts)?.groupValues?.get(1) ?: return emptyList()
+        val seed = READER_SEED_REGEX.find(scripts)?.groupValues?.get(1).orEmpty()
+        val slots = document.select(".reader-page-wrap, .reader-webtoon-wrap").size
+        val from = Fetch.XHR.from(document.location())
+        val headers = ajaxHeaders.newBuilder().set("Accept", "application/json").build()
+        val pages = mutableListOf<RoutePage>()
+        val limit = if (slots > 0) slots else MAX_PAGES
+        var start = 0
+        while (start < limit) {
+            val url = "$baseUrl/reader/pages/".toHttpUrl().newBuilder()
+                .addQueryParameter("reader", readerId)
+                .addQueryParameter("start", start.toString())
+                .build()
+            val response = client.get(url, headers, from, ensureSuccess = slots > 0)
+            // Without slots to count, the batch after the last page is a 404
+            if (response.code == 404 && slots == 0) {
+                response.close()
+                break
             }
-            return pages.distinctBy { it.index }.sortedBy { it.index }.map { page ->
-                if (page.tk == null) page.url else "${page.url}#$CUT_FRAGMENT=${cutPoint(page.tk, page.index, seed)}"
-            }
+            val batch = response.body.string().parseAs<RouteBatch>().pages
+            if (batch.isEmpty()) break
+            pages += batch
+            start += 3
         }
-
-        // Lazy-loaded pages keep their real URL in data-mtr-src until scrolled into view
-        return document.select("img.chapter-img").map { img -> img.absUrl("data-mtr-src").ifEmpty { img.absUrl("src") } }
+        return pages.distinctBy { it.index }.sortedBy { it.index }.map { page ->
+            if (page.tk == null) page.url else "${page.url}#$CUT_FRAGMENT=${cutPoint(page.tk, page.index, seed)}"
+        }
     }
 
     // The reader's 16-bit FNV-1a of "index:seed"; tk xor this is the left part's share of the width, in 1/10000
@@ -396,9 +382,8 @@ abstract class MangaTR : KeiSource() {
         }
     }
 
-    // Puts a page's parts back in order: "#cut=<share>" from the page list (the stored image is the right part, then
-    // the left part, whose width is share/10000 of the page), or "#slices=x:w,x:w" from the WebView reader, listing
-    // the parts the site drew, left to right
+    // Puts a page's parts back in order: with "#cut=<share>", the stored image is the right part, then the left part,
+    // whose width is share/10000 of the page
     private fun unscrambleInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val fragment = request.url.fragment
@@ -412,23 +397,15 @@ abstract class MangaTR : KeiSource() {
         if (bytes.isEmpty()) return original
         val image = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return original
         val width = image.width
-        val slices = when (fragment.substringBefore('=')) {
-            CUT_FRAGMENT -> fragment.substringAfter('=').toIntOrNull()?.let { share ->
-                val left = (width * (share / 10000.0)).roundToInt().coerceIn(10, width - 10)
-                listOf(width - left to left, 0 to width - left)
-            }
-            SLICES_FRAGMENT -> fragment.substringAfter('=').split(',').map { slice ->
-                val (x, w) = slice.split(':').map { it.toIntOrNull() ?: return original }
-                x to w
-            }
-            else -> null
-        }
-        if (slices == null || slices.any { (x, w) -> x < 0 || w <= 0 || x + w > width }) {
+        val share = fragment.takeIf { it.startsWith("$CUT_FRAGMENT=") }?.substringAfter('=')?.toIntOrNull()
+        if (share == null || width < 20) {
             image.recycle()
             return original
         }
 
-        val output = Bitmap.createBitmap(slices.sumOf { it.second }, image.height, Bitmap.Config.ARGB_8888)
+        val left = (width * (share / 10000.0)).roundToInt().coerceIn(10, width - 10)
+        val slices = listOf(width - left to left, 0 to width - left)
+        val output = Bitmap.createBitmap(width, image.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
         var dx = 0
         for ((x, w) in slices) {
@@ -522,6 +499,7 @@ abstract class MangaTR : KeiSource() {
         private val SCRAMBLE_ID_REGEX = Regex("""MTR_SCRAMBLE_ID\s*=\s*["']([a-f0-9]{64})["']""")
         private val READER_SEED_REGEX = Regex("""MTR_READER_SEED\s*=\s*["']([^"']*)["']""")
         private const val CUT_FRAGMENT = "cut"
+        private const val LOGIN_REQUIRED = "Bu bölümü okuyabilmek için WebView üzerinden üye girişi yapmanız gerekmektedir."
         private const val MAX_PAGES = 600
         private val SEED_REGEX = Regex("""--mdx-(white|black)\s*:\s*(-?\d+)""")
         private const val IMAGE_HOST = "image.mngtr.site"
