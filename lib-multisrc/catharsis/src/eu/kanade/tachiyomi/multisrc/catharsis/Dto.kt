@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.MarkdownDescription
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Serializable
@@ -18,22 +19,23 @@ class MangaDto(
     val id: Int,
     val slug: String,
     private val nombre: String,
-    @SerialName("portada_url") private val portadaUrl: String? = null,
-    private val descripcion: String? = null,
-    private val estado: String? = null,
-    private val tipo: String? = null,
+    @SerialName("portada_url") private val portadaUrl: String?,
+    private val descripcion: String?,
+    private val estado: String?,
+    private val tipo: String?,
     private val nsfw: Boolean = false,
-    @SerialName("nombre_alt_1") private val nombreAlt1: String? = null,
-    @SerialName("nombre_alt_2") private val nombreAlt2: String? = null,
+    @SerialName("nombre_alt_1") private val nombreAlt1: String?,
+    @SerialName("nombre_alt_2") private val nombreAlt2: String?,
     @SerialName("fk_generos") private val generos: List<MangaGenreDto> = emptyList(),
-    @SerialName("fk_scans") private val scan: ScanDto? = null,
+    @SerialName("fk_scans") private val scan: ScanDto?,
 ) {
     val scanlator get() = scan?.nombre
 
     fun toSManga(mangaKey: String, baseUrl: String) = SManga.create().apply {
         url = mangaKey
         title = nombre
-        thumbnail_url = portadaUrl?.let { baseUrl.toHttpUrl().resolve("/assets/$it")?.toString() }
+        // A bare file id, or its path under /assets
+        thumbnail_url = portadaUrl?.let { baseUrl.toHttpUrl().resolve(if (it.startsWith("/")) it else "/assets/$it")?.toString() }
         genre = buildList {
             tipo?.let { add(typeName(it)) }
             addAll(generos.map { it.genre.nombre })
@@ -77,18 +79,6 @@ class GenreDto(
 )
 
 @Serializable
-class FilterDataDto(
-    val genres: List<GenreDto>,
-    val scans: List<ScanFilterDto>,
-)
-
-@Serializable
-class ScanFilterDto(
-    val id: Int,
-    val nombre: String,
-)
-
-@Serializable
 class ScanDto(
     val nombre: String,
 )
@@ -96,11 +86,10 @@ class ScanDto(
 @Serializable
 class ChapterDto(
     val numero: Double,
-    private val titulo: String? = null,
-    val temporada: Int? = null,
-    val estado: String? = null,
-    @SerialName("fecha_publicacion") val fechaPublicacion: String? = null,
-    @SerialName("date_created") val dateCreated: String? = null,
+    private val titulo: String?,
+    val temporada: Int?,
+    val estado: String?,
+    @SerialName("date_created") val dateCreated: String?,
 ) {
     fun toSChapter(mangaUrl: String, scanlator: String?, dateUpload: Long) = SChapter.create().apply {
         val num = numero.toString().removeSuffix(".0")
@@ -112,51 +101,48 @@ class ChapterDto(
     }
 }
 
+// What the page's reader posted: a challenge, an error status, or what it read
 @Serializable
-class SystemDto(
-    @SerialName("cap_sitekey") val capSitekey: String,
-    @SerialName("cap_api_endpoint") val capApiEndpoint: String,
+internal class PageRead(
+    val challenge: Boolean = false,
+    val status: Int?,
+    val obstacle: Obstacle?,
+    val result: JsonObject?,
+)
+
+// Something the site put over the page, and where its close button is
+@Serializable
+internal class Obstacle(val x: Float, val y: Float, val scale: Float)
+
+/** A spot to tap in CSS pixels, and whether the element it aims at is what a tap there would hit. */
+@Serializable
+class Point(
+    val x: Float,
+    val y: Float,
+    val clear: Boolean = true,
+    // Where a swipe towards it starts, when it scrolls inside a box of its own
+    val fromX: Float? = null,
+    val fromY: Float? = null,
+)
+
+// What the reader script reads from the site's chapter reader
+@Serializable
+internal class ReaderPage(
+    val scale: Float,
+    val width: Float,
+    val height: Float,
+    val gate: Point?,
+    val check: Point?,
+    val turnstile: Boolean = false,
+    val textOnly: Boolean = false,
+    val pages: List<ReaderItem> = emptyList(),
+    val grip: Point?,
+    val text: String?,
+    val image: PageImage?,
 )
 
 @Serializable
-class CapChallengeResponse(
-    val challenge: CapChallenge,
-    val token: String,
-)
+internal class ReaderItem(val index: Int, val top: Float, val height: Float, val ready: Boolean, val retry: Point?)
 
 @Serializable
-class CapChallenge(
-    @SerialName("c") val count: Int,
-    @SerialName("s") val saltSize: Int,
-    @SerialName("d") val difficulty: Int,
-)
-
-@Serializable
-class CapRedeemRequest(
-    private val token: String,
-    private val solutions: List<Int>,
-)
-
-@Serializable
-class CapRedeemResponse(
-    val success: Boolean,
-    val token: String? = null,
-)
-
-@Serializable
-class ApiErrorDto(
-    val code: String? = null,
-    val retryAfterMs: Long? = null,
-)
-
-@Serializable
-class ReaderPassRequest(
-    private val token: String,
-    private val sitekey: String,
-)
-
-@Serializable
-class ReaderPassDto(
-    val pass: String,
-    val expiresAt: Long,
-)
+internal class PageImage(val index: Int, val data: String)

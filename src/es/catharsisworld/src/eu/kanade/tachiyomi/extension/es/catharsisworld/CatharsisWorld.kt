@@ -1,350 +1,213 @@
 package eu.kanade.tachiyomi.extension.es.catharsisworld
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.util.LruCache
 import eu.kanade.tachiyomi.multisrc.catharsis.Catharsis
-import eu.kanade.tachiyomi.multisrc.catharsis.MangaDto
-import eu.kanade.tachiyomi.multisrc.catharsis.ReaderPassDto
-import eu.kanade.tachiyomi.multisrc.catharsis.ReaderPassRequest
-import eu.kanade.tachiyomi.multisrc.catharsis.descramble
-import eu.kanade.tachiyomi.network.HttpException
-import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.multisrc.catharsis.Step
+import eu.kanade.tachiyomi.multisrc.catharsis.touch
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import keiyoushi.network.Fetch
-import keiyoushi.network.fetch
-import keiyoushi.network.get
-import keiyoushi.network.post
-import keiyoushi.network.rateLimit
-import keiyoushi.utils.asJsoup
-import keiyoushi.utils.getIntOrNull
-import keiyoushi.utils.intOrNull
+import keiyoushi.source.SMangaUpdate
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.stringOrNull
-import keiyoushi.utils.toJsonRequestBody
-import keiyoushi.utils.xor
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.json.JsonArray
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonString
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import okhttp3.Cookie
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import okhttp3.ResponseBody.Companion.asResponseBody
-import okio.Buffer
-import java.io.IOException
 import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.Instant
 
 @Source
 abstract class CatharsisWorld : Catharsis() {
 
-    override val apiUrl get() = "$baseUrl/api"
-
-    override val apiHeaders get() = headersBuilder()
-        .set("Accept", "application/json, text/plain, */*")
-        .set("System", "catharsis")
-        .set("X-FK-Sistema", "3")
-        .build()
+    override val listingPath = "biblioteca"
 
     override val mangaPath = "manga"
 
-    override fun mangaKey(manga: MangaDto) = manga.id.toString()
+    override val chapterSegment = "chapter/"
 
-    // Page budget the site allows a guest reader
-    override fun OkHttpClient.Builder.addReaderInterceptors(): OkHttpClient.Builder = addInterceptor(::pageInterceptor)
-        .rateLimit(2, 5.seconds) { it.encodedPath.startsWith("/lector/p/") }
+    override val sorts = listOf(
+        "Recientes" to null,
+        "Nuevos" to "date_created",
+        "Populares" to "n_visitas",
+        "Título" to "nombre",
+    )
 
-    override fun getChapterUrl(chapter: SChapter) = chapterPageUrl(chapter.url).toString()
+    override val popularSort = 2
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val session = sessionMutex.withLock { openChapter(chapter.url) }
-        return List(session.pageTokens.size) { i ->
-            val url = HttpUrl.Builder()
-                .scheme("http")
-                .host(PAGE_HOST)
-                .addPathSegments(chapter.url)
-                .addQueryParameter("page", i.toString())
-                .build()
-            Page(i, imageUrl = url.toString())
+    override val latestSort = 0
+
+    override val statuses = STATUSES.keys.toList()
+
+    override val ascendingOrder = "asc"
+
+    // The ad-free reading pass the site offers after a rewarded ad
+    override val prelude = "pass.js"
+
+    // Genre ids by name, learned from the site's filter panel; a name it no longer offers maps to ""
+    private val genreIds = LruCache<String, String>(100)
+
+    override suspend fun readListing(url: HttpUrl): MangasPage {
+        // A genre is its id, or its name when the filter data had no id for it
+        val genres = url.queryParameter("genre")?.split('|').orEmpty().map { genreIds[it] ?: it }
+        val names = genres.filterNot { UUID_REGEX.matches(it) || it.isEmpty() }
+        val ids = genres.filter { UUID_REGEX.matches(it) }
+        val pageUrl = url.newBuilder().apply {
+            removeAllQueryParameters("genre")
+            if (ids.isNotEmpty()) setQueryParameter("genre", ids.joinToString("|"))
+            // The panel's picks show on the first page
+            if (names.isNotEmpty()) removeAllQueryParameters("page")
+        }.build()
+
+        // The request the page sends for its url, which names its cached response
+        val sort = pageUrl.queryParameter("sort") ?: "fecha_ultimo_capitulo"
+        val query = buildMap {
+            put("limit", PAGE_SIZE.toString())
+            put("page", pageUrl.queryParameter("page") ?: "1")
+            pageUrl.queryParameter("search")?.let { put("name", it) }
+            pageUrl.queryParameter("letter")?.let { put("letter", it) }
+            pageUrl.queryParameter("status")?.let { put("status", STATUSES.getValue(it)) }
+            put("sort", if (pageUrl.queryParameter("order") == ascendingOrder) sort else "-$sort")
+            pageUrl.queryParameter("genre")?.let { put("genre", it) }
         }
-    }
-
-    // The pass cookie from an earlier session
-    override fun storedReaderPass(): ReaderPassDto? = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
-        .firstOrNull { it.name == PASS_COOKIE }
-        ?.let { ReaderPassDto(it.value, it.expiresAt) }
-
-    // The pass is the cookie this call sets
-    override suspend fun redeemReaderPass(capToken: String, sitekey: String, fetch: Fetch): ReaderPassDto {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("lector/pase")
-            .build()
-        val response = client.post(url, fetch, ReaderPassRequest(capToken, sitekey).toJsonRequestBody(), ensureSuccess = false)
-            .ensureSiteSuccess()
-        val cookie = Cookie.parseAll(response.request.url, response.headers).first { it.name == PASS_COOKIE }
-        response.close()
-        return ReaderPassDto(cookie.value, cookie.expiresAt)
-    }
-
-    // Page image: the chapter's page token, signed, with the heartbeat's live token
-    private fun pageInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        if (request.url.host != PAGE_HOST) return chain.proceed(request)
-        val chapterUrl = request.url.encodedPath.removePrefix("/")
-        val pageIndex = request.url.queryParameter("page")!!.toInt()
-        return try {
-            val session = runBlocking { chapterSession(chapterUrl) }
-            if (session.passRefused) throw Exception(PASS_REFUSED)
-            fetchPage(chain, request, session, pageIndex)
-                ?: runBlocking { chapterSession(chapterUrl, rejected = session) }.let { reopened ->
-                    fetchPage(chain, request, reopened, pageIndex) ?: run {
-                        if (!reopened.passSpent) throw HttpException(401)
-                        reopened.passRefused = true
-                        throw Exception(PASS_REFUSED)
-                    }
-                }
-        } catch (e: Exception) {
-            throw e as? IOException ?: IOException(e.message, e)
-        }
-    }
-
-    private fun Response.descrambled(secret: ReaderSecret, scrambleKey: String, gutter: Int): Response {
-        val image = Buffer()
-        body.source().use(image::writeAll)
-        val bitmap = BitmapFactory.decodeStream(image.peek().inputStream())
-        // The site's reader draws pages under 200 px as they come
-        if (bitmap == null || bitmap.width < 200 || bitmap.height < 200) {
-            bitmap?.recycle()
-            return newBuilder()
-                .body(image.asResponseBody(body.contentType(), image.size))
-                .build()
-        }
-        val descrambled = descramble(bitmap, gutter) { width, height -> secret.tilePlan(scrambleKey, width, height) }
-        bitmap.recycle()
-        val out = Buffer()
-        descrambled.compress(Bitmap.CompressFormat.JPEG, 90, out.outputStream())
-        descrambled.recycle()
-        return newBuilder()
-            .body(out.asResponseBody("image/jpeg".toMediaType(), out.size))
-            .build()
-    }
-
-    // The page as the site's reader draws it; null when the site wants a new reader pass
-    private fun fetchPage(chain: Interceptor.Chain, request: Request, session: ChapterSession, pageIndex: Int): Response? {
-        val token = session.pageTokens[pageIndex]
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("lector/p")
-            .addPathSegment(token)
-            .addQueryParameter("q", "hq")
-            .build()
-        var liveRetried = false
-        var waited = 0L
-        while (true) {
-            val liveToken = liveToken(chain, request, session) ?: return null
-            val pageRequest = request.newBuilder()
-                .url(url)
-                .fetch(session.fetch)
-                .header(session.secret.clientHeader, session.secret.clientValue)
-                .header(session.secret.signatureHeader, session.secret.signature("p", token))
-                .header("X-Catharsis-Reader", "1")
-                .header(session.secret.liveHeader, liveToken)
-                .build()
-            val response = chain.proceed(pageRequest)
-            when (response.code) {
-                401, 403, 409 -> {
-                    val code = response.apiError()?.code
-                    when {
-                        // A stale live token is minted again once, like the site's reader
-                        code == "LIVE_REQUIRED" && !liveRetried -> {
-                            liveRetried = true
-                            session.liveToken = null
-                        }
-                        // The site's other 403s refuse the client or its IP
-                        response.code == 403 -> throw response.siteError(code)
-                        else -> return null
-                    }
-                }
-                // Waits out READING_TOO_FAST like the site's reader
-                429 -> {
-                    val error = response.apiError()
-                    if (error?.code != "READING_TOO_FAST") throw HttpException(429)
-                    // Without a wait to honour, the site has spent the reader pass
-                    val delay = error.retryAfterMs?.takeIf { it > 0 }?.plus(150) ?: run {
-                        session.passSpent = true
-                        return null
-                    }
-                    if (waited + delay > PACE_WAIT.inWholeMilliseconds) throw HttpException(429)
-                    Thread.sleep(delay)
-                    waited += delay
-                }
-                else -> {
-                    if (!response.isSuccessful) return response
-                    // Like the site's reader, a missing or invalid X-Page-Xor keeps the chapter's last one
-                    val xorKey = response.header("X-Page-Xor")?.toIntOrNull()?.takeIf { it in 1..255 } ?: session.xorKey
-                    session.xorKey = xorKey
-                    val plain = response.xor(xorKey)
-                    val scrambleKey = response.header("X-Page-Key") ?: return plain
-                    val gutter = response.header("X-Tile-Gutter")?.toIntOrNull()?.takeIf { it in 1..63 } ?: 0
-                    return plain.descrambled(session.secret, scrambleKey, gutter)
-                }
+        val pick = if (names.isEmpty()) "null" else names.toJsonString()
+        val listing = siteView.drive(pageUrl.toString(), "(${siteView.asset("listing.js")})(${query.toJsonString()}, $pick)") { result ->
+            val page = result.parseAs<ListingPage>()
+            when {
+                page.tap != null -> touch(page.scale, page.width, page.height, page.tap)
+                page.list != null -> Step.Done(page)
+                else -> Step.Wait
             }
         }
+        if (names.isNotEmpty()) {
+            listing.ids.forEach { (name, id) -> genreIds.put(name, id.orEmpty()) }
+            // The panel showed page 1; a later page loads by the ids it gave
+            if ((url.queryParameter("page")?.toInt() ?: 1) > 1) return readListing(url)
+        }
+        val list = listing.list!!
+        val page = query.getValue("page").toInt()
+        return MangasPage(list.data.map { it.toSManga(it.id.toString(), baseUrl) }, page < list.totalPages)
     }
 
-    // Minted again every 20 s like the site's heartbeat; null when the site wants a new reader pass
-    private fun liveToken(chain: Interceptor.Chain, request: Request, session: ChapterSession): String? = synchronized(session) {
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement = siteView.drive("$baseUrl/$listingPath", "(${siteView.asset("genres.js")})()") { result ->
+        val panel = result.parseAs<GenrePanel>()
+        when {
+            panel.tap != null -> touch(panel.scale, panel.width, panel.height, panel.tap)
+            panel.names != null -> Step.Done(panel.names.map { GenreOption(it, panel.ids[it]) }.toJsonElement())
+            else -> Step.Wait
+        }
+    }
+
+    override fun genres(data: JsonElement?) = data?.parseAs<List<GenreOption>>().orEmpty().map { it.name to (it.id ?: it.name) }
+
+    override suspend fun readSeries(manga: SManga, known: List<SChapter>, withChapters: Boolean): SMangaUpdate {
+        val series = siteView.drive(getMangaUrl(manga), "(${siteView.asset("series.js")})()") { result ->
+            val page = result.parseAs<SeriesPage>()
+            when {
+                page.tap != null -> touch(page.scale, page.width, page.height, page.tap)
+                page.title == null -> Step.Wait
+                // A series opened by its slug is stored by its id, as the site's lists give it
+                manga.url.toIntOrNull() == null && page.id == null -> Step.Wait
+                withChapters && page.more != null -> touch(page.scale, page.width, page.height, page.more)
+                // The chapter rows arrive after the details
+                withChapters && page.rows.size < page.count -> Step.Wait
+                else -> Step.Done(page)
+            }
+        }
+
+        val details = SManga.create().apply {
+            url = series.id?.takeIf { manga.url.toIntOrNull() == null } ?: manga.url
+            title = series.title!!
+            thumbnail_url = series.cover?.let { baseUrl.toHttpUrl().resolve(it)?.newBuilder()?.query(null)?.build()?.toString() }
+            author = series.author?.takeUnless { it == UNKNOWN_AUTHOR }
+            val statusBadge = series.badges.firstOrNull { it in STATUSES }
+            status = when (statusBadge?.let(STATUSES::get)) {
+                "curso" -> SManga.ONGOING
+                "pausado" -> SManga.ON_HIATUS
+                "terminado" -> SManga.COMPLETED
+                "abandonado" -> SManga.CANCELLED
+                else -> SManga.UNKNOWN
+            }
+            genre = series.badges.filter { it != statusBadge }.joinToString().ifEmpty { null }
+            description = MarkdownDescription.Builder()
+                .rating(series.rating?.takeIf { (series.votes ?: 0) > 0 }, max = 5, votes = series.votes)
+                .description(series.description)
+                .altTitles(listOfNotNull(series.altTitle?.takeIf { it != series.title }), "Nombres alternativos")
+                .build()
+        }
+        if (!withChapters) return SMangaUpdate(details, known)
+
+        // The site shows only how long ago a chapter came out, so a chapter keeps the date it was first stored with
+        val stored = known.associate { it.url to it.date_upload }
         val now = Clock.System.now()
-        session.liveToken?.takeIf { now - it.mintedAt < LIVE_REFRESH }?.let { return it.value }
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("lector")
-            .addPathSegment(session.secret.heartbeatPath)
-            .build()
-        val heartbeat = request.newBuilder()
-            .url(url)
-            .post(HeartbeatRequest(session.heartbeat).toJsonRequestBody())
-            .fetch(session.fetch)
-            .header(session.secret.clientHeader, session.secret.clientValue)
-            .header(session.secret.signatureHeader, session.secret.signature("v", session.heartbeat))
-            .build()
-        val response = chain.proceed(heartbeat)
-        if (response.code == 401) {
-            response.close()
-            return null
-        }
-        val liveToken = response.ensureSiteSuccess().parseAs<HeartbeatDto>().liveToken
-        session.liveToken = LiveToken(liveToken, now)
-        liveToken
-    }
-
-    private class LiveToken(val value: String, val mintedAt: Instant)
-
-    private class ChapterSession(
-        val secret: ReaderSecret,
-        val pageTokens: List<String>,
-        val heartbeat: String,
-        val fetch: Fetch,
-    ) {
-        @Volatile var liveToken: LiveToken? = null
-
-        @Volatile var xorKey = DEFAULT_XOR_KEY
-
-        @Volatile var passSpent = false
-
-        // A renewed pass was spent too; the chapter's other pages fail without asking again
-        @Volatile var passRefused = false
-    }
-
-    private class FailedOpen(val chapterUrl: String, val failedAt: Instant, val error: Exception)
-
-    private val sessionMutex = Mutex()
-    private val chapterSessions = LruCache<String, ChapterSession>(10)
-    private var failedOpen: FailedOpen? = null
-
-    // Session for pageInterceptor; a failed open replays for 10 s
-    private suspend fun chapterSession(chapterUrl: String, rejected: ChapterSession? = null): ChapterSession = sessionMutex.withLock {
-        val now = Clock.System.now()
-        chapterSessions[chapterUrl]
-            ?.takeIf { it !== rejected }
-            ?.let { return@withLock it }
-        failedOpen
-            ?.takeIf { it.chapterUrl == chapterUrl && now - it.failedAt < 10.seconds }
-            ?.let { throw it.error }
-        try {
-            openChapter(chapterUrl, renewPass = rejected?.passSpent == true)
-        } catch (e: Exception) {
-            failedOpen = FailedOpen(chapterUrl, now, e)
-            throw e
-        }
-    }
-
-    // Caller holds sessionMutex
-    private suspend fun openChapter(chapterUrl: String, renewPass: Boolean = false): ChapterSession {
-        val fetch = Fetch.XHR.from(chapterPageUrl(chapterUrl))
-        val secret = readerSecret(chapterUrl)
-        readerPass(fetch, renew = renewPass)
-        val blob = loadChapter(chapterUrl, secret, fetch)
-            ?: run {
-                readerPass(fetch, renew = true)
-                loadChapter(chapterUrl, secret, fetch)
+        val scanlator = series.scans.joinToString().ifEmpty { null }
+        val chapters = series.rows
+            .map { row ->
+                val number = baseUrl.toHttpUrl().resolve(row.href)!!.pathSegments.last()
+                SChapter.create().apply {
+                    url = "${details.url}/$number"
+                    name = row.title ?: row.heading
+                    number.toFloatOrNull()?.let { chapter_number = it }
+                    date_upload = stored[url]?.takeIf { it > 0 } ?: row.age?.let(::age)?.let { (now - it).toEpochMilliseconds() } ?: 0L
+                    this.scanlator = scanlator
+                }
             }
-            ?: throw Exception("Reader verification failed")
-        val data = secret.decryptLoader(blob).parseAs<ReaderDataDto>()
-        val session = ChapterSession(secret, data.pageTokens, data.heartbeat, fetch)
-        chapterSessions.put(chapterUrl, session)
-        failedOpen = null
-        return session
+            .distinctBy { it.url }
+            .reversed()
+        return SMangaUpdate(details, chapters)
     }
 
-    // The loader's encrypted reader data; null while it asks for a reader pass
-    private suspend fun loadChapter(chapterUrl: String, secret: ReaderSecret, fetch: Fetch): String? {
-        val response = client.get(chapterPageUrl(chapterUrl, ".data"), fetch, ensureSuccess = false).ensureSiteSuccess()
-        val stream = response.parseAs<JsonArray>()
-        val state = stream.turboStreamValue("state")?.stringOrNull
-        when (state) {
-            "captcha" -> return null
-            "error" -> {
-                val status = stream.turboStreamValue("status")?.intOrNull
-                if (status == 401) throw Exception("This chapter requires login on the website")
-                throw response.siteError(stream.turboStreamValue("code")?.stringOrNull, status ?: response.code)
-            }
-        }
-        val blob = stream.turboStreamValue(secret.loaderField)?.stringOrNull
-        if (blob == null && state == "ok") throw ReaderChangedException()
-        return blob ?: throw Exception("Chapter unavailable: $state")
+    /** How long ago "Hace 3 días" is. */
+    private fun age(text: String): Duration? {
+        if (text == "Hace un momento") return Duration.ZERO
+        val match = AGE_REGEX.matchEntire(text) ?: return null
+        val count = match.groupValues[1].toLongOrNull() ?: 1
+        val unit = AGE_UNITS.entries.firstOrNull { match.groupValues[2].startsWith(it.key) }?.value ?: return null
+        return unit * count.toDouble()
     }
 
-    private var readerSecret: Pair<String, ReaderSecret>? = null
+    override val readerPages = "[data-page-index]"
 
-    // The secret of the reader build the chapter page loads, kept per bundle; caller holds sessionMutex
-    private suspend fun readerSecret(chapterUrl: String): ReaderSecret {
-        val chapterPage = chapterPageUrl(chapterUrl)
-        val bundleUrl = client.get(chapterPage, Fetch.DOCUMENT).asJsoup()
-            .selectFirst("link[rel=modulepreload][href*=/chapter-viewer-]")
-            ?.absUrl("href")
-            ?: throw ReaderChangedException()
-        readerSecret?.takeIf { it.first == bundleUrl }?.let { return it.second }
-        val bundle = client.get(bundleUrl, Fetch.SCRIPT.from(chapterPage)).body.string()
-        return ReaderSecret.fromBundle(bundle).also { readerSecret = bundleUrl to it }
-    }
+    override val readerText = ".catha-novel-body"
 
-    // "<manga id>/<number>" as the site's chapter page
-    private fun chapterPageUrl(chapterUrl: String, suffix: String = ""): HttpUrl {
-        val (mangaId, number) = chapterUrl.split("/", limit = 2)
-        return baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("manga")
-            .addPathSegment(mangaId)
-            .addPathSegment("chapter")
-            .addPathSegment(number + suffix)
-            .build()
-    }
-
-    // React Router turbo-stream: a flat array whose objects map "_<index of a key>" to the index of its value;
-    // negative indexes stand for null and other constants
-    private fun JsonArray.turboStreamValue(key: String): JsonElement? {
-        val keyIndex = indexOfFirst { it is JsonPrimitive && it.isString && it.content == key }
-        if (keyIndex < 0) return null
-        val valueIndex = firstNotNullOfOrNull { (it as? JsonObject)?.getIntOrNull("_$keyIndex") } ?: return null
-        return getOrNull(valueIndex)
-    }
-
-    companion object {
-        private val PACE_WAIT = 2.minutes
-        private val LIVE_REFRESH = 20.seconds
-        private const val DEFAULT_XOR_KEY = 67
-        private const val PASS_COOKIE = "cw_rp"
-        private const val PASS_REFUSED = "The site refuses the reader pass"
-        private const val PAGE_HOST = "catharsisworld.invalid"
+    override fun readerRefusal(text: String): String? = when {
+        "requiere iniciar sesión" in text -> "Inicia sesión en el sitio desde WebView para leer esta serie"
+        "Este capítulo es nuevo" in text ->
+            "Capítulo en acceso anticipado" + (UNLOCK_REGEX.find(text)?.let { " hasta el ${it.groupValues[1]}" } ?: "")
+        "no es compatible" in text -> "El sitio rechazó el navegador de la app; inténtalo de nuevo"
+        "VPN, proxy o servidor" in text -> "Desactiva la VPN o el proxy para leer en este sitio"
+        else -> null
     }
 }
+
+private const val PAGE_SIZE = 24
+private const val UNKNOWN_AUTHOR = "Desconocido"
+private val UUID_REGEX = Regex("""[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}""")
+private val UNLOCK_REGEX = Regex("""a partir del (\d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC)""")
+
+// The status labels the site's list takes, and the values it sends for them
+private val STATUSES = mapOf(
+    "En Emisión" to "curso",
+    "Hiatus" to "pausado",
+    "Terminado" to "terminado",
+    "Abandonado" to "abandonado",
+)
+
+private val AGE_REGEX = Regex("""Hace (\d+|una?) (\S+)""")
+private val AGE_UNITS = mapOf(
+    "segundo" to 1.seconds,
+    "minuto" to 1.minutes,
+    "hora" to 1.hours,
+    "día" to 1.days,
+    "semana" to 7.days,
+    "mes" to 30.days,
+    "año" to 365.days,
+)

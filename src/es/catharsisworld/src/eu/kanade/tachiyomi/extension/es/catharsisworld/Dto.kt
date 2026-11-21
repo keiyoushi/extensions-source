@@ -1,33 +1,53 @@
 package eu.kanade.tachiyomi.extension.es.catharsisworld
 
-import eu.kanade.tachiyomi.multisrc.catharsis.TilePlan
-import kotlinx.serialization.SerialName
+import eu.kanade.tachiyomi.multisrc.catharsis.MangaListDto
+import eu.kanade.tachiyomi.multisrc.catharsis.Point
 import kotlinx.serialization.Serializable
 
-// The chapter loader's encrypted field
 @Serializable
-class ReaderDataDto(
-    @SerialName("p") val pageTokens: List<String>,
-    @SerialName("r") val heartbeat: String,
+internal class SeriesPage(
+    val scale: Float,
+    val id: String?,
+    val height: Float,
+    val width: Float,
+    val tap: Point?,
+    val title: String?,
+    val altTitle: String?,
+    val badges: List<String> = emptyList(),
+    val description: String?,
+    val cover: String?,
+    val scans: List<String> = emptyList(),
+    val author: String?,
+    val rows: List<Row> = emptyList(),
+    val more: Point?,
+    val count: Int = -1,
+    val rating: Float?,
+    val votes: Int?,
 )
 
 @Serializable
-class HeartbeatRequest(
-    @SerialName("h") private val heartbeat: String,
+internal class ListingPage(
+    val scale: Float,
+    val width: Float,
+    val height: Float,
+    val tap: Point?,
+    val list: MangaListDto?,
+    val ids: Map<String, String?> = emptyMap(),
 )
 
 @Serializable
-class HeartbeatDto(
-    @SerialName("l") val liveToken: String,
+internal class GenrePanel(
+    val scale: Float,
+    val width: Float,
+    val height: Float,
+    val tap: Point?,
+    val names: List<String>?,
+    val ids: Map<String, String> = emptyMap(),
 )
 
-// What the reader's tile plan function returns
+// A genre of the filter panel, with its id when the site's cached lists showed it
 @Serializable
-class TilePlanDto(
-    @SerialName("X") val cols: List<Int>,
-    @SerialName("Y") val rows: List<Int>,
-    val colPerm: List<Int>,
-    val rowPerm: List<Int>,
-)
+internal class GenreOption(val name: String, val id: String?)
 
-fun TilePlanDto.toTilePlan() = TilePlan(cols.toIntArray(), rows.toIntArray(), colPerm.toIntArray(), rowPerm.toIntArray())
+@Serializable
+internal class Row(val href: String, val heading: String, val title: String?, val age: String?)
