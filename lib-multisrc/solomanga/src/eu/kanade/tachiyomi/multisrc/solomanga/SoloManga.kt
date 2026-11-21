@@ -87,6 +87,8 @@ abstract class SoloManga : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
+        // Site domain without its wN. mirror label, covers img.<domain> and <domain>/wp-content/uploads
+        val hosts = bloggerHosts + imageHosts + baseUrl.toHttpUrl().host.substringAfter('.')
         return document.select(".entry-content img, .post-single-content img")
             .mapNotNull { img ->
                 // Pages are lazy-loaded: src holds a data: placeholder, the real image is in data-src or srcset
@@ -94,19 +96,12 @@ abstract class SoloManga : KeiSource() {
                     .ifBlank { img.attr("data-lazy-src") }
                     .ifBlank { img.attr("srcset").substringBefore(',').substringBefore(' ').trim() }
                     .ifBlank { img.attr("abs:src") }
-                url.takeIf { it.startsWith("http") && isPageImage(it) }
+                // "cropped-" is the site logo and other cropped assets
+                url.takeIf { it.startsWith("http") && "cropped-" !in it && hosts.any(it::contains) }
             }
             .distinct()
             .mapIndexed { index, url -> Page(index, imageUrl = url) }
     }
 
-    private fun isPageImage(url: String): Boolean {
-        if ("cropped-" in url) return false // site logo and other cropped assets
-        return (allowedHosts + imageHosts).any { it in url }
-    }
-
-    // Site domain without its wN. mirror label, covers img.<domain> and <domain>/wp-content/uploads
-    private val allowedHosts by lazy {
-        listOf("blogger.googleusercontent.com", "bp.blogspot.com", baseUrl.toHttpUrl().host.substringAfter('.'))
-    }
+    private val bloggerHosts = listOf("blogger.googleusercontent.com", "bp.blogspot.com")
 }
