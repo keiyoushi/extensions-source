@@ -13,6 +13,6 @@ keiyoushi {
 
     source {
         lang = "en"
-        baseUrl = "https://w3.theexiledheavyknight.com"
+        baseUrl = "https://w4.theexiledheavyknight.com"
     }
 }
