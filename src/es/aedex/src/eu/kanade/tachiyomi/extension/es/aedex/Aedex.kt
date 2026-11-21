@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.aedex
 
+import android.util.Base64
 import android.util.LruCache
 import eu.kanade.tachiyomi.multisrc.catharsis.Catharsis
 import eu.kanade.tachiyomi.multisrc.catharsis.ChapterDto
@@ -14,7 +15,6 @@ import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParse
@@ -121,11 +121,16 @@ abstract class Aedex : Catharsis() {
     }
 
     private suspend fun loadSigner(chapter: SChapter): ReaderSigner {
-        val vault = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup().getElementById("aedex-reader-vault")
-            ?: throw IOException("Reader keys not found")
-        val token = vault.attrOrNull("data-t") ?: throw IOException("Reader keys not found")
-        val seed = vault.attrOrNull("data-s") ?: throw IOException("Reader keys not found")
-        return ReaderSigner("ax", token, seed)
+        val doc = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
+        doc.selectFirst("[data-t][data-s]")?.let { vault ->
+            return ReaderSigner("ax", vault.attr("data-t"), vault.attr("data-s"))
+        }
+        val hexAttrs = doc.select("[hidden]").firstNotNullOfOrNull { el ->
+            el.attributes()
+                .filter { it.key.startsWith("data-") && HEX_32_REGEX.matches(it.value) }
+                .takeIf { it.size == 2 }
+        } ?: throw IOException("Reader keys not found")
+        return ReaderSigner("ax", hexAttrs[0].value, hexAttrs[1].value)
     }
 
     private suspend fun openReader(chapter: SChapter): Document {
@@ -151,14 +156,26 @@ abstract class Aedex : Catharsis() {
     }
 
     private fun readerSession(reader: Document): ReaderSession {
-        val seed = reader.getElementById("bv-vault")?.attr("data-bv-seed") ?: throw IOException("Reader seed not found")
-        val lector = reader.select("script").firstNotNullOfOrNull { LECTOR_REGEX.find(it.data())?.groupValues?.get(1) }
-            ?.parseAs<LectorDto>()
-            ?: throw IOException("Reader keys not found")
+        val seed = reader.select("[hidden]").firstNotNullOfOrNull { el ->
+            el.attributes().firstOrNull { it.key.startsWith("data-") && HEX_32_REGEX.matches(it.value) }?.value
+        } ?: throw IOException("Reader seed not found")
+        val lector = reader.select("script").firstNotNullOfOrNull { script ->
+            LECTOR_REGEX.findAll(script.data()).firstNotNullOfOrNull { match ->
+                val raw = match.groupValues[1].takeIf { it.isNotEmpty() }
+                    ?.let { Base64.decode(it, Base64.DEFAULT).decodeToString() }
+                    ?: match.groupValues[2]
+                runCatching { raw.parseAs<LectorDto>() }.getOrNull()
+            }
+        } ?: throw IOException("Reader keys not found")
+        val handles = reader.select("canvas.manga-page-canvas, canvas[data-page]").mapNotNull { canvas ->
+            canvas.attributes().firstOrNull { attr ->
+                attr.key.startsWith("data-") && attr.key != "data-page" && attr.value.length > 16
+            }?.value
+        }.ifEmpty { throw IOException("Reader pages not found") }
         return ReaderSession(
             readerUrl = reader.location(),
             keys = VisitKeys(lector.token, seed, lector.liveKey, lector.now - Clock.System.now().toEpochMilliseconds()),
-            handles = reader.select("canvas.manga-page-canvas[data-h]").map { it.attr("data-h") },
+            handles = handles,
         )
     }
 
@@ -181,7 +198,8 @@ abstract class Aedex : Catharsis() {
     companion object {
         private const val PASS_COOKIE = "ax_rp"
         private const val MAX_ATTEMPTS = 3
-        private val LECTOR_REGEX = Regex("""window\.__LECTOR__\s*=\s*(\{.*?\});""")
+        private val HEX_32_REGEX = Regex("^[0-9a-f]{32}$")
+        private val LECTOR_REGEX = Regex("""window\.__\w+\s*=\s*(?:JSON\.parse\(atob\("([^"]+)"\)\)|(\{[^;]+\}))""")
     }
 }
 

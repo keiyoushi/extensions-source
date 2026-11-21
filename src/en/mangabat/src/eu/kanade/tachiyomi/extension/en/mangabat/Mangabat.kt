@@ -6,6 +6,10 @@ import keiyoushi.annotation.Source
 
 @Source
 abstract class Mangabat : MangaBox() {
+
+    override val mirrorLegacyMap = mapOf(
+        "https://www.mangabats.com" to true,
+    )
     override fun getMangaUrl(manga: SManga): String {
         if (manga.url.contains("mangabat.com/")) {
             throw Exception(MIGRATE_MESSAGE)

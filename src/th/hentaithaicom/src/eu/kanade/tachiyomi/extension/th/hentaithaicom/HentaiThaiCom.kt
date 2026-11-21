@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.th.hentaithai
+package eu.kanade.tachiyomi.extension.th.hentaithaicom
 
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage

@@ -178,7 +178,7 @@ class LANraragi(
         }
 
         if (page == 1 && lastResultCount > 1 && preferences.getBoolean(RANDOM_ENTRY_SHOW_KEY, RANDOM_ENTRY_SHOW_DEFAULT)) {
-            val randQuery = searchUrl.query.toString()
+            val randQuery = searchUrl.encodedQuery.toString()
             randomArchiveID = getRandomID(randQuery)
 
             archives.add(

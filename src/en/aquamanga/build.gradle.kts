@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Aqua Manga"
-    versionCode = 17
+    versionCode = 18
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "madara"

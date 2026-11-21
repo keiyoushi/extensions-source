@@ -58,14 +58,18 @@ abstract class Softkomik : KeiSource() {
     // ======================== Search ========================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotEmpty()) {
-            val url = "$apiUrl/komik".toHttpUrl().newBuilder()
-                .addQueryParameter("name", query)
-                .addQueryParameter("search", "true")
-                .addQueryParameter("limit", "20")
-                .addQueryParameter("page", page.toString())
+            // The site's search returns at most 30 titles, with no cover and no paging.
+            val searchUrl = "$baseUrl/api/content/search".toHttpUrl().newBuilder()
+                .addQueryParameter("name", query.trim().take(100))
                 .build()
 
-            return client.get(url, Fetch.XHR).parseAs<LibDataDto>().toMangasPage()
+            val mangas = client.get(searchUrl, Fetch.XHR).parseAs<SearchDto>().data.map { manga ->
+                SManga.create().apply {
+                    url = manga.titleSlug
+                    title = manga.title
+                }
+            }
+            return MangasPage(mangas, false)
         }
 
         val url = libraryUrlBuilder(page)
@@ -517,7 +521,7 @@ abstract class Softkomik : KeiSource() {
     private val requiredLoginGenres = listOf("ecchi", "mature")
     private val sessionKeyChapterList = "chapter-list"
     private val sessionKeyChapterImage = "chapter-image"
-    private val apiUrl = "https://api.softkomik.org"
+    private val apiUrl = "https://v2.softkomik.org"
 
     // The site's own pages; any other first path segment is a series slug.
     private val sitePages = setOf("akun", "img", "komik", "u")

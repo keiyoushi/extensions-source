@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Doujin Moon"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     theme = "mangathemesia"
