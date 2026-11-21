@@ -88,6 +88,5 @@ class ImageListDto(
 @Serializable
 class WebViewResultDto(
     val needLogin: Boolean = false,
-    val needLevel2: Boolean = false,
     val urls: List<String> = emptyList(),
 )

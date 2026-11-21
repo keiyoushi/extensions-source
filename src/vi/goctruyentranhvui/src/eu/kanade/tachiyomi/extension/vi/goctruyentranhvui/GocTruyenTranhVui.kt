@@ -226,13 +226,8 @@ abstract class GocTruyenTranhVui :
 
                         val res = rawJson.parseAs<WebViewResultDto>()
 
-                        if (res.needLogin || res.needLevel2) {
-                            val message = if (res.needLogin) {
-                                "Để đọc chương này bạn cần đăng nhập trong WebView!"
-                            } else {
-                                "Chương này yêu cầu tài khoản cấp 2+ trong WebView!"
-                            }
-                            reject(Exception(message))
+                        if (res.needLogin) {
+                            reject(Exception("Để đọc chương này bạn cần đăng nhập trong WebView!"))
                         } else if (res.urls.isNotEmpty()) {
                             if (res.urls.size == lastCount) {
                                 stableCount++
