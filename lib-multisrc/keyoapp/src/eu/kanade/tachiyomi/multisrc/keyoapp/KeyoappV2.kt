@@ -10,7 +10,9 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
+import keiyoushi.utils.describe
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.setMeta
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
@@ -132,7 +134,7 @@ abstract class KeyoappV2 : KeyoappBase() {
     protected open fun parseMangaDetails(document: Document, slug: String): SManga = SManga.create().apply {
         url = seriesUrl(slug).encodedPath
         title = document.selectFirst("h1")!!.text()
-        description = document.selectFirst("#series-desc")?.wholeText()?.trim()
+        describe { description(document.selectFirst("#series-desc"), keepNewlines = true) }
         thumbnail_url = document.selectFirst("meta[property=og:image]")?.attrOrNull("content")
         genre = document.select("a[href*=\"?browse&tag\"]").eachText().joinToString().ifBlank { null }
         author = metaValue(document, "Author")
@@ -157,11 +159,10 @@ abstract class KeyoappV2 : KeyoappBase() {
         return rowsDocument.select("a.chapter-row[href]")
             .filter { showPaidChapters || it.attr("data-ch-locked") != "1" }
             .map { element ->
-                val locked = element.attr("data-ch-locked") == "1"
-                val label = element.attr("data-ch-label")
                 SChapter.create().apply {
                     setUrlWithoutDomain(element.absUrl("href"))
-                    name = if (locked) "🔒 $label" else label
+                    name = element.attr("data-ch-label")
+                    setMeta { locked = element.attr("data-ch-locked") == "1" }
                     element.selectFirst(".ch-date-row span:last-child")?.text()?.let { date_upload = it.parseDate() }
                 }
             }

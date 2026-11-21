@@ -125,17 +125,14 @@ class DemographicFilter :
         ),
     )
 
-class LanguageFilter :
-    CheckBoxGroup(
-        "Original language",
-        "language",
-        listOf(
-            "Japanese" to "ja",
-            "Korean" to "ko",
-            "Chinese" to "zh",
-            "Chinese (Hong Kong)" to "zh-hk",
-        ),
-    )
+val ORIGINAL_LANGUAGES = listOf(
+    "Japanese" to "ja",
+    "Korean" to "ko",
+    "Chinese" to "zh",
+    "Chinese (Hong Kong)" to "zh-hk",
+)
+
+class LanguageFilter : CheckBoxGroup("Original language", "language", ORIGINAL_LANGUAGES)
 
 val RATING_OPTIONS = listOf(
     "Default (Suggestive)" to "",

@@ -8,6 +8,7 @@ import keiyoushi.network.get
 import keiyoushi.network.head
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.putMemo
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -83,7 +84,7 @@ abstract class MadaraNoAjax : MadaraBase() {
                             this.url = id
                             title = card.title
                             thumbnail_url = card.thumbnail
-                            memo = mangaMemo(card.path, emptyList())
+                            putMemo(mangaMemo(card.path, emptyList()))
                         }
                     }
                 },
@@ -97,7 +98,7 @@ abstract class MadaraNoAjax : MadaraBase() {
                         this.url = id
                         title = card.title
                         thumbnail_url = card.thumbnail
-                        memo = mangaMemo(card.path, emptyList())
+                        putMemo(mangaMemo(card.path, emptyList()))
                     }
                 }
             },

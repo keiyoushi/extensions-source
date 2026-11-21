@@ -10,7 +10,9 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.describe
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.setMeta
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -157,26 +159,25 @@ abstract class Keyoapp : KeyoappBase() {
         status = document.selectFirst(statusSelector).parseStatus()
         author = document.selectFirst(authorSelector)?.text()
         artist = document.selectFirst(artistSelector)?.text()
+        val seriesType = document.selectFirst(typeSelector)?.text()
+        val genres = document.select(genreSelector).map { it.text().trim(',', ' ') }.filter(String::isNotBlank)
         genre = buildList {
-            document.selectFirst(typeSelector)?.text()?.replaceFirstChar {
-                it.titlecase(Locale.ENGLISH)
-            }?.let(::add)
-            document.select(genreSelector).forEach { add(it.text().trim(',', ' ')) }
-        }.filter(String::isNotBlank).joinToString()
+            seriesType?.replaceFirstChar { it.titlecase(Locale.ENGLISH) }?.takeIf(String::isNotBlank)?.let(::add)
+            addAll(genres)
+        }.joinToString()
 
-        val synopsis = document.selectFirst(descriptionSelector)?.text().orEmpty()
         val altNames = document.select(altNameSelector)
             .map { it.text() }
-            .filter { it.isNotEmpty() && it != "No alternative titles." }
-        description = buildString {
-            append(synopsis)
-            if (altNames.isNotEmpty()) {
-                if (isNotEmpty()) append("\n\n")
-                append(altNamePrefix.trim())
-                append("\n")
-                altNames.joinTo(this, "\n") { "- $it" }
+            .filter { it != "No alternative titles." }
+        describe {
+            description(document.selectFirst(descriptionSelector))
+            altTitles(altNames, altNamePrefix)
+            meta {
+                field("Type", seriesType, summary = true)
+                primaryTags = genres
+                chips("Genres", genres)
             }
-        }.takeIf { it.isNotEmpty() }
+        }
     }
 
     protected open val paidChapterSelector: String = "img[alt~=Coin]"
@@ -196,9 +197,7 @@ abstract class Keyoapp : KeyoappBase() {
         element.selectFirst(dateSelector)?.run {
             date_upload = text().parseDate()
         }
-        if (element.select(paidChapterSelector).isNotEmpty()) {
-            name = "🔒 $name"
-        }
+        setMeta { locked = element.select(paidChapterSelector).isNotEmpty() }
     }
 
     // =============================== Pages ===============================

@@ -21,6 +21,8 @@ import eu.kanade.tachiyomi.extension.all.mangadex.dto.ListDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.MangaDataDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.MangaDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.MangaListDto
+import eu.kanade.tachiyomi.extension.all.mangadex.dto.MangaStatisticsDto
+import eu.kanade.tachiyomi.extension.all.mangadex.dto.StatisticsDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -447,13 +449,15 @@ class MangaDex(
      *
      * @throws Exception if the url is the old format so people migrate
      */
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga {
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga = coroutineScope {
         if (!helper.containsUuid(url.toString())) {
             throw Exception(helper.intl["migrate_warning"])
         }
 
+        val id = url.pathSegments[1]
+        val statistics = async { fetchStatistics(id) }
         val manga = client.get(
-            url = "${MDConstants.API_URL}/manga/${url.pathSegments[1]}"
+            url = "${MDConstants.API_URL}/manga/$id"
                 .toHttpUrl()
                 .newBuilder()
                 .addQueryParameter("includes[]", MDConstants.COVER_ART)
@@ -464,10 +468,11 @@ class MangaDex(
             cacheControl = CacheControl.FORCE_NETWORK,
         ).parseAs<MangaDto>(helper.json)
 
-        return helper.createManga(
+        helper.createManga(
             manga.data!!,
             fetchSimpleChapterList(manga),
             fetchFirstVolumeCover(manga),
+            statistics.await(),
             dexLang,
             preferences.coverQuality,
             preferences.altTitlesInDesc,
@@ -492,6 +497,10 @@ class MangaDex(
         return runCatching { response.parseAs<AggregateDto>(helper.json) }
             .getOrNull()?.volumes.orEmpty()
     }
+
+    // The title page's rating and follows
+    private suspend fun fetchStatistics(id: String): MangaStatisticsDto? = client.get("${MDConstants.API_URL}/statistics/manga/$id", Fetch.XHR)
+        .parseAs<StatisticsDto>(helper.json).statistics[id]
 
     /**
      * Attempt to get the first volume cover if the setting is enabled.

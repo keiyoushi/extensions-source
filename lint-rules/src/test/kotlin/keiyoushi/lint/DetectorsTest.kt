@@ -38,6 +38,23 @@ class DetectorsTest {
 
     private fun TestLintResult.count(n: Int) = expectWarningCount(n)
 
+    @Test
+    fun memoAssigned() {
+        check(
+            ContentDetector.MEMO_ASSIGNED,
+            """
+            package test.pkg
+            import eu.kanade.tachiyomi.source.model.*
+            import kotlinx.serialization.json.*
+            fun built() = SManga.create().apply { memo = buildJsonObject { } }
+            fun copied(other: SManga) = SManga.create().apply { memo = other.memo }
+            fun chapter(o: JsonObject) = SChapter.create().apply { memo = o }
+            fun read(manga: SManga) = manga.memo["slug"]
+            """,
+            Stubs.buildJson,
+        ).count(3)
+    }
+
     // region Network
 
     @Test

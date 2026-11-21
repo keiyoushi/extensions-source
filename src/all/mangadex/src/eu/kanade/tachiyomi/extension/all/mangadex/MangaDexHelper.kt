@@ -21,6 +21,8 @@ import eu.kanade.tachiyomi.extension.all.mangadex.dto.ListAttributesDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.ListDataDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.MangaAttributesDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.MangaDataDto
+import eu.kanade.tachiyomi.extension.all.mangadex.dto.MangaStatisticsDto
+import eu.kanade.tachiyomi.extension.all.mangadex.dto.PublicationDemographicDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.ScanlationGroupAttributes
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.ScanlationGroupDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.StatusDto
@@ -36,7 +38,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
+import keiyoushi.utils.MangaMeta
+import keiyoushi.utils.describe
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.setMeta
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
@@ -46,9 +51,11 @@ import kotlinx.serialization.modules.subclass
 import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.parser.Parser
+import java.text.NumberFormat
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -316,6 +323,7 @@ class MangaDexHelper(private val lang: String) {
         mangaDataDto: MangaDataDto,
         chapters: Map<String, AggregateVolume>,
         firstVolumeCover: String?,
+        statistics: MangaStatisticsDto?,
         lang: String,
         coverSuffix: String?,
         altTitlesInDesc: Boolean,
@@ -362,50 +370,84 @@ class MangaDexHelper(private val lang: String) {
 
         val genreList = MDConstants.TAG_GROUPS_ORDER.flatMap { genresMap[it].orEmpty() } + nonGenres
 
-        // Build description
-        val desc = mutableListOf<String>()
-
-        (attr.description[lang] ?: attr.description["en"])
-            ?.removeEntitiesAndMarkdown()
-            ?.let { desc.add(it) }
-
-        if (altTitlesInDesc) {
-            val romanizedOriginalLang = MDConstants.romanizedLangCodes[attr.originalLanguage].orEmpty()
-            val allLanguages = lang == MDConstants.ALL_LANGUAGES
-            val altTitles = attr.altTitles
-                .filter { allLanguages || it.containsKey(lang) || it.containsKey(romanizedOriginalLang) }
-                .mapNotNull { it.entries.singleOrNull() }
-                .filter { it.value.isNotEmpty() }
-                .map { (code, title) -> if (allLanguages) "[$code] $title" else title }
-
-            if (altTitles.isNotEmpty()) {
-                val altTitlesDesc = altTitles
-                    .joinToString("\n", "${intl["alternative_titles"]}\n") { "• $it" }
-                desc.add(altTitlesDesc.removeEntities())
-            }
-        }
-
-        if (finalChapterInDesc) {
-            val finalChapter = mutableListOf<String>()
-            attr.lastVolume?.takeIf { it.isNotEmpty() }?.let { finalChapter.add("Vol.$it") }
-            attr.lastChapter?.takeIf { it.isNotEmpty() }?.let { finalChapter.add("Ch.$it") }
-
-            if (finalChapter.isNotEmpty()) {
-                val finalChapterDesc = finalChapter
-                    .joinToString(" ", "${intl["final_chapter"]}\n")
-                desc.add(finalChapterDesc.removeEntities())
-            }
-        }
-
         return createBasicManga(mangaDataDto, coverFileName, coverSuffix, lang, preferExtensionLangTitle).apply {
-            description = desc.joinToString("\n\n")
             author = authors.joinToString()
             artist = artists.joinToString()
             status = getPublicationStatus(attr, chapters)
             genre = genreList
                 .filter(String::isNotEmpty)
                 .joinToString()
+            describe {
+                // An unrated title still has MangaDex's starting score
+                statistics?.rating?.let { stats -> stats.distribution.values.sum().takeIf { it > 0 }?.let { votes -> rating(stats.bayesian, votes = votes) } }
+                description((attr.description[lang] ?: attr.description["en"])?.removeEntitiesAndMarkdown())
+                if (altTitlesInDesc) {
+                    val romanizedOriginalLang = MDConstants.romanizedLangCodes[attr.originalLanguage].orEmpty()
+                    val allLanguages = lang == MDConstants.ALL_LANGUAGES
+                    altTitles(
+                        attr.altTitles
+                            .filter { allLanguages || it.containsKey(lang) || it.containsKey(romanizedOriginalLang) }
+                            .mapNotNull { it.entries.singleOrNull() }
+                            .filter { it.value.isNotEmpty() }
+                            .map { (code, title) -> (if (allLanguages) "[$code] $title" else title).removeEntities() },
+                        intl["alternative_titles"],
+                    )
+                }
+                val finalChapter = listOfNotNull(
+                    attr.lastVolume?.takeIf { it.isNotEmpty() }?.let { "Vol.$it" },
+                    attr.lastChapter?.takeIf { it.isNotEmpty() }?.let { "Ch.$it" },
+                ).joinToString(" ").removeEntities()
+                if (finalChapterInDesc) field(intl["final_chapter"], finalChapter)
+                meta {
+                    altTitles = attr.altTitles.flatMap { it.values }.map { it.removeEntities() }
+                    // The settings that keep these out of the description don't keep them from apps
+                    if (!altTitlesInDesc) titles(altTitles, intl["alternative_titles"])
+                    if (!finalChapterInDesc) field(intl["final_chapter"], finalChapter)
+                    field("Original title", attr.originalLanguage?.let { original -> attr.altTitles.firstNotNullOfOrNull { it[original] } }?.removeEntities())
+                    field("Demographic", attr.publicationDemographic?.takeIf { it != PublicationDemographicDto.NONE }?.let { intl["publication_demographic_${it.name.lowercase()}"] })
+                    field("Original language", attr.originalLanguage?.let { Locale.forLanguageTag(it).getDisplayName(dexLocale) }, summary = true)
+                    field("Year", attr.year?.toString(), summary = true)
+                    field("Follows", statistics?.follows?.takeIf { it > 0 }?.let { NumberFormat.getIntegerInstance(dexLocale).format(it) })
+                    contentRating = when (attr.contentRating) {
+                        ContentRatingDto.SAFE -> MangaMeta.ContentRating.SAFE
+                        ContentRatingDto.SUGGESTIVE -> MangaMeta.ContentRating.SUGGESTIVE
+                        ContentRatingDto.EROTICA, ContentRatingDto.PORNOGRAPHIC -> MangaMeta.ContentRating.ADULT
+                        null -> null
+                    }
+                    primaryTags = genresMap[MDConstants.TAG_GROUP_GENRE].orEmpty()
+                    // The title page's tag groups, in its order
+                    listOf(MDConstants.TAG_GROUP_GENRE, MDConstants.TAG_GROUP_THEME, MDConstants.TAG_GROUP_FORMAT, MDConstants.TAG_GROUP_CONTENT)
+                        .forEach { group -> chips(intl[group], genresMap[group].orEmpty()) }
+                    trackers(
+                        MangaMeta.Tracker.ANILIST to attr.links["al"],
+                        MangaMeta.Tracker.ANIMEPLANET to attr.links["ap"],
+                        MangaMeta.Tracker.KITSU to attr.links["kt"],
+                        MangaMeta.Tracker.MANGAUPDATES to attr.links["mu"],
+                        MangaMeta.Tracker.NOVELUPDATES to attr.links["nu"],
+                        MangaMeta.Tracker.MYANIMELIST to attr.links["mal"],
+                    )
+                    attr.links.mapNotNull { (key, value) -> mangaLink(key, value) }
+                        .groupBy({ it.first }, { it.second })
+                        .forEach { (group, groupLinks) -> links(groupLinks, group) }
+                }
+            }
         }
+    }
+
+    // The keys of the API's manga `links` that aren't trackers, as (group, label to url)
+    private fun mangaLink(key: String, value: String): Pair<String, Pair<String, String>>? {
+        if (value.isBlank()) return null
+        val stores = "Stores"
+        val (group, label, url) = when (key) {
+            "bw" -> Triple(stores, "BookWalker", "https://bookwalker.jp/$value")
+            "amz" -> Triple(stores, "Amazon", value)
+            "ebj" -> Triple(stores, "eBookJapan", value)
+            "cdj" -> Triple(stores, "CDJapan", value)
+            "raw" -> Triple("Original", "Raw", value)
+            "engtl" -> Triple("Official translations", "English", value)
+            else -> return null
+        }
+        return group to (label to (url.toHttpUrlOrNull() ?: return null).toString())
     }
 
     /**
@@ -414,10 +456,11 @@ class MangaDexHelper(private val lang: String) {
     fun createChapter(chapterDataDto: ChapterDataDto): SChapter {
         val attr = chapterDataDto.attributes!!
 
-        val groups = chapterDataDto.relationships
+        val groupNames = chapterDataDto.relationships
             .filterIsInstance<ScanlationGroupDto>()
             .filterNot { it.id == MDConstants.LEGACY_NO_GROUP_ID } // 'no group' left over from MDv3
             .mapNotNull { it.attributes?.name }
+        val groups = groupNames
             .joinToString(" & ")
             .ifEmpty {
                 // Fallback to uploader name if no group is set.
@@ -472,6 +515,11 @@ class MangaDexHelper(private val lang: String) {
             name = chapterName.joinToString(" ").removeEntities()
             date_upload = Instant.tryParse(attr.publishAt)
             scanlator = languagePrefix + unavailablePrefix + groups
+            setMeta {
+                volume = attr.volume?.takeIf { it.isNotEmpty() }
+                scanlators = groupNames
+                language = attr.translatedLanguage
+            }
         }
     }
 

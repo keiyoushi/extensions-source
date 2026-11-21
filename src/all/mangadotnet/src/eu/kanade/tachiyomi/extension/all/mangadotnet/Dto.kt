@@ -1,7 +1,8 @@
 package eu.kanade.tachiyomi.extension.all.mangadotnet
 
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.MangaMeta
+import keiyoushi.utils.describe
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -177,7 +178,6 @@ class Manga(
     private val animeNewsNetworkId: Long? = null,
     @SerialName("mangadex_id")
     private val mangadexID: String? = null,
-    @SerialName("year")
     private val year: Int? = null,
     @SerialName("chapter_count")
     private val chapterCount: Int? = null,
@@ -191,6 +191,8 @@ class Manga(
     private val artists: String? = null,
 ) {
     companion object {
+        private val ORIGIN_TYPES = mapOf("JP" to "Manga", "KR" to "Manhwa", "CN" to "Manhua", "EN" to "OEL")
+        private val ORIGIN_LANGUAGES = mapOf("JP" to "Japanese", "KR" to "Korean", "CN" to "Chinese", "EN" to "English")
         private val multipleNewlinesRegex = Regex("\n{3,}")
         private val listRegex = Regex("\n\n(-|•|\\d+\\.)")
     }
@@ -214,15 +216,10 @@ class Manga(
             runCatching { it.parseAs<List<String>>().joinToString() }.getOrNull()?.let { "\u200B\u200B$it" }
         }
         genre = buildList {
-            when (this@Manga.origin) {
-                "JP" -> add("Manga")
-                "KR" -> add("Manhwa")
-                "CN" -> add("Manhua")
-                "EN" -> add("OEL")
-            }
-            this@Manga.genres.forEach { add(it.trim()) }
+            ORIGIN_TYPES[origin]?.let(::add)
+            genres.forEach { add(it.trim()) }
             if (showTags) {
-                this@Manga.tags.flatMap { it.tags }
+                tags.flatMap { it.tags }
                     .map { it.name.trim() }
                     .sortedBy { it.lowercase() }
                     .forEach { add(it) }
@@ -237,35 +234,51 @@ class Manga(
                 else -> SManga.UNKNOWN
             }
         }
-        description = MarkdownDescription.Builder().apply {
+        describe {
             rating(this@Manga.rating, votes = ratingCount?.takeIf { it > 0 })
-            field("Year", year?.toString())
+            field("Year", year?.toString(), summary = true)
             field("Chapters", chapterCount?.toString())
             field("Volumes", extraVolumeCount?.takeIf { it > 0 }?.toString())
             field("Tracked", trackedCount?.toString())
-            field("Content Rating", contentRating?.replaceFirstChar { it.uppercase() })
+            field("Content Rating", contentRating?.replaceFirstChar { it.uppercase() }, summary = true)
             separator()
             markdown(
                 this@Manga.description?.replace("\r\n", "\n")
                     ?.replace(multipleNewlinesRegex, "\n\n")
                     ?.replace(listRegex, "\n$1"),
             )
+            trackers(
+                MangaMeta.Tracker.ANILIST to anilistID,
+                MangaMeta.Tracker.MANGAUPDATES to mangaupdatesID,
+                MangaMeta.Tracker.MANGABAKA to mangabakaID,
+                MangaMeta.Tracker.MYANIMELIST to malID,
+                MangaMeta.Tracker.KITSU to kitsuID,
+                MangaMeta.Tracker.ANIMEPLANET to animePlanetId,
+                MangaMeta.Tracker.SHIKIMORI to shikimoriId,
+            )
             links(
                 listOf(
-                    "AniList" to anilistID?.let { "https://anilist.co/manga/$it" },
-                    "MangaUpdates" to mangaupdatesID?.let { "https://www.mangaupdates.com/series/$it" },
-                    "MangaBaka" to mangabakaID?.let { "https://mangabaka.org/$it" },
-                    "MyAnimeList" to malID?.let { "https://myanimelist.net/manga/$it" },
-                    "Kitsu" to kitsuID?.let { "https://kitsu.app/manga/$it" },
-                    "AnimePlanet" to animePlanetId?.let { "https://www.anime-planet.com/manga/$it" },
-                    "Shikimori" to shikimoriId?.let { "https://shikimori.io/mangas/$it" },
                     "AnimeNewsNetwork" to animeNewsNetworkId?.let { "https://www.animenewsnetwork.com/encyclopedia/manga.php?id=$it" },
                     "MangaDex" to mangadexID?.let { "https://mangadex.org/title/$it" },
+                    // The site's source is where it gets its chapters, not a publisher
                     "Source" to sourceUrl,
                 ),
             )
             altTitles(altTitles)
-        }.build()
+            meta {
+                field("Type", ORIGIN_TYPES[origin], summary = true)
+                field("Original language", ORIGIN_LANGUAGES[origin], summary = true)
+                contentRating = when (this@Manga.contentRating) {
+                    "safe" -> MangaMeta.ContentRating.SAFE
+                    "suggestive" -> MangaMeta.ContentRating.SUGGESTIVE
+                    "erotica", "pornographic" -> MangaMeta.ContentRating.ADULT
+                    else -> null
+                }
+                primaryTags = genres.map(String::trim)
+                chips("Genres", primaryTags)
+                tags.forEach { category -> chips(category.category, category.tags.map { it.name }) }
+            }
+        }
         initialized = true
     }
 }
