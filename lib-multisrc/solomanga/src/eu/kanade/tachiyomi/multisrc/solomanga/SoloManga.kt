@@ -13,6 +13,7 @@ import keiyoushi.utils.asJsoup
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 
 abstract class SoloManga : KeiSource() {
 
@@ -20,11 +21,7 @@ abstract class SoloManga : KeiSource() {
 
     protected abstract val mangaTitle: String
 
-    protected abstract val chapterSlug: String
-
-    protected open val chapterRegex by lazy { Regex("""$chapterSlug(\d+)/?$""") }
-
-    protected open val chapterListSelector = "#ceo_latest_comics_widget-3"
+    protected open val chapterListSelector = "#ceo_latest_comics_widget-3 a"
 
     protected abstract val imageHosts: List<String>
 
@@ -77,17 +74,16 @@ abstract class SoloManga : KeiSource() {
 
     // ============================== Chapters ==============================
 
-    protected open fun chapterListParse(document: Document): List<SChapter> = document.select("$chapterListSelector a[href*='$chapterSlug']")
-        .map { it.attr("abs:href") }
-        .mapNotNull { href -> chapterRegex.find(href)?.let { chapterFromMatch(href, it) } }
-        .distinctBy { it.name }
+    protected open fun chapterListParse(document: Document): List<SChapter> = document.select(chapterListSelector).map(::chapterFromElement)
 
-    protected open fun chapterFromMatch(href: String, match: MatchResult): SChapter = SChapter.create().apply {
-        val number = match.groupValues[1]
-        setUrlWithoutDomain(href)
-        name = "Chapter $number"
-        chapter_number = number.toFloatOrNull() ?: 0f
+    // Slugs can be off (maid-sama-chapter-59-5 is Chapter 60), the link text is right
+    protected open fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        setUrlWithoutDomain(element.absUrl("href"))
+        name = element.text()
+        chapterNumberRegex.find(name)?.let { chapter_number = it.groupValues[1].toFloat() }
     }
+
+    private val chapterNumberRegex = Regex("""Chapter\s+(\d+(?:\.\d+)?)""")
 
     // =============================== Pages ================================
 

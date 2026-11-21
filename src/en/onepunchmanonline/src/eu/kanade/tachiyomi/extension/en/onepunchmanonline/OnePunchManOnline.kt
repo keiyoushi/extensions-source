@@ -12,11 +12,6 @@ abstract class OnePunchManOnline : SoloManga() {
 
     override val mangaTitle = "One Punch Man"
 
-    override val chapterSlug = "one-punch-man-chapter-"
-
-    // WordPress appends -1/-2 to duplicate slugs, so chapter-244-1 is Chapter 244
-    override val chapterRegex = Regex("""one-punch-man-chapter-(\d+)(?:-\d+)?/?$""")
-
     override val imageHosts = listOf("images.mangafreak.me")
 
     override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {

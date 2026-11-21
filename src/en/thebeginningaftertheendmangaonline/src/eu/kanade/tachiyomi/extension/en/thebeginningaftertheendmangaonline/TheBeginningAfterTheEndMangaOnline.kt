@@ -10,9 +10,9 @@ abstract class TheBeginningAfterTheEndMangaOnline : SoloManga() {
 
     override val mangaTitle = "The Beginning After The End"
 
-    override val chapterSlug = "beginning-after-the-end-"
+    private val chapterSlug = "beginning-after-the-end-"
 
-    override val chapterRegex = Regex("""(?:chapter|ch)-(\d+)/?$""")
+    private val chapterRegex = Regex("""(?:chapter|ch)-(\d+)/?$""")
 
     override val imageHosts = listOf("img.thebeginningaftertheendmanga.com")
 
