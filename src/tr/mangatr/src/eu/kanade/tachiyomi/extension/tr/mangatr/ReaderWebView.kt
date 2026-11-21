@@ -38,14 +38,20 @@ internal suspend fun readPagesInWebView(chapterUrl: String, userAgent: String, o
 @Serializable
 private class WebViewPages(val pages: List<String> = emptyList(), val login: Boolean = false)
 
+/** Marks a page put together from parts of one image, see [MangaTR] unscrambleInterceptor. */
+internal const val SLICES_FRAGMENT = "slices"
+
 internal const val LOGIN_REQUIRED = "Bu bölümü okuyabilmek için WebView üzerinden üye girişi yapmanız gerekmektedir."
 
-// Remembers which image each canvas was drawn from, as a drawn canvas keeps no url of its own
+// Remembers which image each canvas was drawn from, as a drawn canvas keeps no url of its own, and which part of it
 private const val CANVAS_HOOK = """
 (() => {
     const draw = CanvasRenderingContext2D.prototype.drawImage;
     CanvasRenderingContext2D.prototype.drawImage = function (image, ...rest) {
-        if (image instanceof HTMLImageElement && !this.canvas.dataset.kSrc) this.canvas.dataset.kSrc = image.currentSrc || image.src;
+        if (image instanceof HTMLImageElement && !this.canvas.dataset.kSrc) {
+            this.canvas.dataset.kSrc = image.currentSrc || image.src;
+            if (rest.length >= 8) this.canvas.dataset.kSlice = Math.round(rest[0]) + ':' + Math.round(rest[2]);
+        }
         return draw.call(this, image, ...rest);
     };
 })();
@@ -60,8 +66,9 @@ private const val COLLECT_PAGES = """
     document.documentElement.style.zoom = '0.02';
     window.scrollTo(0, document.documentElement.scrollHeight);
 
-    // A chapter can repeat a page, so every image counts, in the order the reader shows them
-    const urls = [];
+    // A chapter can repeat a page, so every image counts, in the order the reader shows them. Side by side canvases
+    // drawn from parts of one image are one page, put back together from those parts (#slices=x:w,x:w).
+    const pages = [];
     const reader = document.querySelector('.chapter-content') || document.body;
     for (const el of reader.querySelectorAll('img, canvas, [style*="background-image"]')) {
         let url = null;
@@ -69,8 +76,15 @@ private const val COLLECT_PAGES = """
         else if (el.tagName === 'CANVAS') url = el.dataset.kSrc;
         else url = (/url\(["']?([^"')]+)/.exec(el.style.backgroundImage) || [])[1];
         if (!url || !/^https:\/\/image\.mngtr\.site\//.test(url) || /\/kapak\//.test(url)) continue;
-        urls.push(url);
+        const slice = el.tagName === 'CANVAS' ? el.dataset.kSlice : null;
+        const last = pages[pages.length - 1];
+        if (slice && last && last.slices && last.url === url && last.parent === el.parentElement) {
+            last.slices.push(slice);
+            continue;
+        }
+        pages.push({ url, slices: slice ? [slice] : null, parent: el.parentElement });
     }
+    const urls = pages.map((p) => (p.slices && p.slices.length > 1 ? p.url + '#$SLICES_FRAGMENT=' + p.slices.join(',') : p.url));
     if (urls.length !== state.count) {
         state.count = urls.length;
         state.changed = Date.now();
