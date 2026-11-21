@@ -18,9 +18,7 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
@@ -32,10 +30,13 @@ abstract class Bbato : KeiSource() {
 
     // ============================== Popular ==============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        val path = if (page == 1) "/filter?sort=views" else "/filter?sort=views&page=$page"
-        return client.get("$baseUrl$path", Fetch.DOCUMENT).asJsoup().parseMangasPage()
-    }
+    override suspend fun getPopularManga(page: Int) = client.get("$baseUrl/home", Fetch.DOCUMENT).asJsoup().select("#most-viewed .mt-rank-item").map {
+        SManga.create().apply {
+            setUrlWithoutDomain(it.attr("abs:href"))
+            title = it.selectFirst(".mt-rank-title")!!.text()
+            thumbnail_url = it.selectFirst("img")?.getImageUrl()
+        }
+    }.let { MangasPage(it, false) }
 
     // ============================== Latest ===============================
 
@@ -71,14 +72,14 @@ abstract class Bbato : KeiSource() {
         return client.get(url, Fetch.DOCUMENT).asJsoup().parseMangasPage()
     }
 
-    private fun Document.parseMangasPage(): MangasPage {
-        val mangas = select(".original.card-lg .unit").mapNotNull { element ->
-            val poster = element.selectFirst("a.poster") ?: return@mapNotNull null
-            val title = element.selectFirst(".info > a")?.text() ?: throw Exception("Missing title")
+    private fun Element.parseMangasPage(): MangasPage {
+        val mangas = select(".mt-updates-grid .mt-card").mapNotNull { element ->
+            val card = element.selectFirst("a.mt-card-cover") ?: return@mapNotNull null
+            val title = element.selectFirst(".mt-card-title")?.text() ?: throw Exception("Missing title")
             SManga.create().apply {
-                setUrlWithoutDomain(poster.attr("abs:href"))
+                setUrlWithoutDomain(card.attr("abs:href"))
                 this.title = title
-                thumbnail_url = poster.selectFirst("img")?.getImageUrl()
+                thumbnail_url = card.selectFirst("img")?.getImageUrl()
             }
         }
 
@@ -103,22 +104,15 @@ abstract class Bbato : KeiSource() {
             }
             else -> return null
         }
-        val document = client.get("$baseUrl$mangaUrl", Fetch.DOCUMENT).asJsoup()
-        return SManga.create().apply {
-            setUrlWithoutDomain(mangaUrl)
-            title = document.selectFirst("h1[itemprop=name]")?.text() ?: return null
-            author = document.select(".meta div:has(span:contains(Author)) a").joinToString { it.text() }
-            description = document.selectFirst(".description")?.text()
-            genre = document.select(".meta div:has(span:contains(Genres)) a").joinToString { it.text() }
-            status = document.selectFirst(".info > p")?.text().toStatus()
-            thumbnail_url = document.selectFirst(".poster img")?.getImageUrl()
-            initialized = true
-        }
+        return fetchMangaUpdate(
+            SManga.create().apply { this.url = mangaUrl },
+            emptyList(),
+            true,
+            false,
+        ).manga
     }
 
     // ============================== Details & Chapters ==============================
-
-    private val dateTimeFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -131,12 +125,13 @@ abstract class Bbato : KeiSource() {
             SManga.create().apply {
                 url = manga.url
                 title = document.selectFirst("h1[itemprop=name]")?.text() ?: throw Exception("Missing title")
-                author = document.select(".meta div:has(span:contains(Author)) a").joinToString { it.text() }
-                description = document.selectFirst(".description")?.text()
-                genre = document.select(".meta div:has(span:contains(Genres)) a").joinToString { it.text() }
-                status = document.selectFirst(".info > p")?.text().toStatus()
-                thumbnail_url = document.selectFirst(".poster img")?.getImageUrl()
-                initialized = true
+                author = document.select(".mt-author-line a").joinToString { it.text() }
+                description = (
+                    document.selectFirst("#synopsisModal p") ?: document.selectFirst(".mt-comic-synopsis p")
+                    )?.text()
+                genre = document.select(".mt-comic-badges a, .mt-hero-genres a").joinToString { it.text() }
+                status = document.selectFirst(".mt-status-tag")?.text().toStatus()
+                thumbnail_url = document.selectFirst(".mt-comic-poster img")?.getImageUrl()
             }
         } else {
             manga
@@ -146,7 +141,7 @@ abstract class Bbato : KeiSource() {
             val slug = manga.url.removeSuffix("/").substringAfterLast("/")
             val chapterHeaders = headersBuilder().add("X-Requested-With", "XMLHttpRequest").build()
             val responseDto = client.get("$baseUrl/get-chapter-list?slug=$slug", chapterHeaders, Fetch.XHR).parseAs<ChapterListResponse>()
-            responseDto.toSChapterList(slug, dateTimeFormat)
+            responseDto.toSChapterList(slug)
         } else {
             chapters
         }
