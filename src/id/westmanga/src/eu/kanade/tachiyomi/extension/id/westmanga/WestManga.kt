@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.parseAs
@@ -19,13 +20,16 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
+import okhttp3.Response
 import kotlin.time.Clock
-import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 @Source
 abstract class WestManga : KeiSource() {
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(2) { it.pathSegments.first() == "api" }
+
     override suspend fun getPopularManga(page: Int) = getSearchMangaList(page, "", SortFilter.popular)
 
     override suspend fun getLatestUpdates(page: Int) = getSearchMangaList(page, "", SortFilter.latest)
@@ -140,45 +144,34 @@ abstract class WestManga : KeiSource() {
     private var visitToken: String? = null
     private var visitTokenExpiresAt = Instant.DISTANT_PAST
 
-    private suspend fun getVisitToken(forceRefresh: Boolean = false): String? = visitTokenMutex.withLock {
+    private suspend fun getVisitToken(stale: String? = null): String = visitTokenMutex.withLock {
         val now = Clock.System.now()
-        if (!forceRefresh && visitToken != null && now < visitTokenExpiresAt - 5.minutes) {
-            return@withLock visitToken
-        }
+        visitToken?.takeIf { it != stale && now < visitTokenExpiresAt - 5.minutes }?.let { return@withLock it }
 
         val url = "$baseUrl/api/visit-token".toHttpUrl()
-        val response = runCatching {
-            client.get(url, Fetch.XHR).parseAs<VisitTokenResponse>()
-        }.getOrNull()
-
-        if (response?.status == true && !response.token.isNullOrBlank()) {
-            visitToken = response.token
-            visitTokenExpiresAt = response.expiresAt?.let(Instant::fromEpochSeconds) ?: (now + 1.hours)
-            return@withLock visitToken
-        }
-
-        if (forceRefresh) {
-            visitToken = null
-            visitTokenExpiresAt = Instant.DISTANT_PAST
-        }
-        return@withLock visitToken
+        val response = client.get(url, Fetch.XHR).parseAs<VisitTokenResponse>()
+        visitTokenExpiresAt = Instant.fromEpochSeconds(response.expiresAt)
+        visitToken = response.token
+        response.token
     }
 
-    private suspend fun apiHeaders(includeToken: Boolean = true): Headers = headersBuilder().apply {
-        getVisitToken()?.let { set("X-WM-Visit", it) }
+    private suspend fun apiHeaders(token: String, includeToken: Boolean): Headers = headersBuilder().apply {
+        set("X-WM-Visit", token)
         if (includeToken) {
             bearerToken()?.let { set("Authorization", "Bearer $it") }
         }
     }.build()
 
-    private suspend inline fun <reified T> apiGet(url: HttpUrl, includeToken: Boolean = true): T = try {
-        client.get(url, apiHeaders(includeToken), Fetch.XHR).parseAs<T>()
-    } catch (e: Exception) {
-        if (e is HttpException && (e.code == 403 || e.code == 404)) {
-            getVisitToken(forceRefresh = true)
-            client.get(url, apiHeaders(includeToken), Fetch.XHR).parseAs<T>()
-        } else {
-            throw e
-        }
+    private suspend inline fun <reified T> apiGet(url: HttpUrl, includeToken: Boolean = true): T = api(url, includeToken).parseAs<T>()
+
+    private suspend fun api(url: HttpUrl, includeToken: Boolean): Response {
+        val token = getVisitToken()
+        val response = client.get(url, apiHeaders(token, includeToken), Fetch.XHR, ensureSuccess = false)
+        if (response.isSuccessful) return response
+        response.close()
+        // A token answers 40 API requests, then 429s until it expires; a stale one gets 403 + X-WM-Visit-Error.
+        val tokenRejected = response.code == 429 || (response.code == 403 && response.header("X-WM-Visit-Error") != null)
+        if (!tokenRejected) throw HttpException(response.code)
+        return client.get(url, apiHeaders(getVisitToken(stale = token), includeToken), Fetch.XHR)
     }
 }
