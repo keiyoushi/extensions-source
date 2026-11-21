@@ -4,9 +4,15 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.time.Instant
 
 private const val CDN_URL = "https://cdn.mediocrescan.com"
@@ -61,6 +67,7 @@ class MangaDetailsDto(
     @SerialName("obr_imagem") private val imagem: String? = null,
     @SerialName("obr_descricao") private val descricao: String? = null,
     @SerialName("obr_status") private val status: String? = null,
+    @SerialName("obr_titulos_alternativos") private val alternativeTitles: JsonElement? = null,
     private val tags: List<TagDto> = emptyList(),
     private val capitulos: List<ChapterDto>,
 ) {
@@ -68,7 +75,7 @@ class MangaDetailsDto(
         url = "/obra/$id"
         title = nome
         thumbnail_url = imagem?.let { "$CDN_URL/obras/$id/$it" }
-        description = descricao
+        description = descriptionMarkdown()
         genre = tags.joinToString { it.nome }
         this.status = when (this@MangaDetailsDto.status?.lowercase()) {
             "em_lancamento" -> SManga.ONGOING
@@ -78,6 +85,11 @@ class MangaDetailsDto(
             else -> SManga.UNKNOWN
         }
     }
+
+    fun descriptionMarkdown() = MarkdownDescription.Builder()
+        .description(descricao)
+        .altTitles(parseAltTitles(alternativeTitles), "Nomes alternativos")
+        .build()
 
     fun toChapterList() = capitulos.map(ChapterDto::toSChapter).sortedByDescending(SChapter::chapter_number)
 
@@ -121,3 +133,21 @@ class PageDto(
 }
 
 fun List<PageDto>.toPageList() = sortedBy(PageDto::ordem).mapIndexed { index, page -> Page(index, imageUrl = page.imageUrl) }
+
+// The site often sends the list serialized into a string, sometimes more than once, with "null" as a placeholder.
+fun parseAltTitles(element: JsonElement?): List<String> = when (element) {
+    is JsonArray -> element.flatMap(::parseAltTitles)
+    is JsonPrimitive -> if (element.isString) unwrapTitle(element.content) else emptyList()
+    else -> emptyList()
+}
+
+private fun unwrapTitle(text: String): List<String> {
+    val title = text.trim()
+    if (title.isEmpty() || title.equals("null", ignoreCase = true)) return emptyList()
+    if (!title.startsWith('[')) return listOf(title)
+    return try {
+        parseAltTitles(title.parseAs<JsonElement>())
+    } catch (_: SerializationException) {
+        listOf(title)
+    }
+}
