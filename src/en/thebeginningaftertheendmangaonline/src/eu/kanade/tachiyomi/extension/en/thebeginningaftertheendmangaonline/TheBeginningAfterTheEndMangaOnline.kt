@@ -9,6 +9,4 @@ abstract class TheBeginningAfterTheEndMangaOnline : SoloManga() {
     override val mangaTitle = "The Beginning After The End"
 
     override val chapterListSelector = ".kt-svg-icon-list a"
-
-    override val imageHosts = listOf("img.thebeginningaftertheendmanga.com")
 }

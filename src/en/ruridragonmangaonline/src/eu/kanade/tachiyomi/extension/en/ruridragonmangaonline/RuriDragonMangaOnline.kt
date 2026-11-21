@@ -7,6 +7,4 @@ import keiyoushi.annotation.Source
 abstract class RuriDragonMangaOnline : SoloManga() {
 
     override val mangaTitle = "RuriDragon"
-
-    override val imageHosts = listOf("img.ruridragon.com", "ruridragon.com/wp-content/uploads")
 }

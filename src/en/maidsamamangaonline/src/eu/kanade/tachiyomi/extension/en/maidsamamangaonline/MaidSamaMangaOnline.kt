@@ -10,8 +10,6 @@ abstract class MaidSamaMangaOnline : SoloManga() {
 
     override val mangaTitle = "Maid Sama"
 
-    override val imageHosts = listOf("img.maid-sama.com")
-
     private val specialRegex = Regex("""Oneshot Special (\d+)""")
 
     // Specials come after the last chapter (85.2), without this they'd be read as chapters 1-5

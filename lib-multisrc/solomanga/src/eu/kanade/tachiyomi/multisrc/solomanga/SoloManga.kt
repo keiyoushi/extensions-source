@@ -23,7 +23,7 @@ abstract class SoloManga : KeiSource() {
 
     protected open val chapterListSelector = "#ceo_latest_comics_widget-3 a"
 
-    protected abstract val imageHosts: List<String>
+    protected open val imageHosts = emptyList<String>()
 
     protected open val pageSelector = ".entry-content img"
 
@@ -104,8 +104,11 @@ abstract class SoloManga : KeiSource() {
 
     private fun isPageImage(url: String): Boolean {
         if ("cropped-" in url) return false // site logo and other cropped assets
-        return (bloggerHosts + imageHosts).any { it in url }
+        return (allowedHosts + imageHosts).any { it in url }
     }
 
-    private val bloggerHosts = listOf("blogger.googleusercontent.com", "bp.blogspot.com")
+    // Site domain without its wN. mirror label, covers img.<domain> and <domain>/wp-content/uploads
+    private val allowedHosts by lazy {
+        listOf("blogger.googleusercontent.com", "bp.blogspot.com", baseUrl.toHttpUrl().host.substringAfter('.'))
+    }
 }

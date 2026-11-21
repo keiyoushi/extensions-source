@@ -10,8 +10,6 @@ abstract class KaijiMangaOnline : SoloManga() {
 
     override val mangaTitle = "Kaiji"
 
-    override val imageHosts = listOf("img.kaijimanga.com", "kaijimanga.com/wp-content/uploads")
-
     private val chapterUrlRegex = Regex("""/manga/(.+)-chapter-(\d+)/?$""")
 
     // Four arcs share chapter numbers, so each arc starts after the older ones end (older arcs are finished)

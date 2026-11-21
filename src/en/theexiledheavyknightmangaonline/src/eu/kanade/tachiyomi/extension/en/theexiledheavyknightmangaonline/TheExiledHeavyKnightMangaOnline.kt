@@ -16,11 +16,7 @@ abstract class TheExiledHeavyKnightMangaOnline : SoloManga() {
 
     override val pageSelector = ".post-single-content img, .entry-content img"
 
-    override val imageHosts = listOf(
-        "pic.readkakegurui.com",
-        "img.theexiledheavyknight.com",
-        "theexiledheavyknight.com/wp-content/uploads",
-    )
+    override val imageHosts = listOf("pic.readkakegurui.com")
 
     override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
         description = document.select(".right-content > p.wp-block-paragraph:not(:has(strong))")
