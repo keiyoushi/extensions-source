@@ -21,7 +21,7 @@ abstract class KaijiMangaOnline : SoloManga() {
     )
 
     override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
-        val (arc, num) = chapterUrlRegex.find(url)!!.destructured
+        val (arc, num) = chapterUrlRegex.find(url)?.destructured ?: return@apply
         val number = num.toFloat()
         // Chapter 0 is a prologue the site lists last.
         chapter_number = if (number == 0f) 0f else arcOffsets[arc]?.plus(number) ?: -1f
