@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.pawchive
 
+import android.os.SystemClock
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
@@ -15,7 +16,6 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
-import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
@@ -32,6 +32,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.Cache
 import okhttp3.CacheControl
+import okhttp3.Dispatcher
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -40,6 +41,7 @@ import okhttp3.Request
 import okhttp3.Response
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -56,8 +58,19 @@ abstract class Pawchive :
     @Volatile
     private var fileServersUnreachable = false
 
+    private val hostPacers = ConcurrentHashMap<String, HostPacer>()
+
     override fun OkHttpClient.Builder.configureClient() = apply {
+        // Isolate from the app's shared Dispatcher so concurrent source downloads and DoH aren't
+        // starved, and raise maxRequestsPerHost to match Mihon/Komikku's 1..15 page concurrency.
+        dispatcher(
+            Dispatcher().apply {
+                maxRequests = 64
+                maxRequestsPerHost = 15
+            },
+        )
         addInterceptor(::thumbnailFallbackInterceptor)
+        addInterceptor(::adaptiveRateLimitInterceptor)
         cache(
             Cache(
                 directory = File(
@@ -67,9 +80,113 @@ abstract class Pawchive :
                 maxSize = 50L * 1024 * 1024, // 50 MiB
             ),
         )
-        readTimeout(5.minutes)
-        rateLimit(5) { it.pathSegments.firstOrNull() == "api" }
-        rateLimit(5) { it.pathSegments.firstOrNull() in FILE_PATHS }
+        // Keep pooled HTTP/2 connections alive and detect dead sockets quickly during long downloads
+        pingInterval(20.seconds)
+    }
+
+    // Self-tuning per-host pacer: starts unthrottled, measures the host's actual sustainable
+    // interval when recovering from a 429, and slowly eases back toward full speed on successes.
+    private class HostPacer {
+        private var intervalMs = 0L
+        private var lastDispatchMs = 0L
+        private var cooldownUntilMs = 0L
+        private var backingOff = false
+        private var windowStartMs = 0L
+        private var lastSuccessMs = 0L
+        private var windowSuccesses = 0
+
+        fun waitForTurn(chain: Interceptor.Chain) {
+            while (true) {
+                if (chain.call().isCanceled()) throw IOException("Canceled")
+                val waitMs = synchronized(this) {
+                    val now = SystemClock.elapsedRealtime()
+                    val readyAt = maxOf(
+                        if (intervalMs > 0L) lastDispatchMs + intervalMs else 0L,
+                        cooldownUntilMs,
+                    )
+                    if (now >= readyAt) {
+                        lastDispatchMs = now
+                        0L
+                    } else {
+                        readyAt - now
+                    }
+                }
+                if (waitMs <= 0L) return
+                try {
+                    Thread.sleep(minOf(waitMs, 250L))
+                } catch (e: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    throw IOException("Canceled", e)
+                }
+            }
+        }
+
+        fun onSuccess() {
+            synchronized(this) {
+                val now = SystemClock.elapsedRealtime()
+                if (now < cooldownUntilMs) return
+                if (backingOff) {
+                    backingOff = false
+                    if (windowSuccesses > 0) {
+                        val measured = (now - windowStartMs) / windowSuccesses
+                        intervalMs = maxOf(measured, intervalMs).coerceIn(100L, MAX_INTERVAL_MS)
+                    }
+                    windowStartMs = now
+                    windowSuccesses = 1
+                } else {
+                    if (windowSuccesses == 0 || now - lastSuccessMs > IDLE_RESET_MS) {
+                        windowStartMs = now
+                        windowSuccesses = 0
+                    }
+                    windowSuccesses++
+                    if (intervalMs > 0L) {
+                        intervalMs = (intervalMs - 20L).coerceAtLeast(0L)
+                    }
+                }
+                lastSuccessMs = now
+            }
+        }
+
+        fun onRateLimited(retryAfterMs: Long) = synchronized(this) {
+            val now = SystemClock.elapsedRealtime()
+            val until = now + retryAfterMs
+            if (!backingOff) {
+                backingOff = true
+                intervalMs = if (intervalMs == 0L) 500L else (intervalMs * 5 / 4).coerceAtMost(MAX_INTERVAL_MS)
+            }
+            cooldownUntilMs = maxOf(cooldownUntilMs, until)
+        }
+    }
+
+    private fun adaptiveRateLimitInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        // Separate /api/ from /icons/ on the main host so cover loading never delays API calls
+        val key = if (request.url.pathSegments.firstOrNull() == "api") {
+            "${request.url.host}/api"
+        } else {
+            request.url.host
+        }
+        val pacer = hostPacers.computeIfAbsent(key) { HostPacer() }
+
+        for (attempt in 0..MAX_429_RETRIES) {
+            pacer.waitForTurn(chain)
+
+            val response = chain.proceed(request)
+            if (response.code == 429 && attempt < MAX_429_RETRIES) {
+                val retryAfterMs = (
+                    response.header("Retry-After")?.toLongOrNull()?.times(1000L)
+                        ?: ((2L shl attempt) * 1000L)
+                    ).coerceIn(1000L, 30_000L)
+                response.close()
+                pacer.onRateLimited(retryAfterMs)
+                continue
+            }
+
+            if (response.isSuccessful) pacer.onSuccess()
+            return response
+        }
+
+        throw IOException("Rate limit retries exhausted")
     }
 
     private fun thumbnailFallbackInterceptor(chain: Interceptor.Chain): Response {
@@ -87,7 +204,7 @@ abstract class Pawchive :
         if (!isFileServer || !fileServersUnreachable) {
             try {
                 val response = chain.proceed(request)
-                if (response.isSuccessful) return response
+                if (response.isSuccessful || response.code == 429) return response
                 response.close()
             } catch (e: IOException) {
                 if (chain.call().isCanceled()) throw e
@@ -487,16 +604,13 @@ abstract class Pawchive :
 
     private suspend fun retry(url: String): Response {
         var code = 0
-        repeat(5) {
+        repeat(3) { attempt ->
             val response = client.get(url, Fetch.XHR, ensureSuccess = false)
             if (response.isSuccessful) return response
             code = response.code
             response.close()
-            if (code == 429) {
-                delay(10.seconds)
-            } else if (code in 400..499) {
-                throw HttpException(code)
-            }
+            if (code !in 500..599) throw HttpException(code)
+            if (attempt < 2) delay((1L shl attempt).seconds)
         }
         throw HttpException(code)
     }
@@ -575,8 +689,11 @@ abstract class Pawchive :
 
     companion object {
         private val services = setOf("patreon", "fanbox")
-        private val FILE_PATHS = setOf("data", "f")
         private val NO_STORE_CACHE_CONTROL = CacheControl.Builder().noStore().build()
+
+        private const val MAX_429_RETRIES = 6
+        private const val MAX_INTERVAL_MS = 4_000L
+        private const val IDLE_RESET_MS = 60_000L
 
         private const val PAGE_POST_LIMIT = 50
         private const val PAGE_CREATORS_LIMIT = 50
