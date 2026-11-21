@@ -15,7 +15,6 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
@@ -23,6 +22,7 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
@@ -122,13 +122,9 @@ abstract class Taiyo : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = mangaUpdate(
-        manga,
-        chapters,
-        fetchDetails,
-        fetchChapters,
-        details = { parseMangaDetails(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()) },
-        chapterList = { fetchChapterList(manga) },
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) parseMangaDetails(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()) else manga },
+        chapters = { if (fetchChapters) fetchChapterList(manga) else chapters },
     )
 
     private fun parseMangaDetails(document: Document) = SManga.create().apply {

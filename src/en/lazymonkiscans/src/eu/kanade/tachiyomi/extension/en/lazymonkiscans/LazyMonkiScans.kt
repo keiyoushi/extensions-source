@@ -6,11 +6,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
@@ -70,20 +70,24 @@ abstract class LazyMonkiScans : KeiSource() {
     ): SMangaUpdate {
         val id = getMangaUrl(manga).toHttpUrl().queryParameter("manga")!!
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = {
-                val document = client.get(documentUrl("mangas/$id"), Fetch.XHR).parseAs<DocumentDto>()
-                document.toSMangaDetails(document.coverUrl())
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    val document = client.get(documentUrl("mangas/$id"), Fetch.XHR).parseAs<DocumentDto>()
+                    document.toSMangaDetails(document.coverUrl())
+                } else {
+                    manga
+                }
             },
-            chapterList = {
-                fetchDocuments("chapters", CHAPTER_FIELDS)
-                    .filter { it.text("mangaId") == id }
-                    .map { it.toSChapter(id) }
-                    .sortedByDescending { it.chapter_number }
+            chapters = {
+                if (fetchChapters) {
+                    fetchDocuments("chapters", CHAPTER_FIELDS)
+                        .filter { it.text("mangaId") == id }
+                        .map { it.toSChapter(id) }
+                        .sortedByDescending { it.chapter_number }
+                } else {
+                    chapters
+                }
             },
         )
     }

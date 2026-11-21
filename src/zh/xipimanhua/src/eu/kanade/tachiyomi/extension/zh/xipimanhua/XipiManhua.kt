@@ -10,12 +10,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -94,7 +94,8 @@ abstract class XipiManhua :
         }
         // Links can carry anything; only a base64 "m:<id>" is a series
         if (mid.isNullOrEmpty() || runCatching { decode(mid) }.getOrNull()?.startsWith("m:") != true) return null
-        return getMangaDetailsByUrl(mid)
+        val manga = SManga.create().apply { this.url = mid }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun fetchMangaUpdate(
@@ -102,13 +103,9 @@ abstract class XipiManhua :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = mangaUpdate(
-        manga,
-        chapters,
-        fetchDetails,
-        fetchChapters,
-        details = { mangaDetails(manga.url) },
-        chapterList = { chapterList(manga.url) },
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) mangaDetails(manga.url) else manga },
+        chapters = { if (fetchChapters) chapterList(manga.url) else chapters },
     )
 
     private suspend fun mangaDetails(mid: String): SManga {

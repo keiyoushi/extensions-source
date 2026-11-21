@@ -10,12 +10,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -160,7 +160,7 @@ abstract class TuLinhTruyen :
             else -> null
         } ?: return null
         val manga = SManga.create().apply { this.url = "/manga/$mangaId" }
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga()
     }
 
     // =========================== Manga Details ============================
@@ -173,24 +173,28 @@ abstract class TuLinhTruyen :
     ): SMangaUpdate {
         val mangaId = manga.url.substringAfterLast('/')
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = {
-                val detailUrl = "$baseUrl/manga/$mangaId".toHttpUrl().newBuilder()
-                    .addQueryParameter("includes[]", "cover_art")
-                    .addQueryParameter("includes[]", "author")
-                    .build()
-                client.get(detailUrl, Fetch.XHR).parseAs<MangaDetailResponse>().data.toSManga(baseUrl, manga.url)
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    val detailUrl = "$baseUrl/manga/$mangaId".toHttpUrl().newBuilder()
+                        .addQueryParameter("includes[]", "cover_art")
+                        .addQueryParameter("includes[]", "author")
+                        .build()
+                    client.get(detailUrl, Fetch.XHR).parseAs<MangaDetailResponse>().data.toSManga(baseUrl, manga.url)
+                } else {
+                    manga
+                }
             },
-            chapterList = {
-                val feedUrl = "$baseUrl/manga/$mangaId/feed".toHttpUrl().newBuilder()
-                    .addQueryParameter("limit", "500")
-                    .addQueryParameter("order[chapter]", "desc")
-                    .build()
-                client.get(feedUrl, Fetch.XHR).parseAs<ChapterListResponse>().data.map { it.toSChapter() }
+            chapters = {
+                if (fetchChapters) {
+                    val feedUrl = "$baseUrl/manga/$mangaId/feed".toHttpUrl().newBuilder()
+                        .addQueryParameter("limit", "500")
+                        .addQueryParameter("order[chapter]", "desc")
+                        .build()
+                    client.get(feedUrl, Fetch.XHR).parseAs<ChapterListResponse>().data.map { it.toSChapter() }
+                } else {
+                    chapters
+                }
             },
         )
     }

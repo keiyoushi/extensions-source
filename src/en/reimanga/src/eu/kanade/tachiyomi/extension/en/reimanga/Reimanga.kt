@@ -11,13 +11,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
@@ -130,7 +130,13 @@ abstract class Reimanga :
         if (url.host != baseUrl.toHttpUrl().host) return null
         if (url.pathSegments.firstOrNull() != "manga") return null
         val slug = url.pathSegments.getOrNull(1) ?: return null
-        return getMangaDetailsByUrl(slug)
+
+        return getMangaUpdate(
+            SManga.create().apply { this.url = slug },
+            emptyList(),
+            fetchDetails = true,
+            fetchChapters = false,
+        ).manga
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"

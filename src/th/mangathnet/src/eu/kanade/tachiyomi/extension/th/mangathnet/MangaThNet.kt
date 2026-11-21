@@ -5,11 +5,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
@@ -86,7 +86,8 @@ abstract class MangaThNet : KeiSource() {
             "chapter" -> getChapterData(id).takeIf { it.contentType in TYPES }?.path ?: return null
             else -> return null
         }
-        return getMangaDetailsByUrl(path)
+        val manga = SManga.create().apply { this.url = path }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     // The series page has the details and every chapter

@@ -162,7 +162,6 @@ object Stubs {
 
         abstract class KeiSource : eu.kanade.tachiyomi.source.online.HttpSource() {
             override val supportsLatest get() = true
-            protected suspend fun getMangaDetailsByUrl(url: String): eu.kanade.tachiyomi.source.model.SManga = TODO()
         }
         """,
     ).indented()

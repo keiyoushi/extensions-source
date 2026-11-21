@@ -9,12 +9,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -94,7 +94,8 @@ abstract class CuuTruyen :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "mangas") return null
         val mangaId = url.pathSegments.getOrNull(1)?.toIntOrNull() ?: return null
-        return getMangaDetailsByUrl(mangaId.toString())
+        val manga = SManga.create().apply { this.url = mangaId.toString() }
+        return fetchMangaUpdate(manga, emptyList(), true, false).manga()
     }
 
     override suspend fun fetchMangaUpdate(
@@ -105,22 +106,26 @@ abstract class CuuTruyen :
     ): SMangaUpdate {
         val mangaId = manga.url.substringAfterLast('/')
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = {
-                client.get("$baseUrl/api/v2/mangas/$mangaId", Fetch.XHR)
-                    .parseAs<MangaDetailResponse>()
-                    .data
-                    .toSManga(useMobileCover)
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    client.get("$baseUrl/api/v2/mangas/$mangaId", Fetch.XHR)
+                        .parseAs<MangaDetailResponse>()
+                        .data
+                        .toSManga(useMobileCover)
+                } else {
+                    manga
+                }
             },
-            chapterList = {
-                client.get("$baseUrl/api/v2/mangas/$mangaId/chapters", Fetch.XHR)
-                    .parseAs<ChapterListResponse>()
-                    .data
-                    .map { it.toSChapter(mangaId) }
+            chapters = {
+                if (fetchChapters) {
+                    client.get("$baseUrl/api/v2/mangas/$mangaId/chapters", Fetch.XHR)
+                        .parseAs<ChapterListResponse>()
+                        .data
+                        .map { it.toSChapter(mangaId) }
+                } else {
+                    chapters
+                }
             },
         )
     }

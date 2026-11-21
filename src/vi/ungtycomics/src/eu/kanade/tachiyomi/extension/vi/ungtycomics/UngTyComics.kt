@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
@@ -56,7 +56,8 @@ abstract class UngTyComics : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (!isSiteUrl(url) || url.pathSegments.first() != "truyen") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotEmpty) ?: return null
-        return getMangaDetailsByUrl("/truyen/$slug")
+        val manga = SManga.create().apply { this.url = "/truyen/$slug" }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     private fun isSiteUrl(url: HttpUrl) = url.host.removePrefix("www.") == baseUrl.toHttpUrl().host

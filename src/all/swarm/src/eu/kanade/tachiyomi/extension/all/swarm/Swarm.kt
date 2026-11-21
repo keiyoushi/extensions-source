@@ -11,12 +11,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.aesCbc
 import keiyoushi.utils.aesEncrypt
 import keiyoushi.utils.extractNextJs
@@ -100,7 +100,8 @@ abstract class Swarm :
         if (url.host != baseUrl.toHttpUrl().host) return null
         val segments = url.pathSegments
         if (segments.size < 2 || segments[0] != "comic" || segments[1].isBlank()) return null
-        return getMangaDetailsByUrl(segments[1])
+        val manga = SManga.create().apply { this.url = segments[1] }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/comic/${manga.url}"

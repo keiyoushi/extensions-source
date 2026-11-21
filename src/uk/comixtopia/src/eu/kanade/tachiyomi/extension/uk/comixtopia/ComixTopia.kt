@@ -6,11 +6,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.array
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
@@ -90,7 +90,11 @@ abstract class ComixTopia : KeiSource() {
     // =========================== Deeplink ============================
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "titles" && url.pathSegments[1].length > 1) {
-            return getMangaDetailsByUrl(url.pathSegments[1])
+            val tmpManga = SManga.create().apply {
+                this.url = url.pathSegments[1]
+            }
+
+            return fetchMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga()
         }
 
         return null

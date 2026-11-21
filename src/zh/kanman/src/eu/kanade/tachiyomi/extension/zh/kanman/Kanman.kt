@@ -5,11 +5,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.booleanOrNull
@@ -105,7 +105,8 @@ abstract class Kanman : KeiSource() {
         val domain = baseUrl.toHttpUrl().host.removePrefix("www.")
         if (url.host != domain && !url.host.endsWith(".$domain")) return null
         val comicId = url.pathSegments.first().takeIf { it.isNotEmpty() && it.all(Char::isDigit) } ?: return null
-        return getMangaDetailsByUrl("/$comicId/")
+        val manga = SManga.create().apply { this.url = "/$comicId/" }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     // Unlike the mobile site, the desktop page also lists the paid chapters, with a lock

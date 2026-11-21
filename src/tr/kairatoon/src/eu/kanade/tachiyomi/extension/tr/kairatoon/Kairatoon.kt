@@ -6,11 +6,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
@@ -78,7 +78,8 @@ abstract class Kairatoon : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val slug = url.pathSegments.getOrNull(1)
         if (!url.isSite() || url.pathSegments[0] != "webtoon" || slug.isNullOrEmpty()) return null
-        return getMangaDetailsByUrl("/webtoon/$slug")
+        val manga = SManga.create().apply { this.url = "/webtoon/$slug" }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun fetchMangaUpdate(
@@ -89,16 +90,16 @@ abstract class Kairatoon : KeiSource() {
     ): SMangaUpdate {
         val webtoonUrl = apiUrl.newBuilder().addPathSegment("webtoons").addPathSegment(manga.url.substringAfterLast('/')).build()
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = { client.get(webtoonUrl, Fetch.XHR).parseAs<WebtoonDto>().toSManga(baseUrl.toHttpUrl()) },
-            chapterList = {
-                client.get(webtoonUrl.newBuilder().addPathSegment("chapters").build(), Fetch.XHR).parseAs<List<ChapterDto>>()
-                    .map { it.toSChapter(manga.url) }
-                    .reversed()
+        return SMangaUpdate(
+            manga = { if (fetchDetails) client.get(webtoonUrl, Fetch.XHR).parseAs<WebtoonDto>().toSManga(baseUrl.toHttpUrl()) else manga },
+            chapters = {
+                if (fetchChapters) {
+                    client.get(webtoonUrl.newBuilder().addPathSegment("chapters").build(), Fetch.XHR).parseAs<List<ChapterDto>>()
+                        .map { it.toSChapter(manga.url) }
+                        .reversed()
+                } else {
+                    chapters
+                }
             },
         )
     }

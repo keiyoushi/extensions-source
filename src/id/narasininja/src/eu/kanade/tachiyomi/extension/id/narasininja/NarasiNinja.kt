@@ -7,12 +7,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
@@ -195,8 +195,9 @@ abstract class NarasiNinja : KeiSource() {
         val slug = url.pathSegments[komikIdx + 1]
         if (slug.isEmpty()) return null
 
+        val manga = SManga.create().apply { this.url = "/komik/$slug" }
         return runCatching {
-            getMangaDetailsByUrl("/komik/$slug")
+            fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga()
         }.getOrNull()
     }
 

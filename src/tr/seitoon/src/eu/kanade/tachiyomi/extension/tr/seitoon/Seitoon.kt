@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.booleanOrNull
 import keiyoushi.utils.parseAs
@@ -59,13 +59,9 @@ abstract class Seitoon : KeiSource() {
         val slug = manga.url.substringAfterLast('/')
         val from = Fetch.XHR.from(getMangaUrl(manga))
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = { client.get(seriesUrl(slug), from).parseAs<SeriesResponse>().data.series.toSMangaDetails(baseUrl.toHttpUrl()) },
-            chapterList = { fetchChapters(slug, from).map { it.toSChapter() } },
+        return SMangaUpdate(
+            manga = { if (fetchDetails) client.get(seriesUrl(slug), from).parseAs<SeriesResponse>().data.series.toSMangaDetails(baseUrl.toHttpUrl()) else manga },
+            chapters = { if (fetchChapters) fetchChapters(slug, from).map { it.toSChapter() } else chapters },
         )
     }
 

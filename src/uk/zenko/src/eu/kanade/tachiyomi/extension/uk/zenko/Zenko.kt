@@ -10,12 +10,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
@@ -125,7 +125,11 @@ abstract class Zenko :
         if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "titles") {
             val mangaId = url.pathSegments[1]
 
-            return getMangaDetailsByUrl("/titles/$mangaId")
+            val tmpManga = SManga.create().apply {
+                this.url = "/titles/$mangaId"
+            }
+
+            return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
         }
 
         return null
@@ -140,24 +144,28 @@ abstract class Zenko :
     ): SMangaUpdate {
         val mangaId = manga.url.substringAfter("titles/")
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = {
-                val lang = isEng()
-                val url = "$apiUrl/titles/$mangaId"
-                val data = client.get(url, Fetch.XHR).use { it.parseAs<MangaDetailsResponse>() }
-                data.toSManga(lang, imgUrl)
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    val lang = isEng()
+                    val url = "$apiUrl/titles/$mangaId"
+                    val data = client.get(url, Fetch.XHR).use { it.parseAs<MangaDetailsResponse>() }
+                    data.toSManga(lang, imgUrl)
+                } else {
+                    manga
+                }
             },
-            chapterList = {
-                val chaptersUrl = "$apiUrl/titles/$mangaId/chapters"
-                val data = client.get(chaptersUrl, Fetch.XHR).use { it.parseAs<List<ChapterResponseItem>>() }
-                data.sortedByDescending { item ->
-                    val id = StringProcessor.generateId(item.name)
-                    if (id > 0) id else item.id.toDouble()
-                }.map { it.toSChapter() }
+            chapters = {
+                if (fetchChapters) {
+                    val chaptersUrl = "$apiUrl/titles/$mangaId/chapters"
+                    val data = client.get(chaptersUrl, Fetch.XHR).use { it.parseAs<List<ChapterResponseItem>>() }
+                    data.sortedByDescending { item ->
+                        val id = StringProcessor.generateId(item.name)
+                        if (id > 0) id else item.id.toDouble()
+                    }.map { it.toSChapter() }
+                } else {
+                    chapters
+                }
             },
         )
     }

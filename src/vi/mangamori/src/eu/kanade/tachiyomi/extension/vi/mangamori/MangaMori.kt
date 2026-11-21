@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
@@ -79,7 +79,8 @@ abstract class MangaMori : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "truyen") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotBlank) ?: return null
-        return getMangaDetailsByUrl(slug)
+        val manga = SManga.create().apply { this.url = slug }
+        return fetchMangaUpdate(manga, emptyList(), true, false).manga()
     }
 
     override suspend fun fetchMangaUpdate(

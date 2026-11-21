@@ -7,11 +7,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.WebViewTimeoutException
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
@@ -44,7 +44,12 @@ abstract class GolgeBahcesi : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val slug = url.pathSegments.getOrNull(1) ?: return null
-        return getMangaDetailsByUrl(slug)
+        return fetchMangaUpdate(
+            SManga.create().apply { this.url = slug },
+            emptyList(),
+            true,
+            false,
+        ).manga()
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -85,20 +90,20 @@ abstract class GolgeBahcesi : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = mangaUpdate(
-        manga,
-        chapters,
-        fetchDetails,
-        fetchChapters,
-        details = { client.get("$apiBaseUrl/series/${manga.url}", Fetch.XHR).parseAs<SeriesDto>().toSManga() },
-        chapterList = {
-            client.get("$apiBaseUrl/series/${manga.url}/chapters", Fetch.XHR).parseAs<List<ChapterDto>>().map { chapter ->
-                SChapter.create().apply {
-                    url = "/${chapter.id}/${chapter.seriesSlug}/${chapter.slug}"
-                    name = chapter.title
-                    chapter_number = chapter.number
-                    date_upload = Instant.tryParse(chapter.releaseDate ?: chapter.createdAt)
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) client.get("$apiBaseUrl/series/${manga.url}", Fetch.XHR).parseAs<SeriesDto>().toSManga() else manga },
+        chapters = {
+            if (fetchChapters) {
+                client.get("$apiBaseUrl/series/${manga.url}/chapters", Fetch.XHR).parseAs<List<ChapterDto>>().map { chapter ->
+                    SChapter.create().apply {
+                        url = "/${chapter.id}/${chapter.seriesSlug}/${chapter.slug}"
+                        name = chapter.title
+                        chapter_number = chapter.number
+                        date_upload = Instant.tryParse(chapter.releaseDate ?: chapter.createdAt)
+                    }
                 }
+            } else {
+                chapters
             }
         },
     )

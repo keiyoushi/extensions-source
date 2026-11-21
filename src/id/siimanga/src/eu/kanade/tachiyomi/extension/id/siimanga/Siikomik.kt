@@ -10,12 +10,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -72,7 +72,8 @@ abstract class Siikomik :
         if (url.host != baseUrl.toHttpUrl().host && url.host != OLD_HOST) return null
         val segments = url.pathSegments.filter(String::isNotEmpty)
         if (segments.size !in 2..3 || segments[0] != "komik") return null
-        return getMangaDetailsByUrl(mangaPath(segments[1]))
+        val manga = SManga.create().apply { this.url = mangaPath(segments[1]) }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun fetchMangaUpdate(

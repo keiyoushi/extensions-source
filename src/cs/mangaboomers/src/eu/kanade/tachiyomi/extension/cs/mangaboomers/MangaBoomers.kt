@@ -5,13 +5,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
@@ -70,13 +70,9 @@ abstract class MangaBoomers : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = mangaUpdate(
-        manga,
-        chapters,
-        fetchDetails,
-        fetchChapters,
-        details = { getDetails(manga.url.toInt()) },
-        chapterList = { getChapters(manga.url) },
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) getDetails(manga.url.toInt()) else manga },
+        chapters = { if (fetchChapters) getChapters(manga.url) else chapters },
     )
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl$READER_PATH?m=${chapter.mangaId}&c=${chapter.url}"

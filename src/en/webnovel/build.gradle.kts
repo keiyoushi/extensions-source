@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "WebNovel"
-    versionCode = 16
+    versionCode = 15
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 

@@ -6,12 +6,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
@@ -108,17 +108,17 @@ abstract class MangaToon : KeiSource() {
     ): SMangaUpdate {
         val contentId = manga.contentId
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = { api<DetailDto>("/api/content/detail", contentId)!!.toSManga() },
-            chapterList = {
-                api<List<EpisodeDto>>("/api/content/episodes", contentId)!!
-                    .filterNot { it.isFee }
-                    .map { it.toSChapter(urlLang, contentId) }
-                    .reversed()
+        return SMangaUpdate(
+            manga = { if (fetchDetails) api<DetailDto>("/api/content/detail", contentId)!!.toSManga() else manga },
+            chapters = {
+                if (fetchChapters) {
+                    api<List<EpisodeDto>>("/api/content/episodes", contentId)!!
+                        .filterNot { it.isFee }
+                        .map { it.toSChapter(urlLang, contentId) }
+                        .reversed()
+                } else {
+                    chapters
+                }
             },
         )
     }

@@ -8,10 +8,10 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
@@ -96,13 +96,9 @@ abstract class EZManhwa :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = mangaUpdate(
-        manga,
-        chapters,
-        fetchDetails,
-        fetchChapters,
-        details = { client.get("$apiUrl/series/${manga.url}", Fetch.XHR).parseAs<EZManhwaSeriesDto>().toSManga() },
-        chapterList = { fetchChapterList(manga.url) },
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) client.get("$apiUrl/series/${manga.url}", Fetch.XHR).parseAs<EZManhwaSeriesDto>().toSManga() else manga },
+        chapters = { if (fetchChapters) fetchChapterList(manga.url) else chapters },
     )
 
     // ── Chapters ─────────────────────────────────────────────────────────────

@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.speedbinb.SpeedBinbInterceptor
 import keiyoushi.lib.speedbinb.fetchPages
@@ -17,6 +16,7 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.boolean
 import keiyoushi.utils.firstInstance
@@ -86,7 +86,8 @@ abstract class BookLive :
             else -> null
         }
         if (titleId.isNullOrEmpty()) return null
-        return getMangaDetailsByUrl(titleId)
+
+        return getMangaUpdate(SManga.create().apply { this.url = titleId }, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/product/index/title_id/${manga.url}"

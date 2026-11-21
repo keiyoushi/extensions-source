@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
@@ -62,7 +62,8 @@ abstract class Chikari : KeiSource() {
         if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host) return null
         if (url.pathSegments.firstOrNull() != "series") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
-        return getMangaDetailsByUrl("/series/$slug")
+        val manga = SManga.create().apply { this.url = "/series/$slug" }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun fetchMangaUpdate(
@@ -70,13 +71,9 @@ abstract class Chikari : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = mangaUpdate(
-        manga,
-        chapters,
-        fetchDetails,
-        fetchChapters,
-        details = { getDetails(manga) },
-        chapterList = { getChapters(manga) },
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) getDetails(manga) else manga },
+        chapters = { if (fetchChapters) getChapters(manga) else chapters },
     )
 
     private suspend fun getDetails(manga: SManga): SManga {

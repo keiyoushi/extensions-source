@@ -5,13 +5,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
@@ -114,15 +114,15 @@ abstract class Doujinio : KeiSource() {
     ): SMangaUpdate {
         val id = getIdFromUrl(manga.url)
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = { fetchMangaDetails(id) },
-            chapterList = {
-                val response = client.get("$baseUrl/api/chapters?manga_id=$id", Fetch.XHR)
-                response.parseData<List<Chapter>>().map { it.toSChapter() }.reversed()
+        return SMangaUpdate(
+            manga = { if (fetchDetails) fetchMangaDetails(id) else manga },
+            chapters = {
+                if (fetchChapters) {
+                    val response = client.get("$baseUrl/api/chapters?manga_id=$id", Fetch.XHR)
+                    response.parseData<List<Chapter>>().map { it.toSChapter() }.reversed()
+                } else {
+                    chapters
+                }
             },
         )
     }

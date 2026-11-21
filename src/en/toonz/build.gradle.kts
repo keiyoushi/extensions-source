@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Toonz/Toonx"
-    versionCode = 8
+    versionCode = 7
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

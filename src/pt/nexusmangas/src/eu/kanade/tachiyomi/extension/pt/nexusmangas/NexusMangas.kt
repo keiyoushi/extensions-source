@@ -5,7 +5,6 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
@@ -13,6 +12,7 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
@@ -175,7 +175,9 @@ abstract class NexusMangas : KeiSource() {
         val siteHost = baseUrl.toHttpUrl().host.removePrefix("www.")
         if (url.host.removePrefix("www.") != siteHost || url.pathSegments.firstOrNull() != "obra") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotBlank) ?: return null
-        return getMangaDetailsByUrl(slug)
+        val manga = SManga.create().apply { this.url = slug }
+
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
             .takeUnless { "Novel" in it.genre.orEmpty().split(", ") }
     }
 

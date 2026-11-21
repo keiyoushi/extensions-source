@@ -8,11 +8,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferences
@@ -85,7 +85,8 @@ abstract class NinkoComics :
                 .selectFirst("a[href^=/comic/]")!!.absUrl("href").toHttpUrl().encodedPath
             else -> return null
         }
-        return getMangaDetailsByUrl(path)
+        val manga = SManga.create().apply { this.url = path }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     // Details and chapters come from the same page

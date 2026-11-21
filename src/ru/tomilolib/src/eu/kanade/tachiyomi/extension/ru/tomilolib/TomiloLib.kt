@@ -9,12 +9,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
@@ -109,16 +109,16 @@ abstract class TomiloLib :
     ): SMangaUpdate {
         val titleId = manga.titleId()
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = {
-                client.get("$apiUrl/titles/$titleId", apiHeaders, Fetch.XHR)
-                    .parseAs<ApiResponse<TitleDto>>().data.toSManga(baseUrl)
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    client.get("$apiUrl/titles/$titleId", apiHeaders, Fetch.XHR)
+                        .parseAs<ApiResponse<TitleDto>>().data.toSManga(baseUrl)
+                } else {
+                    manga
+                }
             },
-            chapterList = { getChapters(titleId) },
+            chapters = { if (fetchChapters) getChapters(titleId) else chapters },
         )
     }
 

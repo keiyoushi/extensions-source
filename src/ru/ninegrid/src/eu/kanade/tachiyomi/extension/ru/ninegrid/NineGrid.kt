@@ -8,11 +8,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -108,13 +108,9 @@ abstract class NineGrid :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = mangaUpdate(
-        manga,
-        chapters,
-        fetchDetails,
-        fetchChapters,
-        details = { client.get("$apiBase/series/${manga.url}", Fetch.XHR).parseAs<SeriesDto>().toSManga(apiBase) },
-        chapterList = { getChapterList(manga) },
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) client.get("$apiBase/series/${manga.url}", Fetch.XHR).parseAs<SeriesDto>().toSManga(apiBase) else manga },
+        chapters = { if (fetchChapters) getChapterList(manga) else chapters },
     )
 
     private suspend fun getChapterList(manga: SManga): List<SChapter> {

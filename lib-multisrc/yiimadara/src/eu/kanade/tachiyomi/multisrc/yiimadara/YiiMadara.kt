@@ -6,10 +6,10 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.ownTextOrNull
@@ -140,7 +140,10 @@ abstract class YiiMadara : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != mangaPath) return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotEmpty) ?: return null
-        return getMangaDetailsByUrl("/$mangaPath/$slug" + if (trailingSlash) "/" else "")
+        val manga = SManga.create().apply {
+            this.url = "/$mangaPath/$slug" + if (trailingSlash) "/" else ""
+        }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun fetchMangaUpdate(

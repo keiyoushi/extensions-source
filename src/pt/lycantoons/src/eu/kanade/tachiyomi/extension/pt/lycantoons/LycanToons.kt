@@ -5,13 +5,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
@@ -62,7 +62,8 @@ abstract class LycanToons : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.getOrNull(0) != "series") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotEmpty) ?: return null
-        return getMangaDetailsByUrl("/series/$slug")
+        val manga = SManga.create().apply { this.url = "/series/$slug" }
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga()
     }
 
     override suspend fun fetchMangaUpdate(
@@ -73,16 +74,16 @@ abstract class LycanToons : KeiSource() {
     ): SMangaUpdate {
         val slug = manga.slug()
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = { client.get("$baseUrl/series/$slug", Fetch.XHR).extractNextJs<SeriesDto>()!!.toSManga() },
-            chapterList = {
-                client.get("$baseUrl/series/$slug/1", Fetch.XHR).extractNextJs<ChapterResponse>()!!.capitulos
-                    .map { it.toSChapter(slug) }
-                    .sortedByDescending { it.chapter_number }
+        return SMangaUpdate(
+            manga = { if (fetchDetails) client.get("$baseUrl/series/$slug", Fetch.XHR).extractNextJs<SeriesDto>()!!.toSManga() else manga },
+            chapters = {
+                if (fetchChapters) {
+                    client.get("$baseUrl/series/$slug/1", Fetch.XHR).extractNextJs<ChapterResponse>()!!.capitulos
+                        .map { it.toSChapter(slug) }
+                        .sortedByDescending { it.chapter_number }
+                } else {
+                    chapters
+                }
             },
         )
     }

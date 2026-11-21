@@ -5,11 +5,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -109,7 +109,10 @@ abstract class MangaPoisk : KeiSource() {
     // =========================== Deeplink ============================
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host == baseUrl.toHttpUrl().host && url.pathSegments[0] == "manga") {
-            return getMangaDetailsByUrl(url.encodedPath)
+            val tmpManga = SManga.create().apply {
+                this.url = url.encodedPath
+            }
+            return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
         }
         return null
     }
@@ -123,45 +126,49 @@ abstract class MangaPoisk : KeiSource() {
     ): SMangaUpdate {
         val mangaSlug = manga.url
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = {
-                val requestUrl = "$baseUrl${manga.url}"
-                val document = client.get(requestUrl, Fetch.DOCUMENT).use { it.asJsoup() }
-                val infoElement = document.selectFirst("div.card:has(header)") ?: throw Exception("Не получилось найти информацию о манге")
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    val requestUrl = "$baseUrl${manga.url}"
+                    val document = client.get(requestUrl, Fetch.DOCUMENT).use { it.asJsoup() }
+                    val infoElement = document.selectFirst("div.card:has(header)") ?: throw Exception("Не получилось найти информацию о манге")
 
-                SManga.create().apply {
-                    url = mangaSlug
-                    title = infoElement.selectFirst(".text-base span")?.text() ?: ""
-                    genre = infoElement.select("span:contains(Жанр:) a").joinToString { it.text() }
-                    description = infoElement.select(".manga-description").text()
-                    status = parseStatus(infoElement.selectFirst("span:contains(Статус:)")?.text() ?: "")
-                    thumbnail_url = infoElement.selectFirst("img.w-full")?.attr("abs:src")
+                    SManga.create().apply {
+                        url = mangaSlug
+                        title = infoElement.selectFirst(".text-base span")?.text() ?: ""
+                        genre = infoElement.select("span:contains(Жанр:) a").joinToString { it.text() }
+                        description = infoElement.select(".manga-description").text()
+                        status = parseStatus(infoElement.selectFirst("span:contains(Статус:)")?.text() ?: "")
+                        thumbnail_url = infoElement.selectFirst("img.w-full")?.attr("abs:src")
+                    }
+                } else {
+                    manga
                 }
             },
-            chapterList = {
-                val document = client.get("${baseUrl}$mangaSlug?tab=chapters", Fetch.DOCUMENT).use { it.asJsoup() }
-                if (document.selectFirst(".text-md:contains(Главы удалены по требованию правообладателя)") != null) {
-                    throw Exception("Лицензировано - Нет глав")
+            chapters = {
+                if (fetchChapters) {
+                    val document = client.get("${baseUrl}$mangaSlug?tab=chapters", Fetch.DOCUMENT).use { it.asJsoup() }
+                    if (document.selectFirst(".text-md:contains(Главы удалены по требованию правообладателя)") != null) {
+                        throw Exception("Лицензировано - Нет глав")
+                    }
+
+                    val firstPageDocument = client.get("${baseUrl}$mangaSlug/chaptersList", Fetch.DOCUMENT).use { it.asJsoup() }
+                    val chaptersList = mutableListOf<SChapter>()
+
+                    chaptersList.addAll(firstPageDocument.select(".chapter-item").mapNotNull { chapterFromElement(it) })
+
+                    val lastPage = firstPageDocument.select("li.page-item")
+                        .mapNotNull { it.text().toIntOrNull() }
+                        .maxOrNull() ?: 1
+
+                    for (page in 2..lastPage) {
+                        val response = client.get("${baseUrl}$mangaSlug/chaptersList?page=$page", Fetch.DOCUMENT).use { it.asJsoup() }
+                        chaptersList.addAll(response.select(".chapter-item").mapNotNull { chapterFromElement(it) })
+                    }
+                    chaptersList
+                } else {
+                    chapters
                 }
-
-                val firstPageDocument = client.get("${baseUrl}$mangaSlug/chaptersList", Fetch.DOCUMENT).use { it.asJsoup() }
-                val chaptersList = mutableListOf<SChapter>()
-
-                chaptersList.addAll(firstPageDocument.select(".chapter-item").mapNotNull { chapterFromElement(it) })
-
-                val lastPage = firstPageDocument.select("li.page-item")
-                    .mapNotNull { it.text().toIntOrNull() }
-                    .maxOrNull() ?: 1
-
-                for (page in 2..lastPage) {
-                    val response = client.get("${baseUrl}$mangaSlug/chaptersList?page=$page", Fetch.DOCUMENT).use { it.asJsoup() }
-                    chaptersList.addAll(response.select(".chapter-item").mapNotNull { chapterFromElement(it) })
-                }
-                chaptersList
             },
         )
     }

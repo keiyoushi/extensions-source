@@ -54,7 +54,8 @@ abstract class ManhuaManga : MCCMSWeb() {
             url.encodedPath.startsWith("/chapter_") -> seriesPath(url) ?: return null
             else -> return null
         }
-        return getMangaDetailsByUrl(path)
+        val manga = SManga.create().apply { this.url = path }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     private suspend fun seriesPath(chapterUrl: HttpUrl): String? = client.get(chapterUrl, pcHeaders, Fetch.DOCUMENT).asJsoup()

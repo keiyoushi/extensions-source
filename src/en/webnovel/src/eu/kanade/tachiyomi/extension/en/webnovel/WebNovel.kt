@@ -7,11 +7,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
@@ -75,7 +75,15 @@ abstract class WebNovel : KeiSource() {
             return null
         }
 
-        return getMangaDetailsByUrl(url.pathSegments[1].substringAfterLast("_"))
+        val manga = SManga.create().apply {
+            this.url = url.pathSegments[1].substringAfterLast("_")
+        }
+
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
+            .manga
+            .apply {
+                initialized = true
+            }
     }
 
     // Filters

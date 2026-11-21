@@ -11,11 +11,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -231,8 +231,12 @@ abstract class Madokami :
         if (url.host != baseUrl.toHttpUrl().host) return null
         if (isArchiveUrl(url)) return null
 
+        val manga = SManga.create().apply {
+            this.url = url.encodedPath
+        }
+
         return try {
-            getMangaDetailsByUrl(url.encodedPath)
+            fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga()
         } catch (_: Exception) {
             null
         }

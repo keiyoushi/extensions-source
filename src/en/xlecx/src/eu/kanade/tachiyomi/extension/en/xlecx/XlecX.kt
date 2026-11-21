@@ -5,11 +5,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl
@@ -91,7 +91,12 @@ abstract class XlecX : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (!postRegex.matches(url.encodedPath)) return null
 
-        return getMangaDetailsByUrl(url.encodedPath)
+        val manga = SManga.create().apply {
+            this.url = url.encodedPath
+        }
+
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
+            .manga
             .apply {
                 initialized = true
                 this.url = url.encodedPath

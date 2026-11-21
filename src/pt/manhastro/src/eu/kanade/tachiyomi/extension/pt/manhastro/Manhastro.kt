@@ -8,12 +8,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -96,18 +96,18 @@ abstract class Manhastro :
     ): SMangaUpdate {
         val mangaId = manga.url.substringAfterLast("/")
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = {
-                client.get("$apiUrl/dados?manga_id=$mangaId", Fetch.XHR)
-                    .parseAs<ApiResponse<List<MangaDto>>>(transform = ::cleanJsonResponse)
-                    .data.firstOrNull()?.toSManga()
-                    ?: throw Exception("Manga not found")
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    client.get("$apiUrl/dados?manga_id=$mangaId", Fetch.XHR)
+                        .parseAs<ApiResponse<List<MangaDto>>>(transform = ::cleanJsonResponse)
+                        .data.firstOrNull()?.toSManga()
+                        ?: throw Exception("Manga not found")
+                } else {
+                    manga
+                }
             },
-            chapterList = { fetchChapterList(mangaId) },
+            chapters = { if (fetchChapters) fetchChapterList(mangaId) else chapters },
         )
     }
 

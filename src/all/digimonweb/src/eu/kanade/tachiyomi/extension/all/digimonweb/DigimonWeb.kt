@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import kotlinx.coroutines.async
@@ -60,7 +60,8 @@ abstract class DigimonWeb : KeiSource() {
         val path = url.encodedPath
         val mangaUrl = listOf(COMIC_URL_REGEX, DREAMERS_URL_REGEX, AWARD_URL_REGEX).firstNotNullOfOrNull { it.find(path)?.value }
         if (mangaUrl == null || mangaUrl.language() != lang) return null
-        return getMangaDetailsByUrl(mangaUrl)
+        val manga = SManga.create().apply { this.url = mangaUrl }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     // Details and episodes are on the page that lists the work

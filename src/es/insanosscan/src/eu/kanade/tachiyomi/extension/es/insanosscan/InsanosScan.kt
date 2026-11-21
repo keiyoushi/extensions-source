@@ -8,11 +8,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl
@@ -45,7 +45,13 @@ abstract class InsanosScan :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val seriesId = url.pathSegments.getOrNull(1) ?: return null
         seriesId.toIntOrNull() ?: return null
-        return getMangaDetailsByUrl(seriesId)
+
+        return fetchMangaUpdate(
+            SManga.create().apply { this.url = seriesId },
+            emptyList(),
+            true,
+            false,
+        ).manga()
     }
 
     override suspend fun fetchMangaUpdate(
@@ -53,20 +59,24 @@ abstract class InsanosScan :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = mangaUpdate(
-        manga,
-        chapters,
-        fetchDetails,
-        fetchChapters,
-        details = {
-            client.get("$baseUrl/series/${manga.url}", Fetch.XHR)
-                .parseAs<Series>().toSManga(baseUrl)
+    ): SMangaUpdate = SMangaUpdate(
+        manga = {
+            if (fetchDetails) {
+                client.get("$baseUrl/series/${manga.url}", Fetch.XHR)
+                    .parseAs<Series>().toSManga(baseUrl)
+            } else {
+                manga
+            }
         },
-        chapterList = {
-            client.get("$baseUrl/series/${manga.url}/chapters", Fetch.XHR)
-                .parseAs<List<Chapter>>().mapNotNull {
-                    it.toSChapter(showPaidChapters)
-                }.reversed()
+        chapters = {
+            if (fetchChapters) {
+                client.get("$baseUrl/series/${manga.url}/chapters", Fetch.XHR)
+                    .parseAs<List<Chapter>>().mapNotNull {
+                        it.toSChapter(showPaidChapters)
+                    }.reversed()
+            } else {
+                chapters
+            }
         },
     )
 

@@ -6,12 +6,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
@@ -68,7 +68,8 @@ abstract class Longjinman : KeiSource() {
         val segments = url.pathSegments
         if (segments.firstOrNull() != "manhua") return null
         val id = segments.getOrNull(1)?.removeSuffix(".html")?.toIntOrNull() ?: return null
-        return getMangaDetailsByUrl("/manhua/$id.html")
+        val manga = SManga.create().apply { this.url = "/manhua/$id.html" }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun fetchMangaUpdate(

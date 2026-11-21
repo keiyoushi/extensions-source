@@ -7,10 +7,10 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
@@ -80,13 +80,9 @@ abstract class FansubsCat : KeiSource() {
     ): SMangaUpdate {
         val slug = manga.url.substringAfterLast('/')
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = { fetchMangaDetails(slug) },
-            chapterList = { fetchChapterList(slug) },
+        return SMangaUpdate(
+            manga = { if (fetchDetails) fetchMangaDetails(slug) else manga },
+            chapters = { if (fetchChapters) fetchChapterList(slug) else chapters },
         )
     }
 

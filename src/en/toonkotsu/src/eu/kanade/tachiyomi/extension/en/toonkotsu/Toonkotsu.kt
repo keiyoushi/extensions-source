@@ -13,12 +13,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.aesCtr
 import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.getPreferencesLazy
@@ -153,7 +153,8 @@ abstract class Toonkotsu :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (!url.isSiteUrl() || url.pathSegments.firstOrNull() != "title") return null
         val hid = url.pathSegments.getOrNull(1)?.let { HID_REGEX.find(it) }?.value ?: return null
-        return getMangaDetailsByUrl("/title/$hid")
+        val manga = SManga.create().apply { this.url = "/title/$hid" }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     private fun HttpUrl.isSiteUrl() = host.removePrefix("www.") == baseUrl.toHttpUrl().host.removePrefix("www.")

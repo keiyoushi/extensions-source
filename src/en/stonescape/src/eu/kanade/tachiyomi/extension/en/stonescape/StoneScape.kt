@@ -5,11 +5,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
@@ -125,24 +125,28 @@ abstract class StoneScape : KeiSource() {
     ): SMangaUpdate {
         val slug = manga.url.substringAfterLast("/")
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = {
-                client.get("$apiUrl/series/by-slug/$slug", Fetch.XHR)
-                    .parseAs<SeriesDto>()
-                    .toSMangaDetails(baseUrl)
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    client.get("$apiUrl/series/by-slug/$slug", Fetch.XHR)
+                        .parseAs<SeriesDto>()
+                        .toSMangaDetails(baseUrl)
+                } else {
+                    manga
+                }
             },
-            chapterList = {
-                client.get("$apiUrl/series/by-slug/$slug/chapters", Fetch.XHR)
-                    .parseAs<ChapterListResponse>()
-                    .chapters
-                    .map {
-                        it.toSChapter(slug)
-                    }
-                    .reversed()
+            chapters = {
+                if (fetchChapters) {
+                    client.get("$apiUrl/series/by-slug/$slug/chapters", Fetch.XHR)
+                        .parseAs<ChapterListResponse>()
+                        .chapters
+                        .map {
+                            it.toSChapter(slug)
+                        }
+                        .reversed()
+                } else {
+                    chapters
+                }
             },
         )
     }

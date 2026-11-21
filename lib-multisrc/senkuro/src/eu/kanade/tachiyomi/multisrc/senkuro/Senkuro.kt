@@ -6,11 +6,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.graphQLBody
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.parseGraphQLAs
@@ -175,13 +175,9 @@ abstract class Senkuro : KeiSource() {
     ): SMangaUpdate {
         val mangaId = manga.url.split(",,").first()
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = { fetchMangaDetails(mangaId) },
-            chapterList = { fetchChapterList(manga, mangaId) },
+        return SMangaUpdate(
+            manga = { if (fetchDetails) fetchMangaDetails(mangaId) else manga },
+            chapters = { if (fetchChapters) fetchChapterList(manga, mangaId) else chapters },
         )
     }
 

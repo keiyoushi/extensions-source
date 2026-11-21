@@ -5,13 +5,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
@@ -19,8 +19,6 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -95,7 +93,7 @@ abstract class LuotTruyen : KeiSource() {
         } ?: return null
 
         val manga = SManga.create().apply { setUrlWithoutDomain(mangaPath) }
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga()
     }
 
     private fun mangaListParse(document: Document): MangasPage {
@@ -117,23 +115,10 @@ abstract class LuotTruyen : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val mangaDeferred = if (fetchDetails) {
-            async { mangaDetailsParse(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup(), manga) }
-        } else {
-            null
-        }
-        val chaptersDeferred = if (fetchChapters) {
-            async { parseChapterList(client.post("$baseUrl/Story/ListChapterByStoryID", chapterHeaders, Fetch.XHR.from(getMangaUrl(manga)), chapterBody(manga))) }
-        } else {
-            null
-        }
-
-        SMangaUpdate(
-            manga = mangaDeferred?.await() ?: manga,
-            chapters = chaptersDeferred?.await() ?: chapters,
-        )
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) mangaDetailsParse(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup(), manga) else manga },
+        chapters = { if (fetchChapters) parseChapterList(client.post("$baseUrl/Story/ListChapterByStoryID", chapterHeaders, Fetch.XHR.from(getMangaUrl(manga)), chapterBody(manga))) else chapters },
+    )
 
     private fun mangaDetailsParse(document: Document, manga: SManga): SManga = SManga.create().apply {
         setUrlWithoutDomain(manga.url)

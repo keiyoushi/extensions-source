@@ -8,12 +8,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.aesCbc
 import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.firstInstance
@@ -124,7 +124,12 @@ abstract class SunshineButterflyScans : KeiSource() {
         }
 
         val mangaUrl = "/projects?n=${url.queryParameter("n")}"
-        return getMangaDetailsByUrl(mangaUrl)
+        val manga = SManga.create().apply {
+            this.url = mangaUrl
+        }
+
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
+            .manga
             .apply {
                 initialized = true
                 this.url = mangaUrl

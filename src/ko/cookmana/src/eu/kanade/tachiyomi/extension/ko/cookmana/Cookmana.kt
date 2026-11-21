@@ -6,11 +6,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
@@ -48,7 +48,8 @@ abstract class Cookmana : KeiSource() {
             path.size == 2 && path[0] == "detail" -> parentEpisodeId(path[1]) ?: return null
             else -> return null
         }
-        return getMangaDetailsByUrl("/episode/$id")
+        val manga = SManga.create().apply { this.url = "/episode/$id" }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     // A /detail/<chapter> link resolves to its episode via the chapter's parentId.

@@ -5,11 +5,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
@@ -49,7 +49,7 @@ abstract class MangaAR : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (!isSiteUrl(url) || url.pathSegments.firstOrNull() != "manga") return null
         val id = url.pathSegments.getOrNull(1)?.substringBefore('-')?.takeIf { it.isNotEmpty() && it.all(Char::isDigit) } ?: return null
-        return getMangaDetailsByUrl(id)
+        return getMangaUpdate(SManga.create().apply { this.url = id }, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun getMangasByUrl(url: HttpUrl, page: Int): MangasPage {
@@ -74,13 +74,9 @@ abstract class MangaAR : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = mangaUpdate(
-        manga,
-        chapters,
-        fetchDetails,
-        fetchChapters,
-        details = { client.get("$apiUrl/public/manga/${manga.url}", Fetch.XHR).parseAs<MangaDetailsDto>().toSManga(baseUrl.toHttpUrl()) },
-        chapterList = { client.get("$apiUrl/public/manga/${manga.url}/chapters", Fetch.XHR).parseAs<ChapterListDto>().toSChapterList(manga.url) },
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) client.get("$apiUrl/public/manga/${manga.url}", Fetch.XHR).parseAs<MangaDetailsDto>().toSManga(baseUrl.toHttpUrl()) else manga },
+        chapters = { if (fetchChapters) client.get("$apiUrl/public/manga/${manga.url}/chapters", Fetch.XHR).parseAs<ChapterListDto>().toSChapterList(manga.url) else chapters },
     )
 
     // Chapters from MangaDex come through the site's image proxy, its own translations from its server

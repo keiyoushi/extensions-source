@@ -5,11 +5,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
@@ -41,16 +41,16 @@ abstract class ReadVagabondManga : KeiSource() {
     ): SMangaUpdate {
         val mangaId = "$baseUrl${manga.url}".toHttpUrl().fragment
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = { client.get("$baseUrl/api/mihon/mangas/$mangaId", Fetch.XHR).parseAs<MangaDto>().toSManga() },
-            chapterList = {
-                client.get("$baseUrl/api/mihon/mangas/$mangaId/chapters", Fetch.XHR)
-                    .parseAs<List<ChapterDto>>()
-                    .map { chapter -> chapter.toSChapter() }
+        return SMangaUpdate(
+            manga = { if (fetchDetails) client.get("$baseUrl/api/mihon/mangas/$mangaId", Fetch.XHR).parseAs<MangaDto>().toSManga() else manga },
+            chapters = {
+                if (fetchChapters) {
+                    client.get("$baseUrl/api/mihon/mangas/$mangaId/chapters", Fetch.XHR)
+                        .parseAs<List<ChapterDto>>()
+                        .map { chapter -> chapter.toSChapter() }
+                } else {
+                    chapters
+                }
             },
         )
     }

@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "OneReader"
-    versionCode = 5
+    versionCode = 4
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

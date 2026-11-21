@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
@@ -35,7 +35,9 @@ abstract class JuraTempest : KeiSource() {
         if (segments.size < 2 || segments[0] != "explore") return null
 
         val slug = segments[1]
-        return getMangaDetailsByUrl(slug)
+        val manga = SManga.create().apply { this.url = slug }
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
+            .manga()
             .apply {
                 initialized = true
                 this.url = slug
@@ -140,24 +142,28 @@ abstract class JuraTempest : KeiSource() {
     ): SMangaUpdate {
         val slug = manga.url.removePrefix("/explore/").trim('/')
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = {
-                client.post(
-                    "$baseUrl/api/rpc/manga/bySlug",
-                    fetch = Fetch.XHR,
-                    body = RpcRequest(MangaSlugPayload(slug)).toJsonRequestBody(),
-                ).parseAs<RpcResponse<MangaDto>>().json.toSMangaDetails()
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    client.post(
+                        "$baseUrl/api/rpc/manga/bySlug",
+                        fetch = Fetch.XHR,
+                        body = RpcRequest(MangaSlugPayload(slug)).toJsonRequestBody(),
+                    ).parseAs<RpcResponse<MangaDto>>().json.toSMangaDetails()
+                } else {
+                    manga
+                }
             },
-            chapterList = {
-                client.post(
-                    "$baseUrl/api/rpc/chapter/byMangaSlug",
-                    fetch = Fetch.XHR,
-                    body = RpcRequest(MangaSlugPayload(slug)).toJsonRequestBody(),
-                ).parseAs<RpcResponse<List<ChapterDto>>>().json.map { it.toSChapter(slug) }
+            chapters = {
+                if (fetchChapters) {
+                    client.post(
+                        "$baseUrl/api/rpc/chapter/byMangaSlug",
+                        fetch = Fetch.XHR,
+                        body = RpcRequest(MangaSlugPayload(slug)).toJsonRequestBody(),
+                    ).parseAs<RpcResponse<List<ChapterDto>>>().json.map { it.toSChapter(slug) }
+                } else {
+                    chapters
+                }
             },
         )
     }

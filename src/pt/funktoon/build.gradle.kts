@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Funktoon"
-    versionCode = 2
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

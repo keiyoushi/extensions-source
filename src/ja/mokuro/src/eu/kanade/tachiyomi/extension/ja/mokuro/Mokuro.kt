@@ -9,11 +9,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -173,24 +173,28 @@ abstract class Mokuro :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = mangaUpdate(
-        manga,
-        chapters,
-        fetchDetails,
-        fetchChapters,
-        details = {
-            val catalog = getCatalog()
-            val catalogEntry = catalog.series.find { it.seriesTitle == manga.url }
-                ?: throw Exception("Series not found")
-            val cover = resolveCoverUrl(manga.url)
+    ): SMangaUpdate = SMangaUpdate(
+        manga = {
+            if (fetchDetails) {
+                val catalog = getCatalog()
+                val catalogEntry = catalog.series.find { it.seriesTitle == manga.url }
+                    ?: throw Exception("Series not found")
+                val cover = resolveCoverUrl(manga.url)
 
-            manga.apply {
-                catalogEntry.fillDetails(this, titleLang, cover)
+                manga.apply {
+                    catalogEntry.fillDetails(this, titleLang, cover)
+                }
+            } else {
+                manga
             }
         },
-        chapterList = {
-            val detail = getSeriesDetail(manga.url)
-            detail.volumes.asReversed().map { it.toSChapter(detail.seriesTitle) }
+        chapters = {
+            if (fetchChapters) {
+                val detail = getSeriesDetail(manga.url)
+                detail.volumes.asReversed().map { it.toSChapter(detail.seriesTitle) }
+            } else {
+                chapters
+            }
         },
     )
 

@@ -10,11 +10,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.graphQLBody
 import keiyoushi.utils.parseGraphQLAs
@@ -65,24 +65,24 @@ abstract class StashApp :
     ): SMangaUpdate {
         val id = urlLast(manga.url)
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = {
-                client.post(
-                    url = "$baseUrl/graphql",
-                    headers = graphQlHeaders,
-                    fetch = Fetch.XHR,
-                    body = graphQLBody(
-                        operationName = "MangaDetails",
-                        query = MANGA_DETAILS_QUERY,
-                        variables = MangaDetailsVariables(id = id),
-                    ),
-                ).parseGraphQLAs<MangaDetailsData>().findGallery.toMangaDetails(baseUrl)!!
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    client.post(
+                        url = "$baseUrl/graphql",
+                        headers = graphQlHeaders,
+                        fetch = Fetch.XHR,
+                        body = graphQLBody(
+                            operationName = "MangaDetails",
+                            query = MANGA_DETAILS_QUERY,
+                            variables = MangaDetailsVariables(id = id),
+                        ),
+                    ).parseGraphQLAs<MangaDetailsData>().findGallery.toMangaDetails(baseUrl)!!
+                } else {
+                    manga
+                }
             },
-            chapterList = { getChapterList(id) },
+            chapters = { if (fetchChapters) getChapterList(id) else chapters },
         )
     }
 

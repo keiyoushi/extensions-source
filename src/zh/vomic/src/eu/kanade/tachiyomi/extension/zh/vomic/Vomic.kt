@@ -8,12 +8,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
@@ -92,7 +92,13 @@ abstract class Vomic :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val mangaId = url.pathSegments.getOrNull(1) ?: return null
         mangaId.toIntOrNull() ?: return null
-        return getMangaDetailsByUrl(mangaId)
+
+        return fetchMangaUpdate(
+            SManga.create().apply { this.url = mangaId },
+            emptyList(),
+            true,
+            false,
+        ).manga()
     }
 
     // MangaUpdate

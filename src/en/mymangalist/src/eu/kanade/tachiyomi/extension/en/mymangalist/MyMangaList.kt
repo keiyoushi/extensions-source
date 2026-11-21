@@ -5,11 +5,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
@@ -68,7 +68,8 @@ abstract class MyMangaList : KeiSource() {
             path.startsWith("s-") -> path.removePrefix("s-").substringBeforeLast("--")
             else -> return null
         }
-        return getMangaDetailsByUrl("/t-$slug")
+        val manga = SManga.create().apply { this.url = "/t-$slug" }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     // The chapters come from the API, which needs the permalink of the title page, kept in the memo

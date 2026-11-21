@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
@@ -58,7 +58,13 @@ abstract class ManhuaTop : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments[0] != "manhua") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotEmpty) ?: return null
         val path = baseUrl.toHttpUrl().newBuilder().addPathSegment("manhua").addPathSegment(slug).addPathSegment("").build().encodedPath
-        return getMangaDetailsByUrl(path)
+
+        return getMangaUpdate(
+            manga = SManga.create().apply { this.url = path },
+            chapters = emptyList(),
+            fetchDetails = true,
+            fetchChapters = false,
+        ).manga
     }
 
     // Entries saved by the Madara version can store the WordPress post id, with the path in memo
@@ -71,13 +77,9 @@ abstract class ManhuaTop : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = mangaUpdate(
-        manga,
-        chapters,
-        fetchDetails,
-        fetchChapters,
-        details = { parseDetails(manga, client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()) },
-        chapterList = { fetchChapters(mangaPath(manga)) },
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) parseDetails(manga, client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()) else manga },
+        chapters = { if (fetchChapters) fetchChapters(mangaPath(manga)) else chapters },
     )
 
     private fun parseDetails(manga: SManga, document: Document): SManga = manga.apply {

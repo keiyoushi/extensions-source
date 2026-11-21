@@ -5,11 +5,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -80,13 +80,9 @@ abstract class Dynasty : KeiSource() {
     ): SMangaUpdate {
         val mangaId = manga.url.substringBefore("|")
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = { fetchDetails(mangaId) },
-            chapterList = { fetchChapterList(mangaId) },
+        return SMangaUpdate(
+            manga = { if (fetchDetails) fetchDetails(mangaId) else manga },
+            chapters = { if (fetchChapters) fetchChapterList(mangaId) else chapters },
         )
     }
 

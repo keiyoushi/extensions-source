@@ -5,11 +5,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getBooleanOrNull
@@ -64,7 +64,8 @@ abstract class Lemoon : KeiSource() {
         val index = url.pathSegments.indexOf("series")
         if (index == -1) return null
         val id = url.pathSegments.getOrNull(index + 1)?.substringBefore('-')?.takeIf(String::isNotEmpty) ?: return null
-        return getMangaDetailsByUrl(id)
+        val manga = SManga.create().apply { this.url = id }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
@@ -74,13 +75,9 @@ abstract class Lemoon : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = mangaUpdate(
-        manga,
-        chapters,
-        fetchDetails,
-        fetchChapters,
-        details = { getDetails(manga.url) },
-        chapterList = { getEpisodes(manga.url) },
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) getDetails(manga.url) else manga },
+        chapters = { if (fetchChapters) getEpisodes(manga.url) else chapters },
     )
 
     private suspend fun getDetails(id: String): SManga = client.get("$API_URL/comic/$id", apiHeaders, Fetch.XHR).parseAs<ComicDetailsDto>().toSManga()

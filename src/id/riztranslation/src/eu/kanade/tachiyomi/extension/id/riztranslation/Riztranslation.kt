@@ -5,11 +5,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
@@ -145,21 +145,25 @@ abstract class Riztranslation : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = mangaUpdate(
-        manga,
-        chapters,
-        fetchDetails,
-        fetchChapters,
-        details = {
-            val books = client.get("$apiUrl/Book?select=*%2Cgenres%3A_BookGenre%28genre%3AGenre%28*%29%29&type=not.ilike.*novel*&id=eq.${manga.url}", apiHeaders, Fetch.XHR)
-                .parseAs<List<BookDto>>()
-            if (books.isEmpty()) throw Exception("Manga not found")
-            books.first().toSMangaDetails().apply { url = manga.url }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = {
+            if (fetchDetails) {
+                val books = client.get("$apiUrl/Book?select=*%2Cgenres%3A_BookGenre%28genre%3AGenre%28*%29%29&type=not.ilike.*novel*&id=eq.${manga.url}", apiHeaders, Fetch.XHR)
+                    .parseAs<List<BookDto>>()
+                if (books.isEmpty()) throw Exception("Manga not found")
+                books.first().toSMangaDetails().apply { url = manga.url }
+            } else {
+                manga
+            }
         },
-        chapterList = {
-            client.get("$apiUrl/Chapter?select=id,bookId,chapter,nama,created_at&bookId=eq.${manga.url}&order=chapter.desc", apiHeaders, Fetch.XHR)
-                .parseAs<List<ChapterDto>>()
-                .map { it.toSChapter() }
+        chapters = {
+            if (fetchChapters) {
+                client.get("$apiUrl/Chapter?select=id,bookId,chapter,nama,created_at&bookId=eq.${manga.url}&order=chapter.desc", apiHeaders, Fetch.XHR)
+                    .parseAs<List<ChapterDto>>()
+                    .map { it.toSChapter() }
+            } else {
+                chapters
+            }
         },
     )
 

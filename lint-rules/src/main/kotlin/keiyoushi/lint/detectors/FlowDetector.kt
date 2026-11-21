@@ -36,7 +36,7 @@ class FlowDetector :
             val anchor = context.getNameLocation(node)
 
             when (node.name) {
-                "getMangaByUrl" -> if (DETAILS_CALL.containsMatchIn(body.replace(URL_LOOKUP_HELPER, "")) && "initialized" !in body && !node.callsInitializingParser()) {
+                "getMangaByUrl" -> if (DETAILS_CALL.containsMatchIn(body) && "initialized" !in body && !node.callsInitializingParser()) {
                     context.report(
                         INITIALIZED,
                         node,
@@ -192,7 +192,6 @@ class FlowDetector :
         private val ITERATORS = setOf("map", "mapNotNull", "mapIndexed", "forEach", "forEachIndexed", "flatMap", "associate", "associateWith")
         private val DETAILS_NAME = Regex("""(?i)details""")
         private val DETAILS_CALL = Regex("""(?i)details\w*\(""")
-        private const val URL_LOOKUP_HELPER = "getMangaDetailsByUrl("
         private val SINGLE_ITEM_PAGE = Regex("""MangasPage\(\s*(mangas\s*=\s*)?listOf(NotNull)?\(|\bmangas\s*=\s*listOf(NotNull)?\(""")
         private val EMPTY_THROW = Regex("""isEmpty\(\)\)?\s*\{?\s*throw\b|\?:\s*throw\s+\w*Exception\("[^"]*(?i:no pages|not found|pages not)""")
 

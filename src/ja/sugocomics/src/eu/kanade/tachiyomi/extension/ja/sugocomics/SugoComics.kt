@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.clipstudioreader.ClipStudioReaderInterceptor
 import keiyoushi.lib.clipstudioreader.fetchPages
@@ -16,6 +15,7 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.head
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
@@ -118,7 +118,8 @@ abstract class SugoComics :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.encodedPath != "/products/detail.php") return null
         val productId = url.queryParameter("product_id")?.toIntOrNull() ?: return null
-        return getMangaDetailsByUrl(productId.toString())
+        val manga = SManga.create().apply { this.url = productId.toString() }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/products/detail.php?product_id=${manga.url}"

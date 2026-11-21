@@ -5,11 +5,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -130,7 +130,12 @@ abstract class HentaiZoneBeta : KeiSource() {
             segments.size == 1 -> segments[0]
             else -> return null
         }
-        return getMangaDetailsByUrl(slug)
+        return fetchMangaUpdate(
+            SManga.create().apply { this.url = slug },
+            emptyList(),
+            fetchDetails = true,
+            fetchChapters = false,
+        ).manga()
     }
 
     // ============================== Filters ===============================

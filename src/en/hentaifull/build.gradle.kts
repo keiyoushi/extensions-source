@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "HentaiFull"
-    versionCode = 1
+    versionCode = 0
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 

@@ -5,11 +5,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDateTime
 import kotlinx.coroutines.async
@@ -52,7 +52,13 @@ abstract class ZonatmoTo : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host.removePrefix("www.") !in MIRROR_HOSTS || url.pathSegments[0] != "manga") return null
         val mangaSlug = url.pathSegments.getOrNull(1)?.ifEmpty { null } ?: return null
-        return getMangaDetailsByUrl(mangaSlug)
+
+        return getMangaUpdate(
+            SManga.create().apply { this.url = mangaSlug },
+            emptyList(),
+            fetchDetails = true,
+            fetchChapters = false,
+        ).manga
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList) = apiUrl.newBuilder().apply {
@@ -106,26 +112,30 @@ abstract class ZonatmoTo : KeiSource() {
     ): SMangaUpdate {
         val mangaUrl = "$apiUrl/single/manga/${manga.url}"
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = {
-                client.get(mangaUrl, Fetch.XHR).parseAs<SingleMangaResponseDto>()
-                    .data
-                    ?.toSManga()
-                    ?: throw Exception("Unable to parse manga details")
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    client.get(mangaUrl, Fetch.XHR).parseAs<SingleMangaResponseDto>()
+                        .data
+                        ?.toSManga()
+                        ?: throw Exception("Unable to parse manga details")
+                } else {
+                    manga
+                }
             },
-            chapterList = {
-                val chaptersUrl = mangaUrl.toHttpUrl().newBuilder()
-                    .addPathSegment("chapters")
-                    .addQueryParameter("page", "1")
-                    .addQueryParameter("postsPerPage", CHAPTERS_PER_PAGE.toString())
-                    .addQueryParameter("order", "asc")
-                    .build()
+            chapters = {
+                if (fetchChapters) {
+                    val chaptersUrl = mangaUrl.toHttpUrl().newBuilder()
+                        .addPathSegment("chapters")
+                        .addQueryParameter("page", "1")
+                        .addQueryParameter("postsPerPage", CHAPTERS_PER_PAGE.toString())
+                        .addQueryParameter("order", "asc")
+                        .build()
 
-                getChapters(chaptersUrl, manga.url)
+                    getChapters(chaptersUrl, manga.url)
+                } else {
+                    chapters
+                }
             },
         )
     }

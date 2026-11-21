@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
@@ -54,7 +54,8 @@ abstract class Hentai18 : KeiSource() {
         // Chapter links share the series' path prefix and point back to their series
         val seriesPath = document.selectFirst("[data-comic-url]")?.attr("data-comic-url")
             ?: return parseDetails(document, url.encodedPath).apply { initialized = true }
-        return getMangaDetailsByUrl(seriesPath)
+        val manga = SManga.create().apply { this.url = seriesPath }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun fetchMangaUpdate(

@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -121,7 +121,7 @@ abstract class Otakusic : KeiSource() {
         val manga = SManga.create().apply {
             setUrlWithoutDomain("/chi-tiet/$slug")
         }
-        return fetchMangaUpdate(manga, emptyList(), true, false).manga.apply {
+        return fetchMangaUpdate(manga, emptyList(), true, false).manga().apply {
             initialized = true
         }
     }
@@ -131,13 +131,9 @@ abstract class Otakusic : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = mangaUpdate(
-        manga,
-        chapters,
-        fetchDetails,
-        fetchChapters,
-        details = { parseMangaDetails(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup(), manga) },
-        chapterList = { loadChapterList(manga) },
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) parseMangaDetails(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup(), manga) else manga },
+        chapters = { if (fetchChapters) loadChapterList(manga) else chapters },
     )
 
     private fun parseMangaDetails(document: Document, manga: SManga): SManga = SManga.create().apply {

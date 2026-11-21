@@ -6,13 +6,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.get
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
@@ -112,22 +112,26 @@ abstract class MoeTruyenSuiCao : KeiSource() {
             .addQueryParameter("include", "genres")
             .build()
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = {
-                val result = client.get(detailsUrl, Fetch.XHR).parseAs<ApiResponse<MangaItem>>()
-                (result.data ?: throw Exception("Manga not found")).toSManga()
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    val result = client.get(detailsUrl, Fetch.XHR).parseAs<ApiResponse<MangaItem>>()
+                    (result.data ?: throw Exception("Manga not found")).toSManga()
+                } else {
+                    manga
+                }
             },
-            chapterList = {
-                val result = client.get("$baseUrl/v2/manga/$mangaId/chapters/aggregate", Fetch.XHR)
-                    .parseAs<ApiResponse<ChapterListData>>()
-                result.data?.chapters
-                    ?.filter { it.access == "public" }
-                    ?.map { it.toSChapter() }
-                    .orEmpty()
+            chapters = {
+                if (fetchChapters) {
+                    val result = client.get("$baseUrl/v2/manga/$mangaId/chapters/aggregate", Fetch.XHR)
+                        .parseAs<ApiResponse<ChapterListData>>()
+                    result.data?.chapters
+                        ?.filter { it.access == "public" }
+                        ?.map { it.toSChapter() }
+                        .orEmpty()
+                } else {
+                    chapters
+                }
             },
         )
     }

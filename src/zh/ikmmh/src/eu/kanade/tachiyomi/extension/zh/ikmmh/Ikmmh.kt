@@ -5,13 +5,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
@@ -132,16 +132,16 @@ abstract class Ikmmh : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = mangaUpdate(
-        manga,
-        chapters,
-        fetchDetails,
-        fetchChapters,
-        details = {
-            warmupSession()
-            client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup().parseDetails(manga)
+    ): SMangaUpdate = SMangaUpdate(
+        manga = {
+            if (fetchDetails) {
+                warmupSession()
+                client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup().parseDetails(manga)
+            } else {
+                manga
+            }
         },
-        chapterList = { fetchChapterList(manga) },
+        chapters = { if (fetchChapters) fetchChapterList(manga) else chapters },
     )
 
     private fun Document.parseDetails(manga: SManga): SManga = manga.apply {

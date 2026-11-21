@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "O Translations"
-    versionCode = 1
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 

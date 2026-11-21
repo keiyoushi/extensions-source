@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.booleanOrNull
@@ -65,7 +65,8 @@ abstract class MangaHotWeb : KeiSource() {
         val workCode = url.queryParameter("work_code")
             ?: url.queryParameter("story_id")?.let { getWorkCode(it) }
             ?: return null
-        return getMangaDetailsByUrl(workCode)
+        val manga = SManga.create().apply { this.url = workCode }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     // An episode's reader links to its work, and a locked episode redirects to it
@@ -82,13 +83,9 @@ abstract class MangaHotWeb : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = mangaUpdate(
-        manga,
-        chapters,
-        fetchDetails,
-        fetchChapters,
-        details = { getDetails(manga) },
-        chapterList = { getChapters(manga) },
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) getDetails(manga) else manga },
+        chapters = { if (fetchChapters) getChapters(manga) else chapters },
     )
 
     private suspend fun getDetails(manga: SManga): SManga {

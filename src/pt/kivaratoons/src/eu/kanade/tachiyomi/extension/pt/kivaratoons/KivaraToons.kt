@@ -8,12 +8,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -95,7 +95,11 @@ abstract class KivaraToons :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != siteUrl.host || url.pathSegments.firstOrNull() !in MANGA_PATH_SEGMENTS) return null
         val mangaId = url.pathSegments.getOrNull(1)?.takeIf(String::isNotEmpty)?.decodeMangaId() ?: return null
-        return getMangaDetailsByUrl(mangaId)
+        val manga = SManga.create().apply { this.url = mangaId }
+
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
+            .manga()
+            .apply { initialized = true }
     }
 
     // Details and pages always ask for adult content, otherwise entries already saved by the user stop working.

@@ -8,11 +8,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParseDate
@@ -70,7 +70,14 @@ abstract class Duskoryvile :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val seriesId = url.queryParameter("series_id") ?: return null
-        return getMangaDetailsByUrl("/series-page/?series_id=$seriesId")
+        return fetchMangaUpdate(
+            SManga.create().apply {
+                this.url = "/series-page/?series_id=$seriesId"
+            },
+            emptyList(),
+            true,
+            false,
+        ).manga()
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {

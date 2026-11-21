@@ -5,13 +5,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
@@ -86,7 +86,8 @@ abstract class Xsnvshen : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (!url.isSiteUrl() || url.pathSegments.firstOrNull() != "album") return null
         val id = url.pathSegments.getOrNull(1)?.takeIf { ALBUM_ID_REGEX.matches(it) } ?: return null
-        return getMangaDetailsByUrl("/album/$id")
+        val manga = SManga.create().apply { this.url = "/album/$id" }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun getMangasByUrl(url: HttpUrl, page: Int): MangasPage {

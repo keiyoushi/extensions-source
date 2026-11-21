@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "PornPics"
-    versionCode = 3
+    versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 

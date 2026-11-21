@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
 import okhttp3.HttpUrl
@@ -65,7 +65,8 @@ abstract class HentaiComics : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val segments = url.encodedPathSegments.filter { it.isNotEmpty() }
         if (segments.size != 2 || segments[0] in setOf("page", "search")) return null
-        return getMangaDetailsByUrl(segments.joinToString("/", postfix = "/"))
+        val manga = SManga.create().apply { this.url = segments.joinToString("/", postfix = "/") }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}"

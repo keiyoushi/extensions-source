@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
@@ -65,7 +65,11 @@ abstract class EgoToons : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host.removePrefix("www.") || url.pathSegments.firstOrNull() != "obra") return null
         val mangaId = url.pathSegments.getOrNull(1)?.toIntOrNull() ?: return null
-        return getMangaDetailsByUrl("/obra/$mangaId")
+        val manga = SManga.create().apply { this.url = "/obra/$mangaId" }
+
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga().apply {
+            initialized = true
+        }
     }
 
     override suspend fun fetchMangaUpdate(
@@ -76,18 +80,18 @@ abstract class EgoToons : KeiSource() {
     ): SMangaUpdate {
         val mangaId = manga.url.mangaId()
 
-        return mangaUpdate(
-            manga,
-            chapters,
-            fetchDetails,
-            fetchChapters,
-            details = {
-                client.get("$baseUrl/api/obras/$mangaId", Fetch.XHR)
-                    .parseAs<MangaDetailsDto>()
-                    .manga
-                    .toSManga(baseUrl)
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    client.get("$baseUrl/api/obras/$mangaId", Fetch.XHR)
+                        .parseAs<MangaDetailsDto>()
+                        .manga
+                        .toSManga(baseUrl)
+                } else {
+                    manga
+                }
             },
-            chapterList = { getChapterList(mangaId) },
+            chapters = { if (fetchChapters) getChapterList(mangaId) else chapters },
         )
     }
 

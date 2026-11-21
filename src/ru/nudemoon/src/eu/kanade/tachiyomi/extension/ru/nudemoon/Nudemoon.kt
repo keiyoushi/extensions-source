@@ -7,12 +7,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -112,7 +112,10 @@ abstract class Nudemoon : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val firstSegment = url.pathSegments.firstOrNull() ?: return null
         if (url.host == domain && firstSegment.endsWith(".html")) {
-            return getMangaDetailsByUrl("/$firstSegment")
+            val tmpManga = SManga.create().apply {
+                this.url = "/$firstSegment"
+            }
+            return getMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
         }
         return null
     }

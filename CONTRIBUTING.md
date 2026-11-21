@@ -1396,24 +1396,25 @@ API response, fetch and parse it once and return both the updated `SManga` and t
 list, regardless of the `fetchDetails`/`fetchChapters` flags - there's no separate request to skip,
 so honoring the flags would just mean discarding data you already parsed. If details and chapters
 instead live behind separate pages/endpoints, only fetch what each flag actually asks for; when
-both `fetchDetails` and `fetchChapters` are `true`, fire both requests concurrently instead of
-awaiting them sequentially. `mangaUpdate` does both:
+both `fetchDetails` and `fetchChapters` are `true`, run them concurrently: `fetchMangaUpdate` returns
+`keiyoushi.source.SMangaUpdate` (the callback shape of extensions-lib 1.7), and `KeiSource` runs its `manga` and
+`chapters` callbacks concurrently.
 
 ```kotlin
+import keiyoushi.source.SMangaUpdate
+
 override suspend fun fetchMangaUpdate(
     manga: SManga,
     chapters: List<SChapter>,
     fetchDetails: Boolean,
     fetchChapters: Boolean,
-): SMangaUpdate = mangaUpdate(
-    manga,
-    chapters,
-    fetchDetails,
-    fetchChapters,
-    details = { getMangaDetails(manga) },
-    chapterList = { getChapterList(manga) },
+): SMangaUpdate = SMangaUpdate(
+    manga = { if (fetchDetails) getMangaDetails(manga) else manga },
+    chapters = { if (fetchChapters) getChapterList(manga) else chapters },
 )
 ```
+
+`SMangaUpdate(manga, chapters)` takes values for the single-response case.
 
 Behavior `KeiSource` gives you for free:
 
@@ -1735,17 +1736,6 @@ override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         this.url = "/manga/$id"
         title = ...
     }
-}
-```
-
-When the URL only tells you the manga's `url`, `getMangaDetailsByUrl` fetches its details through
-`fetchMangaUpdate`:
-
-```kotlin
-override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-    if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "manga") return null
-    val id = url.pathSegments.getOrNull(1) ?: return null
-    return getMangaDetailsByUrl("/manga/$id")
 }
 ```
 
