@@ -14,14 +14,16 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.runWebView
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Luvaholic : KeiSource() {
@@ -30,10 +32,39 @@ abstract class Luvaholic : KeiSource() {
         rateLimit(3)
     }
 
+    // =============================== Verify ================================
+
+    // The splash check only answers browser TLS; one WebView run sets its cookie for the rest of the session.
+    private val needsVerification = AtomicBoolean(false)
+
+    private fun Document.isVerificationPage() = selectFirst("script:contains(wsidchk)") != null
+
+    private suspend fun fetchPage(url: HttpUrl): Document {
+        val page = client.get(url, Fetch.DOCUMENT).asJsoup()
+        if (!page.isVerificationPage()) return page
+        passVerificationIfChecked(page)
+        return client.get(url, Fetch.DOCUMENT).asJsoup()
+    }
+
+    private suspend fun fetchMangaPage(url: HttpUrl): MangasPage = parseMangaPage(fetchPage(url))
+
+    private suspend fun passVerificationIfChecked(page: Document) {
+        if (!page.isVerificationPage() || !needsVerification.compareAndSet(false, true)) return
+        try {
+            runWebView<Unit>(timeout = 15.seconds) {
+                onPageStarted { url -> if (url != "$baseUrl/") resolve(Unit) }
+                loadUrl("$baseUrl/")
+            }
+        } catch (e: Exception) {
+            needsVerification.set(false)
+            throw e
+        }
+    }
+
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
+        val document = fetchPage(baseUrl.toHttpUrl())
         val manga = document.select(".td-hot-slider .comic-card").mapNotNull(::mangaFromCard)
         return MangasPage(manga, hasNextPage = false)
     }
@@ -50,7 +81,7 @@ abstract class Luvaholic : KeiSource() {
             addQueryParameter("sort", "new")
         }.build()
 
-        return parseMangaPage(client.get(url, Fetch.DOCUMENT))
+        return fetchMangaPage(url)
     }
 
     // =============================== Search ===============================
@@ -61,7 +92,7 @@ abstract class Luvaholic : KeiSource() {
                 addQueryParameter("s", query)
                 addQueryParameter("paged", page.toString())
             }.build()
-            return parseMangaPage(client.get(url, Fetch.DOCUMENT))
+            return fetchMangaPage(url)
         }
 
         val genreSlug = filters.firstInstanceOrNull<GenreFilter>()?.selectedSlug
@@ -88,11 +119,10 @@ abstract class Luvaholic : KeiSource() {
             if (statusValue != null) builder.addQueryParameter("filter", statusValue)
         }
 
-        return parseMangaPage(client.get(builder.build(), Fetch.DOCUMENT))
+        return fetchMangaPage(builder.build())
     }
 
-    private fun parseMangaPage(response: Response): MangasPage {
-        val document = response.asJsoup()
+    private fun parseMangaPage(document: Document): MangasPage {
         val manga = document.select(".row-cols-2 .col, .row .col").mapNotNull(::mangaFromCard)
         val hasNextPage = document.selectFirst("ul.page-numbers a.next") != null
         return MangasPage(manga, hasNextPage)
@@ -128,7 +158,7 @@ abstract class Luvaholic : KeiSource() {
         val segments = url.pathSegments.filter { it.isNotBlank() }
         if (segments.isEmpty()) return null
 
-        var document = client.get(url, Fetch.DOCUMENT).asJsoup()
+        var document = fetchPage(url)
 
         val mangaUrl = if (document.selectFirst("#chapter-list-container") == null && segments.size > 1) {
             "$baseUrl/${segments.dropLast(1).last()}/"
@@ -137,7 +167,7 @@ abstract class Luvaholic : KeiSource() {
         }
 
         if (mangaUrl != url.toString()) {
-            document = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
+            document = fetchPage(mangaUrl.toHttpUrl())
         }
 
         return mangaDetailsParse(document).apply {
@@ -153,7 +183,7 @@ abstract class Luvaholic : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        val document = fetchPage(getMangaUrl(manga).toHttpUrl())
 
         return SMangaUpdate(
             mangaDetailsParse(document).apply { setUrlWithoutDomain(manga.url) },
@@ -209,7 +239,7 @@ abstract class Luvaholic : KeiSource() {
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
+        val document = fetchPage(getChapterUrl(chapter).toHttpUrl())
         return document.select(".td-chap-images img, #chapter-content-text img")
             .mapIndexedNotNull { index, img ->
                 val src = img.absUrl("src").ifBlank { null }
@@ -224,7 +254,7 @@ abstract class Luvaholic : KeiSource() {
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
+        val document = fetchPage(baseUrl.toHttpUrl())
         val genres = document.select(".dropdown-mega .dropdown-menu a[href*=\"/category/\"]")
             .mapNotNull { a ->
                 val name = a.text().trim()

@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.es.komiwa
 
+import android.util.Base64
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -119,19 +121,29 @@ class ChapterDto(
 
 @Serializable
 class ReaderDto(
-    val pages: List<String>,
-    val imageSigs: Map<String, String> = emptyMap(),
-    val manga: ReaderMangaDto,
     @SerialName("__r")
-    val encryptedPages: String? = null,
-)
+    private val encryptedPages: String,
+    @SerialName("__k")
+    private val encryptedKey: String,
+    val manga: ReaderMangaDto,
+) {
+    fun decryptPages(): ReaderPagesDto {
+        val rawKey = Base64.decode(encryptedKey, Base64.URL_SAFE)
+        val key = ByteArray(rawKey.size) { i -> (rawKey[i].toInt() xor (7 * i + 61)).toByte() }
+        val rawPages = Base64.decode(encryptedPages, Base64.URL_SAFE)
+        val json = ByteArray(rawPages.size) { i ->
+            (rawPages[i].toInt() xor key[i % key.size].toInt() xor i).toByte()
+        }
+        return json.decodeToString().parseAs()
+    }
+}
 
 @Serializable
-class ReaderDecryptedDto(
+class ReaderPagesDto(
     @SerialName("p")
     val pages: List<String>,
     @SerialName("s")
-    val signatures: Map<String, String> = emptyMap(),
+    val imageSigs: Map<String, String> = emptyMap(),
 )
 
 @Serializable

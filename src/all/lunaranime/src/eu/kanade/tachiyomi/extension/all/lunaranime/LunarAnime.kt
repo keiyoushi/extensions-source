@@ -297,7 +297,6 @@ abstract class LunarAnime : KeiSource() {
         val images = data.images
         return cacheStatus == "revalidate" ||
             slug == "unknown" ||
-            v4 == null ||
             images.isEmpty() ||
             images.all { DECOY_PATH in it }
     }

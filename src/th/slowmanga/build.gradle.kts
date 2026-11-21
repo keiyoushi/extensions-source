@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Slow Manga"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "mangathemesia"

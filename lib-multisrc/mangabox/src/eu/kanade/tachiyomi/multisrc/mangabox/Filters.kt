@@ -6,11 +6,23 @@ class SortFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Order by",
 class StatusFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Status", vals)
 class GenreFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Category", vals)
 
-internal fun getSortFilters(): Array<Pair<String?, String>> = arrayOf(
-    Pair("latest", "Latest"),
-    Pair("newest", "Newest"),
-    Pair("topview", "Top read"),
-)
+internal fun getSortFilters(useLegacy: Boolean = false): Array<Pair<String?, String>> = if (useLegacy) {
+    arrayOf(
+        Pair("latest", "Latest"),
+        Pair("newest", "Newest"),
+        Pair("topview", "Top read"),
+    )
+} else {
+    arrayOf(
+        Pair("latest", "Latest"),
+        Pair("newest", "Newest"),
+        Pair("views", "Top read"),
+        Pair("az", "A → Z"),
+        Pair("chapters", "Chapters"),
+        Pair("follows", "Most followed"),
+        Pair("rating", "Top rated"),
+    )
+}
 
 internal fun getStatusFilters(): Array<Pair<String?, String>> = arrayOf(
     Pair("all", "ALL"),
@@ -171,6 +183,7 @@ internal fun getGenreFilters(): Array<Pair<String?, String>> = arrayOf(
     Pair("time-travel", "Time travel"),
     Pair("traditional-games", "Traditional games"),
     Pair("tragedy", "Tragedy"),
+    Pair("transmigration", "Transmigration"),
     Pair("vampires", "Vampires"),
     Pair("video-games", "Video games"),
     Pair("villainess", "Villainess"),
