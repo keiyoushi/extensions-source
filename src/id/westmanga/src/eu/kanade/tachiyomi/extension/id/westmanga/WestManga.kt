@@ -75,14 +75,13 @@ abstract class WestManga : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if ("westmanga" !in url.host.split(".")) return null
         val slug = when (url.pathSegments.firstOrNull()) {
             "comic", "manga" -> url.pathSegments.getOrNull(1)
             else -> null
         } ?: return null
-        val api = "$baseUrl/api/comic/$slug".toHttpUrl()
-
-        return apiGet<Data<Manga>>(api).data
-            .toSManga(baseUrl)
+        val manga = SManga.create().apply { this.url = "/manga/$slug/" }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     override suspend fun fetchMangaUpdate(
@@ -92,7 +91,7 @@ abstract class WestManga : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val path = "$baseUrl${manga.url}".toHttpUrl().pathSegments
-        require(path.size == 3) { "Migrate from $name to $name" }
+        require(path.size == 3) { "Migrasikan dari $name ke $name" }
         val slug = path[1]
         val api = "$baseUrl/api/comic/$slug".toHttpUrl()
 
@@ -110,14 +109,13 @@ abstract class WestManga : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val path = "$baseUrl${chapter.url}".toHttpUrl().pathSegments
-        require(path.isNotEmpty()) { "Refresh Chapter List" }
+        require(path.isNotEmpty()) { "Muat ulang daftar chapter" }
         val slug = path.first()
 
         val url = "$baseUrl/api/v/$slug".toHttpUrl()
         val data = apiGet<Data<ImageList>>(url).data
         return data.images.mapIndexed { idx, img ->
-            val imgUrl = if (img.startsWith("http")) img else "$baseUrl$img"
-            Page(idx, imageUrl = imgUrl)
+            Page(idx, imageUrl = baseUrl.toHttpUrl().resolve(img)!!.toString())
         }
     }
 
