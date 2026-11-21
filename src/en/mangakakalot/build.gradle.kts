@@ -15,8 +15,8 @@ keiyoushi {
         lang = "en"
         baseUrl {
             mirrors(
-                "https://www.kakamanga.com",
-                "https://www.mangakakalove.com",
+                "" to "https://www.kakamanga.com",
+                "www.mangakakalove.com (legacy)" to "https://www.mangakakalove.com",
             )
         }
     }
