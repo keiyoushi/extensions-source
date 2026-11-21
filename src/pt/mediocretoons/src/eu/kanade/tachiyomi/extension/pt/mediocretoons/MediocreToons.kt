@@ -166,12 +166,7 @@ abstract class MediocreToons :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        // The site's own links point to the www host
-        if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "obra") {
-            return null
-        }
-
-        val id = url.pathSegments.getOrNull(1)?.toIntOrNull() ?: return null
+        val id = mangaIdFromUrl(url, baseUrl.toHttpUrl().host) ?: return null
 
         return client.get("$API_URL/obras/$id", Fetch.XHR).parseAs<MangaDetailsDto>().toSManga()
     }
@@ -223,7 +218,7 @@ abstract class MediocreToons :
     }
 
     companion object {
-        private const val API_URL = "https://back2.mediocrescan.com"
+        private const val API_URL = "https://api.laranjatoons.com"
         private const val LOGIN_PATH = "/auth/login"
 
         private const val LIMIT = 24
@@ -243,4 +238,13 @@ abstract class MediocreToons :
             "Falha no login. Não foi possível ler a resposta do site."
         private const val VIP_ONLY_ERROR = "O site restringe o acesso a assinantes VIP"
     }
+}
+
+private const val LEGACY_SITE_HOST = "mediocrescan.com"
+
+// The site moved to laranjatoons.com (its links also come with www); old links are still recognized.
+fun mangaIdFromUrl(url: HttpUrl, siteHost: String): Int? {
+    val host = url.host.removePrefix("www.")
+    if ((host != siteHost && host != LEGACY_SITE_HOST) || url.pathSegments.firstOrNull() != "obra") return null
+    return url.pathSegments.getOrNull(1)?.toIntOrNull()
 }
