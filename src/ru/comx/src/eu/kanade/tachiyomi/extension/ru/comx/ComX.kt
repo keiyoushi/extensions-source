@@ -169,7 +169,7 @@ abstract class ComX :
     private fun Element.imgAttr(): String? = attrOrNull("abs:data-src") ?: attrOrNull("abs:src")
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host) return null
+        if (url.host != baseUrl.toHttpUrl().host || !url.encodedPath.endsWith(".html")) return null
         val manga = SManga.create().apply { this.url = url.encodedPath }
         return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
