@@ -310,7 +310,6 @@ class LunarPageListData(
 class LunarPageListDecrypted(
     val data: LunarPageListData,
     val slug: String?,
-    val v4: String?,
     val veil: List<String?>?,
     @SerialName("cache_status") val cacheStatus: String?,
     @SerialName("cache_ttl") val cacheTtl: Long?,
