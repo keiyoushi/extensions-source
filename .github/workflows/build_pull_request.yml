@@ -75,6 +75,10 @@ jobs:
           TASKS=()
           for module in $MODULES; do
             TASKS+=("${module}:assembleRelease" "${module}:lintRelease")
+            dir="${module#:}"
+            if [ -d "${dir//://}/test" ]; then
+              TASKS+=("${module}:testDebugUnitTest")
+            fi
           done
           ./gradlew "${TASKS[@]}"
 
@@ -118,8 +122,9 @@ jobs:
           TASKS=()
           for module in $MODULES; do
             TASKS+=("${module}:lintRelease")
-            if [ "$module" = ":core" ]; then
-              TASKS+=(":core:testDebugUnitTest")
+            dir="${module#:}"
+            if [ "$module" = ":core" ] || [ -d "${dir//://}/test" ]; then
+              TASKS+=("${module}:testDebugUnitTest")
             fi
           done
           ./gradlew "${TASKS[@]}"
