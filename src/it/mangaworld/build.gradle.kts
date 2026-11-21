@@ -13,6 +13,6 @@ keiyoushi {
 
     source {
         lang = "it"
-        baseUrl = "https://www.mangaworld.mx"
+        baseUrl = "https://www.mangaworld.me"
     }
 }
