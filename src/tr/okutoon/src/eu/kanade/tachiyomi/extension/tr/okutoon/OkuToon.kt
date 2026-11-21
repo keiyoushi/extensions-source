@@ -14,6 +14,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
@@ -35,6 +36,13 @@ abstract class OkuToon : KeiSource() {
         filters.filterIsInstance<UrlFilter>().forEach { it.addToUrl(url) }
         val response = client.get(url.build(), Fetch.XHR).parseAs<SeriesListResponse>()
         return MangasPage(response.data.map { it.toSManga() }, response.hasNextPage)
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val host = url.host.removePrefix("www.")
+        if (host != baseUrl.toHttpUrl().host && host != "okutoon.com") return null
+        val slug = url.pathSegments.first().takeIf { it.isNotEmpty() && it != "tur" } ?: return null
+        return getSeries(slug).toSManga(baseUrl).apply { initialized = true }
     }
 
     override suspend fun fetchMangaUpdate(

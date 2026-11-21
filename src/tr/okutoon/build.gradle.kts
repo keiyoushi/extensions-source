@@ -14,4 +14,11 @@ keiyoushi {
         lang = "tr"
         baseUrl = "https://okutoon.net"
     }
+
+    deeplink {
+        host("okutoon.net")
+        host("www.okutoon.net")
+        host("okutoon.com")
+        path("/..*")
+    }
 }
