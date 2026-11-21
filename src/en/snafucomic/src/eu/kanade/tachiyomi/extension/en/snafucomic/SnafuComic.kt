@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.snafucomics
+package eu.kanade.tachiyomi.extension.en.snafucomic
 
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
