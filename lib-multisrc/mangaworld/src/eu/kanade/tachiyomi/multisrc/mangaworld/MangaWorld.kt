@@ -45,7 +45,7 @@ abstract class MangaWorld : KeiSource() {
         }
     }
 
-    private fun parseMangasPage(document: Document): MangasPage {
+    protected open fun parseMangasPage(document: Document): MangasPage {
         val mangas = document.select("div.comics-grid .entry").map { searchMangaFromElement(it) }
         val hasNextPage = mangas.size == 16
         return MangasPage(mangas, hasNextPage)
@@ -95,7 +95,6 @@ abstract class MangaWorld : KeiSource() {
         val document = client.get(baseUrl + mangaUrl, Fetch.DOCUMENT).asJsoup()
         return mangaDetailsParse(document).apply {
             this.url = mangaUrl
-            title = document.selectFirst("div.comic-info h1")!!.text()
         }
     }
 
@@ -111,11 +110,12 @@ abstract class MangaWorld : KeiSource() {
         return SMangaUpdate(details, chapterListParse(document))
     }
 
-    private fun mangaDetailsParse(document: Document): SManga {
+    protected open fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.selectFirst("div.comic-info")
             ?: throw Exception("Page not found")
 
         return SManga.create().apply {
+            title = infoElement.selectFirst("h1")!!.text()
             author = infoElement.selectFirst("a[href*=/archive?author=]")?.text()
             artist = infoElement.selectFirst("a[href*=/archive?artist=]")?.text() ?: ""
             thumbnail_url = infoElement.selectFirst(".thumb > img")?.attr("abs:src")
@@ -143,7 +143,7 @@ abstract class MangaWorld : KeiSource() {
         else -> SManga.UNKNOWN
     }
 
-    private fun chapterListParse(document: Document): List<SChapter> = document.select(".chapters-wrapper .chapter").map { element ->
+    protected open fun chapterListParse(document: Document): List<SChapter> = document.select(".chapters-wrapper .chapter").map { element ->
         SChapter.create().apply {
             val urlElement = element.selectFirst("a.chap") ?: throw Exception("Url not found")
             setUrlWithoutDomain(fixChapterUrl(urlElement.attr("abs:href")))

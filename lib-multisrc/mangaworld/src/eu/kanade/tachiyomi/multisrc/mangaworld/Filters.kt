@@ -8,13 +8,14 @@ internal class SortBy :
     UriPartFilter(
         "Ordina per",
         arrayOf(
-            Pair("Rilevanza", ""),
+            Pair("Rilevanza", "relevance"),
             Pair("Più letti", "most_read"),
             Pair("Meno letti", "less_read"),
             Pair("Più recenti", "newest"),
             Pair("Meno recenti", "oldest"),
             Pair("A-Z", "a-z"),
             Pair("Z-A", "z-a"),
+            Pair("Più votati", "top_rated"),
         ),
     )
 
