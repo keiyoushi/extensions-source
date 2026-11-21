@@ -37,7 +37,7 @@ abstract class MangaWorld : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int) = parseMangasPage(client.get("$baseUrl/?page=$page", Fetch.DOCUMENT).asJsoup())
 
-    private fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+    protected open fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
         thumbnail_url = element.selectFirst(".card-cover img")?.attr("abs:src")
         element.selectFirst(".card-title a")!!.let {
             setUrlWithoutDomain(it.attr("abs:href").removeSuffix("/"))
@@ -45,7 +45,7 @@ abstract class MangaWorld : KeiSource() {
         }
     }
 
-    private fun parseMangasPage(document: Document): MangasPage {
+    protected open fun parseMangasPage(document: Document): MangasPage {
         val mangas = document.select(".archive-grid .archive-card, article.card").map { searchMangaFromElement(it) }
         val hasNextPage = document.selectFirst(".pager a[rel=next]") != null
         return MangasPage(mangas, hasNextPage)
@@ -108,7 +108,7 @@ abstract class MangaWorld : KeiSource() {
         return SMangaUpdate(details, chapterListParse(document))
     }
 
-    private fun mangaDetailsParse(document: Document): SManga {
+    protected open fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.selectFirst(".manga-info")
             ?: throw Exception("Page not found")
 
@@ -119,14 +119,22 @@ abstract class MangaWorld : KeiSource() {
             thumbnail_url = document.selectFirst(".manga-cover img")?.attr("abs:src")
 
             description = buildString {
+                infoElement.selectFirst("a[href*='year=']")?.let {
+                    append("Anno di uscita: ${it.text()}")
+                    append("\n\n")
+                }
+
                 append(document.select(".manga-plot").text())
+
                 val otherTitle = infoElement.selectFirst(".manga-alt")?.text()
                 if (!otherTitle.isNullOrEmpty() && otherTitle.contains("Titoli alternativi")) {
                     append("\n\n").append(otherTitle)
                 }
             }
 
-            genre = infoElement.select(".hero-chips a").joinToString { it.text() }
+            genre = listOf("a[href*='type=']", ".hero-chips a").flatMap {
+                infoElement.select(it)
+            }.joinToString { it.text() }
 
             val statusText = infoElement.selectFirst(".manga-facts a[href*='status=']")?.text()
             status = parseStatus(statusText)
@@ -141,7 +149,7 @@ abstract class MangaWorld : KeiSource() {
         else -> SManga.UNKNOWN
     }
 
-    private fun chapterListParse(document: Document): List<SChapter> = document.select(".volume-list .ch-row").map { element ->
+    protected open fun chapterListParse(document: Document): List<SChapter> = document.select(".volume-list .ch-row").map { element ->
         SChapter.create().apply {
             val urlElement = element.selectFirst("a.ch") ?: throw Exception("Url not found")
             setUrlWithoutDomain(fixChapterUrl(urlElement.attr("abs:href")))
