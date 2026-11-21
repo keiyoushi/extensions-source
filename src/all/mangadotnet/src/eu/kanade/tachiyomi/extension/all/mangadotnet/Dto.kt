@@ -238,6 +238,12 @@ class Manga(
             }
         }
         description = MarkdownDescription.Builder().apply {
+            markdown(
+                this@Manga.description?.replace("\r\n", "\n")
+                    ?.replace(multipleNewlinesRegex, "\n\n")
+                    ?.replace(listRegex, "\n$1"),
+            )
+            separator()
             rating(this@Manga.rating, votes = ratingCount?.takeIf { it > 0 })
             field("Year", year?.toString())
             field("Chapters", chapterCount?.toString())
@@ -245,11 +251,6 @@ class Manga(
             field("Tracked", trackedCount?.toString())
             field("Content Rating", contentRating?.replaceFirstChar { it.uppercase() })
             separator()
-            markdown(
-                this@Manga.description?.replace("\r\n", "\n")
-                    ?.replace(multipleNewlinesRegex, "\n\n")
-                    ?.replace(listRegex, "\n$1"),
-            )
             links(
                 listOf(
                     "AniList" to anilistID?.let { "https://anilist.co/manga/$it" },
