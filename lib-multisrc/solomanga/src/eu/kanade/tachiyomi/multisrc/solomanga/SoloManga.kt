@@ -25,8 +25,6 @@ abstract class SoloManga : KeiSource() {
 
     protected open val imageHosts = emptyList<String>()
 
-    protected open val pageSelector = ".entry-content img"
-
     private fun singleManga(): SManga = SManga.create().apply {
         url = "/"
         title = mangaTitle
@@ -89,7 +87,7 @@ abstract class SoloManga : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        return document.select(pageSelector)
+        return document.select(".entry-content img, .post-single-content img")
             .mapNotNull { img ->
                 // Pages are lazy-loaded: src holds a data: placeholder, the real image is in data-src or srcset
                 val url = img.attr("data-src")

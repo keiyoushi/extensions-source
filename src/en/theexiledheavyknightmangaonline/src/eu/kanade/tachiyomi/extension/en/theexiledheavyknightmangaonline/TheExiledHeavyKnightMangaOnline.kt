@@ -14,8 +14,6 @@ abstract class TheExiledHeavyKnightMangaOnline : SoloManga() {
 
     override val chapterListSelector = "ul.scroll-sm a"
 
-    override val pageSelector = ".post-single-content img, .entry-content img"
-
     override val imageHosts = listOf("pic.readkakegurui.com")
 
     override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
