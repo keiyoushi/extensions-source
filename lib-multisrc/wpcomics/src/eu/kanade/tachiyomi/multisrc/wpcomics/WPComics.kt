@@ -11,6 +11,7 @@ import keiyoushi.lib.i18n.Intl
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
@@ -18,6 +19,7 @@ import keiyoushi.utils.tryParseDate
 import keiyoushi.utils.tryParseDateTime
 import keiyoushi.utils.tryParseZonedDateTime
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -97,12 +99,12 @@ abstract class WPComics : KeiSource() {
                 when (filter) {
                     is GenreFilter -> filter.toUriPart()?.let { addPathSegment(it) }
                     is StatusFilter -> filter.toUriPart()?.let { addQueryParameter("status", it) }
+                    is SortFilter -> filter.toUriPart()?.let { addQueryParameter("sort", it) }
                     else -> {}
                 }
             }
             addQueryParameter(queryParam, query)
             addQueryParameter("page", page.toString())
-            addQueryParameter("sort", "0")
         }.build()
 
         return parseMangaPage(client.get(url, Fetch.DOCUMENT), searchMangaSelector(), ::searchMangaFromElement)
@@ -118,6 +120,23 @@ abstract class WPComics : KeiSource() {
         thumbnail_url = imageOrNull(element.select("div.image a img").first()!!)
     }
 
+    protected open val mangaUrlDirectory: String? = null
+
+    protected open fun isSiteHost(host: String): Boolean {
+        val baseHost = baseUrl.toHttpUrl().host
+        return host == baseHost || host.endsWith(".$baseHost")
+    }
+
+    // Only manga and chapter links map to a manga url, longer paths carry ids the manga url needs
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val directory = mangaUrlDirectory ?: return null
+        val segments = url.pathSegments
+        if (!isSiteHost(url.host) || segments.size !in 2..3 || segments[0] != directory) return null
+
+        val manga = SManga.create().apply { this.url = "/$directory/${segments[1]}" }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
+
     // ============================== Details ======================================
 
     override suspend fun fetchMangaUpdate(
@@ -125,25 +144,32 @@ abstract class WPComics : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = mangaUpdateParse(client.get(getMangaUrl(manga), Fetch.DOCUMENT), manga, chapters)
+    ): SMangaUpdate {
+        if (!fetchDetails) fetchChapterList(manga)?.let { return SMangaUpdate(manga, it) }
+        return mangaUpdateParse(client.get(getMangaUrl(manga), Fetch.DOCUMENT), manga, chapters)
+    }
 
     protected open suspend fun mangaUpdateParse(response: Response, manga: SManga, chapters: List<SChapter>): SMangaUpdate {
         val document = response.asJsoup()
-        val updatedManga = mangaDetailsParse(document)
-        val updatedChapters = document.select(chapterListSelector()).map(::chapterFromElement)
+        val updatedManga = mangaDetailsParse(document).apply { url = manga.url }
+        val updatedChapters = fetchChapterList(manga) ?: document.select(chapterListSelector()).map(::chapterFromElement)
 
         return SMangaUpdate(updatedManga, updatedChapters)
     }
 
     protected open fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        document.selectFirst("h1.title-detail")?.let { title = it.text() }
         document.selectFirst("article#item-detail")?.let { info ->
             author = info.select("li.author p.col-xs-8").text()
             status = info.select("li.status p.col-xs-8").text().toStatus()
             genre = info.select("li.kind p.col-xs-8 a").joinToString { it.text() }
             thumbnail_url = imageOrNull(info.selectFirst("div.col-image img")!!)
-            val otherName = info.select("h2.other-name").text()
-            description = info.select("div.detail-content p").joinToString("\n") { it.wholeText().trim() } +
-                if (otherName.isNotBlank()) "\n\n${intl["OTHER_NAME"]}: $otherName" else ""
+            description = MarkdownDescription.Builder().apply {
+                info.select("div.detail-content div.shortened > *")
+                    .ifEmpty { info.select("div.detail-content p") }
+                    .forEach { description(it) }
+                field(intl["OTHER_NAME"], info.selectFirst("h2.other-name")?.text())
+            }.build()
         }
     }
 
@@ -161,6 +187,26 @@ abstract class WPComics : KeiSource() {
     }
 
     // ============================== Chapters ======================================
+
+    protected open val useChapterListApi = false
+
+    // Chapters that come from their own request, null when they are on the manga page
+    protected open suspend fun fetchChapterList(manga: SManga): List<SChapter>? = if (useChapterListApi) fetchChapterListApi(manga) else null
+
+    protected open fun chapterListApiUrl(manga: SManga): HttpUrl = "$baseUrl/Comic/Services/ComicService.asmx/ChapterList".toHttpUrl().newBuilder()
+        .addQueryParameter("slug", manga.url.substringAfterLast("/"))
+        .build()
+
+    protected open fun chapterListApiChapterUrl(manga: SManga, chapter: ChapterDto): String = "/truyen-tranh/${manga.url.substringAfterLast("/")}/${chapter.chapterSlug}"
+
+    private suspend fun fetchChapterListApi(manga: SManga): List<SChapter> {
+        val headers = headersBuilder().set("X-Requested-With", "XMLHttpRequest").build()
+        return client.get(chapterListApiUrl(manga), headers, Fetch.XHR.from(getMangaUrl(manga)))
+            .parseAs<ChapterListDto>().data
+            .map { it.toSChapter(chapterListApiChapterUrl(manga, it), chapterListApiDateFormat, dateZone) }
+    }
+
+    private val chapterListApiDateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
 
     protected open fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         element.select("a").let {
@@ -268,10 +314,28 @@ abstract class WPComics : KeiSource() {
 
     protected class GenreFilter(name: String, pairs: List<Pair<String?, String>>) : UriPartFilter(name, pairs)
 
+    protected class SortFilter(name: String, pairs: List<Pair<String?, String>>) : UriPartFilter(name, pairs)
+
     protected open fun getStatusList(): List<Pair<String?, String>> = listOf(
         Pair(null, intl["STATUS_ALL"]),
         Pair("1", intl["STATUS_ONGOING"]),
         Pair("2", intl["STATUS_COMPLETED"]),
+    )
+
+    protected open fun getSortList(): List<Pair<String?, String>> = emptyList()
+
+    // sort=0 is "Top all" on these sites, the latest updated list is no sort at all
+    protected fun netTruyenSortList(): List<Pair<String?, String>> = listOf(
+        Pair(null, intl["SORT_UPDATED"]),
+        Pair("15", intl["SORT_NEW"]),
+        Pair("10", intl["SORT_TOP_ALL"]),
+        Pair("11", intl["SORT_TOP_MONTH"]),
+        Pair("12", intl["SORT_TOP_WEEK"]),
+        Pair("13", intl["SORT_TOP_DAY"]),
+        Pair("19", intl["SORT_TOP_FOLLOW"]),
+        Pair("20", intl["SORT_FOLLOW"]),
+        Pair("25", intl["SORT_COMMENT"]),
+        Pair("30", intl["SORT_CHAPTER"]),
     )
 
     override val supportsFilterFetching = true
@@ -307,6 +371,7 @@ abstract class WPComics : KeiSource() {
     protected open fun getFilterList(genres: List<Pair<String?, String>>): FilterList = FilterList(
         buildList {
             add(StatusFilter(intl["STATUS"], getStatusList()))
+            getSortList().takeIf { it.isNotEmpty() }?.let { add(SortFilter(intl["SORT"], it)) }
             if (genres.isNotEmpty()) {
                 add(GenreFilter(intl["GENRE"], genres))
             }
