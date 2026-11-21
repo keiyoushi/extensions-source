@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.theexiledheavyknightmangaonline
 
 import eu.kanade.tachiyomi.multisrc.solomanga.SoloManga
-import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import org.jsoup.nodes.Document
@@ -21,7 +20,5 @@ abstract class TheExiledHeavyKnightMangaOnline : SoloManga() {
             .joinToString("\n\n") { it.text() }
     }
 
-    override fun chapterFromElement(element: Element): SChapter = super.chapterFromElement(element).apply {
-        name = element.selectFirst("span")!!.text()
-    }
+    override fun chapterName(element: Element): String = element.selectFirst("span")!!.text()
 }

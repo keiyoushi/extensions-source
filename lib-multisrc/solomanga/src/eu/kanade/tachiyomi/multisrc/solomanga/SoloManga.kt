@@ -77,9 +77,11 @@ abstract class SoloManga : KeiSource() {
     // Slugs can be off (maid-sama-chapter-59-5 is Chapter 60), the link text is right
     protected open fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.absUrl("href"))
-        name = element.text()
+        name = chapterName(element)
         chapterNumberRegex.find(name)?.let { chapter_number = it.groupValues[1].toFloat() }
     }
+
+    protected open fun chapterName(element: Element): String = element.text()
 
     private val chapterNumberRegex = Regex("""Chapter\s+(\d+(?:\.\d+)?)""")
 
