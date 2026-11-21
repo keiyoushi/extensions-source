@@ -28,6 +28,8 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
+import keiyoushi.utils.tryParse
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -48,6 +50,8 @@ import okio.Buffer
 import okio.IOException
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
@@ -64,6 +68,14 @@ abstract class MangaBox :
     private fun SharedPreferences.getMergeImagesPref(): Boolean = getBoolean(PREF_MERGE_IMAGES, false)
 
     private val preferences: SharedPreferences by getPreferencesLazy()
+
+    open val mirrorLegacyMap: Map<String, Boolean> = emptyMap()
+
+    private val forceModernLayout: Boolean
+        get() = preferences.getBoolean(PREF_FORCE_MODERN_LAYOUT, false)
+
+    protected open val useLegacy: Boolean
+        get() = !forceModernLayout && (mirrorLegacyMap[baseUrl] ?: false)
 
     private var mergeImages: Boolean? = null
         get() {
@@ -212,17 +224,22 @@ abstract class MangaBox :
 
     open val latestUrlPath = "manga-list/latest-manga?page="
 
-    open val simpleQueryPath = "search/story/"
+    open val simpleQueryPath: String
+        get() = if (useLegacy) "search/story/" else "search"
 
     // ============================== Popular ==============================
 
-    open fun popularMangaSelector() = ":is(div.truyen-list > div.list-truyen-item-wrap, div.comic-list > .list-comic-item-wrap):has(a[data-id])"
+    open fun popularMangaSelector() = if (useLegacy) {
+        ":is(div.truyen-list > div.list-truyen-item-wrap, div.comic-list > .list-comic-item-wrap):has(a[data-id])"
+    } else {
+        "div.grid > div.group"
+    }
 
     open fun parsePopularManga(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas = document.select(popularMangaSelector()).map { popularMangaFromElement(it) }
         val hasNextPage = popularMangaNextPageSelector().let { selector ->
-            if (selector.isEmpty()) false else document.select(selector).first() != null
+            if (selector.isEmpty()) false else document.selectFirst(selector) != null
         }
         return MangasPage(mangas, hasNextPage)
     }
@@ -231,7 +248,11 @@ abstract class MangaBox :
 
     open fun popularMangaFromElement(element: Element): SManga = mangaFromElement(element)
 
-    open fun popularMangaNextPageSelector() = "div.group_page, div.group-page a:not([href]) + a:not(:contains(Last))"
+    open fun popularMangaNextPageSelector() = if (useLegacy) {
+        "div.group_page, div.group-page a:not([href]) + a:not(:contains(Last))"
+    } else {
+        "nav[aria-label=Pagination] a[aria-label*=Next], nav[aria-label=Pagination] a:contains(Next)"
+    }
 
     // ============================== Latest ===============================
 
@@ -241,7 +262,7 @@ abstract class MangaBox :
         val document = response.asJsoup()
         val mangas = document.select(latestUpdatesSelector()).map { latestUpdatesFromElement(it) }
         val hasNextPage = latestUpdatesNextPageSelector().let { selector ->
-            if (selector.isEmpty()) false else document.select(selector).first() != null
+            if (selector.isEmpty()) false else document.selectFirst(selector) != null
         }
         return MangasPage(mangas, hasNextPage)
     }
@@ -255,74 +276,122 @@ abstract class MangaBox :
     // ============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val response = if (query.isNotBlank()) {
-            val url = "$baseUrl/$simpleQueryPath".toHttpUrl().newBuilder()
-                .addPathSegment(normalizeSearchQuery(query))
-                .addQueryParameter("page", page.toString())
-                .build()
+        val response = if (useLegacy) {
+            if (query.isNotBlank()) {
+                val url = "$baseUrl/$simpleQueryPath".toHttpUrl().newBuilder()
+                    .addPathSegment(normalizeSearchQuery(query))
+                    .addQueryParameter("page", page.toString())
+                    .build()
 
-            client.get(url, Fetch.DOCUMENT)
-        } else {
-            val url = "$baseUrl/genre".toHttpUrl().newBuilder()
-            var sort: String? = null
-            var status: String? = null
-
-            filters.forEach { filter ->
-                when (filter) {
-                    is SortFilter -> sort = filter.toUriPart()
-                    is StatusFilter -> status = filter.toUriPart()
-                    is GenreFilter -> filter.toUriPart()?.let { url.addPathSegment(it) }
-                    else -> {}
-                }
-            }
-
-            val id = if (sort != null && status != null) {
-                FILTER_ID_MAP[Pair(sort, status)]
+                client.get(url, Fetch.DOCUMENT)
             } else {
-                null
+                val url = "$baseUrl/genre".toHttpUrl().newBuilder()
+                var sort: String? = null
+                var status: String? = null
+
+                filters.forEach { filter ->
+                    when (filter) {
+                        is SortFilter -> sort = filter.toUriPart()
+                        is StatusFilter -> status = filter.toUriPart()
+                        is GenreFilter -> filter.toUriPart()?.let { url.addPathSegment(it) }
+                        else -> {}
+                    }
+                }
+
+                val id = if (sort != null && status != null) {
+                    FILTER_ID_MAP[Pair(sort, status)]
+                } else {
+                    null
+                }
+
+                id?.let { url.addQueryParameter("filter", it) }
+                url.addQueryParameter("page", page.toString())
+
+                client.get(url.build(), Fetch.DOCUMENT)
             }
+        } else {
+            if (query.isNotBlank()) {
+                val url = "$baseUrl/$simpleQueryPath".toHttpUrl().newBuilder()
+                    .addQueryParameter("q", query.trim())
+                    .addQueryParameter("page", page.toString())
+                    .build()
 
-            id?.let { url.addQueryParameter("filter", it) }
-            url.addQueryParameter("page", page.toString())
+                client.get(url, Fetch.DOCUMENT)
+            } else {
+                val url = "$baseUrl/$simpleQueryPath".toHttpUrl().newBuilder()
+                var sort: String? = null
+                var hasFilter = false
 
-            client.get(url.build(), Fetch.DOCUMENT)
+                filters.forEach { filter ->
+                    when (filter) {
+                        is SortFilter -> sort = filter.toUriPart()
+                        is StatusFilter -> filter.toUriPart()?.takeIf { it != "all" }?.let {
+                            url.addQueryParameter("status", it)
+                            hasFilter = true
+                        }
+                        is GenreFilter -> filter.toUriPart()?.takeIf { it != "all" }?.let {
+                            url.addQueryParameter("genres", it)
+                            hasFilter = true
+                        }
+                        else -> {}
+                    }
+                }
+
+                if (!hasFilter && (sort == null || sort == "latest")) {
+                    return getLatestUpdates(page)
+                }
+                if (sort != null) {
+                    url.addQueryParameter("sort", sort)
+                }
+                url.addQueryParameter("page", page.toString())
+
+                client.get(url.build(), Fetch.DOCUMENT)
+            }
         }
 
         val document = response.asJsoup()
         val mangas = document.select(searchMangaSelector()).map { searchMangaFromElement(it) }
         val hasNextPage = searchMangaNextPageSelector().let { selector ->
-            if (selector.isEmpty()) false else document.select(selector).first() != null
+            if (selector.isEmpty()) false else document.selectFirst(selector) != null
         }
         return MangasPage(mangas, hasNextPage)
     }
 
-    open fun searchMangaSelector() = ".panel_story_list .story_item, div.list-truyen-item-wrap, div.list-comic-item-wrap"
+    open fun searchMangaSelector() = if (useLegacy) {
+        ".panel_story_list .story_item, div.list-truyen-item-wrap, div.list-comic-item-wrap"
+    } else {
+        "div.grid > div.group"
+    }
 
     open fun searchMangaFromElement(element: Element) = mangaFromElement(element)
 
-    open fun searchMangaNextPageSelector() = "a.page_select + a:not(.page_last), a.page-select + a:not(.page-last)"
+    open fun searchMangaNextPageSelector() = if (useLegacy) {
+        "a.page_select + a:not(.page_last), a.page-select + a:not(.page-last)"
+    } else {
+        popularMangaNextPageSelector()
+    }
 
     private fun mangaFromElement(element: Element, urlSelector: String = "h3 a"): SManga = SManga.create().apply {
         val urlElement = element.selectFirst(urlSelector)!!
-        url = urlElement
-            .attr("abs:href")
-            .substringAfter(baseUrl) // intentionally not using setUrlWithoutDomain
-        memo = buildJsonObject {
-            put("slug", computeMangaSlug(this@apply))
-        }
         title = urlElement.text()
-        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
+        setUrlWithoutDomain(urlElement.absUrl("href"))
+        getMangaSlug(this)
+        thumbnail_url = element.selectFirst("img")?.attr("abs:src")
     }
 
     // ============================== Details ==============================
 
-    open val mangaDetailsMainSelector = "div.manga-info-top, div.panel-story-info"
+    open val mangaDetailsMainSelector: String
+        get() = if (useLegacy) "div.manga-info-top, div.panel-story-info" else "div.relative.overflow-hidden:has(h1)"
 
-    open val thumbnailSelector = "div.manga-info-pic img, span.info-image img"
+    open val thumbnailSelector: String
+        get() = if (useLegacy) "div.manga-info-pic img, span.info-image img" else "div.relative.overflow-hidden:has(h1) img"
 
-    open val descriptionSelector = "div#noidungm, div#panel-story-info-description, div#contentBox"
+    open val descriptionSelector: String
+        get() = if (useLegacy) "div#noidungm, div#panel-story-info-description, div#contentBox" else "div.prose-summary"
 
-    open val altNameSelector = ".story-alternative, tr:has(.info-alternative) h2"
+    open val altNameSelector: String
+        get() = if (useLegacy) ".story-alternative, tr:has(.info-alternative) h2" else "div.relative.overflow-hidden:has(h1) h1 + p"
 
     open val altName = "Alternative Name: "
 
@@ -347,24 +416,38 @@ abstract class MangaBox :
         val infoElement = document.selectFirst(mangaDetailsMainSelector)
         if (infoElement != null) {
             title = infoElement.selectFirst("h1, h2")!!.text()
-            author = infoElement.select("li:contains(author) a, td:containsOwn(author) + td a")
-                .eachText().joinToString()
-            status = parseStatus(
-                infoElement.select("li:contains(status), td:containsOwn(status) + td").text(),
-            )
-            genre = infoElement.selectFirst("div.manga-info-top li:contains(genres)")
-                ?.select("a")?.joinToString { it.text() } // kakalot
-                ?: infoElement.select("td:containsOwn(genres) + td a")
-                    .joinToString { it.text() } // nelo
+            if (useLegacy) {
+                author = infoElement.select("li:contains(author) a, td:containsOwn(author) + td a")
+                    .eachText().joinToString()
+                status = parseStatus(
+                    infoElement.select("li:contains(status), td:containsOwn(status) + td").text(),
+                )
+                genre = infoElement.selectFirst("div.manga-info-top li:contains(genres)")
+                    ?.select("a")?.joinToString { it.text() } // kakalot
+                    ?: infoElement.select("td:containsOwn(genres) + td a")
+                        .joinToString { it.text() } // nelo
+            } else {
+                author = infoElement.select("aside span:containsOwn(Author) + span")
+                    .eachText().joinToString()
+                status = parseStatus(
+                    infoElement.select("aside span:containsOwn(Status) + span").text(),
+                )
+                genre = infoElement.select("a[href^=/genre/]").joinToString { it.text() }
+            }
         } else {
             checkForRedirectMessage(document)
         }
 
-        description = document.selectFirst(descriptionSelector)?.ownText()
+        val rawDescription = if (useLegacy) {
+            document.selectFirst(descriptionSelector)?.ownText()
+        } else {
+            document.selectFirst(descriptionSelector)?.wholeText()?.trim()
+        }
+        description = rawDescription
             ?.replace("""^$title summary:\s""".toRegex(), "")
             ?.replace("""<\s*br\s*/?>""".toRegex(), "\n")
             ?.replace("<[^>]*>".toRegex(), "")
-        thumbnail_url = document.selectFirst(thumbnailSelector)!!.attr("abs:src")
+        thumbnail_url = document.selectFirst(thumbnailSelector)?.attr("abs:src")
 
         // add alternative name to manga description
         val altNameElement = document.selectFirst(altNameSelector)
@@ -407,9 +490,9 @@ abstract class MangaBox :
                     .replace("__CHAPTER__", chapterSlug)
                 chapter_number = apiChapter.chapterNum ?: 0f
                 scanlator = baseUrl.replace("https://", "")
-                date_upload = apiChapter.updatedAt
-                    ?.let { Instant.parseOrNull(it)?.toEpochMilliseconds() }
-                    ?: 0L
+                date_upload = dateFormat.tryParseDateTime(apiChapter.updatedAt, ZoneOffset.UTC)
+                    .takeIf { it > 0L }
+                    ?: Instant.tryParse(apiChapter.updatedAt)
             }
         }
     }
@@ -432,25 +515,31 @@ abstract class MangaBox :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         val document = response.asJsoup()
-        val content = document.select("script:containsData(cdns =)").joinToString("\n") { it.data() }
-        val cdns = extractArray(content, cdnsRegex) + extractArray(content, backupImageRegex)
-        val chapterImages = extractArray(content, chapterImagesRegex)
 
-        // Add all parsed cdns to set
-        cdnSet.addAll(cdns)
+        val imageUrls = if (useLegacy) {
+            val content = document.select("script:containsData(cdns =)").joinToString("\n") { it.data() }
+            val cdns = extractArray(content, cdnsRegex) + extractArray(content, backupImageRegex)
+            val chapterImages = extractArray(content, chapterImagesRegex)
 
-        val imageUrls = if (chapterImages.isNotEmpty()) {
-            val httpUrl = cdns[0].toHttpUrl()
-            chapterImages.asSequence().map { imagePath ->
-                httpUrl
-                    .newBuilder()
-                    .encodedPath("/$imagePath".replace("//", "/")) // replace ensures that there's at least one trailing slash prefix
-                    .build()
-                    .toString()
+            // Add all parsed cdns to set
+            cdnSet.addAll(cdns)
+
+            if (chapterImages.isNotEmpty() && cdns.isNotEmpty()) {
+                val httpUrl = cdns[0].toHttpUrl()
+                chapterImages.asSequence().map { imagePath ->
+                    httpUrl
+                        .newBuilder()
+                        .encodedPath("/$imagePath".replace("//", "/")) // replace ensures that there's at least one trailing slash prefix
+                        .build()
+                        .toString()
+                }
+            } else {
+                document.select("div.container-chapter-reader > img").asSequence().map { img ->
+                    img.absUrl("src")
+                }
             }
         } else {
-            val elements = document.select("div.container-chapter-reader > img")
-            elements.asSequence().map { img ->
+            document.select("div[data-page] > img").asSequence().map { img ->
                 img.absUrl("src")
             }
         }
@@ -606,7 +695,7 @@ abstract class MangaBox :
     override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("NOTE: Ignored if using text search!"),
         Filter.Separator(),
-        SortFilter(getSortFilters()),
+        SortFilter(getSortFilters(useLegacy)),
         StatusFilter(getStatusFilters()),
         GenreFilter(getGenreFilters()),
     )
@@ -628,12 +717,22 @@ abstract class MangaBox :
                 true
             }
         }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_FORCE_MODERN_LAYOUT
+            title = "Force Modern Layout"
+            summary = "Disregard the per-mirror legacy layout setting and always use the modern layout parser."
+            setDefaultValue(false)
+        }.also(screen::addPreference)
     }
 
     companion object {
         private const val PREF_MERGE_IMAGES = "pref_merge_images"
+        private const val PREF_FORCE_MODERN_LAYOUT = "pref_force_modern_layout"
         private const val IMAGE_SIZE_RETRIES = 3
         private const val URL_PREFIX = "https://"
+
+        private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
 
         private val cdnsRegex = Regex("""cdns\s*=\s*\[([^]]+)]""")
         private val backupImageRegex = Regex("""backupImage\s*=\s*\[([^]]+)]""")
