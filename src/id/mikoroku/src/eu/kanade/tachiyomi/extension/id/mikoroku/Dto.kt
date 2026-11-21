@@ -1,15 +1,11 @@
 package eu.kanade.tachiyomi.extension.id.mikoroku
 
-import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
-import kotlin.time.Instant
 
 private val CHAPTER_REGEX = """Chapter\s+(\d+(?:\.\d+)?)""".toRegex(RegexOption.IGNORE_CASE)
-private val POST_ID_REGEX = """post-(\d+)""".toRegex()
 
 internal fun String.chapterLabel(): String? = CHAPTER_REGEX.find(this)?.value
 
@@ -76,15 +72,67 @@ class CatalogEntry(
     fun toSManga() = SManga.create().apply {
         title = this@CatalogEntry.title
         thumbnail_url = img.takeIf { it.isNotBlank() }
-        url = "/detail.html?slug=$slug"
+        url = slug
     }
 }
 
 @Serializable
-class FirestoreMap(val fields: Map<String, FirestoreValue> = emptyMap())
+class ApiChaptersResponse(val chapters: List<ApiChapter> = emptyList())
 
 @Serializable
-class FirestoreListResponse(val documents: List<FirestoreDoc> = emptyList())
+class ApiChapter(
+    val num: String,
+    val title: String,
+    val url: String,
+    val images: List<String>,
+    val thumbnail: String,
+    val createdAt: String,
+    val source: String,
+)
+
+// Firestore WebChannel Listen request, as sent by the site's own Firebase SDK.
+@Serializable
+class ListenRequest(
+    val database: String,
+    val addTarget: ListenAddTarget,
+    val targetId: Int,
+)
+
+@Serializable
+class ListenAddTarget(
+    val query: ListenQuery,
+    val parent: String,
+)
+
+@Serializable
+class ListenQuery(
+    val structuredQuery: ListenStructuredQuery,
+)
+
+@Serializable
+class ListenStructuredQuery(
+    val from: List<ListenCollectionRef>,
+    val orderBy: List<ListenOrderBy>,
+)
+
+@Serializable
+class ListenCollectionRef(
+    val collectionId: String,
+)
+
+@Serializable
+class ListenOrderBy(
+    val field: ListenFieldRef,
+    val direction: String,
+)
+
+@Serializable
+class ListenFieldRef(
+    val fieldPath: String,
+)
+
+@Serializable
+class FirestoreMap(val fields: Map<String, FirestoreValue> = emptyMap())
 
 @Serializable
 class FirestoreDoc(
@@ -105,10 +153,6 @@ class FirestoreValue(
 class FirestoreArray(val values: List<FirestoreValue> = emptyList())
 
 internal fun Map<String, FirestoreValue>.getString(key: String): String? = get(key)?.stringValue
-
-internal fun Map<String, FirestoreValue>.getLong(key: String): Long? = get(key)?.integerValue?.toLongOrNull()
-
-internal fun Map<String, FirestoreValue>.getBoolean(key: String): Boolean? = get(key)?.booleanValue
 
 internal fun Map<String, FirestoreValue>.getStringList(key: String): List<String> = get(key)?.arrayValue?.values?.mapNotNull { it.stringValue }.orEmpty()
 
@@ -139,17 +183,6 @@ class BloggerEntry(
         // Fallback: word overlap for conversion variants (e.g. "konten" vs "tamashiten")
         if (titleWordsMatch(title.text, mangaTitle)) return title.text.chapterLabel()
         return null
-    }
-
-    fun toSChapter(slug: String, mangaTitle: String): SChapter? {
-        val label = chapterLabel(mangaTitle) ?: return null
-        val postId = POST_ID_REGEX.find(id.text)?.groupValues?.get(1) ?: return null
-
-        return SChapter.create().apply {
-            name = label
-            date_upload = Instant.tryParse(published?.text)
-            url = "/manga/$slug/post/$postId"
-        }
     }
 
     fun imageUrls(): List<String> = Jsoup.parseBodyFragment(content?.text.orEmpty())
