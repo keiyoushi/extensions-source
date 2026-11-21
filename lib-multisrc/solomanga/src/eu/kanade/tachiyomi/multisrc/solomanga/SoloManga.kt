@@ -30,22 +30,14 @@ abstract class SoloManga : KeiSource() {
         title = mangaTitle
     }
 
-    // ============================== Popular ===============================
-
     override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(listOf(singleManga()), false)
 
-    // =============================== Latest ===============================
-
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
-
-    // =============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val mangas = listOf(singleManga()).filter { it.title.contains(query, ignoreCase = true) }
         return MangasPage(mangas, false)
     }
-
-    // ============================== Details ===============================
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
@@ -70,8 +62,6 @@ abstract class SoloManga : KeiSource() {
         description = document.selectFirst("meta[property='og:description']")?.attr("content")
     }
 
-    // ============================== Chapters ==============================
-
     protected open fun chapterListParse(document: Document): List<SChapter> = document.select(chapterListSelector).map(::chapterFromElement)
 
     // Slugs can be off (maid-sama-chapter-59-5 is Chapter 60), the link text is right
@@ -84,8 +74,6 @@ abstract class SoloManga : KeiSource() {
     protected open fun chapterName(element: Element): String = element.text()
 
     private val chapterNumberRegex = Regex("""Chapter\s+(\d+(?:\.\d+)?)""")
-
-    // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
