@@ -22,11 +22,13 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.io.IOException
@@ -59,9 +61,24 @@ abstract class MangaLivre :
             .apply { if (query.isNotBlank()) addQueryParameter("q", query) }
             .addQueryParameter("sortBy", sort.sortBy)
             .addQueryParameter("sortOrder", if (sort.ascending) "asc" else "desc")
+            .apply { filters.filterIsInstance<CheckBoxGroup>().forEach { it.addTo(this) } }
             .build()
         val dto = client.get(url, Fetch.XHR).parseAs<WrapperDto>()
         return MangasPage(dto.mangas.map { it.toSManga(useAlternativeTitle) }, dto.hasNextPage)
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val segments = url.pathSegments.filter { it.isNotEmpty() }
+        val slug = when (segments.firstOrNull()) {
+            "read" -> segments.getOrNull(1)
+            "manga" -> segments.lastOrNull()
+            else -> segments.firstOrNull()
+        } ?: return null
+        client.get(mangaBySlugUrl(slug), Fetch.XHR, ensureSuccess = false).use { response ->
+            if (response.code == 404) return null
+            return response.parseAs<MangaDto>().toSManga(useAlternativeTitle).apply { initialized = true }
+        }
     }
 
     private fun mangaBySlugUrl(slug: String) = apiUrl.newBuilder().addPathSegment("manga-by-slug").addPathSegment(slug).build()
@@ -104,7 +121,31 @@ abstract class MangaLivre :
         }
     }
 
-    override fun getFilterList(data: JsonElement?): FilterList = FilterList(SortFilter())
+    override val supportsFilterFetching get() = true
+
+    override suspend fun fetchFilterData(): JsonElement = client.get(
+        apiUrl.newBuilder()
+            .addPathSegment("mangas")
+            .addQueryParameter("lite", "1")
+            .addQueryParameter("includeRecentChapters", "0")
+            .build(),
+        Fetch.XHR,
+    )
+        .parseAs<List<GenresDto>>()
+        .flatMap { it.genres.orEmpty() }
+        .distinct()
+        .sorted()
+        .toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
+        listOfNotNull(
+            SortFilter(),
+            TypeFilter(),
+            StatusFilter(),
+            YearFilter(),
+            data?.parseAs<List<String>>()?.let(::GenreFilter),
+        ),
+    )
 
     private val useAlternativeTitle get() = preferences.getBoolean(ALTERNATIVE_TITLE_PREF, false)
 

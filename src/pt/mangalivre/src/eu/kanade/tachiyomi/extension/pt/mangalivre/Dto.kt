@@ -22,6 +22,11 @@ class PaginationDto(
 )
 
 @Serializable
+class GenresDto(
+    val genres: List<String>?,
+)
+
+@Serializable
 class MangaDto(
     private val id: String,
     private val title: String,
