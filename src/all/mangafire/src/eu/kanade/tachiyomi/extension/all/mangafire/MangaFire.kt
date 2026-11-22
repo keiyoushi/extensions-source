@@ -146,9 +146,8 @@ abstract class MangaFire :
     private suspend fun fetchChapters(hid: String, mangaUrl: String): List<SChapter> {
         if (showAsVolumes) {
             val volumes = client.get("$baseUrl/api/titles/$hid/volumes", Fetch.XHR).parseAs<ApiResponse<VolumeDto>>().items
-            if (volumes.isNotEmpty()) {
-                return volumes.filter { it.language == langCode }.map { it.toSChapter(mangaUrl) }
-            }
+                .filter { it.language == langCode }
+            if (volumes.isNotEmpty()) return volumes.map { it.toSChapter(mangaUrl) }
         }
 
         val chapters = fetchAllChapters(hid).map { it.toSChapter(mangaUrl, langCode) }
@@ -262,7 +261,7 @@ abstract class MangaFire :
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_SHOW_AS_VOLUMES
             title = "Prefer Volume Release"
-            summary = SUMMARY_MSG
+            summary = "Lists only the chapters collected in volumes. $SUMMARY_MSG"
             setDefaultValue(false)
         }.also(screen::addPreference)
 
