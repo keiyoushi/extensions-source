@@ -17,6 +17,9 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
@@ -187,45 +190,70 @@ abstract class Niadd : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
-        val chapterId = chapterUrl.toHttpUrl().pathSegments[2].removeSuffix(".html")
-        val url = readerJumpUrl().newBuilder().apply {
-            setQueryParameter("cid", chapterId)
-            // Users' original works have their own reader type in every language
-            if (chapter.memo["original"]?.booleanOrNull == true) setQueryParameter("type", "ogniadd")
-        }.build()
-        val imageUrls = try {
-            val html = client.get(url, Fetch.DOCUMENT.from(chapterUrl)).body.string()
-            val imageList = ALL_IMGS_URL_REGEX.find(html)?.groupValues?.get(1) ?: throw Exception(PAGES_NOT_FOUND)
-            IMAGE_URL_REGEX.findAll(imageList).map { it.groupValues[1] }.toList()
+        val isOriginal = chapter.memo["original"]?.booleanOrNull == true
+        return imageUrls(chapterUrl, isOriginal).mapIndexed { i, imageUrl -> Page(i, imageUrl = imageUrl) }
+    }
+
+    private suspend fun imageUrls(chapterUrl: String, isOriginal: Boolean): List<String> {
+        val chapterHttpUrl = chapterUrl.toHttpUrl()
+        val chapterId = chapterHttpUrl.pathSegments[2].removeSuffix(".html")
+        val jumpUrl = readerJumpUrl(isOriginal)
+        return try {
+            if (jumpUrl == null) {
+                siteReaderImageUrls(chapterHttpUrl, chapterId)
+            } else {
+                jumpReaderImageUrls(jumpUrl, chapterHttpUrl, chapterId)
+            }
         } catch (e: Exception) {
-            cachedJumpUrl = null
+            readerJumpMutex.withLock { jumpUrls.remove(isOriginal) }
             throw e
         }
+    }
 
-        return imageUrls.mapIndexed { i, imageUrl -> Page(i, imageUrl = imageUrl) }
+    // The site's reader shows at most 10 images per view
+    private suspend fun siteReaderImageUrls(chapterUrl: HttpUrl, chapterId: String): List<String> = coroutineScope {
+        fun viewUrl(view: Int) = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("chapter")
+            .addPathSegment(chapterUrl.pathSegments[1])
+            .addPathSegment("$chapterId-10-$view.html")
+            .build()
+
+        val firstView = client.get(viewUrl(1), Fetch.DOCUMENT.from(chapterUrl)).asJsoup()
+        val otherViews = (2..firstView.select("option[value*=/$chapterId-10-]").size)
+            .map { async { client.get(viewUrl(it), Fetch.DOCUMENT.from(chapterUrl)).asJsoup() } }
+            .awaitAll()
+        (listOf(firstView) + otherViews).flatMap { view ->
+            view.select("img.manga_pic").map { it.absUrl("src") }.ifEmpty { throw Exception(PAGES_NOT_FOUND) }
+        }
+    }
+
+    private suspend fun jumpReaderImageUrls(jumpUrl: HttpUrl, chapterUrl: HttpUrl, chapterId: String): List<String> {
+        val url = jumpUrl.newBuilder().setQueryParameter("cid", chapterId).build()
+        val html = client.get(url, Fetch.DOCUMENT.from(chapterUrl)).body.string()
+        val imageList = ALL_IMGS_URL_REGEX.find(html)?.groupValues?.get(1) ?: throw Exception(PAGES_NOT_FOUND)
+        return IMAGE_URL_REGEX.findAll(imageList).map { it.groupValues[1] }.toList()
     }
 
     private val readerJumpMutex = Mutex()
-    private var cachedJumpUrl: HttpUrl? = null
-    private var hasNoReader = false
 
-    // The site's /chapter/ links redirect to a dead host. Its chapter lists link each chapter through /go/rds/
+    // Reader jump url for manga (false) and users' original works (true); null where the site links its own reader
+    private val jumpUrls = HashMap<Boolean, HttpUrl?>()
+
+    // Where the site's /chapter/ links redirect to a dead host, its pages link each chapter through /go/rds/
     // to a reader jump url that only differs in cid
-    private suspend fun readerJumpUrl(): HttpUrl = readerJumpMutex.withLock {
-        cachedJumpUrl?.let { return@withLock it }
-        if (hasNoReader) throw Exception(NO_READER)
+    private suspend fun readerJumpUrl(isOriginal: Boolean): HttpUrl? = readerJumpMutex.withLock {
+        if (jumpUrls.containsKey(isOriginal)) return@withLock jumpUrls[isOriginal]
 
-        val mangaUrl = getMangaUrl(getLatestUpdates(1).mangas.first())
-        val redirectUrl = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
+        val listUrl = if (isOriginal) "$baseUrl/category/original/" else "$baseUrl/list/New-Update.html"
+        val entryUrl = getMangaUrl(parseMangaList(client.get(listUrl, Fetch.DOCUMENT).asJsoup()).mangas.first())
+        val redirectUrl = client.get(entryUrl, Fetch.DOCUMENT).asJsoup()
             .selectFirst("a[href*=/go/rds/]")
             ?.absUrl("href")
-        if (redirectUrl == null) {
-            hasNoReader = true
-            throw Exception(NO_READER)
+        val jumpUrl = redirectUrl?.let {
+            val script = client.get(it, Fetch.DOCUMENT.from(entryUrl)).body.string()
+            JUMP_URL_REGEX.find(script)?.groupValues?.get(1)?.toHttpUrl() ?: throw Exception(PAGES_NOT_FOUND)
         }
-        val script = client.get(redirectUrl, Fetch.DOCUMENT.from(mangaUrl)).body.string()
-        val jumpUrl = JUMP_URL_REGEX.find(script)?.groupValues?.get(1) ?: throw Exception(PAGES_NOT_FOUND)
-        jumpUrl.toHttpUrl().also { cachedJumpUrl = it }
+        jumpUrl.also { jumpUrls[isOriginal] = it }
     }
 
     override val supportsFilterFetching get() = true
@@ -261,7 +289,6 @@ abstract class Niadd : KeiSource() {
         private const val PAGES_NOT_FOUND = "Chapter pages not found on the site"
         private const val BLOCKED_COOKIE = "niadd_bad_user_2"
         private const val BLOCKED_NETWORK = "Niadd has blocked this network, try another network"
-        private const val NO_READER = "The site has no reader for this language"
         private val ENTRY_PATHS = setOf("manga", "original")
         private val GENRE_ID_REGEX = Regex("""'(\d+)'""")
         private val JUMP_URL_REGEX = Regex("""document\.location\s*=\s*'([^']+)'""")
