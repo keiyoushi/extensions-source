@@ -35,6 +35,9 @@ class SortFilter :
             "Most Viewed: 7 Days" to "views_7days",
             "Most Viewed: 30 Days" to "views_30days",
             "Most Viewed: All Time" to "views",
+            "Most Bookmarks" to "bookmarks",
+            "Most Discussed" to "comments",
+            "Most Reviews" to "reviews",
             "Most Chapters" to "chapters",
         ),
     )
