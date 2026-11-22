@@ -87,7 +87,7 @@ abstract class LuotTruyen : WPComics() {
         } ?: return null
 
         val manga = SManga.create().apply { setUrlWithoutDomain(mangaPath) }
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga()
     }
 
     override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {

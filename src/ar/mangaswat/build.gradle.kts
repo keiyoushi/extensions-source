@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "MangaSwat"
-    versionCode = 63
+    versionCode = 64
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 

@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
@@ -37,7 +37,7 @@ abstract class JuraTempest : KeiSource() {
         val slug = segments[1]
         val manga = SManga.create().apply { this.url = slug }
         return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
-            .manga
+            .manga()
             .apply {
                 initialized = true
                 this.url = slug
@@ -139,36 +139,32 @@ abstract class JuraTempest : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val slug = manga.url.removePrefix("/explore/").trim('/')
 
-        val detailsDeferred = if (fetchDetails) {
-            async {
-                client.post(
-                    "$baseUrl/api/rpc/manga/bySlug",
-                    fetch = Fetch.XHR,
-                    body = RpcRequest(MangaSlugPayload(slug)).toJsonRequestBody(),
-                ).parseAs<RpcResponse<MangaDto>>().json.toSMangaDetails()
-            }
-        } else {
-            null
-        }
-
-        val chaptersDeferred = if (fetchChapters) {
-            async {
-                client.post(
-                    "$baseUrl/api/rpc/chapter/byMangaSlug",
-                    fetch = Fetch.XHR,
-                    body = RpcRequest(MangaSlugPayload(slug)).toJsonRequestBody(),
-                ).parseAs<RpcResponse<List<ChapterDto>>>().json.map { it.toSChapter(slug) }
-            }
-        } else {
-            null
-        }
-
-        SMangaUpdate(
-            manga = detailsDeferred?.await() ?: manga,
-            chapters = chaptersDeferred?.await() ?: chapters,
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    client.post(
+                        "$baseUrl/api/rpc/manga/bySlug",
+                        fetch = Fetch.XHR,
+                        body = RpcRequest(MangaSlugPayload(slug)).toJsonRequestBody(),
+                    ).parseAs<RpcResponse<MangaDto>>().json.toSMangaDetails()
+                } else {
+                    manga
+                }
+            },
+            chapters = {
+                if (fetchChapters) {
+                    client.post(
+                        "$baseUrl/api/rpc/chapter/byMangaSlug",
+                        fetch = Fetch.XHR,
+                        body = RpcRequest(MangaSlugPayload(slug)).toJsonRequestBody(),
+                    ).parseAs<RpcResponse<List<ChapterDto>>>().json.map { it.toSChapter(slug) }
+                } else {
+                    chapters
+                }
+            },
         )
     }
 

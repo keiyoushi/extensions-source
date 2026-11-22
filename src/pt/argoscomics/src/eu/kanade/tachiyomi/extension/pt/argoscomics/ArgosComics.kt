@@ -6,13 +6,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.extractNextJsRsc
@@ -20,8 +20,6 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -136,8 +134,8 @@ abstract class ArgosComics : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val detailsDeferred = async {
+    ): SMangaUpdate = SMangaUpdate(
+        manga = {
             if (fetchDetails) {
                 val url = getMangaUrl(manga)
                 val payload = url.toHttpUrl().pathSegments.toJsonRequestBody()
@@ -148,9 +146,8 @@ abstract class ArgosComics : KeiSource() {
             } else {
                 manga
             }
-        }
-
-        val chaptersDeferred = async {
+        },
+        chapters = {
             if (fetchChapters) {
                 val url = getMangaUrl(manga)
                 val payload = url.toHttpUrl().pathSegments.toJsonRequestBody()
@@ -163,10 +160,8 @@ abstract class ArgosComics : KeiSource() {
             } else {
                 chapters
             }
-        }
-
-        SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
-    }
+        },
+    )
 
     // ======================== Pages =============================
 

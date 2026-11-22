@@ -5,17 +5,15 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDateTime
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -161,17 +159,14 @@ abstract class TaoSect : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val projectSlug = manga.url
             .substringAfterLast("projeto/")
             .substringBefore("/")
 
-        val details = if (fetchDetails) async { fetchMangaDetails(manga, projectSlug) } else null
-        val chapterList = if (fetchChapters) async { fetchChapterList(projectSlug) } else null
-
-        SMangaUpdate(
-            manga = details?.await() ?: manga,
-            chapters = chapterList?.await() ?: chapters,
+        return SMangaUpdate(
+            manga = { if (fetchDetails) fetchMangaDetails(manga, projectSlug) else manga },
+            chapters = { if (fetchChapters) fetchChapterList(projectSlug) else chapters },
         )
     }
 

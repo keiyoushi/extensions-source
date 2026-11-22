@@ -9,13 +9,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.OkHttpClient
@@ -60,12 +60,10 @@ abstract class QuestionableContent :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val details = if (fetchDetails) createManga() else manga
-        val chapterList = if (fetchChapters) fetchChapterList(manga) else chapters
-
-        return SMangaUpdate(details, chapterList)
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) createManga() else manga },
+        chapters = { if (fetchChapters) fetchChapterList(manga) else chapters },
+    )
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()

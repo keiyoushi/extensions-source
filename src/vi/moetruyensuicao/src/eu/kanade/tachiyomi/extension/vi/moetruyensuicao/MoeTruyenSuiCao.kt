@@ -6,18 +6,16 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.get
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -108,36 +106,33 @@ abstract class MoeTruyenSuiCao : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val mangaId = manga.url
         val detailsUrl = "$baseUrl/v2/manga/$mangaId".toHttpUrl().newBuilder()
             .addQueryParameter("include", "genres")
             .build()
 
-        val detailsDeferred = if (fetchDetails) {
-            async {
-                val result = client.get(detailsUrl, Fetch.XHR).parseAs<ApiResponse<MangaItem>>()
-                (result.data ?: throw Exception("Manga not found")).toSManga()
-            }
-        } else {
-            null
-        }
-        val chaptersDeferred = if (fetchChapters) {
-            async {
-                val result = client.get("$baseUrl/v2/manga/$mangaId/chapters/aggregate", Fetch.XHR)
-                    .parseAs<ApiResponse<ChapterListData>>()
-                result.data?.chapters
-                    ?.filter { it.access == "public" }
-                    ?.map { it.toSChapter() }
-                    .orEmpty()
-            }
-        } else {
-            null
-        }
-
-        SMangaUpdate(
-            manga = detailsDeferred?.await() ?: manga,
-            chapters = chaptersDeferred?.await() ?: chapters,
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    val result = client.get(detailsUrl, Fetch.XHR).parseAs<ApiResponse<MangaItem>>()
+                    (result.data ?: throw Exception("Manga not found")).toSManga()
+                } else {
+                    manga
+                }
+            },
+            chapters = {
+                if (fetchChapters) {
+                    val result = client.get("$baseUrl/v2/manga/$mangaId/chapters/aggregate", Fetch.XHR)
+                        .parseAs<ApiResponse<ChapterListData>>()
+                    result.data?.chapters
+                        ?.filter { it.access == "public" }
+                        ?.map { it.toSChapter() }
+                        .orEmpty()
+                } else {
+                    chapters
+                }
+            },
         )
     }
 
