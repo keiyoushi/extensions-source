@@ -39,20 +39,6 @@ remote_extensions = {
     ext.packageName: ext for ext in remote_proto.extensionList.extensions
 }
 
-release_assets_path = REPO_DIR / "release-assets.json"
-if release_assets_path.exists():
-    with release_assets_path.open() as f:
-        release_assets = json.load(f)
-else:
-    release_assets = {}
-
-updated_release_assets = {
-    package_name: assets
-    for package_name, assets in release_assets.items()
-    if not full_rebuild
-    and not any(package_name.endswith(f".{module}") for module in to_delete)
-}
-
 # Build index entries for the freshly built apks. Each extension's metadata comes from the
 # source-info JSON emitted by its assembleRelease task (see GenerateSourceInfoTask); its APK is a
 # sibling in the same build dir. aapt reads the icon out of the APK
@@ -98,11 +84,7 @@ for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
         published = index_pb2.Extension()
         published.CopyFrom(remote_ext)
         new_extensions.append((published, apk, jar, False))
-        if package_name in release_assets:
-            updated_release_assets[package_name] = release_assets[package_name]
         continue
-
-    updated_release_assets[package_name] = info["contentHash"]
 
     ext = index_pb2.Extension(
         name=info["name"],
@@ -185,10 +167,6 @@ with REPO_DIR.joinpath("index.json").open("w", encoding="utf-8") as f:
 
 with REPO_DIR.joinpath("index.pb").open("wb") as f:
     f.write(gzip.compress(index.SerializeToString(deterministic=True), mtime=0))
-
-with release_assets_path.open("w", encoding="utf-8") as f:
-    json.dump(updated_release_assets, f, indent=2, sort_keys=True)
-    f.write("\n")
 
 with REPO_DIR.joinpath("index.html").open("w", encoding="utf-8") as f:
     f.write(
