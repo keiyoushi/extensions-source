@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
@@ -41,6 +42,13 @@ abstract class Bloomscans : MangaThemesia() {
     override val seriesDescriptionSelector = ".lrs-syn-wrap"
     override val seriesStatusSelector = ".lrs-infotable tr:contains(Status) td:last-child"
     override val seriesGenreSelector = ".lrs-genre"
+
+    override fun String?.parseStatus(): Int = when (this) {
+        "En emisión" -> SManga.ONGOING
+        "Completed" -> SManga.COMPLETED
+        "Hiatus" -> SManga.ON_HIATUS
+        else -> SManga.UNKNOWN
+    }
 
     override fun chapterListSelector() = "#lrs-native-chapterlist li"
 
