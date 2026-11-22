@@ -91,17 +91,18 @@ for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
             f"{package_name}: no release jar found under {info_file.parent}"
         )
 
-    # The apk and jar always ship together, when the content hash (version and signature
-    # independent, see ComputeContentHashTask) or the versionCode changed.
-    content_hash = info["contentHash"]
+    # An extension only ships when its versionCode changes: a build the app wont update to
+    # would leave users on different builds of the same version.
     remote_ext = remote_extensions.get(package_name)
-    changed = (
-        remote_ext is None
-        or remote_ext.versionCode != info["versionCode"]
-        or release_assets.get(package_name) != content_hash
-    )
+    if remote_ext is not None and remote_ext.versionCode == info["versionCode"]:
+        published = index_pb2.Extension()
+        published.CopyFrom(remote_ext)
+        new_extensions.append((published, apk, jar, False))
+        if package_name in release_assets:
+            updated_release_assets[package_name] = release_assets[package_name]
+        continue
 
-    updated_release_assets[package_name] = content_hash
+    updated_release_assets[package_name] = info["contentHash"]
 
     ext = index_pb2.Extension(
         name=info["name"],
@@ -124,7 +125,7 @@ for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
             for source in info["sources"]
         ],
     )
-    new_extensions.append((ext, apk, jar, changed))
+    new_extensions.append((ext, apk, jar, True))
 
 new_extensions.sort(key=lambda item: item[0].packageName)
 
@@ -146,17 +147,10 @@ def get_release_tag(batch_index: int) -> str:
     )
 
 
-changed_index = 0
-for ext, apk, jar, changed in new_extensions:
-    if changed:
-        tag = get_release_tag(changed_index // ext_per_release)
-        ext.resources.apkUrl = f"{RELEASE_BASE_URL}/{tag}/{apk.name}"
-        ext.resources.jarUrl = f"{RELEASE_BASE_URL}/{tag}/{jar.name}"
-        changed_index += 1
-    else:
-        old_resources = remote_extensions[ext.packageName].resources
-        ext.resources.apkUrl = old_resources.apkUrl
-        ext.resources.jarUrl = old_resources.jarUrl
+for changed_index, (ext, apk, jar, _) in enumerate(changed_extensions):
+    tag = get_release_tag(changed_index // ext_per_release)
+    ext.resources.apkUrl = f"{RELEASE_BASE_URL}/{tag}/{apk.name}"
+    ext.resources.jarUrl = f"{RELEASE_BASE_URL}/{tag}/{jar.name}"
 
 # Merge with the already-published index, dropping the deleted/rebuilt modules.
 final_extensions = []
