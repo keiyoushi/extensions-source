@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.mangamulti
+package eu.kanade.tachiyomi.multisrc.mangaverse
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
