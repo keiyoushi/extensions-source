@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.niadd
 
+import android.util.LruCache
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -20,6 +21,7 @@ import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
@@ -39,7 +41,8 @@ import java.util.Locale
 @Source
 abstract class Niadd : KeiSource() {
 
-    override fun OkHttpClient.Builder.configureClient() = addNetworkInterceptor(::blockedUserInterceptor)
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::expiredImageInterceptor)
+        .addNetworkInterceptor(::blockedUserInterceptor)
 
     // The site flags networks with a cookie and then serves a fake "404 Not Found" page with status 200 on every route.
     // A flagged network gets that page with or without the cookie, so the cookie only keeps blocking after a network change.
@@ -191,7 +194,11 @@ abstract class Niadd : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
         val isOriginal = chapter.memo["original"]?.booleanOrNull == true
-        return imageUrls(chapterUrl, isOriginal).mapIndexed { i, imageUrl -> Page(i, imageUrl = imageUrl) }
+        return imageUrls(chapterUrl, isOriginal).mapIndexed { i, imageUrl ->
+            // Chapter and index for expiredImageInterceptor
+            val url = imageUrl.toHttpUrl().newBuilder().fragment("$chapterUrl|$isOriginal|$i").build()
+            Page(i, imageUrl = url.toString())
+        }
     }
 
     private suspend fun imageUrls(chapterUrl: String, isOriginal: Boolean): List<String> {
@@ -232,6 +239,39 @@ abstract class Niadd : KeiSource() {
         val html = client.get(url, Fetch.DOCUMENT.from(chapterUrl)).body.string()
         val imageList = ALL_IMGS_URL_REGEX.find(html)?.groupValues?.get(1) ?: throw Exception(PAGES_NOT_FOUND)
         return IMAGE_URL_REGEX.findAll(imageList).map { it.groupValues[1] }.toList()
+    }
+
+    private val refreshedImageUrls = LruCache<String, List<String>>(5)
+    private val refreshMutex = Mutex()
+
+    // Image urls are signed for about 18 hours and then answer 410, while the app keeps them in its page list cache
+    private fun expiredImageInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val (chapterUrl, isOriginal, index) = request.url.fragment?.split('|')?.takeIf { it.size == 3 } ?: return chain.proceed(request)
+        var url = request.url.newBuilder().fragment(null).build().toString()
+        var response = chain.proceed(request)
+        // A refreshed list from the cache can have expired too
+        repeat(2) {
+            if (response.code != 410) return response
+            response.close()
+            url = refreshedImageUrl(chapterUrl, isOriginal.toBoolean(), index.toInt(), url)
+            response = chain.proceed(request.newBuilder().url(url).build())
+        }
+        return response
+    }
+
+    private fun refreshedImageUrl(chapterUrl: String, isOriginal: Boolean, index: Int, expiredUrl: String): String = try {
+        // Reader pages sit on other hosts than the images, outside the image hosts' dispatcher slots
+        runBlocking {
+            refreshMutex.withLock {
+                refreshedImageUrls.get(chapterUrl)?.takeIf { expiredUrl !in it }
+                    ?: imageUrls(chapterUrl, isOriginal).also { refreshedImageUrls.put(chapterUrl, it) }
+            }
+        }.getOrNull(index) ?: throw IOException(PAGES_NOT_FOUND)
+    } catch (e: IOException) {
+        throw e
+    } catch (e: Exception) {
+        throw IOException(e)
     }
 
     private val readerJumpMutex = Mutex()
