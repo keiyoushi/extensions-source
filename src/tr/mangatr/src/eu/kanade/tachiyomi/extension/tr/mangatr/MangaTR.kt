@@ -39,7 +39,6 @@ import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
-import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -47,7 +46,6 @@ import java.io.IOException
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 import java.util.Locale
-import kotlin.math.roundToInt
 import kotlin.time.Clock
 
 @Source
@@ -332,7 +330,7 @@ abstract class MangaTR : KeiSource() {
                 response.close()
                 break
             }
-            val batch = response.body.string().parseAs<RouteBatch>().pages
+            val batch = response.parseAs<RouteBatch>().pages
             if (batch.isEmpty()) break
             pages += batch
             start += 3
@@ -386,36 +384,20 @@ abstract class MangaTR : KeiSource() {
     // whose width is share/10000 of the page
     private fun unscrambleInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val fragment = request.url.fragment
-        if (request.url.host != IMAGE_HOST || fragment == null) return chain.proceed(request)
+        val share = request.url.fragment?.removePrefix("$CUT_FRAGMENT=")?.toIntOrNull()
         val response = chain.proceed(request)
-        if (!response.isSuccessful) return response
+        if (share == null || !response.isSuccessful) return response
 
-        val contentType = response.body.contentType()
-        val bytes = response.body.bytes()
-        val original = response.newBuilder().body(bytes.toResponseBody(contentType)).build()
-        if (bytes.isEmpty()) return original
-        val image = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return original
-        val width = image.width
-        val share = fragment.takeIf { it.startsWith("$CUT_FRAGMENT=") }?.substringAfter('=')?.toIntOrNull()
-        if (share == null || width < 20) {
-            image.recycle()
-            return original
+        val image = response.body.byteStream().use(BitmapFactory::decodeStream)
+        val (width, height) = image.width to image.height
+        val left = width * share / 10000
+        val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        Canvas(output).apply {
+            drawBitmap(image, Rect(width - left, 0, width, height), Rect(0, 0, left, height), null)
+            drawBitmap(image, Rect(0, 0, width - left, height), Rect(left, 0, width, height), null)
         }
-
-        val left = (width * (share / 10000.0)).roundToInt().coerceIn(10, width - 10)
-        val slices = listOf(width - left to left, 0 to width - left)
-        val output = Bitmap.createBitmap(width, image.height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(output)
-        var dx = 0
-        for ((x, w) in slices) {
-            canvas.drawBitmap(image, Rect(x, 0, x + w, image.height), Rect(dx, 0, dx + w, image.height), null)
-            dx += w
-        }
-        image.recycle()
         val buffer = Buffer()
         output.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
-        output.recycle()
         return response.newBuilder().body(buffer.asResponseBody("image/jpeg".toMediaType())).build()
     }
 
