@@ -5,16 +5,16 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Response
 import kotlin.time.Instant
 
 @Source
@@ -29,7 +29,7 @@ abstract class BanglaManga : KeiSource() {
             .set("Authorization", "Bearer $apiKey")
             .build()
 
-    private suspend fun apiGet(url: HttpUrl): okhttp3.Response = client.get(url, apiHeaders, Fetch.XHR)
+    private suspend fun apiGet(url: HttpUrl): Response = client.get(url, apiHeaders, Fetch.XHR)
 
     private val apiBaseUrl =
         "https://wgeydzfmtehdkosxwnai.supabase.co/rest/v1/"
@@ -88,18 +88,7 @@ abstract class BanglaManga : KeiSource() {
         )
     }
 
-    private val uuidRegex = Regex(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-    )
-    private val preferences by getPreferencesLazy()
-
-    override fun getMangaUrl(manga: SManga): String {
-        val mangaUrl = manga.url.removePrefix("/")
-        if (!uuidRegex.matches(mangaUrl)) return "$baseUrl/manga/$mangaUrl"
-
-        val slug = preferences.getString("legacy_slug_$mangaUrl", null) ?: return "$baseUrl/browse"
-        return "$baseUrl/manga/$slug"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? = null
 
@@ -109,23 +98,18 @@ abstract class BanglaManga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val mangaUrl = manga.url.removePrefix("/")
         val url = (apiBaseUrl + "mangas").toHttpUrl().newBuilder()
             .addQueryParameter(
                 "select",
                 "id,slug,title_bn,author,artist,status,synopsis_bn,cover_url,genres,chapters(id,number,title_bn,publish_at)",
             )
-            .addQueryParameter(if (uuidRegex.matches(mangaUrl)) "id" else "slug", "eq.$mangaUrl")
+            .addQueryParameter("slug", "eq.${manga.url}")
             .build()
 
         val result = apiGet(url)
             .parseAs<List<MangaDto>>()
             .firstOrNull()
             ?: throw Exception("Manga not found")
-
-        if (uuidRegex.matches(mangaUrl)) {
-            preferences.edit().putString("legacy_slug_$mangaUrl", result.slug).apply()
-        }
 
         val chapterList = result.chapters.orEmpty()
             .sortedByDescending { it.number }
@@ -155,14 +139,14 @@ abstract class BanglaManga : KeiSource() {
             .firstOrNull()
 
         return result?.pages.orEmpty().mapIndexed { index, page ->
-            Page(index, page.url, page.url)
+            Page(index, imageUrl = page.url)
         }
     }
 
     private fun MangaDto.toSManga(): SManga = SManga.create().apply {
         title = this@toSManga.titleBn
         url = this@toSManga.slug
-        thumbnail_url = this@toSManga.coverUrl.orEmpty()
+        thumbnail_url = this@toSManga.coverUrl
         author = this@toSManga.author
         artist = this@toSManga.artist
         description = this@toSManga.synopsisBn
