@@ -6,7 +6,6 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import kotlin.time.Duration.Companion.seconds
@@ -15,8 +14,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class SushiScan : MangaThemesia() {
     override val mangaUrlDirectory = "/catalogue"
     override val datePattern = "d MMMM yyyy"
-
-    private val preferences = getPreferences()
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2, 1.seconds)
 
