@@ -39,6 +39,11 @@ class MangaItemDto(
 }
 
 @Serializable
+class RecommendationsResponseDto(
+    val data: List<MangaItemDto>,
+)
+
+@Serializable
 class PaginationDto(
     @SerialName("has_next") val hasNext: Boolean,
 )

@@ -35,6 +35,7 @@ abstract class MangaKSource :
     ConfigurableSource {
 
     override val supportsFilterFetching = true
+    override val supportsRelatedMangas = true
     protected open val apiUrl: String
         get() = "https://api." + baseUrl.toHttpUrl().host
 
@@ -196,6 +197,22 @@ abstract class MangaKSource :
             addQueryParameter("cv", Clock.System.now().toEpochMilliseconds().toString())
         }.build()
         return client.get(url, Fetch.XHR).parseAs<ChapterListResponseDto>().data.chapters.map { it.toSChapter() }
+    }
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val id = manga.memo["id"]?.stringOrNull
+            ?: fetchTitle(getMangaUrl(manga))?.id
+            ?: throw Exception("Could not find manga details")
+        val url = "$apiUrl/recommendations".toHttpUrl().newBuilder().apply {
+            addPathSegment(id)
+
+            val blacklist = getBlacklist()
+            if (blacklist.isNotEmpty()) {
+                addQueryParameter("exclude", blacklist.joinToString(","))
+            }
+        }.build()
+
+        return client.get(url, Fetch.XHR).parseAs<RecommendationsResponseDto>().data.map { it.toSManga() }
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
