@@ -173,8 +173,7 @@ abstract class GocTruyenTranhVui :
             ?: requestUrl.pathSegments.getOrNull(1)
 
         if (id != null && nameEn != null) {
-            runCatching { setUrlWithoutDomain("$id:$nameEn") }
-                .onFailure { this.url = "$id:$nameEn" }
+            url = "$id:$nameEn"
         }
     }
 
@@ -209,7 +208,6 @@ abstract class GocTruyenTranhVui :
 
         val useWebViewLoader = preferences.getBoolean(USE_WEBVIEW_LOADER, USE_WEBVIEW_LOADER_DEFAULT)
 
-        // Chế độ 1: Tải bằng WebView Loader (Nếu công tắc BẬT) - Không fallback về API
         if (useWebViewLoader) {
             val script = javaClass.getResource("/assets/reader.js")!!.readText()
             val imageUrls = runWebView(timeout = 30.seconds) {
@@ -222,9 +220,7 @@ abstract class GocTruyenTranhVui :
                 poll(1.seconds) {
                     pollAttempts++
                     evaluateJs(script) { jsonResult ->
-                        val rawJson = jsonResult.parseAs<String>()
-
-                        val res = rawJson.parseAs<WebViewResultDto>()
+                        val res = jsonResult!!.parseAs<WebViewResultDto>()
 
                         if (res.needLogin) {
                             reject(Exception("Để đọc chương này bạn cần đăng nhập trong WebView!"))
@@ -247,17 +243,9 @@ abstract class GocTruyenTranhVui :
                 loadUrl(chapterPageUrl)
             }
 
-            return imageUrls.mapIndexed { i, imgUrl ->
-                val finalUrl = if (imgUrl.startsWith("/image/")) {
-                    baseUrl + imgUrl
-                } else {
-                    imgUrl
-                }
-                Page(i, imageUrl = finalUrl)
-            }
+            return imageUrls.toPages()
         }
 
-        // Chế độ 2: Tải bằng API trực tiếp (Nếu công tắc TẮT)
         getToken()
         val body = FormBody.Builder()
             .add("comicId", comicId)
@@ -277,14 +265,7 @@ abstract class GocTruyenTranhVui :
 
             // Nếu API đã trả danh sách ảnh, dùng danh sách đó bất kể codeState.
             if (imageList != null) {
-                return imageList.mapIndexed { i, imgUrl ->
-                    val finalUrl = if (imgUrl.startsWith("/image/")) {
-                        baseUrl + imgUrl
-                    } else {
-                        imgUrl
-                    }
-                    Page(i, imageUrl = finalUrl)
-                }
+                return imageList.toPages()
             }
 
             // Không có ảnh thì trả lỗi cụ thể nếu API cung cấp.
@@ -312,6 +293,10 @@ abstract class GocTruyenTranhVui :
         }
 
         return pages ?: throw Exception("Không thể tải danh sách ảnh bằng API. Vui lòng kiểm tra đăng nhập")
+    }
+
+    private fun List<String>.toPages() = mapIndexed { i, imgUrl ->
+        Page(i, imageUrl = if (imgUrl.startsWith("/image/")) baseUrl + imgUrl else imgUrl)
     }
 
     private var tokenCache: String? = null
@@ -366,12 +351,11 @@ abstract class GocTruyenTranhVui :
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val tokenPref = EditTextPreference(screen.context).apply {
+        EditTextPreference(screen.context).apply {
             key = CUSTOM_TOKEN
             title = "Authorization Token"
             summary = "Enter token manually"
             dialogTitle = "Authorization Token"
-            setEnabled(!preferences.getBoolean(USE_WEBVIEW_LOADER, USE_WEBVIEW_LOADER_DEFAULT))
             setOnBindEditTextListener {
                 it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             }
@@ -381,21 +365,14 @@ abstract class GocTruyenTranhVui :
                 tokenChecked = true
                 true
             }
-        }
+        }.also(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
             key = USE_WEBVIEW_LOADER
             title = "WebView Loader"
             summary = "Đề xuất bật cho Mihon. Tải ảnh qua WebView giảm trường hợp khóa tài khoản"
             setDefaultValue(USE_WEBVIEW_LOADER_DEFAULT)
-            setOnPreferenceChangeListener { _, newValue ->
-                val isWebViewEnabled = newValue as Boolean
-                tokenPref.setEnabled(!isWebViewEnabled)
-                true
-            }
         }.also(screen::addPreference)
-
-        screen.addPreference(tokenPref)
     }
 
     companion object {

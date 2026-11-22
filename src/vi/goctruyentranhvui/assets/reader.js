@@ -45,8 +45,8 @@
                 }
             }
         }
-        return JSON.stringify({ needLogin: isBlocked, urls: urls });
+        return { needLogin: isBlocked, urls: urls };
     } catch (e) {
-        return JSON.stringify({ needLogin: false, urls: [] });
+        return { needLogin: false, urls: [] };
     }
 })()
