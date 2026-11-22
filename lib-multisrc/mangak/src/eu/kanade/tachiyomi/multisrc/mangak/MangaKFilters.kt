@@ -96,14 +96,14 @@ class DemographicFilter :
         ),
     )
 
-fun getGenreList(data: JsonElement? = null, blacklist: Set<String> = emptySet()): List<Genre> {
-    val items = data?.parseAs<GenreResponseDto>()?.data?.items.orEmpty()
+fun getGenreList(data: JsonElement? = null, excludedGenres: Set<String> = emptySet()): List<Genre> {
+    val items = data?.parseAs<DataDto<GenreDataDto>>()?.data?.items.orEmpty()
 
     return items.map { item ->
         Genre(
             name = item.name,
             value = item.slug,
-            state = if (item.slug in blacklist) Filter.TriState.STATE_EXCLUDE else Filter.TriState.STATE_IGNORE,
+            state = if (item.slug in excludedGenres) Filter.TriState.STATE_EXCLUDE else Filter.TriState.STATE_IGNORE,
         )
     }
 }

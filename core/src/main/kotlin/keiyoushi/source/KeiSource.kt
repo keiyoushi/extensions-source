@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.network.BaseUrlFetchInterceptor
 import keiyoushi.network.BrowserCallInterceptor
@@ -26,6 +25,8 @@ import keiyoushi.utils.jsonInstance
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -54,6 +55,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.seconds
+import eu.kanade.tachiyomi.source.model.SMangaUpdate as LibSMangaUpdate
 
 private val BASE_URL_FETCH_TIMEOUT = 10.seconds
 
@@ -420,7 +422,7 @@ abstract class KeiSource : HttpSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
+    ): LibSMangaUpdate {
         check(fetchDetails || fetchChapters) { "getMangaUpdate called with nothing to fetch (fetchDetails=false, fetchChapters=false)" }
 
         val key = manga.url
@@ -429,10 +431,15 @@ abstract class KeiSource : HttpSource() {
         try {
             val update = fetchMangaUpdate(manga, chapters, fetchDetails, fetchChapters)
 
-            return SMangaUpdate(
-                manga = update.manga.apply { initialized = true },
-                chapters = update.chapters,
-            )
+            return coroutineScope {
+                val details = async { update.manga() }
+                val chapterList = async { update.chapters() }
+
+                LibSMangaUpdate(
+                    manga = details.await().apply { initialized = true },
+                    chapters = chapterList.await(),
+                )
+            }
         } finally {
             updatesInFlight.remove(key)
         }

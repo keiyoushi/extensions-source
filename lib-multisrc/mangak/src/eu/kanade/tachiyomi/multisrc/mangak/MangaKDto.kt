@@ -11,8 +11,8 @@ import kotlinx.serialization.json.put
 import kotlin.time.Instant
 
 @Serializable
-class SearchResponseDto(
-    val data: SearchDataDto,
+class DataDto<T>(
+    val data: T,
 )
 
 @Serializable
@@ -41,11 +41,6 @@ class MangaItemDto(
 @Serializable
 class PaginationDto(
     @SerialName("has_next") val hasNext: Boolean,
-)
-
-@Serializable
-class ChapterListResponseDto(
-    val data: ChapterDataDto,
 )
 
 @Serializable
@@ -155,11 +150,6 @@ class TrackerDto(
 @Serializable
 class InitialChapterDto(
     val images: List<String>,
-)
-
-@Serializable
-class GenreResponseDto(
-    val data: GenreDataDto,
 )
 
 @Serializable

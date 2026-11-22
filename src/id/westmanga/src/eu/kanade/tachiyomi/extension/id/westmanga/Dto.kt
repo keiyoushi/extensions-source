@@ -2,8 +2,10 @@ package eu.kanade.tachiyomi.extension.id.westmanga
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.Jsoup
 
 @Serializable
@@ -35,9 +37,7 @@ class BrowseManga(
         // old urls compatibility
         url = "/manga/$slug/"
         title = this@BrowseManga.title
-        thumbnail_url = this@BrowseManga.cover?.let {
-            if (it.startsWith("http")) it else "$baseUrl$it"
-        }
+        thumbnail_url = this@BrowseManga.cover?.let { baseUrl.toHttpUrl().resolve(it)?.toString() }
     }
 }
 
@@ -59,9 +59,7 @@ class Manga(
         // old urls compatibility
         url = "/manga/$slug/"
         title = this@Manga.title
-        thumbnail_url = this@Manga.cover?.let {
-            if (it.startsWith("http")) it else "$baseUrl$it"
-        }
+        thumbnail_url = this@Manga.cover?.let { baseUrl.toHttpUrl().resolve(it)?.toString() }
         author = this@Manga.author
         status = when (this@Manga.status?.lowercase()) {
             "ongoing" -> SManga.ONGOING
@@ -81,16 +79,10 @@ class Manga(
             this@Manga.genres.forEach { add(it.name) }
         }.joinToString()
 
-        description = buildString {
-            this@Manga.synopsis?.let {
-                append(Jsoup.parseBodyFragment(it, baseUrl).text())
-            }
-            this@Manga.alternativeName?.let {
-                if (isNotEmpty()) append("\n\n")
-                append("Alternative Name: ")
-                append(it.trim())
-            }
-        }
+        description = MarkdownDescription.Builder()
+            .description(this@Manga.synopsis?.let { Jsoup.parseBodyFragment(it, baseUrl).body() }, keepNewlines = true)
+            .field("Alternative Name", this@Manga.alternativeName)
+            .build()
     }
 }
 
@@ -147,7 +139,6 @@ class GlobalAppSession(
 
 @Serializable
 class VisitTokenResponse(
-    val status: Boolean = false,
-    val token: String? = null,
-    @SerialName("expires_at") val expiresAt: Long? = null,
+    val token: String,
+    @SerialName("expires_at") val expiresAt: Long,
 )

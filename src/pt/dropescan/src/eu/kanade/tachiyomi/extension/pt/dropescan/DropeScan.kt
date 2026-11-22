@@ -6,11 +6,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
@@ -76,11 +76,10 @@ abstract class DropeScan : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) getMangaDetails(manga) else manga }
-        val chapterList = async { if (fetchChapters) getChapterList(manga) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) getMangaDetails(manga) else manga },
+        chapters = { if (fetchChapters) getChapterList(manga) else chapters },
+    )
 
     private suspend fun getMangaDetails(manga: SManga): SManga = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         .extractNextJs<ObraDto> { it is JsonObject && "ObraId" in it && "Chapters" in it }!!

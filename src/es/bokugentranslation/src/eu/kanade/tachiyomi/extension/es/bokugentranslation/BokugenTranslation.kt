@@ -10,22 +10,7 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class BokugenTranslation : MangaThemesia() {
 
-    override val datePattern = "dd MMMM, yyyy"
+    override val datePattern = "d MMMM, yyyy"
 
-    override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor { chain ->
-            val request = chain.request()
-            if (request.url.host.endsWith(".wp.com")) {
-                chain.proceed(request.newBuilder().headers(imageHeaders).build())
-            } else {
-                chain.proceed(request)
-            }
-        }
-
-        rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
-    }
-
-    private val imageHeaders get() = headersBuilder()
-        .set("Accept", "image/avif,image/jxl,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5")
-        .build()
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
 }

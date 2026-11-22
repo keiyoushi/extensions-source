@@ -5,19 +5,17 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.booleanOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -57,19 +55,14 @@ abstract class Seitoon : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val slug = manga.url.substringAfterLast('/')
         val from = Fetch.XHR.from(getMangaUrl(manga))
-        val details = if (fetchDetails) {
-            async {
-                client.get(seriesUrl(slug), from).parseAs<SeriesResponse>().data.series.toSMangaDetails(baseUrl.toHttpUrl())
-            }
-        } else {
-            null
-        }
-        val chapterList = if (fetchChapters) async { fetchChapters(slug, from).map { it.toSChapter() } } else null
 
-        SMangaUpdate(details?.await() ?: manga, chapterList?.await() ?: chapters)
+        return SMangaUpdate(
+            manga = { if (fetchDetails) client.get(seriesUrl(slug), from).parseAs<SeriesResponse>().data.series.toSMangaDetails(baseUrl.toHttpUrl()) else manga },
+            chapters = { if (fetchChapters) fetchChapters(slug, from).map { it.toSChapter() } else chapters },
+        )
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {

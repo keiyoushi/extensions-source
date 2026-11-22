@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.booleanOrNull
@@ -83,11 +83,10 @@ abstract class MangaHotWeb : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) getDetails(manga) else manga }
-        val chapterList = async { if (fetchChapters) getChapters(manga) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) getDetails(manga) else manga },
+        chapters = { if (fetchChapters) getChapters(manga) else chapters },
+    )
 
     private suspend fun getDetails(manga: SManga): SManga {
         val work = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup().selectFirst("div.work_box")!!
