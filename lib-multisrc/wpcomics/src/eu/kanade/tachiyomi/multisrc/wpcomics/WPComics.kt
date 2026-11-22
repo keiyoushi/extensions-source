@@ -41,7 +41,7 @@ abstract class WPComics : KeiSource() {
     open val intl = Intl(
         language = lang,
         baseLanguage = "en",
-        availableLanguages = setOf("en", "vi", "ja"),
+        availableLanguages = setOf("en", "vi", "ja", "id"),
         classLoader = this::class.java.classLoader!!,
     )
 
