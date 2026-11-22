@@ -35,7 +35,6 @@ class MangaDto(
         url = "/title/$hid${slug?.let { "-$it" } ?: ""}"
         title = this@MangaDto.title
         thumbnail_url = poster?.large ?: poster?.medium ?: poster?.small
-        initialized = false
     }
 }
 
@@ -75,7 +74,6 @@ class MangaDetailsDto(
             "discontinued" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
-        initialized = true
     }
 }
 
@@ -90,7 +88,6 @@ class VolumeDto(
     private val id: Int,
     private val number: Int,
     private val name: String? = null,
-    private val chapterCount: Int,
     val language: String,
 ) {
     fun toSChapter(mangaUrl: String): SChapter = SChapter.create().apply {
@@ -103,7 +100,6 @@ class VolumeDto(
                 append(this@VolumeDto.name)
             }
         }
-        scanlator = "$chapterCount chapters"
     }
 }
 
@@ -113,21 +109,21 @@ class ChapterDto(
     private val number: Float,
     private val name: String? = null,
     private val createdAt: Long? = null,
-    val type: String? = null,
+    private val type: String? = null,
 ) {
     fun toSChapter(mangaUrl: String, langCode: String): SChapter = SChapter.create().apply {
-        url = "$mangaUrl/$id-chapter-${number.toString().removeSuffix(".0")}-$langCode"
-        chapter_number = number
+        val number = number.toString().removeSuffix(".0")
+        url = "$mangaUrl/$id-chapter-$number-$langCode"
+        chapter_number = this@ChapterDto.number
         name = buildString {
-            append("Ch. ")
-            append(number.toString().removeSuffix(".0"))
+            append("Ch. $number")
             if (!this@ChapterDto.name.isNullOrBlank()) {
                 append(" - ")
                 append(this@ChapterDto.name)
             }
         }
-        scanlator = type ?: "Unknown"
-        date_upload = createdAt?.times(1000L) ?: 0L
+        scanlator = type
+        createdAt?.let { date_upload = it * 1000 }
     }
 }
 
