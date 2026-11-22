@@ -10,18 +10,32 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha256
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
+import java.security.SecureRandom
 
 @Source
 abstract class Cgbum : KeiSource() {
+
+    private val sid = ByteArray(24).also(SecureRandom()::nextBytes).toHexString()
+
+    @Volatile
+    private var grant = ""
+
+    private val readerAccessHeaders
+        get() = headers.newBuilder()
+            .set("X-Reader-Access", "1")
+            .build()
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(listUrl(page).addQueryParameter("sort", "views").build())
 
@@ -112,10 +126,44 @@ abstract class Cgbum : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        return document.select("div.page-container[data-url]").mapIndexed { index, element ->
-            Page(index, imageUrl = element.absUrl("data-url"))
+        val chapterUrl = getChapterUrl(chapter)
+        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
+        val readerAccess = document.selectFirst("script:containsData(__READER_ACCESS =)")!!.data()
+            .let { READER_ACCESS_REGEX.find(it)!!.groupValues[1] }
+            .parseAs<ReaderAccessDto>()
+        val endpoint = baseUrl.toHttpUrl().resolve(readerAccess.endpoint)!!
+        val fetch = Fetch.XHR.from(chapterUrl)
+        suspend fun access(body: ReaderAccessRequest) = client.post(endpoint, readerAccessHeaders, fetch, body.toJsonRequestBody())
+            .parseAs<ReaderAccessResponse>()
+
+        var response = access(ReaderAccessRequest(sid, readerAccess.page, grant))
+        response.challenge?.let { challenge ->
+            response = access(
+                ReaderAccessRequest(
+                    sid = sid,
+                    page = readerAccess.page,
+                    token = "",
+                    ticket = challenge.ticket,
+                    nonce = solveChallenge(challenge.seed, challenge.difficulty),
+                ),
+            )
         }
+        response.grant?.let { grant = it.token }
+
+        val images = response.images ?: throw Exception("Gagal memuat gambar, coba lagi")
+        return images.mapIndexed { index, url ->
+            Page(index, imageUrl = url)
+        }
+    }
+
+    private fun solveChallenge(seed: String, difficulty: Int): String = generateSequence(0L) { it + 1 }
+        .first { nonce -> "$seed$nonce".sha256().leadingZeroBits() >= difficulty }
+        .toString()
+
+    private fun ByteArray.leadingZeroBits(): Int {
+        val index = indexOfFirst { it != 0.toByte() }
+        if (index == -1) return size * 8
+        return index * 8 + Integer.numberOfLeadingZeros(this[index].toInt() and 0xFF) - 24
     }
 
     override val supportsFilterFetching: Boolean get() = true
@@ -139,5 +187,6 @@ abstract class Cgbum : KeiSource() {
 
     companion object {
         private val MANGA_PATHS = setOf("komik", "baca")
+        private val READER_ACCESS_REGEX = Regex("""__READER_ACCESS\s*=\s*(\{.*?\});""")
     }
 }
