@@ -182,7 +182,7 @@ abstract class Manhuagui :
         if (!url.host.endsWith("manhuagui.com") && !url.host.endsWith("mhgui.com")) return null
         val id = url.pathSegments.getOrNull(1) ?: return null
 
-        val document = client.get("$baseUrl/comic/$id", Fetch.DOCUMENT).asJsoup()
+        val document = client.get("$baseUrl/comic/$id/", Fetch.DOCUMENT).asJsoup()
         return SManga.create().apply {
             parseDetails(document)
             this.url = "/comic/$id/"
