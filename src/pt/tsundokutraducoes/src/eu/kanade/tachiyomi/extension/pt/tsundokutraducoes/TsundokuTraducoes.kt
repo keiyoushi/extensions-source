@@ -8,6 +8,7 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class TsundokuTraducoes : MangaThemesia() {
+    override val datePattern = "dd/MM/yyyy"
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(1, 2.seconds)
 

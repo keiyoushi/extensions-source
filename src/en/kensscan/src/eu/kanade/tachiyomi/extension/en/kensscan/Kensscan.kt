@@ -10,10 +10,10 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferences
@@ -87,10 +87,16 @@ abstract class Kensscan :
     ): SMangaUpdate {
         if (!fetchDetails) return SMangaUpdate(manga, super.fetchMangaUpdate(manga, chapters, false, fetchChapters).chapters)
         val update = super.fetchMangaUpdate(manga, chapters, true, fetchChapters)
-        update.manga.genre = manga.genre
-        update.manga.status = manga.status
-        searchCard(update.manga.url, update.manga.title)?.let { update.manga.applySearchCard(it) }
-        return update
+        return SMangaUpdate(
+            manga = {
+                update.manga().also { details ->
+                    details.genre = manga.genre
+                    details.status = manga.status
+                    searchCard(details.url, details.title)?.let { details.applySearchCard(it) }
+                }
+            },
+            chapters = update.chapters,
+        )
     }
 
     override fun chapterFromElement(element: Element, mangaPath: String): SChapter? {

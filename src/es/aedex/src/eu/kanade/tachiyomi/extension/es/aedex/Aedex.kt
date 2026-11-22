@@ -15,6 +15,7 @@ import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParse
@@ -156,21 +157,15 @@ abstract class Aedex : Catharsis() {
     }
 
     private fun readerSession(reader: Document): ReaderSession {
-        val seed = reader.select("[hidden]").firstNotNullOfOrNull { el ->
-            el.attributes().firstOrNull { it.key.startsWith("data-") && HEX_32_REGEX.matches(it.value) }?.value
-        } ?: throw IOException("Reader seed not found")
-        val lector = reader.select("script").firstNotNullOfOrNull { script ->
-            LECTOR_REGEX.findAll(script.data()).firstNotNullOfOrNull { match ->
-                val raw = match.groupValues[1].takeIf { it.isNotEmpty() }
-                    ?.let { Base64.decode(it, Base64.DEFAULT).decodeToString() }
-                    ?: match.groupValues[2]
-                runCatching { raw.parseAs<LectorDto>() }.getOrNull()
-            }
-        } ?: throw IOException("Reader keys not found")
-        val handles = reader.select("canvas.manga-page-canvas, canvas[data-page]").mapNotNull { canvas ->
-            canvas.attributes().firstOrNull { attr ->
-                attr.key.startsWith("data-") && attr.key != "data-page" && attr.value.length > 16
-            }?.value
+        // Same lookups as the site's own reader script
+        val seed = reader.selectFirst("meta[name=reader-token]")?.attr("content")
+            ?: reader.getElementById("bv-frame")?.attr("data-seed")
+            ?: throw IOException("Reader seed not found")
+        val lector = reader.select("script").firstNotNullOfOrNull { LECTOR_REGEX.find(it.data())?.groupValues?.get(1) }
+            ?.let { Base64.decode(it, Base64.DEFAULT).decodeToString().parseAs<LectorDto>() }
+            ?: throw IOException("Reader keys not found")
+        val handles = lector.pages.ifEmpty {
+            reader.select("canvas.manga-page-canvas").mapNotNull { it.attrOrNull("data-cid") ?: it.attrOrNull("data-h") }
         }.ifEmpty { throw IOException("Reader pages not found") }
         return ReaderSession(
             readerUrl = reader.location(),
@@ -199,7 +194,7 @@ abstract class Aedex : Catharsis() {
         private const val PASS_COOKIE = "ax_rp"
         private const val MAX_ATTEMPTS = 3
         private val HEX_32_REGEX = Regex("^[0-9a-f]{32}$")
-        private val LECTOR_REGEX = Regex("""window\.__\w+\s*=\s*(?:JSON\.parse\(atob\("([^"]+)"\)\)|(\{[^;]+\}))""")
+        private val LECTOR_REGEX = Regex("""window\.(?:readerContext|__BV_CTX__)\s*=\s*JSON\.parse\(atob\("([^"]+)"\)\)""")
     }
 }
 

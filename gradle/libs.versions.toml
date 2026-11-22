@@ -1,12 +1,12 @@
 [versions]
-android-gradle = "9.5.1"
+android-gradle = "9.5.2"
 coroutines = "1.11.0"
 serialization = "1.11.0"
 junit = "4.13.2"
 kotlin-gradle = "2.4.10"
 ksp = "2.3.9"
 # AGP + 23.0.0; Renovate bumps both together
-lint = "32.5.1"
+lint = "32.5.2"
 kotlinpoet = "2.3.0"
 ktlint = "1.8.0"
 spotless = "8.10.1"

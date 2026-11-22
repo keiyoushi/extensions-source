@@ -10,12 +10,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
@@ -146,11 +146,13 @@ abstract class MangaFire :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val hid = getHid(manga.url)
-        val detailsDeferred = async { if (fetchDetails) fetchMangaDetails(hid) else manga }
-        val chaptersDeferred = async { if (fetchChapters) fetchChapters(manga) else chapters }
-        SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
+
+        return SMangaUpdate(
+            manga = { if (fetchDetails) fetchMangaDetails(hid) else manga },
+            chapters = { if (fetchChapters) fetchChapters(manga) else chapters },
+        )
     }
 
     private suspend fun fetchMangaDetails(hid: String): SManga = client.get("$baseUrl/api/titles/$hid", Fetch.XHR).parseAs<MangaDetailsResponse>().data.toSManga()

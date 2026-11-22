@@ -7,13 +7,14 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.WebViewTimeoutException
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.parseAs
@@ -141,7 +142,6 @@ abstract class Kumanga : KeiSource() {
         val readerUrl = if (chapter.url.startsWith("/manga/leer/")) {
             getChapterUrl(chapter)
         } else {
-            // Chapters redirect to their upload (/manga/c/<id>), or list one per group; the reader (/manga/leer/<id>) shares the id
             val upload = redirectClient.get(getChapterUrl(chapter), Fetch.DOCUMENT, ensureSuccess = false).use { response ->
                 response.header("Location") ?: run {
                     if (!response.isSuccessful) throw HttpException(response.code)
@@ -155,24 +155,28 @@ abstract class Kumanga : KeiSource() {
                 .toString()
         }
         val html = client.get(readerUrl, Fetch.DOCUMENT).body.string()
-        val readerHost = readerUrl.toHttpUrl().host
-        // The site keeps renaming its page list variable: read the list the reader's x-for template loops over
+        val siteDomain = readerUrl.toHttpUrl().host.removePrefix("www.")
+        val script = javaClass.getResource("/assets/pages.js")!!.readText()
         val paths = try {
             runWebView<List<String>> {
                 interceptRequest { request ->
-                    if (request.url.host == readerHost && request.url.path.orEmpty().endsWith(".js")) {
+                    val path = request.url.path.orEmpty()
+                    val host = request.url.host.orEmpty()
+                    if (path.endsWith(".js") && (host == siteDomain || host.endsWith(".$siteDomain") || "alpinejs" in path)) {
                         proxyRequest(request, client)
                     } else {
                         WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
                     }
                 }
-                onPageFinished {
-                    evaluateJs(PAGES_SCRIPT) { result ->
-                        result.parseAs<List<String>?>()?.takeIf { it.isNotEmpty() }?.let(::resolve) ?: reject(Exception("No page list"))
+                poll {
+                    evaluateJs(script) { result ->
+                        result.parseAs<List<String>?>()?.takeIf { it.isNotEmpty() }?.let(::resolve)
                     }
                 }
                 loadData(readerUrl, html)
             }
+        } catch (_: WebViewTimeoutException) {
+            throw IOException("No se encontró la lista de páginas")
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -181,7 +185,6 @@ abstract class Kumanga : KeiSource() {
         val base = readerUrl.toHttpUrl()
         return paths.mapIndexed { index, path ->
             val url = base.resolve(path)!!
-            // The site's image proxy carries the image url hex-encoded in src
             val image = url.queryParameter("src")?.takeIf(HEX_REGEX::matches)?.decodeHex()?.decodeToString()?.toHttpUrlOrNull() ?: url
             Page(index, imageUrl = image.toString())
         }
@@ -190,7 +193,6 @@ abstract class Kumanga : KeiSource() {
     override fun getImageRequest(page: Page): Request {
         val url = page.imageUrl!!.toHttpUrl()
         if (!url.host.endsWith(".googleusercontent.com")) return super.getImageRequest(page)
-        // googleusercontent answers 429 to the site's Referer
         return Request.Builder().url(url).headers(headers.newBuilder().removeAll("Referer").build()).build()
     }
 
@@ -203,18 +205,6 @@ abstract class Kumanga : KeiSource() {
     private fun String.toMangaId() = baseUrl.toHttpUrl().resolve(this)!!.pathSegments[1].toInt()
 
     companion object {
-        private const val PAGES_SCRIPT = """
-            (() => {
-                const loop = [...document.querySelectorAll('template[x-for]')].find((t) => t.content.querySelector('img'));
-                const list = loop
-                    .getAttribute('x-for')
-                    .split(/\s+(?:in|of)\s+/)
-                    .pop()
-                    .trim();
-                const data = new Function(`return ${'$'}{loop.closest('[x-data]').getAttribute('x-data')}`)();
-                return data[list];
-            })()
-        """
         private val HEX_REGEX = Regex("(?:[0-9A-Fa-f]{2})+")
         private val OTHER_CHAPTERS_REGEX = Regex("""OTHER_CHAPTERS\s*=\s*(\[.*])\s*;""", RegexOption.DOT_MATCHES_ALL)
     }

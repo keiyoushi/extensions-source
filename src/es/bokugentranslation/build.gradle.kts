@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "BokugenTranslation"
-    versionCode = 18
+    versionCode = 19
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "mangathemesia"
