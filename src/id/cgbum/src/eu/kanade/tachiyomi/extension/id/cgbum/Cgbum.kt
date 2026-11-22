@@ -14,6 +14,7 @@ import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.sha256
 import keiyoushi.utils.toJsonElement
@@ -22,6 +23,7 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import java.security.SecureRandom
 
 @Source
@@ -32,43 +34,53 @@ abstract class Cgbum : KeiSource() {
     @Volatile
     private var grant = ""
 
+    @Volatile
+    private var nextPage: NextPage? = null
+
     private val readerAccessHeaders
         get() = headers.newBuilder()
             .set("X-Reader-Access", "1")
             .build()
 
-    override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(listUrl(page).addQueryParameter("sort", "views").build())
+    override suspend fun getPopularManga(page: Int): MangasPage = getMangaList("$baseUrl/populer".toHttpUrl(), page)
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList(listUrl(page).addQueryParameter("sort", "latest").build())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getMangaList(listUrl().addQueryParameter("sort", "latest").build(), page)
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
             val url = "$baseUrl/cari".toHttpUrl().newBuilder()
                 .addQueryParameter("q", query)
+                .addQueryParameter("sort", filters.firstInstance<SearchSortFilter>().value)
                 .build()
-            return getMangaList(url)
+            return getMangaList(url, page)
         }
 
-        val url = listUrl(page).apply {
+        val url = listUrl().apply {
             filters.filterIsInstance<UrlFilter>().forEach { it.addToUrl(this) }
         }.build()
-        return getMangaList(url)
+        return getMangaList(url, page)
     }
 
-    private fun listUrl(page: Int): HttpUrl.Builder = "$baseUrl/daftar-komik".toHttpUrl().newBuilder()
-        .addQueryParameter("page", page.toString())
+    private fun listUrl(): HttpUrl.Builder = "$baseUrl/daftar-komik".toHttpUrl().newBuilder()
 
-    private suspend fun getMangaList(url: HttpUrl): MangasPage {
+    private suspend fun getMangaList(listing: HttpUrl, page: Int): MangasPage {
+        val url = nextPage?.takeIf { it.listing == listing && it.page == page }?.url
+            ?: listing.newBuilder().setQueryParameter("page", page.toString()).build()
         val document = client.get(url, Fetch.DOCUMENT).asJsoup()
-        val mangas = document.select("article.comic-card").map { element ->
-            SManga.create().apply {
-                val link = element.selectFirst("h3.comic-card-title a")!!
-                title = link.text()
-                setUrlWithoutDomain(link.absUrl("href"))
-                thumbnail_url = element.selectFirst("img")?.absUrl("src")
-            }
-        }
-        return MangasPage(mangas, document.selectFirst("a[rel=next]") != null)
+        val mangas = document.select("article.comic-card").map(::mangaFromCard)
+        val next = document.selectFirst("a[rel=next]")?.absUrl("href")?.toHttpUrl()
+        nextPage = next?.let { NextPage(listing, page + 1, it) }
+        return MangasPage(mangas, next != null)
+    }
+
+    private class NextPage(val listing: HttpUrl, val page: Int, val url: HttpUrl)
+
+    private fun mangaFromCard(element: Element): SManga = SManga.create().apply {
+        val link = element.selectFirst("h3.comic-card-title a")!!
+        title = link.text()
+        setUrlWithoutDomain(link.absUrl("href"))
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        status = parseStatus(element.selectFirst(".badge-status")?.text())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -114,8 +126,15 @@ abstract class Cgbum : KeiSource() {
         SChapter.create().apply {
             setUrlWithoutDomain(element.absUrl("href"))
             name = element.text()
-            chapter_number = element.attr("data-chapter").toFloatOrNull() ?: -1f
+            chapter_number = element.attr("data-chapter-sort").toFloatOrNull() ?: -1f
         }
+    }
+
+    override val supportsRelatedMangas get() = true
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        return document.select("section[aria-label=\"Komik terkait\"] article.comic-card").map(::mangaFromCard)
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -170,7 +189,9 @@ abstract class Cgbum : KeiSource() {
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         buildList {
-            add(Filter.Header("Filter diabaikan saat mencari judul"))
+            add(Filter.Header("Saat mencari judul, hanya Urutkan pencarian yang dipakai"))
+            add(SearchSortFilter())
+            add(Filter.Separator())
             add(SortFilter())
             add(StatusFilter())
             add(TypeFilter())

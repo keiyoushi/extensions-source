@@ -33,6 +33,23 @@ class SortFilter :
         state = 3,
     )
 
+class SearchSortFilter :
+    Filter.Select<String>(
+        "Urutkan pencarian",
+        OPTIONS.map { it.first }.toTypedArray(),
+    ) {
+    val value get() = OPTIONS[state].second
+
+    private companion object {
+        val OPTIONS = listOf(
+            "Relevan" to "relevance",
+            "Terbaru" to "latest",
+            "Populer" to "popular",
+            "Banyak Chapter" to "chapters",
+        )
+    }
+}
+
 class StatusFilter :
     SelectFilter(
         "Status",
