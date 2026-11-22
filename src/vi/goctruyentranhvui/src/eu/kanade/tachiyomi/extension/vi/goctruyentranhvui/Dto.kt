@@ -79,6 +79,7 @@ class MangaDto(
 }
 
 @Serializable
-class ImageListDto(
-    val data: List<String>? = null,
+class WebViewResultDto(
+    val needLogin: Boolean = false,
+    val urls: List<String> = emptyList(),
 )
