@@ -5,16 +5,14 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -44,7 +42,7 @@ abstract class ComicKFan : KeiSource() {
             emptyList(),
             true,
             false,
-        ).manga
+        ).manga()
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -101,21 +99,17 @@ abstract class ComicKFan : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ) = coroutineScope {
-        val detailsDeferred = async {
+    ): SMangaUpdate = SMangaUpdate(
+        manga = {
             if (fetchDetails) {
                 val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
                 parseDetails(doc)
             } else {
                 manga
             }
-        }
-        val chaptersDeferred = async { if (fetchChapters) getChapters(manga) else chapters }
-        SMangaUpdate(
-            detailsDeferred.await(),
-            chaptersDeferred.await(),
-        )
-    }
+        },
+        chapters = { if (fetchChapters) getChapters(manga) else chapters },
+    )
 
     private fun parseDetails(document: Document): SManga {
         val infoRoot = document.selectFirst("div[class=bg-card-section]")

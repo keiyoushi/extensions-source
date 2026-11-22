@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "ManhuaTop"
-    versionCode = 59
+    versionCode = 60
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

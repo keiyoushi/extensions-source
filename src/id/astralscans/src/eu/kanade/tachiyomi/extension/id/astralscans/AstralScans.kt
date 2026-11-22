@@ -4,14 +4,12 @@ import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.post
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.textOrNull
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.FormBody
 
 @Source
@@ -24,11 +22,10 @@ abstract class AstralScans : MangaThemesia() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val detailsDeferred = async { if (fetchDetails) getMangaDetails(manga) else manga }
-        val chaptersDeferred = async { if (fetchChapters) getChapterList(manga) else chapters }
-        SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) getMangaDetails(manga) else manga },
+        chapters = { if (fetchChapters) getChapterList(manga) else chapters },
+    )
 
     private suspend fun getChapterList(manga: SManga): List<SChapter> {
         val body = FormBody.Builder()

@@ -31,13 +31,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.getBooleanOrNull
 import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferences
@@ -283,7 +283,7 @@ abstract class NamiComi :
             chapters = emptyList(),
             fetchDetails = true,
             fetchChapters = false,
-        ).manga
+        ).manga()
     }
 
     override val supportRelatedMangasBySearch = true
@@ -295,28 +295,20 @@ abstract class NamiComi :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val updatedManga = async {
-            if (!fetchDetails) {
-                return@async manga
+    ): SMangaUpdate = SMangaUpdate(
+        manga = {
+            if (fetchDetails) {
+                val url = "$apiUrl/title/${manga.url}".toHttpUrl().newBuilder()
+                    .addCommonIncludeParameters()
+                    .build()
+
+                client.get(url, Fetch.XHR).parseAs<MangaDto>(json).data?.toSManga() ?: manga
+            } else {
+                manga
             }
-
-            val url = "$apiUrl/title/${manga.url}".toHttpUrl().newBuilder()
-                .addCommonIncludeParameters()
-                .build()
-
-            client.get(url, Fetch.XHR).parseAs<MangaDto>(json).data?.toSManga() ?: manga
-        }
-        val updatedChapters = async {
-            if (!fetchChapters) {
-                return@async chapters
-            }
-
-            getChapterList(manga.url)
-        }
-
-        SMangaUpdate(updatedManga.await(), updatedChapters.await())
-    }
+        },
+        chapters = { if (fetchChapters) getChapterList(manga.url) else chapters },
+    )
 
     private suspend fun getChapterList(mangaId: String): List<SChapter> {
         val firstPage = client.get(chapterListUrl(mangaId, 0), Fetch.XHR).parseAs<ChapterListDto>(json)

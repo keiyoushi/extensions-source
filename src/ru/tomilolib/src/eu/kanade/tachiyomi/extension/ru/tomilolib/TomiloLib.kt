@@ -9,16 +9,14 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -108,21 +106,20 @@ abstract class TomiloLib :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val titleId = manga.titleId()
-        val details = async {
-            if (fetchDetails) {
-                client.get("$apiUrl/titles/$titleId", apiHeaders, Fetch.XHR)
-                    .parseAs<ApiResponse<TitleDto>>().data.toSManga(baseUrl)
-            } else {
-                manga
-            }
-        }
-        val chapterList = async {
-            if (fetchChapters) getChapters(titleId) else chapters
-        }
 
-        SMangaUpdate(details.await(), chapterList.await())
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    client.get("$apiUrl/titles/$titleId", apiHeaders, Fetch.XHR)
+                        .parseAs<ApiResponse<TitleDto>>().data.toSManga(baseUrl)
+                } else {
+                    manga
+                }
+            },
+            chapters = { if (fetchChapters) getChapters(titleId) else chapters },
+        )
     }
 
     // ============================== Chapters ==============================

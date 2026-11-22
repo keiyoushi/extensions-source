@@ -9,16 +9,14 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.Jsoup
@@ -68,17 +66,10 @@ abstract class HibonBlScanlation : ZeistManga() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async {
-            if (fetchDetails) {
-                mangaDetailsParse(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()).apply { url = manga.url }
-            } else {
-                manga
-            }
-        }
-        val chapterList = async { if (fetchChapters) getChapters(manga.url) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) mangaDetailsParse(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()).apply { url = manga.url } else manga },
+        chapters = { if (fetchChapters) getChapters(manga.url) else chapters },
+    )
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         val heading = document.selectFirst("h1[itemprop=name]")!!

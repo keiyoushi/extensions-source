@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
@@ -19,6 +18,7 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.aesDecryptWithPrependedIv
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
@@ -128,11 +128,10 @@ abstract class ManwaManhua :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) comicDetails(manga.url) else manga }
-        val chapterList = async { if (fetchChapters) chapterList(manga) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) comicDetails(manga.url) else manga },
+        chapters = { if (fetchChapters) chapterList(manga) else chapters },
+    )
 
     private suspend fun comicDetails(id: String): SManga = client.get("$baseUrl/api/comic/$id", Fetch.XHR.from("/comic/$id"))
         .parseAs<ResponseDto<ComicDto>>().data.toSManga()
