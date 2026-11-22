@@ -10,7 +10,7 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class BokugenTranslation : MangaThemesia() {
 
-    override val datePattern = "dd MMMM, yyyy"
+    override val datePattern = "d MMMM, yyyy"
 
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor { chain ->

@@ -14,7 +14,7 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class SushiScan : MangaThemesia() {
     override val mangaUrlDirectory = "/catalogue"
-    override val datePattern = "dd MMMM yyyy"
+    override val datePattern = "d MMMM yyyy"
 
     private val preferences = getPreferences()
 
