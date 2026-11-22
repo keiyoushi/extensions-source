@@ -5,17 +5,15 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -76,23 +74,10 @@ abstract class MangaAR : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async {
-            if (fetchDetails) {
-                client.get("$apiUrl/public/manga/${manga.url}", Fetch.XHR).parseAs<MangaDetailsDto>().toSManga(baseUrl.toHttpUrl())
-            } else {
-                manga
-            }
-        }
-        val chapterList = async {
-            if (fetchChapters) {
-                client.get("$apiUrl/public/manga/${manga.url}/chapters", Fetch.XHR).parseAs<ChapterListDto>().toSChapterList(manga.url)
-            } else {
-                chapters
-            }
-        }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) client.get("$apiUrl/public/manga/${manga.url}", Fetch.XHR).parseAs<MangaDetailsDto>().toSManga(baseUrl.toHttpUrl()) else manga },
+        chapters = { if (fetchChapters) client.get("$apiUrl/public/manga/${manga.url}/chapters", Fetch.XHR).parseAs<ChapterListDto>().toSChapterList(manga.url) else chapters },
+    )
 
     // Chapters from MangaDex come through the site's image proxy, its own translations from its server
     override suspend fun getPageList(chapter: SChapter): List<Page> {

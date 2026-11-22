@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getArrayOrNull
 import keiyoushi.utils.obj
@@ -174,7 +174,7 @@ abstract class LeesinComic : KeiSource() {
             emptyList(),
             fetchDetails = true,
             fetchChapters = false,
-        ).manga
+        ).manga()
     }
 
     // ============================== Details ===============================

@@ -6,14 +6,15 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import org.jsoup.nodes.Document
 
 @Source
 abstract class Comicabc : KeiSource() {
@@ -23,30 +24,14 @@ abstract class Comicabc : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get("$baseUrl/comic/h-$page.html", Fetch.DOCUMENT).asJsoup()
-        val mangas = document.select(".container .row a.comicpic_col6").map { element ->
-            SManga.create().apply {
-                title = element.selectFirst("li.nowraphide")!!.text()
-                setUrlWithoutDomain(element.absUrl("href"))
-                thumbnail_url = element.selectFirst("img")?.absUrl("src")
-            }
-        }
-        val hasNextPage = document.selectFirst("div.pager a span.mdi-skip-next") != null
-        return MangasPage(mangas, hasNextPage)
+        return parseMangaList(document)
     }
 
     // ============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val document = client.get("$baseUrl/comic/u-$page.html", Fetch.DOCUMENT).asJsoup()
-        val mangas = document.select(".container .row .cat2_list a").map { element ->
-            SManga.create().apply {
-                title = element.selectFirst("li.nowraphide")!!.text()
-                setUrlWithoutDomain(element.absUrl("href"))
-                thumbnail_url = element.selectFirst("img")?.absUrl("src")
-            }
-        }
-        val hasNextPage = document.selectFirst("div.pager a span.mdi-skip-next") != null
-        return MangasPage(mangas, hasNextPage)
+        return parseMangaList(document)
     }
 
     // ============================== Search ===============================
@@ -58,31 +43,29 @@ abstract class Comicabc : KeiSource() {
             .addQueryParameter("key", query)
             .addQueryParameter("page", page.toString())
             .build()
-        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
-        val mangas = document.select(".container .row a.comicpic_col6").map { element ->
-            SManga.create().apply {
-                title = element.selectFirst("li.nowraphide")!!.text()
-                setUrlWithoutDomain(element.absUrl("href"))
-                thumbnail_url = element.selectFirst("img")?.absUrl("src")
-            }
-        }
-        if (mangas.isEmpty() && page == 1) {
+        val result = parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
+        if (result.mangas.isEmpty() && page == 1) {
             val converted = query.toTraditional()
             if (converted != query) {
                 val retryUrl = "$baseUrl/member/search.aspx".toHttpUrl().newBuilder()
                     .addQueryParameter("key", converted)
                     .addQueryParameter("page", "1")
                     .build()
-                val retryDocument = client.get(retryUrl, Fetch.DOCUMENT).asJsoup()
-                val retryMangas = retryDocument.select(".container .row a.comicpic_col6").map { element ->
-                    SManga.create().apply {
-                        title = element.selectFirst("li.nowraphide")!!.text()
-                        setUrlWithoutDomain(element.absUrl("href"))
-                        thumbnail_url = element.selectFirst("img")?.absUrl("src")
-                    }
+                return parseMangaList(client.get(retryUrl, Fetch.DOCUMENT).asJsoup())
+            }
+        }
+        return result
+    }
+
+    private fun parseMangaList(document: Document): MangasPage {
+        val mangas = document.select("div.cu-grid .cu-card").map { element ->
+            SManga.create().apply {
+                val link = element.selectFirst("a.cu-title, a.cu-cover") ?: element
+                title = element.selectFirst(".cu-title")!!.text()
+                setUrlWithoutDomain(link.absUrl("href"))
+                thumbnail_url = element.selectFirst("img")?.let { img ->
+                    img.absUrl("data-cc-src").ifEmpty { img.absUrl("src") }
                 }
-                val hasNextPage = retryDocument.selectFirst("div.pager a span.mdi-skip-next") != null
-                return MangasPage(retryMangas, hasNextPage)
             }
         }
         val hasNextPage = document.selectFirst("div.pager a span.mdi-skip-next") != null

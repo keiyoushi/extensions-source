@@ -6,11 +6,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
@@ -87,21 +87,21 @@ abstract class Kairatoon : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val webtoonUrl = apiUrl.newBuilder().addPathSegment("webtoons").addPathSegment(manga.url.substringAfterLast('/')).build()
-        val details = async {
-            if (fetchDetails) client.get(webtoonUrl, Fetch.XHR).parseAs<WebtoonDto>().toSManga(baseUrl.toHttpUrl()) else manga
-        }
-        val chapterList = async {
-            if (fetchChapters) {
-                client.get(webtoonUrl.newBuilder().addPathSegment("chapters").build(), Fetch.XHR).parseAs<List<ChapterDto>>()
-                    .map { it.toSChapter(manga.url) }
-                    .reversed()
-            } else {
-                chapters
-            }
-        }
-        SMangaUpdate(details.await(), chapterList.await())
+
+        return SMangaUpdate(
+            manga = { if (fetchDetails) client.get(webtoonUrl, Fetch.XHR).parseAs<WebtoonDto>().toSManga(baseUrl.toHttpUrl()) else manga },
+            chapters = {
+                if (fetchChapters) {
+                    client.get(webtoonUrl.newBuilder().addPathSegment("chapters").build(), Fetch.XHR).parseAs<List<ChapterDto>>()
+                        .map { it.toSChapter(manga.url) }
+                        .reversed()
+                } else {
+                    chapters
+                }
+            },
+        )
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {

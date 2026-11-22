@@ -6,11 +6,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
@@ -67,27 +67,29 @@ abstract class LazyMonkiScans : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val id = getMangaUrl(manga).toHttpUrl().queryParameter("manga")!!
-        val details = if (fetchDetails) {
-            async {
-                val document = client.get(documentUrl("mangas/$id"), Fetch.XHR).parseAs<DocumentDto>()
-                document.toSMangaDetails(document.coverUrl())
-            }
-        } else {
-            null
-        }
-        val chapterList = if (fetchChapters) {
-            async {
-                fetchDocuments("chapters", CHAPTER_FIELDS)
-                    .filter { it.text("mangaId") == id }
-                    .map { it.toSChapter(id) }
-                    .sortedByDescending { it.chapter_number }
-            }
-        } else {
-            null
-        }
-        SMangaUpdate(details?.await() ?: manga, chapterList?.await() ?: chapters)
+
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    val document = client.get(documentUrl("mangas/$id"), Fetch.XHR).parseAs<DocumentDto>()
+                    document.toSMangaDetails(document.coverUrl())
+                } else {
+                    manga
+                }
+            },
+            chapters = {
+                if (fetchChapters) {
+                    fetchDocuments("chapters", CHAPTER_FIELDS)
+                        .filter { it.text("mangaId") == id }
+                        .map { it.toSChapter(id) }
+                        .sortedByDescending { it.chapter_number }
+                } else {
+                    chapters
+                }
+            },
+        )
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {

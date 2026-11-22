@@ -5,15 +5,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -61,20 +59,10 @@ abstract class MangaSwat : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val mangaDeferred = async {
-            if (fetchDetails) getMangaDetails(manga.url) else manga
-        }
-
-        val chaptersDeferred = async {
-            if (fetchChapters) getChapterList(manga) else chapters
-        }
-
-        SMangaUpdate(
-            manga = mangaDeferred.await(),
-            chapters = chaptersDeferred.await(),
-        )
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) getMangaDetails(manga.url) else manga },
+        chapters = { if (fetchChapters) getChapterList(manga) else chapters },
+    )
 
     private suspend fun getMangaDetails(id: String): SManga = client.get(api("series/$id/").build(), Fetch.XHR)
         .parseAs<MangaDetailsDto>()

@@ -5,20 +5,18 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -113,19 +111,20 @@ abstract class Doujinio : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val id = getIdFromUrl(manga.url)
 
-        val mangaDeferred = async { if (fetchDetails) fetchMangaDetails(id) else manga }
-        val chaptersDeferred = async {
-            if (fetchChapters) {
-                val response = client.get("$baseUrl/api/chapters?manga_id=$id", Fetch.XHR)
-                response.parseData<List<Chapter>>().map { it.toSChapter() }.reversed()
-            } else {
-                chapters
-            }
-        }
-        SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
+        return SMangaUpdate(
+            manga = { if (fetchDetails) fetchMangaDetails(id) else manga },
+            chapters = {
+                if (fetchChapters) {
+                    val response = client.get("$baseUrl/api/chapters?manga_id=$id", Fetch.XHR)
+                    response.parseData<List<Chapter>>().map { it.toSChapter() }.reversed()
+                } else {
+                    chapters
+                }
+            },
+        )
     }
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/${chapter.url}"
