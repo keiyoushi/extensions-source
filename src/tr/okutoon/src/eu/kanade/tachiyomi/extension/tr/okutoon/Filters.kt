@@ -1,70 +1,96 @@
 package eu.kanade.tachiyomi.extension.tr.okutoon
 
 import eu.kanade.tachiyomi.source.model.Filter
+import okhttp3.HttpUrl
 
-open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-    fun toUriPart() = vals[state].second
+interface UrlFilter {
+    fun addToUrl(url: HttpUrl.Builder)
 }
 
-class SortFilter :
-    UriPartFilter(
-        "Sıralama",
-        arrayOf(
-            Pair("En Yeni", "newest"),
-            Pair("Son Güncellenenler", "updated"),
-            Pair("En Popüler", "popular"),
-            Pair("En Yüksek Puan", "rating"),
-            Pair("A-Z", "az"),
-        ),
-    ) {
-    init {
-        state = 1 // Defaults to 'Son Güncellenenler' exactly like the website
+open class SelectFilter(
+    displayName: String,
+    private val param: String,
+    private val options: List<Pair<String, String>>,
+    defaultValue: String = "",
+) : Filter.Select<String>(displayName, options.map { it.first }.toTypedArray(), options.indexOfFirst { it.second == defaultValue }),
+    UrlFilter {
+    override fun addToUrl(url: HttpUrl.Builder) {
+        options[state].second.takeIf { it.isNotEmpty() }?.let { url.addQueryParameter(param, it) }
     }
 }
 
+class SortFilter(defaultValue: String = "popular") :
+    SelectFilter(
+        "Sıralama",
+        "sort",
+        listOf(
+            "En yeni" to "newest",
+            "Son güncellenen" to "updated",
+            "En popüler" to "popular",
+            "En yüksek puan" to "rating",
+            "A-Z" to "az",
+        ),
+        defaultValue,
+    )
+
+class PeriodFilter :
+    SelectFilter(
+        "Popülerlik dönemi",
+        "period",
+        listOf(
+            "Bugün" to "daily",
+            "Haftalık" to "weekly",
+            "Aylık" to "monthly",
+            "Tüm zamanlar" to "all_time",
+        ),
+        defaultValue = "daily",
+    )
+
 class StatusFilter :
-    UriPartFilter(
+    SelectFilter(
         "Durum",
-        arrayOf(
-            Pair("Tümü", ""),
-            Pair("Devam Ediyor", "ongoing"),
-            Pair("Tamamlandı", "completed"),
-            Pair("Ara Verildi", "hiatus"),
+        "status",
+        listOf(
+            "Her durum" to "",
+            "Devam ediyor" to "ongoing",
+            "Tamamlandı" to "completed",
+            "Ara verildi" to "hiatus",
         ),
     )
 
-class Genre(name: String, val id: String) : Filter.CheckBox(name)
-class GenreFilter(genres: List<Genre>) : Filter.Group<Genre>("Türler", genres)
+class TypeFilter :
+    SelectFilter(
+        "Tip",
+        "type",
+        listOf(
+            "Tümü" to "",
+            "Manga" to "manga",
+            "Webtoon" to "webtoon",
+        ),
+    )
 
-fun getGenreList() = listOf(
-    Genre("Aksiyon", "aksiyon"),
-    Genre("Askeri", "askeri"),
-    Genre("Bilim Kurgu", "bilim-kurgu"),
-    Genre("Doğaüstü", "dogaustu"),
-    Genre("Dövüş Sanatları", "dovus-sanatlari"),
-    Genre("Dram", "dram"),
-    Genre("Fantezi", "fantezi"),
-    Genre("Gerilim", "gerilim"),
-    Genre("Gizem", "gizem"),
-    Genre("Günlük Hayat", "gunluk-hayat"),
-    Genre("Harem", "harem"),
-    Genre("Hayatta Kalma", "hayatta-kalma"),
-    Genre("Isekai", "isekai"),
-    Genre("Josei", "josei"),
-    Genre("Kıyamet", "kiyamet"),
-    Genre("Komedi", "komedi"),
-    Genre("Korku", "korku"),
-    Genre("Macera", "macera"),
-    Genre("Okul Hayatı", "okul-hayati"),
-    Genre("Oyun", "oyun"),
-    Genre("Psikolojik", "psikolojik"),
-    Genre("Reenkarnasyon", "reenkarnasyon"),
-    Genre("Romantizm", "romantizm"),
-    Genre("Shoujo", "shoujo"),
-    Genre("Shounen", "shounen"),
-    Genre("Sihir", "sihir"),
-    Genre("Suç", "suc"),
-    Genre("Süperkahraman", "superkahraman"),
-    Genre("Tarihi", "tarihi"),
-    Genre("Yaoi", "yaoi"),
-)
+class FlagFilter(name: String, private val param: String) :
+    Filter.CheckBox(name),
+    UrlFilter {
+    override fun addToUrl(url: HttpUrl.Builder) {
+        if (state) url.addQueryParameter(param, "1")
+    }
+}
+
+class ChapterCountFilter(name: String, private val param: String) :
+    Filter.Text(name),
+    UrlFilter {
+    override fun addToUrl(url: HttpUrl.Builder) {
+        state.trim().toIntOrNull()?.let { url.addQueryParameter(param, it.toString()) }
+    }
+}
+
+class Genre(name: String, val slug: String) : Filter.CheckBox(name)
+
+class GenreFilter(genres: List<Genre>) :
+    Filter.Group<Genre>("Türler", genres),
+    UrlFilter {
+    override fun addToUrl(url: HttpUrl.Builder) {
+        state.filter { it.state }.forEach { url.addQueryParameter("categories[]", it.slug) }
+    }
+}
