@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.call
@@ -19,6 +18,7 @@ import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -121,7 +121,7 @@ abstract class Comicomoe :
             else -> null
         } ?: return null
         val manga = SManga.create().apply { this.url = mangaId }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga()
     }
 
     override suspend fun fetchMangaUpdate(
@@ -129,11 +129,10 @@ abstract class Comicomoe :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = if (fetchDetails) async { mangaDetails(manga) } else null
-        val chapterList = if (fetchChapters) chapterList(manga.url) else chapters
-        SMangaUpdate(details?.await() ?: manga, chapterList)
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        { if (fetchDetails) mangaDetails(manga) else manga },
+        { if (fetchChapters) chapterList(manga.url) else chapters },
+    )
 
     private suspend fun mangaDetails(manga: SManga): SManga = coroutineScope {
         val metadata = async { client.get(mangaApi(manga.url).addPathSegment("metadata").build(), Fetch.XHR).parseAs<MetadataDto>() }
