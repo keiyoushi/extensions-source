@@ -104,19 +104,68 @@ abstract class MangaKSource :
             )
         }
 
+        val tagText = filters.firstInstanceOrNull<TagFilter>()?.state?.trim().orEmpty()
+        val authorText = filters.firstInstanceOrNull<AuthorFilter>()?.state?.trim().orEmpty()
+        val resolveNames = filters.firstInstanceOrNull<ResolveFilter>()?.state ?: true
+
+        // A text query and a Tag filter are never sent together: ToonTop answers that
+        // combination with HTTP 500 and the other two sites intersect it, which silently
+        // cuts the tag's results. When both are set the tag wins.
+        val canResolve = resolveNames && query.isNotBlank() && tagText.isEmpty() && authorText.isEmpty()
+
+        var target = if (canResolve) searchResolver.resolve(query, filters) else null
+        if (target == null && canResolve) {
+            searchResolver.cachedAuthor(query)?.let { target = MangaKSearchResolver.Target("author", it) }
+        }
+
+        val data = search(page, query, filters, target, minChapters, maxChapters)
+
+        if (page == 1 && data.items.isEmpty()) {
+            // A one-word name cannot be resolved up front without hijacking `solo`, so it
+            // gets one probe once the text search has come back empty.
+            if (canResolve && target == null) {
+                val slug = searchResolver.authorForPlainQuery(query)
+                if (slug != null) {
+                    val retried = search(
+                        page = page,
+                        query = query,
+                        filters = filters,
+                        target = MangaKSearchResolver.Target("author", slug),
+                        minChapters = minChapters,
+                        maxChapters = maxChapters,
+                    )
+                    return MangasPage(retried.items.map { it.toSManga() }, retried.pagination.hasNext)
+                }
+            }
+            maybeSuggest(query, filters)
+        }
+        return MangasPage(data.items.map { it.toSManga() }, data.pagination.hasNext)
+    }
+
+    private suspend fun search(
+        page: Int,
+        query: String,
+        filters: FilterList,
+        target: MangaKSearchResolver.Target?,
+        minChapters: Int?,
+        maxChapters: Int?,
+    ): SearchDataDto {
+        val includedGenres = mutableListOf<String>()
+        val excludedGenres = getExcludedGenres().toMutableSet()
+        val tagText = filters.firstInstanceOrNull<TagFilter>()?.state
+
         val url = "$apiUrl/titles/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", DEFAULT_PAGE_LIMIT)
 
-            if (query.isNotBlank()) {
+            if (target != null) {
+                addQueryParameter(target.parameter, target.value)
+            } else if (query.isNotBlank() && tagText.isNullOrBlank()) {
                 val filteredQuery = query.filter { it.isLetterOrDigit() || it == ' ' }
                     .trim()
                     .take(QUERY_LENGTH_LIMIT)
                 addQueryParameter("q", filteredQuery)
             }
-
-            val includedGenres = mutableListOf<String>()
-            val excludedGenres = getExcludedGenres().toMutableSet()
 
             filters.forEach { filter ->
                 when (filter) {
@@ -140,23 +189,24 @@ abstract class MangaKSource :
                     is FormatFilter -> if (filter.selected.isNotBlank()) addQueryParameter("format", filter.selected)
                     is TagFilter -> if (filter.state.isNotBlank()) addQueryParameter("tag", filter.state.toSlug())
                     is AuthorFilter -> if (filter.state.isNotBlank()) addQueryParameter("author", filter.state.toSlug())
-                    is MinChapterFilter, is MaxChapterFilter -> {}
+                    is MinChapterFilter, is MaxChapterFilter, is ResolveFilter -> {}
                     else -> {}
                 }
+            }
+
+            if (target?.parameter == "genres") {
+                includedGenres.add(target.value)
+                excludedGenres.remove(target.value)
             }
 
             if (minChapters != null) addQueryParameter("min_ch", minChapters.toString())
             if (maxChapters != null) addQueryParameter("max_ch", maxChapters.toString())
 
-            if (includedGenres.isNotEmpty()) addQueryParameter("genres", includedGenres.joinToString(","))
+            if (includedGenres.isNotEmpty()) addQueryParameter("genres", includedGenres.distinct().joinToString(","))
             if (excludedGenres.isNotEmpty()) addQueryParameter("exclude", excludedGenres.joinToString(","))
         }.build()
 
-        val data = client.get(url, Fetch.XHR).parseAs<DataDto<SearchDataDto>>().data
-        if (page == 1 && data.items.isEmpty()) {
-            maybeSuggest(query, filters)
-        }
-        return MangasPage(data.items.map { it.toSManga() }, data.pagination.hasNext)
+        return client.get(url, Fetch.XHR).parseAs<DataDto<SearchDataDto>>().data
     }
 
     // Entries migrated from MangaBuddy keep their old "#id" suffix
@@ -259,6 +309,7 @@ abstract class MangaKSource :
             MinChapterFilter(),
             MaxChapterFilter(),
             TagFilter(),
+            ResolveFilter(),
         )
         if (genres.isNotEmpty()) {
             filters.add(Filter.Separator())
@@ -266,12 +317,6 @@ abstract class MangaKSource :
         }
         return FilterList(filters)
     }
-
-    /**
-     * The site's author and tag params take a lowercase slug. A space or uppercase in
-     * either makes the backend ignore the filter and return the whole catalogue.
-     */
-    private fun String.toSlug() = lowercase().replace(SLUG_DROP_REGEX, "").trim().replace(WHITESPACE_REGEX, "-")
 
     private fun getExcludedGenres(): Set<String> = preferences.getStringSet(PREF_EXCLUDED_GENRES_KEY, emptySet()) ?: emptySet()
 
@@ -290,6 +335,10 @@ abstract class MangaKSource :
 
     private val suggestions by lazy {
         MangaKSuggestions(client, headers, baseUrl, apiUrl, id)
+    }
+
+    private val searchResolver by lazy {
+        MangaKSearchResolver(client, headers, apiUrl)
     }
 
     private suspend fun maybeSuggest(query: String, filters: FilterList) {
@@ -422,7 +471,5 @@ abstract class MangaKSource :
         private const val SORT_LATEST = "latest"
 
         private val IMAGE_FALLBACK_REGEX = """rx\.qvzr[a-z]\.org""".toRegex()
-        private val SLUG_DROP_REGEX = """[^a-z0-9\s-]""".toRegex()
-        private val WHITESPACE_REGEX = """\s+""".toRegex()
     }
 }

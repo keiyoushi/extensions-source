@@ -41,6 +41,7 @@ class MangaItemDto(
 @Serializable
 class PaginationDto(
     @SerialName("has_next") val hasNext: Boolean,
+    @SerialName("total") val total: Int = 0,
 )
 
 @Serializable
