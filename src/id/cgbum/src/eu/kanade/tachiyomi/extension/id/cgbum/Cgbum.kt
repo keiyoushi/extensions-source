@@ -12,10 +12,10 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.sha256
-import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.serialization.json.JsonElement
@@ -100,21 +100,14 @@ abstract class Cgbum : KeiSource() {
             ?.text()
             ?.takeIf { it != "-" }
         genre = buildList {
-            document.select(".comic-genres a.genre-pill").mapTo(this) { it.text() }
             document.selectFirst(".meta-row:has(.meta-label:containsOwn(Tipe)) .meta-value")?.text()?.let(::add)
+            document.select(".comic-genres a.genre-pill").mapTo(this) { it.text() }
         }.joinToString()
-        status = when (document.selectFirst(".comic-cover .badge-status")?.text()?.lowercase()) {
-            "ongoing" -> SManga.ONGOING
-            "tamat" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
-        description = buildString {
-            document.selectFirst(".synopsis-content")?.textOrNull()?.let(::append)
-            document.selectFirst("p.comic-alt-title")?.textOrNull()?.let {
-                if (isNotEmpty()) append("\n\n")
-                append("Judul alternatif: ", it)
-            }
-        }
+        status = parseStatus(document.selectFirst(".comic-cover .badge-status")?.text())
+        description = MarkdownDescription.Builder()
+            .description(document.selectFirst(".synopsis-content"))
+            .altTitles(document.selectFirst("p.comic-alt-title")?.text()?.split(",").orEmpty(), "Judul alternatif")
+            .build()
     }
 
     private fun parseChapters(document: Document): List<SChapter> = document.select(".chapter-grid a.ch-grid-item").map { element ->
@@ -184,6 +177,12 @@ abstract class Cgbum : KeiSource() {
             data?.parseAs<List<String>>()?.let { add(GenreFilter(it)) }
         },
     )
+
+    private fun parseStatus(status: String?): Int = when (status?.lowercase()) {
+        "ongoing" -> SManga.ONGOING
+        "tamat" -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
     companion object {
         private val MANGA_PATHS = setOf("komik", "baca")
