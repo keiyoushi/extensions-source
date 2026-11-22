@@ -7,6 +7,7 @@ import okhttp3.OkHttpClient
 
 @Source
 abstract class LianScans : MangaThemesia() {
+    override val datePattern = "d MMMM yyyy"
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(4)
 

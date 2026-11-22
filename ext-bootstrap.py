@@ -120,9 +120,9 @@ def write_keisource_source(f, classname: str) -> None:
     f.write("import eu.kanade.tachiyomi.source.model.Page\n")
     f.write("import eu.kanade.tachiyomi.source.model.SChapter\n")
     f.write("import eu.kanade.tachiyomi.source.model.SManga\n")
-    f.write("import eu.kanade.tachiyomi.source.model.SMangaUpdate\n")
     f.write("import keiyoushi.annotation.Source\n")
     f.write("import keiyoushi.source.KeiSource\n")
+    f.write("import keiyoushi.source.SMangaUpdate\n")
     f.write("import okhttp3.HttpUrl\n")
     f.write("import java.lang.UnsupportedOperationException\n\n")
 

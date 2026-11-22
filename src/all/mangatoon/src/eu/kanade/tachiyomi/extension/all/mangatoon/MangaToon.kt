@@ -6,17 +6,15 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.md5
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -107,24 +105,22 @@ abstract class MangaToon : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val contentId = manga.contentId
-        val details = if (fetchDetails) {
-            async { api<DetailDto>("/api/content/detail", contentId)!!.toSManga() }
-        } else {
-            null
-        }
-        val episodes = if (fetchChapters) {
-            async {
-                api<List<EpisodeDto>>("/api/content/episodes", contentId)!!
-                    .filterNot { it.isFee }
-                    .map { it.toSChapter(urlLang, contentId) }
-                    .reversed()
-            }
-        } else {
-            null
-        }
-        SMangaUpdate(details?.await() ?: manga, episodes?.await() ?: chapters)
+
+        return SMangaUpdate(
+            manga = { if (fetchDetails) api<DetailDto>("/api/content/detail", contentId)!!.toSManga() else manga },
+            chapters = {
+                if (fetchChapters) {
+                    api<List<EpisodeDto>>("/api/content/episodes", contentId)!!
+                        .filterNot { it.isFee }
+                        .map { it.toSChapter(urlLang, contentId) }
+                        .reversed()
+                } else {
+                    chapters
+                }
+            },
+        )
     }
 
     override fun getChapterUrl(chapter: SChapter): String {

@@ -9,11 +9,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -103,19 +103,10 @@ abstract class Kodansha :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async {
-            if (fetchDetails) {
-                client.get("$API_URL/manga/${manga.url}/v0", Fetch.XHR).parseAs<SeriesDto>().toSMangaDetails()
-            } else {
-                manga
-            }
-        }
-        val chapterList = async {
-            if (fetchChapters) fetchChapterList(manga) else chapters
-        }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) client.get("$API_URL/manga/${manga.url}/v0", Fetch.XHR).parseAs<SeriesDto>().toSMangaDetails() else manga },
+        chapters = { if (fetchChapters) fetchChapterList(manga) else chapters },
+    )
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> = coroutineScope {
         val slug = manga.memo["slug"]!!.stringOrNull!!

@@ -8,18 +8,16 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDateTime
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -95,24 +93,22 @@ abstract class Manhastro :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val mangaId = manga.url.substringAfterLast("/")
 
-        val details = async {
-            if (fetchDetails) {
-                client.get("$apiUrl/dados?manga_id=$mangaId", Fetch.XHR)
-                    .parseAs<ApiResponse<List<MangaDto>>>(transform = ::cleanJsonResponse)
-                    .data.firstOrNull()?.toSManga()
-                    ?: throw Exception("Manga not found")
-            } else {
-                manga
-            }
-        }
-        val chapterList = async {
-            if (fetchChapters) fetchChapterList(mangaId) else chapters
-        }
-
-        SMangaUpdate(details.await(), chapterList.await())
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    client.get("$apiUrl/dados?manga_id=$mangaId", Fetch.XHR)
+                        .parseAs<ApiResponse<List<MangaDto>>>(transform = ::cleanJsonResponse)
+                        .data.firstOrNull()?.toSManga()
+                        ?: throw Exception("Manga not found")
+                } else {
+                    manga
+                }
+            },
+            chapters = { if (fetchChapters) fetchChapterList(mangaId) else chapters },
+        )
     }
 
     // ============================== Chapters ==============================

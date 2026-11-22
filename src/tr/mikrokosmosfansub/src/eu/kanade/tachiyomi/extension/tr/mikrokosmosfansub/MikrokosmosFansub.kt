@@ -5,15 +5,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -47,15 +45,9 @@ abstract class MikrokosmosFansub : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async {
-            if (fetchDetails) {
-                fetchSeries().first { it.slug == manga.url }.toSManga()
-            } else {
-                manga
-            }
-        }
-        val chapterList = async {
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) fetchSeries().first { it.slug == manga.url }.toSManga() else manga },
+        chapters = {
             if (fetchChapters) {
                 fetchChapters(manga.url)
                     .sortedWith(compareByDescending<ChapterDto> { it.number }.thenByDescending { it.publishedDate })
@@ -63,9 +55,8 @@ abstract class MikrokosmosFansub : KeiSource() {
             } else {
                 chapters
             }
-        }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+        },
+    )
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (slug, id) = chapter.url.split('/', limit = 2)

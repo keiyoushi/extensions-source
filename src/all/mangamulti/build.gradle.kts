@@ -6,9 +6,10 @@ plugins {
 
 keiyoushi {
     name = "Manga Multi"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
+    theme = "mangaverse"
 
     source {
         lang = "tr"

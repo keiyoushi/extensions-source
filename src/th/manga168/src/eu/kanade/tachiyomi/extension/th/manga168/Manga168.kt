@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
@@ -99,7 +99,7 @@ abstract class Manga168 : KeiSource() {
         val slug = url.pathSegments.getOrNull(1) ?: return null
         val manga = SManga.create().apply { this.url = "/manga/$slug" }
         return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = true)
-            .manga
+            .manga()
             .apply { initialized = true }
     }
 

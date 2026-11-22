@@ -5,17 +5,15 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getBooleanOrNull
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -77,11 +75,10 @@ abstract class Lemoon : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = if (fetchDetails) async { getDetails(manga.url) } else null
-        val episodes = if (fetchChapters) async { getEpisodes(manga.url) } else null
-        SMangaUpdate(details?.await() ?: manga, episodes?.await() ?: chapters)
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) getDetails(manga.url) else manga },
+        chapters = { if (fetchChapters) getEpisodes(manga.url) else chapters },
+    )
 
     private suspend fun getDetails(id: String): SManga = client.get("$API_URL/comic/$id", apiHeaders, Fetch.XHR).parseAs<ComicDetailsDto>().toSManga()
 
