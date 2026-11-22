@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.vi.goctruyentranhvui
 import android.text.InputType
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,7 +12,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
-import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
@@ -26,7 +24,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.json.JsonElement
-import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -203,100 +200,43 @@ abstract class GocTruyenTranhVui :
         val url = chapter.url
         val slug = url.substringAfter("/truyen/").substringBefore("/chuong-")
         val numberChapter = url.substringAfter("/chuong-").substringBefore("#")
-        val comicId = url.substringAfter("#")
-        val chapterPageUrl = "$baseUrl/truyen/$slug/chuong-$numberChapter"
+        val script = javaClass.getResource("/assets/reader.js")!!.readText()
+        val imageUrls = runWebView(timeout = 30.seconds) {
+            userAgent = headers["User-Agent"]!!
 
-        val useWebViewLoader = preferences.getBoolean(USE_WEBVIEW_LOADER, USE_WEBVIEW_LOADER_DEFAULT)
+            var lastCount = 0
+            var stableCount = 0
+            var pollAttempts = 0
 
-        if (useWebViewLoader) {
-            val script = javaClass.getResource("/assets/reader.js")!!.readText()
-            val imageUrls = runWebView(timeout = 30.seconds) {
-                userAgent = headers["User-Agent"]!!
+            poll(1.seconds) {
+                pollAttempts++
+                evaluateJs(script) { jsonResult ->
+                    val res = jsonResult!!.parseAs<WebViewResultDto>()
 
-                var lastCount = 0
-                var stableCount = 0
-                var pollAttempts = 0
-
-                poll(1.seconds) {
-                    pollAttempts++
-                    evaluateJs(script) { jsonResult ->
-                        val res = jsonResult!!.parseAs<WebViewResultDto>()
-
-                        if (res.needLogin) {
-                            reject(Exception("Để đọc chương này bạn cần đăng nhập trong WebView!"))
-                        } else if (res.urls.isNotEmpty()) {
-                            if (res.urls.size == lastCount) {
-                                stableCount++
-                                if (stableCount >= 2) {
-                                    resolve(res.urls)
-                                }
-                            } else {
-                                lastCount = res.urls.size
-                                stableCount = 0
+                    if (res.needLogin) {
+                        reject(Exception("Để đọc chương này bạn cần đăng nhập trong WebView!"))
+                    } else if (res.urls.isNotEmpty()) {
+                        if (res.urls.size == lastCount) {
+                            stableCount++
+                            if (stableCount >= 2) {
+                                resolve(res.urls)
                             }
-                        } else if (pollAttempts >= 12) {
-                            reject(Exception("Không thể giải mã dữ liệu từ WebView!"))
+                        } else {
+                            lastCount = res.urls.size
+                            stableCount = 0
                         }
+                    } else if (pollAttempts >= 12) {
+                        reject(Exception("Không thể giải mã dữ liệu từ WebView!"))
                     }
                 }
-
-                loadUrl(chapterPageUrl)
             }
 
-            return imageUrls.toPages()
+            loadUrl("$baseUrl/truyen/$slug/chuong-$numberChapter")
         }
 
-        getToken()
-        val body = FormBody.Builder()
-            .add("comicId", comicId)
-            .add("chapterNumber", numberChapter)
-            .add("nameEn", slug)
-            .build()
-
-        suspend fun requestImages(): List<Page>? = client.post(
-            "$baseUrl/api/chapter/loadAll",
-            Fetch.XHR.from(chapterPageUrl),
-            body,
-        ).use { response ->
-            val result = response.parseAs<ResultDto<ImageListDto>>()
-
-            val imageResult = result.result
-            val imageList = imageResult?.data?.takeIf { it.isNotEmpty() }
-
-            // Nếu API đã trả danh sách ảnh, dùng danh sách đó bất kể codeState.
-            if (imageList != null) {
-                return imageList.toPages()
-            }
-
-            // Không có ảnh thì trả lỗi cụ thể nếu API cung cấp.
-            val accessError = when (imageResult?.codeState) {
-                "01" -> "Trang web yêu cầu đăng nhập để đọc chương này."
-                "02" -> "Chương này yêu cầu tài khoản cấp 2+."
-                "03" -> "Trang web từ chối tải chương này (mã 03)."
-                else -> result.errorMessage
-            }
-
-            if (accessError != null) throw Exception(accessError)
-
-            null
+        return imageUrls.mapIndexed { i, imgUrl ->
+            Page(i, imageUrl = if (imgUrl.startsWith("/image/")) baseUrl + imgUrl else imgUrl)
         }
-
-        // Thử lần 1
-        var pages = requestImages()
-        // Nếu thất bại (do hết hạn cookie/phiên làm việc)
-        if (pages == null) {
-            // Gọi "mồi" đến trang chi tiết để làm mới cookie
-            val mangaUrl = "$baseUrl/truyen/$slug"
-            client.get(mangaUrl, Fetch.DOCUMENT).close()
-            // Thử lần 2 sau khi đã có cookie mới
-            pages = requestImages()
-        }
-
-        return pages ?: throw Exception("Không thể tải danh sách ảnh bằng API. Vui lòng kiểm tra đăng nhập")
-    }
-
-    private fun List<String>.toPages() = mapIndexed { i, imgUrl ->
-        Page(i, imageUrl = if (imgUrl.startsWith("/image/")) baseUrl + imgUrl else imgUrl)
     }
 
     private var tokenCache: String? = null
@@ -366,18 +306,9 @@ abstract class GocTruyenTranhVui :
                 true
             }
         }.also(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
-            key = USE_WEBVIEW_LOADER
-            title = "WebView Loader"
-            summary = "Đề xuất bật cho Mihon. Tải ảnh qua WebView giảm trường hợp khóa tài khoản"
-            setDefaultValue(USE_WEBVIEW_LOADER_DEFAULT)
-        }.also(screen::addPreference)
     }
 
     companion object {
-        private const val USE_WEBVIEW_LOADER = "use_webview_loader"
-        private const val USE_WEBVIEW_LOADER_DEFAULT = false
         private const val CUSTOM_TOKEN = "custom_token"
         private val COMIC_ID_REGEX = Regex("""id:\s*"([^"]+)"""")
         private val COMIC_NAME_EN_REGEX = Regex("""nameEn:\s*`([^`]+)`""")
