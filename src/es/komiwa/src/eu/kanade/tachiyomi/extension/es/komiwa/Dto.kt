@@ -1,12 +1,9 @@
 package eu.kanade.tachiyomi.extension.es.komiwa
 
-import android.util.Base64
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.MarkdownDescription
-import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.time.Instant
 
@@ -34,13 +31,8 @@ class CatalogDto(
 )
 
 @Serializable
-class MangaPageDto(
-    val manga: MangaDto,
-    val initialChapters: ChapterListDto,
-)
-
-@Serializable
 class MangaDto(
+    val id: String,
     private val slug: String,
     private val title: String,
     private val cover: String? = null,
@@ -95,23 +87,20 @@ class FiltersDto(
 )
 
 @Serializable
-class ChapterListDto(
-    val chapters: List<ChapterDto>,
-    val hasMore: Boolean,
-)
+class ChapterListDto(val chapters: List<ChapterDto>)
 
 @Serializable
 class ChapterDto(
     val id: String,
     private val number: String,
-    private val title: String? = null,
     private val publishedAt: String? = null,
     private val createdAt: String? = null,
     private val group: TaxonomyDto? = null,
 ) {
     fun toSChapter() = SChapter.create().apply {
         url = id
-        name = title?.ifBlank { null } ?: "Capítulo $number"
+        // The site lists chapters by number; their titles mostly repeat the series title
+        name = "Capítulo $number"
         chapter_number = number.toFloatOrNull() ?: -1f
         scanlator = group?.name
         // The newest chapters can have no publication date yet
@@ -120,34 +109,7 @@ class ChapterDto(
 }
 
 @Serializable
-class ReaderDto(
-    @SerialName("__r")
-    private val encryptedPages: String,
-    @SerialName("__k")
-    private val encryptedKey: String,
-    val manga: ReaderMangaDto,
-) {
-    fun decryptPages(): ReaderPagesDto {
-        val rawKey = Base64.decode(encryptedKey, Base64.URL_SAFE)
-        val key = ByteArray(rawKey.size) { i -> (rawKey[i].toInt() xor (7 * i + 61)).toByte() }
-        val rawPages = Base64.decode(encryptedPages, Base64.URL_SAFE)
-        val json = ByteArray(rawPages.size) { i ->
-            (rawPages[i].toInt() xor key[i % key.size].toInt() xor i).toByte()
-        }
-        return json.decodeToString().parseAs()
-    }
-}
+class LinkedDataDto(val isPartOf: LinkedDataSeriesDto? = null)
 
 @Serializable
-class ReaderPagesDto(
-    @SerialName("p")
-    val pages: List<String>,
-    @SerialName("s")
-    val imageSigs: Map<String, String> = emptyMap(),
-)
-
-@Serializable
-class ReaderChaptersDto(val allChapters: List<ChapterDto>)
-
-@Serializable
-class ReaderMangaDto(val slug: String)
+class LinkedDataSeriesDto(val url: String)
