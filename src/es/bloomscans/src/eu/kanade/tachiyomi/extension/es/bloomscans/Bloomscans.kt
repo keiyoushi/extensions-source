@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.es.bloomscans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
@@ -24,11 +25,16 @@ abstract class Bloomscans : MangaThemesia() {
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::refreshExpiredImage)
 
-    override fun searchMangaUrl(page: Int, query: String) = baseUrl.toHttpUrl().newBuilder()
-        .addPathSegment("page")
-        .addPathSegment(page.toString())
-        .addQueryParameter("s", query)
-        .addPathSegment("")
+    // Text queries use the site's search box
+    override fun searchMangaUrl(page: Int, query: String, filters: FilterList) = if (query.isEmpty()) {
+        super.searchMangaUrl(page, query, filters)
+    } else {
+        baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("page")
+            .addPathSegment(page.toString())
+            .addPathSegment("")
+            .addQueryParameter("s", query)
+    }
 
     override val seriesTitleSelector = ".lrs-title"
     override val seriesThumbnailSelector = "img.lrs-cover"
