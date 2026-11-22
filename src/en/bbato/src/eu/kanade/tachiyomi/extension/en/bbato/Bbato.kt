@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -109,7 +109,7 @@ abstract class Bbato : KeiSource() {
             emptyList(),
             true,
             false,
-        ).manga
+        ).manga()
     }
 
     // ============================== Details & Chapters ==============================
@@ -119,35 +119,36 @@ abstract class Bbato : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val updatedManga = if (fetchDetails) {
-            val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
-            SManga.create().apply {
-                url = manga.url
-                title = document.selectFirst("h1[itemprop=name]")?.text() ?: throw Exception("Missing title")
-                author = document.select(".mt-author-line a").joinToString { it.text() }
-                description = (
-                    document.selectFirst("#synopsisModal p") ?: document.selectFirst(".mt-comic-synopsis p")
-                    )?.text()
-                genre = document.select(".mt-comic-badges a, .mt-hero-genres a").joinToString { it.text() }
-                status = document.selectFirst(".mt-status-tag")?.text().toStatus()
-                thumbnail_url = document.selectFirst(".mt-comic-poster img")?.getImageUrl()
+    ): SMangaUpdate = SMangaUpdate(
+        manga = {
+            if (fetchDetails) {
+                val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+                SManga.create().apply {
+                    url = manga.url
+                    title = document.selectFirst("h1[itemprop=name]")?.text() ?: throw Exception("Missing title")
+                    author = document.select(".mt-author-line a").joinToString { it.text() }
+                    description = (
+                        document.selectFirst("#synopsisModal p") ?: document.selectFirst(".mt-comic-synopsis p")
+                        )?.text()
+                    genre = document.select(".mt-comic-badges a, .mt-hero-genres a").joinToString { it.text() }
+                    status = document.selectFirst(".mt-status-tag")?.text().toStatus()
+                    thumbnail_url = document.selectFirst(".mt-comic-poster img")?.getImageUrl()
+                }
+            } else {
+                manga
             }
-        } else {
-            manga
-        }
-
-        val updatedChapters = if (fetchChapters) {
-            val slug = manga.url.removeSuffix("/").substringAfterLast("/")
-            val chapterHeaders = headersBuilder().add("X-Requested-With", "XMLHttpRequest").build()
-            val responseDto = client.get("$baseUrl/get-chapter-list?slug=$slug", chapterHeaders, Fetch.XHR).parseAs<ChapterListResponse>()
-            responseDto.toSChapterList(slug)
-        } else {
-            chapters
-        }
-
-        return SMangaUpdate(updatedManga, updatedChapters)
-    }
+        },
+        chapters = {
+            if (fetchChapters) {
+                val slug = manga.url.removeSuffix("/").substringAfterLast("/")
+                val chapterHeaders = headersBuilder().add("X-Requested-With", "XMLHttpRequest").build()
+                val responseDto = client.get("$baseUrl/get-chapter-list?slug=$slug", chapterHeaders, Fetch.XHR).parseAs<ChapterListResponse>()
+                responseDto.toSChapterList(slug)
+            } else {
+                chapters
+            }
+        },
+    )
 
     private fun String?.toStatus(): Int = when (this?.trim()?.lowercase(Locale.ENGLISH)) {
         "ongoing", "releasing" -> SManga.ONGOING

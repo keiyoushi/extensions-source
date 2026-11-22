@@ -32,12 +32,13 @@ class FreeReaderAckDto(
     private val sig: String,
 )
 
-// The reader page's `window.__BV_CTX__`
+// The reader page's `window.readerContext`
 @Serializable
 class LectorDto(
     @SerialName("t") val token: String,
     @SerialName("h") val liveKey: String,
     val now: Long,
+    val pages: List<String> = emptyList(),
 )
 
 @Serializable

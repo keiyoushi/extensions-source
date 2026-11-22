@@ -15,7 +15,9 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.time.Instant
 
-private const val CDN_URL = "https://cdn.mediocrescan.com"
+private const val CDN_URL = "https://cdn.laranjatoons.com"
+
+fun coverUrl(id: Int, image: String?) = image?.let { "$CDN_URL/obras/$id/$it" }
 
 @Serializable
 class LoginRequestDto(
@@ -56,7 +58,7 @@ class MangaDto(
         // Same url format as 1.4, so existing library entries and chapters keep matching
         url = "/obra/$id"
         title = nome
-        thumbnail_url = imagem?.let { "$CDN_URL/obras/$id/$it" }
+        thumbnail_url = coverUrl(id, imagem)
     }
 }
 
@@ -74,7 +76,7 @@ class MangaDetailsDto(
     fun toSManga() = SManga.create().apply {
         url = "/obra/$id"
         title = nome
-        thumbnail_url = imagem?.let { "$CDN_URL/obras/$id/$it" }
+        thumbnail_url = coverUrl(id, imagem)
         description = descriptionMarkdown()
         genre = tags.joinToString { it.nome }
         this.status = when (this@MangaDetailsDto.status?.lowercase()) {

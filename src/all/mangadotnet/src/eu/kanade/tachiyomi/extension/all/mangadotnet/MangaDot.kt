@@ -16,12 +16,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
@@ -331,7 +331,7 @@ abstract class MangaDot :
         }
 
         val tmpManga = SManga.create().apply { this.url = mangaUrl }
-        return fetchMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return fetchMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga()
     }
 
     // ============================== Filters ==============================
@@ -478,8 +478,8 @@ abstract class MangaDot :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val detailsDeferred = async {
+    ): SMangaUpdate = SMangaUpdate(
+        manga = {
             if (fetchDetails) {
                 val url = "$baseUrl/manga/${manga.url}.data?_routes=pages/MangaDetailPage".toHttpUrl()
                 val data = client.get(url, Fetch.XHR).use { it.decodeRscAs<Data<MangaData>>().data }
@@ -487,14 +487,9 @@ abstract class MangaDot :
             } else {
                 manga
             }
-        }
-
-        val chaptersDeferred = async {
-            if (fetchChapters) fetchChapterListInternal(manga) else chapters
-        }
-
-        SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
-    }
+        },
+        chapters = { if (fetchChapters) fetchChapterListInternal(manga) else chapters },
+    )
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = coroutineScope {
         val url = "$baseUrl/manga/${manga.url}.data?_routes=pages/MangaDetailPage".toHttpUrl()

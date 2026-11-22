@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
@@ -77,12 +77,10 @@ abstract class ManhuaTop : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) parseDetails(manga, client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()) else manga }
-        val chapterList = async { if (fetchChapters) fetchChapters(mangaPath(manga)) else chapters }
-
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) parseDetails(manga, client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()) else manga },
+        chapters = { if (fetchChapters) fetchChapters(mangaPath(manga)) else chapters },
+    )
 
     private fun parseDetails(manga: SManga, document: Document): SManga = manga.apply {
         title = document.selectFirst("h1#manga-title")!!.text()

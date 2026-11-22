@@ -6,18 +6,16 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.graphQLBody
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.parseGraphQLAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseZonedDateTime
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.OkHttpClient
@@ -174,11 +172,13 @@ abstract class Senkuro : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val mangaId = manga.url.split(",,").first()
-        val details = async { if (fetchDetails) fetchMangaDetails(mangaId) else manga }
-        val chapterList = async { if (fetchChapters) fetchChapterList(manga, mangaId) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
+
+        return SMangaUpdate(
+            manga = { if (fetchDetails) fetchMangaDetails(mangaId) else manga },
+            chapters = { if (fetchChapters) fetchChapterList(manga, mangaId) else chapters },
+        )
     }
 
     private suspend fun fetchMangaDetails(mangaId: String): SManga = graphQL(

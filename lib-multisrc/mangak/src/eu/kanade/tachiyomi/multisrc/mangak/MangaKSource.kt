@@ -11,10 +11,10 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
@@ -35,6 +35,7 @@ abstract class MangaKSource :
     ConfigurableSource {
 
     override val supportsFilterFetching = true
+    override val supportsRelatedMangas = true
     protected open val apiUrl: String
         get() = "https://api." + baseUrl.toHttpUrl().host
 
@@ -62,16 +63,11 @@ abstract class MangaKSource :
             addQueryParameter("window", WINDOW_WEEK)
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", DEFAULT_PAGE_LIMIT)
-
-            val blacklist = getBlacklist()
-            if (blacklist.isNotEmpty()) {
-                addQueryParameter("exclude", blacklist.joinToString(","))
-            }
+            addExcludedGenres()
         }.build()
 
-        val response = client.get(url, Fetch.XHR)
-        val dto = response.parseAs<SearchResponseDto>()
-        return MangasPage(dto.data.items.map { it.toSManga() }, dto.data.pagination.hasNext)
+        val data = client.get(url, Fetch.XHR).parseAs<DataDto<SearchDataDto>>().data
+        return MangasPage(data.items.map { it.toSManga() }, data.pagination.hasNext)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
@@ -79,16 +75,11 @@ abstract class MangaKSource :
             addQueryParameter("sort", SORT_LATEST)
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", DEFAULT_PAGE_LIMIT)
-
-            val blacklist = getBlacklist()
-            if (blacklist.isNotEmpty()) {
-                addQueryParameter("exclude", blacklist.joinToString(","))
-            }
+            addExcludedGenres()
         }.build()
 
-        val response = client.get(url, Fetch.XHR)
-        val dto = response.parseAs<SearchResponseDto>()
-        return MangasPage(dto.data.items.map { it.toSManga() }, dto.data.pagination.hasNext)
+        val data = client.get(url, Fetch.XHR).parseAs<DataDto<SearchDataDto>>().data
+        return MangasPage(data.items.map { it.toSManga() }, data.pagination.hasNext)
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -104,7 +95,7 @@ abstract class MangaKSource :
             }
 
             val includedGenres = mutableListOf<String>()
-            val excludedGenres = getBlacklist().toMutableSet()
+            val excludedGenres = getExcludedGenres().toMutableSet()
 
             filters.forEach { filter ->
                 when (filter) {
@@ -138,21 +129,16 @@ abstract class MangaKSource :
             if (excludedGenres.isNotEmpty()) addQueryParameter("exclude", excludedGenres.joinToString(","))
         }.build()
 
-        val response = client.get(url, Fetch.XHR)
-        val dto = response.parseAs<SearchResponseDto>()
-        return MangasPage(dto.data.items.map { it.toSManga() }, dto.data.pagination.hasNext)
+        val data = client.get(url, Fetch.XHR).parseAs<DataDto<SearchDataDto>>().data
+        return MangasPage(data.items.map { it.toSManga() }, data.pagination.hasNext)
     }
 
     // Entries migrated from MangaBuddy keep their old "#id" suffix
     override fun getMangaUrl(manga: SManga): String {
         val path = manga.url.substringBefore("#")
-        // `path` may be relative or already absolute depending on the API response,
-        // so resolve it against baseUrl instead of blindly concatenating.
         return baseUrl.toHttpUrl().resolve(path)?.toString() ?: (baseUrl + path)
     }
 
-    // `chapter.url` may be relative or already absolute depending on the API response,
-    // so resolve it against baseUrl instead of blindly concatenating.
     override fun getChapterUrl(chapter: SChapter): String = baseUrl.toHttpUrl().resolve(chapter.url)?.toString() ?: (baseUrl + chapter.url)
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -195,7 +181,19 @@ abstract class MangaKSource :
             // The chapter list is cached at the edge for a day
             addQueryParameter("cv", Clock.System.now().toEpochMilliseconds().toString())
         }.build()
-        return client.get(url, Fetch.XHR).parseAs<ChapterListResponseDto>().data.chapters.map { it.toSChapter() }
+        return client.get(url, Fetch.XHR).parseAs<DataDto<ChapterDataDto>>().data.chapters.map { it.toSChapter() }
+    }
+
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+        val id = manga.memo["id"]?.stringOrNull
+            ?: fetchTitle(getMangaUrl(manga))?.id
+            ?: throw Exception("Could not find manga details")
+        val url = "$apiUrl/recommendations".toHttpUrl().newBuilder().apply {
+            addPathSegment(id)
+            addExcludedGenres()
+        }.build()
+
+        return client.get(url, Fetch.XHR).parseAs<DataDto<List<MangaItemDto>>>().data.map { it.toSManga() }
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -215,7 +213,7 @@ abstract class MangaKSource :
     override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres", Fetch.XHR).parseAs<JsonElement>()
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val genres = getGenreList(data, getBlacklist())
+        val genres = getGenreList(data, getExcludedGenres())
 
         val filters = mutableListOf<Filter<*>>(
             SortFilter(),
@@ -239,7 +237,14 @@ abstract class MangaKSource :
 
     private fun String.toTagSlug() = lowercase().replace(TAG_SLUG_DROP_REGEX, "").trim().replace(WHITESPACE_REGEX, "-")
 
-    private fun getBlacklist(): Set<String> = preferences.getStringSet(PREF_BLACKLIST_KEY, emptySet()) ?: emptySet()
+    private fun getExcludedGenres(): Set<String> = preferences.getStringSet(PREF_EXCLUDED_GENRES_KEY, emptySet()) ?: emptySet()
+
+    private fun HttpUrl.Builder.addExcludedGenres() {
+        val excludedGenres = getExcludedGenres()
+        if (excludedGenres.isNotEmpty()) {
+            addQueryParameter("exclude", excludedGenres.joinToString(","))
+        }
+    }
 
     protected open val includeTags: Boolean
         get() = preferences.getBoolean(PREF_INCLUDE_TAGS_KEY, PREF_INCLUDE_TAGS_DEFAULT)
@@ -253,9 +258,9 @@ abstract class MangaKSource :
         }.let(screen::addPreference)
 
         val genres = getFilterList().firstInstanceOrNull<GenreList>()?.state.orEmpty()
-        val blacklistPref = MultiSelectListPreference(screen.context).apply {
-            key = PREF_BLACKLIST_KEY
-            title = "Global Genre Blacklist"
+        MultiSelectListPreference(screen.context).apply {
+            key = PREF_EXCLUDED_GENRES_KEY
+            title = "Excluded genres"
             summary = if (genres.isEmpty()) {
                 "Open search filters in the browse screen once to load and sync genres."
             } else {
@@ -264,12 +269,11 @@ abstract class MangaKSource :
             entries = genres.map { it.name }.toTypedArray()
             entryValues = genres.map { it.value }.toTypedArray()
             setDefaultValue(emptySet<String>())
-        }
-        screen.addPreference(blacklistPref)
+        }.let(screen::addPreference)
     }
 
     companion object {
-        private const val PREF_BLACKLIST_KEY = "pref_blacklist"
+        private const val PREF_EXCLUDED_GENRES_KEY = "pref_blacklist"
         private const val PREF_INCLUDE_TAGS_KEY = "pref_include_tags"
         private const val PREF_INCLUDE_TAGS_DEFAULT = true
         private const val FALLBACK_IMAGE_HOST = "rx.rzyn.net"
