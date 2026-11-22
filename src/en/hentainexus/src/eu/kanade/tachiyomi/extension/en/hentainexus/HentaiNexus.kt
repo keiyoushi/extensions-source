@@ -10,13 +10,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.array
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
@@ -127,7 +127,7 @@ abstract class HentaiNexus :
             listOf(
                 parseMangaResponse(
                     client.get("$baseUrl/view/$id", Fetch.DOCUMENT),
-                ).manga.apply { url = "/view/$id" },
+                ).manga().apply { url = "/view/$id" },
             ),
             false,
         )
@@ -147,7 +147,7 @@ abstract class HentaiNexus :
             ?: throw Exception("Unsupported url")
         return parseMangaResponse(
             client.get("$baseUrl/view/$id", Fetch.DOCUMENT),
-        ).manga.apply { this.url = "/view/$id" }
+        ).manga().apply { this.url = "/view/$id" }
     }
 
     override suspend fun fetchMangaUpdate(

@@ -6,20 +6,18 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.cryptoJsDecrypt
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -96,7 +94,7 @@ abstract class MinoTruyen : KeiSource() {
 
         val bookId = url.pathSegments.getOrNull(categoryIndex + 2)?.toIntOrNull() ?: return null
         val manga = SManga.create().apply { setUrlWithoutDomain("/books/$bookId") }
-        return fetchMangaUpdate(manga, emptyList(), true, false).manga
+        return fetchMangaUpdate(manga, emptyList(), true, false).manga()
     }
 
     override suspend fun fetchMangaUpdate(
@@ -104,32 +102,30 @@ abstract class MinoTruyen : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val bookId = manga.url.substringAfterLast("/")
         val apiUrl = getApiUrl()
-        val mangaDeferred = if (fetchDetails) {
-            async {
-                client.get("$apiUrl/books/$bookId", Fetch.XHR)
-                    .parseAs<BookDetailResponse>()
-                    .toSManga(baseUrl)
-            }
-        } else {
-            null
-        }
-        val chaptersDeferred = if (fetchChapters) {
-            async {
-                val url = "$apiUrl/books/$bookId/chapters".toHttpUrl().newBuilder()
-                    .addQueryParameter("order", "desc")
-                    .build()
-                client.get(url, Fetch.XHR).parseAs<ChaptersResponse>().toSChapterList(bookId)
-            }
-        } else {
-            null
-        }
 
-        SMangaUpdate(
-            manga = mangaDeferred?.await() ?: manga,
-            chapters = chaptersDeferred?.await() ?: chapters,
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    client.get("$apiUrl/books/$bookId", Fetch.XHR)
+                        .parseAs<BookDetailResponse>()
+                        .toSManga(baseUrl)
+                } else {
+                    manga
+                }
+            },
+            chapters = {
+                if (fetchChapters) {
+                    val url = "$apiUrl/books/$bookId/chapters".toHttpUrl().newBuilder()
+                        .addQueryParameter("order", "desc")
+                        .build()
+                    client.get(url, Fetch.XHR).parseAs<ChaptersResponse>().toSChapterList(bookId)
+                } else {
+                    chapters
+                }
+            },
         )
     }
 

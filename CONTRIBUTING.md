@@ -1396,8 +1396,25 @@ API response, fetch and parse it once and return both the updated `SManga` and t
 list, regardless of the `fetchDetails`/`fetchChapters` flags - there's no separate request to skip,
 so honoring the flags would just mean discarding data you already parsed. If details and chapters
 instead live behind separate pages/endpoints, only fetch what each flag actually asks for; when
-both `fetchDetails` and `fetchChapters` are `true`, prefer firing both requests concurrently (e.g.
-with `coroutineScope { async { ... } }`) instead of awaiting them sequentially.
+both `fetchDetails` and `fetchChapters` are `true`, run them concurrently: `fetchMangaUpdate` returns
+`keiyoushi.source.SMangaUpdate` (the callback shape of extensions-lib 1.7), and `KeiSource` runs its `manga` and
+`chapters` callbacks concurrently.
+
+```kotlin
+import keiyoushi.source.SMangaUpdate
+
+override suspend fun fetchMangaUpdate(
+    manga: SManga,
+    chapters: List<SChapter>,
+    fetchDetails: Boolean,
+    fetchChapters: Boolean,
+): SMangaUpdate = SMangaUpdate(
+    manga = { if (fetchDetails) getMangaDetails(manga) else manga },
+    chapters = { if (fetchChapters) getChapterList(manga) else chapters },
+)
+```
+
+`SMangaUpdate(manga, chapters)` takes values for the single-response case.
 
 Behavior `KeiSource` gives you for free:
 

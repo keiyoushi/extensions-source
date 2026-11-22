@@ -10,12 +10,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.XorInterceptor
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
@@ -109,24 +109,13 @@ abstract class Azuki :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val url = "$baseUrl/${manga.url}".toHttpUrl()
         val slug = url.pathSegments.first()
 
-        val details = if (fetchDetails) {
-            async { client.get("$apiUrl/manga/slug/$slug/v0", apiHeaders(), Fetch.XHR).parseAs<DetailsDto>().toSManga() }
-        } else {
-            null
-        }
-        val chapterList = if (fetchChapters) {
-            async { getChapterList(slug, url.fragment!!) }
-        } else {
-            null
-        }
-
-        SMangaUpdate(
-            manga = details?.await() ?: manga,
-            chapters = chapterList?.await() ?: chapters,
+        return SMangaUpdate(
+            manga = { if (fetchDetails) client.get("$apiUrl/manga/slug/$slug/v0", apiHeaders(), Fetch.XHR).parseAs<DetailsDto>().toSManga() else manga },
+            chapters = { if (fetchChapters) getChapterList(slug, url.fragment!!) else chapters },
         )
     }
 

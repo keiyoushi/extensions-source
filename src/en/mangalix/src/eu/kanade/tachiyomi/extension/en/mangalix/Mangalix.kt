@@ -5,18 +5,16 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -93,40 +91,30 @@ abstract class Mangalix : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val slug = manga.url
 
-        val updatedManga = if (fetchDetails) {
-            async {
-                loadCatalog().firstOrNull { it.slug == slug }?.toSManga(baseUrl) ?: manga
-            }
-        } else {
-            null
-        }
-
-        val updatedChapters = if (fetchChapters) {
-            async {
-                readChapters(slug).distinctBy { it.id to it.number }.map { chapter ->
-                    SChapter.create().apply {
-                        val number = chapter.number.toString().removeSuffix(".0")
-                        url = chapter.id
-                        memo = buildJsonObject {
-                            put("slug", slug)
-                            put("number", number)
+        return SMangaUpdate(
+            manga = { if (fetchDetails) loadCatalog().firstOrNull { it.slug == slug }?.toSManga(baseUrl) ?: manga else manga },
+            chapters = {
+                if (fetchChapters) {
+                    readChapters(slug).distinctBy { it.id to it.number }.map { chapter ->
+                        SChapter.create().apply {
+                            val number = chapter.number.toString().removeSuffix(".0")
+                            url = chapter.id
+                            memo = buildJsonObject {
+                                put("slug", slug)
+                                put("number", number)
+                            }
+                            name = chapter.title.ifBlank { "Chapter $number" }
+                            chapter_number = chapter.number.toFloat()
+                            date_upload = chapter.releaseDate.toMangaTimestamp()
                         }
-                        name = chapter.title.ifBlank { "Chapter $number" }
-                        chapter_number = chapter.number.toFloat()
-                        date_upload = chapter.releaseDate.toMangaTimestamp()
                     }
+                } else {
+                    chapters
                 }
-            }
-        } else {
-            null
-        }
-
-        SMangaUpdate(
-            manga = updatedManga?.await() ?: manga,
-            chapters = updatedChapters?.await() ?: chapters,
+            },
         )
     }
 

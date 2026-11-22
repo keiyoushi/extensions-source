@@ -6,10 +6,10 @@ import eu.kanade.tachiyomi.multisrc.mccms.ResultDto
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -47,7 +47,7 @@ abstract class TibiuComics : MCCMS() {
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
         val chapterList = async { if (fetchChapters) fetchChapterList(manga) else chapters }
-        val details = super.fetchMangaUpdate(manga, chapters, fetchDetails, fetchChapters = false).manga
+        val details = super.fetchMangaUpdate(manga, chapters, fetchDetails, fetchChapters = false).manga()
         SMangaUpdate(details, chapterList.await())
     }
 
