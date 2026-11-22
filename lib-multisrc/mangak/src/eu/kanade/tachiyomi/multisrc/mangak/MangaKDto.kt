@@ -28,6 +28,8 @@ class MangaItemDto(
     private val cover: String? = null,
     private val url: String,
 ) {
+    fun titleMatches(text: String) = name.contains(text, ignoreCase = true)
+
     fun toSManga() = SManga.create().apply {
         title = name
         thumbnail_url = cover

@@ -120,10 +120,17 @@ abstract class MangaKSource :
 
         val data = search(page, query, filters, target, minChapters, maxChapters)
 
-        if (page == 1 && data.items.isEmpty()) {
+        if (page == 1 && canResolve && target == null) {
             // A one-word name cannot be resolved up front without hijacking `solo`, so it
-            // gets one probe once the text search has come back empty.
-            if (canResolve && target == null) {
+            // is probed after the text search. That search is fuzzy — `Gurodi` returns six
+            // titles that never mention the name — so a page with no title containing the
+            // query counts as a miss, not only an empty page.
+            val searched = query.filter { it.isLetterOrDigit() || it == ' ' }
+                .trim()
+                .take(QUERY_LENGTH_LIMIT)
+            val titleHit = data.items.any { it.titleMatches(searched) }
+
+            if (!titleHit) {
                 val slug = searchResolver.authorForPlainQuery(query)
                 if (slug != null) {
                     val retried = search(
@@ -137,6 +144,8 @@ abstract class MangaKSource :
                     return MangasPage(retried.items.map { it.toSManga() }, retried.pagination.hasNext)
                 }
             }
+        }
+        if (page == 1 && data.items.isEmpty()) {
             maybeSuggest(query, filters)
         }
         return MangasPage(data.items.map { it.toSManga() }, data.pagination.hasNext)
