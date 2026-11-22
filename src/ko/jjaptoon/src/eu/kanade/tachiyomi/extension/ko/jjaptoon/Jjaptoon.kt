@@ -128,8 +128,9 @@ abstract class Jjaptoon : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
+        // The reader may show a watermarked copy of the original in data-original
         return document.select("div[data-reader-image] img").mapIndexed { i, img ->
-            Page(i, imageUrl = img.absUrl("src"))
+            Page(i, imageUrl = img.absUrl("data-original").ifEmpty { img.absUrl("src") })
         }
     }
 
