@@ -5,14 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -77,21 +75,21 @@ abstract class MangaTube : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val slug = manga.url.substringAfterLast("/")
 
-        val details = async { if (fetchDetails) fetchMangaDetails(slug) else manga }
-        val chapterList = async {
-            if (fetchChapters) {
-                client.get("$baseUrl/api/manga/$slug/chapters", mangaApiHeaders(slug), Fetch.XHR)
-                    .parseAs<MangaChaptersResponse>()
-                    .toSChapters(slug)
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(details.await(), chapterList.await())
+        return SMangaUpdate(
+            manga = { if (fetchDetails) fetchMangaDetails(slug) else manga },
+            chapters = {
+                if (fetchChapters) {
+                    client.get("$baseUrl/api/manga/$slug/chapters", mangaApiHeaders(slug), Fetch.XHR)
+                        .parseAs<MangaChaptersResponse>()
+                        .toSChapters(slug)
+                } else {
+                    chapters
+                }
+            },
+        )
     }
 
     private suspend fun fetchMangaDetails(slug: String): SManga = client.get("$baseUrl/api/manga/$slug", mangaApiHeaders(slug), Fetch.XHR)

@@ -6,15 +6,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -141,32 +139,28 @@ abstract class MiMi : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val id = manga.url.substringAfterLast("/")
 
-        val detailsDeferred = if (fetchDetails) {
-            async {
-                client.get("$apiUrl/manga/$id", Fetch.XHR).use {
-                    it.parseAs<MangaDto>().toSManga()
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    client.get("$apiUrl/manga/$id", Fetch.XHR).use {
+                        it.parseAs<MangaDto>().toSManga()
+                    }
+                } else {
+                    manga
                 }
-            }
-        } else {
-            null
-        }
-
-        val chaptersDeferred = if (fetchChapters) {
-            async {
-                client.get("$apiUrl/manga/$id/chapters", Fetch.XHR).use { response ->
-                    response.parseAs<List<ChapterDto>>().map { it.toSChapter(id) }
+            },
+            chapters = {
+                if (fetchChapters) {
+                    client.get("$apiUrl/manga/$id/chapters", Fetch.XHR).use { response ->
+                        response.parseAs<List<ChapterDto>>().map { it.toSChapter(id) }
+                    }
+                } else {
+                    chapters
                 }
-            }
-        } else {
-            null
-        }
-
-        SMangaUpdate(
-            manga = detailsDeferred?.await() ?: manga,
-            chapters = chaptersDeferred?.await() ?: chapters,
+            },
         )
     }
 

@@ -6,12 +6,12 @@ plugins {
 
 keiyoushi {
     name = "Mediocre Toons"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
         lang = "pt-BR"
-        baseUrl = "https://mediocrescan.com"
+        baseUrl = "https://laranjatoons.com"
     }
 }

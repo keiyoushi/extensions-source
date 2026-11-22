@@ -5,11 +5,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDateTime
 import kotlinx.coroutines.async
@@ -109,36 +109,35 @@ abstract class ZonatmoTo : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ) = coroutineScope {
+    ): SMangaUpdate {
         val mangaUrl = "$apiUrl/single/manga/${manga.url}"
 
-        val updatedManga = async {
-            if (fetchDetails) {
-                client.get(mangaUrl, Fetch.XHR).parseAs<SingleMangaResponseDto>()
-                    .data
-                    ?.toSManga()
-                    ?: throw Exception("Unable to parse manga details")
-            } else {
-                manga
-            }
-        }
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    client.get(mangaUrl, Fetch.XHR).parseAs<SingleMangaResponseDto>()
+                        .data
+                        ?.toSManga()
+                        ?: throw Exception("Unable to parse manga details")
+                } else {
+                    manga
+                }
+            },
+            chapters = {
+                if (fetchChapters) {
+                    val chaptersUrl = mangaUrl.toHttpUrl().newBuilder()
+                        .addPathSegment("chapters")
+                        .addQueryParameter("page", "1")
+                        .addQueryParameter("postsPerPage", CHAPTERS_PER_PAGE.toString())
+                        .addQueryParameter("order", "asc")
+                        .build()
 
-        val updatedChapters = async {
-            if (fetchChapters) {
-                val chaptersUrl = mangaUrl.toHttpUrl().newBuilder()
-                    .addPathSegment("chapters")
-                    .addQueryParameter("page", "1")
-                    .addQueryParameter("postsPerPage", CHAPTERS_PER_PAGE.toString())
-                    .addQueryParameter("order", "asc")
-                    .build()
-
-                getChapters(chaptersUrl, manga.url)
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(updatedManga.await(), updatedChapters.await())
+                    getChapters(chaptersUrl, manga.url)
+                } else {
+                    chapters
+                }
+            },
+        )
     }
 
     override fun getChapterUrl(chapter: SChapter): String {

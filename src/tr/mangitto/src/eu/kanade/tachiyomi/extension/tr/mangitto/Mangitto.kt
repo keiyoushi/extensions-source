@@ -5,17 +5,15 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getString
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -114,16 +112,10 @@ abstract class Mangitto : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async {
-            if (fetchDetails) client.get("$apiUrl/${manga.url}", Fetch.XHR).parseAs<MangttoDetailData>().toSManga() else manga
-        }
-        val chapterList = async {
-            if (fetchChapters) fetchAllChapters(manga.url) else chapters
-        }
-
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) client.get("$apiUrl/${manga.url}", Fetch.XHR).parseAs<MangttoDetailData>().toSManga() else manga },
+        chapters = { if (fetchChapters) fetchAllChapters(manga.url) else chapters },
+    )
 
     private suspend fun fetchAllChapters(slug: String): List<SChapter> {
         val allChapters = mutableListOf<SChapter>()

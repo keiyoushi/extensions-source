@@ -7,6 +7,8 @@ import keiyoushi.annotation.Source
 
 @Source
 abstract class StrayFansub : MangaThemesia() {
+    override val datePattern = "d MMMM yyyy"
+
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val pageList = super.getPageList(chapter)
         if (
