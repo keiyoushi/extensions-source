@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.xxxyaoi
 
 import android.webkit.CookieManager
+import keiyoushi.utils.TURNSTILE_AREA
 import keiyoushi.utils.runWebViewBlocking
 import okhttp3.Interceptor
 import okhttp3.Request
@@ -8,6 +9,7 @@ import okhttp3.Response
 import java.io.IOException
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 /**
  * Passes Cloudflare's challenge in a WebView with an empty X-Requested-With: the site refuses the app's package name there.
@@ -42,8 +44,13 @@ class ChallengeInterceptor : Interceptor {
             runWebViewBlocking<Unit>(chain.call(), TIMEOUT) {
                 userAgent = request.header("User-Agent")!!
                 setOriginMatchedHeader("X-Requested-With", "", setOf(origin))
+                val start = TimeSource.Monotonic.markNow()
                 poll(POLL_INTERVAL) {
-                    if (clearance(origin).let { it != null && it != previous }) resolve(Unit)
+                    when {
+                        clearance(origin).let { it != null && it != previous } -> resolve(Unit)
+                        // The check usually passes by itself within a few seconds, otherwise it wants a tap
+                        start.elapsedNow() > SHOW_AFTER -> showToUser(TURNSTILE_AREA)
+                    }
                 }
                 loadUrl(request.url.toString())
             }
@@ -63,5 +70,6 @@ class ChallengeInterceptor : Interceptor {
     companion object {
         private val TIMEOUT = 60.seconds
         private val POLL_INTERVAL = 250.milliseconds
+        private val SHOW_AFTER = 10.seconds
     }
 }
