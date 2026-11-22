@@ -5,18 +5,16 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -65,7 +63,7 @@ abstract class LycanToons : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.getOrNull(0) != "series") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotEmpty) ?: return null
         val manga = SManga.create().apply { this.url = "/series/$slug" }
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga()
     }
 
     override suspend fun fetchMangaUpdate(
@@ -73,28 +71,21 @@ abstract class LycanToons : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val slug = manga.slug()
 
-        val details = async {
-            if (fetchDetails) {
-                client.get("$baseUrl/series/$slug", Fetch.XHR).extractNextJs<SeriesDto>()!!.toSManga()
-            } else {
-                manga
-            }
-        }
-
-        val chapterList = async {
-            if (fetchChapters) {
-                client.get("$baseUrl/series/$slug/1", Fetch.XHR).extractNextJs<ChapterResponse>()!!.capitulos
-                    .map { it.toSChapter(slug) }
-                    .sortedByDescending { it.chapter_number }
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(details.await(), chapterList.await())
+        return SMangaUpdate(
+            manga = { if (fetchDetails) client.get("$baseUrl/series/$slug", Fetch.XHR).extractNextJs<SeriesDto>()!!.toSManga() else manga },
+            chapters = {
+                if (fetchChapters) {
+                    client.get("$baseUrl/series/$slug/1", Fetch.XHR).extractNextJs<ChapterResponse>()!!.capitulos
+                        .map { it.toSChapter(slug) }
+                        .sortedByDescending { it.chapter_number }
+                } else {
+                    chapters
+                }
+            },
+        )
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {

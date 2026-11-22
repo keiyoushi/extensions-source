@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.bendezomnihero
 
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -18,24 +19,18 @@ class BloggerText(@SerialName("\$t") val text: String)
 
 @Serializable
 class BloggerLink(
-    private val rel: String,
-    private val href: String,
-) {
-    fun isAlternate(): Boolean = rel == "alternate"
-
-    fun href(): String = href
-}
+    val rel: String,
+    val href: String,
+)
 
 @Serializable
 class BloggerEntry(
     val title: BloggerText,
-    val content: BloggerText? = null,
-    val published: BloggerText? = null,
-    val link: List<BloggerLink> = emptyList(),
+    val content: BloggerText?,
+    val published: BloggerText?,
+    val link: List<BloggerLink>,
 ) {
-    fun feedTitle(): String = title.text
-
-    fun postPath(): String = link.first(BloggerLink::isAlternate).href().toHttpUrl().encodedPath
+    fun postPath(): String = link.first { it.rel == "alternate" }.href.toHttpUrl().encodedPath
 
     fun publishedEpoch(): Long = Instant.tryParse(published?.text)
 
@@ -45,9 +40,10 @@ class BloggerEntry(
 
     fun toPostManga(): SManga = SManga.create().apply {
         url = postPath()
-        title = feedTitle().ifBlank { error("Post at ${postPath()} has no title") }
+        title = this@BloggerEntry.title.text.ifBlank { error("Post at ${postPath()} has no title") }
         thumbnail_url = firstImageUrl()
         status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 
     private fun inlineImageCount(): Int = content?.text?.let { inlineImageRegex.findAll(it).count() } ?: 0

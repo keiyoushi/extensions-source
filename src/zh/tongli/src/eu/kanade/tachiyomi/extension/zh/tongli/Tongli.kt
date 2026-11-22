@@ -10,17 +10,15 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -96,27 +94,26 @@ abstract class Tongli :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val id = manga.url.substringBefore(",")
         val isSerial = manga.url.substringAfter(",")
 
-        val updatedManga = async {
-            if (fetchDetails) getMangaDetails(id, isSerial) else manga
-        }
-        val updatedChapters = async {
-            if (fetchChapters) {
-                client.get(
-                    "$apiUrl/Book/BookVol/$id?bookID=null&isSerial=$isSerial",
-                    headersBuilder().addToken(getToken()),
-                    Fetch.XHR,
-                ).parseAs<List<ChapterDto>>().mapNotNull {
-                    it.toSChapter()
-                }.reversed()
-            } else {
-                chapters
-            }
-        }
-        SMangaUpdate(updatedManga.await(), updatedChapters.await())
+        return SMangaUpdate(
+            manga = { if (fetchDetails) getMangaDetails(id, isSerial) else manga },
+            chapters = {
+                if (fetchChapters) {
+                    client.get(
+                        "$apiUrl/Book/BookVol/$id?bookID=null&isSerial=$isSerial",
+                        headersBuilder().addToken(getToken()),
+                        Fetch.XHR,
+                    ).parseAs<List<ChapterDto>>().mapNotNull {
+                        it.toSChapter()
+                    }.reversed()
+                } else {
+                    chapters
+                }
+            },
+        )
     }
 
     private suspend fun getMangaDetails(id: String, isSerial: String) = client.get(

@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.string
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
@@ -17,7 +18,6 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonPrimitive
 import java.util.Locale
 import kotlin.time.Instant
 
@@ -37,19 +37,19 @@ class LunarMangaResponse(
 class LunarMangaDto(
     val slug: String,
     val title: String,
-    val description: String? = null,
-    @SerialName("cover_url") val coverUrl: String? = null,
-    val genres: String? = null,
-    @SerialName("publication_status") val publicationStatus: String? = null,
-    val author: String? = null,
-    val artist: String? = null,
-    @SerialName("alternative_titles") val alternativeTitles: String? = null,
-    val demographic: String? = null,
-    val themes: String? = null,
-    private val rating: String? = null,
-    @SerialName("publication_year") private val publicationYear: Int? = null,
-    private val publisher: String? = null,
-    private val serialization: String? = null,
+    val description: String?,
+    @SerialName("cover_url") val coverUrl: String?,
+    val genres: String?,
+    @SerialName("publication_status") val publicationStatus: String?,
+    val author: String?,
+    val artist: String?,
+    @SerialName("alternative_titles") val alternativeTitles: String?,
+    val demographic: String?,
+    val themes: String?,
+    private val rating: String?,
+    @SerialName("publication_year") private val publicationYear: Int?,
+    private val publisher: String?,
+    private val serialization: String?,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         title = this@LunarMangaDto.title
@@ -91,11 +91,11 @@ class LunarChapterListResponse(
 @Serializable
 class LunarChapterDto(
     val chapter: String,
-    @SerialName("chapter_number") val chapterNumber: Float? = null,
-    @SerialName("chapter_title") val chapterTitle: String? = null,
+    @SerialName("chapter_number") val chapterNumber: Float?,
+    @SerialName("chapter_title") val chapterTitle: String?,
     val language: String,
-    @SerialName("uploaded_at") val uploadedAt: String? = null,
-    @SerialName("uploader_profile") val uploaderProfile: LunarUploaderDto? = null,
+    @SerialName("uploaded_at") val uploadedAt: String?,
+    @SerialName("uploader_profile") val uploaderProfile: LunarUploaderDto?,
 ) {
     fun toSChapter(mangaSlug: String, isLocked: Boolean, showLanguage: Boolean): SChapter = SChapter.create().apply {
         url = "/manga/$mangaSlug/$chapter?lang=$language"
@@ -166,7 +166,7 @@ class LunarSeedPropsDto(private val props: Map<String, String>) {
     private fun parseHeader(name: String, value: String): SeedHeader? {
         val decoded = try {
             Base64.decode(value.reversed(), Base64.DEFAULT)
-        } catch (_: Exception) {
+        } catch (_: IllegalArgumentException) {
             return null
         }
 
@@ -282,7 +282,7 @@ class LunarSeedPropsDto(private val props: Map<String, String>) {
         fun matches(element: JsonElement): Boolean = element is JsonObject &&
             element.isNotEmpty() &&
             element.values.all { it is JsonPrimitive && it.isString } &&
-            LunarSeedPropsDto(element.mapValues { (_, value) -> value.jsonPrimitive.content }).toSeeds() != null
+            LunarSeedPropsDto(element.mapValues { (_, value) -> value.string }).toSeeds() != null
     }
 }
 
@@ -309,11 +309,10 @@ class LunarPageListData(
 @Serializable
 class LunarPageListDecrypted(
     val data: LunarPageListData,
-    val slug: String? = null,
-    val v4: String? = null,
-    val veil: List<String?>? = null,
-    @SerialName("cache_status") val cacheStatus: String? = null,
-    @SerialName("cache_ttl") val cacheTtl: Long? = null,
+    val slug: String?,
+    val veil: List<String?>?,
+    @SerialName("cache_status") val cacheStatus: String?,
+    @SerialName("cache_ttl") val cacheTtl: Long?,
 )
 
 @Serializable
@@ -337,8 +336,8 @@ class LunarPasswordInfoResponse(
 
 @Serializable
 class LunarChapterPasswordDto(
-    @SerialName("chapter_number") val chapterNumber: String? = null,
-    val language: String? = null,
+    @SerialName("chapter_number") val chapterNumber: String?,
+    val language: String?,
 )
 
 @Serializable
@@ -360,7 +359,7 @@ class LunarFacetDto(
 
 @Serializable
 class LunarUploaderDto(
-    val username: String? = null,
+    val username: String?,
 )
 
 @Serializable
@@ -372,7 +371,7 @@ class LunarSimilarResponse(
 class LunarSimilarDto(
     private val slug: String,
     private val title: String,
-    @SerialName("cover_url") private val coverUrl: String? = null,
+    @SerialName("cover_url") private val coverUrl: String?,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         url = "/manga/$slug"
@@ -381,10 +380,11 @@ class LunarSimilarDto(
     }
 }
 
+// Member order as the site's client writes it into the proof header
 @Serializable
 class SerenityJwk(
-    val crv: String,
     val kty: String,
+    val crv: String,
     val x: String,
     val y: String,
 )

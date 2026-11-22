@@ -26,7 +26,8 @@ class MirrorPreferences(
         }
     }
 
-    private val mirrors: List<Pair<String, String>>
+    /** The mirrors in use: the fetched urls if any, else the hardcoded ones. */
+    val mirrors: List<Pair<String, String>>
         get() = preferences.getString(fetchedKey, null)?.split(",")?.map { "" to it } ?: defaultMirrors.asList()
 
     private val index: Int

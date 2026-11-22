@@ -159,9 +159,9 @@ class SourceProcessor(
             return emptyList()
         }
 
-        // any overrides below HttpSource
+        // any overrides below HttpSource; findOverridee, as KSP leaves OVERRIDE out of modifiers for compiled (theme) declarations
         val overridden = annotated.getAllProperties()
-            .filter { Modifier.OVERRIDE in it.modifiers && Modifier.ABSTRACT !in it.modifiers }
+            .filter { it.findOverridee() != null && Modifier.ABSTRACT !in it.modifiers }
             .filter { prop ->
                 val owner = prop.parentDeclaration as? KSClassDeclaration
                 owner != null && owner.qualifiedName?.asString() != HTTP_SOURCE && owner.derivesFromHttpSource()
@@ -170,7 +170,7 @@ class SourceProcessor(
             .toSet()
             .plus(
                 annotated.getAllFunctions()
-                    .filter { it.simpleName.asString() == "fetchBaseUrls" && Modifier.OVERRIDE in it.modifiers }
+                    .filter { it.simpleName.asString() == "fetchBaseUrls" && it.findOverridee() != null }
                     .map { it.simpleName.asString() },
             )
 

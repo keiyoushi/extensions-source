@@ -10,14 +10,14 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.source.SMangaUpdate
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -87,10 +87,16 @@ abstract class Kensscan :
     ): SMangaUpdate {
         if (!fetchDetails) return SMangaUpdate(manga, super.fetchMangaUpdate(manga, chapters, false, fetchChapters).chapters)
         val update = super.fetchMangaUpdate(manga, chapters, true, fetchChapters)
-        update.manga.genre = manga.genre
-        update.manga.status = manga.status
-        searchCard(update.manga.url, update.manga.title)?.let { update.manga.applySearchCard(it) }
-        return update
+        return SMangaUpdate(
+            manga = {
+                update.manga().also { details ->
+                    details.genre = manga.genre
+                    details.status = manga.status
+                    searchCard(details.url, details.title)?.let { details.applySearchCard(it) }
+                }
+            },
+            chapters = update.chapters,
+        )
     }
 
     override fun chapterFromElement(element: Element, mangaPath: String): SChapter? {
@@ -148,9 +154,11 @@ abstract class Kensscan :
         artist = card.select(".mg_artists .summary-content a").eachText().joinToString().ifBlank { null }
         card.select(".mg_genres a").eachText().joinToString().ifBlank { null }?.let { genre = it }
         card.selectFirst(".mg_status .summary-content")?.text()?.let { status = it.toStatus() }
-        card.selectFirst(".mg_alternative .summary-content")?.textOrNull()?.let { alternative ->
-            description = listOfNotNull(description, "${intl["alt_names_heading"]} $alternative").joinToString("\n\n")
-        }
+        val alternative = card.selectFirst(".mg_alternative .summary-content")?.text()?.takeIf { it != title && !isUpdating(it) }
+        description = MarkdownDescription.Builder()
+            .markdown(description)
+            .altTitles(listOfNotNull(alternative), intl["alt_names_heading"].removeSuffix(":"))
+            .build()
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

@@ -6,13 +6,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
@@ -297,7 +297,6 @@ abstract class LunarAnime : KeiSource() {
         val images = data.images
         return cacheStatus == "revalidate" ||
             slug == "unknown" ||
-            v4 == null ||
             images.isEmpty() ||
             images.all { DECOY_PATH in it }
     }

@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
@@ -108,7 +108,7 @@ abstract class MiMiHentai : KeiSource() {
         val manga = SManga.create().apply {
             setUrlWithoutDomain("/truyen/$slug")
         }
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga()
     }
 
     // =============================== Details ==============================

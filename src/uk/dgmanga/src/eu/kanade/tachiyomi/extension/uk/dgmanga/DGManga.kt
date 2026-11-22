@@ -10,15 +10,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -104,17 +102,16 @@ abstract class DGManga :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val mangaAsync = async {
+    ): SMangaUpdate = SMangaUpdate(
+        manga = {
             if (fetchDetails) {
                 val url = "$apiUrl/titles/${manga.url}"
                 client.get(url, Fetch.XHR).use { it.parseAs<SMangaDto>().toSManga() }
             } else {
                 manga
             }
-        }
-
-        val chaptersAsync = async {
+        },
+        chapters = {
             if (fetchChapters) {
                 val chaptersUrl = "$apiUrl/chapters/title/${manga.url}"
                 val data = client.get(chaptersUrl, Fetch.XHR).use { it.parseAs<List<ChapterResponseDto>>() }
@@ -122,10 +119,8 @@ abstract class DGManga :
             } else {
                 chapters
             }
-        }
-
-        SMangaUpdate(mangaAsync.await(), chaptersAsync.await())
-    }
+        },
+    )
 
     // ============================== Manga/Chapters ===============================
     // WebView url

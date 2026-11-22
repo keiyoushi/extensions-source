@@ -7,18 +7,6 @@ class InfoWrapperDto<T>(
 )
 
 @Serializable
-class PageWrapperDto<T>(
-    val pagination: NavDto,
-    val mangas: List<T>,
-) {
-    @Serializable
-    class NavDto(
-        val current_page: Int,
-        val last_page: Int,
-    )
-}
-
-@Serializable
 class MangaDetDto(
     val id: Long,
     val name: String,
@@ -107,4 +95,10 @@ class ChapterDataDto(
 @Serializable
 class ChapterPageDto(
     val url: String,
+)
+
+// Відповідь пошуку /manga/search/: HTML-фрагмент у полі templateHtml
+@Serializable
+class SearchDto(
+    val templateHtml: String,
 )

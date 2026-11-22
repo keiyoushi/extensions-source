@@ -11,6 +11,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -147,8 +148,12 @@ abstract class RizzComic : MangaThemesiaAlt() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ) = super.fetchMangaUpdate(manga, chapters, fetchDetails, fetchChapters).apply {
-        this.manga.description = manga.description
+    ): SMangaUpdate {
+        val update = super.fetchMangaUpdate(manga, chapters, fetchDetails, fetchChapters)
+        return SMangaUpdate(
+            manga = { update.manga().apply { description = manga.description } },
+            chapters = update.chapters,
+        )
     }
 
     private fun String.capitalize() = replaceFirstChar {

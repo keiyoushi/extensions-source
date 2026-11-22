@@ -10,16 +10,14 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -143,34 +141,33 @@ abstract class Zenko :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val mangaId = manga.url.substringAfter("titles/")
 
-        val mangaAsync = async {
-            if (fetchDetails) {
-                val lang = isEng()
-                val url = "$apiUrl/titles/$mangaId"
-                val data = client.get(url, Fetch.XHR).use { it.parseAs<MangaDetailsResponse>() }
-                data.toSManga(lang, imgUrl)
-            } else {
-                manga
-            }
-        }
-
-        val chaptersAsync = async {
-            if (fetchChapters) {
-                val chaptersUrl = "$apiUrl/titles/$mangaId/chapters"
-                val data = client.get(chaptersUrl, Fetch.XHR).use { it.parseAs<List<ChapterResponseItem>>() }
-                data.sortedByDescending { item ->
-                    val id = StringProcessor.generateId(item.name)
-                    if (id > 0) id else item.id.toDouble()
-                }.map { it.toSChapter() }
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(mangaAsync.await(), chaptersAsync.await())
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    val lang = isEng()
+                    val url = "$apiUrl/titles/$mangaId"
+                    val data = client.get(url, Fetch.XHR).use { it.parseAs<MangaDetailsResponse>() }
+                    data.toSManga(lang, imgUrl)
+                } else {
+                    manga
+                }
+            },
+            chapters = {
+                if (fetchChapters) {
+                    val chaptersUrl = "$apiUrl/titles/$mangaId/chapters"
+                    val data = client.get(chaptersUrl, Fetch.XHR).use { it.parseAs<List<ChapterResponseItem>>() }
+                    data.sortedByDescending { item ->
+                        val id = StringProcessor.generateId(item.name)
+                        if (id > 0) id else item.id.toDouble()
+                    }.map { it.toSChapter() }
+                } else {
+                    chapters
+                }
+            },
+        )
     }
 
     // =========================== Related Manga (Komikku) ============================

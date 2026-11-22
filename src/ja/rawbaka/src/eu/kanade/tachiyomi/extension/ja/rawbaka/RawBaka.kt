@@ -1,28 +1,44 @@
 package eu.kanade.tachiyomi.extension.ja.rawbaka
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Rect
+import android.util.Base64
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
+import keiyoushi.utils.readIntLittleEndian
 import keiyoushi.utils.tryParseDate
+import keiyoushi.utils.xorInPlace
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.TextNode
+import java.io.IOException
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class RawBaka : KeiSource() {
+
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::descrambleImage)
 
     // The site ranks popularity only in a five-title homepage slider, so Popular lists the whole catalogue
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -106,9 +122,72 @@ abstract class RawBaka : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        return document.select("div.reader-images img").mapIndexed { index, img ->
-            Page(index, imageUrl = img.absUrl("src"))
+        val state = document.selectFirst("script.mr-state")
+            ?: return document.select("div.reader-images img").mapIndexed { index, img ->
+                Page(index, imageUrl = img.absUrl("src"))
+            }
+        val imageUrls = decodeReaderState(state.data().trim())
+        return document.select("div.reader-images figure.mr-page").mapIndexed { index, figure ->
+            Page(index, imageUrl = imageUrls.getValue(figure.attr("data-r")))
         }
+    }
+
+    // Base64 of a version byte, a 32-byte XOR key and the reversed payload: count, then id, url and 3x3 tile order per page
+    private fun decodeReaderState(state: String): Map<String, String> {
+        val bytes = Base64.decode(state, Base64.DEFAULT)
+        val payload = bytes.copyOfRange(33, bytes.size).xorInPlace(bytes.copyOfRange(1, 33)).reversedArray()
+        var offset = 4
+        return List(payload.readIntLittleEndian(0)) {
+            val id = payload.toHexString(offset, offset + 8)
+            val length = payload.readIntLittleEndian(offset + 8)
+            offset += 12
+            val url = payload.decodeToString(offset, offset + length)
+            offset += length
+            val order = List(GRID * GRID) { i ->
+                val byte = payload[offset + i / 2].toInt()
+                if (i % 2 == 0) byte shr 4 and 0xF else byte and 0xF
+            }
+            offset += 5
+            id to url.toHttpUrl().newBuilder().fragment(order.joinToString(",")).build().toString()
+        }.toMap()
+    }
+
+    // The reader shuffles each image as a 3x3 grid, tile i of the served image belongs at tile order[i]
+    private fun descrambleImage(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val order = request.url.fragment?.split(',')?.map(String::toInt) ?: return chain.proceed(request)
+
+        val response = chain.proceed(request)
+        if (!response.isSuccessful) return response
+
+        val image = response.use { BitmapFactory.decodeStream(it.body.byteStream()) }
+            ?: throw IOException("Failed to decode image")
+        val result = Bitmap.createBitmap(image.width, image.height, Bitmap.Config.ARGB_8888)
+        val tileWidth = image.width / GRID
+        val tileHeight = image.height / GRID
+        val canvas = Canvas(result)
+        order.forEachIndexed { tile, original ->
+            val left = tile % GRID * tileWidth
+            val top = tile / GRID * tileHeight
+            val destLeft = original % GRID * tileWidth
+            val destTop = original / GRID * tileHeight
+            canvas.drawBitmap(
+                image,
+                Rect(left, top, left + tileWidth, top + tileHeight),
+                Rect(destLeft, destTop, destLeft + tileWidth, destTop + tileHeight),
+                null,
+            )
+        }
+        image.recycle()
+
+        val output = Buffer()
+        result.compress(Bitmap.CompressFormat.JPEG, 90, output.outputStream())
+        result.recycle()
+        return response.newBuilder()
+            .removeHeader("Content-Length")
+            .removeHeader("Content-Type")
+            .body(output.asResponseBody(JPEG, output.size))
+            .build()
     }
 
     // Widest srcset entry; search cards use a cropped thumbnail as src
@@ -120,5 +199,7 @@ abstract class RawBaka : KeiSource() {
 
     companion object {
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH)
+        private val JPEG = "image/jpeg".toMediaType()
+        private const val GRID = 3
     }
 }

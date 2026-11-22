@@ -8,11 +8,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
@@ -49,29 +49,25 @@ abstract class KodokuStudio :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val slug = manga.url.substringBefore('/')
         val lang = manga.url.substringAfter('/', "en")
-        val details = async {
-            if (fetchDetails) {
-                client.get("$baseUrl/api/series/$slug", Fetch.XHR).parseAs<SeriesDto>().toSManga(lang)
-            } else {
-                manga
-            }
-        }
-        val chapterList = async {
-            if (fetchChapters) {
-                val showLocked = preferences.getBoolean(SHOW_LOCKED, false)
-                client.get("$baseUrl/api/series/$slug/chapters", Fetch.XHR)
-                    .parseAs<List<ChapterEntryDto>>()
-                    .filter { it.languageCode == lang && (showLocked || it.available) }
-                    .map { it.toSChapter() }
-                    .sortedByDescending { it.chapter_number }
-            } else {
-                chapters
-            }
-        }
-        SMangaUpdate(details.await(), chapterList.await())
+
+        return SMangaUpdate(
+            manga = { if (fetchDetails) client.get("$baseUrl/api/series/$slug", Fetch.XHR).parseAs<SeriesDto>().toSManga(lang) else manga },
+            chapters = {
+                if (fetchChapters) {
+                    val showLocked = preferences.getBoolean(SHOW_LOCKED, false)
+                    client.get("$baseUrl/api/series/$slug/chapters", Fetch.XHR)
+                        .parseAs<List<ChapterEntryDto>>()
+                        .filter { it.languageCode == lang && (showLocked || it.available) }
+                        .map { it.toSChapter() }
+                        .sortedByDescending { it.chapter_number }
+                } else {
+                    chapters
+                }
+            },
+        )
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {

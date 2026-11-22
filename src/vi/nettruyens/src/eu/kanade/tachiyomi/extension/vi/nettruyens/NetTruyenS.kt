@@ -1,18 +1,15 @@
 package eu.kanade.tachiyomi.extension.vi.nettruyens
 
+import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
-import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -22,37 +19,28 @@ import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.Response
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
-import java.util.Calendar
 
 @Source
-abstract class NetTruyenS : KeiSource() {
+abstract class NetTruyenS : WPComics() {
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(3)
 
-    // ============================== Popular ===============================
-
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        val url = "$baseUrl/tim-kiem-nang-cao".toHttpUrl().newBuilder()
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(
+        "$baseUrl/tim-kiem-nang-cao".toHttpUrl().newBuilder()
             .apply { if (page > 1) addPathSegment(page.toString()) }
             .addQueryParameter("sort", "views")
-            .build()
-        return parseMangaList(url)
-    }
-
-    private suspend fun parseMangaList(url: HttpUrl): MangasPage {
-        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
-        val mangas = document.select("div.items div.item").map(::mangaFromElement)
-        return MangasPage(mangas, hasNextPage(document))
-    }
-
-    // ============================== Latest ================================
+            .build(),
+    )
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(("$baseUrl/danh-sach-truyen" + if (page > 1) "/$page" else "").toHttpUrl())
 
-    // ============================== Search ================================
+    override fun popularMangaNextPageSelector() = "ul.pagination li.active + li a"
+
+    override val mangaUrlDirectory = "manga"
+
+    private suspend fun parseMangaList(url: HttpUrl): MangasPage = parseMangaPage(client.get(url, Fetch.DOCUMENT), popularMangaSelector(), ::popularMangaFromElement)
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (query.isNotBlank()) {
@@ -79,8 +67,8 @@ abstract class NetTruyenS : KeiSource() {
         url.addQueryParameter("genres", included.joinToString(","))
         url.addQueryParameter("notGenres", excluded.joinToString(","))
 
-        filters.firstInstanceOrNull<StatusFilter>()?.let {
-            url.addQueryParameter("status", it.toValue())
+        filters.firstInstanceOrNull<StatusFilter>()?.toUriPart()?.let {
+            url.addQueryParameter("status", it)
         }
         filters.firstInstanceOrNull<GenderFilter>()?.let {
             url.addQueryParameter("sex", it.toValue())
@@ -88,150 +76,74 @@ abstract class NetTruyenS : KeiSource() {
         filters.firstInstanceOrNull<MinChapterFilter>()?.let {
             url.addQueryParameter("chapter_count", it.toValue())
         }
-        filters.firstInstanceOrNull<SortFilter>()?.let {
-            url.addQueryParameter("sort", it.toValue())
+        filters.firstInstanceOrNull<SortFilter>()?.toUriPart()?.let {
+            url.addQueryParameter("sort", it)
         }
 
         return parseMangaList(url.build())
     }
 
-    private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
-        val link: Element = element.selectFirst("h3 a")!!
-        title = link.text()
-        setUrlWithoutDomain(link.absUrl("href"))
-        thumbnail_url = element.selectFirst("div.image img")?.imageUrl()
-    }
-
-    private fun hasNextPage(document: Document): Boolean {
-        val pageInfo = document.selectFirst(".pagination li.hidden")?.text() ?: return false
-        val match = PAGE_REGEX.find(pageInfo) ?: return false
-        return match.groupValues[1].toInt() < match.groupValues[2].toInt()
-    }
-
-    // ============================== Details ===============================
-
-    override suspend fun fetchMangaUpdate(
-        manga: SManga,
-        chapters: List<SChapter>,
-        fetchDetails: Boolean,
-        fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
-
-        return SMangaUpdate(mangaDetailsParse(document), chapterListParse(document))
-    }
-
-    private fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        val info = document.selectFirst("article#item-detail")!!
-        title = info.selectFirst("h1.title-detail")!!.text()
-        author = info.selectFirst("li.author p.col-xs-8")?.text()
-        status = info.selectFirst("li.status p.col-xs-8")?.text().toStatus()
-        genre = info.select("li.kind p.col-xs-8 a").joinToString { it.text() }
-        val otherName = info.selectFirst("h2.other-name")?.text()
-        description = buildString {
-            info.selectFirst("div.detail-content p")?.text()?.let(::append)
-            if (!otherName.isNullOrBlank()) {
-                append("\n\nTên khác: ")
-                append(otherName)
-            }
-        }
-        thumbnail_url = info.selectFirst("div.col-image img")?.imageUrl()
-    }
-
-    private fun String?.toStatus(): Int = when {
-        this == null -> SManga.UNKNOWN
-        contains("Đang tiến hành") -> SManga.ONGOING
-        contains("Hoàn thành") -> SManga.COMPLETED
-        contains("Tạm ngưng") -> SManga.ON_HIATUS
-        else -> SManga.UNKNOWN
-    }
-
-    // ============================== Chapters ==============================
-
-    private fun chapterListParse(document: Document): List<SChapter> = document.select("div.list-chapter li.row:not(.heading)").map { element ->
-        SChapter.create().apply {
-            val link: Element = element.selectFirst("a")!!
-            name = link.text()
-            setUrlWithoutDomain(link.absUrl("href"))
-            date_upload = element.selectFirst("div.col-xs-4")?.text().parseRelativeDate()
-        }
-    }
-
-    private fun String?.parseRelativeDate(): Long {
-        this ?: return 0L
-        val number = RELATIVE_DATE_REGEX.find(this)?.groupValues?.get(1)?.toIntOrNull() ?: return 0L
-        val calendar = Calendar.getInstance()
-        when {
-            contains("giây") -> calendar.add(Calendar.SECOND, -number)
-            contains("phút") -> calendar.add(Calendar.MINUTE, -number)
-            contains("giờ") -> calendar.add(Calendar.HOUR_OF_DAY, -number)
-            contains("ngày") -> calendar.add(Calendar.DAY_OF_MONTH, -number)
-            contains("tuần") -> calendar.add(Calendar.WEEK_OF_YEAR, -number)
-            contains("tháng") -> calendar.add(Calendar.MONTH, -number)
-            contains("năm") -> calendar.add(Calendar.YEAR, -number)
-            else -> return 0L
-        }
-        return calendar.timeInMillis
-    }
-
-    // ============================== Pages =================================
-
-    override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
+    override suspend fun parsePageList(response: Response): List<Page> {
         val chapterUrl = response.request.url.toString()
         val document = response.asJsoup()
 
-        val imageUrls = document.select("div.page-chapter > img").mapNotNull { it.imageUrl() }
-            .filterNot { it.startsWith("data:") }
-            .distinct()
+        val images = document.select(pageListSelector).ifEmpty {
+            val chapterId = CHAPTER_ID_REGEX.find(document.html())?.groupValues?.get(1)
+                ?: return emptyList()
 
-        if (imageUrls.isNotEmpty()) {
-            return imageUrls.mapIndexed { i, url -> Page(i, imageUrl = url) }
+            val html = client.post(
+                "$baseUrl/ajax/image/list/chap/$chapterId?cache=0",
+                headersBuilder().set("X-Requested-With", "XMLHttpRequest").build(),
+                Fetch.XHR.from(chapterUrl),
+                FormBody.Builder().build(),
+            ).parseAs<AjaxImageListDto>().html
+            Jsoup.parseBodyFragment(html, baseUrl).select(pageListSelector)
         }
 
-        val chapterId = CHAPTER_ID_REGEX.find(document.html())?.groupValues?.get(1)
-            ?: return emptyList()
-
-        val ajaxHeaders = headers.newBuilder()
-            .add("X-Requested-With", "XMLHttpRequest")
-            .set("Referer", chapterUrl)
-            .build()
-
-        val html = client.post(
-            "$baseUrl/ajax/image/list/chap/$chapterId?cache=0",
-            ajaxHeaders,
-            Fetch.DOCUMENT,
-            FormBody.Builder().build(),
-        ).parseAs<AjaxImageListDto>().html
-        val ajaxDoc = Jsoup.parseBodyFragment(html, baseUrl)
-        return ajaxDoc.select("div.page-chapter > img").mapNotNull { it.imageUrl() }
-            .filterNot { it.startsWith("data:") }
+        return images.mapNotNull(::imageOrNull)
+            .filterNot { AD_IMAGE_PATH in it }
             .distinct()
             .mapIndexed { i, url -> Page(i, imageUrl = url) }
     }
 
-    private fun Element.imageUrl(): String? = when {
-        hasAttr("data-original") -> absUrl("data-original")
-        hasAttr("data-src") -> absUrl("data-src")
-        hasAttr("src") -> absUrl("src")
-        else -> null
-    }
+    override val supportsFilterFetching = false
 
-    // ============================== Filters ===============================
+    override fun getStatusList(): List<Pair<String?, String>> = listOf(
+        Pair(null, intl["STATUS_ALL"]),
+        Pair("completed", "Hoàn thành"),
+        Pair("on-going", "Đang tiến hành"),
+        Pair("on-hold", "Tạm ngưng"),
+        Pair("canceled", "Đã hủy"),
+    )
+
+    override fun getSortList(): List<Pair<String?, String>> = listOf(
+        Pair("latest-updated", "Mới cập nhật"),
+        Pair("views", "Xem nhiều nhất"),
+        Pair("views_month", "Xem nhiều nhất tháng"),
+        Pair("views_week", "Xem nhiều nhất tuần"),
+        Pair("views_day", "Xem nhiều nhất ngày"),
+        Pair("score", "Đánh giá cao"),
+        Pair("az", "Từ A-Z"),
+        Pair("za", "Từ Z-A"),
+        Pair("chapters", "Số chương nhiều nhất"),
+        Pair("new", "Mới nhất"),
+        Pair("old", "Cũ nhất"),
+    )
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         Filter.Header("Bộ lọc không dùng được khi tìm kiếm bằng từ khóa"),
         GenreGroupFilter(getGenreList()),
-        StatusFilter(),
+        StatusFilter(intl["STATUS"], getStatusList()),
         GenderFilter(),
         MinChapterFilter(),
-        SortFilter(),
+        SortFilter(intl["SORT"], getSortList()),
     )
 
     companion object {
-        private val PAGE_REGEX = Regex("""Page\s+(\d+)\s*/\s*(\d+)""")
-        private val RELATIVE_DATE_REGEX = Regex("""(\d+)\s""")
         private val CHAPTER_ID_REGEX = Regex("""CHAPTER_ID\s*=\s*(\d+)""")
+
+        // The site's ad banner, shown before and after the pages of every chapter
+        private const val AD_IMAGE_PATH = "/uploads/tmp/"
     }
 }
 

@@ -11,6 +11,7 @@ internal class SortBy :
             Pair("Rilevanza", ""),
             Pair("Più letti", "most_read"),
             Pair("Meno letti", "less_read"),
+            Pair("Più votati", "top_rated"),
             Pair("Più recenti", "newest"),
             Pair("Meno recenti", "oldest"),
             Pair("A-Z", "a-z"),
@@ -71,6 +72,7 @@ internal val GENRES = listOf(
 )
 
 internal val MTYPES = listOf(
+    MType("Doujinshi", "doujinshi"),
     MType("Manga", "manga"),
     MType("Manhua", "manhua"),
     MType("Manhwa", "manhwa"),

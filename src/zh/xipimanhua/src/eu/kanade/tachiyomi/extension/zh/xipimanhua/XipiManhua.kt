@@ -10,12 +10,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -103,11 +103,10 @@ abstract class XipiManhua :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = if (fetchDetails) async { mangaDetails(manga.url) } else null
-        val chapterList = if (fetchChapters) async { chapterList(manga.url) } else null
-        SMangaUpdate(details?.await() ?: manga, chapterList?.await() ?: chapters)
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) mangaDetails(manga.url) else manga },
+        chapters = { if (fetchChapters) chapterList(manga.url) else chapters },
+    )
 
     private suspend fun mangaDetails(mid: String): SManga {
         val url = "$API_URL/v1/manga".toHttpUrl().newBuilder()

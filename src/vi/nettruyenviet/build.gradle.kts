@@ -6,9 +6,10 @@ plugins {
 
 keiyoushi {
     name = "NetTruyenViet (unoriginal)"
-    versionCode = 2
+    versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
+    theme = "wpcomics"
 
     source {
         lang = "vi"

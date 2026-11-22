@@ -31,13 +31,8 @@ class CatalogDto(
 )
 
 @Serializable
-class MangaPageDto(
-    val manga: MangaDto,
-    val initialChapters: ChapterListDto,
-)
-
-@Serializable
 class MangaDto(
+    val id: String,
     private val slug: String,
     private val title: String,
     private val cover: String? = null,
@@ -92,23 +87,20 @@ class FiltersDto(
 )
 
 @Serializable
-class ChapterListDto(
-    val chapters: List<ChapterDto>,
-    val hasMore: Boolean,
-)
+class ChapterListDto(val chapters: List<ChapterDto>)
 
 @Serializable
 class ChapterDto(
     val id: String,
     private val number: String,
-    private val title: String? = null,
     private val publishedAt: String? = null,
     private val createdAt: String? = null,
     private val group: TaxonomyDto? = null,
 ) {
     fun toSChapter() = SChapter.create().apply {
         url = id
-        name = title?.ifBlank { null } ?: "Capítulo $number"
+        // The site lists chapters by number; their titles mostly repeat the series title
+        name = "Capítulo $number"
         chapter_number = number.toFloatOrNull() ?: -1f
         scanlator = group?.name
         // The newest chapters can have no publication date yet
@@ -117,14 +109,7 @@ class ChapterDto(
 }
 
 @Serializable
-class ReaderDto(
-    val pages: List<String>,
-    val imageSigs: Map<String, String> = emptyMap(),
-    val manga: ReaderMangaDto,
-)
+class LinkedDataDto(val isPartOf: LinkedDataSeriesDto? = null)
 
 @Serializable
-class ReaderChaptersDto(val allChapters: List<ChapterDto>)
-
-@Serializable
-class ReaderMangaDto(val slug: String)
+class LinkedDataSeriesDto(val url: String)
