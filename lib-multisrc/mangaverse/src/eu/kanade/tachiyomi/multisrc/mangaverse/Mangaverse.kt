@@ -32,19 +32,20 @@ abstract class Mangaverse : KeiSource() {
 
     override fun getHomeUrl() = langUrl.toString()
 
-    // Every series of the language at once: the home page's grid, then the theme's "load more"
+    // Nonce of the theme's "load more", from the last home page loaded
+    private var gridNonce: String? = null
+
+    // The home page's series grid, then the theme's "load more", one page each
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(langUrl, Fetch.DOCUMENT).asJsoup()
-        val series = document.select(SERIES_SELECTOR).map { it.toSManga() }.toMutableList()
-        if (document.selectFirst("#load-more-series-grid") != null) {
-            val nonce = document.nonce()
-            var next = 2
-            do {
-                val more = loadMore(nonce, langUrl, "type" to "series_grid", "page" to "${next++}")
-                series += Jsoup.parseBodyFragment(more.html, baseUrl).select(SERIES_SELECTOR).map { it.toSManga() }
-            } while (more.hasMore)
+        if (page == 1) {
+            val document = client.get(langUrl, Fetch.DOCUMENT).asJsoup()
+            gridNonce = document.nonce()
+            val series = document.select(SERIES_SELECTOR).map { it.toSManga() }
+            return MangasPage(series, document.selectFirst("#load-more-series-grid") != null)
         }
-        return MangasPage(series, false)
+        val more = loadMore(gridNonce!!, langUrl, "type" to "series_grid", "page" to "$page")
+        val series = Jsoup.parseBodyFragment(more.html, baseUrl).select(SERIES_SELECTOR).map { it.toSManga() }
+        return MangasPage(series, more.hasMore)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
@@ -101,8 +102,9 @@ abstract class Mangaverse : KeiSource() {
             var next = 2
             do {
                 val more = loadMore(nonce, seriesUrl, "type" to "series", "page" to "${next++}", "category_id" to button.attr("data-category"), "order" to "desc")
-                chapterList += Jsoup.parseBodyFragment(more.html, baseUrl).select(CHAPTER_SELECTOR).map { it.toSChapter() }
-            } while (more.hasMore)
+                val page = Jsoup.parseBodyFragment(more.html, baseUrl).select(CHAPTER_SELECTOR).map { it.toSChapter() }
+                chapterList += page
+            } while (more.hasMore && page.isNotEmpty())
         }
         return SMangaUpdate(details, chapterList)
     }
@@ -110,6 +112,8 @@ abstract class Mangaverse : KeiSource() {
     private fun Element.toSChapter() = SChapter.create().apply {
         setUrlWithoutDomain(absUrl("href"))
         name = selectFirst(".chapter-title")!!.text()
+        // Names start with the series title, which can hold numbers of its own
+        chapter_number = NUMBER_REGEX.find(name.substringAfterLast(", "))?.value?.toFloat() ?: -1f
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
@@ -139,6 +143,7 @@ abstract class Mangaverse : KeiSource() {
         private const val SERIES_SELECTOR = ".series-card a.series-card-link"
         private const val CHAPTER_SELECTOR = "article.chapter-item a.chapter-link"
         private val COVER_REGEX = Regex("""url\('([^']+)'\)""")
+        private val NUMBER_REGEX = Regex("""\d+(\.\d+)?""")
         private val SIZE_REGEX = Regex("""-\d+x\d+(?=\.\w+$)""")
     }
 }
