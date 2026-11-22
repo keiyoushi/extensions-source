@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha256
 import keiyoushi.utils.string
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.KSerializer
@@ -162,7 +163,6 @@ class LunarSeedPropsDto(private val props: Map<String, String>) {
         return null
     }
 
-    /** The header prop is masked with a rolling key derived from its own name. */
     private fun parseHeader(name: String, value: String): SeedHeader? {
         val decoded = try {
             Base64.decode(value.reversed(), Base64.DEFAULT)
@@ -170,17 +170,16 @@ class LunarSeedPropsDto(private val props: Map<String, String>) {
             return null
         }
 
-        var nameHash = 0
-        for (char in name) nameHash = 31 * nameHash + char.code and 0xFF
+        val keystream = (0..decoded.size / 32).flatMap { "$HEADER_SALT|$name|$it".sha256().asList() }
 
         val unmasked = String(
             CharArray(decoded.size) { i ->
-                ((decoded[i].toInt() and 0xFF) xor (nameHash + 37 * i and 0xFF)).toChar()
+                ((decoded[i].toInt() xor keystream[i].toInt()) and 0xFF).toChar()
             },
         )
 
         val parts = unmasked.split("|")
-        if (parts.size != HEADER_FIELDS || parts[0] != HEADER_VERSION) return null
+        if (parts.size != HEADER_FIELDS) return null
 
         val seed = parts[1].toIntOrNull(16) ?: return null
         val multiplier = parts[2].toIntOrNull(16) ?: return null
@@ -269,11 +268,11 @@ class LunarSeedPropsDto(private val props: Map<String, String>) {
     companion object {
         private const val HEADER_SIZE = 7
         private const val HEADER_FIELDS = 6
-        private const val HEADER_VERSION = "3"
+        private const val HEADER_SALT = "91a0d2255b9506af2789414f1869f3f7"
         private const val MAX_OPCODE = 7
-        private const val MAGIC_0 = 167
-        private const val MAGIC_1 = 62
-        private const val MAGIC_2 = 145
+        private const val MAGIC_0 = 75
+        private const val MAGIC_1 = 71
+        private const val MAGIC_2 = 106
 
         /**
          * Matches the flight element holding the seeds. Decoys share the shape, so the payload

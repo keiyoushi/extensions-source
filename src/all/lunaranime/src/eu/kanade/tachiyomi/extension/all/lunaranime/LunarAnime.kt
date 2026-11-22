@@ -249,12 +249,16 @@ abstract class LunarAnime : KeiSource() {
         val viewBody = ViewRequestBody(slug, chapterNumber, language).toJsonRequestBody()
         client.post(viewUrl, Fetch.XHR, viewBody, ensureSuccess = false).close()
 
-        return result.data.images.mapIndexed { index, imageUrl ->
-            val veilUrl = result.veil?.getOrNull(index)?.takeIf { it.isNotEmpty() }?.let { API_URL.toHttpUrl().resolve(it) }
+        return result.realPages().mapIndexed { index, (imageUrl, veil) ->
+            val veilUrl = veil?.takeIf { it.isNotEmpty() }?.let { API_URL.toHttpUrl().resolve(it) }
             val url = imageUrl.toHttpUrl().newBuilder().fragment(veilUrl?.toString()).build()
             Page(index, imageUrl = url.toString())
         }
     }
+
+    private fun LunarPageListDecrypted.realPages(): List<Pair<String, String?>> = data.images
+        .mapIndexed { index, imageUrl -> imageUrl to veil?.getOrNull(index) }
+        .filterNot { (imageUrl) -> INTERSTITIAL_PATH in imageUrl }
 
     private suspend fun fetchChapter(
         seeds: LunarSeeds,
@@ -294,10 +298,10 @@ abstract class LunarAnime : KeiSource() {
     }
 
     private fun LunarPageListDecrypted.needsRevalidation(): Boolean {
-        val images = data.images
+        val images = data.images.filterNot { INTERSTITIAL_PATH in it }
         return cacheStatus == "revalidate" ||
             slug == "unknown" ||
-            images.isEmpty() ||
+            images.size == data.images.size ||
             images.all { DECOY_PATH in it }
     }
 
@@ -326,6 +330,7 @@ abstract class LunarAnime : KeiSource() {
         private const val API_URL = "https://$API_HOST"
         private const val CDN_HOST = "vault.lunarx.to"
         private const val DECOY_PATH = "/api/cdn/p/"
+        private const val INTERSTITIAL_PATH = "/api/manga/pg/"
         private const val DEFAULT_CLEARANCE_TTL_S = 300L
         private const val CLEARANCE_MARGIN_S = 30L
     }
