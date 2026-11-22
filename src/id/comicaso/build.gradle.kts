@@ -6,17 +6,18 @@ plugins {
 
 keiyoushi {
     name = "Comicaso"
-    versionCode = 5
+    versionCode = 6
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
         lang = "id"
-        baseUrl = "https://v3.comicaso.pro"
+        baseUrl = "https://comicaso.site"
+        versionId = 2
     }
 
     deeplink {
-        host("v3.comicaso.pro")
-        path("/..*")
+        path("/manga/..*")
+        path("/read/..*")
     }
 }
