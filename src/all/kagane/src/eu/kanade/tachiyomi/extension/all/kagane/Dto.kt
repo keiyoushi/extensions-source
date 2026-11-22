@@ -2,13 +2,14 @@ package eu.kanade.tachiyomi.extension.all.kagane
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.MangaMeta
+import keiyoushi.utils.describe
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.putMemo
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.jsoup.Jsoup
 import java.util.Locale
@@ -222,19 +223,26 @@ class DetailsDto(
 
     fun toSManga(apiUrl: String, sourceName: String? = null, baseUrl: String = "", showEdition: Boolean = false, showSource: Boolean = false, showDetails: Boolean = false, cleanTitle: Boolean): SManga = SManga.create().apply {
         val base = this@DetailsDto.title.trim()
-        val withEdition = if (showEdition && !this@DetailsDto.editionInfo.isNullOrBlank()) "$base (${this@DetailsDto.editionInfo})" else base
+        val withEdition = if (showEdition && !editionInfo.isNullOrBlank()) "$base ($editionInfo)" else base
         title = if (showSource && sourceName != null) "$withEdition [$sourceName]" else withEdition.clean(cleanTitle)
         thumbnail_url = covers.firstOrNull()?.imageId?.let { "$apiUrl/image/$it" }
 
         val byAuthorRoles = seriesStaff.filter { it.roleIs(BOOK_CREATOR_ROLES) }
         val byArtistRoles = seriesStaff.filter { it.roleIs(ARTIST_ROLES) }
 
-        description = MarkdownDescription.Builder().apply {
+        fun Collection<SeriesLink>.pairs() = map { (it.label ?: it.url) to it.url }
+        val officialLinks = seriesLinks.filter { it.kind == "Official" }.pairs()
+        val (trackerPages, trackerLinks) = seriesLinks.filter { it.kind == "Tracker" }.partition { MangaMeta.Tracker.fromUrl(it.url) != null }
+        val otherLinks = seriesLinks.filter { it.kind != null && it.kind != "Official" && it.kind != "Tracker" }.pairs()
+
+        describe {
             markdown(this@DetailsDto.description?.let { Jsoup.parse(it.trim().replace("\n", "<br>")).wholeText() })
 
+            val score = averageRating?.takeIf { (totalRatings ?: 0) > 0 }?.div(10)
+            // The rating and links are printed only with the setting on, recorded either way
             if (showDetails) {
                 val originalName = originalLanguage?.let { LANGUAGE_NAMES[it] }
-                rating(averageRating?.div(10), votes = totalRatings)
+                rating(score, votes = totalRatings)
                 field("Content Rating", ageRating?.toContentRating(isPornographic, isDisturbing))
                 field("Followers", subscriberCount?.takeIf { it > 0 }?.toLong()?.toCompactCount())
                 field("Format", format)
@@ -243,6 +251,8 @@ class DetailsDto(
                 field("Views", totalViews?.takeIf { it > 0 }?.toCompactCount())
                 field("Volumes", currentVolumes?.takeIf { it > 0 }?.toString())
                 field("Year", startYear?.takeIf { it > 0 }?.let { start -> endYear?.takeIf { it > start }?.let { "$start–$it" } ?: "$start" })
+            } else {
+                meta { rating(score, votes = totalRatings) }
             }
 
             seriesStaff
@@ -254,19 +264,35 @@ class DetailsDto(
             if (sourceName != null && sourceId != null) links(listOf(sourceName to "$baseUrl/sources/$sourceId"), label = "Source")
 
             if (showDetails) {
-                fun Collection<SeriesLink>.byLabel() = map { (it.label ?: it.url) to it.url }
-                links(seriesLinks.filter { it.kind == "Official" }.byLabel(), label = "Official Link(s)")
-                links(seriesLinks.filter { it.kind == "Tracker" }.byLabel(), label = "Tracker(s)")
-                links(seriesLinks.filter { it.kind != null && it.kind != "Official" && it.kind != "Tracker" }.byLabel(), label = "Other(s)")
+                links(officialLinks, label = "Official Link(s)")
+                trackers(trackerPages.map { it.url })
+                links(trackerLinks.pairs(), label = "Tracker(s)")
+                links(otherLinks, label = "Other(s)")
+            } else {
+                meta {
+                    links(officialLinks)
+                    trackers(trackerPages.map { it.url })
+                    links(trackerLinks.pairs())
+                    links(otherLinks)
+                }
             }
 
             altTitles(seriesAlternateTitles.map { it.title }, label = "Associated Name(s)")
-        }.build()
+
+            meta {
+                contentRating = when {
+                    isPornographic == true || ageRating == "EighteenPlus" -> MangaMeta.ContentRating.ADULT
+                    ageRating == "Safe" -> MangaMeta.ContentRating.SAFE
+                    ageRating != null -> MangaMeta.ContentRating.SUGGESTIVE
+                    else -> null
+                }
+            }
+        }
 
         author = byAuthorRoles.sortedBy { it.priority }.distinctBy { it.staffId }.joinToString { it.name }
         artist = byArtistRoles.sortedBy { it.priority }.distinctBy { it.staffId }.joinToString { it.name }
         genre = genres.map { it.genreName }.joinToString()
-        status = this@DetailsDto.publicationStatus.toStatus()
+        status = publicationStatus.toStatus()
     }
 
     private fun String.toStatus(): Int = when (this.uppercase()) {
@@ -329,7 +355,7 @@ private fun String.toContentRating(isPornographic: Boolean?, isDisturbing: Boole
         if (isPornographic == true) add("Pornographic")
         if (isDisturbing == true) add("Disturbing")
     }
-    return if (flags.isEmpty()) base else "$base (${flags.joinToString(", ")})"
+    return if (flags.isEmpty()) base else "$base (${flags.joinToString()})"
 }
 
 @Serializable
@@ -385,16 +411,14 @@ class ChapterDto(
     ) {
         fun toSChapter(seriesId: String, slug: String?, useSourceChapterNumber: Boolean = false, chapterTitleMode: String = "optional"): SChapter = SChapter.create().apply {
             url = "/series/$seriesId/reader/$id"
-            memo = buildJsonObject {
-                slug?.takeIf { it.isNotBlank() }?.let { put("seriesSlug", it) }
-            }
+            putMemo { slug?.takeIf { it.isNotBlank() }?.let { put("seriesSlug", it) } }
             name = buildChapterName(chapterTitleMode)
             date_upload = Instant.tryParse(createdAt)
             if (useSourceChapterNumber) {
                 chapter_number = number
             }
             scanlator = buildString {
-                append(groups.joinToString(", ") { it.title })
+                append(groups.joinToString { it.title })
 
                 // Extract group tags in chapter title
                 CHAPTER_GROUP_REGEX.matchEntire(METADATA_REGEX.replace(title.trim(), ""))?.let { match ->

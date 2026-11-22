@@ -12,14 +12,15 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.describe
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.putMemo
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParse
 import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -198,7 +199,7 @@ abstract class ZeistManga : KeiSource() {
                 val mangaDeferred = async {
                     if (fetchDetails) {
                         val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
-                        mangaDetailsParse(doc).apply { memo = manga.memo }
+                        mangaDetailsParse(doc).apply { putMemo { put("feedUrl", feedUrl.toJsonElement()) } }
                     } else {
                         manga
                     }
@@ -211,17 +212,7 @@ abstract class ZeistManga : KeiSource() {
             val url = getChapterFeedUrl(doc, manga.title)
 
             val updatedManga = mangaDetailsParse(doc).apply {
-                memo = buildJsonObject {
-                    put(
-                        "feedUrl",
-                        FeedUrl(
-                            url,
-                            useOldChapterFeed,
-                            useNewChapterFeed,
-                            chapterCategory,
-                        ).toJsonElement(),
-                    )
-                }
+                putMemo { put("feedUrl", FeedUrl(url, useOldChapterFeed, useNewChapterFeed, chapterCategory).toJsonElement()) }
             }
             SMangaUpdate(
                 manga = updatedManga,
@@ -267,14 +258,10 @@ abstract class ZeistManga : KeiSource() {
         val profileManga = document.selectFirst(mangaDetailsSelector)!!
         return SManga.create().apply {
             thumbnail_url = profileManga.selectFirst(mangaDetailsSelectorThumbnail)!!.attr("abs:src")
-            description = buildString {
-                append(profileManga.select(mangaDetailsSelectorDescription).text())
-                append("\n\n")
-                profileManga.selectFirst(mangaDetailsSelectorAltName)?.text()?.takeIf { it.isNotBlank() }?.let {
-                    append(intl["alternative_names"])
-                    append(it)
-                }
-            }.trim()
+            describe {
+                profileManga.select(mangaDetailsSelectorDescription).forEach { description(it) }
+                altTitles(listOfNotNull(profileManga.selectFirst(mangaDetailsSelectorAltName)?.text()), intl["alternative_names"])
+            }
             genre = profileManga.select(mangaDetailsSelectorGenres)
                 .joinToString { it.text() }
             author = profileManga.selectFirst(mangaDetailsSelectorAuthor)?.text()

@@ -2,7 +2,8 @@ package eu.kanade.tachiyomi.extension.en.toonkotsu
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.MangaMeta
+import keiyoushi.utils.describe
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
@@ -80,7 +81,7 @@ class SeriesDto(
 
     fun toSMangaDetails(baseUrl: String, showSpoilerTags: Boolean, showAdult: Boolean, mangabaka: MangabakaDto) = toSManga(baseUrl, showSpoilerTags).apply {
         val sources = mangabaka.sources
-        description = MarkdownDescription.Builder().apply {
+        describe {
             rating(score?.div(10.0))
             info(
                 (year ?: mangabaka.year)?.toString(),
@@ -93,36 +94,33 @@ class SeriesDto(
             links(listOfNotNull(editionOf).map { it.toLink(baseUrl) }, label = "Edition of")
             links(editions.filter { showAdult || !it.adult }.map { it.toLink(baseUrl) }, label = "Editions")
             // In the order of the site's External Links
+            trackers(
+                MangaMeta.Tracker.ANILIST to (externalIds?.anilist ?: sources?.anilist?.id),
+                MangaMeta.Tracker.MYANIMELIST to (externalIds?.myanimelist ?: sources?.myAnimeList?.id),
+                MangaMeta.Tracker.MANGAUPDATES to (externalIds?.mangaupdates ?: sources?.mangaUpdates?.id),
+                MangaMeta.Tracker.KITSU to sources?.kitsu?.id,
+                MangaMeta.Tracker.MANGABAKA to externalIds?.mangabaka,
+                MangaMeta.Tracker.ANIMEPLANET to sources?.animePlanet?.id,
+                MangaMeta.Tracker.SHIKIMORI to sources?.shikimori?.id,
+            )
             links(
                 listOf(
-                    "AniList" to (externalIds?.anilist ?: sources?.anilist?.id)?.let { "https://anilist.co/manga/$it" },
-                    "MyAnimeList" to (externalIds?.myanimelist ?: sources?.myAnimeList?.id)?.let { "https://myanimelist.net/manga/$it" },
                     "MangaDex" to mangadex?.let { "https://mangadex.org/title/$it" },
-                    "MangaUpdates" to (externalIds?.mangaupdates ?: sources?.mangaUpdates?.id)?.let {
-                        // The site links numeric (old) MangaUpdates ids to the old page
-                        val page = if (it.all(Char::isDigit)) "series.html?id=$it" else "series/$it"
-                        "https://www.mangaupdates.com/$page"
-                    },
-                    "Kitsu" to sources?.kitsu?.id?.let { "https://kitsu.app/manga/$it" },
-                    "MangaBaka" to externalIds?.mangabaka?.let { "https://mangabaka.org/$it" },
-                    "Anime-Planet" to sources?.animePlanet?.id?.let { "https://www.anime-planet.com/manga/$it" },
-                    "Shikimori" to sources?.shikimori?.id?.let { "https://shikimori.io/mangas/$it" },
                     "Anime News Network" to sources?.animeNewsNetwork?.id?.let { "https://www.animenewsnetwork.com/encyclopedia/manga.php?id=$it" },
-                ) + listOfNotNull(
-                    // Adaptations with `via` belong to a related series
+                ),
+            )
+            // Adaptations with `via` belong to a related series
+            links(
+                listOfNotNull(
                     adaptation?.takeIf { it.via == null }?.let {
                         val about = listOfNotNull(it.format?.replace('_', ' '), it.year).joinToString().ifEmpty { null }
                         listOfNotNull("Anime", about?.let { "($it)" }).joinToString(" ") to "https://anilist.co/anime/${it.id}"
                     },
                 ),
+                label = "Adaptation",
             )
-            altTitles(
-                (
-                    listOfNotNull(titles?.native, mangabaka.nativeTitle, titles?.romaji, titles?.english) +
-                        alt + mangabaka.titles.map { it.title }
-                    ).filter { it.trim() != title },
-            )
-        }.build()
+            altTitles(listOfNotNull(titles?.native, mangabaka.nativeTitle, titles?.romaji, titles?.english) + alt + mangabaka.titles.map { it.title })
+        }
     }
 }
 

@@ -15,8 +15,9 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.MangaMeta
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.describe
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -160,13 +161,26 @@ abstract class Webnex :
             }
             // Year, original language and content rating; type and demographic are in genres
             val facts = document.select(".series-badges > li:not(:has(.dot, a[href*=kind=], a[href*=demographic=]))").map { it.text() }
-            description = MarkdownDescription.Builder().apply {
+            describe {
                 rating(document.selectFirst(".cover-score strong")?.text()?.toDoubleOrNull())
-                info(*facts.toTypedArray())
+                facts.forEach { fact ->
+                    val audience = CONTENT_RATINGS[fact.lowercase()]
+                    when {
+                        audience != null -> {
+                            field("Content rating", fact)
+                            meta { contentRating = audience }
+                        }
+                        fact.toIntOrNull()?.let { it in 1900..2100 } == true -> field("Year", fact)
+                        fact in LANGUAGES -> field("Original language", fact)
+                        else -> info(fact)
+                    }
+                }
                 document.select(".series-desc p").forEach { description(it) }
-                altTitles(document.select(".series-alt-name").map { it.text() }.filter { it != title }.distinct())
-                links(document.select(".tracker-row a").map { it.attr("title") to it.absUrl("href") })
-            }.build()
+                altTitles(document.select(".series-alt-name").map { it.text() })
+                val (trackerPages, otherLinks) = document.select(".tracker-row a").partition { MangaMeta.Tracker.fromUrl(it.absUrl("href")) != null }
+                trackers(trackerPages.map { it.absUrl("href") })
+                links(otherLinks.map { it.attr("title") to it.absUrl("href") })
+            }
         }
         if (!fetchChapters) return SMangaUpdate(details, chapters)
 
@@ -352,6 +366,13 @@ abstract class Webnex :
     }
 
     companion object {
+        private val LANGUAGES = ORIGINAL_LANGUAGES.toMap()
+        private val CONTENT_RATINGS = mapOf(
+            "safe" to MangaMeta.ContentRating.SAFE,
+            "suggestive" to MangaMeta.ContentRating.SUGGESTIVE,
+            "erotica" to MangaMeta.ContentRating.ADULT,
+            "pornographic" to MangaMeta.ContentRating.ADULT,
+        )
         private const val PREF_RATING = "pref_rating"
         private const val PREF_CHAPTER_LIST = "pref_chapter_list"
         private const val PREF_PREFERRED_GROUPS = "pref_preferred_groups"
