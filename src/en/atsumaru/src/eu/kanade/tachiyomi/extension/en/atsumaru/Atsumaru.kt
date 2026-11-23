@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.network.head
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
@@ -24,6 +25,7 @@ import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import okhttp3.CacheControl
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -234,10 +236,21 @@ abstract class Atsumaru :
             .addQueryParameter("chapterId", name)
             .build()
 
-        return client.get(url, Fetch.XHR).parseAs<PageObjectDto>().readChapter.pages.mapIndexed { index, page ->
+        var pages = fetchPages(url)
+        if (pages.isPromo()) {
+            client.head("$baseUrl/api/android/download", CacheControl.FORCE_NETWORK, ensureSuccess = false).close()
+            pages = fetchPages(url)
+            if (pages.isPromo()) throw Exception("Chapter limit reached, try again later")
+        }
+
+        return pages.mapIndexed { index, page ->
             Page(index, imageUrl = cdnUrl(baseUrl, page.image)!!)
         }
     }
+
+    private suspend fun fetchPages(url: HttpUrl): List<PageDataDto> = client.get(url, Fetch.XHR).parseAs<PageObjectDto>().readChapter.pages
+
+    private fun List<PageDataDto>.isPromo() = singleOrNull()?.image?.startsWith("/static/promo/") == true
 
     override val supportsFilterFetching = true
 
