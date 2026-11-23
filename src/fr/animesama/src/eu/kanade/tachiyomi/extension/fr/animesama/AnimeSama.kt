@@ -137,16 +137,9 @@ abstract class AnimeSama : KeiSource() {
             }.awaitAll()
         }
 
-        val parsedChapterList = mutableListOf<SChapter>()
-        chapterLists.forEach { chapters ->
-            for (chapter in chapters) {
-                if (parsedChapterList.none { it.name == chapter.name }) {
-                    parsedChapterList.add(chapter)
-                }
-            }
-        }
-        parsedChapterList.sortBy { chapter -> "$baseUrl${chapter.url}".toHttpUrl().queryParameter("id")?.toIntOrNull() }
-        return parsedChapterList.asReversed()
+        return chapterLists.flatten()
+            .sortedBy { chapter -> "$baseUrl${chapter.url}".toHttpUrl().queryParameter("id")?.toIntOrNull() }
+            .asReversed()
     }
 
     private suspend fun fetchScanChapters(scanUrl: HttpUrl, scanlatorGroup: String): List<SChapter> {
