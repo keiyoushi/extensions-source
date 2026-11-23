@@ -103,8 +103,7 @@ abstract class XXXYaoi : MadaraNoAjax() {
 
     private suspend fun libraryConfig(refresh: Boolean) = libraryConfigMutex.withLock {
         libraryConfig.takeUnless { refresh } ?: client.get("$baseUrl/biblioteca/", Fetch.DOCUMENT, if (refresh) CacheControl.FORCE_NETWORK else DEFAULT_CACHE_CONTROL).asJsoup()
-            .selectFirst("#xyaoi-cards-container")!!.attributes().first { it.key.startsWith("data-x_") }.value
-            .decodeReversedBase64()
+            .selectFirst("#xyaoi-cards-container")!!.encodedData()
             .parseAs<JsonArray>()
             .let(::LibraryConfig)
             .also { libraryConfig = it }
@@ -144,11 +143,11 @@ abstract class XXXYaoi : MadaraNoAjax() {
         return super.parseChapterList(document, mangaPath).onEach { it.scanlator = scan }
     }
 
-    // Chapter rows carry their slug and name encoded in a data-x_<hash> attribute
+    // Chapter rows carry their slug and name encoded in a data-<letter>_<hash> attribute
     override fun chapterListSelector() = "ul.version-chap > li"
 
     override fun chapterFromElement(element: Element, mangaPath: String) = SChapter.create().apply {
-        val row = element.attributes().first { it.key.startsWith("data-x_") }.value.decodeReversedBase64().parseAs<JsonArray>().let(::ChapterRow)
+        val row = element.encodedData().parseAs<JsonArray>().let(::ChapterRow)
         url = row.slug
         name = row.name
         date_upload = parseChapterDate(element.selectFirst("""span:matchesOwn(^(\d{2}/\d{2}/\d{4}|.+ atrás)$)""")?.text())
