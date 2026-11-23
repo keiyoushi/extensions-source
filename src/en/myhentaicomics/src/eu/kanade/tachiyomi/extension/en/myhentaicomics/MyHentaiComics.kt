@@ -112,16 +112,16 @@ abstract class MyHentaiComics : KeiSource() {
             ?.firstOrNull { it.ownText().startsWith("Pages:") }
             ?.text()
 
+        val author = artists.joinToString(", ").ifEmpty { null }
+
         val updatedManga = manga.apply {
             title = descriptionDiv?.selectFirst("h1")?.text() ?: title
             thumbnail_url = document.selectFirst("div.comic-cover img")?.absUrl("src")?.encodeSpaces()
-            genre = (categories + artists + groups).joinToString(", ")
+            this.author = author
+            this.artist = author
+            genre = (categories + groups).joinToString(", ")
             status = SManga.COMPLETED
-            description = buildString {
-                if (artists.isNotEmpty()) appendLine("Artists: ${artists.joinToString(", ")}")
-                if (groups.isNotEmpty()) appendLine("Groups: ${groups.joinToString(", ")}")
-                if (!pagesText.isNullOrEmpty()) append(pagesText)
-            }.trimEnd()
+            description = pagesText.orEmpty()
         }
 
         // Extract comic ID from the "Back to gallery" / first page link on the thumbnail page
