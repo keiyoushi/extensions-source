@@ -10,6 +10,7 @@ import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.MirrorPreferences
 import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
@@ -18,8 +19,12 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
@@ -30,11 +35,11 @@ import java.util.Locale
 @Source
 abstract class Wolf : KeiSource() {
 
-    private val isWebtoon get() = name.endsWith("웹툰")
+    internal val isWebtoon get() = name.endsWith("웹툰")
     private val isComic get() = name.endsWith("만화책")
-    private val isPhoto get() = name.endsWith("포토툰")
+    internal val isPhoto get() = name.endsWith("포토툰")
 
-    private val browsePath get() = when {
+    internal val browsePath get() = when {
         isComic -> "cm"
         isPhoto -> "pt"
         else -> "ing" // Webtoon
@@ -51,11 +56,18 @@ abstract class Wolf : KeiSource() {
     }
 
     // Old domains serve a notice linking the current one
-    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = listOfNotNull(
-        client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
-            .selectFirst(".card a.main-btn")
-            ?.absUrl("href"),
-    )
+    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = coroutineScope {
+        (fetchableBaseUrl as MirrorPreferences).mirrors.map { (_, url) ->
+            async {
+                val document = client.get(url, Fetch.DOCUMENT).asJsoup()
+                document.selectFirst(".card a.main-btn")?.absUrl("href") ?: document.location()
+            }
+        }.awaitAll()
+    }
+
+    // 늑대닷컴2 and 여우코믹스 have the same series, episodes and images, in the site's previous template
+    private val oldTemplate = OldTemplate(this)
+    private val isOldTemplate get() = OLD_TEMPLATE_HOST.matches(baseUrl.toHttpUrl().host)
 
     private val sortOptions get() = if (isComic) {
         listOf("최신순" to "n", "인기순" to "f")
@@ -68,6 +80,8 @@ abstract class Wolf : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter(sortOptions, "n")))
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (isOldTemplate) return oldTemplate.getSearchMangaList(page, query, filters)
+
         val url = if (query.isNotBlank()) {
             if (query.length < 2) {
                 throw Exception("두 글자 이상 입력 해주세요.")
@@ -102,6 +116,13 @@ abstract class Wolf : KeiSource() {
 
     private fun Document.hasNextPage() = selectFirst(".pagi .pg-btn.on + a.pg-btn") != null
 
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (!FRONT_HOST.matches(url.host) || url.pathSegments.firstOrNull() !in setOf(entryPath, readerPath)) return null
+        val id = url.queryParameter("toon")?.takeIf { it.all(Char::isDigit) } ?: return null
+        val manga = SManga.create().apply { this.url = id }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
+
     override fun getMangaUrl(manga: SManga): String = baseUrl.toHttpUrl().newBuilder()
         .addPathSegment(entryPath)
         .addQueryParameter("toon", manga.url)
@@ -113,6 +134,8 @@ abstract class Wolf : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
+        if (isOldTemplate) return oldTemplate.fetchMangaUpdate(manga)
+
         var document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         val updatedManga = manga.apply {
@@ -170,6 +193,8 @@ abstract class Wolf : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
+        if (isOldTemplate) return oldTemplate.getPageList(chapter)
+
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         return document.select("#vimg-area img[data-src]").mapIndexed { idx, img ->
@@ -177,7 +202,8 @@ abstract class Wolf : KeiSource() {
         }
     }
 
-    override val supportsFilterFetching get() = !isPhoto
+    // The old template's filters are fixed, and fetching them would replace the cached ones of the new template
+    override val supportsFilterFetching get() = !isPhoto && !isOldTemplate
 
     override suspend fun fetchFilterData(): JsonElement {
         val document = client.get("$baseUrl/$browsePath", Fetch.DOCUMENT).asJsoup()
@@ -196,6 +222,7 @@ abstract class Wolf : KeiSource() {
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
+        if (isOldTemplate) return oldTemplate.getFilterList()
         if (isPhoto) return FilterList()
 
         val filters: MutableList<Filter<*>> = mutableListOf(
@@ -217,4 +244,8 @@ abstract class Wolf : KeiSource() {
 
 private val FILTER_PARAMS = listOf("t1", "t2", "t3")
 
-private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
+internal val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
+
+// Current and older domains of 늑대닷컴, 늑대닷컴2 and 여우코믹스
+private val FRONT_HOST = Regex("""(?:wfwf|wftoon|fxfx)\d+\.com""")
+private val OLD_TEMPLATE_HOST = Regex("""(?:wftoon|fxfx)\d+\.com""")

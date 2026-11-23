@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Wolf.com"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -14,7 +14,11 @@ keiyoushi {
         name = "늑대닷컴 - 웹툰"
         lang = "ko"
         baseUrl {
-            custom("https://wfwf541.com")
+            mirrors(
+                "늑대닷컴" to "https://wfwf544.com",
+                "늑대닷컴2" to "https://wftoon238.com",
+                "여우코믹스" to "https://fxfx332.com",
+            )
         }
     }
 
@@ -22,7 +26,7 @@ keiyoushi {
         name = "늑대닷컴 - 만화책"
         lang = "ko"
         baseUrl {
-            custom("https://wfwf541.com")
+            mirrors("늑대닷컴" to "https://wfwf544.com")
         }
     }
 
@@ -30,7 +34,17 @@ keiyoushi {
         name = "늑대닷컴 - 포토툰"
         lang = "ko"
         baseUrl {
-            custom("https://wfwf541.com")
+            mirrors(
+                "늑대닷컴2" to "https://wftoon238.com",
+                "여우코믹스" to "https://fxfx332.com",
+            )
         }
+    }
+
+    deeplink {
+        path("/list")
+        path("/view")
+        path("/cl")
+        path("/cv")
     }
 }
