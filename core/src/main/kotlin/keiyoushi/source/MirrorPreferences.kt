@@ -37,8 +37,15 @@ class MirrorPreferences(
         get() = mirrors[index].second
 
     override fun update(urls: List<String>) {
-        // The default follows the site's order, a pick follows its url
-        val newIndex = if (index == 0) 0 else urls.indexOf(baseUrl).coerceAtLeast(0)
+        // The default follows the site's order. A pick follows its url, or keeps its place when its domain moved in a
+        // list of the same size, else goes back to the first mirror
+        val pick = index
+        val newIndex = when {
+            pick == 0 -> 0
+            baseUrl in urls -> urls.indexOf(baseUrl)
+            urls.size == mirrors.size -> pick
+            else -> 0
+        }
         preferences.edit()
             .putString(fetchedKey, urls.joinToString(","))
             .putString(fetchedFromKey, hardcodedUrls)
