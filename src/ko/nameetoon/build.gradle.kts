@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "NameeToon"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -14,7 +14,11 @@ keiyoushi {
         name = "나미툰"
         lang = "ko"
         baseUrl {
-            custom("https://namee134.asia")
+            mirrors(
+                "나미툰" to "https://namee134.asia",
+                "머니툰" to "https://mtoon174.asia",
+                "무료툰" to "https://foc145.asia",
+            )
         }
     }
 
