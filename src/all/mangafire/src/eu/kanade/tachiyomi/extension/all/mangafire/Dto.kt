@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.all.mangafire
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.toMarkdown
+import keiyoushi.utils.MarkdownDescription
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
 
@@ -35,7 +35,6 @@ class MangaDto(
         url = "/title/$hid${slug?.let { "-$it" } ?: ""}"
         title = this@MangaDto.title
         thumbnail_url = poster?.large ?: poster?.medium ?: poster?.small
-        initialized = false
     }
 }
 
@@ -55,6 +54,12 @@ class MangaDetailsDto(
     private val artists: List<EntityDto>? = null,
     private val genres: List<EntityDto>? = null,
     private val themes: List<EntityDto>? = null,
+    private val demographics: List<EntityDto>? = null,
+    private val year: Int? = null,
+    private val rating: Float? = null,
+    private val ratingCount: Int? = null,
+    private val altTitles: List<String>? = null,
+    private val links: Map<String, String>? = null,
 ) {
     fun toSManga() = SManga.create().apply {
         url = "/title/$hid${slug?.let { "-$it" } ?: ""}"
@@ -62,10 +67,17 @@ class MangaDetailsDto(
         thumbnail_url = poster?.large ?: poster?.medium ?: poster?.small
         author = authors?.joinToString { it.title }
         artist = artists?.joinToString { it.title }
-        description = synopsisHtml?.let { Jsoup.parseBodyFragment(it).body().toMarkdown() }
+        description = MarkdownDescription.Builder()
+            .rating(rating?.takeIf { (ratingCount ?: 0) > 0 }, votes = ratingCount)
+            .info(year?.toString())
+            .description(synopsisHtml?.let { Jsoup.parseBodyFragment(it).body() })
+            .altTitles(altTitles.orEmpty())
+            .links(links.orEmpty().mapNotNull { (key, url) -> LINK_NAMES[key]?.let { it to url } })
+            .build()
         genre = buildList {
             type?.replaceFirstChar { it.uppercase() }?.let { add(it) }
             genres?.forEach { add(it.title) }
+            demographics?.forEach { add(it.title) }
             themes?.forEach { add(it.title) }
         }.joinToString()
         status = when (this@MangaDetailsDto.status?.lowercase()) {
@@ -75,7 +87,16 @@ class MangaDetailsDto(
             "discontinued" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
-        initialized = true
+    }
+
+    companion object {
+        private val LINK_NAMES = mapOf(
+            "mal" to "MyAnimeList",
+            "al" to "AniList",
+            "mu" to "MangaUpdates",
+            "md" to "MangaDex",
+            "mb" to "MangaBaka",
+        )
     }
 }
 
@@ -90,7 +111,6 @@ class VolumeDto(
     private val id: Int,
     private val number: Int,
     private val name: String? = null,
-    private val chapterCount: Int,
     val language: String,
 ) {
     fun toSChapter(mangaUrl: String): SChapter = SChapter.create().apply {
@@ -103,7 +123,6 @@ class VolumeDto(
                 append(this@VolumeDto.name)
             }
         }
-        scanlator = "$chapterCount chapters"
     }
 }
 
@@ -113,26 +132,21 @@ class ChapterDto(
     private val number: Float,
     private val name: String? = null,
     private val createdAt: Long? = null,
-    val type: String? = null,
+    private val type: String? = null,
 ) {
     fun toSChapter(mangaUrl: String, langCode: String): SChapter = SChapter.create().apply {
-        url = "$mangaUrl/$id-chapter-${number.toString().removeSuffix(".0")}-$langCode"
-        when {
-            this@ChapterDto.name.isNullOrBlank() -> number to "Ch. ${number.toString().removeSuffix(".0")}"
-            else -> when (val extractedNumber = chapterRegex.find(this@ChapterDto.name)?.value?.toFloatOrNull()) {
-                null -> number to "Ch. ${number.toString().removeSuffix(".0")} - ${this@ChapterDto.name}"
-                else -> extractedNumber to this@ChapterDto.name
+        val numberText = number.toString().removeSuffix(".0")
+        url = "$mangaUrl/$id-chapter-$numberText-$langCode"
+        chapter_number = number
+        name = buildString {
+            append("Ch. $numberText")
+            if (!this@ChapterDto.name.isNullOrBlank()) {
+                append(" - ")
+                append(this@ChapterDto.name)
             }
-        }.let { (a, b) ->
-            chapter_number = a
-            name = b
         }
-        scanlator = type ?: "Unknown"
-        date_upload = createdAt?.times(1000L) ?: 0L
-    }
-
-    companion object {
-        private val chapterRegex = """(?<=\b(?:ch(?:\.|apter)?|ep(?:\.|isode)?)\s?)\d+(?:\.\d+)?""".toRegex(RegexOption.IGNORE_CASE)
+        scanlator = type
+        createdAt?.let { date_upload = it * 1000 }
     }
 }
 
