@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.vinetheme
 
+import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -12,12 +13,16 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
+import keiyoushi.utils.aesDecrypt
+import keiyoushi.utils.aesGcm
 import keiyoushi.utils.booleanOrNull
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -25,10 +30,13 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 
 abstract class VineTheme :
     KeiSource(),
     ConfigurableSource {
+
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(FragmentInterceptor())
 
     private val preferences by getPreferencesLazy()
 
@@ -137,11 +145,38 @@ abstract class VineTheme :
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         if (chapter.memo["isLocked"]?.booleanOrNull == true) return emptyList()
-        val response = client.get(getChapterUrl(chapter), rscHeaders, Fetch.XHR)
-        val dto = response.extractNextJs<ChapterDetailDto>(ChapterDetailDto::nextJsFilter)
-        return dto?.chapter?.pages.orEmpty().mapIndexedNotNull { index, pageDto ->
-            pageDto.imageUrl?.toAbsoluteUrl(baseUrl)?.let { Page(index, imageUrl = it) }
+        val chapterUrl = getChapterUrl(chapter)
+        val pages = client.get(chapterUrl, rscHeaders, Fetch.XHR)
+            .extractNextJs<ChapterDetailDto>(ChapterDetailDto::nextJsFilter)
+            ?.chapter?.pages.orEmpty()
+        val masterKey = if (pages.any { it.fragmentMap != null }) {
+            client.get("$baseUrl/api/fragments/${chapter.memo["id"]!!.string}/key", Fetch.XHR.from(chapterUrl))
+                .parseAs<FragmentKeyDto>().key.decodeBase64()
+        } else {
+            null
         }
+        return pages.mapIndexed { index, page ->
+            val imageUrl = if (page.fragmentMap != null) page.toLayoutUrl(masterKey!!) else page.imageUrl!!.toAbsoluteUrl(baseUrl)
+            Page(index, imageUrl = imageUrl)
+        }
+    }
+
+    private fun PageDto.toLayoutUrl(masterKey: ByteArray): String {
+        val pageKey = id.hmacSha256(masterKey)
+        val map = fragmentMap!!.decodeBase64()
+            .aesDecrypt(aesGcm(pageKey, fragmentMapIv!!.decodeBase64()))
+            .decodeToString()
+            .parseAs<FragmentMapDto>()
+        val urls = fragments.associate { it.fragmentIndex to it.imageUrl.toAbsoluteUrl(baseUrl)!! }
+        val layout = PageLayout(
+            map.w,
+            map.h,
+            map.fragments.map { PagePart(urls[it.idx]!!, it.x, it.y, it.w, it.h) },
+        )
+        return layout.parts.first().url.toHttpUrl().newBuilder()
+            .fragment(layout.toJsonString())
+            .build()
+            .toString()
     }
 
     override val supportsFilterFetching: Boolean get() = true
@@ -190,6 +225,8 @@ abstract class VineTheme :
         val number = chapter.memo["number"]!!.string
         return "$baseUrl/series/comic/$slug/chapter/$number"
     }
+
+    private fun String.decodeBase64(): ByteArray = Base64.decode(this, Base64.DEFAULT)
 
     companion object {
         private const val HIDE_LOCKED_PREF = "pref_hide_locked_chapters"

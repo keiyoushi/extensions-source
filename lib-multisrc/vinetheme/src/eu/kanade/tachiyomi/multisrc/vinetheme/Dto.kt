@@ -97,7 +97,54 @@ class ChapterPagesDto(
 
 @Serializable
 class PageDto(
-    val imageUrl: String? = null,
+    val id: String,
+    val imageUrl: String?,
+    val fragmentMap: String?,
+    val fragmentMapIv: String?,
+    val fragments: List<FragmentDto> = emptyList(),
+)
+
+@Serializable
+class FragmentDto(
+    val fragmentIndex: Int,
+    val imageUrl: String,
+)
+
+@Serializable
+class FragmentKeyDto(
+    val key: String,
+)
+
+@Serializable
+class FragmentMapDto(
+    val w: Int,
+    val h: Int,
+    val fragments: List<FragmentRectDto>,
+)
+
+@Serializable
+class FragmentRectDto(
+    val idx: Int,
+    val x: Int,
+    val y: Int,
+    val w: Int,
+    val h: Int,
+)
+
+@Serializable
+class PageLayout(
+    val width: Int,
+    val height: Int,
+    val parts: List<PagePart>,
+)
+
+@Serializable
+class PagePart(
+    val url: String,
+    val x: Int,
+    val y: Int,
+    val width: Int,
+    val height: Int,
 )
 
 @Serializable
