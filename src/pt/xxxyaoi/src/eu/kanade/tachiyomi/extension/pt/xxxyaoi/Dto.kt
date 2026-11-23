@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.xxxyaoi
 
 import android.util.Base64
-import keiyoushi.utils.firstInstance
+import keiyoushi.utils.array
 import keiyoushi.utils.int
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
@@ -9,8 +9,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.intOrNull
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.nio.ByteBuffer
@@ -26,7 +24,7 @@ class LibraryData(
     @SerialName("total_pages") val totalPages: Int,
 )
 
-// The library grid's data-x_ config, in the order the site's fetchLibrary reads it
+// The library grid's encoded config, in the order the site's fetchLibrary reads it
 class LibraryConfig(values: JsonArray) {
     private val tokenField = values[0].string
     private val token = values[1].string
@@ -51,7 +49,7 @@ class LibraryConfig(values: JsonArray) {
     )
 }
 
-// A chapter row's data-x_ value: id, slug, name
+// A chapter row's encoded value: id, slug, name
 class ChapterRow(values: JsonArray) {
     val slug = values[1].string
     val name = values[2].string
@@ -82,44 +80,55 @@ class ReaderData(
     }
 
     companion object {
-        // Block keys, ids and the decoder's variable names are renamed per page: values by type, the byte transform from the decoder
+        // Field names and the byte transform as the page's decoder reads them
         fun from(document: Document): ReaderData {
-            // The data block's type changes too (application/json, text/x-xy-data): the reader's script holding a JSON object
-            val values = document.select(".reading-content script:not([src])").firstNotNullOf { script ->
-                script.data().trim().takeIf { it.startsWith("{") }?.parseAs<JsonObject>()?.values
-            }
             val html = document.html()
             fun constant(token: String) = token.toIntOrNull()
                 ?: VARIABLE_REGEX.findAll(html).first { it.groupValues[1] == token }.groupValues[2].toInt()
-            // `(_raw.charCodeAt(i) - <shift> - (i % N)) & 255`
+            // `_b ^ _key.charCodeAt(i % _key.length) ^ <mask>`, with `var _key = _dat["<field>"]`
+            val keyUse = KEY_REGEX.find(html)!!
+            val keyField = FIELD_REGEX.findAll(html).first { it.groupValues[1] == keyUse.groupValues[1] }.groupValues[2]
+            // `_dat["<payload>"].slice(_dat["<offset>"])`
+            val (payloadField, offsetField) = SLICE_REGEX.find(html)!!.destructured
+            // The data block: a JSON object, as is or as reversed base64
+            val data = document.select(".reading-content script:not([src])").firstNotNullOf { script ->
+                val text = script.data().trim()
+                val json = text.takeIf { it.startsWith("{") } ?: text.reversed().decodeBase64OrNull()?.decodeToString()
+                json?.takeIf { it.startsWith("{") }?.parseAs<JsonObject>()?.takeIf { payloadField in it }
+            }
+            // `(_raw.charCodeAt(i) - <shift> - (i % N)) & 255`, or `(_raw.codePointAt(i) + 256 - <shift> - (i % N)) % 256`
             val transform = TRANSFORM_REGEX.find(html)!!.groupValues[1]
             val shift = TERM_REGEX.findAll(MOD_REGEX.replace(transform, "")).sumOf { constant(it.groupValues[1]) }
-            // `_b ^ _key.charCodeAt(i % _key.length) ^ <mask>`
-            val mask = XOR_REGEX.find(html)?.groupValues?.get(1).orEmpty().let(XOR_TERM_REGEX::findAll)
-                .fold(0) { acc, term -> acc xor constant(term.groupValues[1]) }
+            val mask = XOR_TERM_REGEX.findAll(keyUse.groupValues[2]).fold(0) { acc, term -> acc xor constant(term.groupValues[1]) }
             return ReaderData(
-                key = values.firstNotNullOf { (it as? JsonPrimitive)?.takeIf(JsonPrimitive::isString)?.content },
-                payload = values.firstInstance<JsonArray>().map { it.string },
-                offset = values.firstNotNullOf { (it as? JsonPrimitive)?.takeUnless(JsonPrimitive::isString)?.intOrNull },
+                key = data.getValue(keyField).string,
+                payload = data.getValue(payloadField).array.map { it.string },
+                offset = data.getValue(offsetField).int,
                 shift = shift,
                 mods = MOD_REGEX.findAll(transform).map { it.groupValues[1].toInt() }.toList(),
                 mask = mask,
             )
         }
 
-        private val TRANSFORM_REGEX = Regex("""charCodeAt\(\s*i\s*\)(.*?)\)\s*&\s*255""")
+        private val TRANSFORM_REGEX = Regex("""(?:charCodeAt|codePointAt)\(\s*i\s*\)(.*?)\)\s*(?:&\s*255|%\s*256)""")
         private val MOD_REGEX = Regex("""\(\s*i\s*%\s*(\d+)\s*\)""")
         private val TERM_REGEX = Regex("""-\s*(\w+)""")
-        private val XOR_REGEX = Regex("""charCodeAt\(\s*i\s*%\s*\w+\.length\s*\)((?:\s*\^\s*\w+)*)""")
+        private val KEY_REGEX = Regex("""charCodeAt\(\s*i\s*%\s*(\w+)\.length\s*\)((?:\s*\^\s*\w+)*)""")
+        private val FIELD_REGEX = Regex("""var\s+(\w+)\s*=\s*\w+\[\s*["'](\w+)["']\s*]""")
+        private val SLICE_REGEX = Regex("""\w+\[\s*["'](\w+)["']\s*]\.slice\(\s*\w+\[\s*["'](\w+)["']\s*]\s*\)""")
         private val XOR_TERM_REGEX = Regex("""\^\s*(\w+)""")
         private val VARIABLE_REGEX = Regex("""var\s+(\w+)\s*=\s*(\d+)""")
     }
 }
 
-// The site's atob(value).split('').reverse()
-fun String.decodeReversedBase64() = Base64.decode(this, Base64.DEFAULT).reversedArray().decodeToString()
+private fun String.decodeBase64OrNull() = takeIf(BASE64_REGEX::matches)?.let { Base64.decode(it, Base64.DEFAULT) }
 
-// The site's encoded data-<letter>_<hash> attribute, whose letter changes too (data-x_, data-p_)
-fun Element.encodedData() = attributes().first { ENCODED_DATA_REGEX.matches(it.key) }.value.decodeReversedBase64()
+// The element's encoded data-* attribute, recognized by its value: a JSON array once decoded.
+// The site's atob(value).split('').reverse(), after the version prefix newer values carry (`xy2$`)
+fun Element.encodedData() = attributes().firstNotNullOf { attribute ->
+    attribute.value.takeIf { attribute.key.startsWith("data-") }?.substringAfter('$')
+        ?.decodeBase64OrNull()?.reversedArray()?.decodeToString()?.takeIf { it.startsWith("[") }
+}
 
-private val ENCODED_DATA_REGEX = Regex("""data-[a-z]+_[0-9a-f]+""")
+// Whole quantums, then a tail of 2 or 3 characters, padded or not
+private val BASE64_REGEX = Regex("""(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}(?:==)?|[A-Za-z0-9+/]{3}=?)?""")
