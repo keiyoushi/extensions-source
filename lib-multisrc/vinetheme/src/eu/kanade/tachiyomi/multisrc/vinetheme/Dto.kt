@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.multisrc.vinetheme
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.string
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
@@ -158,6 +159,7 @@ class MangaDto(
     private val type: String = "",
     private val origin: String = "",
     private val rating: Double = 0.0,
+    private val ratingCount: Int?,
     private val isHot: Boolean = false,
     private val isMature: Boolean = false,
     private val salePercent: Int?,
@@ -166,9 +168,12 @@ class MangaDto(
     private val description: String?,
     private val genres: List<GenreDto> = emptyList(),
     private val tags: List<GenreDto> = emptyList(),
-    private val team: TeamDto?,
+    val team: TeamDto?,
 ) {
-    fun toSManga(baseUrl: String, manga: SManga = SManga.create(), fallbackSlug: String = ""): SManga = manga.apply {
+    val isComic: Boolean
+        get() = type in COMIC_TYPES
+
+    fun toSManga(baseUrl: String, manga: SManga = SManga.create(), fallbackSlug: String = "", author: String? = null): SManga = manga.apply {
         val canonicalSlug = listOf(urlSlug.orEmpty(), memo["slug"]?.string.orEmpty(), fallbackSlug)
             .firstOrNull { it.isNotBlank() }
             ?: slug
@@ -181,23 +186,24 @@ class MangaDto(
             put("slug", canonicalSlug)
         }
         status = this@MangaDto.status.toSMangaStatus()
-        author = team?.name
+        this.author = author
         genre = buildList {
-            type.takeIf { it.isNotBlank() }?.let(::add)
-            origin.takeIf { it.isNotBlank() }?.let(::add)
+            type.takeIf { it.isNotBlank() }?.let { add(it.toLabel()) }
+            origin.takeIf { it.isNotBlank() }?.let { add(it.toLabel()) }
             if (isMature) add("Mature")
             addAll(genres.map { it.displayName })
             addAll(tags.map { it.displayName })
         }.distinct().joinToString()
         description = MarkdownDescription.Builder()
-            .rating(rating.takeIf { it > 0 })
+            // Scored out of 10, shown by the site as five stars
+            .rating(rating.takeIf { it > 0 }?.div(2), max = 5, votes = ratingCount)
             .info(
                 "Featured".takeIf { isHot },
                 "Mature".takeIf { isMature },
                 salePercent?.takeIf { it > 0 }?.let { "Sale: $it%" },
             )
-            .field("Type", type)
-            .field("Origin", origin)
+            .field("Type", type.toLabel())
+            .field("Origin", origin.toLabel())
             .separator()
             .description(this@MangaDto.description?.let { Jsoup.parseBodyFragment(it, baseUrl).body() })
             .altTitles((listOfNotNull(originalTitle) + aliases).filterNot { it.trim().equals(title, ignoreCase = true) })
@@ -238,7 +244,7 @@ class ChapterDto(
     val isLocked: Boolean = false,
     private val coinPrice: Int = if (isLocked) 1 else 0,
 ) {
-    fun toSChapter(manga: SManga): SChapter = SChapter.create().apply {
+    fun toSChapter(manga: SManga, team: String?): SChapter = SChapter.create().apply {
         val numberString = number.toString().removeSuffix(".0")
         name = if (title.isNullOrBlank() || title == numberString) "Chapter $numberString" else title
         if (isLocked) {
@@ -247,6 +253,7 @@ class ChapterDto(
             name = "\uD83D\uDD13 $name"
         }
         date_upload = Instant.tryParse(publishedAt)
+        scanlator = team
         chapter_number = number.toFloat()
         val mangaSlug = manga.memo["slug"]?.string.orEmpty()
         url = id
@@ -258,6 +265,30 @@ class ChapterDto(
         }
     }
 }
+
+@Serializable
+class JsonLdScriptDto(
+    @SerialName("__html")
+    val html: String,
+) {
+    companion object {
+        fun nextJsFilter(element: JsonElement): Boolean = element is JsonObject && element.getStringOrNull("__html")?.contains(""""@type":"Book"""") == true
+    }
+}
+
+@Serializable
+class JsonLdBookDto(
+    val author: JsonLdPersonDto?,
+)
+
+@Serializable
+class JsonLdPersonDto(
+    val name: String?,
+)
+
+private val COMIC_TYPES = setOf("MANHWA", "MANHUA", "MANGA", "WEBTOON")
+
+private fun String.toLabel(): String = lowercase().split('_').joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
 
 private fun String.toSMangaStatus(): Int = when (this) {
     "ONGOING" -> SManga.ONGOING

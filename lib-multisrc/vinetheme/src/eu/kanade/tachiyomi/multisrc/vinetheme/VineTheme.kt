@@ -17,6 +17,7 @@ import keiyoushi.utils.aesDecrypt
 import keiyoushi.utils.aesGcm
 import keiyoushi.utils.booleanOrNull
 import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
@@ -78,11 +79,9 @@ abstract class VineTheme :
         val segments = url.pathSegments
         if (segments.getOrNull(0) != "series" || segments.getOrNull(1) != "comic") return null
         val slug = segments.getOrNull(2)?.takeIf { it.isNotEmpty() } ?: return null
-        if (segments.getOrNull(3) == "chapter") return null
-        val detail = client.get("$baseUrl/series/comic/$slug", rscHeaders, Fetch.XHR)
-            .extractNextJs<DetailDto>(DetailDto::nextJsFilter)
-            ?: return null
-        return detail.series.toSManga(baseUrl, fallbackSlug = slug)
+        val body = getRsc("$baseUrl/series/comic/$slug".toHttpUrl()).body.string()
+        val detail = body.extractNextJsRsc<DetailDto>(DetailDto::nextJsFilter) ?: return null
+        return detail.series.toSManga(baseUrl, fallbackSlug = slug, author = body.parseAuthor())
     }
 
     override suspend fun fetchMangaUpdate(
@@ -91,9 +90,10 @@ abstract class VineTheme :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = client.get(getDetailsUrl(manga), rscHeaders, Fetch.XHR).extractNextJs<DetailDto>(DetailDto::nextJsFilter)
+        val body = getRsc(getDetailsUrl(manga)).body.string()
+        val details = body.extractNextJsRsc<DetailDto>(DetailDto::nextJsFilter)
 
-        val updatedManga = details?.series?.toSManga(baseUrl, manga) ?: manga
+        val updatedManga = details?.series?.toSManga(baseUrl, manga, author = body.parseAuthor()) ?: manga
         val updatedChapters = if (fetchChapters) fetchAllChapters(manga, details, chapters) else chapters
 
         return SMangaUpdate(updatedManga, updatedChapters)
@@ -101,11 +101,21 @@ abstract class VineTheme :
 
     override val supportsRelatedMangas: Boolean get() = true
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getDetailsUrl(manga), rscHeaders, Fetch.XHR)
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = getRsc(getDetailsUrl(manga))
         .extractNextJs<RelatedDto>(RelatedDto::nextJsFilter)
         ?.similarSeries
         .orEmpty()
+        .filter { it.isComic }
         .map { it.toSManga(baseUrl) }
+
+    private fun String.parseAuthor(): String? = extractNextJsRsc<JsonLdScriptDto>(JsonLdScriptDto::nextJsFilter)
+        ?.html
+        ?.parseAs<JsonLdBookDto>()
+        ?.author
+        ?.name
+
+    // Bare _rsc parameter, without which the site redirects every RSC fetch
+    private suspend fun getRsc(url: HttpUrl) = client.get(url.newBuilder().addQueryParameter("_rsc", null).build(), rscHeaders, Fetch.XHR)
 
     private fun getDetailsUrl(manga: SManga): HttpUrl = getMangaUrl(manga).toHttpUrl().newBuilder()
         .addQueryParameter("sort", "desc")
@@ -118,12 +128,10 @@ abstract class VineTheme :
             details.chapters + coroutineScope {
                 (2..details.totalPages).map { page ->
                     async {
-                        client.get(
+                        getRsc(
                             getDetailsUrl(manga).newBuilder()
                                 .addQueryParameter("page", page.toString())
                                 .build(),
-                            rscHeaders,
-                            Fetch.XHR,
                         ).extractNextJs<DetailDto>(DetailDto::nextJsFilter)
                             ?.chapters.orEmpty()
                     }
@@ -134,7 +142,7 @@ abstract class VineTheme :
         }
         val fetched = allChapters
             .filter { !(it.isLocked && hideLocked) }
-            .map { it.toSChapter(manga) }
+            .map { it.toSChapter(manga, details.series.team?.name) }
         val retained = existing.filter {
             !(hideLocked && it.memo["isLocked"]?.booleanOrNull == true)
         }
@@ -144,9 +152,9 @@ abstract class VineTheme :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        if (chapter.memo["isLocked"]?.booleanOrNull == true) return emptyList()
+        if (chapter.memo["isLocked"]?.booleanOrNull == true) throw Exception("This chapter is locked")
         val chapterUrl = getChapterUrl(chapter)
-        val pages = client.get(chapterUrl, rscHeaders, Fetch.XHR)
+        val pages = getRsc(chapterUrl.toHttpUrl())
             .extractNextJs<ChapterDetailDto>(ChapterDetailDto::nextJsFilter)
             ?.chapter?.pages.orEmpty()
         val masterKey = if (pages.any { it.fragmentMap != null }) {
