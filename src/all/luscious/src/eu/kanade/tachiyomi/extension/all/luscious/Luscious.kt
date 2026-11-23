@@ -15,9 +15,13 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.graphQLGet
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.parseGraphQLAs
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -94,9 +98,9 @@ abstract class Luscious :
         if (!url.host.endsWith(baseUrl.toHttpUrl().host.substringAfter("."))) return null
         if (url.pathSegments.getOrNull(0) != "albums") return null
         val album = url.pathSegments.getOrNull(1) ?: return null
-        val id = album.split("_").last()
+        val manga = SManga.create().apply { this.url = "/albums/$album/" }
 
-        return detailsParse(getAlbumInfo(id))
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     private fun buildAlbumListRequestInput(page: Int, filters: FilterList, query: String = ""): Variables {
@@ -198,14 +202,14 @@ abstract class Luscious :
 
     private suspend fun getAlbumList(page: Int, filters: FilterList, query: String = ""): MangasPage {
         val input = buildAlbumListRequestInput(page, filters, query)
-        val url = apiBaseUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("operationName", "AlbumList")
-            .addQueryParameter("query", ALBUM_LIST_REQUEST_GQL)
-            .addQueryParameter("variables", input.toJsonString())
-            .build()
-
-        val data = client.get(url, Fetch.XHR).parseAs<AlbumListResponse>()
-        with(data.data.album.list) {
+        val data = client.graphQLGet(
+            apiBaseUrl,
+            query = ALBUM_LIST_REQUEST_GQL,
+            operationName = "AlbumList",
+            variables = input.toJsonElement(),
+            fetch = Fetch.XHR,
+        ).parseGraphQLAs<AlbumListData>()
+        with(data.album.list) {
             return MangasPage(
                 this.items.map {
                     SManga.create().apply {
@@ -219,16 +223,13 @@ abstract class Luscious :
         }
     }
 
-    private suspend fun getAlbumInfo(id: String): FullAlbum {
-        val input = SingleIdVariable(id = id)
-        val url = apiBaseUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("operationName", "AlbumGet")
-            .addQueryParameter("query", albumInfoQuery)
-            .addQueryParameter("variables", input.toJsonString())
-            .build()
-
-        return client.get(url, Fetch.XHR).parseAs<AlbumGetResponse>().data.album.get
-    }
+    private suspend fun getAlbumInfo(id: String): FullAlbum = client.graphQLGet(
+        apiBaseUrl,
+        query = albumInfoQuery,
+        operationName = "AlbumGet",
+        variables = SingleIdVariable(id).toJsonElement(),
+        fetch = Fetch.XHR,
+    ).parseGraphQLAs<AlbumGetData>().album.get
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -249,7 +250,11 @@ abstract class Luscious :
         manga.url = data.url
         manga.title = data.title
         manga.thumbnail_url = data.cover.url
-        manga.description = "${data.description}\n\nPictures: ${data.numberOfPictures}\nAnimated Pictures: ${data.numberOfAnimatedPictures}"
+        manga.description = MarkdownDescription.Builder()
+            .description(data.description)
+            .field("Pictures", data.numberOfPictures.toString())
+            .field("Animated Pictures", data.numberOfAnimatedPictures.toString())
+            .build()
         val genreList = listOfNotNull(data.language?.title).toMutableList()
         genreList += data.labels
         genreList += data.genres.map { it.title }
@@ -270,15 +275,14 @@ abstract class Luscious :
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val id = manga.url.substringAfterLast("_").removeSuffix("/")
-        val input = SingleIdVariable(id = id)
-        val url = apiBaseUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("operationName", "AlbumListRelated")
-            .addQueryParameter("query", albumListRelatedQuery)
-            .addQueryParameter("variables", input.toJsonString())
-            .build()
-
-        val data = client.get(url, Fetch.XHR).parseAs<AlbumRelatedResponse>()
-        with(data.data.album.listRelated) {
+        val data = client.graphQLGet(
+            apiBaseUrl,
+            query = albumListRelatedQuery,
+            operationName = "AlbumListRelated",
+            variables = SingleIdVariable(id).toJsonElement(),
+            fetch = Fetch.XHR,
+        ).parseGraphQLAs<AlbumRelatedData>()
+        with(data.album.listRelated) {
             return listOfNotNull(
                 moreLikeThis,
                 itemsLikedLikeThis,

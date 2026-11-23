@@ -22,11 +22,6 @@ class SingleIdVariable(
 
 // ALBUM LIST
 @Serializable
-class AlbumListResponse(
-    val data: AlbumListData,
-)
-
-@Serializable
 class AlbumListData(
     val album: AlbumListDataAlbum,
 )
@@ -43,11 +38,6 @@ class AlbumList(
 )
 
 // ALBUM RELATED
-@Serializable
-class AlbumRelatedResponse(
-    val data: AlbumRelatedData,
-)
-
 @Serializable
 class AlbumRelatedData(
     val album: AlbumRelatedDataAlbum,
@@ -169,11 +159,6 @@ class Picture(
 )
 
 // AlbumGet
-
-@Serializable
-class AlbumGetResponse(
-    val data: AlbumGetData,
-)
 
 @Serializable
 class AlbumGetData(
