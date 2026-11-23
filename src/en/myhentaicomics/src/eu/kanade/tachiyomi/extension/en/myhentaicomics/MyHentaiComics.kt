@@ -25,6 +25,9 @@ abstract class MyHentaiComics : KeiSource() {
 
     private val tagIdCache = ConcurrentHashMap<String, String>()
 
+    /** Resolved page image URLs, keyed by reader page URL. */
+    private val pageImageUrls = ConcurrentHashMap<String, String>()
+
     @Volatile
     private var indexes: TagIndexes? = null
 
@@ -294,23 +297,21 @@ abstract class MyHentaiComics : KeiSource() {
     // ============================== Page List ===============================
 
     /**
-     * Builds the page list, then checks the naming scheme it derived against the last
-     * page before trusting it. Works that do not fit any scheme fall back to reading
-     * each reader page, which is slower but cannot produce broken image URLs.
+     * Only the page numbers are produced here; each image URL is looked up when the reader
+     * asks for it.
+     *
+     * A chapter cannot be rebuilt from one naming rule: the same work mixes stills and
+     * animations, so page 3 can be "003.jpg" while page 4 is "004.gif" or "004.webp", with
+     * prefixes such as "012_001.gif" or "1_001.jpg" on top. Guessing the extension of pages
+     * that were not read produces 404s, so the site's own reader page is asked instead.
      */
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterUrl = getChapterUrl(chapter)
-        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
         // The comic ID from the request URL: /gallery/show/59109/1
         val comicId = document.location()
             .substringAfter("/gallery/show/")
             .substringBefore("/")
-
-        // The first page's image carries the naming scheme: directory, prefix, padding,
-        // suffix and extension. Example: ".../original/012_001.gif?22".
-        val firstImageUrl = document.selectFirst("ul.gallery-slide li img")?.absUrl("src")
-            ?: return emptyList()
 
         // The highest page number the reader links to; the site paginates 1..N with no
         // gaps, so this is also the number of images.
@@ -319,110 +320,33 @@ abstract class MyHentaiComics : KeiSource() {
             .mapNotNull { it.attr("href").substringAfterLast("/").toIntOrNull() }
             .maxOrNull() ?: 1
 
-        // A one-page work needs no scheme: the URL we already have is the whole list.
-        if (totalPages <= 1) {
-            return listOf(Page(0, imageUrl = firstImageUrl.encodeSpaces()))
-        }
-
-        val secondImageUrl = imageUrlOnPage(chapterUrl, 2)
-        val template = secondImageUrl?.let { pageNameTemplate(firstImageUrl, it) }
-
-        if (template != null) {
-            // Page 2 alone cannot tell a scheme like "001_002" (first number moves) from
-            // "012_001" (second number moves), or a 3-digit counter from a 4-digit one,
-            // because both fit a naive guess. The last page is the cheapest independent
-            // check: if it matches its generated name, every page in between will too.
-            val lastImageUrl = imageUrlOnPage(chapterUrl, totalPages)
-            val lastName = lastImageUrl?.substringAfterLast('/')
-            if (lastName == null || lastName != template.name(totalPages)) {
-                return pageListByReadingPages(chapterUrl, totalPages)
-            }
-
-            return (1..totalPages).mapIndexed { index, page ->
-                Page(index, imageUrl = template.url(page).encodeSpaces())
-            }
-        }
-
-        return pageListByReadingPages(chapterUrl, totalPages)
-    }
-
-    /** The image the reader shows for [page] of [chapterUrl], or null if that fails. */
-    private suspend fun imageUrlOnPage(chapterUrl: String, page: Int): String? {
-        // Chapters are stored as ".../gallery/show/<comic>/1"; swap the page segment.
-        val url = chapterUrl.substringBeforeLast('/') + "/" + page
-        return try {
-            client.get(url, Fetch.DOCUMENT).asJsoup()
-                .selectFirst("ul.gallery-slide li img")
-                ?.absUrl("src")
-        } catch (_: Exception) {
-            null
+        // The URL is the reader page, the only place that says what this page's file is.
+        return (1..totalPages).map { page ->
+            Page(page - 1, url = "/gallery/show/$comicId/$page")
         }
     }
 
     /**
-     * Last-resort page list: ask the reader for every page. Costs one request per page
-     * (up to a few hundred), so it only runs when the derived scheme failed its check.
-     */
-    private suspend fun pageListByReadingPages(chapterUrl: String, totalPages: Int): List<Page> = (1..totalPages).mapNotNull { page ->
-        imageUrlOnPage(chapterUrl, page)?.let { Page(page - 1, imageUrl = it.encodeSpaces()) }
-    }
-
-    /**
-     * Works out how page images of one work are named by comparing the first two.
+     * Resolves one page's image from its reader page, which is where the site names the
+     * file: the extension is per page ("004.gif" next to "003.jpg"), so nothing about the
+     * neighbouring pages can be assumed.
      *
-     * The catalogue carries several layouts, e.g. "001.jpg", "001_002.jpg" (first number
-     * moves), "012_001.gif" (the prefix stays, second number moves), "1_001.jpg" (no
-     * padding) and the legacy "0001.jpg" (four digits). Comparing the two names tells us
-     * which run of digits is the page number and which parts are constant; the width of
-     * the page-2 run gives the zero padding, because its number is known to be two.
-     *
-     * Returns null when the names differ in anything but a single number that goes up by
-     * one, or when they do not share a directory.
+     * The reader asks for pages as they come into view, so a chapter only pays for what is
+     * actually read or downloaded. Results are cached per page URL for the session because
+     * scrolling back and forth would otherwise repeat the request.
      */
-    private fun pageNameTemplate(firstUrl: String, secondUrl: String): PageNameTemplate? {
-        val directory = firstUrl.substringBeforeLast('/') + "/"
-        if (secondUrl.substringBeforeLast('/') + "/" != directory) return null
+    override suspend fun getImageUrl(page: Page): String {
+        pageImageUrls[page.url]?.let { return it }
 
-        val first = firstUrl.substringAfterLast('/')
-        val second = secondUrl.substringAfterLast('/')
-        val firstParts = first.splitIntoRuns()
-        val secondParts = second.splitIntoRuns()
-        if (firstParts.size != secondParts.size) return null
+        val pageUrl = if (page.url.startsWith("http")) page.url else baseUrl + page.url
+        val imageUrl = client.get(pageUrl, Fetch.DOCUMENT).asJsoup()
+            .selectFirst("ul.gallery-slide li img")
+            ?.absUrl("src")
+            ?.encodeSpaces()
+            ?: throw Exception("No image on ${page.url}")
 
-        val changed = firstParts.indices.filter { firstParts[it] != secondParts[it] }
-        if (changed.size != 1) return null
-
-        val firstRun = firstParts[changed.single()]
-        val secondRun = secondParts[changed.single()]
-        if (!firstRun.all(Char::isDigit) || !secondRun.all(Char::isDigit)) return null
-        // Page 2's number must be page 1's plus one, otherwise the changed run is not the
-        // page counter (a cover image could, for instance, be named differently).
-        if (firstRun.toIntOrNull()?.plus(1) != secondRun.toIntOrNull()) return null
-
-        return PageNameTemplate(
-            directory = directory,
-            prefix = secondParts.take(changed.single()).joinToString(""),
-            suffix = secondParts.drop(changed.single() + 1).joinToString(""),
-            width = secondRun.length,
-        )
-    }
-
-    /** Splits a name into alternating runs of digits and everything else, in order. */
-    private fun String.splitIntoRuns(): List<String> = NAME_RUN_REGEX.findAll(this).map { it.value }.toList()
-
-    /**
-     * How the images of one work are named: [prefix], the page number zero-padded to
-     * [width], then [suffix], all inside [directory].
-     */
-    private data class PageNameTemplate(
-        val directory: String,
-        val prefix: String,
-        val suffix: String,
-        val width: Int,
-    ) {
-        fun name(page: Int): String = prefix + page.toString().padStart(width, '0') + suffix
-
-        fun url(page: Int): String = directory + name(page)
+        pageImageUrls[page.url] = imageUrl
+        return imageUrl
     }
 
     // ============================== Helpers =================================
@@ -441,9 +365,6 @@ abstract class MyHentaiComics : KeiSource() {
 
     companion object {
         private val GROUP_COUNT_REGEX = Regex("""\s*\(\d+\)$""")
-
-        /** Runs of digits or non-digits inside a page image file name. */
-        private val NAME_RUN_REGEX = Regex("""\d+|\D+""")
 
         private const val CATEGORY_GROUP = "Categories"
         private const val GROUP_GROUP = "Groups"
