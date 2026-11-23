@@ -21,6 +21,7 @@ import kotlin.time.TimeSource
 internal class ChapterReader(
     private val url: String,
     private val first: Int,
+    val hd: Boolean,
     private val view: SiteView,
     private val dir: File,
     private val scope: CoroutineScope,
@@ -48,7 +49,12 @@ internal class ChapterReader(
     private val job = scope.launch(Dispatchers.IO) {
         try {
             dir.mkdirs()
-            view.drive(url, "(${view.asset("reader.js")})(${pageSelector.toJsonString()}, ${textSelector.toJsonString()})", timeout = READ_TIMEOUT) { snapshot -> step(snapshot.parseAs()) }
+            view.drive(
+                url,
+                "(${view.asset("reader.js")})(${pageSelector.toJsonString()}, ${textSelector.toJsonString()}, $hd)",
+                timeout = READ_TIMEOUT,
+                keep = { snapshot -> snapshot.parseAs<ReaderPage>().image?.let(::save) },
+            ) { snapshot -> step(snapshot.parseAs()) }
             val ended = IOException("El lector del capítulo se cerró")
             pages.values.forEach { it.completeExceptionally(ended) }
         } catch (e: Throwable) {
@@ -74,14 +80,16 @@ internal class ChapterReader(
 
     private enum class State { GATE, CHECK, TURNSTILE, EMPTY, PAGES }
 
+    private fun save(image: PageImage) {
+        val file = File(dir, "${image.index}.jpg")
+        file.writeBytes(Base64.decode(image.data.substringAfter(','), Base64.DEFAULT))
+        done += image.index
+        pages.getOrPut(image.index) { CompletableDeferred() }.complete(file)
+    }
+
     @OptIn(NativeWebViewApi::class)
     private fun WebViewScope<Unit>.step(reader: ReaderPage): Step<Unit> {
-        reader.image?.let { image ->
-            val file = File(dir, "${image.index}.jpg")
-            file.writeBytes(Base64.decode(image.data.substringAfter(','), Base64.DEFAULT))
-            done += image.index
-            pages.getOrPut(image.index) { CompletableDeferred() }.complete(file)
-        }
+        reader.image?.let(::save)
 
         val state = when {
             reader.gate != null -> State.GATE

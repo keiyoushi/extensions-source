@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.extension.es.catharsisworld
 
 import android.util.LruCache
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -16,6 +19,7 @@ import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.sha256
 import keiyoushi.utils.toJsonElement
@@ -51,7 +55,11 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class CatharsisWorld : KeiSource() {
+abstract class CatharsisWorld :
+    KeiSource(),
+    ConfigurableSource {
+
+    private val preferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::webViewInterceptor)
         .cronet()
@@ -227,8 +235,10 @@ abstract class CatharsisWorld : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
-        val count = reader(chapterUrl.toHttpUrl().encodedPath, 0).pageCount.await()
-        return List(count) { index -> Page(index, imageUrl = "$chapterUrl#$PAGE_FRAGMENT$index") }
+        val hd = preferences.getBoolean(HD_PREF, false)
+        val count = reader(chapterUrl.toHttpUrl().encodedPath, 0, hd).pageCount.await()
+        val fragment = if (hd) HD_PAGE_FRAGMENT else PAGE_FRAGMENT
+        return List(count) { index -> Page(index, imageUrl = "$chapterUrl#$fragment$index") }
     }
 
     private fun readerRefusal(text: String): String? = when {
@@ -262,19 +272,28 @@ abstract class CatharsisWorld : KeiSource() {
         },
     )
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HD_PREF
+            title = "Calidad HD"
+            summary = "Páginas de 800 px en lugar de 600; carga más lenta"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
     private val readerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val readers = linkedMapOf<String, ChapterReader>()
 
-    /** The chapter's open reader that can still deliver page [index], or a new one starting there. */
+    /** The chapter's open reader in this quality that can still deliver page [index], or a new one starting there. */
     @Synchronized
-    private fun reader(chapterPath: String, index: Int): ChapterReader {
-        readers[chapterPath]?.takeIf { it.covers(index) }?.let { return it }
+    private fun reader(chapterPath: String, index: Int, hd: Boolean): ChapterReader {
+        readers[chapterPath]?.takeIf { it.hd == hd && it.covers(index) }?.let { return it }
         readers.remove(chapterPath)?.close()
         while (readers.size >= MAX_READERS) readers.remove(readers.keys.first())?.close()
-        val dir = File(applicationContext.cacheDir, "catharsis-pages/$id/${chapterPath.hashCode().toUInt()}-$index")
+        val dir = File(applicationContext.cacheDir, "catharsis-pages/$id/${chapterPath.hashCode().toUInt()}-$index${if (hd) "-hd" else ""}")
         val chapterUrl = "$baseUrl$chapterPath"
-        return ChapterReader(chapterUrl, index, siteView, dir, readerScope, READER_PAGES, READER_TEXT, ::readerRefusal) { readerPass(chapterUrl) }
+        return ChapterReader(chapterUrl, index, hd, siteView, dir, readerScope, READER_PAGES, READER_TEXT, ::readerRefusal) { readerPass(chapterUrl) }
             .also { readers[chapterPath] = it }
     }
 
@@ -324,9 +343,11 @@ abstract class CatharsisWorld : KeiSource() {
     private fun webViewInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         if (request.url.host != baseUrl.toHttpUrl().host) return chain.proceed(request)
-        val index = request.url.fragment?.takeIf { it.startsWith(PAGE_FRAGMENT) }?.removePrefix(PAGE_FRAGMENT)?.toIntOrNull()
+        val fragment = request.url.fragment.orEmpty()
+        val hd = fragment.startsWith(HD_PAGE_FRAGMENT)
+        val index = fragment.takeIf { hd || it.startsWith(PAGE_FRAGMENT) }?.substringAfterLast('-')?.toIntOrNull()
         if (index != null) {
-            val file = awaitFile { reader(request.url.encodedPath, index).page(index).await() }
+            val file = awaitFile { reader(request.url.encodedPath, index, hd).page(index).await() }
             return fileResponse(request, file, "image/jpeg")
         }
         if (request.url.pathSegments.first() != "assets") return chain.proceed(request)
@@ -375,6 +396,8 @@ private const val ASCENDING_ORDER = "asc"
 private const val PAGE_SIZE = 24
 private const val UNKNOWN_AUTHOR = "Desconocido"
 private const val PAGE_FRAGMENT = "catharsis-page-"
+private const val HD_PAGE_FRAGMENT = "catharsis-hd-page-"
+private const val HD_PREF = "hd_quality"
 private const val MAX_READERS = 2
 private const val FNV_OFFSET_BASIS = 0x811c9dc5.toInt()
 private const val FNV_PRIME = 0x01000193

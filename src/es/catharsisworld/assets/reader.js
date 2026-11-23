@@ -1,5 +1,10 @@
-// [pages]: the selector of the page elements; [text]: the selector of the text reader, for chapters that are text only
-(pages, text) => {
+// [pages]: the selector of the page elements; [text]: the selector of the text reader, for chapters that are text only;
+// [hd]: whether the site's reader draws its pages in HD
+(pages, text, hd) => {
+    const quality = 'catharsis_reader_quality';
+    if (hd) localStorage.setItem(quality, 'hd');
+    else if (localStorage.getItem(quality) === 'hd') localStorage.removeItem(quality);
+
     const sent = new Set();
     const prints = new Map();
 
@@ -75,8 +80,12 @@
                 prints.set(index, print);
             }
             if (ready && !sent.has(index) && image === null) {
-                sent.add(index);
-                image = { index, data: canvas.toDataURL('image/jpeg', 0.92) };
+                // An encoding that fails gives "data:,"
+                const data = canvas.toDataURL('image/jpeg', 0.92);
+                if (data.startsWith('data:image/')) {
+                    sent.add(index);
+                    image = { index, data };
+                }
             }
             const button = item.querySelector('button');
             const retry = button?.getBoundingClientRect();

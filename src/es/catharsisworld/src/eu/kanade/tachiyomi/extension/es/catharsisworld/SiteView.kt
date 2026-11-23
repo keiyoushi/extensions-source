@@ -47,13 +47,15 @@ class SiteView(
 
     /**
      * Loads [url] and calls [step] with what [read] (a script giving the function that reads the page, which returns null
-     * until the page is ready) reads from it, until a step is done.
+     * until the page is ready) reads from it, until a step is done. A read that comes while a step's action runs only
+     * goes to [keep].
      */
     @OptIn(NativeWebViewApi::class)
     suspend fun <T> drive(
         url: String,
         read: String,
         timeout: Duration = WEBVIEW_TIMEOUT,
+        keep: (JsonObject) -> Unit = {},
         step: WebViewScope<T>.(JsonObject) -> Step<T>,
     ): T {
         pacing.withLock {
@@ -95,7 +97,10 @@ class SiteView(
                 }
                 var acting = false
                 webMessageBridge(bridge, siteOrigins, world) { message, reply ->
-                    if (acting) return@webMessageBridge
+                    if (acting) {
+                        message.parseAs<PageRead>().result?.let(keep)
+                        return@webMessageBridge
+                    }
                     val page = message.parseAs<PageRead>()
                     when {
                         page.challenge -> {
