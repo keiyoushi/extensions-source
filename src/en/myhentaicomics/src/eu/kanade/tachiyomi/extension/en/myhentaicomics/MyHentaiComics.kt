@@ -233,65 +233,108 @@ abstract class MyHentaiComics : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
+        // KeiSource guarantees at least one of the flags is set. Both kinds of data live
+        // on the same page, so one request serves either of them.
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val descriptionDiv = document.selectFirst("div.comic-description")
 
-        val categories = descriptionDiv
-            ?.select("a[href*='/gallery/category/']")
-            ?.map { it.text() }
-            .orEmpty()
+        val updatedManga = if (fetchDetails) {
+            val categories = descriptionDiv
+                ?.select("a[href*='/gallery/category/']")
+                ?.map { it.text() }
+                .orEmpty()
 
-        val artists = descriptionDiv
-            ?.select("a[href*='/gallery/artist/']")
-            ?.map { it.text() }
-            .orEmpty()
+            val artists = descriptionDiv
+                ?.select("a[href*='/gallery/artist/']")
+                ?.map { it.text() }
+                .orEmpty()
 
-        val groups = descriptionDiv
-            ?.select("a[href*='/gallery/group/']")
-            ?.map { it.text() }
-            .orEmpty()
+            val groups = descriptionDiv
+                ?.select("a[href*='/gallery/group/']")
+                ?.map { it.text() }
+                .orEmpty()
 
-        val parodies = descriptionDiv
-            ?.select("a[href*='/gallery/parody/']")
-            ?.map { it.text() }
-            .orEmpty()
+            val parodies = descriptionDiv
+                ?.select("a[href*='/gallery/parody/']")
+                ?.map { it.text() }
+                .orEmpty()
 
-        val pagesText = descriptionDiv
-            ?.select("div")
-            ?.firstOrNull { it.ownText().startsWith("Pages:") }
-            ?.text()
+            val pagesText = descriptionDiv
+                ?.select("div")
+                ?.firstOrNull { it.ownText().startsWith("Pages:") }
+                ?.text()
 
-        val author = artists.joinToString(", ").ifEmpty { null }
+            val author = artists.joinToString(", ").ifEmpty { null }
 
-        val updatedManga = manga.apply {
-            title = descriptionDiv?.selectFirst("h1")?.text() ?: title
-            thumbnail_url = document.selectFirst("div.comic-cover img")?.absUrl("src")?.encodeSpaces()
-            this.author = author
-            this.artist = author
-            genre = (categories + groups + parodies).joinToString(", ")
-            status = SManga.COMPLETED
-            description = pagesText.orEmpty()
+            manga.apply {
+                title = descriptionDiv?.selectFirst("h1")?.text() ?: title
+                thumbnail_url = document.selectFirst("div.comic-cover img")?.absUrl("src")?.encodeSpaces()
+                this.author = author
+                this.artist = author
+                genre = (categories + groups + parodies).joinToString(", ")
+                status = SManga.COMPLETED
+                description = pagesText.orEmpty()
+            }
+        } else {
+            manga
         }
 
-        // Extract comic ID from the "Back to gallery" / first page link on the thumbnail page
-        val firstPageHref = document.selectFirst("div.comic-cover a")?.absUrl("href")
-            ?: return SMangaUpdate(updatedManga, emptyList())
+        // Rebuilt only when the caller asked for chapters; otherwise the existing list is
+        // returned as is, which the SMangaUpdate contract allows.
+        val updatedChapters = if (fetchChapters) {
+            // Extract comic ID from the "Back to gallery" / first page link on the page
+            val firstPageHref = document.selectFirst("div.comic-cover a")?.absUrl("href")
 
-        // href = "https://myhentaicomics.com/gallery/show/59109/1"
-        val comicId = firstPageHref
-            .substringAfter("/gallery/show/")
-            .substringBefore("/")
+            if (firstPageHref == null) {
+                emptyList()
+            } else {
+                // href = "https://myhentaicomics.com/gallery/show/59109/1"
+                val comicId = firstPageHref
+                    .substringAfter("/gallery/show/")
+                    .substringBefore("/")
 
-        val updatedChapters = listOf(
-            SChapter.create().apply {
-                url = "/gallery/show/$comicId/1"
-                name = "Chapter 1"
-                chapter_number = 1f
-                date_upload = 0L
-            },
-        )
+                listOf(
+                    SChapter.create().apply {
+                        url = "/gallery/show/$comicId/1"
+                        name = "Chapter 1"
+                        chapter_number = 1f
+                        date_upload = 0L
+                    },
+                )
+            }
+        } else {
+            chapters
+        }
 
         return SMangaUpdate(updatedManga, updatedChapters)
+    }
+
+    /**
+     * Lets a pasted site URL work from the search box, which otherwise treats the text as
+     * a query. Series pages and reader pages both point at the same work, so both are
+     * accepted and the series page is the canonical [SManga.url].
+     */
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val segments = url.pathSegments
+        val galleryIndex = segments.indexOf("gallery")
+        if (galleryIndex < 0) return null
+
+        val kind = segments.getOrNull(galleryIndex + 1) ?: return null
+        if (kind != "thumbnails" && kind != "show") return null
+
+        val comicId = segments.getOrNull(galleryIndex + 2)
+            ?.takeIf { id -> id.isNotEmpty() && id.all(Char::isDigit) }
+            ?: return null
+
+        val canonicalUrl = "/gallery/thumbnails/$comicId"
+        val document = client.get("$baseUrl$canonicalUrl", Fetch.DOCUMENT).asJsoup()
+        val title = document.selectFirst("div.comic-description h1")?.text() ?: return null
+
+        return SManga.create().apply {
+            setUrlWithoutDomain(canonicalUrl)
+            this.title = title
+            thumbnail_url = document.selectFirst("div.comic-cover img")?.absUrl("src")?.encodeSpaces()
+        }
     }
 
     // ============================== Page List ===============================
