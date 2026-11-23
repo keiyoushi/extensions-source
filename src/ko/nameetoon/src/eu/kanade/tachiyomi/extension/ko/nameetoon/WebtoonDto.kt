@@ -26,3 +26,12 @@ class WebtoonDto(
         thumbnail_url = thumbnail?.let { "$baseUrl/img/data/webtoon/$it" }
     }
 }
+
+@Serializable
+class MoreEpisodesDto(
+    val html: String,
+    private val hasMore: Boolean,
+    @SerialName("nextCursor") private val cursor: Long?,
+) {
+    val nextCursor get() = cursor?.takeIf { hasMore }?.toString()
+}

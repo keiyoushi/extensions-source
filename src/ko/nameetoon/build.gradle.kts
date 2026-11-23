@@ -18,11 +18,20 @@ keiyoushi {
                 "나미툰" to "https://namee134.asia",
                 "머니툰" to "https://mtoon174.asia",
                 "무료툰" to "https://foc145.asia",
+                "야툰" to "https://yatoon277.asia",
             )
         }
     }
 
     deeplink {
         path("/list.php")
+    }
+
+    // 야툰: series (/?episode_list=) and episodes
+    deeplink {
+        host("yatoon277.asia")
+        path("/")
+        path("/viewer/..*")
+        path("/viewer.php")
     }
 }
