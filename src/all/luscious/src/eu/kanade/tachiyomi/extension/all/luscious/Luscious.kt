@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.all.luscious
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,18 +12,17 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
-import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.graphQLBody
 import keiyoushi.utils.graphQLGet
-import keiyoushi.utils.parseAs
 import keiyoushi.utils.parseGraphQLAs
 import keiyoushi.utils.toJsonElement
-import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -240,7 +240,11 @@ abstract class Luscious :
         val id = manga.url.substringAfterLast("_").removeSuffix("/")
         val album = getAlbumInfo(id)
 
-        val chapterList = if (fetchChapters) getChapters(manga, album, chapters) else chapters
+        val chapterList = when {
+            !fetchChapters -> chapters
+            getPerPicturePref() -> getPictureChapters(id, album)
+            else -> getChapters(manga, album, chapters)
+        }
 
         return SMangaUpdate(detailsParse(album).apply { url = manga.url }, chapterList)
     }
@@ -325,7 +329,7 @@ abstract class Luscious :
         val created = (album.created?.toLong() ?: 0L) * 1000L
         val modified = (album.modified?.toLong() ?: 0L) * 1000L
 
-        // one-picture chapters of older versions are dropped
+        // one-picture chapters, of older versions or the per-picture setting, are dropped
         val listed = chapters.filter { it.url.startsWith("/albums/") }.map { chapter ->
             val part = part(chapter)
             // a ?chunk= part past the album's end now ends there, so later pictures get their own chapter
@@ -356,51 +360,94 @@ abstract class Luscious :
         }.reversed()
     }
 
-    private suspend fun getPicturesPage(id: String, display: String, page: Int): AlbumListOwnPicturesList {
-        val input = Variables(
-            Input(
-                display = display,
-                page = page,
-                itemsPerPage = PICTURES_PER_PAGE,
-                filters = listOf(Filter(name = "album_id", value = id)),
-            ),
-        )
-        val url = apiBaseUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("operationName", "AlbumListOwnPictures")
-            .addQueryParameter("query", ALBUM_PICTURES_REQUEST_GQL)
-            .addQueryParameter("variables", input.toJsonString())
-            .build()
-
-        return client.get(url, Fetch.XHR).parseAs<AlbumListOwnPicturesResponse>().data.picture.list
+    private suspend fun getPictureChapters(id: String, album: FullAlbum): List<SChapter> {
+        val pictures = getPictures(id, album.numberOfPictures, 1, album.numberOfPictures, CHAPTER_FIELDS)
+        return pictures.map { (i, picture) ->
+            SChapter.create().apply {
+                url = picture.url!!
+                name = listOfNotNull(i, picture.title).joinToString(" - ")
+                chapter_number = i.toFloat()
+                date_upload = (picture.created?.toLong() ?: 0L) * 1000L
+            }
+        }.reversed()
     }
 
-    // pictures from..to, 1-based in the given order
-    private suspend fun getPictures(id: String, display: String, from: Int, to: Int): List<Picture> = coroutineScope {
-        val pages = (from - 1) / PICTURES_PER_PAGE + 1..(to - 1) / PICTURES_PER_PAGE + 1
-        pages.map { page -> async { getPicturesPage(id, display, page).items } }.awaitAll()
-            .flatten()
-            .drop((from - 1) % PICTURES_PER_PAGE)
-            .take(to - from + 1)
+    private data class PicturePage(val display: String, val page: Int)
+
+    // pages of the album's picture list, several per request
+    private suspend fun getPicturePages(id: String, pages: List<PicturePage>, fields: String): Map<PicturePage, List<Picture>> = coroutineScope {
+        pages.chunked(PAGES_PER_REQUEST).map { batch ->
+            async {
+                val query = buildString {
+                    append("query AlbumListOwnPictures(")
+                    append(batch.indices.joinToString { "\$p$it: PictureListInput!" })
+                    append(") { picture { ")
+                    batch.indices.forEach { append("p$it: list(input: \$p$it) { items { $fields } } ") }
+                    append("} }")
+                }
+                val variables = batch.withIndex().associate { (i, page) ->
+                    "p$i" to Input(
+                        display = page.display,
+                        page = page.page,
+                        itemsPerPage = PICTURES_PER_PAGE,
+                        filters = listOf(Filter(name = "album_id", value = id)),
+                    )
+                }
+                val body = graphQLBody(query, "AlbumListOwnPictures", variables)
+                val lists = client.post(apiBaseUrl, Fetch.XHR, body).parseGraphQLAs<PictureListsData>().picture
+                batch.withIndex().associate { (i, page) -> page to lists.getValue("p$i").items }
+            }
+        }.awaitAll().fold(emptyMap()) { all, batch -> all + batch }
+    }
+
+    // the album's pictures from..to, each with its index
+    private suspend fun getPictures(id: String, total: Int, from: Int, to: Int, fields: String): List<IndexedValue<Picture>> {
+        // anonymous lists stop after 1000 pictures in either order, so later ones come from the newest end
+        val slots = (from..to).associateWith { i ->
+            if (i > PICTURES_PER_CHAPTER && total - i < PICTURES_PER_CHAPTER) {
+                PicturePage("date_newest", (total - i) / PICTURES_PER_PAGE + 1) to (total - i) % PICTURES_PER_PAGE
+            } else {
+                PicturePage("date_oldest", (i - 1) / PICTURES_PER_PAGE + 1) to (i - 1) % PICTURES_PER_PAGE
+            }
+        }
+        val pages = getPicturePages(id, slots.values.map { it.first }.distinct(), fields)
+        return slots.mapNotNull { (i, slot) -> pages.getValue(slot.first).getOrNull(slot.second)?.let { IndexedValue(i, it) } }
+    }
+
+    // uncached, unlike AlbumGet over GET
+    private suspend fun getPictureCount(id: String): Int {
+        val body = graphQLBody(PICTURE_COUNT_QUERY, "AlbumGet", SingleIdVariable(id))
+        return client.post(apiBaseUrl, Fetch.XHR, body).parseGraphQLAs<PictureCountData>().album.get.numberOfPictures
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
+        if (chapter.url.startsWith("/pictures/")) {
+            val segments = baseUrl.toHttpUrl().resolve(chapter.url)!!.pathSegments
+            val pictureId = segments[segments.indexOf("id") + 1]
+            val picture = client.graphQLGet(
+                apiBaseUrl,
+                query = PICTURE_GET_QUERY,
+                operationName = "PictureGet",
+                variables = SingleIdVariable(pictureId).toJsonElement(),
+                fetch = Fetch.XHR,
+            ).parseGraphQLAs<PictureGetData>().picture.get
+            if (picture.urlToVideo == null && picture.urlToOriginal == null && picture.thumbnails.isEmpty()) throw Exception("Picture not found")
+            return listOf(Page(0, imageUrl = getPictureUrl(picture)))
+        }
         // one-picture chapters of older versions
         if (!chapter.url.startsWith("/albums/")) throw Exception("Refresh the chapter list")
 
         val id = baseUrl.toHttpUrl().resolve(chapter.url)!!.pathSegments[1].substringAfterLast("_")
         val part = part(chapter)
-        val total = getAlbumInfo(id).numberOfPictures
+        // only pictures past the first 1000 need the current count
+        val total = if (part.to > PICTURES_PER_CHAPTER) getPictureCount(id) else part.to
         val to = minOf(part.to, total)
         if (part.from > to) return emptyList()
 
-        val pictures = if (to > PICTURES_PER_CHAPTER && total - part.from < PICTURES_PER_CHAPTER) {
-            getPictures(id, "date_newest", total - to + 1, total - part.from + 1).asReversed()
-        } else {
-            getPictures(id, "date_oldest", part.from, to)
-        }
+        val pictures = getPictures(id, total, part.from, to, PAGE_FIELDS)
         if (pictures.isEmpty()) throw Exception("Log in via WebView to view more than 1000 pictures")
 
-        return pictures.mapIndexed { i, picture ->
+        return pictures.mapIndexed { i, (_, picture) ->
             Page(i, imageUrl = getPictureUrl(picture))
         }
     }
@@ -449,8 +496,17 @@ abstract class Luscious :
             setDefaultValue(RESOLUTION_PREF_DEFAULT_VALUE)
             summary = "%s"
         }
+        val perPicturePref = SwitchPreferenceCompat(screen.context).apply {
+            key = "${PER_PICTURE_PREF_KEY}_$lang"
+            title = PER_PICTURE_PREF_TITLE
+            summary = PER_PICTURE_PREF_SUMMARY
+            setDefaultValue(false)
+        }
         screen.addPreference(resolutionPref)
+        screen.addPreference(perPicturePref)
     }
+
+    private fun getPerPicturePref(): Boolean = preferences.getBoolean("${PER_PICTURE_PREF_KEY}_$lang", false)
 
     private fun getResolutionPref(): String = preferences.getString("${RESOLUTION_PREF_KEY}_$lang", RESOLUTION_PREF_DEFAULT_VALUE)!!
 }
