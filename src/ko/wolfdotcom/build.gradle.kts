@@ -18,6 +18,7 @@ keiyoushi {
                 "늑대닷컴" to "https://wfwf544.com",
                 "늑대닷컴2" to "https://wftoon238.com",
                 "여우코믹스" to "https://fxfx332.com",
+                "W툰" to "https://wtwt335.com",
             )
         }
     }
@@ -37,6 +38,7 @@ keiyoushi {
             mirrors(
                 "늑대닷컴2" to "https://wftoon238.com",
                 "여우코믹스" to "https://fxfx332.com",
+                "W툰" to "https://wtwt335.com",
             )
         }
     }
@@ -46,5 +48,12 @@ keiyoushi {
         path("/view")
         path("/cl")
         path("/cv")
+    }
+
+    // W툰: series (/v1?toon=) and episodes (/v2?toon=&num=)
+    deeplink {
+        host("wtwt335.com")
+        path("/v1")
+        path("/v2")
     }
 }

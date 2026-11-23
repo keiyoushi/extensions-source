@@ -69,6 +69,10 @@ abstract class Wolf : KeiSource() {
     private val oldTemplate = OldTemplate(this)
     private val isOldTemplate get() = OLD_TEMPLATE_HOST.matches(baseUrl.toHttpUrl().host)
 
+    // W툰 has them too, on routes of its own
+    private val wtoon = Wtoon(this)
+    private val isWtoon get() = WTOON_HOST.matches(baseUrl.toHttpUrl().host)
+
     private val sortOptions get() = if (isComic) {
         listOf("최신순" to "n", "인기순" to "f")
     } else {
@@ -81,6 +85,7 @@ abstract class Wolf : KeiSource() {
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (isOldTemplate) return oldTemplate.getSearchMangaList(page, query, filters)
+        if (isWtoon) return wtoon.getSearchMangaList(page, query, filters)
 
         val url = if (query.isNotBlank()) {
             if (query.length < 2) {
@@ -117,16 +122,26 @@ abstract class Wolf : KeiSource() {
     private fun Document.hasNextPage() = selectFirst(".pagi .pg-btn.on + a.pg-btn") != null
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (!FRONT_HOST.matches(url.host) || url.pathSegments.firstOrNull() !in setOf(entryPath, readerPath)) return null
+        val paths = when {
+            FRONT_HOST.matches(url.host) -> setOf(entryPath, readerPath)
+            // W툰 has no comics
+            WTOON_HOST.matches(url.host) && !isComic -> WTOON_PATHS
+            else -> return null
+        }
+        if (url.pathSegments.firstOrNull() !in paths) return null
         val id = url.queryParameter("toon")?.takeIf { it.all(Char::isDigit) } ?: return null
         val manga = SManga.create().apply { this.url = id }
         return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl.toHttpUrl().newBuilder()
-        .addPathSegment(entryPath)
-        .addQueryParameter("toon", manga.url)
-        .toString()
+    override fun getMangaUrl(manga: SManga): String {
+        if (isWtoon) return wtoon.getMangaUrl(manga)
+
+        return baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment(entryPath)
+            .addQueryParameter("toon", manga.url)
+            .toString()
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -135,6 +150,7 @@ abstract class Wolf : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         if (isOldTemplate) return oldTemplate.fetchMangaUpdate(manga)
+        if (isWtoon) return wtoon.fetchMangaUpdate(manga)
 
         var document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
@@ -183,6 +199,8 @@ abstract class Wolf : KeiSource() {
     )
 
     override fun getChapterUrl(chapter: SChapter): String {
+        if (isWtoon) return wtoon.getChapterUrl(chapter)
+
         val chapUrl = chapter.url.parseAs<ChapterUrl>()
 
         return baseUrl.toHttpUrl().newBuilder()
@@ -194,6 +212,7 @@ abstract class Wolf : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         if (isOldTemplate) return oldTemplate.getPageList(chapter)
+        if (isWtoon) return wtoon.getPageList(chapter)
 
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
 
@@ -203,7 +222,7 @@ abstract class Wolf : KeiSource() {
     }
 
     // The old template's filters are fixed, and fetching them would replace the cached ones of the new template
-    override val supportsFilterFetching get() = !isPhoto && !isOldTemplate
+    override val supportsFilterFetching get() = !isPhoto && !isOldTemplate && !isWtoon
 
     override suspend fun fetchFilterData(): JsonElement {
         val document = client.get("$baseUrl/$browsePath", Fetch.DOCUMENT).asJsoup()
@@ -222,7 +241,8 @@ abstract class Wolf : KeiSource() {
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        if (isOldTemplate) return oldTemplate.getFilterList()
+        // W툰 filters its lists as the old template does
+        if (isOldTemplate || isWtoon) return oldTemplate.getFilterList()
         if (isPhoto) return FilterList()
 
         val filters: MutableList<Filter<*>> = mutableListOf(
@@ -249,3 +269,7 @@ internal val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-M
 // Current and older domains of 늑대닷컴, 늑대닷컴2 and 여우코믹스
 private val FRONT_HOST = Regex("""(?:wfwf|wftoon|fxfx)\d+\.com""")
 private val OLD_TEMPLATE_HOST = Regex("""(?:wftoon|fxfx)\d+\.com""")
+
+// W툰's current and older domains, and its series and reader paths
+private val WTOON_HOST = Regex("""wtwt\d+\.com""")
+private val WTOON_PATHS = setOf("v1", "v2")
