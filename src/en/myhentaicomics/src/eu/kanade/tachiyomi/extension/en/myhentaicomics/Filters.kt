@@ -133,7 +133,7 @@ internal class CategoryFilter :
         ),
     )
 
-internal class GroupFilter(groups: List<Pair<String, String>>) : UriPartFilter("Groups", groups.toTypedArray())
+internal class GroupFilter(groups: List<Pair<String, String>>) : UriPartFilter("Groups", arrayOf("All" to "") + groups.toTypedArray())
 
 @Serializable
 internal data class FilterData(
