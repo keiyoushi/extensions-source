@@ -18,9 +18,12 @@ import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import java.util.concurrent.ConcurrentHashMap
 
 @Source
 abstract class MyHentaiComics : KeiSource() {
+
+    private val tagIdCache = ConcurrentHashMap<String, String>()
 
     // =============================== Popular ================================
 
@@ -37,10 +40,17 @@ abstract class MyHentaiComics : KeiSource() {
         val sortFilter = filters.firstInstanceOrNull<SortFilter>()
         val categoryFilter = filters.firstInstanceOrNull<CategoryFilter>()
         val groupFilter = filters.firstInstanceOrNull<GroupFilter>()
+        val resolveFilter = filters.firstInstanceOrNull<ResolveTagsFilter>()
+
+        // Mihon sends a tapped author as a plain query, so resolve names the way the
+        // site's tag picker does before falling back to the title search
+        val tagId = if (resolveFilter?.state != false) resolveTagId(query) else null
 
         // /search accepts the query, tags and sorting together, unlike the listing paths
         val url = "$baseUrl/search/$page".toHttpUrl().newBuilder().apply {
-            if (query.isNotEmpty()) {
+            if (tagId != null) {
+                addEncodedQueryParameter("tags[]", tagId)
+            } else if (query.isNotEmpty()) {
                 addQueryParameter("query", query)
             }
             categoryFilter?.toUriPart()?.takeIf(String::isNotEmpty)?.let {
@@ -55,6 +65,31 @@ abstract class MyHentaiComics : KeiSource() {
         }.build()
 
         return parseComicListing(url)
+    }
+
+    /**
+     * Resolves a name the site's tag picker (GET /tags?term=) would suggest, so a query
+     * that exactly names an artist, group, parody or category becomes that tag.
+     * Hits and misses are cached per source instance; paging repeats the same query.
+     */
+    private suspend fun resolveTagId(query: String): String? {
+        if (query.length < MIN_TAG_QUERY_LENGTH) return null
+
+        val key = query.lowercase()
+        tagIdCache[key]?.let { return it.ifEmpty { null } }
+
+        val url = "$baseUrl/tags".toHttpUrl().newBuilder()
+            .addQueryParameter("term", query)
+            .build()
+        val hits = client.get(url, Fetch.XHR).parseAs<List<TagOption>>()
+        val id = hits
+            .firstOrNull { it.text.equals(query, ignoreCase = true) }
+            ?.id
+            ?.toString()
+            .orEmpty()
+
+        tagIdCache[key] = id
+        return id.ifEmpty { null }
     }
 
     // ============================== Filters =================================
@@ -76,6 +111,8 @@ abstract class MyHentaiComics : KeiSource() {
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         buildList {
+            add(ResolveTagsFilter())
+            add(Filter.Separator())
             add(SortFilter())
             add(Filter.Separator())
             add(CategoryFilter())
@@ -206,5 +243,8 @@ abstract class MyHentaiComics : KeiSource() {
 
     companion object {
         private val GROUP_COUNT_REGEX = Regex("""\s*\(\d+\)$""")
+
+        /** The site's tag picker only starts suggesting at three characters. */
+        private const val MIN_TAG_QUERY_LENGTH = 3
     }
 }

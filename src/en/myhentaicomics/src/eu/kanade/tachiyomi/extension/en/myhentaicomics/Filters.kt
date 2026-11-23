@@ -135,6 +135,16 @@ internal class CategoryFilter :
 
 internal class GroupFilter(groups: List<Pair<String, String>>) : UriPartFilter("Groups", arrayOf("All" to "") + groups.toTypedArray())
 
+// On by default, so a tapped author means that artist's works, the way picking the
+// exact suggestion in the site's tag picker does
+internal class ResolveTagsFilter : Filter.CheckBox("Treat plain queries as tags when they match", true)
+
+@Serializable
+internal data class TagOption(
+    val id: Long,
+    val text: String,
+)
+
 @Serializable
 internal data class FilterData(
     val groups: List<GroupOption>,
