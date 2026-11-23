@@ -218,7 +218,8 @@ abstract class LunarAnime : KeiSource() {
         val language = chapterUrl.queryParameter("lang") ?: "en"
         val (slug, chapterNumber) = chapterUrl.pathSegments.takeLast(2)
 
-        val seeds = crypto.extractSeeds(client.get(chapterUrl, Fetch.DOCUMENT).asJsoup())
+        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
+        val seeds = crypto.extractSeeds(document, client)
 
         // Without this call first the page list is decoys
         val chapterLockUrl = API_URL.toHttpUrl().newBuilder()
