@@ -94,6 +94,7 @@ class FullAlbum(
     val numberOfAnimatedPictures: Int,
     val content: ItemWithTitle,
     val created: Double? = null,
+    val modified: Double? = null,
 )
 
 @Serializable

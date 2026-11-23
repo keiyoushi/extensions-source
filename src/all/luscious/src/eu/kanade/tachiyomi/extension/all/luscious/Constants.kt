@@ -75,7 +75,9 @@ fragment AlbumInSearchList on Album {
 """.trimIndent()
 
 const val PICTURES_PER_PAGE = 50
-const val PAGES_PER_CHUNK = 20
+
+// also where anonymous picture lists stop, in either order
+const val PICTURES_PER_CHAPTER = 1000
 
 const val RESOLUTION_PREF_KEY = "RESOLUTION"
 const val RESOLUTION_PREF_TITLE = "Image resolution"
@@ -83,9 +85,3 @@ val RESOLUTION_PREF_ENTRIES = arrayOf("Low", "Medium", "High", "Original")
 val RESOLUTION_PREF_ENTRY_VALUES = arrayOf("2", "1", "0", "-1")
 val RESOLUTION_PREF_DEFAULT_VALUE = RESOLUTION_PREF_ENTRY_VALUES[3]
 val RESOLUTION_SIZES = mapOf("2" to "small", "1" to "medium", "0" to "xMax")
-
-const val SORT_PREF_KEY = "SORT"
-const val SORT_PREF_TITLE = "Page Sort"
-val SORT_PREF_ENTRIES = arrayOf("Position", "Date", "Rating")
-val SORT_PREF_ENTRY_VALUES = arrayOf("date_oldest", "date_newest", "rating_all_time")
-val SORT_PREF_DEFAULT_VALUE = SORT_PREF_ENTRY_VALUES[0]

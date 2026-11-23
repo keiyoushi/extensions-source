@@ -30,7 +30,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
-import kotlin.math.ceil
 import kotlin.time.Duration.Companion.minutes
 
 @Source
@@ -240,7 +239,7 @@ abstract class Luscious :
         val id = manga.url.substringAfterLast("_").removeSuffix("/")
         val album = getAlbumInfo(id)
 
-        val chapterList = if (fetchChapters) getChapters(manga, album) else chapters
+        val chapterList = if (fetchChapters) getChapters(manga, album, chapters) else chapters
 
         return SMangaUpdate(detailsParse(album).apply { url = manga.url }, chapterList)
     }
@@ -296,23 +295,67 @@ abstract class Luscious :
         }
     }
 
-    private fun getChapters(manga: SManga, album: FullAlbum): List<SChapter> {
-        val chunkCount = ceil(album.numberOfPictures / (PAGES_PER_CHUNK * PICTURES_PER_PAGE).toDouble()).toInt().coerceAtLeast(1)
+    // pictures from..to of the album, 1-based in upload order
+    private class Part(val from: Int, val to: Int, val url: String, val date: Long)
 
-        return (chunkCount downTo 1).map { i ->
-            SChapter.create().apply {
-                url = "${manga.url}?chunk=$i"
-                name = if (chunkCount == 1) "Chapter" else "Part $i"
-                chapter_number = i.toFloat()
-                date_upload = (album.created?.toLong() ?: 0L) * 1000L
-            }
+    private fun part(chapter: SChapter): Part {
+        val url = baseUrl.toHttpUrl().resolve(chapter.url)!!
+        // ?chunk=N parts of earlier versions
+        val chunk = url.queryParameter("chunk")?.toInt()
+        if (chunk != null) {
+            return Part((chunk - 1) * PICTURES_PER_CHAPTER + 1, chunk * PICTURES_PER_CHAPTER, chapter.url, chapter.date_upload)
         }
+        return Part(url.queryParameter("from")!!.toInt(), url.queryParameter("to")!!.toInt(), chapter.url, chapter.date_upload)
     }
 
-    private suspend fun getPicturesPage(id: String, page: Int): AlbumListOwnPicturesList {
+    private fun partUrl(manga: SManga, from: Int, to: Int): String {
+        val url = baseUrl.toHttpUrl().resolve(manga.url)!!.newBuilder()
+            .addQueryParameter("from", from.toString())
+            .addQueryParameter("to", to.toString())
+            .build()
+        return "${url.encodedPath}?${url.encodedQuery}"
+    }
+
+    private fun getChapters(manga: SManga, album: FullAlbum, chapters: List<SChapter>): List<SChapter> {
+        val total = album.numberOfPictures
+        val created = (album.created?.toLong() ?: 0L) * 1000L
+        val modified = (album.modified?.toLong() ?: 0L) * 1000L
+
+        // one-picture chapters of older versions are dropped
+        val listed = chapters.filter { it.url.startsWith("/albums/") }.map { chapter ->
+            val part = part(chapter)
+            // a ?chunk= part past the album's end now ends there, so later pictures get their own chapter
+            if (part.to > total && "chunk=" in part.url) {
+                val to = maxOf(total, part.from)
+                Part(part.from, to, partUrl(manga, part.from, to), part.date)
+            } else {
+                part
+            }
+        }
+
+        val listedEnd = listed.maxOfOrNull { it.to } ?: 0
+        val added = (listedEnd + 1..total step PICTURES_PER_CHAPTER).map { from ->
+            val to = minOf(from + PICTURES_PER_CHAPTER - 1, total)
+            // on a first listing only the newest part dates from the album's last upload
+            val date = if (listed.isEmpty() && to < total) created else modified
+            Part(from, to, partUrl(manga, from, to), date)
+        }
+
+        val parts = (listed + added).sortedBy { it.from }
+        return parts.mapIndexed { i, part ->
+            SChapter.create().apply {
+                url = part.url
+                name = if (parts.size == 1) "Chapter" else "Part ${i + 1}"
+                chapter_number = (i + 1).toFloat()
+                date_upload = part.date
+            }
+        }.reversed()
+    }
+
+    private suspend fun getPicturesPage(id: String, display: String, page: Int): AlbumListOwnPicturesList {
         val input = Variables(
             Input(
-                display = getSortPref(),
+                display = display,
                 page = page,
                 itemsPerPage = PICTURES_PER_PAGE,
                 filters = listOf(Filter(name = "album_id", value = id)),
@@ -327,27 +370,33 @@ abstract class Luscious :
         return client.get(url, Fetch.XHR).parseAs<AlbumListOwnPicturesResponse>().data.picture.list
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = coroutineScope {
+    // pictures from..to, 1-based in the given order
+    private suspend fun getPictures(id: String, display: String, from: Int, to: Int): List<Picture> = coroutineScope {
+        val pages = (from - 1) / PICTURES_PER_PAGE + 1..(to - 1) / PICTURES_PER_PAGE + 1
+        pages.map { page -> async { getPicturesPage(id, display, page).items } }.awaitAll()
+            .flatten()
+            .drop((from - 1) % PICTURES_PER_PAGE)
+            .take(to - from + 1)
+    }
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
         // one-picture chapters of older versions
         if (!chapter.url.startsWith("/albums/")) throw Exception("Refresh the chapter list")
 
-        val url = baseUrl.toHttpUrl().resolve(chapter.url)!!
-        val chunk = url.queryParameter("chunk")?.toInt() ?: 1
-        val id = url.pathSegments[1].substringAfterLast("_")
+        val id = baseUrl.toHttpUrl().resolve(chapter.url)!!.pathSegments[1].substringAfterLast("_")
+        val part = part(chapter)
+        val total = getAlbumInfo(id).numberOfPictures
+        val to = minOf(part.to, total)
+        if (part.from > to) return emptyList()
 
-        val startPage = (chunk - 1) * PAGES_PER_CHUNK + 1
-        val first = getPicturesPage(id, startPage)
-        if (first.items.isEmpty()) {
-            if (chunk == 1) return@coroutineScope emptyList()
-            throw Exception("Log in via WebView to view more than 1000 pictures")
+        val pictures = if (to > PICTURES_PER_CHAPTER && total - part.from < PICTURES_PER_CHAPTER) {
+            getPictures(id, "date_newest", total - to + 1, total - part.from + 1).asReversed()
+        } else {
+            getPictures(id, "date_oldest", part.from, to)
         }
+        if (pictures.isEmpty()) throw Exception("Log in via WebView to view more than 1000 pictures")
 
-        val endPage = minOf(chunk * PAGES_PER_CHUNK, first.info.totalPages)
-        val rest = (startPage + 1..endPage).map { page ->
-            async { getPicturesPage(id, page).items }
-        }.awaitAll()
-
-        (first.items + rest.flatten()).mapIndexed { i, picture ->
+        return pictures.mapIndexed { i, picture ->
             Page(i, imageUrl = getPictureUrl(picture))
         }
     }
@@ -396,21 +445,8 @@ abstract class Luscious :
             setDefaultValue(RESOLUTION_PREF_DEFAULT_VALUE)
             summary = "%s"
         }
-        val sortPref = ListPreference(screen.context).apply {
-            key = "${SORT_PREF_KEY}_$lang"
-            title = SORT_PREF_TITLE
-            entries = SORT_PREF_ENTRIES
-            entryValues = SORT_PREF_ENTRY_VALUES
-            setDefaultValue(SORT_PREF_DEFAULT_VALUE)
-            summary = "%s"
-        }
         screen.addPreference(resolutionPref)
-        screen.addPreference(sortPref)
     }
 
     private fun getResolutionPref(): String = preferences.getString("${RESOLUTION_PREF_KEY}_$lang", RESOLUTION_PREF_DEFAULT_VALUE)!!
-
-    // older versions stored "position", which the API no longer accepts (HTTP 400)
-    private fun getSortPref(): String = preferences.getString("${SORT_PREF_KEY}_$lang", SORT_PREF_DEFAULT_VALUE)
-        .takeIf { it in SORT_PREF_ENTRY_VALUES } ?: SORT_PREF_DEFAULT_VALUE
 }
