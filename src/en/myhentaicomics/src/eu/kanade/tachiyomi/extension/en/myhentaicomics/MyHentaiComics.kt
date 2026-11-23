@@ -339,14 +339,20 @@ abstract class MyHentaiComics : KeiSource() {
         pageImageUrls[page.url]?.let { return it }
 
         val pageUrl = if (page.url.startsWith("http")) page.url else baseUrl + page.url
-        val imageUrl = client.get(pageUrl, Fetch.DOCUMENT).asJsoup()
-            .selectFirst("ul.gallery-slide li img")
+        val slide = client.get(pageUrl, Fetch.DOCUMENT).asJsoup()
+            .selectFirst("ul.gallery-slide")
+
+        // Every page is an image today; a <video> page would at least have a poster to
+        // show, since the reader has no video player (unlike the site's own reader).
+        val imageUrl = slide?.selectFirst("img")
             ?.absUrl("src")
-            ?.encodeSpaces()
+            ?: slide?.selectFirst("video[poster]")?.absUrl("poster")
             ?: throw Exception("No image on ${page.url}")
 
-        pageImageUrls[page.url] = imageUrl
-        return imageUrl
+        val encoded = imageUrl.encodeSpaces()
+
+        pageImageUrls[page.url] = encoded
+        return encoded
     }
 
     // ============================== Helpers =================================
@@ -369,7 +375,8 @@ abstract class MyHentaiComics : KeiSource() {
         private const val CATEGORY_GROUP = "Categories"
         private const val GROUP_GROUP = "Groups"
 
-        /** The site's tag picker only starts suggesting at three characters. */
-        private const val MIN_TAG_QUERY_LENGTH = 3
+        /** Two, not the picker's three: the endpoint matches shorter names, and the
+         * catalogue has artists called "Fu", "IT" and the like. */
+        private const val MIN_TAG_QUERY_LENGTH = 2
     }
 }

@@ -39,7 +39,7 @@ internal class ParodyFilter : Filter.Text("Parody (exact name)")
 // On by default, so a tapped author or parody chip means that tag, the way picking the
 // exact suggestion in the site's picker does. Categories and groups do not need it:
 // their chips select the matching checkbox above.
-internal class ResolveNamesFilter : Filter.CheckBox("Resolve artist and parody names typed in the search box", true)
+internal class ResolveNamesFilter : Filter.CheckBox("Resolve artist and parody names typed or tapped", true)
 
 @Serializable
 internal data class TagOption(
