@@ -23,121 +23,23 @@ internal class SortFilter :
         ),
     )
 
-internal class CategoryFilter :
-    UriPartFilter(
-        "Category",
-        arrayOf(
-            Pair("All", ""),
-            Pair("3D Comic", "3"),
-            Pair("Ahegao", "23"),
-            Pair("Anal", "25"),
-            Pair("Animated", "10"),
-            Pair("Asian", "54"),
-            Pair("Ass Expansion", "5"),
-            Pair("Aunt", "6"),
-            Pair("BBW", "7"),
-            Pair("Beastiality", "8"),
-            Pair("Bimbofication", "2049"),
-            Pair("Bisexual", "9"),
-            Pair("Black | Interracial", "20"),
-            Pair("Body Swap", "11"),
-            Pair("Bondage", "12"),
-            Pair("Breast Expansion", "13"),
-            Pair("Brother", "1012"),
-            Pair("Bukkake", "15"),
-            Pair("Catgirl", "1201"),
-            Pair("Cbt", "8133"),
-            Pair("Censored", "5136"),
-            Pair("Cheating", "49"),
-            Pair("Cosplay", "8157"),
-            Pair("Cousin", "17"),
-            Pair("CrimsonCoax", "11531"),
-            Pair("Crossdressing", "43"),
-            Pair("Cuntboy", "8134"),
-            Pair("Dad | Father", "788"),
-            Pair("Daughter", "546"),
-            Pair("Dick Growth", "21"),
-            Pair("Double Penetration", "8135"),
-            Pair("Ebony", "29"),
-            Pair("Elf", "1714"),
-            Pair("Exhibitionism", "1838"),
-            Pair("Family", "2094"),
-            Pair("Femboy | Tomgirl | Sissy", "8136"),
-            Pair("Femdom", "24"),
-            Pair("Foot Fetish", "1873"),
-            Pair("Forced", "18"),
-            Pair("Furry", "14"),
-            Pair("Futanari | Shemale | Dickgirl", "19"),
-            Pair("Futanari X Female", "1951"),
-            Pair("Futanari X Futanari", "1885"),
-            Pair("Futanari X Male", "26"),
-            Pair("Gangbang", "27"),
-            Pair("Gay | Yaoi", "28"),
-            Pair("Gender Bender", "16"),
-            Pair("Giant", "8137"),
-            Pair("Giantess", "452"),
-            Pair("Gilf", "8138"),
-            Pair("Gloryhole", "31"),
-            Pair("Group", "101"),
-            Pair("Hairy Female", "1986"),
-            Pair("Hardcore", "36"),
-            Pair("Harem", "53"),
-            Pair("Inflation | Stomach Bulge", "57"),
-            Pair("Inseki", "1978"),
-            Pair("Kemonomimi", "1875"),
-            Pair("Lactation", "39"),
-            Pair("Legendary", "6293"),
-            Pair("Lesbian | Yuri | Girls Only", "41"),
-            Pair("Milf", "30"),
-            Pair("Mind Break", "2023"),
-            Pair("Mind Control | Hypnosis", "42"),
-            Pair("Mom | Mother", "56"),
-            Pair("Monster", "8140"),
-            Pair("Monster Girl", "8139"),
-            Pair("Most Popular", "52"),
-            Pair("Muscle Girl", "45"),
-            Pair("Muscle Growth", "46"),
-            Pair("Nephew", "47"),
-            Pair("Niece", "48"),
-            Pair("Nipple Fuck | Nipple Penetration", "8141"),
-            Pair("Pegging", "50"),
-            Pair("Possession", "51"),
-            Pair("Pregnant | Impregnation", "55"),
-            Pair("Public Use", "8142"),
-            Pair("Selfcest", "8143"),
-            Pair("Sister", "58"),
-            Pair("Slave", "8144"),
-            Pair("Smegma", "8145"),
-            Pair("Solo", "1865"),
-            Pair("Solo Futa", "8154"),
-            Pair("Solo Girl", "8146"),
-            Pair("Solo Male", "8147"),
-            Pair("Son", "62"),
-            Pair("Spanking", "38"),
-            Pair("Speechless", "8148"),
-            Pair("Strap-On", "61"),
-            Pair("Stuck In Wall", "8149"),
-            Pair("Superheroes", "59"),
-            Pair("Tentacles", "60"),
-            Pair("Threesome", "40"),
-            Pair("Tickling", "2065"),
-            Pair("Titty Fuck | Paizuri", "8150"),
-            Pair("Tomboy", "8153"),
-            Pair("Transformation", "37"),
-            Pair("Uncle", "63"),
-            Pair("Urination", "64"),
-            Pair("Vanilla | Wholesome", "8151"),
-            Pair("Variant Set", "8152"),
-            Pair("Vore | Unbirth", "65"),
-            Pair("Weight Gain", "66"),
-        ),
-    )
+// One checkbox per tag, so several can be picked at once: the site's own tag picker
+// takes multiples, and a work usually belongs to several categories, and to a studio
+// group alongside the Western catch-all.
+internal class TagCheckBox(name: String) : Filter.CheckBox(name)
 
-internal class GroupFilter(groups: List<Pair<String, String>>) : UriPartFilter("Groups", arrayOf("All" to "") + groups.toTypedArray())
+internal class TagCheckBoxGroup(name: String, tags: List<NamedTag>) : Filter.Group<Filter.CheckBox>(name, tags.map { TagCheckBox(it.name) })
 
-// On by default, so a tapped author means that artist's works, the way picking the
-// exact suggestion in the site's tag picker does
-internal class ResolveTagsFilter : Filter.CheckBox("Treat plain queries as tags when they match", true)
+// The site's left bar also covers artists and parodies, but there are 10,381 and 1,612
+// of them, far past what a filter list can hold, so those two are typed by name.
+internal class ArtistFilter : Filter.Text("Artist (exact name)")
+
+internal class ParodyFilter : Filter.Text("Parody (exact name)")
+
+// On by default, so a tapped author or parody chip means that tag, the way picking the
+// exact suggestion in the site's picker does. Categories and groups do not need it:
+// their chips select the matching checkbox above.
+internal class ResolveNamesFilter : Filter.CheckBox("Resolve artist and parody names typed in the search box", true)
 
 @Serializable
 internal data class TagOption(
@@ -146,12 +48,13 @@ internal data class TagOption(
 )
 
 @Serializable
-internal data class FilterData(
-    val groups: List<GroupOption>,
+internal data class NamedTag(
+    val name: String,
+    val value: String,
 )
 
 @Serializable
-internal data class GroupOption(
-    val name: String,
-    val value: String,
+internal data class FilterData(
+    val categories: List<NamedTag>,
+    val groups: List<NamedTag>,
 )

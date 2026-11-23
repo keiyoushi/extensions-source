@@ -25,6 +25,9 @@ abstract class MyHentaiComics : KeiSource() {
 
     private val tagIdCache = ConcurrentHashMap<String, String>()
 
+    @Volatile
+    private var indexes: TagIndexes? = null
+
     // =============================== Popular ================================
 
     // Popular = most viewed
@@ -38,27 +41,63 @@ abstract class MyHentaiComics : KeiSource() {
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val sortFilter = filters.firstInstanceOrNull<SortFilter>()
-        val categoryFilter = filters.firstInstanceOrNull<CategoryFilter>()
-        val groupFilter = filters.firstInstanceOrNull<GroupFilter>()
-        val resolveFilter = filters.firstInstanceOrNull<ResolveTagsFilter>()
+        val resolveFilter = filters.firstInstanceOrNull<ResolveNamesFilter>()
 
-        // Mihon sends a tapped author as a plain query, so resolve names the way the
-        // site's tag picker does before falling back to the title search
-        val tagId = if (resolveFilter?.state != false) resolveTagId(query) else null
+        val hasTagGroups = filters.any {
+            it is Filter.Group<*> && (it.name == CATEGORY_GROUP || it.name == GROUP_GROUP)
+        }
+        val selectedNames = listOf(CATEGORY_GROUP, GROUP_GROUP).flatMap { groupName ->
+            (filters.firstOrNull { it.name == groupName } as? Filter.Group<*>)
+                ?.state.orEmpty()
+                .filterIsInstance<Filter.CheckBox>()
+                .filter { it.state }
+                .map { it.name }
+        }
+
+        val artistName = filters.firstInstanceOrNull<ArtistFilter>()?.state?.trim().orEmpty()
+        val parodyName = filters.firstInstanceOrNull<ParodyFilter>()?.state?.trim().orEmpty()
+        val artistId = artistName.takeIf(String::isNotEmpty)?.let {
+            resolveName(it) ?: throw Exception("No artist named \"$it\"")
+        }
+        val parodyId = parodyName.takeIf(String::isNotEmpty)?.let {
+            resolveName(it) ?: throw Exception("No parody named \"$it\"")
+        }
+
+        // A tapped author or parody chip arrives as a plain query, so those two names
+        // still resolve; categories and groups reach us through their checkboxes, so
+        // their names stay ordinary title searches.
+        val resolvedQueryId = query
+            .takeIf { resolveFilter?.state != false && it.isNotBlank() }
+            ?.let { resolveName(it) }
+
+        // The indexes are only needed to classify a resolved name or to turn ticked
+        // checkboxes into ids; a plain title search does not pay for them.
+        val tagIndexes = if (selectedNames.isNotEmpty() || resolvedQueryId != null) {
+            loadTagIndexes()
+        } else {
+            TagIndexes(emptyList(), emptyList())
+        }
+        val idByName = buildMap {
+            tagIndexes.categories.forEach { put(it.name, it.value) }
+            tagIndexes.groups.forEach { put(it.name, it.value) }
+        }
+        val selectedTags = selectedNames.mapNotNull { idByName[it] }
+
+        // Without checkboxes to hit, the filter lists are still downloading, so let the
+        // name resolve rather than leave a tapped chip on an empty page.
+        val queryTagId = resolvedQueryId
+            ?.takeIf { !hasTagGroups || !tagIndexes.isCategoryOrGroup(it) }
 
         // /search accepts the query, tags and sorting together, unlike the listing paths
         val url = "$baseUrl/search/$page".toHttpUrl().newBuilder().apply {
-            if (tagId != null) {
-                addEncodedQueryParameter("tags[]", tagId)
+            if (queryTagId != null) {
+                addEncodedQueryParameter("tags[]", queryTagId)
             } else if (query.isNotEmpty()) {
                 addQueryParameter("query", query)
             }
-            categoryFilter?.toUriPart()?.takeIf(String::isNotEmpty)?.let {
-                addEncodedQueryParameter("tags[]", it)
-            }
-            groupFilter?.toUriPart()?.takeIf(String::isNotEmpty)?.let {
-                addEncodedQueryParameter("tags[]", it)
-            }
+            selectedTags.forEach { addEncodedQueryParameter("tags[]", it) }
+            artistId?.let { addEncodedQueryParameter("tags[]", it) }
+            parodyId?.let { addEncodedQueryParameter("tags[]", it) }
             sortFilter?.toUriPart()?.takeIf(String::isNotEmpty)?.let {
                 addQueryParameter("sorting", it)
             }
@@ -68,22 +107,22 @@ abstract class MyHentaiComics : KeiSource() {
     }
 
     /**
-     * Resolves a name the site's tag picker (GET /tags?term=) would suggest, so a query
-     * that exactly names an artist, group, parody or category becomes that tag.
-     * Hits and misses are cached per source instance; paging repeats the same query.
+     * Resolves a name the site's tag picker (GET /tags?term=) would suggest, so a name
+     * that exactly matches becomes that tag. Hits and misses are cached per source
+     * instance; paging repeats the same query.
      */
-    private suspend fun resolveTagId(query: String): String? {
-        if (query.length < MIN_TAG_QUERY_LENGTH) return null
+    private suspend fun resolveName(name: String): String? {
+        if (name.length < MIN_TAG_QUERY_LENGTH) return null
 
-        val key = query.lowercase()
+        val key = name.lowercase()
         tagIdCache[key]?.let { return it.ifEmpty { null } }
 
         val url = "$baseUrl/tags".toHttpUrl().newBuilder()
-            .addQueryParameter("term", query)
+            .addQueryParameter("term", name)
             .build()
         val hits = client.get(url, Fetch.XHR).parseAs<List<TagOption>>()
         val id = hits
-            .firstOrNull { it.text.equals(query, ignoreCase = true) }
+            .firstOrNull { it.text.equals(name, ignoreCase = true) }
             ?.id
             ?.toString()
             .orEmpty()
@@ -92,38 +131,79 @@ abstract class MyHentaiComics : KeiSource() {
         return id.ifEmpty { null }
     }
 
+    /**
+     * The two axes small enough to tick: 101 categories and 111 groups. Artists and
+     * parodies are an order of magnitude larger and are typed by name instead.
+     */
+    private suspend fun loadTagIndexes(): TagIndexes {
+        indexes?.let { return it }
+        return try {
+            fetchTagIndexes().also { indexes = it }
+        } catch (_: Exception) {
+            // A failed index fetch must not take the search down with it: without the
+            // indexes every tag name still resolves, only the ticked boxes lose their ids.
+            TagIndexes(emptyList(), emptyList())
+        }
+    }
+
+    private suspend fun fetchTagIndexes(): TagIndexes {
+        val categories = client.get("$baseUrl/tag/category", Fetch.DOCUMENT).asJsoup()
+            .select("div.catagory-inner a[href*='/gallery/category/']")
+            .mapNotNull { el ->
+                val id = el.attr("href").substringAfterLast('/')
+                val name = el.selectFirst("h2")?.text()?.trim()
+                if (id.isNotEmpty() && !name.isNullOrEmpty()) NamedTag(name, id) else null
+            }
+
+        val groups = client.get("$baseUrl/tag/group", Fetch.DOCUMENT).asJsoup()
+            .select("#myList a.listNavItem")
+            .mapNotNull { el ->
+                val id = el.attr("href").substringAfterLast('/')
+                val name = el.text().replace(GROUP_COUNT_REGEX, "").trim()
+                if (id.isNotEmpty() && name.isNotEmpty()) NamedTag(name, id) else null
+            }
+
+        return TagIndexes(categories, groups).also { indexes = it }
+    }
+
     // ============================== Filters =================================
 
     override val supportsFilterFetching: Boolean get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/tag/group", Fetch.DOCUMENT).asJsoup()
-
-        val groups = document.select("#myList a.listNavItem").map {
-            GroupOption(
-                name = it.text().replace(GROUP_COUNT_REGEX, "").trim(),
-                value = it.attr("href").substringAfterLast('/'),
-            )
-        }
-
-        return FilterData(groups).toJsonElement()
+        // Throws on failure so KeiSource retries instead of caching an empty list
+        val data = fetchTagIndexes()
+        return FilterData(data.categories, data.groups).toJsonElement()
     }
 
-    override fun getFilterList(data: JsonElement?) = FilterList(
-        buildList {
-            add(ResolveTagsFilter())
-            add(Filter.Separator())
-            add(SortFilter())
-            add(Filter.Separator())
-            add(CategoryFilter())
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val parsed = data?.parseAs<FilterData>()
+            ?: indexes?.let { FilterData(it.categories, it.groups) }
+        if (parsed != null) {
+            indexes = TagIndexes(parsed.categories, parsed.groups)
+        }
 
-            val groups = data?.parseAs<FilterData>()?.groups.orEmpty()
-            if (groups.isNotEmpty()) {
+        return FilterList(
+            buildList {
+                add(ResolveNamesFilter())
                 add(Filter.Separator())
-                add(GroupFilter(groups.map { it.name to it.value }))
-            }
-        },
-    )
+                add(SortFilter())
+
+                if (parsed != null && parsed.categories.isNotEmpty()) {
+                    add(Filter.Separator())
+                    add(TagCheckBoxGroup(CATEGORY_GROUP, parsed.categories))
+                }
+                if (parsed != null && parsed.groups.isNotEmpty()) {
+                    add(Filter.Separator())
+                    add(TagCheckBoxGroup(GROUP_GROUP, parsed.groups))
+                }
+
+                add(Filter.Separator())
+                add(ArtistFilter())
+                add(ParodyFilter())
+            },
+        )
+    }
 
     // =========================== Comic Listing ==============================
 
@@ -168,6 +248,11 @@ abstract class MyHentaiComics : KeiSource() {
             ?.map { it.text() }
             .orEmpty()
 
+        val parodies = descriptionDiv
+            ?.select("a[href*='/gallery/parody/']")
+            ?.map { it.text() }
+            .orEmpty()
+
         val pagesText = descriptionDiv
             ?.select("div")
             ?.firstOrNull { it.ownText().startsWith("Pages:") }
@@ -180,7 +265,7 @@ abstract class MyHentaiComics : KeiSource() {
             thumbnail_url = document.selectFirst("div.comic-cover img")?.absUrl("src")?.encodeSpaces()
             this.author = author
             this.artist = author
-            genre = (categories + groups).joinToString(", ")
+            genre = (categories + groups + parodies).joinToString(", ")
             status = SManga.COMPLETED
             description = pagesText.orEmpty()
         }
@@ -241,8 +326,21 @@ abstract class MyHentaiComics : KeiSource() {
 
     private fun String.encodeSpaces(): String = replace(" ", "%20")
 
+    private class TagIndexes(
+        val categories: List<NamedTag>,
+        val groups: List<NamedTag>,
+    ) {
+        private val categoryIds = categories.mapTo(HashSet()) { it.value }
+        private val groupIds = groups.mapTo(HashSet()) { it.value }
+
+        fun isCategoryOrGroup(id: String): Boolean = id in categoryIds || id in groupIds
+    }
+
     companion object {
         private val GROUP_COUNT_REGEX = Regex("""\s*\(\d+\)$""")
+
+        private const val CATEGORY_GROUP = "Categories"
+        private const val GROUP_GROUP = "Groups"
 
         /** The site's tag picker only starts suggesting at three characters. */
         private const val MIN_TAG_QUERY_LENGTH = 3
