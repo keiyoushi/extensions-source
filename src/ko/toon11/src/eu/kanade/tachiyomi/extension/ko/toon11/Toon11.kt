@@ -9,12 +9,17 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.MirrorPreferences
 import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -28,7 +33,19 @@ import java.util.Locale
 @Source
 abstract class Toon11 : KeiSource() {
 
+    // Old domains redirect to the current one
+    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = coroutineScope {
+        (fetchableBaseUrl as MirrorPreferences).mirrors.map { (_, url) ->
+            async { client.get(url, Fetch.DOCUMENT).use { it.request.url.toString() } }
+        }.awaitAll()
+    }
+
+    // K만화 has the same series, episodes and images, in a template of its own
+    private val kmana = Kmana(this)
+    private val isKmana get() = KMANA_HOST.matches(baseUrl.toHttpUrl().host)
+
     override suspend fun getPopularManga(page: Int): MangasPage {
+        if (isKmana) return kmana.getPopularManga(page)
         val document = client.get("$baseUrl/bbs/board.php?bo_table=toon_c&is_over=0", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("li[data-id]").map { element ->
             SManga.create().apply {
@@ -42,6 +59,7 @@ abstract class Toon11 : KeiSource() {
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
+        if (isKmana) return kmana.getLatestUpdates(page)
         val document = client.get("$baseUrl/bbs/board.php?bo_table=toon_c&sord=&type=upd&page=$page", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("li[data-id]").map { element ->
             SManga.create().apply {
@@ -57,6 +75,7 @@ abstract class Toon11 : KeiSource() {
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (isKmana) return kmana.getSearchMangaList(page, query, filters)
         val searchUrl = if (query.isNotBlank()) {
             "$baseUrl/bbs/search_stx.php".toHttpUrl().newBuilder().apply {
                 addQueryParameter("stx", query)
@@ -91,13 +110,13 @@ abstract class Toon11 : KeiSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    // Only "is" identifies a manga, so every listing builds the same URL the popular listing links to
-    private fun mangaUrl(title: String, id: String) = "/bbs/board.php?bo_table=toons&stx=$title&is=$id"
-
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host.removePrefix("www.")) return null
-        if (url.queryParameter("bo_table") != "toons") return null
-        val id = url.queryParameter("is") ?: return null
+        val id = when {
+            KMANA_HOST.matches(url.host) -> kmana.getSeriesId(url)
+            TOON11_HOST.matches(url.host) && url.queryParameter("bo_table") == "toons" -> url.queryParameter("is")
+            else -> null
+        } ?: return null
+        if (isKmana) return kmana.getMangaById(id)
 
         val document = client.get("$baseUrl/bbs/board.php?bo_table=toons&is=$id", Fetch.DOCUMENT).asJsoup()
         return parseMangaDetails(document).apply {
@@ -106,12 +125,15 @@ abstract class Toon11 : KeiSource() {
         }
     }
 
+    override fun getMangaUrl(manga: SManga): String = if (isKmana) kmana.getMangaUrl(manga) else super.getMangaUrl(manga)
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
+        if (isKmana) return kmana.fetchMangaUpdate(manga, chapters, fetchChapters)
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(
@@ -166,9 +188,10 @@ abstract class Toon11 : KeiSource() {
         }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + "/bbs" + chapter.url
+    override fun getChapterUrl(chapter: SChapter): String = if (isKmana) kmana.getChapterUrl(chapter) else baseUrl + "/bbs" + chapter.url
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
+        if (isKmana) return kmana.getPageList(chapter)
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val script = document.selectFirst("script:containsData(img_list)")?.data() ?: return emptyList()
         val imgList = extractList(imgListRegex, script)
@@ -201,6 +224,9 @@ abstract class Toon11 : KeiSource() {
         response?.close()
         chain.proceed(request.newBuilder().url(fallback).build())
     }
+        // K만화 fails a few of many requests sent together
+        .rateLimit(2) { KMANA_HOST.matches(it.host) }
+        .addInterceptor(Kmana.RetryInterceptor)
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("Note: can't combine search query with filters, status filter only has effect in 인기만화"),
@@ -216,3 +242,11 @@ abstract class Toon11 : KeiSource() {
         private val imgList2Regex = """img_list_2\s*=\s*(\[.*?])""".toRegex(RegexOption.DOT_MATCHES_ALL)
     }
 }
+
+// Only "is" identifies a manga, so every listing builds the same URL the popular listing links to
+internal fun mangaUrl(title: String, id: String) = "/bbs/board.php?bo_table=toons&stx=$title&is=$id"
+
+private val TOON11_HOST = Regex("""(?:www\.)?11toon\.com""")
+
+// K만화's current and older domains
+internal val KMANA_HOST = Regex("""kmana\d+\.net""")
