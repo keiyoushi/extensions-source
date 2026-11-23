@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.myhentaicomics
 
 import eu.kanade.tachiyomi.source.model.Filter
+import kotlinx.serialization.Serializable
 
 internal open class UriPartFilter(
     displayName: String,
@@ -9,13 +10,14 @@ internal open class UriPartFilter(
     fun toUriPart() = vals[state].second
 }
 
+// Values are the site's `sorting` query parameter, not the paths of its sort dropdown
 internal class SortFilter :
     UriPartFilter(
         "Sort By",
         arrayOf(
-            Pair("Newest", "gallery"),
+            Pair("Newest", ""),
             Pair("Most Viewed", "views"),
-            Pair("Most Favorited", "favorites"),
+            Pair("Most Favorited", "favorite"),
             Pair("Most Commented", "comments"),
             Pair("Longest", "amount"),
         ),
@@ -130,3 +132,16 @@ internal class CategoryFilter :
             Pair("Weight Gain", "66"),
         ),
     )
+
+internal class GroupFilter(groups: List<Pair<String, String>>) : UriPartFilter("Groups", groups.toTypedArray())
+
+@Serializable
+internal data class FilterData(
+    val groups: List<GroupOption>,
+)
+
+@Serializable
+internal data class GroupOption(
+    val name: String,
+    val value: String,
+)

@@ -13,6 +13,8 @@ import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -32,36 +34,58 @@ abstract class MyHentaiComics : KeiSource() {
     // =============================== Search =================================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val categoryFilter = filters.firstInstanceOrNull<CategoryFilter>()
         val sortFilter = filters.firstInstanceOrNull<SortFilter>()
+        val categoryFilter = filters.firstInstanceOrNull<CategoryFilter>()
+        val groupFilter = filters.firstInstanceOrNull<GroupFilter>()
 
-        // Text search takes priority
-        if (query.isNotEmpty()) {
-            val url = "$baseUrl/search/$page".toHttpUrl().newBuilder()
-                .addQueryParameter("query", query)
-                .build()
-            return parseComicListing(url)
-        }
+        // /search accepts the query, tags and sorting together, unlike the listing paths
+        val url = "$baseUrl/search/$page".toHttpUrl().newBuilder().apply {
+            if (query.isNotEmpty()) {
+                addQueryParameter("query", query)
+            }
+            categoryFilter?.toUriPart()?.takeIf(String::isNotEmpty)?.let {
+                addEncodedQueryParameter("tags[]", it)
+            }
+            groupFilter?.toUriPart()?.takeIf(String::isNotEmpty)?.let {
+                addEncodedQueryParameter("tags[]", it)
+            }
+            sortFilter?.toUriPart()?.takeIf(String::isNotEmpty)?.let {
+                addQueryParameter("sorting", it)
+            }
+        }.build()
 
-        // Category filter
-        if (categoryFilter != null && categoryFilter.toUriPart().isNotEmpty()) {
-            val catId = categoryFilter.toUriPart()
-            return parseComicListing("$baseUrl/gallery/category/$catId/$page".toHttpUrl())
-        }
-
-        // Sort filter
-        val sortPath = sortFilter?.toUriPart() ?: "gallery"
-        return parseComicListing("$baseUrl/$sortPath/$page".toHttpUrl())
+        return parseComicListing(url)
     }
 
     // ============================== Filters =================================
 
+    override val supportsFilterFetching: Boolean get() = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val document = client.get("$baseUrl/tag/group", Fetch.DOCUMENT).asJsoup()
+
+        val groups = document.select("#myList a.listNavItem").map {
+            GroupOption(
+                name = it.text().replace(GROUP_COUNT_REGEX, "").trim(),
+                value = it.attr("href").substringAfterLast('/'),
+            )
+        }
+
+        return FilterData(groups).toJsonElement()
+    }
+
     override fun getFilterList(data: JsonElement?) = FilterList(
-        Filter.Header("Note: Text search ignores all filters below"),
-        Filter.Separator(),
-        SortFilter(),
-        Filter.Separator(),
-        CategoryFilter(),
+        buildList {
+            add(SortFilter())
+            add(Filter.Separator())
+            add(CategoryFilter())
+
+            val groups = data?.parseAs<FilterData>()?.groups.orEmpty()
+            if (groups.isNotEmpty()) {
+                add(Filter.Separator())
+                add(GroupFilter(groups.map { it.name to it.value }))
+            }
+        },
     )
 
     // =========================== Comic Listing ==============================
@@ -179,4 +203,8 @@ abstract class MyHentaiComics : KeiSource() {
     // ============================== Helpers =================================
 
     private fun String.encodeSpaces(): String = replace(" ", "%20")
+
+    companion object {
+        private val GROUP_COUNT_REGEX = Regex("""\s*\(\d+\)$""")
+    }
 }
