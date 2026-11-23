@@ -39,20 +39,6 @@ remote_extensions = {
     ext.packageName: ext for ext in remote_proto.extensionList.extensions
 }
 
-release_assets_path = REPO_DIR / "release-assets.json"
-if release_assets_path.exists():
-    with release_assets_path.open() as f:
-        release_assets = json.load(f)
-else:
-    release_assets = {}
-
-updated_release_assets = {
-    package_name: assets
-    for package_name, assets in release_assets.items()
-    if not full_rebuild
-    and not any(package_name.endswith(f".{module}") for module in to_delete)
-}
-
 # Build index entries for the freshly built apks. Each extension's metadata comes from the
 # source-info JSON emitted by its assembleRelease task (see GenerateSourceInfoTask); its APK is a
 # sibling in the same build dir. aapt reads the icon out of the APK
@@ -91,17 +77,14 @@ for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
             f"{package_name}: no release jar found under {info_file.parent}"
         )
 
-    # The apk and jar always ship together, when the content hash (version and signature
-    # independent, see ComputeContentHashTask) or the versionCode changed.
-    content_hash = info["contentHash"]
+    # An extension only ships when its versionCode changes: a build the app wont update to
+    # would leave users on different builds of the same version.
     remote_ext = remote_extensions.get(package_name)
-    changed = (
-        remote_ext is None
-        or remote_ext.versionCode != info["versionCode"]
-        or release_assets.get(package_name) != content_hash
-    )
-
-    updated_release_assets[package_name] = content_hash
+    if remote_ext is not None and remote_ext.versionCode == info["versionCode"]:
+        published = index_pb2.Extension()
+        published.CopyFrom(remote_ext)
+        new_extensions.append((published, apk, jar, False))
+        continue
 
     ext = index_pb2.Extension(
         name=info["name"],
@@ -124,7 +107,7 @@ for info_file in ARTIFACTS_DIR.glob("**/keiyoushi-source-info.json"):
             for source in info["sources"]
         ],
     )
-    new_extensions.append((ext, apk, jar, changed))
+    new_extensions.append((ext, apk, jar, True))
 
 new_extensions.sort(key=lambda item: item[0].packageName)
 
@@ -146,17 +129,10 @@ def get_release_tag(batch_index: int) -> str:
     )
 
 
-changed_index = 0
-for ext, apk, jar, changed in new_extensions:
-    if changed:
-        tag = get_release_tag(changed_index // ext_per_release)
-        ext.resources.apkUrl = f"{RELEASE_BASE_URL}/{tag}/{apk.name}"
-        ext.resources.jarUrl = f"{RELEASE_BASE_URL}/{tag}/{jar.name}"
-        changed_index += 1
-    else:
-        old_resources = remote_extensions[ext.packageName].resources
-        ext.resources.apkUrl = old_resources.apkUrl
-        ext.resources.jarUrl = old_resources.jarUrl
+for changed_index, (ext, apk, jar, _) in enumerate(changed_extensions):
+    tag = get_release_tag(changed_index // ext_per_release)
+    ext.resources.apkUrl = f"{RELEASE_BASE_URL}/{tag}/{apk.name}"
+    ext.resources.jarUrl = f"{RELEASE_BASE_URL}/{tag}/{jar.name}"
 
 # Merge with the already-published index, dropping the deleted/rebuilt modules.
 final_extensions = []
@@ -191,10 +167,6 @@ with REPO_DIR.joinpath("index.json").open("w", encoding="utf-8") as f:
 
 with REPO_DIR.joinpath("index.pb").open("wb") as f:
     f.write(gzip.compress(index.SerializeToString(deterministic=True), mtime=0))
-
-with release_assets_path.open("w", encoding="utf-8") as f:
-    json.dump(updated_release_assets, f, indent=2, sort_keys=True)
-    f.write("\n")
 
 with REPO_DIR.joinpath("index.html").open("w", encoding="utf-8") as f:
     f.write(

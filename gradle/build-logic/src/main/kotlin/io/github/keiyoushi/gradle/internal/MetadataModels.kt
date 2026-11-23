@@ -16,7 +16,6 @@ internal data class ExtensionMetadata(
     val extensionLib: String,
     val contentWarning: Int,
     val sources: List<SourceMetadata>,
-    val contentHash: String,
 )
 
 @Serializable

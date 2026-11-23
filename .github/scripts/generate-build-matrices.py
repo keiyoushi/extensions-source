@@ -1,5 +1,6 @@
 import itertools
 import json
+import math
 import os
 import re
 import subprocess
@@ -237,13 +238,14 @@ def get_all_lint_modules() -> list[str]:
 
 
 def create_matrix(modules: list[str]) -> dict:
+    chunk_size = int(os.getenv("CI_CHUNK_SIZE", 65))
+    # More chunks than the runners that can start at once only queue behind the first ones
+    if max_chunks := int(os.getenv("CI_MAX_CHUNKS") or 0):
+        chunk_size = max(chunk_size, math.ceil(len(modules) / max_chunks))
     return {
         "chunk": [
             {"number": i + 1, "modules": chunk}
-            for i, chunk in enumerate(itertools.batched(
-                modules,
-                int(os.getenv("CI_CHUNK_SIZE", 65))
-            ))
+            for i, chunk in enumerate(itertools.batched(modules, chunk_size))
         ]
     }
 
