@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.catharsis
+package eu.kanade.tachiyomi.extension.es.catharsisworld
 
 import android.os.Handler
 import android.os.Looper
@@ -12,10 +12,7 @@ import kotlin.math.PI
 import kotlin.math.pow
 import kotlin.random.Random
 
-/**
- * Swipes from ([fromX], [fromY]) to ([toX], [toY]) in CSS pixels at [scale] device pixels each, the way a finger does:
- * about half a second, starting slowly and tailing off, with a fingertip's contact. Stops when the run ends.
- */
+/** Swipes from ([fromX], [fromY]) to ([toX], [toY]) in CSS pixels at [scale] device pixels each. */
 internal fun WebViewScope<*>.swipe(scale: Float, fromX: Float, fromY: Float, toX: Float, toY: Float) {
     val frames = Random.nextInt(25, 37)
     val finger = Finger(scale)
@@ -34,10 +31,7 @@ internal fun WebViewScope<*>.swipe(scale: Float, fromX: Float, fromY: Float, toX
     whenDrawn { send(0) }
 }
 
-/**
- * Flicks from ([x], [fromY]) to ([x], [toY]) in CSS pixels at [scale] device pixels each and lets go while moving, so
- * the page keeps scrolling on its own, the way a reader skims a long chapter.
- */
+/** Flicks from ([x], [fromY]) to ([x], [toY]) in CSS pixels at [scale] device pixels each. */
 internal fun WebViewScope<*>.fling(scale: Float, x: Float, fromY: Float, toY: Float) {
     val frames = Random.nextInt(6, 9)
     val finger = Finger(scale)
@@ -49,7 +43,6 @@ internal fun WebViewScope<*>.fling(scale: Float, x: Float, fromY: Float, toY: Fl
             frames + 1 -> MotionEvent.ACTION_UP
             else -> MotionEvent.ACTION_MOVE
         }
-        // Speeding up until the finger lifts
         val progress = (frame.coerceAtMost(frames).toFloat() / frames).pow(1.4f)
         finger.send(this, action, x, fromY + (toY - fromY) * progress)
         if (frame <= frames) handler.postDelayed({ send(frame + 1) }, Random.nextLong(14, 19))
@@ -57,7 +50,7 @@ internal fun WebViewScope<*>.fling(scale: Float, x: Float, fromY: Float, toY: Fl
     whenDrawn { send(0) }
 }
 
-/** Taps ([x], [y]) in CSS pixels at [scale] device pixels each, the way a finger does: a short press that barely moves. */
+/** Taps ([x], [y]) in CSS pixels at [scale] device pixels each. */
 internal fun WebViewScope<*>.tap(scale: Float, x: Float, y: Float) {
     val finger = Finger(scale)
     val handler = Handler(Looper.getMainLooper())
@@ -71,7 +64,6 @@ internal fun WebViewScope<*>.tap(scale: Float, x: Float, y: Float) {
             else -> MotionEvent.ACTION_MOVE
         }
 
-        // A pressed fingertip rolls a pixel or so
         fun roll() = if (action == MotionEvent.ACTION_MOVE) Random.nextDouble(-1.0, 1.0).toFloat() else 0f
         finger.send(this, action, x + roll(), y + roll())
         if (frame <= moves) handler.postDelayed({ send(frame + 1) }, stepMs)
@@ -79,7 +71,6 @@ internal fun WebViewScope<*>.tap(scale: Float, x: Float, y: Float) {
     whenDrawn { send(0) }
 }
 
-/** One fingertip's contact, sent to the WebView as touchscreen events. */
 private class Finger(private val scale: Float) {
     private val majorMm = Random.nextDouble(7.0, 10.5).toFloat()
     private val minorRatio = Random.nextDouble(0.6, 0.95).toFloat()
@@ -90,12 +81,9 @@ private class Finger(private val scale: Float) {
     @OptIn(NativeWebViewApi::class)
     fun send(scope: WebViewScope<*>, action: Int, x: Float, y: Float) = scope.withNativeWebView { view ->
         val metrics = view.resources.displayMetrics
-        // Some vendors report a bogus xdpi; fall back to the density bucket then
         val pxPerMm = (metrics.xdpi.takeIf { it in 100f..1000f } ?: metrics.densityDpi.toFloat()) / 25.4f
         if (action == MotionEvent.ACTION_DOWN) downTime = SystemClock.uptimeMillis()
-        // Contact and pressure shift a little while the finger moves
         fun drift(spread: Double) = if (action == MotionEvent.ACTION_MOVE) Random.nextDouble(1 - spread, 1 + spread).toFloat() else 1f
-        // A real first touch has pointer id 0
         val properties = MotionEvent.PointerProperties().apply {
             id = 0
             toolType = MotionEvent.TOOL_TYPE_FINGER
@@ -123,7 +111,6 @@ private class Finger(private val scale: Float) {
     }
 }
 
-// Touches sent before the page has drawn are dropped, so wait up to a second for its next frame
 @OptIn(NativeWebViewApi::class)
 private fun WebViewScope<*>.whenDrawn(block: () -> Unit) = withNativeWebView { view ->
     val handler = Handler(Looper.getMainLooper())
@@ -151,10 +138,7 @@ internal fun later(ms: Long, block: () -> Unit) {
     Handler(Looper.getMainLooper()).postDelayed(block, ms)
 }
 
-/**
- * Taps [point] (CSS pixels on a [width] x [height] screen at [scale]) once nothing covers it; else moves it towards the
- * upper part of the screen, with a flick when it is several screens away.
- */
+/** Taps [point] (CSS pixels on a [width] x [height] screen at [scale]) when it is clear, else scrolls it into view. */
 fun <T> WebViewScope<T>.touch(scale: Float, width: Float, height: Float, point: Point): Step<T> = Step.Act { done ->
     val travel = point.y - height * 0.3f
     when {

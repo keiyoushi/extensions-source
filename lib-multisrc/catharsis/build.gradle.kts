@@ -3,6 +3,10 @@ plugins {
 }
 
 keiyoushi {
-    baseVersionCode = 3
+    baseVersionCode = 2
     libVersion = "1.6"
+}
+
+dependencies {
+    api(project(":lib:cronet"))
 }

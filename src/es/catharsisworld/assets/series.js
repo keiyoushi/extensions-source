@@ -1,7 +1,6 @@
-// Reads a series page: its details, the chapter rows it shows so far, and what to tap next (the age check, more chapters).
 () => () => {
     const visible = (el) => el && el.getClientRects().length > 0;
-    // A point to tap, and whether the element is what a tap there would hit
+    // The element's centre in CSS pixels, and whether it is the element found there
     const point = (el) => {
         const box = el.getBoundingClientRect();
         const x = box.left + box.width / 2;
@@ -10,7 +9,6 @@
     };
     const base = { scale: devicePixelRatio, height: innerHeight, width: innerWidth };
 
-    // The site's age check before an adult series: remember the answer, then confirm
     const ageCheck = [...document.querySelectorAll('input[type=checkbox]')].find((box) => visible(box) && box.closest('.fixed'));
     if (ageCheck) {
         const dialog = ageCheck.closest('.fixed');

@@ -1,21 +1,48 @@
 package eu.kanade.tachiyomi.extension.es.catharsisworld
 
 import android.util.LruCache
-import eu.kanade.tachiyomi.multisrc.catharsis.Catharsis
-import eu.kanade.tachiyomi.multisrc.catharsis.Step
-import eu.kanade.tachiyomi.multisrc.catharsis.touch
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.lib.cronet.cronet
+import keiyoushi.network.Fetch
+import keiyoushi.network.get
+import keiyoushi.network.post
+import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.applicationContext
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha256
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.RequestBody
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.buffer
+import okio.source
+import java.io.File
+import java.io.IOException
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
@@ -24,36 +51,49 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 @Source
-abstract class CatharsisWorld : Catharsis() {
+abstract class CatharsisWorld : KeiSource() {
 
-    override val listingPath = "biblioteca"
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor(::webViewInterceptor)
+        .cronet()
+        .callTimeout(Duration.ZERO)
 
-    override val mangaPath = "manga"
+    // Lazy for the source's id; baseUrl is read on each load
+    private val siteView by lazy { SiteView({ baseUrl }, PRELUDE) { headers["User-Agent"]!! } }
 
-    override val chapterSegment = "chapter/"
+    override suspend fun getPopularManga(page: Int) = readListing(listingUrl(page, "", POPULAR_SORT, null, null, emptyList()))
 
-    override val sorts = listOf(
-        "Recientes" to null,
-        "Nuevos" to "date_created",
-        "Populares" to "n_visitas",
-        "Título" to "nombre",
-    )
+    override suspend fun getLatestUpdates(page: Int) = readListing(listingUrl(page, "", LATEST_SORT, null, null, emptyList()))
 
-    override val popularSort = 2
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val sort = filters.firstInstanceOrNull<SortFilter>()
+        return readListing(
+            listingUrl(
+                page = page,
+                query = query,
+                sort = sort?.state?.index ?: POPULAR_SORT,
+                ascending = sort?.state?.ascending,
+                status = filters.firstInstanceOrNull<StatusFilter>()?.value,
+                genres = filters.firstInstanceOrNull<GenreFilter>()?.state.orEmpty().filter { it.state }.map { it.id },
+                letter = filters.firstInstanceOrNull<LetterFilter>()?.value,
+            ),
+        )
+    }
 
-    override val latestSort = 0
-
-    override val statuses = STATUSES.keys.toList()
-
-    override val ascendingOrder = "asc"
-
-    // The ad-free reading pass the site offers after a rewarded ad
-    override val prelude = "pass.js"
+    private fun listingUrl(page: Int, query: String, sort: Int, ascending: Boolean?, status: String?, genres: List<String>, letter: String? = null) = baseUrl.toHttpUrl().newBuilder().apply {
+        addPathSegment(LISTING_PATH)
+        if (page > 1) addQueryParameter("page", page.toString())
+        if (query.isNotBlank()) addQueryParameter("search", query.trim())
+        letter?.let { addQueryParameter("letter", it) }
+        status?.let { addQueryParameter("status", it) }
+        SORTS[sort].second?.let { addQueryParameter("sort", it) }
+        if (ascending == true) addQueryParameter("order", ASCENDING_ORDER)
+        if (genres.isNotEmpty()) addQueryParameter("genre", genres.joinToString("|"))
+    }.build()
 
     // Genre ids by name, learned from the site's filter panel; a name it no longer offers maps to ""
     private val genreIds = LruCache<String, String>(100)
 
-    override suspend fun readListing(url: HttpUrl): MangasPage {
+    private suspend fun readListing(url: HttpUrl): MangasPage {
         // A genre is its id, or its name when the filter data had no id for it
         val genres = url.queryParameter("genre")?.split('|').orEmpty().map { genreIds[it] ?: it }
         val names = genres.filterNot { UUID_REGEX.matches(it) || it.isEmpty() }
@@ -73,7 +113,7 @@ abstract class CatharsisWorld : Catharsis() {
             pageUrl.queryParameter("search")?.let { put("name", it) }
             pageUrl.queryParameter("letter")?.let { put("letter", it) }
             pageUrl.queryParameter("status")?.let { put("status", STATUSES.getValue(it)) }
-            put("sort", if (pageUrl.queryParameter("order") == ascendingOrder) sort else "-$sort")
+            put("sort", if (pageUrl.queryParameter("order") == ASCENDING_ORDER) sort else "-$sort")
             pageUrl.queryParameter("genre")?.let { put("genre", it) }
         }
         val pick = if (names.isEmpty()) "null" else names.toJsonString()
@@ -92,23 +132,26 @@ abstract class CatharsisWorld : Catharsis() {
         }
         val list = listing.list!!
         val page = query.getValue("page").toInt()
-        return MangasPage(list.data.map { it.toSManga(it.id.toString(), baseUrl) }, page < list.totalPages)
+        return MangasPage(list.data.map { it.toSManga(baseUrl) }, page < list.totalPages)
     }
 
-    override val supportsFilterFetching = true
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/$MANGA_PATH/${manga.url}"
 
-    override suspend fun fetchFilterData(): JsonElement = siteView.drive("$baseUrl/$listingPath", "(${siteView.asset("genres.js")})()") { result ->
-        val panel = result.parseAs<GenrePanel>()
-        when {
-            panel.tap != null -> touch(panel.scale, panel.width, panel.height, panel.tap)
-            panel.names != null -> Step.Done(panel.names.map { GenreOption(it, panel.ids[it]) }.toJsonElement())
-            else -> Step.Wait
-        }
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.getOrNull(0) != MANGA_PATH) return null
+        val key = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
+        val manga = SManga.create().apply { this.url = key }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
-    override fun genres(data: JsonElement?) = data?.parseAs<List<GenreOption>>().orEmpty().map { it.name to (it.id ?: it.name) }
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = readSeries(manga, chapters, fetchChapters)
 
-    override suspend fun readSeries(manga: SManga, known: List<SChapter>, withChapters: Boolean): SMangaUpdate {
+    private suspend fun readSeries(manga: SManga, known: List<SChapter>, withChapters: Boolean): SMangaUpdate {
         val series = siteView.drive(getMangaUrl(manga), "(${siteView.asset("series.js")})()") { result ->
             val page = result.parseAs<SeriesPage>()
             when {
@@ -117,7 +160,6 @@ abstract class CatharsisWorld : Catharsis() {
                 // A series opened by its slug is stored by its id, as the site's lists give it
                 manga.url.toIntOrNull() == null && page.id == null -> Step.Wait
                 withChapters && page.more != null -> touch(page.scale, page.width, page.height, page.more)
-                // The chapter rows arrive after the details
                 withChapters && page.rows.size < page.count -> Step.Wait
                 else -> Step.Done(page)
             }
@@ -136,7 +178,7 @@ abstract class CatharsisWorld : Catharsis() {
                 "abandonado" -> SManga.CANCELLED
                 else -> SManga.UNKNOWN
             }
-            genre = series.badges.filter { it != statusBadge }.joinToString().ifEmpty { null }
+            genre = series.badges.filter { it != statusBadge }.joinToString { badgeName(it) }.ifEmpty { null }
             description = MarkdownDescription.Builder()
                 .rating(series.rating?.takeIf { (series.votes ?: 0) > 0 }, max = 5, votes = series.votes)
                 .description(series.description)
@@ -165,6 +207,12 @@ abstract class CatharsisWorld : Catharsis() {
         return SMangaUpdate(details, chapters)
     }
 
+    // The site spells some types "Manwha" or in lower case
+    private fun badgeName(badge: String) = when (badge.lowercase()) {
+        "manwha" -> "Manhwa"
+        else -> badge.replaceFirstChar(Char::uppercase)
+    }
+
     /** How long ago "Hace 3 días" is. */
     private fun age(text: String): Duration? {
         if (text == "Hace un momento") return Duration.ZERO
@@ -174,11 +222,16 @@ abstract class CatharsisWorld : Catharsis() {
         return unit * count.toDouble()
     }
 
-    override val readerPages = "[data-page-index]"
+    // Stored as <series>/<chapter number>
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/$MANGA_PATH/${chapter.url.substringBeforeLast('/')}/$CHAPTER_SEGMENT${chapter.url.substringAfterLast('/')}"
 
-    override val readerText = ".catha-novel-body"
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterUrl = getChapterUrl(chapter)
+        val count = reader(chapterUrl.toHttpUrl().encodedPath, 0).pageCount.await()
+        return List(count) { index -> Page(index, imageUrl = "$chapterUrl#$PAGE_FRAGMENT$index") }
+    }
 
-    override fun readerRefusal(text: String): String? = when {
+    private fun readerRefusal(text: String): String? = when {
         "requiere iniciar sesión" in text -> "Inicia sesión en el sitio desde WebView para leer esta serie"
         "Este capítulo es nuevo" in text ->
             "Capítulo en acceso anticipado" + (UNLOCK_REGEX.find(text)?.let { " hasta el ${it.groupValues[1]}" } ?: "")
@@ -186,10 +239,146 @@ abstract class CatharsisWorld : Catharsis() {
         "VPN, proxy o servidor" in text -> "Desactiva la VPN o el proxy para leer en este sitio"
         else -> null
     }
+
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement = siteView.drive("$baseUrl/$LISTING_PATH", "(${siteView.asset("genres.js")})()") { result ->
+        val panel = result.parseAs<GenrePanel>()
+        when {
+            panel.tap != null -> touch(panel.scale, panel.width, panel.height, panel.tap)
+            panel.names != null -> Step.Done(panel.names.map { GenreOption(it, panel.ids[it]) }.toJsonElement())
+            else -> Step.Wait
+        }
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
+        buildList {
+            add(SortFilter(SORTS.map { it.first }, POPULAR_SORT))
+            add(StatusFilter(STATUSES.keys.toList()))
+            add(LetterFilter())
+            data?.parseAs<List<GenreOption>>()?.takeIf { it.isNotEmpty() }?.let { genres ->
+                add(GenreFilter(genres.map { GenreCheckBox(it.name, it.id ?: it.name) }))
+            }
+        },
+    )
+
+    private val readerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val readers = linkedMapOf<String, ChapterReader>()
+
+    /** The chapter's open reader that can still deliver page [index], or a new one starting there. */
+    @Synchronized
+    private fun reader(chapterPath: String, index: Int): ChapterReader {
+        readers[chapterPath]?.takeIf { it.covers(index) }?.let { return it }
+        readers.remove(chapterPath)?.close()
+        while (readers.size >= MAX_READERS) readers.remove(readers.keys.first())?.close()
+        val dir = File(applicationContext.cacheDir, "catharsis-pages/$id/${chapterPath.hashCode().toUInt()}-$index")
+        val chapterUrl = "$baseUrl$chapterPath"
+        return ChapterReader(chapterUrl, index, siteView, dir, readerScope, READER_PAGES, READER_TEXT, ::readerRefusal) { readerPass(chapterUrl) }
+            .also { readers[chapterPath] = it }
+    }
+
+    private val apiHeaders get() = headersBuilder()
+        .set("Accept", "application/json, text/plain, */*")
+        .set("System", "catharsis")
+        .set("X-FK-Sistema", "3")
+        .build()
+
+    private val readerPassMutex = Mutex()
+
+    private suspend fun readerPass(chapterUrl: String) = readerPassMutex.withLock {
+        val fetch = Fetch.XHR.from(chapterUrl)
+        val system = client.get("$baseUrl/api/system", apiHeaders, fetch).parseAs<SystemDto>()
+        val capUrl = system.capApiEndpoint.toHttpUrl()
+        val challenge = client.post(capUrl.resolve("challenge")!!, fetch, RequestBody.EMPTY).parseAs<CapChallengeResponse>()
+        val solutions = (1..challenge.challenge.count).map { i ->
+            solveCap(
+                salt = capPrng("${challenge.token}$i", challenge.challenge.saltSize),
+                target = capPrng("${challenge.token}${i}d", challenge.challenge.difficulty),
+            )
+        }
+        val redeemed = client.post(capUrl.resolve("redeem")!!, fetch, CapRedeemRequest(challenge.token, solutions).toJsonRequestBody())
+            .parseAs<CapRedeemResponse>()
+        val capToken = redeemed.token?.takeIf { redeemed.success } ?: throw IOException("Reader verification failed")
+        client.post("$baseUrl/lector/pase", fetch, ReaderPassRequest(capToken, system.capSitekey).toJsonRequestBody()).close()
+    }
+
+    // FNV-1a seeded xorshift32, as hex
+    private fun capPrng(seed: String, length: Int): String {
+        var state = seed.fold(FNV_OFFSET_BASIS) { hash, char -> (hash xor char.code) * FNV_PRIME }
+        return buildString {
+            while (this.length < length) {
+                state = state xor (state shl 13)
+                state = state xor (state ushr 17)
+                state = state xor (state shl 5)
+                append(state.toUInt().toString(16).padStart(8, '0'))
+            }
+        }.take(length)
+    }
+
+    private fun solveCap(salt: String, target: String): Int = generateSequence(0) { it + 1 }
+        .first { "$salt$it".sha256().toHexString().startsWith(target) }
+
+    private val covers by lazy { Covers({ baseUrl }, File(applicationContext.cacheDir, "catharsis-covers/$id"), readerScope) { headers["User-Agent"]!! } }
+
+    private fun webViewInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        if (request.url.host != baseUrl.toHttpUrl().host) return chain.proceed(request)
+        val index = request.url.fragment?.takeIf { it.startsWith(PAGE_FRAGMENT) }?.removePrefix(PAGE_FRAGMENT)?.toIntOrNull()
+        if (index != null) {
+            val file = awaitFile { reader(request.url.encodedPath, index).page(index).await() }
+            return fileResponse(request, file, "image/jpeg")
+        }
+        if (request.url.pathSegments.first() != "assets") return chain.proceed(request)
+        val cover = awaitFile { covers.get(request.url.newBuilder().query(null).fragment(null).build().toString()).await() }
+        return fileResponse(request, cover.file, cover.type)
+    }
+
+    private fun <T> awaitFile(block: suspend () -> T): T = try {
+        runBlocking { withTimeout(FILE_TIMEOUT) { block() } }
+    } catch (e: Throwable) {
+        throw e as? IOException ?: IOException(e.message ?: "La página del sitio no cargó", e)
+    }
+
+    private fun fileResponse(request: Request, file: File, type: String) = Response.Builder()
+        .request(request)
+        .protocol(Protocol.HTTP_1_1)
+        .code(200)
+        .message("OK")
+        .body(file.source().buffer().asResponseBody(type.toMediaType(), file.length()))
+        .build()
 }
+
+private const val LISTING_PATH = "biblioteca"
+private const val MANGA_PATH = "manga"
+
+// What comes between the series and the chapter number in a chapter's path
+private const val CHAPTER_SEGMENT = "chapter/"
+
+private const val PRELUDE = "pass.js"
+
+// The reader's page elements, each a canvas, in reading order, and its text reader for novels
+private const val READER_PAGES = "[data-page-index]"
+private const val READER_TEXT = ".catha-novel-body"
+
+// The series list's sorts as its page url takes them
+private val SORTS = listOf(
+    "Recientes" to null,
+    "Nuevos" to "date_created",
+    "Populares" to "n_visitas",
+    "Título" to "nombre",
+)
+private const val POPULAR_SORT = 2
+private const val LATEST_SORT = 0
+private const val ASCENDING_ORDER = "asc"
 
 private const val PAGE_SIZE = 24
 private const val UNKNOWN_AUTHOR = "Desconocido"
+private const val PAGE_FRAGMENT = "catharsis-page-"
+private const val MAX_READERS = 2
+private const val FNV_OFFSET_BASIS = 0x811c9dc5.toInt()
+private const val FNV_PRIME = 0x01000193
+private val FILE_TIMEOUT = 5.minutes
 private val UUID_REGEX = Regex("""[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}""")
 private val UNLOCK_REGEX = Regex("""a partir del (\d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC)""")
 

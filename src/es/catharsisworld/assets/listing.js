@@ -1,5 +1,5 @@
-// Reads the series list the page fetched for its url, from the site's own response cache. With [genres] (names), ticks
-// them in the site's filter panel first, since only the panel knows their ids, and reports the id each one got.
+// [query]: the parameters of the list request the page sends for its url; [genres]: genre names, whose ids only the
+// filter panel gives
 (query, genres) => {
     const ids = {};
     // Ticks whose ids haven't reached the url yet, in tick order, and when the last one was made
@@ -21,14 +21,13 @@
             return { x, y, clear: y > 0 && y < innerHeight && el.contains(document.elementFromPoint(x, y)) };
         };
         const base = { scale: devicePixelRatio, width: innerWidth, height: innerHeight };
-        // The site's button labelled with this text (a count may follow), preferring the copy a tap would reach
+        // The button labelled with this text (a count may follow); the page has one per layout
         const button = (text) => {
             const spots = [...document.querySelectorAll('button')]
                 .filter((el) => visible(el) && el.textContent.trim().startsWith(text))
                 .map((el) => point(el));
             return spots.find((spot) => spot.clear) ?? spots[0];
         };
-        // A tap on a panel option; one further down the panel's own list is swiped to inside that list
         const reach = (option) => {
             const spot = point(option);
             let list = option.parentElement;
@@ -55,7 +54,6 @@
                 waiting = [];
             }
             if (waiting.length && Date.now() - tickedAt < 4000) return null;
-            // Ticks whose ids never reached the url (a full-page ad swallowed the change) are undone and made again
             waiting = [];
             const field = [...document.querySelectorAll('label')].find(
                 (label) => /^g[ée]neros$/i.test(label.textContent.trim()) && onScreen(label),
@@ -74,7 +72,6 @@
                 pending.filter((name) => !options.some((label) => label.textContent.trim() === name)).forEach((name) => (ids[name] = null));
                 const offered = options.filter((label) => pending.includes(label.textContent.trim()));
                 if (!offered.length) return null;
-                // Checked without its id in the url: undone first
                 const stale = offered.find((label) => label.querySelector('input').checked);
                 const option = stale ?? offered[0];
                 const spot = reach(option);

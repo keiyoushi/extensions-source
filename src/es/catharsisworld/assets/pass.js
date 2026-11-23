@@ -1,4 +1,3 @@
-// Keeps the site's reading pass active: the site grants it in the browser alone once its rewarded ad plays.
 () => {
     const key = 'catharsis_reward_gate';
     const read = () => {

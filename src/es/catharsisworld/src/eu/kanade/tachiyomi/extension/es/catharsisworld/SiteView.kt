@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.catharsis
+package eu.kanade.tachiyomi.extension.es.catharsisworld
 
 import android.webkit.WebResourceResponse
 import keiyoushi.utils.InjectionEvent
@@ -32,14 +32,9 @@ sealed interface Step<out T> {
     class Act(val run: (done: () -> Unit) -> Unit) : Step<Nothing>
 }
 
-/**
- * Opens the site's pages in a WebView shown on its own display, reads what they render and acts on them only with
- * touches, so nothing is added to the page.
- */
-class SiteView internal constructor(
+class SiteView(
     private val baseUrl: () -> String,
-    private val readerHosts: Set<String>,
-    private val prelude: String?,
+    private val prelude: String,
     private val userAgent: () -> String,
 ) {
 
@@ -47,13 +42,12 @@ class SiteView internal constructor(
 
     private var lastLoad: TimeMark? = null
 
-    /** Set when the site refused or rate limited us; loads fail fast for [BACKOFF]. */
     @Volatile
     private var refusedAt: TimeMark? = null
 
     /**
-     * Loads [url] on a display the size of the screen and calls [step] with what [read] (a script
-     * giving the function that reads the page, which returns null until the page is ready) reads from it, until a step is done.
+     * Loads [url] and calls [step] with what [read] (a script giving the function that reads the page, which returns null
+     * until the page is ready) reads from it, until a step is done.
      */
     @OptIn(NativeWebViewApi::class)
     suspend fun <T> drive(
@@ -68,46 +62,39 @@ class SiteView internal constructor(
             lastLoad = TimeSource.Monotonic.markNow()
         }
 
-        val siteOrigins = (readerHosts + baseUrl().toHttpUrl().host).map { "https://$it" }.toSet()
+        val siteOrigins = setOf("https://${baseUrl().toHttpUrl().host}")
         val bridge = randomName()
         val world = randomName()
         val reads = "(${asset("world.js")})(\"$bridge\", (${asset("page.js")})($read))"
-        val script = prelude?.let { "(${asset(it)})(), $reads" } ?: reads
+        val script = "(${asset(prelude)})(), $reads"
         var challengeSince: TimeMark? = null
         var obstacles = 0
         var loaded = false
         val result = try {
             runWebView<T>(timeout = timeout) {
                 userAgent = this@SiteView.userAgent()
-                // Chrome sends no X-Requested-With; the site refuses readers that do
                 setOriginMatchedHeader("X-Requested-With", "", siteOrigins)
                 withNativeWebView { webView ->
-                    // Ads can't open windows (a pop-under), with no window handler to give them one
                     webView.settings.setSupportMultipleWindows(true)
                     webView.settings.javaScriptCanOpenWindowsAutomatically = false
-                    // The scroll indicators would be in the frames
                     webView.isVerticalScrollBarEnabled = false
                     webView.isHorizontalScrollBarEnabled = false
                     val metrics = webView.resources.displayMetrics
                     Surface.host(webView, metrics.widthPixels, metrics.heightPixels)
                 }
-                // Everything loads as in a browser, ads too, since the sites stop at an ad blocker notice; but the page stays
-                // where it was opened, or goes on to the site's reader: no redirect away by an ad or a stray tap
                 val page = url.toHttpUrl().encodedPath
                 interceptRequest { request ->
                     val host = request.url.host
                     when {
-                        request.isForMainFrame && host != null && host !in readerHosts && request.url.encodedPath != page -> blockedResponse()
+                        request.isForMainFrame && host != null && request.url.encodedPath != page -> blockedResponse()
                         else -> null
                     }
                 }
                 onReceivedError { request, error ->
                     if (request.isForMainFrame) reject(IOException(error.description.toString()))
                 }
-                // The page's reads run in a world of their own: they share its DOM but none of its JavaScript
                 var acting = false
                 webMessageBridge(bridge, siteOrigins, world) { message, reply ->
-                    // Unanswered reads are posted again, so one that arrives mid-action can wait
                     if (acting) return@webMessageBridge
                     val page = message.parseAs<PageRead>()
                     when {

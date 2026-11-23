@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.catharsis
+package eu.kanade.tachiyomi.extension.es.catharsisworld
 
 import android.util.Base64
 import keiyoushi.utils.parseAs
@@ -16,7 +16,6 @@ import java.security.SecureRandom
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-/** Covers, fetched in batches by a WebView from a blank page on the site's origin and kept on disk. */
 internal class Covers(
     private val baseUrl: () -> String,
     private val dir: File,
@@ -51,7 +50,6 @@ internal class Covers(
 
     private suspend fun runBatches() {
         while (true) {
-            // Let the app ask for the rest of a screen's covers first
             delay(BATCH_DELAY)
             val batch = synchronized(this) {
                 if (pending.isEmpty()) {

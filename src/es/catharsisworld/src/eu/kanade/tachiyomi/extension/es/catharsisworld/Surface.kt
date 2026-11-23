@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.catharsis
+package eu.kanade.tachiyomi.extension.es.catharsisworld
 
 import android.app.Presentation
 import android.content.Context
@@ -11,13 +11,10 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
 
-/** Shows offscreen WebViews on a private virtual display, so they lay out, draw and take touches like one on screen. */
 internal object Surface {
-    /** Shows [webView] on a [width] x [height] display until it leaves it. Main thread. */
     fun host(webView: WebView, width: Int, height: Int) {
         val frames = HandlerThread("catharsis-webview-frames").apply { start() }
         val reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
-        // Frames are drawn, never read
         reader.setOnImageAvailableListener({ it.acquireLatestImage()?.close() }, Handler(frames.looper))
         val displayManager = webView.context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         val display = displayManager.createVirtualDisplay(

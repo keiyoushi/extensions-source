@@ -1,4 +1,3 @@
-// Fetches cover images from a blank page on the site's origin and posts each one back as base64.
 (bridge, urls) => {
     const post = (message) => window[bridge].postMessage(JSON.stringify(message));
     const base64 = (buffer) => {

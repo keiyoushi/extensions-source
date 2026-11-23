@@ -1,8 +1,21 @@
-// Reads the site's chapter reader: its check, where its pages are (the elements [pages] finds), and the pixels of one
-// finished page at a time. [text] finds the site's text reader, for chapters that are text only.
+// [pages]: the selector of the page elements; [text]: the selector of the text reader, for chapters that are text only
 (pages, text) => {
     const sent = new Set();
     const prints = new Map();
+
+    addEventListener(
+        'click',
+        (event) => {
+            const target = event.target;
+            if (!document.querySelector(pages) || !(target instanceof Element) || target.closest(pages)) return;
+            for (let node = target; node && node !== document.documentElement; node = node.parentElement) {
+                if (getComputedStyle(node).position === 'fixed') return;
+            }
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        },
+        true,
+    );
 
     // A sample of a canvas's pixels across its height, or null while any sampled spot is still empty
     const fingerprint = (canvas) => {
@@ -28,7 +41,6 @@
     return () => {
         const base = { scale: devicePixelRatio, width: innerWidth, height: innerHeight };
         const visible = (el) => el && el.getClientRects().length > 0;
-        // The site's age check before an adult series: remember the answer, then confirm
         const ageCheck = [...document.querySelectorAll('input[type=checkbox]')].find((box) => visible(box) && box.closest('.fixed'));
         if (ageCheck) {
             const target = ageCheck.checked
@@ -40,16 +52,8 @@
         }
         const items = [...document.querySelectorAll(pages)];
         if (!items.length) {
-            const check = document.querySelector('cap-widget');
-            if (check) {
-                const box = check.getBoundingClientRect();
-                // The widget's checkbox sits at its start
-                const x = box.left + Math.min(32, box.width / 2);
-                const y = box.top + box.height / 2;
-                return { ...base, check: { x, y, clear: y > 0 && y < innerHeight && check.contains(document.elementFromPoint(x, y)) } };
-            }
+            if (document.querySelector('cap-widget')) return { ...base, check: true };
             if (text && document.querySelector(text)) return { ...base, textOnly: true };
-            // Cloudflare's Turnstile, which may want a tap from the user
             const turnstile = document.querySelector('input[name="cf-turnstile-response"]');
             if (turnstile && !turnstile.value) return { ...base, turnstile: true };
             return { ...base, pages: [], text: document.body.innerText.slice(0, 500) };
@@ -84,7 +88,6 @@
                 retry: retry && retry.height > 0 ? point(button, retry) : null,
             };
         });
-        // Where a finger lands in the reader's scrolling area, clear of ads and fixed toolbars, to swipe from
         let scroller = items[0].parentElement;
         while (
             scroller &&

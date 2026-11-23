@@ -1,4 +1,3 @@
-// Reads the genre names the site's filter panel offers, opening the panel and its genre list first.
 () => () => {
     const visible = (el) => el && el.getClientRects().length > 0;
     const onScreen = (el) => {
@@ -12,7 +11,7 @@
         return { x, y, clear: y > 0 && y < innerHeight && el.contains(document.elementFromPoint(x, y)) };
     };
     const base = { scale: devicePixelRatio, width: innerWidth, height: innerHeight };
-    // The site's button labelled with this text (a count may follow), preferring the copy a tap would reach (the page has one per layout)
+    // The button labelled with this text (a count may follow); the page has one per layout
     const button = (text) => {
         const spots = [...document.querySelectorAll('button')]
             .filter((el) => visible(el) && el.textContent.trim().startsWith(text))
