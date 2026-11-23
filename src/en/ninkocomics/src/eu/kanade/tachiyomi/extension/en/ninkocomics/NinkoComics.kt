@@ -32,6 +32,8 @@ abstract class NinkoComics :
 
     private val preferences = getPreferences()
 
+    override val imageFetch = Fetch.NONE
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = SHOW_LOCKED_PREF
@@ -130,10 +132,14 @@ abstract class NinkoComics :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        return document.select("img[src*=/media/pages/]").mapIndexed { index, img ->
-            Page(index, imageUrl = img.absUrl("src"))
-        }
+        val chapterUrl = getChapterUrl(chapter)
+        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
+        val pagesUrl = document.selectFirst("[data-pages-url]")?.absUrl("data-pages-url")
+            ?: return emptyList()
+        return client.get(pagesUrl, Fetch.XHR.from(chapterUrl)).parseAs<PagesDto>().pages
+            .mapIndexed { index, page ->
+                Page(index, imageUrl = baseUrl.toHttpUrl().resolve(page.url)!!.toString())
+            }
     }
 
     override fun getFilterList(data: JsonElement?): FilterList = getFilters()
