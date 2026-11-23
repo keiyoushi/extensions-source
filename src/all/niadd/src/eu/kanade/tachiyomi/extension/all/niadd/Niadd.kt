@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.niadd
 
 import android.util.LruCache
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,6 +15,7 @@ import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.booleanOrNull
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
@@ -84,6 +86,13 @@ abstract class Niadd : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/list/New-Update.html", Fetch.DOCUMENT).asJsoup())
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (query.isBlank() && filters.firstInstance<TypeFilter>().isOriginal) {
+            val url = baseUrl.toHttpUrl().newBuilder()
+                .addPathSegments("category/original_$page.html")
+                .addQueryParameter("sort", filters.firstInstance<SortFilter>().value)
+                .build()
+            return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
+        }
         val url = "$baseUrl/search/".toHttpUrl().newBuilder().apply {
             addQueryParameter("name", query)
             filters.forEach { filter ->
@@ -315,6 +324,10 @@ abstract class Niadd : KeiSource() {
         val filterData = data?.parseAs<FilterData>()
         return FilterList(
             listOfNotNull(
+                TypeFilter(),
+                SortFilter(),
+                Filter.Header("Original: only with an empty search, the filters below don't apply"),
+                Filter.Separator(),
                 AuthorFilter(),
                 ArtistFilter(),
                 SelectFilter("Completed", "completed_series", listOf("Either" to "", "Yes" to "YES", "No" to "NO")),
