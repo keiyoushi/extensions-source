@@ -10,88 +10,41 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
-import keiyoushi.utils.asJsoup
-import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.OkHttpClient
 import okhttp3.Response
 
 @Source
 abstract class Ikiru : KeiSource() {
     override val supportRelatedMangasBySearch = true
 
-    // ikiru.wtf redirects to the current subdomain
-    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = listOfNotNull(
-        client.get(HUB_URL, Fetch.DOCUMENT).use { it.request.url.takeIf { url -> url.host.endsWith(".$DOMAIN") }?.toString() },
-    )
-
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        val url = "$baseUrl/api/public/library/search".toHttpUrl().newBuilder()
-            .addQueryParameter("sortBy", "popular")
-            .addQueryParameter("sort", "desc")
-            .addQueryParameter("page", page.toString())
-            .build()
-        val response = client.get(url, Fetch.XHR)
-        return parseSearchResponse(response, page)
+    override suspend fun getPopularManga(page: Int): MangasPage = getSeriesList(page) {
+        addQueryParameter("sort", "popular")
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val url = "$baseUrl/api/public/library/search".toHttpUrl().newBuilder()
-            .addQueryParameter("sortBy", "updated")
-            .addQueryParameter("sort", "desc")
-            .addQueryParameter("page", page.toString())
-            .build()
-        val response = client.get(url, Fetch.XHR)
-        return parseSearchResponse(response, page)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSeriesList(page) {
+        addQueryParameter("sort", "update")
     }
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        // the "project" option is a separate listing, the other filters do not apply to it
-        if (filters.firstInstanceOrNull<ProjectFilter>()?.isProject == true) {
-            val url = "$baseUrl/api/public/manga/project".toHttpUrl().newBuilder()
-                .addQueryParameter("layout", "vertical")
-                .addQueryParameter("page", page.toString())
-                .addQueryParameter("limit", PROJECT_PAGE_SIZE.toString())
-                .build()
-            val data = client.get(url, Fetch.XHR).parseData<IkiruProjectDataDto>()
-            val projects = data.project.map { it.toSManga() }
-            val hasNextPage = projects.isNotEmpty() && page * PROJECT_PAGE_SIZE < data.total
-            return MangasPage(projects, hasNextPage)
-        }
-
-        val url = "$baseUrl/api/public/library/search".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = getSeriesList(page) {
         if (query.isNotBlank()) {
-            url.addQueryParameter("query", query.trim())
+            addQueryParameter("q", query.trim())
         }
-
-        filters.filterIsInstance<UriFilter>().forEach {
-            it.addToUri(url)
-        }
-
-        val response = client.get(url.build(), Fetch.XHR)
-        return parseSearchResponse(response, page)
+        filters.filterIsInstance<UriFilter>().forEach { it.addToUri(this) }
     }
 
-    private fun parseSearchResponse(response: Response, page: Int): MangasPage {
-        val data = response.parseData<IkiruSearchDataDto>()
-        val mangaList = data.mangas.map { it.toSManga() }
-        val hasNextPage = mangaList.isNotEmpty() && page * mangaList.size < data.total
-        return MangasPage(mangaList, hasNextPage)
+    private suspend fun getSeriesList(page: Int, configure: HttpUrl.Builder.() -> Unit): MangasPage {
+        val url = "$baseUrl/api/v1/series".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .apply(configure)
+            .build()
+        val result = client.get(url, Fetch.XHR).parseAs<IkiruResponseDto<List<IkiruSeriesItemDto>>>()
+        return MangasPage(result.requireData().map { it.toSManga() }, result.pagination?.hasNextPage == true)
     }
-
-    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
-        SortFilter(),
-        TypeFilter(),
-        StatusFilter(),
-        GenreFilter(),
-        ProjectFilter(),
-    )
 
     // library entries saved by older versions stored "/manga/<slug>", the absolute url, or a JSON blob
     private fun SManga.slug(): String {
@@ -103,7 +56,7 @@ abstract class Ikiru : KeiSource() {
         }.trim('/')
     }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga".toHttpUrl().newBuilder()
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/series".toHttpUrl().newBuilder()
         .addPathSegment(manga.slug())
         .build()
         .toString()
@@ -112,7 +65,7 @@ abstract class Ikiru : KeiSource() {
         // links from earlier numbered domains still resolve
         if (url.host != baseUrl.toHttpUrl().host && !url.host.endsWith(".$DOMAIN")) return null
         val segments = url.pathSegments.filter { it.isNotEmpty() }
-        if (segments.size != 2 || segments[0] != "manga") return null
+        if (segments.size != 2 || segments[0] !in listOf("series", "manga")) return null
         val manga = SManga.create().apply { this.url = segments[1] }
         return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
@@ -124,54 +77,76 @@ abstract class Ikiru : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val slug = manga.slug()
-        val url = "$baseUrl/api/public/manga".toHttpUrl().newBuilder()
+        val url = "$baseUrl/api/v1/series".toHttpUrl().newBuilder()
             .addPathSegment(slug)
             .build()
 
-        // the dedicated chapter endpoint returns an empty list for some manga, while this one
-        // embeds the complete chapter list
-        val detail = client.get(url, Fetch.XHR).parseData<IkiruMangaDetailDto>()
+        val detail = client.get(url, Fetch.XHR).parseData<IkiruSeriesDetailDto>()
 
         return SMangaUpdate(
-            manga = detail.toSManga(),
-            chapters = detail.chapters.chapters.map { it.toSChapter(slug) },
+            manga = detail.toSManga(baseUrl),
+            chapters = detail.chapters.map { it.toSChapter(slug) },
         )
     }
 
-    // legacy library entries stored the absolute web URL on an earlier domain
-    override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.startsWith("http")) {
-        chapter.url.toHttpUrl().newBuilder()
-            .host(baseUrl.toHttpUrl().host)
-            .build()
-            .toString()
-    } else {
-        baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments(chapter.url.trim('/'))
+    override fun getChapterUrl(chapter: SChapter): String {
+        val (slug, number) = chapter.parseKey()
+        return "$baseUrl/series".toHttpUrl().newBuilder()
+            .addPathSegment(slug)
+            .addPathSegment("chapter")
+            .addPathSegment(number)
             .build()
             .toString()
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
-        val document = response.asJsoup()
-        val images = document.select("img[src*='cdn.ikiru.id']")
+        val (slug, number) = chapter.parseKey()
+        val url = "$baseUrl/api/v1/series".toHttpUrl().newBuilder()
+            .addPathSegment(slug)
+            .addPathSegment("chapters")
+            .addPathSegment(number)
+            .build()
 
-        return images.mapIndexed { idx, img -> Page(idx, imageUrl = img.absUrl("src")) }
+        return client.get(url, Fetch.XHR).parseData<IkiruChapterPagesDto>().pages
+            .sortedBy { it.pageNumber }
+            .mapIndexed { idx, page -> Page(idx, imageUrl = page.imageUrl) }
     }
 
-    // the API returns HTTP 200 with a failure envelope for bad input, so the flag must be checked explicitly
-    private inline fun <reified T> Response.parseData(): T {
-        val res = parseAs<IkiruResponseDto<T>>()
-        val data = res.data
-        if (!res.success || data == null) {
-            throw Exception(res.message?.takeIf { it.isNotBlank() } ?: "Request failed")
-        }
-        return data
+    // also matches the absolute keys saved by older versions
+    private fun SChapter.parseKey(): Pair<String, String> {
+        val match = chapterKeyRegex.find(url) ?: throw Exception("Refresh the chapter list")
+        return match.groupValues[1] to match.groupValues[2]
     }
+
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/api/v1/genres", Fetch.XHR)
+        .parseData<List<IkiruGenreDto>>()
+        .toJsonElement()
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val genres = data?.parseAs<List<IkiruGenreDto>>().orEmpty()
+            .filterNot { it.slug in explicitGenres }
+            .map { Genre(it.name, it.slug) }
+
+        return FilterList(
+            SortFilter(),
+            TypeFilter(),
+            StatusFilter(),
+            SourceFilter(),
+            GenreFilter(genres),
+        )
+    }
+
+    private inline fun <reified T> Response.parseData(): T = parseAs<IkiruResponseDto<T>>().requireData()
 
     companion object {
-        private const val PROJECT_PAGE_SIZE = 24
         private const val DOMAIN = "ikiru.wtf"
-        private const val HUB_URL = "https://$DOMAIN/"
+
+        // anchored so a suffixed older key like "chapter-12-5" fails instead of opening chapter 12
+        private val chapterKeyRegex = Regex("""/manga/([^/]+)/chapter-([\d.]+)/?$""")
+
+        // the extension is SFW
+        private val explicitGenres = setOf("adult", "hentai", "lolicon", "shotacon", "smut")
     }
 }
