@@ -7,6 +7,13 @@
     let tickedAt = 0;
     // Genres already in the page url when it opened
     const preset = new URLSearchParams(location.search).get('genre')?.split('|') ?? [];
+    const decode = (value) => {
+        try {
+            return JSON.parse([...atob(value)].map((c) => String.fromCharCode(c.charCodeAt(0) ^ 90)).join(''));
+        } catch {
+            return JSON.parse(value);
+        }
+    };
 
     return () => {
         const visible = (el) => el && el.getClientRects().length > 0;
@@ -84,14 +91,14 @@
         }
 
         const wanted = applied ? { ...query, genre: applied } : query;
-        for (let i = 0; i < sessionStorage.length; i++) {
-            const key = sessionStorage.key(i);
-            if (!key.startsWith('catha_swr_mangas_')) continue;
-            const params = new URLSearchParams(key.slice('catha_swr_mangas_'.length));
-            const names = [...params.keys()];
-            if (names.length !== Object.keys(wanted).length || names.some((name) => params.get(name) !== wanted[name])) continue;
-            return { ...base, list: JSON.parse(sessionStorage.getItem(key)).data, ids };
+        const params = new URLSearchParams();
+        for (const name of ['limit', 'page', 'name', 'letter', 'genre', 'status', 'sort']) {
+            if (wanted[name] !== undefined) params.append(name, wanted[name]);
         }
-        return null;
+        let hash = 2166136261;
+        const key = 'mangas_' + params;
+        for (let i = 0; i < key.length; i++) hash = Math.imul(hash ^ key.charCodeAt(i), 16777619);
+        const cached = sessionStorage.getItem('__app_st_' + (hash >>> 0).toString(36));
+        return cached ? { ...base, list: decode(cached).data, ids } : null;
     };
 }
