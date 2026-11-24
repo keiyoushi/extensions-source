@@ -10,22 +10,11 @@ class Info(
 )
 
 @Serializable
-class PictureListInfo(
-    @SerialName("total_pages")
-    val totalPages: Int,
-)
-
-@Serializable
 class SingleIdVariable(
     val id: String,
 )
 
 // ALBUM LIST
-@Serializable
-class AlbumListResponse(
-    val data: AlbumListData,
-)
-
 @Serializable
 class AlbumListData(
     val album: AlbumListDataAlbum,
@@ -43,11 +32,6 @@ class AlbumList(
 )
 
 // ALBUM RELATED
-@Serializable
-class AlbumRelatedResponse(
-    val data: AlbumRelatedData,
-)
-
 @Serializable
 class AlbumRelatedData(
     val album: AlbumRelatedDataAlbum,
@@ -94,6 +78,7 @@ class FullAlbum(
     val numberOfAnimatedPictures: Int,
     val content: ItemWithTitle,
     val created: Double? = null,
+    val modified: Double? = null,
 )
 
 @Serializable
@@ -135,44 +120,57 @@ class Filter(
     val value: String,
 )
 
+@Serializable
+class PictureCountData(
+    val album: PictureCountAlbum,
+)
+
+@Serializable
+class PictureCountAlbum(
+    val get: PictureCount,
+)
+
+@Serializable
+class PictureCount(
+    @SerialName("number_of_pictures")
+    val numberOfPictures: Int,
+)
+
 // AlbumListOwnPictures
 
 @Serializable
-class AlbumListOwnPicturesResponse(
-    val data: AlbumListOwnPicturesData,
+class PictureListsData(
+    val picture: Map<String, PictureList>,
 )
 
 @Serializable
-class AlbumListOwnPicturesData(
-    val picture: AlbumListOwnPicturesDataPicture,
-)
-
-@Serializable
-class AlbumListOwnPicturesDataPicture(
-    val list: AlbumListOwnPicturesList,
-)
-
-@Serializable
-class AlbumListOwnPicturesList(
-    val info: PictureListInfo,
+class PictureList(
     val items: List<Picture>,
 )
 
 @Serializable
 class Picture(
-    val thumbnails: List<Cover>,
+    val title: String? = null,
+    val url: String? = null,
+    val created: Double? = null,
+    val thumbnails: List<Cover> = emptyList(),
     @SerialName("url_to_original")
-    val urlToOriginal: String?,
+    val urlToOriginal: String? = null,
     @SerialName("url_to_video")
-    val urlToVideo: String?,
+    val urlToVideo: String? = null,
+)
+
+@Serializable
+class PictureGetData(
+    val picture: PictureGet,
+)
+
+@Serializable
+class PictureGet(
+    val get: Picture,
 )
 
 // AlbumGet
-
-@Serializable
-class AlbumGetResponse(
-    val data: AlbumGetData,
-)
 
 @Serializable
 class AlbumGetData(
