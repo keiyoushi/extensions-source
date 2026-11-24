@@ -6,10 +6,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.lib.webviewpatch.ensureRequestedWithStripped
 import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import okhttp3.HttpUrl
@@ -69,6 +71,7 @@ abstract class Bakaloli : KeiSource() {
 
     // The first item is the folder itself, then its content
     private suspend fun list(href: String): List<ItemDto> {
+        ensureRequestedWithStripped(applicationContext)
         val body = ListRequestDto("get", ListItemsDto(href, 1)).toJsonRequestBody()
         return client.post("$baseUrl/", Fetch.XHR, body).parseAs<ListDto>().items
     }
