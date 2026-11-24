@@ -158,6 +158,20 @@ abstract class Tappytoon :
         }
     }
 
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val base = baseUrl.toHttpUrl()
+        if (url.host != base.host || url.pathSegments.getOrNull(0) != lang || url.pathSegments.getOrNull(1) !in setOf("comics", "book")) return null
+        val slug = url.pathSegments.getOrNull(2)?.takeIf { it.isNotEmpty() } ?: return null
+
+        // An unknown slug redirects to the site's search, so match it exactly
+        val bookUrl = base.newBuilder().addPathSegment("book").addPathSegment(slug).build()
+        val comic = client.get(bookUrl, Fetch.DOCUMENT).asJsoup().extractNextJs<BookState>()!!
+            .entities.comics.values.firstOrNull { it.slug == slug } ?: return null
+
+        val manga = SManga.create().apply { this.url = comic.toString() }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
+
     private suspend fun chapterList(comicUrl: HttpUrl, canUserRead: Boolean): List<SChapter> {
         val showLocked = preferences.getBoolean(PREF_SHOW_LOCKED, false)
         if (!canUserRead && !showLocked) return emptyList()

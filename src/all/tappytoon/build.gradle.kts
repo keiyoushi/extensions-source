@@ -16,6 +16,11 @@ keiyoushi {
             baseUrl = "https://www.tappytoon.com/$it"
         }
     }
+
+    deeplink {
+        path("/.*/comics/..*")
+        path("/.*/book/..*")
+    }
 }
 
 dependencies {

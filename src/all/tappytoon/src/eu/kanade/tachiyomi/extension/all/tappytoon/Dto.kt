@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.MarkdownDescription
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 interface Accessible {
     val isAccessible: Boolean
@@ -97,6 +98,23 @@ class Image(private val path: String) {
 
 @Serializable
 class ErrorResponse(val message: String)
+
+@Serializable
+class BookState(
+    val axios: JsonElement,
+    val entities: Entities,
+)
+
+@Serializable
+class Entities(val comics: Map<String, ComicSlug> = emptyMap())
+
+@Serializable
+class ComicSlug(
+    private val id: Int,
+    val slug: String,
+) {
+    override fun toString() = "$slug|$id"
+}
 
 @Serializable
 class AxiosHeaders(
