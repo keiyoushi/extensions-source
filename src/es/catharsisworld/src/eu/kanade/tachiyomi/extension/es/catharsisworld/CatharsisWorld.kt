@@ -379,7 +379,7 @@ private const val CHAPTER_SEGMENT = "chapter/"
 private const val PRELUDE = "pass.js"
 
 // The reader's page elements, each a canvas, in reading order, and its text reader for novels
-private const val READER_PAGES = "[data-page-index]"
+private const val READER_PAGES = "[data-page-seq]"
 private const val READER_TEXT = ".catha-novel-body"
 
 // The series list's sorts as its page url takes them
