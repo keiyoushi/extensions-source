@@ -14,7 +14,7 @@ keiyoushi {
         name = "Dưa Leo Truyện"
         lang = "vi"
         baseUrl {
-            custom("https://dualeotruyenkf.com")
+            custom("https://dualeotruyengf.com")
         }
     }
 
