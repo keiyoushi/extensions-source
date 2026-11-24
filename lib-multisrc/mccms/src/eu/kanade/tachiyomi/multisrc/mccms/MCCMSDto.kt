@@ -63,3 +63,6 @@ class ChapterDataDto(val id: String, private val addtime: String) {
 class ResultDto<T>(val data: T)
 
 private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
+
+@Serializable
+class ImageListDto(val images: List<String>)
