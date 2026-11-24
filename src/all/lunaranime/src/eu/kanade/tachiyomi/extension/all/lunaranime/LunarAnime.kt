@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.lunaranime
 
-import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,82 +8,46 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
-import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
-import keiyoushi.utils.asJsoup
-import keiyoushi.utils.getTurnstileToken
+import keiyoushi.utils.TURNSTILE_AREA
+import keiyoushi.utils.WebViewScope
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJsonRequestBody
+import keiyoushi.utils.runWebView
+import keiyoushi.utils.toJsonString
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
-import okhttp3.Response
-import java.util.concurrent.ConcurrentHashMap
-import kotlin.time.Clock
+import java.io.IOException
+import kotlin.coroutines.resume
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.Instant
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 @Source
 abstract class LunarAnime : KeiSource() {
-    private val serenity by lazy { LunarSerenity(API_HOST, id) }
-
-    private class Clearance(val thumbprint: String, val expiresAt: Instant)
-
-    private val clearances = ConcurrentHashMap<String, Clearance>()
-
-    private val pageListMutex = Mutex()
-
-    private fun hasClearance(slug: String): Boolean {
-        val clearance = clearances[slug] ?: return false
-        return clearance.thumbprint == serenity.thumbprint && clearance.expiresAt > Clock.System.now()
-    }
-
-    private fun markCleared(slug: String, ttlSeconds: Long?) {
-        val ttl = ((ttlSeconds ?: DEFAULT_CLEARANCE_TTL_S) - CLEARANCE_MARGIN_S).coerceAtLeast(0).seconds
-        clearances[slug] = Clearance(serenity.thumbprint, Clock.System.now() + ttl)
-    }
-
-    private var cachedSiteKey: String? = null
-
-    private suspend fun siteKey(): String {
-        cachedSiteKey?.let { return it }
-        val url = API_URL.toHttpUrl().newBuilder().addPathSegments("api/captcha/config").build()
-        return client.get(url, Fetch.XHR).parseAs<LunarCaptchaConfig>().mangaTurnstileSitekey
-            .also { cachedSiteKey = it }
-    }
-
-    // Turnstile token bound to the chapter token's nonce, as in the site's reader
-    private suspend fun solveTurnstile(nonce: String): String = getTurnstileToken(
-        url = baseUrl,
-        siteKey = siteKey(),
-        action = "read",
-        cData = nonce,
-    )
-
     override fun OkHttpClient.Builder.configureClient() = this
-        .addInterceptor(::authorize)
         .addInterceptor(VeilInterceptor(CDN_HOST))
-        .addInterceptor(serenity.interceptor())
         .rateLimit(2) { it.host == API_HOST }
         .rateLimit(4) { it.host == CDN_HOST }
-
-    private val crypto by lazy { LunarDecryptor(serenity) }
-
-    private fun authorize(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val token = client.cookieJar.loadForRequest(request.url).firstOrNull { it.name == AUTHORIZATION }?.value
-        if (request.url.host != API_HOST || token == null) return chain.proceed(request)
-        return chain.proceed(request.newBuilder().header(AUTHORIZATION, token).build())
-    }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", SortFilter.POPULAR)
 
@@ -226,103 +189,114 @@ abstract class LunarAnime : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = (baseUrl + chapter.url).toHttpUrl()
-        val language = chapterUrl.queryParameter("lang") ?: "en"
         val (slug, chapterNumber) = chapterUrl.pathSegments.takeLast(2)
+        val language = chapterUrl.queryParameter("lang") ?: "en"
+        val script = "(${javaClass.getResource(READER_SCRIPT)!!.readText()})(${slug.toJsonString()}, ${chapterNumber.toJsonString()}, ${language.toJsonString()})"
 
-        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
-        val seeds = crypto.extractSeeds(document, client)
+        val state = readerMutex.withLock { readerTab(chapterUrl.toString()).read(chapterUrl.toString(), script) }
 
-        // Without this call first the page list is decoys
-        val chapterLockUrl = API_URL.toHttpUrl().newBuilder()
-            .addPathSegments("api/manga/chapter-lock")
-            .addPathSegment(slug)
-            .build()
-        client.get(chapterLockUrl, Fetch.XHR, ensureSuccess = false).close()
-
-        // One key in play at a time: a retry replaces the key other page lists are signed with
-        val result = pageListMutex.withLock {
-            var attempt = fetchChapter(seeds, slug, chapterNumber, language, withTurnstile = !hasClearance(slug))
-
-            if (attempt.needsRevalidation()) {
-                clearances.remove(slug)
-                serenity.reset()
-                attempt = fetchChapter(seeds, slug, chapterNumber, language, withTurnstile = true)
+        val pages = when {
+            state.price != null -> {
+                val balance = state.balance?.let { ", balance $it" }.orEmpty()
+                error("This chapter is unlocked with ad points (price ${state.price}$balance). Unlock it in WebView.")
             }
-
-            if (attempt.needsRevalidation()) {
-                error("Could not load images. Open in WebView and try again.")
-            }
-
-            markCleared(slug, attempt.cacheTtl)
-            attempt
+            state.reason != null -> error(if ("account" in state.reason) LOGIN_MESSAGE else state.message ?: state.reason)
+            else -> state.pages.orEmpty()
         }
 
-        val viewUrl = API_URL.toHttpUrl().newBuilder().addPathSegments("api/manga/chapter/view").build()
-        val viewBody = ViewRequestBody(slug, chapterNumber, language).toJsonRequestBody()
-        client.post(viewUrl, Fetch.XHR, viewBody, ensureSuccess = false).close()
-
-        return result.realPages().mapIndexed { index, (imageUrl, veil) ->
-            val veilUrl = veil?.takeIf { it.isNotEmpty() }?.let { API_URL.toHttpUrl().resolve(it) }
-            val url = imageUrl.toHttpUrl().newBuilder().fragment(veilUrl?.toString()).build()
-            Page(index, imageUrl = url.toString())
+        return pages.mapIndexed { index, page ->
+            val url = page.url.toHttpUrl()
+            Page(index, imageUrl = url.newBuilder().fragment(page.veil?.let { url.resolve(it)?.toString() }).build().toString())
         }
     }
 
-    private fun LunarPageListDecrypted.realPages(): List<Pair<String, String?>> = data.images
-        .mapIndexed { index, imageUrl -> imageUrl to veil?.getOrNull(index) }
-        .filterNot { (imageUrl) -> INTERSTITIAL_PATH in imageUrl }
+    private val readerMutex = Mutex()
 
-    private suspend fun fetchChapter(
-        seeds: LunarSeeds,
-        slug: String,
-        chapterNumber: String,
-        language: String,
-        withTurnstile: Boolean,
-    ): LunarPageListDecrypted {
-        val nonce = crypto.newNonce()
-        val turnstileToken = if (withTurnstile) solveTurnstile(nonce) else null
+    private val tabScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-        val url = API_URL.toHttpUrl().newBuilder()
-            .addPathSegments("api/manga/r")
-            // Minted after the solve: a token minted long before the request gets decoys
-            .addPathSegment(crypto.mint(seeds, slug, chapterNumber, nonce))
-            .apply { if (language != "en") addQueryParameter("language", language) }
-            .build()
+    private var tab: ReaderTab? = null
 
-        val requestHeaders = headersBuilder().apply {
-            if (turnstileToken != null) {
-                set(seeds.names.token, turnstileToken)
-                set(seeds.names.type, "turnstile")
+    private fun readerTab(url: String): ReaderTab = tab?.takeUnless { it.closed } ?: ReaderTab(url).also { tab = it }
+
+    // One reader tab, kept between chapters
+    private inner class ReaderTab(firstUrl: String) {
+        private val ready = CompletableDeferred<WebViewScope<Unit>>()
+
+        private var opened = false
+
+        @Volatile
+        private var navigations = 0
+
+        @Volatile
+        private var lastUsed = TimeSource.Monotonic.markNow()
+
+        @Volatile
+        private var failure: Throwable? = null
+
+        @Volatile
+        var closed = false
+            private set
+
+        init {
+            tabScope.launch {
+                try {
+                    runWebView<Unit>(TAB_TIMEOUT) {
+                        onPageStarted { navigations++ }
+                        poll(IDLE_TIMEOUT / 4) {
+                            if (lastUsed.elapsedNow() > IDLE_TIMEOUT) resolve(Unit)
+                        }
+                        loadUrl(firstUrl)
+                        ready.complete(this)
+                    }
+                } catch (e: Throwable) {
+                    failure = e
+                    ready.completeExceptionally(e)
+                } finally {
+                    closed = true
+                }
             }
-        }.build()
-
-        serenity.proofHeader = seeds.names.proof
-        val response = client.get(url, requestHeaders, Fetch.XHR, ensureSuccess = false)
-        if (!response.isSuccessful) {
-            if (response.code == 401) {
-                response.close()
-                error(LOGIN_MESSAGE)
-            }
-            if (response.code == 403 && response.body.contentType()?.subtype == "json") {
-                val locked = response.parseAs<LunarLockedChapterDto>()
-                if (locked.accountOnly) error(LOGIN_MESSAGE)
-                if (locked.isPointsLocked) error("This chapter is unlocked with ad points. Log in and unlock it in WebView.")
-            }
-            response.close()
-            throw HttpException(response.code)
         }
-        val sessionData = response.parseAs<JsonObject>().renamed(seeds.names.outer)
-            .parseAs<LunarPageListResponse>().data.sessionData
 
-        return crypto.unpack(sessionData, seeds, nonce).parseAs<LunarPageListDecrypted>()
-    }
+        suspend fun read(url: String, script: String): LunarReaderState {
+            val scope = ready.await()
+            val before = if (opened) navigations else 0
+            if (opened) scope.evaluateJs("location.assign(${url.toJsonString()})")
+            opened = true
 
-    private fun LunarPageListDecrypted.needsRevalidation(): Boolean {
-        val images = data.images.filterNot { INTERSTITIAL_PATH in it }
-        return cacheStatus == "revalidate" ||
-            slug == "unknown" ||
-            images.size == data.images.size ||
-            images.all { DECOY_PATH in it }
+            var deadline = TimeSource.Monotonic.markNow() + READ_TIMEOUT
+            var checkSince: TimeMark? = null
+            var shown = false
+            try {
+                while (true) {
+                    if (closed) throw failure as? IOException ?: IOException("The reader was closed, try again", failure)
+                    lastUsed = TimeSource.Monotonic.markNow()
+                    val state = if (navigations > before) scope.evaluate(script)?.parseAs<LunarReaderState?>() else null
+                    if (state != null && (state.pages != null || state.price != null || state.reason != null)) return state
+                    if (state?.check == true) {
+                        val since = checkSince ?: TimeSource.Monotonic.markNow().also { checkSince = it }
+                        if (since.elapsedNow() >= CHECK_GRACE) {
+                            if (!shown) deadline = TimeSource.Monotonic.markNow() + CHECK_TIMEOUT
+                            shown = withContext(Dispatchers.Main) { scope.showToUser(if (state.turnstile) TURNSTILE_AREA else state.area) }
+                            if (!shown) throw IOException("Open the chapter in WebView to pass the site's check")
+                        }
+                    } else if (state != null && shown) {
+                        scope.hideFromUser()
+                        shown = false
+                        checkSince = null
+                        deadline = TimeSource.Monotonic.markNow() + READ_TIMEOUT
+                    }
+                    if (deadline.hasPassedNow()) throw IOException("The chapter did not load, open it in WebView")
+                    delay(POLL_INTERVAL)
+                }
+            } finally {
+                if (shown) scope.hideFromUser()
+                scope.evaluateJs("location.replace('about:blank')")
+            }
+        }
+
+        private suspend fun WebViewScope<Unit>.evaluate(script: String): String? = withTimeoutOrNull(SCRIPT_TIMEOUT) {
+            suspendCancellableCoroutine { continuation -> evaluateJs(script) { continuation.resume(it) } }
+        }
     }
 
     override val supportsFilterFetching = true
@@ -348,12 +322,15 @@ abstract class LunarAnime : KeiSource() {
     companion object {
         private const val API_HOST = "api.lunarx.to"
         private const val API_URL = "https://$API_HOST"
-        private const val AUTHORIZATION = "Authorization"
         private const val LOGIN_MESSAGE = "Log in via WebView to read chapters"
         private const val CDN_HOST = "vault.lunarx.to"
-        private const val DECOY_PATH = "/api/cdn/p/"
-        private const val INTERSTITIAL_PATH = "/api/manga/pg/"
-        private const val DEFAULT_CLEARANCE_TTL_S = 300L
-        private const val CLEARANCE_MARGIN_S = 30L
+        private const val READER_SCRIPT = "/assets/lunar-reader.js"
+        private val TAB_TIMEOUT = 24.hours
+        private val IDLE_TIMEOUT = 30.minutes
+        private val READ_TIMEOUT = 60.seconds
+        private val CHECK_TIMEOUT = 3.minutes
+        private val CHECK_GRACE = 5.seconds
+        private val POLL_INTERVAL = 500.milliseconds
+        private val SCRIPT_TIMEOUT = 5.seconds
     }
 }

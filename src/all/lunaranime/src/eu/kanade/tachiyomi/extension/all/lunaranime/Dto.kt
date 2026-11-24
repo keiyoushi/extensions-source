@@ -7,8 +7,6 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
 import java.util.Locale
 import kotlin.time.Instant
 
@@ -116,55 +114,22 @@ class LunarChapterDto(
     }
 }
 
-/**
- * The two seed strings every chapter token and session key is derived from.
- */
 @Serializable
-class LunarSeeds(val axis: String, val pitch: String, val names: LunarNames)
-
-@Serializable
-class LunarNames(
-    val token: String,
-    val type: String,
-    val proof: String,
-    val mintStep: Int,
-    val outer: List<List<String>>,
-    val inner: List<List<String>>,
+class LunarReaderState(
+    val pages: List<LunarReaderPage>? = null,
+    val price: Int? = null,
+    val balance: Int? = null,
+    val reason: String? = null,
+    val message: String? = null,
+    val check: Boolean = false,
+    val turnstile: Boolean = false,
+    val area: String? = null,
 )
 
 @Serializable
-class LunarPageListResponse(
-    val data: LunarSessionDto,
-)
-
-@Serializable
-class LunarLockedChapterDto(
-    @SerialName("is_points_locked") val isPointsLocked: Boolean = false,
-    @SerialName("account_only") val accountOnly: Boolean = false,
-)
-
-@Serializable
-class LunarSessionDto(
-    @SerialName("session_data") val sessionData: String,
-)
-
-@Serializable
-class LunarPageListData(
-    val images: List<String>,
-)
-
-@Serializable
-class LunarPageListDecrypted(
-    val data: LunarPageListData,
-    val slug: String?,
-    val veil: List<String?>?,
-    @SerialName("cache_status") val cacheStatus: String?,
-    @SerialName("cache_ttl") val cacheTtl: Long?,
-)
-
-@Serializable
-class LunarCaptchaConfig(
-    @SerialName("manga_turnstile_sitekey") val mangaTurnstileSitekey: String,
+class LunarReaderPage(
+    val url: String,
+    val veil: String?,
 )
 
 @Serializable
@@ -185,13 +150,6 @@ class LunarPasswordInfoResponse(
 class LunarChapterPasswordDto(
     @SerialName("chapter_number") val chapterNumber: String?,
     val language: String?,
-)
-
-@Serializable
-class ViewRequestBody(
-    val slug: String,
-    val chapter: String,
-    val language: String,
 )
 
 @Serializable
@@ -226,34 +184,3 @@ class LunarSimilarDto(
         thumbnail_url = coverUrl
     }
 }
-
-// Member order as the site's client writes it into the proof header
-@Serializable
-class SerenityJwk(
-    val kty: String,
-    val crv: String,
-    val x: String,
-    val y: String,
-)
-
-@Serializable
-class SerenityProofHeader(
-    val alg: String,
-    val typ: String,
-    val jwk: SerenityJwk,
-)
-
-@Serializable
-class SerenityProofPayload(
-    val htu: String,
-    val htm: String,
-    val iat: Long,
-    val jti: String,
-)
-
-@Serializable
-class LunarSeedGroup(
-    val moduleId: JsonElement,
-    val chunkUrls: List<String>,
-    val candidates: List<JsonObject>,
-)
