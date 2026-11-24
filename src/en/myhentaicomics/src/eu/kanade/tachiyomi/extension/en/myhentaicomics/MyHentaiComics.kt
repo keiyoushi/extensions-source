@@ -1,5 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.myhentaicomics
 
+import android.app.Application
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import android.widget.Toast
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,15 +20,26 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.abs
 
 @Source
 abstract class MyHentaiComics : KeiSource() {
 
     private val tagIdCache = ConcurrentHashMap<String, String>()
+
+    /** Ranked suggestions, keyed by the lowercased name that missed. */
+    private val suggestionCache = ConcurrentHashMap<String, List<String>>()
+
+    /** Every tag name the site has, fetched on the first miss so a typo does not pay twice. */
+    @Volatile
+    private var siteTags: List<TagOption>? = null
 
     /** Resolved page image URLs, keyed by reader page URL. */
     private val pageImageUrls = ConcurrentHashMap<String, String>()
@@ -60,10 +76,10 @@ abstract class MyHentaiComics : KeiSource() {
         val artistName = filters.firstInstanceOrNull<ArtistFilter>()?.state?.trim().orEmpty()
         val parodyName = filters.firstInstanceOrNull<ParodyFilter>()?.state?.trim().orEmpty()
         val artistId = artistName.takeIf(String::isNotEmpty)?.let {
-            resolveName(it) ?: throw Exception("No artist named \"$it\"")
+            resolveOrFail("artist", it)
         }
         val parodyId = parodyName.takeIf(String::isNotEmpty)?.let {
-            resolveName(it) ?: throw Exception("No parody named \"$it\"")
+            resolveOrFail("parody", it)
         }
 
         // A tapped author or parody chip arrives as a plain query, so those two names
@@ -120,10 +136,7 @@ abstract class MyHentaiComics : KeiSource() {
         val key = name.lowercase()
         tagIdCache[key]?.let { return it.ifEmpty { null } }
 
-        val url = "$baseUrl/tags".toHttpUrl().newBuilder()
-            .addQueryParameter("term", name)
-            .build()
-        val hits = client.get(url, Fetch.XHR).parseAs<List<TagOption>>()
+        val hits = searchTags(name) ?: return null
         val id = hits
             .firstOrNull { it.text.equals(name, ignoreCase = true) }
             ?.id
@@ -132,6 +145,145 @@ abstract class MyHentaiComics : KeiSource() {
 
         tagIdCache[key] = id
         return id.ifEmpty { null }
+    }
+
+    /**
+     * Turns a typed name into a tag id or fails with something the user can act on.
+     *
+     * An exact name wins. Anything else is reported with the closest spellings from the
+     * whole catalogue rather than a bare "not found", because the site's own picker is a
+     * substring search that offers nothing at all once a name is misspelled.
+     */
+    private suspend fun resolveOrFail(kind: String, name: String): String {
+        tagIdCache[name.lowercase()]?.takeIf { it.isNotEmpty() }?.let { return it }
+
+        val hits = searchTags(name) ?: failWith(unverifiedMessage(kind, name))
+        hits.firstOrNull { it.text.equals(name, ignoreCase = true) }?.let {
+            tagIdCache[name.lowercase()] = it.id.toString()
+            return it.id.toString()
+        }
+
+        // Nothing matches it, so it is a typo: rank the whole catalogue instead.
+        val tags = loadSiteTags() ?: failWith(unverifiedMessage(kind, name))
+        failWith(notFoundMessage(kind, name, closest(tags, name)))
+    }
+
+    /**
+     * Every tag name on the site in one request: 12k entries, ~120 KB gzipped. Fetched
+     * only once a name has already failed to resolve, and kept for the source instance;
+     * an empty `term` is how the site's picker lists its whole catalogue.
+     */
+    private suspend fun loadSiteTags(): List<TagOption>? {
+        siteTags?.let { return it }
+        return searchTags("")?.also { siteTags = it }
+    }
+
+    /** The site's autocomplete; null when the lookup itself failed (offline, rate limit). */
+    private suspend fun searchTags(term: String): List<TagOption>? = try {
+        val url = "$baseUrl/tags".toHttpUrl().newBuilder()
+            .addQueryParameter("term", term)
+            .build()
+        client.get(url, Fetch.XHR).parseAs<List<TagOption>>()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        null
+    }
+
+    /**
+     * Closest names to a typo, by optimal string alignment so adjacent transpositions
+     * count as one edit. The site's picker is a substring search and returns nothing for
+     * a misspelled name, so ranking the full catalogue is what turns "derpixonn" back
+     * into "Derpixon" instead of guessing at a prefix.
+     */
+    private fun closest(tags: List<TagOption>, input: String): List<String> {
+        if (input.length < MIN_SUGGESTION_LENGTH) return emptyList()
+
+        val key = input.lowercase()
+        suggestionCache[key]?.let { return it }
+
+        val limit = maxEdits(input.length)
+        val close = tags.asSequence()
+            .filter { abs(it.text.length - input.length) <= limit }
+            .map { it.text to editDistance(input, it.text) }
+            .filter { (name, distance) ->
+                distance <= limit && distance.toDouble() / maxOf(input.length, name.length) <= MAX_FUZZY_RATIO
+            }
+            .sortedWith(compareBy({ it.second }, { it.first.length }))
+            .take(MAX_SUGGESTIONS)
+            .map { it.first }
+            .toList()
+
+        suggestionCache[key] = close
+        return close
+    }
+
+    /** One edit for short names, two for medium, three for long; nonsense stays nonsense. */
+    private fun maxEdits(length: Int): Int = when {
+        length <= 5 -> 1
+        length <= 9 -> 2
+        else -> 3
+    }
+
+    /** Levenshtein plus adjacent transpositions, on rolling rows to spare the allocator. */
+    private fun editDistance(first: String, second: String): Int {
+        val a = first.lowercase()
+        val b = second.lowercase()
+        var twoBack = IntArray(b.length + 1)
+        var previous = IntArray(b.length + 1) { it }
+        var current = IntArray(b.length + 1)
+
+        for (i in 1..a.length) {
+            current[0] = i
+            for (j in 1..b.length) {
+                val cost = if (a[i - 1] == b[j - 1]) 0 else 1
+                current[j] = minOf(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + cost)
+                if (i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1]) {
+                    current[j] = minOf(current[j], twoBack[j - 2] + 1)
+                }
+            }
+            val spare = twoBack
+            twoBack = previous
+            previous = current
+            current = spare
+        }
+
+        return previous[b.length]
+    }
+
+    private fun notFoundMessage(kind: String, name: String, suggestions: List<String>): String {
+        val hint = suggestions
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString(", ") { annotated(it) }
+            ?.let { " Did you mean: $it?" }
+            .orEmpty()
+        val advice = if (hint.isEmpty()) " Check the spelling, or clear the field to drop this filter." else ""
+        return "No $kind named \"$name\" on MyHentaiComics.$hint$advice"
+    }
+
+    /**
+     * Names the filter index files under another namespace, so a suggestion that is a
+     * category is not offered as an artist. Silent until the filter lists are loaded.
+     */
+    private fun annotated(name: String): String = indexes?.kindOf(name)?.let { "$name ($it)" } ?: name
+
+    private fun unverifiedMessage(kind: String, name: String): String = "Couldn't look up the $kind \"$name\" because MyHentaiComics is unreachable. Try again when you're online."
+
+    private fun toast(message: String) {
+        try {
+            val context = Injekt.get<Application>()
+            Handler(Looper.getMainLooper()).post {
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            }
+        } catch (e: Exception) {
+            Log.w(LOG_TAG, "toast failed: ${e.message}")
+        }
+    }
+
+    /** The thrown message is what the browse screen shows; the toast makes it visible now. */
+    private fun failWith(message: String): Nothing {
+        toast(message)
+        throw Exception(message)
     }
 
     /**
@@ -408,8 +560,14 @@ abstract class MyHentaiComics : KeiSource() {
     ) {
         private val categoryIds = categories.mapTo(HashSet()) { it.value }
         private val groupIds = groups.mapTo(HashSet()) { it.value }
+        private val kindByName = buildMap {
+            categories.forEach { put(it.name.lowercase(), "category") }
+            groups.forEach { put(it.name.lowercase(), "group") }
+        }
 
         fun isCategoryOrGroup(id: String): Boolean = id in categoryIds || id in groupIds
+
+        fun kindOf(name: String): String? = kindByName[name.lowercase()]
     }
 
     companion object {
@@ -421,5 +579,14 @@ abstract class MyHentaiComics : KeiSource() {
         /** Two, not the picker's three: the endpoint matches shorter names, and the
          * catalogue has artists called "Fu", "IT" and the like. */
         private const val MIN_TAG_QUERY_LENGTH = 2
+
+        /** Shorter typos have too many neighbours for a suggestion to be a guess worth making. */
+        private const val MIN_SUGGESTION_LENGTH = 3
+
+        private const val MAX_SUGGESTIONS = 3
+
+        private const val MAX_FUZZY_RATIO = 0.34
     }
 }
+
+private const val LOG_TAG = "MyHentaiComics"
