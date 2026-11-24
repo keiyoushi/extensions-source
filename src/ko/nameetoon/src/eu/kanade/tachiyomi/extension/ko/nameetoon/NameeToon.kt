@@ -43,16 +43,11 @@ abstract class NameeToon : KeiSource() {
 
     override val supportsLatest = false
 
-    private val yatoon = Yatoon(this)
-
-    private val isYatoon get() = YATOON_HOST.matches(baseUrl.toHttpUrl().host)
-
-    override suspend fun getPopularManga(page: Int): MangasPage = if (isYatoon) yatoon.getPopularManga(page) else getSearchMangaList(page, "", FilterList())
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList())
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        if (isYatoon) return yatoon.getSearchMangaList(page, query, filters)
         if (query.isNotBlank()) {
             val results = searchEntries(page, query)
             return MangasPage(results.flatten().map { it.toSManga(baseUrl) }, results.any { it.size == PAGE_SIZE })
@@ -85,16 +80,13 @@ abstract class NameeToon : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        val id = when {
-            YATOON_HOST.matches(url.host) -> yatoon.getSeriesId(url)
-            FRONT_HOST.matches(url.host) && url.pathSegments.lastOrNull() == "list.php" -> url.queryParameter("i")?.takeIf { it.all(Char::isDigit) }
-            else -> null
-        } ?: return null
+        if (!FRONT_HOST.matches(url.host) || url.pathSegments.lastOrNull() != "list.php") return null
+        val id = url.queryParameter("i")?.takeIf { it.all(Char::isDigit) } ?: return null
         val manga = SManga.create().apply { this.url = id }
         return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
-    override fun getMangaUrl(manga: SManga): String = if (isYatoon) yatoon.getMangaUrl(manga) else "$baseUrl/list.php?i=${manga.url}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/list.php?i=${manga.url}"
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -102,7 +94,6 @@ abstract class NameeToon : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        if (isYatoon) return yatoon.fetchMangaUpdate(manga, chapters, fetchDetails, fetchChapters)
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = { if (fetchDetails) parseDetails(manga.url, document) else manga },
@@ -154,10 +145,9 @@ abstract class NameeToon : KeiSource() {
 
     private fun daysAgo(days: Long): Long = LocalDate.now(KOREA_ZONE).minusDays(days).atStartOfDay(KOREA_ZONE).toInstant().toEpochMilli()
 
-    override fun getChapterUrl(chapter: SChapter): String = if (isYatoon) yatoon.getChapterUrl(chapter) else "$baseUrl/detail.php?wi=${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/detail.php?wi=${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        if (isYatoon) return yatoon.getPageList(chapter)
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select(".toon_view img").mapIndexed { i, img ->
             Page(i, imageUrl = img.absUrl("src"))
@@ -168,17 +158,14 @@ abstract class NameeToon : KeiSource() {
 
     companion object {
         private const val PAGE_SIZE = 30
-        internal const val ONGOING = "연재중"
-        internal const val COMPLETED = "완결"
-        internal const val ALL_GENRES = "전체"
-        internal val KOREA_ZONE = ZoneId.of("Asia/Seoul")
+        private const val ONGOING = "연재중"
+        private const val COMPLETED = "완결"
+        private const val ALL_GENRES = "전체"
+        private val KOREA_ZONE = ZoneId.of("Asia/Seoul")
         private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
-        internal val GENRE_SEPARATOR = Regex("[,/]")
+        private val GENRE_SEPARATOR = Regex("[,/]")
 
         // 나미툰, 무료툰 and 머니툰 domains, the current ones and the older numbered ones
         private val FRONT_HOST = Regex("""(?:www\.)?(?:namee|foc|mtoon)\d+\.asia""")
-
-        // 야툰's domains, whose template is its own
-        private val YATOON_HOST = Regex("""(?:www\.)?yatoon\d+\.asia""")
     }
 }
