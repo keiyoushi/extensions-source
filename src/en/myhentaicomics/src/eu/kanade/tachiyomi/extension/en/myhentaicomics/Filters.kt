@@ -32,9 +32,9 @@ internal class TagCheckBoxGroup(name: String, tags: List<NamedTag>) : Filter.Gro
 
 // The site's left bar also covers artists and parodies, but there are 10,381 and 1,612
 // of them, far past what a filter list can hold, so those two are typed by name.
-internal class ArtistFilter : Filter.Text("Artist (exact name)")
+internal class ArtistFilter : Filter.Text("Artist (exact names — comma or semicolon separated)")
 
-internal class ParodyFilter : Filter.Text("Parody (exact name)")
+internal class ParodyFilter : Filter.Text("Parody (exact names — comma or semicolon separated)")
 
 // On by default, so a tapped author or parody chip means that tag, the way picking the
 // exact suggestion in the site's picker does. Categories and groups do not need it:

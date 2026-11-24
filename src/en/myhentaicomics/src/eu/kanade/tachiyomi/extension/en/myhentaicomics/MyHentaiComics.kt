@@ -79,12 +79,10 @@ abstract class MyHentaiComics : KeiSource() {
 
         val artistName = filters.firstInstanceOrNull<ArtistFilter>()?.state?.trim().orEmpty()
         val parodyName = filters.firstInstanceOrNull<ParodyFilter>()?.state?.trim().orEmpty()
-        val artistId = artistName.takeIf(String::isNotEmpty)?.let {
-            resolveOrFail("artist", it)
-        }
-        val parodyId = parodyName.takeIf(String::isNotEmpty)?.let {
-            resolveOrFail("parody", it)
-        }
+        // The site ANDs repeated tags[], so several names mean "works with all of them":
+        // the collab, or the crossover. No name contains a comma or a semicolon.
+        val artistIds = namesIn(artistName).map { resolveOrFail("artist", it) }
+        val parodyIds = namesIn(parodyName).map { resolveOrFail("parody", it) }
 
         // A tapped author or parody chip arrives as a plain query, so those two names
         // still resolve; categories and groups reach us through their checkboxes, so
@@ -119,8 +117,8 @@ abstract class MyHentaiComics : KeiSource() {
                 addQueryParameter("query", query)
             }
             selectedTags.forEach { addEncodedQueryParameter("tags[]", it) }
-            artistId?.let { addEncodedQueryParameter("tags[]", it) }
-            parodyId?.let { addEncodedQueryParameter("tags[]", it) }
+            artistIds.forEach { addEncodedQueryParameter("tags[]", it) }
+            parodyIds.forEach { addEncodedQueryParameter("tags[]", it) }
             sortFilter?.toUriPart()?.takeIf(String::isNotEmpty)?.let {
                 addQueryParameter("sorting", it)
             }
@@ -128,6 +126,9 @@ abstract class MyHentaiComics : KeiSource() {
 
         return parseComicListing(url)
     }
+
+    /** Splits a name field into the names it holds; no artist or parody name contains a separator. */
+    private fun namesIn(raw: String): List<String> = raw.split(',', ';').map(String::trim).filter(String::isNotEmpty)
 
     /**
      * Resolves a name the site's tag picker (GET /tags?term=) would suggest, so a name
