@@ -7,7 +7,9 @@ import keiyoushi.utils.sha256
 // and the header names, build id and live path are cut from the seed.
 // The prefix tells the readers apart: "ax" for the chapter page's, "bv" for the image host's.
 class ReaderSigner(prefix: String, t: String, s: String) {
-    private val seed = "$t:$s".sha256().toHexString()
+    // What the readers call their session key
+    val sessionKey = "$t:$s".sha256().toHexString()
+    private val seed get() = sessionKey
     private val key = "$seed:p".sha256()
 
     private val proofName = "$prefix-sig-${seed.substring(7, 15)}"

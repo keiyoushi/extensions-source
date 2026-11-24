@@ -50,10 +50,12 @@ class ImageInterceptor(
         }
         if (!response.isSuccessful) return response
 
-        val pageXorKey = response.header("X-Page-Xor")?.toIntOrNull()
-        val scrambleKey = response.header("X-Page-Key").orEmpty()
+        // The scramble key, XOR key and gutter ride masked in X-Page-Meta; the plain headers are a fallback
+        val meta = PageMeta.unmask(response.header("X-Page-Meta"), keys.signer.sessionKey, request.url.pathSegments[2])
+        val pageXorKey = meta?.xor ?: response.header("X-Page-Xor")?.toIntOrNull()
+        val scrambleKey = meta?.key ?: response.header("X-Page-Key").orEmpty()
         // The reader spaces the shuffled strips apart by this many px
-        val tileGutter = response.header("X-Tile-Gutter")?.toIntOrNull() ?: 0
+        val tileGutter = meta?.gutter ?: response.header("X-Tile-Gutter")?.toIntOrNull() ?: 0
 
         // Plain, the page's XOR key, then 0x43 for older chapters, like the site's reader
         val header = response.body.source().peek().readByteArray(HEADER_SIZE)
