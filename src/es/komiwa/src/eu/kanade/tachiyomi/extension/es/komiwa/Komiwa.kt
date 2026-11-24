@@ -18,6 +18,7 @@ import keiyoushi.utils.WebViewTimeoutException
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getString
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import keiyoushi.utils.toJsonElement
@@ -27,6 +28,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import org.jsoup.nodes.Document
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import kotlin.time.Duration.Companion.seconds
@@ -35,6 +37,8 @@ import kotlin.time.Duration.Companion.seconds
 abstract class Komiwa : KeiSource() {
 
     private val host get() = baseUrl.toHttpUrl().host.removePrefix("www.")
+
+    private var saltCache: Pair<String, String>? = null
 
     override suspend fun getPopularManga(page: Int) = fetchCatalog(CatalogBodyDto(page, PAGE_SIZE, "views", "desc"))
 
@@ -111,8 +115,24 @@ abstract class Komiwa : KeiSource() {
         )
     }
 
-    private suspend fun fetchMangaPage(slug: String) = client.get("$baseUrl/manga/$slug", Fetch.DOCUMENT)
-        .extractNextJs<MangaDto> { it is JsonObject && "slug" in it && "synopsis" in it }!!
+    private suspend fun fetchMangaPage(slug: String): MangaDto {
+        val url = "$baseUrl/manga/$slug"
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
+        val salt = getSalt(document, url)
+        val dataField = fieldName("work", salt)
+        val keyField = fieldName("wkey", salt)
+        val manga = document.extractNextJs<JsonObject> { it is JsonObject && dataField in it && keyField in it }!!
+        return decodeData(manga.getString(dataField), manga.getString(keyField), salt).parseAs()
+    }
+
+    private suspend fun getSalt(document: Document, pageUrl: String): String {
+        val scripts = document.select("script[src*=/_next/static/chunks/]").map { it.absUrl("src") }
+        saltCache?.takeIf { it.first in scripts }?.let { return it.second }
+        return scripts.asReversed().firstNotNullOf { script ->
+            SALT_REGEX.find(client.get(script, Fetch.SCRIPT.from(pageUrl)).body.string())?.groupValues?.get(2)
+                ?.also { saltCache = script to it }
+        }
+    }
 
     // The series page's own request for its full chapter list
     private suspend fun fetchChapters(id: String, manga: SManga): List<SChapter> {
@@ -196,6 +216,7 @@ abstract class Komiwa : KeiSource() {
         private const val API_URL = "https://b78sk.komiwa.net"
         private const val PAGE_SIZE = 24
         private val LIST_PATHS = setOf("genero", "tipo", "demografia")
+        private val SALT_REGEX = Regex("""([\w$]+)="([^"]+)";function [\w$]+\([\w$]+\)\{let [\w$]+=0x811c9dc5,[\w$]+=[\w$]+\+"\|"\+\1[;,]""")
         private const val BRIDGE = "komiwaReader"
         private const val WORLD = "komiwa"
         private val READER_TIMEOUT = 30.seconds
