@@ -18,16 +18,14 @@ import java.util.concurrent.ConcurrentHashMap
  * list. Everything else arrives as a plain query, so a tapped tag or author used to
  * search titles instead of filtering.
  *
- * This resolves a whole query that exactly names a filter to that filter, the same way
- * the nhentai source resolves a plain query to an exact tag. Only an exact, complete
- * match counts, so `south korea trip` is still a text search.
+ * This resolves a whole query that exactly names a filter to that filter. Only an exact,
+ * complete match counts, so `south korea trip` is still a text search.
  */
 internal class MangaKSearchResolver(
     private val client: OkHttpClient,
     private val headers: Headers,
     private val apiUrl: String,
 ) {
-    /** A query parameter the search should use instead of `q`. */
     data class Target(val parameter: String, val value: String)
 
     private val resolved = ConcurrentHashMap<String, Target>()
@@ -77,6 +75,7 @@ internal class MangaKSearchResolver(
     }
 
     private fun matchLocal(query: String, filters: FilterList): Target? {
+        // An explicit Type/Demographics/Format choice wins over the query.
         filters.firstInstanceOrNull<TypeFilter>()
             ?.takeIf { it.state == 0 }
             ?.valueFor(query)
@@ -145,6 +144,7 @@ internal class MangaKSearchResolver(
     private suspend fun authorTotal(slug: String): Int {
         authorTotals[slug]?.let { return it }
 
+        // A failed probe means "not an author", so the search still runs as text.
         val response = runCatching {
             client.get(
                 "$apiUrl/titles/search".toHttpUrl().newBuilder()

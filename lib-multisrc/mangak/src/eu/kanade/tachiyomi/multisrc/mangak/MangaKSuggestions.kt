@@ -19,7 +19,8 @@ import java.util.zip.GZIPInputStream
  *
  * The API has no suggestion endpoint and its author filter is an exact match, so the candidate
  * lists come from the sitemaps (authors and titles), the genre endpoint and the tag search.
- * Matching uses optimal-string-alignment distance with the same thresholds as the nhentai source.
+ * Matching uses optimal-string-alignment distance: 1 edit up to 5 characters, 2 up to 9,
+ * 3 beyond, and nothing above 34 % of the name length.
  */
 internal class MangaKSuggestions(
     private val client: OkHttpClient,

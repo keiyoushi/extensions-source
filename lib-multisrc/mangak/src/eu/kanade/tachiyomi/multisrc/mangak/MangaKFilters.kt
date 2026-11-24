@@ -12,6 +12,11 @@ class AuthorFilter : Filter.Text("Author")
 class MinChapterFilter : Filter.Text("Min Chapters")
 class MaxChapterFilter : Filter.Text("Max Chapters")
 class TagFilter : Filter.Text("Tag")
+
+/**
+ * On by default: a chip tap arrives as a plain query, so exact names resolve unless the
+ * user opts out.
+ */
 class ResolveFilter : Filter.CheckBox("Treat plain searches as exact filters", true)
 
 open class SelectFilter(
