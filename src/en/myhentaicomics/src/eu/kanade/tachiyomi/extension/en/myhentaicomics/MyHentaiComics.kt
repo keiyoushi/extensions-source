@@ -271,9 +271,12 @@ abstract class MyHentaiComics : KeiSource() {
                 distance <= limit && distance.toDouble() / maxOf(input.length, candidate.length) <= MAX_FUZZY_RATIO
             }
             .sortedWith(compareBy({ it.second }, { it.first.length }))
-            .map { it.first }
+            .toList()
 
-        val closest = ranked
+        // At five characters two edits is most of the name, so two names tying at that
+        // distance make the suggestion a coin flip rather than a correction.
+        val ambiguous = input.length <= 5 && ranked.size > 1 && ranked[0].second > 1 && ranked[1].second == ranked[0].second
+        val closest = if (ambiguous) emptySequence() else ranked.asSequence().map { it.first }
 
         val contained = candidates.asSequence()
             .filter { it.length > input.length && it.contains(input, ignoreCase = true) }
