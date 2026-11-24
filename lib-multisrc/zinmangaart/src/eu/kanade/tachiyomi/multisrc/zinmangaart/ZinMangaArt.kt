@@ -32,6 +32,8 @@ import org.jsoup.nodes.Element
 
 @Source
 abstract class ZinMangaArt : KeiSource() {
+    protected open val searchPath: String = "/"
+
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter.POPULAR))
     override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter.LATEST))
 
@@ -45,7 +47,7 @@ abstract class ZinMangaArt : KeiSource() {
         val adult = (filters.firstInstanceOrNull<AdultFilter>() ?: AdultFilter()).toUriPart()
         val statuses = (filters.firstInstanceOrNull<StatusFilter>() ?: StatusFilter()).selectedStatuses()
 
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
+        val url = "$baseUrl$searchPath".toHttpUrl().newBuilder().apply {
             if (page > 1) addPathSegments("page/$page")
             addQueryParameter("s", query)
             addQueryParameter("post_type", "wp-manga")
@@ -67,7 +69,7 @@ abstract class ZinMangaArt : KeiSource() {
         val mangas = document
             .select("div.page-item-detail, div.c-tabs-item__content")
             .map(::mangaFromElement)
-        val hasNextPage = document.selectFirst("ul.pagination a[aria-label=Next]") != null
+        val hasNextPage = document.selectFirst("a[aria-label=Next]") != null
 
         return MangasPage(mangas, hasNextPage)
     }
@@ -199,7 +201,7 @@ abstract class ZinMangaArt : KeiSource() {
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl$searchPath", Fetch.DOCUMENT).asJsoup()
         .select(".menu-item-object-wp-manga-genre a")
         .map { it.text() to it.absUrl("href").substringAfterLast('/') }
         .toJsonElement()
@@ -219,9 +221,10 @@ abstract class ZinMangaArt : KeiSource() {
             if (genres.isNotEmpty()) {
                 add(Filter.Separator())
                 add(GenreFilter(genres))
+                add(GenreOperatorFilter())
+                add(Filter.Separator())
             }
 
-            add(GenreOperatorFilter())
             add(AuthorFilter())
             add(ArtistFilter())
             add(ReleaseFilter())
