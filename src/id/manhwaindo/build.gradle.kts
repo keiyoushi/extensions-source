@@ -9,6 +9,7 @@ keiyoushi {
     versionCode = 13
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
+    theme = "manhwaindo"
 
     source {
         lang = "id"

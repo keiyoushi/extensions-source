@@ -1,12 +1,14 @@
-package eu.kanade.tachiyomi.extension.id.manhwaindo
+package eu.kanade.tachiyomi.multisrc.manhwaindo
 
 import kotlinx.serialization.Serializable
 
 @Serializable
 class ChapterDto(
+    val id: Long,
     val url: String,
     val chapter: String,
     val time: String,
+    val date: Long?,
 )
 
 @Serializable
