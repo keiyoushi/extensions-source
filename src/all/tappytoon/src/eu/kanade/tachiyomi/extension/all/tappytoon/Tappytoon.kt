@@ -135,7 +135,7 @@ abstract class Tappytoon :
         SManga.create().apply {
             url = it.toString()
             title = it.title
-            description = it.longDescription
+            description = listOfNotNull(matureLoginMessage.takeUnless { _ -> it.ageRating.canUserRead }, it.longDescription).joinToString("\n\n")
             thumbnail_url = it.posterThumbnailUrl
             author = it.authors.joinToString()
             artist = author
@@ -162,19 +162,28 @@ abstract class Tappytoon :
     ): SMangaUpdate {
         if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
-        val url = apiUrl.newBuilder()
-            .addEncodedPathSegments("comics/${manga.id}/chapters")
+        val comicUrl = apiUrl.newBuilder()
+            .addEncodedPathSegments("comics/${manga.id}")
             .addEncodedQueryParameter("locale", lang)
             .build()
+        val canUserRead = apiGet(comicUrl).parseAs<Comic>().ageRating.canUserRead
 
-        val chapterList = apiGet(url).parseAs<List<Chapter>>().accessible.asReversed().map {
+        val url = comicUrl.newBuilder()
+            .addEncodedPathSegment("chapters")
+            .build()
+
+        val showLocked = preferences.getBoolean(PREF_SHOW_LOCKED, false)
+        if (!canUserRead && !showLocked) return SMangaUpdate(manga, emptyList())
+        val chapterList = apiGet(url).parseAs<List<Chapter>>().accessible.mapNotNull {
+            val isLocked = !canUserRead || it.isLocked
+            if (isLocked && !showLocked) return@mapNotNull null
             SChapter.create().apply {
-                name = it.toString()
+                name = if (isLocked) "$it \uD83D\uDD12" else it.toString()
                 this.url = it.id.toString()
                 chapter_number = it.order + 1f
                 date_upload = Instant.tryParse(it.willAccessibleAt)
             }
-        }
+        }.asReversed()
 
         return SMangaUpdate(manga, chapterList)
     }
@@ -207,6 +216,13 @@ abstract class Tappytoon :
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_SHOW_LOCKED
+            title = "Show locked chapters"
+            summary = "Also list chapters you can't read yet, marked with \uD83D\uDD12. Mature comics need an adult account, logged in through WebView."
+            setDefaultValue(false)
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
             key = PREF_HD_MODE
             title = "HD mode"
             summary = "Load chapters at 1280 px for comics that have HD on Tappytoon. Other comics stay at 720 px."
@@ -230,6 +246,13 @@ abstract class Tappytoon :
     private inline val SManga.id: String
         get() = url.substringAfter('|')
 
+    private val matureLoginMessage: String
+        get() = when (lang) {
+            "fr" -> "Connectez-vous dans la WebView avec un compte adulte pour lire cette série"
+            "de" -> "Melde dich in der WebView mit einem Konto für Erwachsene an, um diese Serie zu lesen"
+            else -> "Log in through WebView with an adult account to read this series"
+        }
+
     private val day: String
         get() = LocalDate.now().dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.ENGLISH).lowercase(Locale.ENGLISH)
 
@@ -237,6 +260,8 @@ abstract class Tappytoon :
         private const val IMG_CONTENT_TYPE = "image/jpeg"
 
         private const val PREF_HD_MODE = "pref_hd_mode"
+
+        private const val PREF_SHOW_LOCKED = "pref_show_locked"
 
         private val apiUrl: HttpUrl = "https://api-global.tappytoon.com".toHttpUrl()
 

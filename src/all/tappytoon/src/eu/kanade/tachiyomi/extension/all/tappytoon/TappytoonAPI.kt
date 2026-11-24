@@ -21,11 +21,19 @@ class Comic(
     override val isAccessible: Boolean,
     val isCompleted: Boolean,
     val isSuperHighQualitySupported: Boolean,
-    val ageRating: Name,
+    val ageRating: AgeRating,
     val genres: List<Name>,
     val authors: List<Name>,
 ) : Accessible {
     override fun toString() = "$slug|$id"
+}
+
+@Serializable
+class AgeRating(
+    private val name: String,
+    val canUserRead: Boolean,
+) {
+    override fun toString() = name
 }
 
 @Serializable
@@ -51,10 +59,10 @@ class Chapter(
             append(" - ")
             append(subtitle)
         }
-        if (!isFree && !(isUserUnlocked || isUserRented)) {
-            append(" \uD83D\uDD12")
-        }
     }
+
+    val isLocked: Boolean
+        get() = !isFree && !isUserUnlocked && !isUserRented
 }
 
 @Serializable
