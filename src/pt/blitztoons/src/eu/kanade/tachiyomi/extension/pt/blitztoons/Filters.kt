@@ -28,7 +28,7 @@ class TypeFilter :
     QueryFilter(
         "Categoria",
         "tipo",
-        listOf("Todos" to null, "Comics" to "comic", "Yaoi" to "yaoi", "Yuri" to "yuri", "Shoujo" to "shoujo"),
+        listOf("Todos" to null, "Comics" to "comic", "Shoujo" to "shoujo"),
     )
 
 class StatusFilter :

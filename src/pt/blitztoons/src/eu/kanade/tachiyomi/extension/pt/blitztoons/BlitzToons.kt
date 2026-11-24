@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.blitztoons
 
+import android.util.Base64
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,6 +13,7 @@ import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
@@ -27,6 +29,8 @@ import kotlin.time.Instant
 abstract class BlitzToons : KeiSource() {
 
     override val supportsFilterFetching = true
+
+    private var readerKey: ReaderKey? = null
 
     override suspend fun getPopularManga(page: Int): MangasPage = getMangaList(catalogUrl("populares", page))
 
@@ -69,9 +73,23 @@ abstract class BlitzToons : KeiSource() {
         return SMangaUpdate(document.toSManga(manga.url), document.toSChapters())
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        .select("[data-pages-wrap] img.page")
-        .mapIndexed { index, img -> Page(index, imageUrl = img.absUrl("src")) }
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterUrl = getChapterUrl(chapter)
+        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
+        // Novel chapters are text only
+        val block = document.selectFirst("[data-block][data-pt]") ?: return emptyList()
+        val token = block.attr("data-pt")
+        val url = "$baseUrl/api/paginas".toHttpUrl().newBuilder()
+            .addPathSegment(document.selectFirst("[data-reader]")!!.attr("data-slug"))
+            .addPathSegment(block.attr("data-num"))
+            .addQueryParameter("t", token)
+            .build()
+        val pagesHeaders = headersBuilder()
+            .set("Accept", "application/json")
+            .set("X-BT-P", getReaderKey(document, chapterUrl).sign(token))
+            .build()
+        return client.get(url, pagesHeaders, Fetch.XHR.from(chapterUrl)).parseAs<PagesDto>().toPageList()
+    }
 
     override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/obras", Fetch.DOCUMENT).asJsoup()
         .select(".filter-gen a.chip[href*=genero=]")
@@ -87,7 +105,7 @@ abstract class BlitzToons : KeiSource() {
 
     private suspend fun getMangaList(url: HttpUrl): MangasPage {
         val document = client.get(url, Fetch.DOCUMENT).asJsoup()
-        val mangas = document.select("article.card").map { it.toSManga() }
+        val mangas = document.select("article.card:not(:has(.card-type-novel))").map { it.toSManga() }
         return MangasPage(mangas, document.selectFirst("nav.pager a:containsOwn(Próxima)") != null)
     }
 
@@ -131,5 +149,25 @@ abstract class BlitzToons : KeiSource() {
         }
     }
 
+    private suspend fun getReaderKey(document: Document, chapterUrl: String): ReaderKey {
+        val scriptUrl = document.selectFirst("script[src*=/reader.js]")!!.absUrl("src")
+        readerKey?.takeIf { it.scriptUrl == scriptUrl }?.let { return it }
+        val script = client.get(scriptUrl, Fetch.SCRIPT.from(chapterUrl)).body.string()
+        val keyName = KEY_NAME_REGEX.find(script)!!.groupValues[1]
+        val key = STRING_REGEX.findAll(script).first { it.groupValues[1] == keyName }.groupValues[2]
+        val prefix = PREFIX_REGEX.find(script)!!.groupValues[1]
+        return ReaderKey(scriptUrl, key.encodeToByteArray(), prefix).also { readerKey = it }
+    }
+
+    private class ReaderKey(val scriptUrl: String, private val key: ByteArray, private val prefix: String) {
+        fun sign(token: String): String = Base64.encodeToString((prefix + token).hmacSha256(key), Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+    }
+
     private fun HttpUrl.isSiteUrl() = host.removePrefix("www.") == baseUrl.toHttpUrl().host
+
+    companion object {
+        private val KEY_NAME_REGEX = Regex("""importKey\("raw",[\w$]+\.encode\(([\w$]+)\)""")
+        private val STRING_REGEX = Regex("""(?<![\w$.])([\w$]+)="([^"]*)"""")
+        private val PREFIX_REGEX = Regex("""sign\("HMAC",[\w$]+,[\w$]+\.encode\("([^"]*)"\+""")
+    }
 }
