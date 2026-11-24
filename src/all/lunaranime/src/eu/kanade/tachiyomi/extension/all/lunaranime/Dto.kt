@@ -127,6 +127,23 @@ class LunarReaderState(
 )
 
 @Serializable
+class LunarAdPoints(val points: Int)
+
+@Serializable
+class LunarBuyResponse(val success: Boolean = false, val error: String? = null)
+
+@Serializable
+class LunarBuyBody(
+    @SerialName("content_type") val contentType: String,
+    val slug: String,
+    val chapter: String,
+    val language: String,
+)
+
+@Serializable
+class LunarHeartbeatBody(val beat: String)
+
+@Serializable
 class LunarReaderPage(
     val url: String,
     val veil: String?,

@@ -1,5 +1,9 @@
 package eu.kanade.tachiyomi.extension.all.lunaranime
 
+import android.util.Base64
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -8,13 +12,16 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.TURNSTILE_AREA
 import keiyoushi.utils.WebViewScope
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
+import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -32,7 +39,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import java.io.IOException
 import kotlin.coroutines.resume
 import kotlin.time.Duration.Companion.hours
@@ -43,11 +53,32 @@ import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
 @Source
-abstract class LunarAnime : KeiSource() {
+abstract class LunarAnime :
+    KeiSource(),
+    ConfigurableSource {
+    private val preferences by getPreferencesLazy()
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_AUTO_UNLOCK
+            title = "Auto-unlock with ad points"
+            summary = "Earn free ad points and unlock points-locked chapters automatically"
+            setDefaultValue(false)
+        }.let(screen::addPreference)
+    }
+
     override fun OkHttpClient.Builder.configureClient() = this
+        .addInterceptor(::authorize)
         .addInterceptor(VeilInterceptor(CDN_HOST))
         .rateLimit(2) { it.host == API_HOST }
         .rateLimit(4) { it.host == CDN_HOST }
+
+    private fun authorize(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val token = client.cookieJar.loadForRequest(request.url).firstOrNull { it.name == AUTHORIZATION }?.value
+        if (request.url.host != API_HOST || token == null) return chain.proceed(request)
+        return chain.proceed(request.newBuilder().header(AUTHORIZATION, token).build())
+    }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", SortFilter.POPULAR)
 
@@ -197,8 +228,16 @@ abstract class LunarAnime : KeiSource() {
 
         val pages = when {
             state.price != null -> {
-                val balance = state.balance?.let { ", balance $it" }.orEmpty()
-                error("This chapter is unlocked with ad points (price ${state.price}$balance). Unlock it in WebView.")
+                if (!autoUnlock) {
+                    val balance = state.balance?.let { ", balance $it" }.orEmpty()
+                    error(
+                        "This chapter is unlocked with ad points (price ${state.price}$balance). " +
+                            "Turn on \"Auto-unlock with ad points\" in the extension settings, or unlock it in WebView.",
+                    )
+                }
+                unlock(slug, chapterNumber, language, state.price, state.balance ?: 0)
+                val unlocked = readerMutex.withLock { readerTab(chapterUrl.toString()).read(chapterUrl.toString(), script) }
+                unlocked.pages ?: error("Unlocked, but the chapter did not load. Open it in WebView.")
             }
             state.reason != null -> error(if ("account" in state.reason) LOGIN_MESSAGE else state.message ?: state.reason)
             else -> state.pages.orEmpty()
@@ -208,6 +247,48 @@ abstract class LunarAnime : KeiSource() {
             val url = page.url.toHttpUrl()
             Page(index, imageUrl = url.newBuilder().fragment(page.veil?.let { url.resolve(it)?.toString() }).build().toString())
         }
+    }
+
+    private suspend fun unlock(slug: String, chapter: String, language: String, price: Int, balance: Int) {
+        var points = balance
+        var attempts = 0
+        while (points < price) {
+            if (attempts++ >= MAX_EARN_ATTEMPTS) error("Not enough ad points yet ($points of $price). Try again shortly.")
+            val earned = earnPoints()
+            if (earned == null || earned <= points) error("Could not earn ad points right now ($points of $price). Try again shortly.")
+            points = earned
+        }
+
+        val buyUrl = API_URL.toHttpUrl().newBuilder().addPathSegments("api/points-lock/buy").build()
+        val body = LunarBuyBody("manga", slug, chapter, language).toJsonRequestBody()
+        val result = client.post(buyUrl, Fetch.XHR, body, ensureSuccess = false).parseAs<LunarBuyResponse>()
+        if (!result.success) error(result.error ?: "Could not unlock this chapter")
+    }
+
+    private suspend fun earnPoints(): Int? {
+        val grantUrl = baseUrl.toHttpUrl().newBuilder().addPathSegments("px/q").addQueryParameter("p", "1").build()
+        val grant = client.post(grantUrl, Fetch.XHR, "".toRequestBody(), ensureSuccess = false).use { response ->
+            if (!response.isSuccessful) return null
+            decodeGrant(response.body.string())
+        } ?: return null
+
+        val heartbeatUrl = API_URL.toHttpUrl().newBuilder().addPathSegments("api/presence/heartbeat").build()
+        val banked = client.post(heartbeatUrl, Fetch.XHR, LunarHeartbeatBody(grant).toJsonRequestBody(), ensureSuccess = false)
+            .use { it.isSuccessful }
+        if (!banked) return null
+
+        val pointsUrl = API_URL.toHttpUrl().newBuilder().addPathSegments("api/ads/points").build()
+        return client.get(pointsUrl, Fetch.XHR).parseAs<LunarAdPoints>().points
+    }
+
+    private fun decodeGrant(raw: String): String? {
+        val bytes = Base64.decode(raw.trim(), Base64.DEFAULT)
+        if (bytes.size < 4) return null
+        val decoded = CharArray(bytes.size) { i ->
+            val key = if (i < 4) 0 else bytes[(i - 4) % 4].toInt() and 0xFF
+            ((bytes[i].toInt() and 0xFF) xor key).toChar()
+        }
+        return GRANT_REGEX.find(String(decoded))?.value
     }
 
     private val readerMutex = Mutex()
@@ -332,5 +413,12 @@ abstract class LunarAnime : KeiSource() {
         private val CHECK_GRACE = 5.seconds
         private val POLL_INTERVAL = 500.milliseconds
         private val SCRIPT_TIMEOUT = 5.seconds
+
+        private const val AUTHORIZATION = "Authorization"
+        private const val PREF_AUTO_UNLOCK = "auto_unlock_points"
+        private const val MAX_EARN_ATTEMPTS = 3
+        private val GRANT_REGEX = Regex("""[0-9]{13}\.[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]{43}""")
     }
+
+    private val autoUnlock get() = preferences.getBoolean(PREF_AUTO_UNLOCK, false)
 }
