@@ -166,14 +166,20 @@ abstract class MyHentaiComics : KeiSource() {
         tagIdCache[key]?.takeIf { it.isNotEmpty() }?.let { return it }
 
         val hits = searchTags(name) ?: failWith(unverifiedMessage(field, name))
-        hits.firstOrNull { it.text.equals(name, ignoreCase = true) }?.let { match ->
-            val kind = loadNamespaces()?.kindOf(match.text)
+        // The picker matches case-insensitively except across an internal capital: it finds
+        // "LewdDoodler" but not "lewdoodler". The catalogue has no such blind spot, so a
+        // name that is typed correctly in the wrong case is still recognised as exact.
+        val exact = hits.firstOrNull { it.text.equals(name, ignoreCase = true) }
+            ?: loadSiteTags()?.firstOrNull { it.text.equals(name, ignoreCase = true) }
+
+        if (exact != null) {
+            val kind = loadNamespaces()?.kindOf(exact.text)
             // Without the namespace lists the site's exact match is the best answer left.
             if (kind == null || kind == field) {
-                tagIdCache[key] = match.id.toString()
-                return match.id.toString()
+                tagIdCache[key] = exact.id.toString()
+                return exact.id.toString()
             }
-            failWith(misplacedMessage(field, match.text, kind))
+            failWith(misplacedMessage(field, exact.text, kind))
         }
 
         suggestionsFor(field, name).takeIf { it.isNotEmpty() }
@@ -267,10 +273,12 @@ abstract class MyHentaiComics : KeiSource() {
             .sortedWith(compareBy({ it.second }, { it.first.length }))
             .map { it.first }
 
+        val closest = ranked
+
         val contained = candidates.asSequence()
             .filter { it.length > input.length && it.contains(input, ignoreCase = true) }
 
-        val close = (ranked + contained)
+        val close = (closest + contained)
             .distinctBy { it.lowercase() }
             .take(MAX_SUGGESTIONS)
             .toList()
