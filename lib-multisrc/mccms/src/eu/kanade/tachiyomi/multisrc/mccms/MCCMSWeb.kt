@@ -25,6 +25,7 @@ import okio.IOException
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Evaluator
+import kotlin.time.Duration.Companion.milliseconds
 
 abstract class MCCMSWeb : KeiSource() {
 
@@ -41,6 +42,8 @@ abstract class MCCMSWeb : KeiSource() {
         }
         response
     }
+        // Searches closer than about 1.4 s get 429 "搜索过于频繁"
+        .rateLimit(1, 1500.milliseconds) { it.host == baseUrl.toHttpUrl().host && it.encodedPath.startsWith("/search") }
         .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
 
     override fun Headers.Builder.configureHeaders() = set("User-Agent", System.getProperty("http.agent")!!)
