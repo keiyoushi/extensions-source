@@ -1,17 +1,23 @@
 package eu.kanade.tachiyomi.extension.all.tappytoon
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
@@ -29,12 +35,16 @@ import java.util.Locale
 import kotlin.time.Instant
 
 @Source
-abstract class Tappytoon : KeiSource() {
+abstract class Tappytoon :
+    KeiSource(),
+    ConfigurableSource {
+
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
         val res = chain.proceed(chain.request())
         val mime = res.headers["Content-Type"]
-        if (res.isSuccessful) {
+        if (res.isSuccessful || res.code == 401) {
             if (mime != "application/octet-stream") {
                 return@addInterceptor res
             }
@@ -58,7 +68,7 @@ abstract class Tappytoon : KeiSource() {
     private var apiHeaders: Headers? = null
 
     private suspend fun apiHeaders(): Headers = apiHeaders ?: run {
-        val data = client.get(baseUrl).asJsoup().getElementById("__NEXT_DATA__")!!
+        val data = client.get(baseUrl, Fetch.DOCUMENT).asJsoup().getElementById("__NEXT_DATA__")!!
         val axiosHeaders = data.data().parseAs<NextData>().props.initialState.axios.headers
         headers.newBuilder()
             .set("Accept-Language", lang)
@@ -66,6 +76,15 @@ abstract class Tappytoon : KeiSource() {
             .set("X-Device-Uuid", axiosHeaders.deviceUuid)
             .build()
             .also { apiHeaders = it }
+    }
+
+    private suspend fun apiGet(url: HttpUrl, isRetry: Boolean = false): Response {
+        val res = client.get(url, apiHeaders(), Fetch.XHR, ensureSuccess = isRetry)
+        if (res.code != 401 || isRetry) return res
+
+        res.close()
+        apiHeaders = null
+        return apiGet(url, true)
     }
 
     private var nextUrl: String? = null
@@ -77,7 +96,7 @@ abstract class Tappytoon : KeiSource() {
             .addEncodedQueryParameter("locale", lang)
             .build()
 
-        return parseComics(client.get(url, apiHeaders()))
+        return parseComics(apiGet(url))
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -89,7 +108,7 @@ abstract class Tappytoon : KeiSource() {
             .addEncodedQueryParameter("locale", lang)
             .build()
 
-        return parseComics(client.get(url, apiHeaders()))
+        return parseComics(apiGet(url))
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -106,13 +125,13 @@ abstract class Tappytoon : KeiSource() {
             build()
         }
 
-        val response = client.get(url, apiHeaders())
+        val response = apiGet(url)
         val link = response.headers["Link"]
         nextUrl = link?.substringAfter('<')?.substringBefore('>')
-        return parseComics(response).copy(hasNextPage = link != null)
+        return parseComics(response, link != null)
     }
 
-    private fun parseComics(response: Response) = response.parseAs<List<Comic>>().accessible.map {
+    private fun parseComics(response: Response, hasNext: Boolean = false) = response.parseAs<List<Comic>>().accessible.map {
         SManga.create().apply {
             url = it.toString()
             title = it.title
@@ -120,19 +139,19 @@ abstract class Tappytoon : KeiSource() {
             thumbnail_url = it.posterThumbnailUrl
             author = it.authors.joinToString()
             artist = author
-            genre = buildString {
-                it.genres.joinToString(this, postfix = ", ")
-                append("Rating: ").append(it.ageRating)
-            }
+            genre = buildList {
+                it.genres.mapTo(this, Name::toString)
+                add("Rating: ${it.ageRating}")
+                if (it.isSuperHighQualitySupported) add("HD")
+            }.joinToString()
             status = when {
                 it.isCompleted -> SManga.COMPLETED
                 !it.isHiatus -> SManga.ONGOING
                 else -> SManga.UNKNOWN
             }
         }
-    }.run { MangasPage(this, false) }
+    }.run { MangasPage(this, hasNext) }
 
-    // The real URL for the webview
     override fun getMangaUrl(manga: SManga) = "$baseUrl/comics/${manga.slug}"
 
     override suspend fun fetchMangaUpdate(
@@ -148,7 +167,7 @@ abstract class Tappytoon : KeiSource() {
             .addEncodedQueryParameter("locale", lang)
             .build()
 
-        val chapterList = client.get(url, apiHeaders()).parseAs<List<Chapter>>().accessible.asReversed().map {
+        val chapterList = apiGet(url).parseAs<List<Chapter>>().accessible.asReversed().map {
             SChapter.create().apply {
                 name = it.toString()
                 this.url = it.id.toString()
@@ -161,16 +180,38 @@ abstract class Tappytoon : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val media = if (preferences.getBoolean(PREF_HD_MODE, false)) {
+            // Only comics marked for HD have super_high images (others answer 404), and the API can refuse it, so fall back.
+            try {
+                contents(chapter, "super_high")
+            } catch (_: IOException) {
+                contents(chapter, "high")
+            }
+        } else {
+            contents(chapter, "high")
+        }
+        return media.mapIndexed { idx, img ->
+            Page(idx, "", img.toString())
+        }
+    }
+
+    private suspend fun contents(chapter: SChapter, variant: String): Media {
         val url = apiUrl.newBuilder()
             .addEncodedPathSegments("content-delivery/contents")
             .addEncodedQueryParameter("chapterId", chapter.url)
-            .addEncodedQueryParameter("variant", "high")
+            .addEncodedQueryParameter("variant", variant)
             .addEncodedQueryParameter("locale", lang)
             .build()
+        return apiGet(url).parseAs<Media>()
+    }
 
-        return client.get(url, apiHeaders()).parseAs<Media>().mapIndexed { idx, img ->
-            Page(idx, "", img.toString())
-        }
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_HD_MODE
+            title = "HD mode"
+            summary = "Load chapters at 1280 px for comics that have HD on Tappytoon. Other comics stay at 720 px."
+            setDefaultValue(false)
+        }.let(screen::addPreference)
     }
 
     override fun getFilterList(data: JsonElement?) = FilterList(
@@ -194,6 +235,8 @@ abstract class Tappytoon : KeiSource() {
 
     companion object {
         private const val IMG_CONTENT_TYPE = "image/jpeg"
+
+        private const val PREF_HD_MODE = "pref_hd_mode"
 
         private val apiUrl: HttpUrl = "https://api-global.tappytoon.com".toHttpUrl()
 

@@ -6,13 +6,14 @@ plugins {
 
 keiyoushi {
     name = "Luna Toons"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "keyoapp"
 
     source {
         lang = "en"
-        baseUrl = "https://lunatoons.org"
+        baseUrl = "https://lunatoons.net"
+        versionId = 2
     }
 }

@@ -5,13 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -26,7 +25,7 @@ abstract class YSKComics : KeiSource() {
     // ---
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val data = client.get("$baseUrl/api/home/best-comics").parseAs<PopularDto>().data
+        val data = client.get("$baseUrl/api/home/best-comics", Fetch.XHR).parseAs<PopularDto>().data
         return MangasPage(
             mangas = data.map { it.toSManga(lang) },
             hasNextPage = false,
@@ -36,7 +35,7 @@ abstract class YSKComics : KeiSource() {
     // ---
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val data = client.get("$baseUrl/api/home/latest-comics?page=$page").parseAs<LatestDto>().data
+        val data = client.get("$baseUrl/api/home/latest-comics?page=$page", Fetch.XHR).parseAs<LatestDto>().data
         return MangasPage(
             mangas = data.dataMessages.map { it.toSManga(lang) },
             hasNextPage = data.meta.linkNext != null,
@@ -64,7 +63,7 @@ abstract class YSKComics : KeiSource() {
             .addQueryParameter("name", query)
             .build()
 
-        val data = client.get(url).parseAs<SearchDto>().data
+        val data = client.get(url, Fetch.XHR).parseAs<SearchDto>().data
         return MangasPage(
             mangas = data.map { it.toSManga(lang) },
             hasNextPage = false,
@@ -78,16 +77,14 @@ abstract class YSKComics : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) fetchMangaDetails(manga) else manga }
-        val chapterList = async { if (fetchChapters) fetchChapterList(manga) else chapters }
-
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) fetchMangaDetails(manga) else manga },
+        chapters = { if (fetchChapters) fetchChapterList(manga) else chapters },
+    )
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
         val slug = extractSlug(manga.url)
-        return client.get("$baseUrl/api/comic/$slug").parseAs<DetailsDto>().data.toSManga(lang)
+        return client.get("$baseUrl/api/comic/$slug", Fetch.XHR).parseAs<DetailsDto>().data.toSManga(lang)
     }
 
     // ---
@@ -97,7 +94,7 @@ abstract class YSKComics : KeiSource() {
         return buildList {
             var page = 1
             do {
-                val data = client.get("$baseUrl/api/comic/chapter/$slug?page=$page").parseAs<ChapterDto>().data
+                val data = client.get("$baseUrl/api/comic/chapter/$slug?page=$page", Fetch.XHR).parseAs<ChapterDto>().data
                 data.dataMessages.mapTo(this) { it.toSChapter(lang) }
                 page++
             } while (data.meta.linkNext != null)
@@ -108,7 +105,7 @@ abstract class YSKComics : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val slug = extractSlug(chapter.url)
-        val data = client.get("$baseUrl/api/chapters/images/$slug").parseAs<PageDto>().data
+        val data = client.get("$baseUrl/api/chapters/images/$slug", Fetch.XHR).parseAs<PageDto>().data
         return data.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
         }

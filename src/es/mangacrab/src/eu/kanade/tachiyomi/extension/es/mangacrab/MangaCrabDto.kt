@@ -49,7 +49,6 @@ data class MangaCrabChaptersDto(
 
 @Serializable
 data class MangaCrabChapterDto(
-    val index: Int,
     val title: String,
     val label: String = "",
     val number: String = "",

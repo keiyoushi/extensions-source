@@ -2,6 +2,7 @@ package keiyoushi.lib.publus
 
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
@@ -35,7 +36,7 @@ suspend fun OkHttpClient.fetchPages(
         .also { auth?.applyTo(it) }
         .build()
 
-    val root = get(configUrl, headers).parseAs<JsonObject>()
+    val root = get(configUrl, headers, Fetch.XHR).parseAs<JsonObject>()
     val decoded = root["data"]?.stringOrNull?.let { Decoder(it).decode() }
     val config = decoded?.json?.parseAs<JsonObject>() ?: root
     val keys = decoded?.keys.orEmpty()

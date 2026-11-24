@@ -1,34 +1,25 @@
 package eu.kanade.tachiyomi.extension.vi.panomic
 
-import android.app.Activity
-import android.app.AlertDialog
-import android.app.Application
-import android.os.Bundle
-import android.text.InputType
-import android.widget.EditText
-import android.widget.FrameLayout
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.applicationContext
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
+import keiyoushi.utils.tryParseDate
+import keiyoushi.utils.ui.askPassword
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -40,41 +31,12 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.lang.ref.WeakReference
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class Panomic : KeiSource() {
-    private var currentActivity: WeakReference<Activity>? = null
-
-    init {
-        try {
-            applicationContext.registerActivityLifecycleCallbacks(
-                object : Application.ActivityLifecycleCallbacks {
-                    override fun onActivityResumed(a: Activity) {
-                        currentActivity = WeakReference(a)
-                    }
-
-                    override fun onActivityPaused(a: Activity) {
-                        if (currentActivity?.get() === a) currentActivity = null
-                    }
-
-                    override fun onActivityDestroyed(a: Activity) {
-                        if (currentActivity?.get() === a) currentActivity = null
-                    }
-
-                    override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
-                    override fun onActivityStarted(activity: Activity) = Unit
-                    override fun onActivityStopped(activity: Activity) = Unit
-                    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
-                },
-            )
-        } catch (_: Throwable) {
-        }
-    }
 
     private val preferences by getPreferencesLazy()
 
@@ -99,7 +61,7 @@ abstract class Panomic : KeiSource() {
     // ============================== Popular ===============================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/nhieu-xem-nhat/").asJsoup()
+        val document = client.get("$baseUrl/nhieu-xem-nhat/", Fetch.DOCUMENT).asJsoup()
         val mangas = parseListManga(document.select("ul.most-views.single-list-comic li.position-relative"))
         return MangasPage(mangas, hasNextPage = false)
     }
@@ -108,7 +70,7 @@ abstract class Panomic : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = if (page == 1) baseUrl else "$baseUrl/page/$page/"
-        return parseLatestPage(client.get(url).asJsoup())
+        return parseLatestPage(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private fun parseLatestPage(document: Document): MangasPage {
@@ -147,14 +109,14 @@ abstract class Panomic : KeiSource() {
                 .add("keyword", query)
                 .build()
 
-            return parseSearchApiResponse(client.post(searchAjaxUrl, searchHeaders, formBody))
+            return parseSearchApiResponse(client.post(searchAjaxUrl, searchHeaders, Fetch.XHR, formBody))
         }
 
         val filterUri = filters.firstSelectedFilterUri()
         if (filterUri != null) {
             val pageSuffix = if (page == 1) "" else "page/$page/"
             val filterUrl = "$baseUrl${filterUri.ensureTrailingSlash()}$pageSuffix"
-            return parseFilterPage(client.get(filterUrl).asJsoup())
+            return parseFilterPage(client.get(filterUrl, Fetch.DOCUMENT).asJsoup())
         }
 
         return getLatestUpdates(page)
@@ -217,7 +179,7 @@ abstract class Panomic : KeiSource() {
         val manga = SManga.create().apply {
             setUrlWithoutDomain(url.encodedPath)
         }
-        return fetchMangaUpdate(manga, emptyList(), true, false).manga
+        return fetchMangaUpdate(manga, emptyList(), true, false).manga()
     }
 
     override suspend fun fetchMangaUpdate(
@@ -226,7 +188,7 @@ abstract class Panomic : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
             chapters = parseChapterList(document),
@@ -294,23 +256,14 @@ abstract class Panomic : KeiSource() {
         return trailingPart.ifEmpty { rawName.trim() }
     }
 
-    private fun parseChapterDate(date: String): Long = runCatching {
-        LocalDate.parse(date, dateFormatShort)
-            .atStartOfDay(dateZone)
-            .toInstant()
-            .toEpochMilli()
-    }.recoverCatching {
-        LocalDate.parse(date, dateFormatLong)
-            .atStartOfDay(dateZone)
-            .toInstant()
-            .toEpochMilli()
-    }.getOrDefault(0L)
+    private fun parseChapterDate(date: String): Long = dateFormatShort.tryParseDate(date, dateZone).takeIf { it != 0L }
+        ?: dateFormatLong.tryParseDate(date, dateZone)
 
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = "$baseUrl${chapter.url}"
-        var html = client.get(chapterUrl).body.string()
+        var html = client.get(chapterUrl, Fetch.DOCUMENT).body.string()
 
         val loginButton = Jsoup.parse(html).selectFirst(
             "button.v-btn.v-big-btn[data-toggle=modal][data-target='#info-modal']",
@@ -322,7 +275,16 @@ abstract class Panomic : KeiSource() {
         if ("entered_secret_code" in html) {
             val document = Jsoup.parse(html, chapterUrl)
             val hint = document.selectFirst(".gate-box p")?.text()
-            val password = promptForPassword(chapter.name, hint)
+            val message = if (!hint.isNullOrBlank()) {
+                "Chương này yêu cầu mã bí mật\n\n$hint"
+            } else {
+                "Chương này yêu cầu mã bí mật"
+            }
+            val password = askPassword(
+                title = chapter.name,
+                message = message,
+                hint = "Mã bí mật",
+            ) ?: throw Exception("Đã hủy nhập mã bí mật")
 
             val lockForm = document.selectFirst("form:has(input[name=entered_secret_code])")
             val postAction = lockForm?.absUrl("action")?.ifEmpty { chapterUrl } ?: chapterUrl
@@ -336,7 +298,7 @@ abstract class Panomic : KeiSource() {
                 .set("Referer", chapterUrl)
                 .build()
 
-            val postResponse = client.post(postAction, postHeaders, formBody, ensureSuccess = false)
+            val postResponse = client.post(postAction, postHeaders, Fetch.DOCUMENT, formBody, ensureSuccess = false)
             val postHtml = postResponse.body.string()
 
             val setCookieHeaders = postResponse.headers("Set-Cookie") +
@@ -350,7 +312,7 @@ abstract class Panomic : KeiSource() {
             html = if (postResponse.isSuccessful && !postHtml.contains("entered_secret_code")) {
                 postHtml
             } else {
-                client.get(chapterUrl).body.string()
+                client.get(chapterUrl, Fetch.DOCUMENT).body.string()
             }
 
             if ("entered_secret_code" in html) {
@@ -364,71 +326,12 @@ abstract class Panomic : KeiSource() {
         }
     }
 
-    private suspend fun promptForPassword(chapterTitle: String, hintText: String? = null): String {
-        val activity = currentActivity?.get()
-            ?: throw Exception("Mở chương trong WebView để nhập mã bí mật")
-
-        val deferred = CompletableDeferred<String>()
-        var dialog: AlertDialog? = null
-
-        try {
-            withContext(Dispatchers.Main.immediate) {
-                val input = EditText(activity).apply {
-                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-                    hint = "Mã bí mật"
-                }
-                val container = FrameLayout(activity).apply {
-                    val pad = (16 * resources.displayMetrics.density).toInt()
-                    setPadding(pad, pad / 2, pad, 0)
-                    addView(input)
-                }
-
-                val message = if (!hintText.isNullOrBlank()) {
-                    "Chương này yêu cầu mã bí mật\n\n$hintText"
-                } else {
-                    "Chương này yêu cầu mã bí mật"
-                }
-
-                dialog = AlertDialog.Builder(activity)
-                    .setTitle(chapterTitle)
-                    .setMessage(message)
-                    .setView(container)
-                    .setPositiveButton("Mở khóa") { _, _ ->
-                        val text = input.text.toString().trim()
-                        if (text.isNotBlank()) {
-                            deferred.complete(text)
-                        } else {
-                            deferred.completeExceptionally(Exception("Mã bí mật không được để trống"))
-                        }
-                    }
-                    .setNegativeButton("Hủy") { _, _ ->
-                        deferred.completeExceptionally(Exception("Đã hủy nhập mã bí mật"))
-                    }
-                    .setOnCancelListener {
-                        deferred.completeExceptionally(Exception("Đã đóng hộp thoại"))
-                    }
-                    .setOnDismissListener {
-                        if (!deferred.isCompleted) {
-                            deferred.completeExceptionally(Exception("Đã đóng hộp thoại"))
-                        }
-                    }
-                    .show()
-            }
-
-            return deferred.await()
-        } finally {
-            withContext(NonCancellable + Dispatchers.Main.immediate) {
-                dialog?.takeIf { it.isShowing }?.dismiss()
-            }
-        }
-    }
-
     // ============================== Filters ===============================
 
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         return FilterData(
             genres = document.parseFilterOptions("#nav-tags"),
             groups = document.parseFilterOptions("#nav-teams"),
@@ -451,7 +354,7 @@ abstract class Panomic : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         val relatedSection = document.select("h3.blue-title")
             .firstOrNull { it.text() == "Truyện liên quan" }
             ?.parent()

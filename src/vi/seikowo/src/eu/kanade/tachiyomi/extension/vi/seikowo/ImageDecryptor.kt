@@ -1,13 +1,12 @@
 package eu.kanade.tachiyomi.extension.vi.seikowo
 
 import android.util.Base64
+import keiyoushi.utils.aesDecrypt
+import keiyoushi.utils.aesGcm
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 import java.util.zip.GZIPInputStream
-import javax.crypto.Cipher
-import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 object ImageDecryptor {
     private const val ENCRYPTION_KEY = "super_secret_key_for_manga_app_1"
@@ -20,14 +19,7 @@ object ImageDecryptor {
         val iv = combined.copyOfRange(0, IV_SIZE)
         val encrypted = combined.copyOfRange(IV_SIZE, combined.size)
 
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(
-            Cipher.DECRYPT_MODE,
-            SecretKeySpec(normalizedKeyBytes(), "AES"),
-            GCMParameterSpec(128, iv),
-        )
-
-        val compressed = cipher.doFinal(encrypted)
+        val compressed = encrypted.aesDecrypt(aesGcm(normalizedKeyBytes(), iv))
         return decompressGzip(compressed)
     }
 

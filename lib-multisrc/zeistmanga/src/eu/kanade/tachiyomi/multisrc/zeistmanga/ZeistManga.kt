@@ -6,17 +6,17 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParse
 import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
@@ -32,11 +32,15 @@ abstract class ZeistManga : KeiSource() {
 
     protected open val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
-    protected open val mangaCategory = "Series"
-
-    open fun apiUrl(feed: String = mangaCategory): HttpUrl.Builder = "$baseUrl/feeds/posts/default/-/".toHttpUrl().newBuilder()
-        .addPathSegment(feed)
-        .addQueryParameter("alt", "json")
+    open fun apiUrl(feed: String = ""): HttpUrl.Builder {
+        val url = "$baseUrl/feeds/posts/default/".toHttpUrl().newBuilder()
+        if (feed.isNotEmpty()) {
+            url.addPathSegment("-")
+            url.addPathSegment(feed)
+        }
+        url.addQueryParameter("alt", "json")
+        return url
+    }
 
     protected val intl = Intl(
         language = lang,
@@ -53,7 +57,7 @@ abstract class ZeistManga : KeiSource() {
     protected open val popularMangaSelectorUrl = "figcaption > a"
 
     override suspend fun getPopularManga(page: Int) = if (supportsLatest) {
-        parsePopularManga(client.get(popularMangaUrl(page)))
+        parsePopularManga(client.get(popularMangaUrl(page), Fetch.DOCUMENT))
     } else {
         getLatestUpdates(page)
     }
@@ -76,76 +80,98 @@ abstract class ZeistManga : KeiSource() {
             .addQueryParameter("orderby", orderBy)
             .addQueryParameter("max-results", (MAX_MANGA_RESULTS + 1).toString())
             .addQueryParameter("start-index", startIndex.toString())
+            .addCategoryLabels()
             .build().toString()
     }
 
-    override suspend fun getLatestUpdates(page: Int) = parseSearchManga(client.get(latestUpdatesUrl(page)))
-
-    open fun parseLastestUpdates(response: Response) = parseSearchManga(response)
+    override suspend fun getLatestUpdates(page: Int) = parseSearchManga(client.get(latestUpdatesUrl(page), Fetch.XHR))
 
     // Search
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.pathSegments.size < 3) return null
-        val doc = client.get(url).asJsoup()
-        return mangaDetailsParse(doc).apply {
-            if (title.isEmpty()) {
-                title = doc.selectFirst("meta[property='og:title']")!!.attr("content")
-                    .substringBefore("-").trim()
-            }
-            setUrlWithoutDomain(url.toString())
-        }
+        if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host.removePrefix("www.")) return null
+        if (!POST_PATH_REGEX.matches(url.encodedPath)) return null
+        // Blogger's feed finds a post by its path
+        val postUrl = apiUrl().addQueryParameter("path", url.encodedPath).build()
+        val post = client.get(postUrl, Fetch.XHR).parseAs<ZeistMangaDto>().feed?.entry?.singleOrNull() ?: return null
+        if (post.category.orEmpty().any { it.term in excludedCategories }) return null
+        return post.toSManga(baseUrl)
     }
 
     open fun searchMangaUrl(page: Int, query: String) = apiUrl()
+
+    protected open val includedCategories: List<String> get() = listOf("Series", "Manga", "Manhwa", "Manhua", "Doujinshi", "Web Novel (JP)", "Web Novel (KR)", "Web Novel (CN)")
+
+    protected open val excludedCategories: List<String> get() = listOf("Anime", "Novel", "Novela", chapterCategory)
+
+    private fun HttpUrl.Builder.addCategoryLabels(query: String = "", filterList: FilterList? = null): HttpUrl.Builder = addQueryParameter(
+        "q",
+        buildString {
+            append("{")
+            includedCategories.forEach {
+                append("label:\"$it\" ")
+            }
+            append("}")
+            excludedCategories.forEach {
+                append("-label:\"${it.trim()}\" ")
+            }
+            if (query.isNotBlank()) {
+                append(query.trim())
+            } else {
+                filterList?.forEach { filter ->
+                    when (filter) {
+                        is StatusList -> {
+                            filter.selected.value.trim()
+                                .takeIf { it.isNotEmpty() }
+                                ?.let { append("label:\"$it\" ") }
+                        }
+
+                        is TypeList -> {
+                            filter.selected.value.trim()
+                                .takeIf { it.isNotEmpty() }
+                                ?.let { append("label:\"$it\" ") }
+                        }
+
+                        is LanguageList -> {
+                            filter.selected.value.trim()
+                                .takeIf { it.isNotEmpty() }
+                                ?.let { append("label:\"$it\" ") }
+                        }
+
+                        is GenreList -> {
+                            val selectedGenres = filter.state
+                                .filter { it.state }
+                                .map { it.value.trim() }
+                                .filter { it.isNotEmpty() }
+                                .map { "label:\"$it\"" }
+
+                            if (selectedGenres.isNotEmpty()) {
+                                append(" ")
+                                append(selectedGenres.joinToString(" "))
+                            }
+                        }
+
+                        else -> {}
+                    }
+                }
+            }
+        }.trim(),
+    )
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val startIndex = MAX_MANGA_RESULTS * (page - 1) + 1
         val url = searchMangaUrl(page, query)
 
-        val searchUrl = if (query.isNotBlank()) {
-            url.addQueryParameter("q", query)
-                .addQueryParameter("max-results", (MAX_MANGA_RESULTS + 1).toString())
-                .addQueryParameter("start-index", startIndex.toString())
-        } else {
-            filters.forEach { filter ->
-                when (filter) {
-                    is StatusList -> {
-                        url.addPathSegment(filter.selected.value)
-                    }
+        val searchUrl = url.addCategoryLabels(query, filters)
+            .addQueryParameter("max-results", (MAX_MANGA_RESULTS + 1).toString())
+            .addQueryParameter("start-index", startIndex.toString())
+            .build()
 
-                    is TypeList -> {
-                        url.addPathSegment(filter.selected.value)
-                    }
-
-                    is LanguageList -> {
-                        url.addPathSegment(filter.selected.value)
-                    }
-
-                    is GenreList -> {
-                        filter.state.forEach { genre ->
-                            when (genre.state) {
-                                true -> url.addPathSegment(genre.value)
-                                false -> {}
-                            }
-                        }
-                    }
-
-                    else -> {}
-                }
-            }
-            url
-        }.build().toString().replaceLast("q=", "q=label:$mangaCategory+")
-
-        return parseSearchManga(client.get(searchUrl))
+        return parseSearchManga(client.get(searchUrl, Fetch.XHR))
     }
-
-    protected open val excludedCategories: List<String> = listOf("Anime", "Novel", "Novela")
 
     open fun parseSearchManga(response: Response): MangasPage {
         val result = response.parseAs<ZeistMangaDto>()
         val mangas = result.feed?.entry.orEmpty()
-            .filter { it.category.orEmpty().any { category -> category.term == mangaCategory } }
-            .filterNot { it.category.orEmpty().any { category -> excludedCategories.contains(category.term) } }
             .map { it.toSManga(baseUrl) }
 
         val mangalist = mangas.toMutableList()
@@ -171,7 +197,7 @@ abstract class ZeistManga : KeiSource() {
             coroutineScope {
                 val mangaDeferred = async {
                     if (fetchDetails) {
-                        val doc = client.get(getMangaUrl(manga)).asJsoup()
+                        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
                         mangaDetailsParse(doc).apply { memo = manga.memo }
                     } else {
                         manga
@@ -181,7 +207,7 @@ abstract class ZeistManga : KeiSource() {
                 SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
             }
         } else {
-            val doc = client.get(getMangaUrl(manga)).asJsoup()
+            val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
             val url = getChapterFeedUrl(doc, manga.title)
 
             val updatedManga = mangaDetailsParse(doc).apply {
@@ -285,28 +311,21 @@ abstract class ZeistManga : KeiSource() {
             .setQueryParameter("start-index", startIndex.toString())
             .setQueryParameter("max-results", maxResults.toString()).build().toString()
 
-        val res = client.get(paginationUrl)
+        val res = client.get(paginationUrl, Fetch.XHR)
         return res.parseAs<ZeistMangaDto>()
     }
 
     open suspend fun getChapterList(feedUrl: String, doc: Document? = null): List<SChapter> {
         val allEntries = mutableListOf<ZeistMangaEntryDto>()
 
-        // Get total and server chunk size by initial max request.
-        val result = fetchChapter(feedUrl, 1, MAX_CHAPTER_RESULTS)
-        val totalResults = result.feed?.totalResults?.t?.toIntOrNull() ?: MAX_CHAPTER_RESULTS
-        val itemsPerPage = result.feed?.itemsPerPage?.t?.toIntOrNull() ?: CHAPTER_CHUNK
-
-        allEntries += result.feed?.entry ?: throw Exception("Failed to parse from chapter API")
-
-        coroutineScope {
-            (allEntries.size until totalResults step itemsPerPage).map { startIndex ->
-                async {
-                    fetchChapter(feedUrl, startIndex + 1, maxResults = itemsPerPage)
-                        .feed!!.entry!!
-                }
-            }.awaitAll().flatten().also(allEntries::addAll)
-        }
+        // Blogger ends a page at 150 posts or about 2 MB of post content, so each page starts where the last one stopped
+        do {
+            val feed = fetchChapter(feedUrl, allEntries.size + 1, MAX_CHAPTER_RESULTS).feed
+                ?: throw Exception("Failed to parse from chapter API")
+            val entries = feed.entry.orEmpty()
+            allEntries += entries
+            val totalResults = feed.totalResults?.t?.toIntOrNull() ?: 0
+        } while (entries.isNotEmpty() && allEntries.size < totalResults)
 
         return allEntries
             .filter { it.category.orEmpty().any { cat -> cat.term == chapterCategory } }
@@ -393,7 +412,7 @@ abstract class ZeistManga : KeiSource() {
     // Pages
     protected open val pageListSelector = "div.check-box div.separator"
 
-    override suspend fun getPageList(chapter: SChapter) = pageListParse(client.get(getChapterUrl(chapter)).asJsoup())
+    override suspend fun getPageList(chapter: SChapter) = pageListParse(client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup())
 
     open fun pageListParse(document: Document): List<Page> {
         val images = document.select(pageListSelector)
@@ -527,8 +546,8 @@ abstract class ZeistManga : KeiSource() {
     }
 
     companion object {
+        private val POST_PATH_REGEX = Regex("""/\d{4}/\d{2}/[^/]+\.html""")
         private const val MAX_MANGA_RESULTS = 20
         private const val MAX_CHAPTER_RESULTS = 150
-        private const val CHAPTER_CHUNK = 50
     }
 }

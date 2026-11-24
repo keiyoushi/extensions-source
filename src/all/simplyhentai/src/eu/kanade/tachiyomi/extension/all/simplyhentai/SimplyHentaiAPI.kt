@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.simplyhentai
 
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -56,6 +57,20 @@ class SHData(
     val translators: List<SHTag>,
 ) {
     val path get() = "/${series.slug}/$slug"
+
+    fun toSManga() = SManga.create().apply {
+        url = path
+        title = this@SHData.title
+        description = MarkdownDescription.Builder()
+            .description(this@SHData.description)
+            .field("Series", series.title)
+            .field("Characters", characters.map { it.title })
+            .build()
+        thumbnail_url = preview.sizes.thumb
+        genre = tags.joinToString { it.title }.ifEmpty { null }
+        artist = artists.joinToString { it.title }.ifEmpty { null }
+        author = artist
+    }
 }
 
 @Serializable

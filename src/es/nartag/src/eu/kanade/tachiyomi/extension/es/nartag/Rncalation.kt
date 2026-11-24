@@ -5,14 +5,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -21,7 +20,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Rncalation : KeiSource() {
-
     override fun OkHttpClient.Builder.configureClient() = rateLimit(2, 1.seconds).addInterceptor { chain ->
         val response = chain.proceed(chain.request())
         // Without the mv_ck cookie the site serves a JS page that sets it and reloads; the cookie is saved by now, so retry once
@@ -33,7 +31,7 @@ abstract class Rncalation : KeiSource() {
         }
     }
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/library?sort=views&page=$page").asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/library?sort=views&page=$page", Fetch.DOCUMENT).asJsoup())
 
     private fun parseMangaList(document: Document): MangasPage {
         val mangas = document.select(".lib-grid a.comic-card").mapNotNull { element ->
@@ -51,7 +49,7 @@ abstract class Rncalation : KeiSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/library?sort=updated&page=$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/library?sort=updated&page=$page", Fetch.DOCUMENT).asJsoup())
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/library".toHttpUrl().newBuilder().apply {
@@ -83,7 +81,7 @@ abstract class Rncalation : KeiSource() {
                 }
             }
         }.build()
-        return parseMangaList(client.get(url).asJsoup())
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun fetchMangaUpdate(
@@ -91,15 +89,13 @@ abstract class Rncalation : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) fetchMangaDetails(manga) else manga }
-        val chapterList = async { if (fetchChapters) fetchChapterList(manga) else chapters }
-
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) fetchMangaDetails(manga) else manga },
+        chapters = { if (fetchChapters) fetchChapterList(manga) else chapters },
+    )
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return manga.apply {
             description = document.selectFirst("div.comic-page-wrap p[class*=text-][^data-astro-cid]")?.text() ?: ""
 
@@ -136,7 +132,7 @@ abstract class Rncalation : KeiSource() {
         val allChapters = mutableListOf<SChapter>()
         var page = 1
         do {
-            val response = client.get("$baseUrl/comics/$slug/chapters?page=$page")
+            val response = client.get("$baseUrl/comics/$slug/chapters?page=$page", Fetch.DOCUMENT)
             val currentPage = response.header("x-page")?.toIntOrNull()
             val totalPages = response.header("x-pages")?.toIntOrNull()
 
@@ -160,7 +156,7 @@ abstract class Rncalation : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("img.page-img, .page-wrap img").mapIndexed { index, element ->
             val imageUrl = element.attr("abs:data-src").ifEmpty { element.attr("abs:src") }
             Page(index, imageUrl = imageUrl)

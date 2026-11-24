@@ -4,6 +4,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.time.Instant
 
 // ============================== Utilities ===============================
@@ -115,7 +117,7 @@ class SMangaDto(
     }
     fun makeSChapters(mangaSlug: String) = volumes.orEmpty().flatMap {
         it.chapters.map { chapter ->
-            chapter.toSChapter(mangaSlug)
+            chapter.toSChapter(mangaSlug, ageBracket)
         }
     }
 }
@@ -146,7 +148,7 @@ class ChaptersListDto(
     private val createdDate: String? = null,
     private val translationTeams: List<Tags>? = emptyList(),
 ) {
-    fun toSChapter(mangaSlug: String) = SChapter.create().apply {
+    fun toSChapter(mangaSlug: String, ageBracket: String?) = SChapter.create().apply {
         val vol = volumeOrder.toString().removeSuffix(".0")
         val chp = number.toString().removeSuffix(".0")
         val time = updatedDate ?: createdDate ?: ""
@@ -158,6 +160,9 @@ class ChaptersListDto(
         date_upload = Instant.parseOrNull(time)?.toEpochMilliseconds() ?: 0L
         chapter_number = number
         scanlator = translationTeams?.joinToString { it.name }
+        memo = buildJsonObject {
+            put("age", ageBracket)
+        }
     }
 }
 
@@ -186,6 +191,6 @@ class GenreDto(
 
 @Serializable
 class FiltersDto(
-    val genres: List<Pair<String, String>>,
-    val tags: List<Pair<String, String>>,
+    val genres: List<Pair<String, String>>? = emptyList(),
+    val tags: List<Pair<String, String>>? = emptyList(),
 )

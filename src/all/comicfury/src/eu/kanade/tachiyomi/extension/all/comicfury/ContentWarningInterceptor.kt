@@ -27,6 +27,7 @@ class ContentWarningInterceptor : Interceptor {
 
                     val postRequest = request.newBuilder()
                         .post(formBody)
+                        .header("Origin", request.url.resolve("/")!!.toString().removeSuffix("/"))
                         .build()
 
                     return chain.proceed(postRequest)

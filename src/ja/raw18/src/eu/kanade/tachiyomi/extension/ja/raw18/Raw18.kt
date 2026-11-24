@@ -3,10 +3,9 @@ package eu.kanade.tachiyomi.extension.ja.raw18
 import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
-import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import java.time.format.DateTimeFormatter
@@ -19,26 +18,15 @@ abstract class Raw18 : WPComics() {
 
     override val gmtOffset = null
     override val searchPath = "search/manga"
+    override val mangaUrlDirectory = "manga"
 
     override val genresUrlDelimiter = "="
 
     override fun popularMangaSelector() = "div.items .item"
 
-    override fun popularMangaNextPageSelector() = "li:nth-last-child(2) a.page-link"
+    override fun popularMangaNextPageSelector() = "ul.pagination li.active + li a.page-link"
 
     override fun searchMangaSelector() = popularMangaSelector()
-
-    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        val baseHost = baseUrl.toHttpUrl().host
-        if (url.host != baseHost && !url.host.endsWith(".$baseHost")) return null
-        if (url.pathSegments.firstOrNull() != "manga") return null
-        val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotBlank() } ?: return null
-
-        val manga = SManga.create().apply {
-            this.url = "/manga/$slug"
-        }
-        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
-    }
 
     override fun mangaDetailsParse(document: Document) = super.mangaDetailsParse(document).apply {
         description = document.selectFirst("div.detail-content")?.text()
@@ -57,7 +45,7 @@ abstract class Raw18 : WPComics() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        return parseMangaPage(client.get(url), searchMangaSelector(), ::searchMangaFromElement)
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT), searchMangaSelector(), ::searchMangaFromElement)
     }
 
     override fun getStatusList(): List<Pair<String?, String>> = listOf(

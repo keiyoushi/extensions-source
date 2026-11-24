@@ -5,20 +5,24 @@ import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toMarkdown
+import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.Call
 import okhttp3.Callback
@@ -115,7 +119,7 @@ abstract class MadaraBase : KeiSource() {
     protected open val mangaDetailsSelectorTag = "div.tags-content a"
     protected open val seriesTypeSelector = ".post-content_item:contains(Type) .summary-content"
     protected open val altNameSelector = ".post-content_item:contains(Alt) .summary-content"
-    protected open val updatingRegex = "Updating|Atualizando".toRegex(RegexOption.IGNORE_CASE)
+    protected open val updatingRegex = Regex("Updating|Atualizando", RegexOption.IGNORE_CASE)
     protected open fun chapterListSelector() = "li.wp-manga-chapter"
     protected open val chapterNameSelector: String? = null
     protected open val chapterUrlSelector = "a"
@@ -124,7 +128,7 @@ abstract class MadaraBase : KeiSource() {
     protected open val filterGenresSelector = "div.genres"
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/$mangaSubString/").asJsoup()
+        val document = client.get("$baseUrl/$mangaSubString/", Fetch.DOCUMENT).asJsoup()
         return document.select(filterGenresSelector).select("a[href*='/$genreDirectory/']").mapNotNull { element ->
             val href = element.attr("abs:href").takeIf(String::isNotBlank) ?: return@mapNotNull null
             val path = href.toHttpUrl().encodedPath
@@ -136,7 +140,16 @@ abstract class MadaraBase : KeiSource() {
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
-        val document = client.get(url).asJsoup()
+        val page = client.get(url, Fetch.DOCUMENT).asJsoup()
+        // A chapter page carries the post id of its series, and ?p= leads to the series
+        val document = if (page.body().hasClass("reading-manga")) {
+            val seriesId = page.mangaId() ?: return null
+            client.get("$baseUrl/?p=$seriesId", Fetch.DOCUMENT.from(page.location())).asJsoup()
+        } else {
+            page
+        }
+        // Other pages, like the home page or a genre, have no series title
+        if (document.selectFirst(mangaDetailsSelectorTitle)?.ownText().isNullOrBlank()) return null
         val id = if (supportsPostId) {
             document.mangaId() ?: return null
         } else {
@@ -186,14 +199,19 @@ abstract class MadaraBase : KeiSource() {
         val path = memoPath(manga) ?: manga.url.takeIf { !it.all(Char::isDigit) }
         if (path != null) {
             val requestedUrl = baseUrl.toHttpUrl().resolve(path) ?: error("Invalid manga path")
-            val response = client.get(requestedUrl, ensureSuccess = false)
-            if (response.isSuccessful && response.request.url == requestedUrl) return response
+            val response = client.get(requestedUrl, Fetch.DOCUMENT, ensureSuccess = false)
+            if (
+                response.isSuccessful &&
+                (response.request.url == requestedUrl || !supportsPostId)
+            ) {
+                return response
+            }
             val redirectedId = response.use { fallback ->
                 if (id == null) fallback.asJsoup().mangaId() else null
             }
             id = id ?: redirectedId
         }
-        return client.get("$baseUrl/?p=${id ?: error("Missing Madara post ID")}")
+        return client.get("$baseUrl/?p=${id ?: error("Missing Madara post ID from redirection")}", Fetch.DOCUMENT)
     }
 
     protected open fun parseDetails(document: Document, id: String, preserveUrl: String?): SManga = SManga.create().apply {
@@ -206,12 +224,11 @@ abstract class MadaraBase : KeiSource() {
         title = document.selectFirst(mangaDetailsSelectorTitle)!!.ownText()
         author = document.select(mangaDetailsSelectorAuthor).eachText().filterNot(::isUpdating).joinToString().ifBlank { null }
         artist = document.select(mangaDetailsSelectorArtist).eachText().filterNot(::isUpdating).joinToString().ifBlank { null }
-        description = document.selectFirst(mangaDetailsSelectorDescription)?.let { element ->
-            element.select("p").takeIf(List<Element>::isNotEmpty)?.joinToString("\n\n") { it.text() } ?: element.text()
-        }
-        document.selectFirst(altNameSelector)?.ownText()?.takeIf { it.isNotEmpty() && !isUpdating(it) }?.let { alternative ->
-            description = listOfNotNull(description, "${intl["alt_names_heading"]} $alternative").joinToString("\n\n")
-        }
+        val alternative = document.selectFirst(altNameSelector)?.ownText()?.takeIf { it != title && !isUpdating(it) }
+        description = MarkdownDescription.Builder()
+            .apply { descriptionParagraphs(document).forEach(::markdown) }
+            .altTitles(listOfNotNull(alternative), intl["alt_names_heading"].removeSuffix(":"))
+            .build()
         thumbnail_url = document.selectFirst(mangaDetailsSelectorThumbnail)?.let { processThumbnail(imageFromElement(it)) }
         status = document.select(mangaDetailsSelectorStatus).lastOrNull()?.text()?.toStatus() ?: SManga.UNKNOWN
         val genres = document.select(mangaDetailsSelectorGenre).mapNotNull { element ->
@@ -232,6 +249,12 @@ abstract class MadaraBase : KeiSource() {
         )
     }
 
+    /** The synopsis as Markdown paragraphs: the description's `p` elements, or the whole element without any */
+    protected open fun descriptionParagraphs(document: Document): List<String> {
+        val element = document.selectFirst(mangaDetailsSelectorDescription) ?: return emptyList()
+        return element.select("p").ifEmpty { listOf(element) }.map { it.toMarkdown() }
+    }
+
     protected open suspend fun fetchChapters(mangaPath: String, id: String, mangaPage: Document? = null): List<SChapter> = when (chapterMode) {
         ChapterMode.MangaPage -> fetchMangaPageChapters(mangaPath, mangaPage)
         ChapterMode.AdminAjax -> fetchAdminAjaxChapters(mangaPath, id)
@@ -244,10 +267,10 @@ abstract class MadaraBase : KeiSource() {
 
     private suspend fun fetchAdminAjaxChapters(mangaPath: String, id: String): List<SChapter> {
         val body = FormBody.Builder().add("action", "manga_get_chapters").add("manga", id).build()
-        return parseChapterList(client.post("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, body).asJsoup(), mangaPath)
+        return parseChapterList(client.post("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, Fetch.XHR.from(mangaPath), body).asJsoup(), mangaPath)
     }
 
-    private suspend fun fetchMangaAjaxChapters(mangaPath: String): List<SChapter> = parseChapterList(client.post(chapterAjaxUrl(mangaPath), xhrHeaders, FormBody.Builder().build()).asJsoup(), mangaPath)
+    private suspend fun fetchMangaAjaxChapters(mangaPath: String): List<SChapter> = parseChapterList(client.post(chapterAjaxUrl(mangaPath), xhrHeaders, Fetch.XHR.from(mangaPath), FormBody.Builder().build()).asJsoup(), mangaPath)
 
     private suspend fun fetchPaginatedChapters(mangaPath: String): List<SChapter> {
         val result = mutableListOf<SChapter>()
@@ -257,6 +280,7 @@ abstract class MadaraBase : KeiSource() {
             val response = client.post(
                 "${chapterAjaxUrl(mangaPath)}?t=$page",
                 xhrHeaders,
+                Fetch.XHR.from(mangaPath),
                 FormBody.Builder().build(),
                 ensureSuccess = false,
             )
@@ -285,7 +309,7 @@ abstract class MadaraBase : KeiSource() {
             .add("manga_ajax", "1")
             .add("maction", "get_chapters")
             .build()
-        return parseChapterList(client.post("$baseUrl/index.php", xhrHeaders, body).asJsoup(), mangaPath)
+        return parseChapterList(client.post("$baseUrl/index.php", xhrHeaders, Fetch.XHR.from(mangaPath), body).asJsoup(), mangaPath)
     }
 
     private fun chapterAjaxUrl(mangaPath: String) = "$baseUrl${mangaPath.trimEnd('/')}/ajax/chapters/"
@@ -342,7 +366,7 @@ abstract class MadaraBase : KeiSource() {
 
     override fun getChapterUrl(chapter: SChapter): String {
         if (chapter.url.contains('/')) error("Refresh the chapter list.")
-        val mangaPath = chapter.memo["mangaPath"]?.jsonPrimitive?.content
+        val mangaPath = chapter.memo.getStringOrNull("mangaPath")
             ?: error("Refresh the chapter list.")
         return "$baseUrl${mangaPath.trimEnd('/')}/${chapter.url}/"
     }
@@ -351,7 +375,7 @@ abstract class MadaraBase : KeiSource() {
         val chapterUrl = getChapterUrl(chapter)
         val first = fetchChapterDocument(chapterUrl)
         val document = if (first.selectFirst("#single-pager") != null) {
-            client.get(chapterUrl.toHttpUrl().newBuilder().addQueryParameter("style", "list").build()).asJsoup()
+            client.get(chapterUrl.toHttpUrl().newBuilder().addQueryParameter("style", "list").build(), Fetch.DOCUMENT).asJsoup()
         } else {
             first
         }
@@ -359,7 +383,7 @@ abstract class MadaraBase : KeiSource() {
         return parsePages(document)
     }
 
-    protected open suspend fun fetchChapterDocument(chapterUrl: String): Document = client.get(chapterUrl).asJsoup()
+    protected open suspend fun fetchChapterDocument(chapterUrl: String): Document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
 
     private fun enqueueViewCount(document: Document) {
         if (!sendViewCount) return
@@ -368,21 +392,26 @@ abstract class MadaraBase : KeiSource() {
             ?.substringAfter("var manga = ", "")
             ?.substringBeforeLast(';')
             ?.takeIf(String::isNotBlank)
-            ?.runCatching { parseAs<JsonObject>() }
+            ?.runCatching { parseAs<MangaViewData>() }
             ?.getOrNull()
             ?: return
-        if (data["enable_manga_view"]?.jsonPrimitive?.content != "1") return
-        val mangaId = data["manga_id"]?.jsonPrimitive?.content?.takeIf(String::isNotBlank) ?: return
-        val chapterSlug = data["chapter_slug"]?.jsonPrimitive?.contentOrNull
+        if (data.enableMangaView != "1") return
+        val mangaId = data.mangaId?.takeIf(String::isNotBlank) ?: return
+        val chapterSlug = data.chapterSlug
+        val nonce = data.nonce?.takeIf(String::isNotBlank)
         val body = FormBody.Builder()
             .add("action", "manga_views")
             .add("manga", mangaId)
-            .apply { chapterSlug?.let { add("chapter", it) } }
+            .apply {
+                chapterSlug?.let { add("chapter", it) }
+                nonce?.let { add("nonce", it) }
+            }
             .build()
         val request = Request.Builder()
             .url("$baseUrl/wp-admin/admin-ajax.php")
             .headers(headersBuilder().set("Referer", document.location()).build())
             .post(body)
+            .fetch(Fetch.XHR)
             .build()
         client.newCall(request).enqueue(
             object : Callback {
@@ -432,7 +461,7 @@ abstract class MadaraBase : KeiSource() {
         return cipher.doFinal(Base64.decode(data.ciphertext, Base64.DEFAULT)).toString(Charsets.UTF_8)
     }
 
-    override fun imageRequest(page: Page) = super.imageRequest(page).newBuilder().header("Referer", page.url).build()
+    override fun getImageRequest(page: Page) = super.getImageRequest(page).newBuilder().header("Referer", page.url).build()
 
     protected open fun imageFromElement(element: Element): String? = when {
         element.hasAttr("data-src") -> element.attr("abs:data-src")
@@ -477,9 +506,9 @@ abstract class MadaraBase : KeiSource() {
     }
 
     protected open fun mangaId(manga: SManga): String? = manga.url.takeIf { it.all(Char::isDigit) }
-        ?: manga.memo["id"]?.jsonPrimitive?.content
+        ?: manga.memo.getStringOrNull("id")
 
-    protected fun memoPath(manga: SManga): String? = manga.memo["path"]?.jsonPrimitive?.content
+    protected fun memoPath(manga: SManga): String? = manga.memo.getStringOrNull("path")
 
     protected fun mangaMemo(path: String, genres: List<GenreRoute>, legacyId: String? = null): JsonObject = buildJsonObject {
         put("path", path)
@@ -487,7 +516,7 @@ abstract class MadaraBase : KeiSource() {
         legacyId?.let { put("id", it) }
     }
 
-    protected fun Document.mangaId(): String? = selectFirst("[id^=manga-chapters-holder]")?.attr("data-id")?.takeIf(String::isNotBlank)
+    protected open fun Document.mangaId(): String? = selectFirst("[id^=manga-chapters-holder]")?.attr("data-id")?.takeIf(String::isNotBlank)
         ?: selectFirst("input.rating-post-id")?.attr("value")?.takeIf(String::isNotBlank)
         ?: selectFirst("a[data-post]")?.attr("data-post")?.takeIf(String::isNotBlank)
         ?: selectFirst("link[rel=shortlink]")?.attr("href")?.takeIf { it.contains("?p=") }
@@ -526,7 +555,14 @@ abstract class MadaraBase : KeiSource() {
     protected open val chapterDateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH)
 
     protected open fun parseChapterDate(date: String?): Long {
-        val value = date ?: return 0
+        var value = date ?: return 0
+
+        ARABIC_DUALS.forEach { (dual, replacement) ->
+            if (value.contains(dual)) {
+                value = value.replace(dual, replacement)
+            }
+        }
+
         val normalized = value.lowercase(Locale.ROOT)
         val today = LocalDate.now(ZoneOffset.UTC)
         if (arrayOf("today", "hoje", "hoy").any(normalized::startsWith)) {
@@ -549,7 +585,7 @@ abstract class MadaraBase : KeiSource() {
             }
             if (unit != null) return ZonedDateTime.now(ZoneOffset.UTC).minus(amount, unit).toInstant().toEpochMilli()
         }
-        return runCatching { LocalDate.parse(value, chapterDateFormat).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli() }.getOrDefault(0)
+        return chapterDateFormat.tryParseDate(value, ZoneOffset.UTC)
     }
 
     protected fun isUpdating(value: String) = updatingRegex.containsMatchIn(value)
@@ -561,7 +597,7 @@ abstract class MadaraBase : KeiSource() {
         private val URL_REGEX = Regex("""^https?://[^\s/$.?#].[^\s]*$""")
         private val WHITESPACE_REGEX = Regex("""\s+""")
         private val IMAGE_DESCRIPTOR_REGEX = Regex("""^(\d+|\d+\.\d+)[wx]$""")
-        private val NUMBER_REGEX = Regex("\\d+")
+        private val NUMBER_REGEX = Regex("""\d+""")
 
         // Keywords must not be preceded by a letter, otherwise "ay" matches inside "mayıs", "may" and "days"
         private fun wordRegex(vararg words: String) = Regex("""(?<!\p{L})(?:${words.joinToString("|") { Regex.escape(it) }})""")
@@ -571,7 +607,18 @@ abstract class MadaraBase : KeiSource() {
         private val DAY_WORDS = wordRegex("day", "día", "dia", "jour", "hari", "gün", "ngày", "giorni", "أيام", "天")
         private val HOUR_WORDS = wordRegex("hour", "hora", "heure", "jam", "saat", "giờ", "ore", "ساعة", "ساعات", "小时")
         private val MINUTE_WORDS = wordRegex("minute", "minuto", "min", "menit", "dakika", "phút", "دقيقة", "دقائق")
-        private val SECOND_WORDS = wordRegex("second", "segundo", "sec", "detik", "giây", "ثانية", "ثوان")
+        private val SECOND_WORDS = wordRegex("second", "segundo", "sec", "detik", "saniye", "giây", "ثانية", "ثوان")
+
+        private val ARABIC_DUALS = mapOf(
+            "ثانيتين" to "2 ثوان",
+            "دقيقتين" to "2 دقائق",
+            "ساعتين" to "2 ساعات",
+            "يومين" to "2 أيام",
+            "أسبوعين" to "2 أسابيع",
+            "شهرين" to "2 أشهر",
+            "سنتين" to "2 سنوات",
+        )
+
         private fun String.hexBytes() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
     }
 }

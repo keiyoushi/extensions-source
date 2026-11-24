@@ -6,11 +6,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
@@ -43,7 +44,7 @@ abstract class HentaiVNx : KeiSource() {
 
     // ============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaListParse(client.get("$baseUrl/?page=$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = mangaListParse(client.get("$baseUrl/?page=$page", Fetch.DOCUMENT).asJsoup())
 
     // ============================== Search ===============================
 
@@ -80,33 +81,35 @@ abstract class HentaiVNx : KeiSource() {
             addQueryParameter("page", page.toString())
         }.build()
 
-        return mangaListParse(client.get(url).asJsoup())
+        return mangaListParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "truyen-hentai") {
+        val siteUrl = baseUrl.toHttpUrl()
+        if ((url.host != siteUrl.host && url.host !in SITE_HOSTS) || url.pathSegments.firstOrNull() != "truyen-hentai") {
             return null
         }
 
-        val mangaUrl = if (url.pathSegments.size == 2) {
-            url
+        val mangaPath = if (url.pathSegments.size == 2) {
+            url.encodedPath
         } else {
-            client.get(url).asJsoup()
+            client.get(siteUrl.newBuilder().encodedPath(url.encodedPath).build(), Fetch.DOCUMENT).asJsoup()
                 .selectFirst("a.itemcrumb[href*=/truyen-hentai/]")
                 ?.absUrl("href")
                 ?.toHttpUrlOrNull()
+                ?.encodedPath
                 ?: return null
         }
 
-        val manga = SManga.create().apply { setUrlWithoutDomain(mangaUrl.encodedPath) }
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = true).manga
+        val manga = SManga.create().apply { this.url = mangaPath }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
     // ============================== Filters ===============================
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-truyen-nang-cao").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/tim-truyen-nang-cao", Fetch.DOCUMENT).asJsoup()
         .select(".genre-item")
         .mapNotNull { element ->
             val name = element.attr("title").ifEmpty { element.text() }
@@ -149,7 +152,7 @@ abstract class HentaiVNx : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = mangaDetailsParse(document, manga),
             chapters = chapterListParse(document),
@@ -199,7 +202,7 @@ abstract class HentaiVNx : KeiSource() {
     // ============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get("$baseUrl${chapter.url}").asJsoup()
+        val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
         val images = document.select(".reading-detail img, .page-chapter img")
             .ifEmpty { document.select(".chapter-content img") }
 
@@ -240,4 +243,9 @@ abstract class HentaiVNx : KeiSource() {
         Regex("""(\d+)\s*phút""", RegexOption.IGNORE_CASE) to { it.minutes },
         Regex("""(\d+)\s*giây""", RegexOption.IGNORE_CASE) to { it.seconds },
     )
+
+    companion object {
+        // The site serves the same pages on both domains, so their links open with the chosen base URL
+        private val SITE_HOSTS = setOf("www.hentaivnx.com", "hentaivnx.com", "www.hentaivn.college", "hentaivn.college")
+    }
 }

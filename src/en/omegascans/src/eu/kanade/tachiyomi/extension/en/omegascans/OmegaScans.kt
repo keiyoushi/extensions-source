@@ -14,4 +14,6 @@ abstract class OmegaScans : HeanCms() {
     }
 
     override val enableLogin = true
+
+    override val fetchBadge = true
 }

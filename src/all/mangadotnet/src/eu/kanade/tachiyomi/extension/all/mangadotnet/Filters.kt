@@ -52,6 +52,7 @@ private val status = listOf(
     "Ongoing" to "Ongoing",
     "Completed" to "Completed",
     "Hiatus" to "Hiatus",
+    "Cancelled" to "Cancelled",
 )
 
 class VolumesFilter :

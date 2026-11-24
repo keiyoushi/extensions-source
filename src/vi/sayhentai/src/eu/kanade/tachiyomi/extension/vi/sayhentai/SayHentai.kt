@@ -3,9 +3,10 @@ package eu.kanade.tachiyomi.extension.vi.sayhentai
 import eu.kanade.tachiyomi.multisrc.manhwaz.ManhwaZ
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.jsonInstance
 import kotlinx.serialization.json.JsonElement
@@ -24,7 +25,7 @@ abstract class SayHentai : ManhwaZ() {
     override fun genreListSelector(): String = "ul.genres-grid li a"
 
     override suspend fun fetchFilterData(): JsonElement {
-        val document = client.get("$baseUrl/genre").asJsoup()
+        val document = client.get("$baseUrl/genre", Fetch.DOCUMENT).asJsoup()
         val genres = document.select(genreListSelector()).map {
             SelectOption(
                 it.select(".genre-meta .name").text(),
@@ -44,7 +45,7 @@ abstract class SayHentai : ManhwaZ() {
             return super.fetchMangaUpdate(manga, chapters, fetchDetails, false)
         }
 
-        val response = client.get(getMangaUrl(manga))
+        val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
         val document = response.asJsoup()
         val chapterList = parseChapterList(document).toMutableList()
 
@@ -54,7 +55,7 @@ abstract class SayHentai : ManhwaZ() {
             ?.takeIf(String::isNotBlank)
 
         if (moreChaptersUrl != null) {
-            val moreResponse = client.get(moreChaptersUrl)
+            val moreResponse = client.get(moreChaptersUrl, Fetch.DOCUMENT)
             chapterList += parseChapterList(moreResponse.asJsoup())
         }
 

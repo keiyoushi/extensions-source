@@ -29,6 +29,16 @@ class MangaItemDto(
 }
 
 @Serializable
+class SearchDto(
+    val data: List<MangaItemDto>,
+    private val total: Int,
+    private val page: Int,
+    private val pageSize: Int,
+) {
+    val hasNextPage get() = page * pageSize < total
+}
+
+@Serializable
 class MangaPageDto(
     val manga: MangaDto,
     val chapters: List<ChapterDto>,

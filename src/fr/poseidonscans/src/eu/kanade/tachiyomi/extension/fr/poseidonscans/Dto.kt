@@ -1,7 +1,8 @@
 package eu.kanade.tachiyomi.extension.fr.poseidonscans
 
-import keiyoushi.utils.reactFlight.ReactFlightDate
 import kotlinx.serialization.Serializable
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 @Serializable
 class LatestApiManga(
@@ -46,11 +47,13 @@ class CategoryData(val name: String)
 class ChapterData(
     val number: Float,
     val title: String? = null,
-    val createdAt: ReactFlightDate,
-    val isPremium: Boolean? = false,
-    val premiumUntil: ReactFlightDate? = null,
+    val createdAt: Instant,
+    private val isPremium: Boolean? = false,
+    val premiumUntil: Instant? = null,
     val isVolume: Boolean? = false,
-)
+) {
+    val isLocked: Boolean get() = isPremium == true && isBeforeFreeDate(premiumUntil)
+}
 
 @Serializable
 class PageData(
@@ -62,8 +65,14 @@ class PageData(
 
 @Serializable
 class CurrentChapterData(
-    val isPremium: Boolean,
-)
+    private val isPremium: Boolean,
+    private val premiumUntil: Instant? = null,
+) {
+    val isLocked: Boolean get() = isPremium && isBeforeFreeDate(premiumUntil)
+}
+
+// The site keeps isPremium set after premiumUntil has passed
+private fun isBeforeFreeDate(premiumUntil: Instant?) = premiumUntil == null || premiumUntil > Clock.System.now()
 
 @Serializable
 class InitialData(

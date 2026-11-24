@@ -11,6 +11,17 @@
     ".github/**"
   ],
   "ignoreDeps": ["keiyoushi/issue-moderator-action"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The Keiyoushi Runtime artifacts, pinned to a keiyoushi/runtime release tag on JitPack",
+      "managerFilePatterns": ["/^gradle/libs\\.versions\\.toml$/"],
+      "matchStrings": ["keiyoushi-runtime = \"(?<currentValue>v\\d+)\""],
+      "depNameTemplate": "keiyoushi/runtime",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "regex:^v(?<major>\\d+)$"
+    }
+  ],
   "packageRules": [
     {
       "matchManagers": ["github-actions"],
@@ -22,10 +33,27 @@
     },
     {
       "matchPackageNames": [
+        "androidx.webkit:webkit",
         "com.android.tools.build:gradle",
         "gradle"
       ],
       "draftPR": true,
+      "enabled": true
+    },
+    {
+      "matchPackageNames": [
+        "com.android.tools.build:gradle",
+        "com.android.tools.lint:lint-api",
+        "com.android.tools.lint:lint-checks",
+        "com.android.tools.lint:lint-tests"
+      ],
+      "groupName": "Android Gradle Plugin and Lint",
+      "draftPR": true,
+      "enabled": true
+    },
+    {
+      "matchDepNames": ["keiyoushi/runtime"],
+      "schedule": ["at any time"],
       "enabled": true
     }
   ]

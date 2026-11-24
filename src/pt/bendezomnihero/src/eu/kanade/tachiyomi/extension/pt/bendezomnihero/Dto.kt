@@ -1,0 +1,58 @@
+package eu.kanade.tachiyomi.extension.pt.bendezomnihero
+
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import kotlin.time.Instant
+
+@Serializable
+class BloggerFeedResponse(val feed: BloggerFeed)
+
+@Serializable
+class BloggerFeed(val entry: List<BloggerEntry> = emptyList())
+
+@Serializable
+class BloggerText(@SerialName("\$t") val text: String)
+
+@Serializable
+class BloggerLink(
+    val rel: String,
+    val href: String,
+)
+
+@Serializable
+class BloggerEntry(
+    val title: BloggerText,
+    val content: BloggerText?,
+    val published: BloggerText?,
+    val link: List<BloggerLink>,
+) {
+    fun postPath(): String = link.first { it.rel == "alternate" }.href.toHttpUrl().encodedPath
+
+    fun publishedEpoch(): Long = Instant.tryParse(published?.text)
+
+    fun isReadableComic(): Boolean = inlineImageCount() >= MIN_INLINE_IMAGES
+
+    fun firstImageUrl(): String? = content?.text?.let { firstImageRegex.find(it)?.groupValues?.get(1) }
+
+    fun toPostManga(): SManga = SManga.create().apply {
+        url = postPath()
+        title = this@BloggerEntry.title.text.ifBlank { error("Post at ${postPath()} has no title") }
+        thumbnail_url = firstImageUrl()
+        status = SManga.COMPLETED
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+    }
+
+    private fun inlineImageCount(): Int = content?.text?.let { inlineImageRegex.findAll(it).count() } ?: 0
+
+    companion object {
+        private const val MIN_INLINE_IMAGES = 20
+        private val inlineImageRegex =
+            Regex("""<img[^>]+?src="https://blogger\.googleusercontent\.com[^"]*"""")
+        private val firstImageRegex =
+            Regex("""<img[^>]+?src="(https://blogger\.googleusercontent\.com[^"]*)"""")
+    }
+}

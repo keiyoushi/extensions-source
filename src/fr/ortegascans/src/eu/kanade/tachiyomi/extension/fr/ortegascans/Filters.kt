@@ -51,9 +51,9 @@ class TagFilter :
     CheckboxGroupFilter<TagCheckBox>(
         "Tags",
         listOf(
-            "Action", "Aventure", "Comédie", "Drame", "Esclave", "Fantaisie", "Fétichisme",
-            "Hardcore", "Harem", "Humiliation", "Hypnose", "Isekai", "Mature", "MILF", "Partenaire",
-            "Pouvoir", "Revanche", "Romance", "Seinen", "Sport", "Surnaturel", "Système", "Tranche de Vie", "Vie Scolaire",
+            "Comédie", "Domination", "Drame", "Fantasy", "Hardcore", "Harem", "Historique",
+            "Humiliation", "Isekai", "Magie", "Mature", "Milf", "NTR", "Pouvoir",
+            "Revanche", "Romance", "Slice of Life", "Surnaturel", "Système", "Vie Scolaire",
         ).map(::TagCheckBox),
     )
 

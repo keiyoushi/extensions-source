@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.inkr
 
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.utils.parseAs
@@ -108,7 +109,7 @@ internal class InkrAuth(
             .set("Accept", "application/json")
             .build()
         val response = runCatching {
-            client().get("https://inkr-payment-api.inkr.com/v1/user/my-info", headers)
+            client().get("https://inkr-payment-api.inkr.com/v1/user/my-info", headers, Fetch.XHR)
         }.getOrNull() ?: return null
 
         if (!response.isSuccessful) {
@@ -126,7 +127,7 @@ internal class InkrAuth(
     private suspend fun readAuthUser(): StoredAuthUser? = runCatching {
         runWebView<StoredAuthUser?>(timeout = 15.seconds) {
             domStorageEnabled = true
-            jsBridge(BRIDGE_NAME) { message ->
+            webMessageBridge(BRIDGE_NAME, setOf(baseUrl())) { message ->
                 resolve(
                     message.takeUnless { it.isEmpty() }
                         ?.let { runCatching { it.parseAs<StoredAuthUser>() }.getOrNull() },
@@ -153,7 +154,7 @@ internal class InkrAuth(
             .addQueryParameter("key", apiKey)
             .build()
         val response = runCatching {
-            client().post(url, headers, body).parseAs<TokenRefreshDto>()
+            client().post(url, headers, Fetch.XHR, body).parseAs<TokenRefreshDto>()
         }.getOrNull() ?: return false
 
         if (response.idToken.isEmpty()) return false
@@ -176,10 +177,10 @@ internal class InkrAuth(
             (async () => {
               const post = (key, value) => {
                 if (value == null) {
-                  window.$BRIDGE_NAME.post("");
+                  window.$BRIDGE_NAME.postMessage("");
                   return;
                 }
-                window.$BRIDGE_NAME.post(JSON.stringify({ key: key || "", value: String(value) }));
+                window.$BRIDGE_NAME.postMessage(JSON.stringify({ key: key || "", value: String(value) }));
               };
               const unwrap = (entry) => {
                 if (entry == null) return null;

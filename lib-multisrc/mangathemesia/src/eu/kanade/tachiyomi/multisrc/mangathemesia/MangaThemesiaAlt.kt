@@ -7,8 +7,9 @@ import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -74,7 +75,7 @@ abstract class MangaThemesiaAlt(
     }
 
     protected open suspend fun fetchUrlMap(): Map<String, String> {
-        client.get("$baseUrl$listUrl").use { response ->
+        client.get("$baseUrl$listUrl", Fetch.DOCUMENT).use { response ->
             val document = response.asJsoup()
 
             return document.select(listSelector).associate {

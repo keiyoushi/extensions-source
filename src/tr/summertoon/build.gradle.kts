@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "SummerToon"
-    versionCode = 2
+    versionCode = 60
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
-    theme = "madara"
+    theme = "mangathemesia"
 
     source {
         lang = "tr"
-        baseUrl = "https://summertoons.net"
+        baseUrl = "https://summertoons.org"
     }
 }

@@ -6,17 +6,16 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.get
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -53,7 +52,7 @@ abstract class MoeTruyenSuiCao : KeiSource() {
             .addQueryParameter("sort_by", "views")
             .addQueryParameter("time", "all_time")
             .build()
-        return parseMangaList(client.get(url))
+        return parseMangaList(client.get(url, Fetch.XHR))
     }
 
     // ============================== Latest ========================================
@@ -64,7 +63,7 @@ abstract class MoeTruyenSuiCao : KeiSource() {
             .addQueryParameter("limit", "20")
             .addQueryParameter("sort", "updated_at")
             .build()
-        return parseMangaList(client.get(url))
+        return parseMangaList(client.get(url, Fetch.XHR))
     }
 
     // ============================== Search ========================================
@@ -97,7 +96,7 @@ abstract class MoeTruyenSuiCao : KeiSource() {
                 }
             }
         }.build()
-        return parseMangaList(client.get(url))
+        return parseMangaList(client.get(url, Fetch.XHR))
     }
 
     // ============================== Details =======================================
@@ -107,36 +106,33 @@ abstract class MoeTruyenSuiCao : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val mangaId = manga.url
         val detailsUrl = "$baseUrl/v2/manga/$mangaId".toHttpUrl().newBuilder()
             .addQueryParameter("include", "genres")
             .build()
 
-        val detailsDeferred = if (fetchDetails) {
-            async {
-                val result = client.get(detailsUrl).parseAs<ApiResponse<MangaItem>>()
-                (result.data ?: throw Exception("Manga not found")).toSManga()
-            }
-        } else {
-            null
-        }
-        val chaptersDeferred = if (fetchChapters) {
-            async {
-                val result = client.get("$baseUrl/v2/manga/$mangaId/chapters/aggregate")
-                    .parseAs<ApiResponse<ChapterListData>>()
-                result.data?.chapters
-                    ?.filter { it.access == "public" }
-                    ?.map { it.toSChapter() }
-                    .orEmpty()
-            }
-        } else {
-            null
-        }
-
-        SMangaUpdate(
-            manga = detailsDeferred?.await() ?: manga,
-            chapters = chaptersDeferred?.await() ?: chapters,
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    val result = client.get(detailsUrl, Fetch.XHR).parseAs<ApiResponse<MangaItem>>()
+                    (result.data ?: throw Exception("Manga not found")).toSManga()
+                } else {
+                    manga
+                }
+            },
+            chapters = {
+                if (fetchChapters) {
+                    val result = client.get("$baseUrl/v2/manga/$mangaId/chapters/aggregate", Fetch.XHR)
+                        .parseAs<ApiResponse<ChapterListData>>()
+                    result.data?.chapters
+                        ?.filter { it.access == "public" }
+                        ?.map { it.toSChapter() }
+                        .orEmpty()
+                } else {
+                    chapters
+                }
+            },
         )
     }
 
@@ -145,7 +141,7 @@ abstract class MoeTruyenSuiCao : KeiSource() {
     // ============================== Pages =========================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val result = client.get("$baseUrl${chapter.url}").parseAs<ApiResponse<ChapterReaderData>>()
+        val result = client.get("$baseUrl${chapter.url}", Fetch.XHR).parseAs<ApiResponse<ChapterReaderData>>()
         val data = result.data ?: throw Exception("Chapter not found")
         val chapterId = data.chapter.id
         val pageCount = data.pageUrls.size
@@ -174,7 +170,7 @@ abstract class MoeTruyenSuiCao : KeiSource() {
             val accessHeaders = headers.newBuilder()
                 .set("Accept", "application/json")
                 .build()
-            val pageAccess = client.post(url, accessHeaders, body)
+            val pageAccess = client.post(url, accessHeaders, Fetch.XHR, body)
                 .parseAs<ApiResponse<PageAccessData>>()
 
             val accessData = pageAccess.data ?: throw Exception("Failed to get page access")
@@ -230,7 +226,7 @@ abstract class MoeTruyenSuiCao : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/v2/genres")
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/v2/genres", Fetch.XHR)
         .parseAs<JsonElement>()
 
     override fun getFilterList(data: JsonElement?): FilterList {
@@ -250,7 +246,7 @@ abstract class MoeTruyenSuiCao : KeiSource() {
         val url = "$baseUrl/v2/manga/${manga.url}/recommendations".toHttpUrl().newBuilder()
             .addQueryParameter("include", "genres")
             .build()
-        return client.get(url).parseAs<ListApiResponse<MangaItem>>().data
+        return client.get(url, Fetch.XHR).parseAs<ListApiResponse<MangaItem>>().data
             .filter { it.id.toString() != manga.url }
             .map { it.toSManga() }
     }

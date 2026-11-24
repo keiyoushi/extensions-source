@@ -3,6 +3,7 @@ package keiyoushi.lib.speedbinb
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
@@ -100,7 +101,7 @@ suspend fun OkHttpClient.fetchPages(
         .setQueryParameter("dmytime", System.currentTimeMillis().toString())
         .build()
 
-    val contentInfo = get(url, headers).parseAs<BibContentInfo>()
+    val contentInfo = get(url, headers, Fetch.XHR).parseAs<BibContentInfo>()
 
     if (contentInfo.result != 1) {
         return emptyList()
@@ -110,7 +111,7 @@ suspend fun OkHttpClient.fetchPages(
     val ctbl = decodeScrambleTable(cid, sharedKey, contentItem.ctbl).parseAs<List<String>>()
     val ptbl = decodeScrambleTable(cid, sharedKey, contentItem.ptbl).parseAs<List<String>>()
     val sbcUrl = contentItem.getSbcUrl(contentInfoUrl, cid)
-    val sbcResponse = get(sbcUrl, headers)
+    val sbcResponse = get(sbcUrl, headers, Fetch.XHR)
     val sbcData = if (contentItem.serverType == ServerType.DIRECT) {
         sbcResponse.parseAs<SBCContent> { it.substringAfter("DataGet_Content(").substringBeforeLast(")") }
     } else {

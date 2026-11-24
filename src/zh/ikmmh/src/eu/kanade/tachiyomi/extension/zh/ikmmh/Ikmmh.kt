@@ -5,17 +5,16 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -66,8 +65,6 @@ abstract class Ikmmh : KeiSource() {
             }
         }
         .set("Accept-Language", "zh-CN,zh;q=0.9")
-        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
-        .removeAll("Origin")
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = this
         .protocols(listOf(Protocol.HTTP_1_1))
@@ -78,7 +75,7 @@ abstract class Ikmmh : KeiSource() {
     protected suspend fun warmupSession() {
         if (sessionCookie == null) {
             runCatching {
-                client.get("$baseUrl/").asJsoup()
+                client.get("$baseUrl/", Fetch.DOCUMENT).asJsoup()
             }
         }
     }
@@ -87,7 +84,7 @@ abstract class Ikmmh : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         warmupSession()
-        val document = client.get("$baseUrl/booklists/9/全部/3/$page.html").asJsoup()
+        val document = client.get("$baseUrl/booklists/9/全部/3/$page.html", Fetch.DOCUMENT).asJsoup()
         return MangasPage(parseListItemMangas(document), document.hasNextPage())
     }
 
@@ -95,7 +92,7 @@ abstract class Ikmmh : KeiSource() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         warmupSession()
-        val document = client.get("$baseUrl/update/$page.html").asJsoup()
+        val document = client.get("$baseUrl/update/$page.html", Fetch.DOCUMENT).asJsoup()
         return MangasPage(parseListItemMangas(document), page < LATEST_MAX_PAGES)
     }
 
@@ -108,7 +105,7 @@ abstract class Ikmmh : KeiSource() {
             val url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("searchkey", query)
                 .build()
-            val document = client.get(url).asJsoup()
+            val document = client.get(url, Fetch.DOCUMENT).asJsoup()
             return MangasPage(parseListItemMangas(document), hasNextPage = false)
         }
 
@@ -124,7 +121,7 @@ abstract class Ikmmh : KeiSource() {
             }
         }
 
-        val document = client.get("$baseUrl/booklists/$area/$tag/$status/$page.html").asJsoup()
+        val document = client.get("$baseUrl/booklists/$area/$tag/$status/$page.html", Fetch.DOCUMENT).asJsoup()
         return MangasPage(parseListItemMangas(document), document.hasNextPage())
     }
 
@@ -135,18 +132,17 @@ abstract class Ikmmh : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async {
+    ): SMangaUpdate = SMangaUpdate(
+        manga = {
             if (fetchDetails) {
                 warmupSession()
-                client.get(getMangaUrl(manga)).asJsoup().parseDetails(manga)
+                client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup().parseDetails(manga)
             } else {
                 manga
             }
-        }
-        val chapterList = async { if (fetchChapters) fetchChapterList(manga) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+        },
+        chapters = { if (fetchChapters) fetchChapterList(manga) else chapters },
+    )
 
     private fun Document.parseDetails(manga: SManga): SManga = manga.apply {
         title = selectFirst("meta[property=og:title]")?.attr("content") ?: title
@@ -169,6 +165,7 @@ abstract class Ikmmh : KeiSource() {
         val bookId = manga.url.trim().trimEnd('/').substringAfterLast('/')
         val chapters = client.get(
             "$baseUrl/api/comic/zyz/chapters?ph=1&tempid=3&zpid=$bookId&page=0&line=48&orderby=desc",
+            Fetch.XHR,
         ).parseAs<ChapterListDto> {
             it.replace("\\,", ",")
         }
@@ -189,7 +186,7 @@ abstract class Ikmmh : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "book") return null
 
-        return client.get(url).asJsoup().parseDetails(SManga.create()).apply {
+        return client.get(url, Fetch.DOCUMENT).asJsoup().parseDetails(SManga.create()).apply {
             this.url = url.encodedPath
         }
     }
@@ -216,7 +213,7 @@ abstract class Ikmmh : KeiSource() {
                 .add("limit", "10")
                 .build()
 
-            val data = client.post("$baseUrl/api/comic/read/pics", body).parseAs<PicsDto>().data
+            val data = client.post("$baseUrl/api/comic/read/pics", Fetch.XHR, body).parseAs<PicsDto>().data
             val batch = data.pic
             if (batch.isEmpty()) break
 

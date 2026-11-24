@@ -9,18 +9,21 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
-import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.json.JsonElement
-import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -30,6 +33,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import kotlin.text.isNotBlank
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class GocTruyenTranhVui :
@@ -41,11 +45,9 @@ abstract class GocTruyenTranhVui :
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(::authInterceptor)
-        rateLimit(3)
-    }
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
-        removeAll("Origin")
+        rateLimit(1, 2.seconds) {
+            it.host == baseUrl.toHttpUrl().host && it.encodedPath.startsWith("/api/")
+        }
     }
 
     private val xhrHeaders: Headers
@@ -114,7 +116,7 @@ abstract class GocTruyenTranhVui :
             }
         }.build()
 
-        return parseMangaPage(client.get(url, xhrHeaders))
+        return parseMangaPage(client.get(url, xhrHeaders, Fetch.XHR))
     }
 
     private fun parseMangaPage(response: Response): MangasPage {
@@ -127,7 +129,7 @@ abstract class GocTruyenTranhVui :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrlOrNull()?.host) return null
         if (url.pathSegments.size < 2 || url.pathSegments[0] != "truyen") return null
-        return parseMangaDetails(client.get(url).asJsoup(), url)
+        return parseMangaDetails(client.get(url, Fetch.DOCUMENT).asJsoup(), url)
     }
 
     // =========================== Manga Details ============================
@@ -137,7 +139,7 @@ abstract class GocTruyenTranhVui :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = client.get(getMangaUrl(manga).toHttpUrl()).use { response ->
+    ): SMangaUpdate = client.get(getMangaUrl(manga).toHttpUrl(), Fetch.DOCUMENT).use { response ->
         val document = response.asJsoup()
         val newManga = parseMangaDetails(document, response.request.url)
 
@@ -168,14 +170,14 @@ abstract class GocTruyenTranhVui :
             ?: requestUrl.pathSegments.getOrNull(1)
 
         if (id != null && nameEn != null) {
-            setUrlWithoutDomain("$id:$nameEn")
+            url = "$id:$nameEn"
         }
     }
 
     private suspend fun parseChapterList(manga: SManga): List<SChapter> {
         val mangaId = manga.url.substringBefore(':')
         val slug = manga.url.substringAfter(':')
-        val result = client.get("$baseUrl/api/comic/$mangaId/chapter?limit=-1", xhrHeaders)
+        val result = client.get("$baseUrl/api/comic/$mangaId/chapter?limit=-1", xhrHeaders, Fetch.XHR)
             .parseAs<ResultDto<ChapterListDto>>()
 
         val chapters = result.result?.chapters ?: throw Exception(result.errorMessage ?: "Phiên làm việc đã hết hạn, vui lòng tải lại.")
@@ -195,45 +197,46 @@ abstract class GocTruyenTranhVui :
     // =============================== Pages ================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        getToken()
         val url = chapter.url
         val slug = url.substringAfter("/truyen/").substringBefore("/chuong-")
         val numberChapter = url.substringAfter("/chuong-").substringBefore("#")
-        val comicId = url.substringAfter("#")
+        val script = javaClass.getResource("/assets/reader.js")!!.readText()
+        val imageUrls = runWebView(timeout = 30.seconds) {
+            userAgent = headers["User-Agent"]!!
 
-        val body = FormBody.Builder()
-            .add("comicId", comicId)
-            .add("chapterNumber", numberChapter)
-            .add("nameEn", slug)
-            .build()
+            var lastCount = 0
+            var stableCount = 0
+            var pollAttempts = 0
 
-        suspend fun requestImages(): List<Page>? {
-            return client.post("$baseUrl/api/chapter/loadAll", body).use { response ->
-                val result = runCatching { response.parseAs<ResultDto<ImageListDto>>() }.getOrNull()
-                val imageList = result?.result?.data ?: return@use null
+            poll(1.seconds) {
+                pollAttempts++
+                evaluateJs(script) { jsonResult ->
+                    val res = jsonResult!!.parseAs<WebViewResultDto>()
 
-                imageList.mapIndexed { i, imgUrl ->
-                    val finalUrl = if (imgUrl.startsWith("/image/")) {
-                        baseUrl + imgUrl
-                    } else {
-                        imgUrl
+                    if (res.needLogin) {
+                        reject(Exception("Để đọc chương này bạn cần đăng nhập trong WebView!"))
+                    } else if (res.urls.isNotEmpty()) {
+                        if (res.urls.size == lastCount) {
+                            stableCount++
+                            if (stableCount >= 2) {
+                                resolve(res.urls)
+                            }
+                        } else {
+                            lastCount = res.urls.size
+                            stableCount = 0
+                        }
+                    } else if (pollAttempts >= 12) {
+                        reject(Exception("Không thể giải mã dữ liệu từ WebView!"))
                     }
-                    Page(i, imageUrl = finalUrl)
                 }
             }
-        }
-        // Thử lần 1
-        var pages = requestImages()
-        // Nếu thất bại (do hết hạn cookie/phiên làm việc)
-        if (pages == null) {
-            // Gọi "mồi" đến trang chi tiết để làm mới cookie
-            val mangaUrl = "$baseUrl/truyen/$slug"
-            client.get(mangaUrl).close()
-            // Thử lần 2 sau khi đã có cookie mới
-            pages = requestImages()
+
+            loadUrl("$baseUrl/truyen/$slug/chuong-$numberChapter")
         }
 
-        return pages ?: throw Exception("Chưa đăng nhập trong WebView. Hoặc không có ảnh!")
+        return imageUrls.mapIndexed { i, imgUrl ->
+            Page(i, imageUrl = if (imgUrl.startsWith("/image/")) baseUrl + imgUrl else imgUrl)
+        }
     }
 
     private var tokenCache: String? = null
@@ -250,7 +253,11 @@ abstract class GocTruyenTranhVui :
                 return it
             }
 
-        tokenCache = runCatching { getLocalStorage(baseUrl, "Authorization") }.getOrNull()
+        tokenCache = runCatching { getLocalStorage(baseUrl, "Authorization") }.onFailure {
+            if (it is CancellationException) {
+                currentCoroutineContext().ensureActive()
+            }
+        }.getOrNull()
             ?.takeIf(String::isNotBlank)
         tokenChecked = true
         return tokenCache
@@ -261,7 +268,7 @@ abstract class GocTruyenTranhVui :
 
     override suspend fun fetchFilterData(): JsonElement {
         getToken()
-        return client.get("$baseUrl/api/category", xhrHeaders).parseAs()
+        return client.get("$baseUrl/api/category", xhrHeaders, Fetch.XHR).parseAs()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {

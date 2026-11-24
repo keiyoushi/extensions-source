@@ -13,4 +13,4 @@ abstract class EntityDto {
 abstract class AttributesDto
 
 @Serializable
-data class UnknownEntity(override val attributes: AttributesDto? = null) : EntityDto()
+class UnknownEntity(override val attributes: AttributesDto? = null) : EntityDto()

@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
@@ -48,7 +49,7 @@ abstract class Miaoqu : MCCMSWeb() {
     }
 
     // Use mobile page
-    override suspend fun fetchMangaPage(manga: SManga): Document = client.get(getMangaUrl(manga)).asJsoup()
+    override suspend fun fetchMangaPage(manga: SManga): Document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         description = document.selectFirst(".text")!!.text()
@@ -70,7 +71,7 @@ abstract class Miaoqu : MCCMSWeb() {
     override fun chapterListSelector() = "ul.list > li"
 
     // Might return HTTP 500 with page data
-    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(baseUrl + chapter.url, pcHeaders, ensureSuccess = false))
+    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(baseUrl + chapter.url, pcHeaders, Fetch.DOCUMENT, ensureSuccess = false))
 
     override fun pageListParse(response: Response): List<Page> {
         val cid = response.request.url.pathSegments.last().removeSuffix(".html").toInt()
@@ -100,7 +101,7 @@ abstract class Miaoqu : MCCMSWeb() {
     @Serializable
     private class Image(val url: String)
 
-    override suspend fun fetchGenresPage(): Document = client.get("${baseUrl.mobileUrl()}/category/").asJsoup()
+    override suspend fun fetchGenresPage(): Document = client.get("${baseUrl.mobileUrl()}/category/", Fetch.DOCUMENT).asJsoup()
 }
 
 private fun String.substringBetween(left: String, right: Char): String {

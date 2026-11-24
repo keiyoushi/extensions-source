@@ -1,18 +1,18 @@
 package eu.kanade.tachiyomi.extension.vi.hv2tcomics
 
 import android.graphics.Bitmap
-import android.graphics.ImageDecoder
-import android.os.Build
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.lib.imagedecoder.ImageDecoder
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.parseAs
@@ -65,51 +65,27 @@ abstract class HV2TComics : KeiSource() {
 
     // ============================== AVIF to WebP ==============================
 
-    /**
-     * Website have some animated avif images in thumbnail. Can't display follow bug
-     * https://github.com/mihonapp/mihon/issues/1975
-     * Convert first frame animated avif image to webp image
-     */
+    // Animated avif thumbnails play with Mihon's new decoder (v0.21.0+); older apps
+    // can't show them (https://github.com/mihonapp/mihon/issues/1975), so send the first frame as webp
+    private val hasNewDecoder by lazy { runCatching { Class.forName("ca.mpreg.imagedecoder.ImageDecoder") }.isSuccess }
+
     private fun avifToWebpInterceptor() = Interceptor { chain ->
         val request = chain.request()
-        val url = request.url.toString()
-
-        if (!url.endsWith(".avif", ignoreCase = true)) {
-            return@Interceptor chain.proceed(request)
-        }
-
         val response = chain.proceed(request)
-        if (!response.isSuccessful) {
+        if (hasNewDecoder || !response.isSuccessful || !request.url.encodedPath.endsWith(".avif", ignoreCase = true)) {
             return@Interceptor response
         }
 
-        response.body.use { body ->
-            val bytes = body.bytes()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                try {
-                    val source = ImageDecoder.createSource(bytes)
-                    val bitmap = ImageDecoder.decodeBitmap(source) { decoder, info, source ->
-                        decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-                    }
+        val bytes = response.body.use { it.bytes() }
+        val webp = runCatching {
+            ByteArrayOutputStream().also {
+                ImageDecoder.decode(bytes).compress(Bitmap.CompressFormat.WEBP, 90, it)
+            }.toByteArray()
+        }.getOrNull()
 
-                    val outputStream = ByteArrayOutputStream()
-                    bitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, 90, outputStream)
-                    val webpBytes = outputStream.toByteArray()
-
-                    response.newBuilder()
-                        .body(webpBytes.toResponseBody("image/webp".toMediaType()))
-                        .build()
-                } catch (_: Exception) {
-                    response.newBuilder()
-                        .body(bytes.toResponseBody("image/webp".toMediaType()))
-                        .build()
-                }
-            } else {
-                response.newBuilder()
-                    .body(bytes.toResponseBody("image/webp".toMediaType()))
-                    .build()
-            }
-        }
+        val body = webp?.toResponseBody("image/webp".toMediaType())
+            ?: bytes.toResponseBody(response.body.contentType())
+        response.newBuilder().body(body).build()
     }
 
     // ============================== Popular ===============================
@@ -119,7 +95,7 @@ abstract class HV2TComics : KeiSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("sort", "popular")
             .build()
-        return client.get(url).parseAs<ComicListResponse>().toMangasPage()
+        return client.get(url, Fetch.XHR).parseAs<ComicListResponse>().toMangasPage()
     }
 
     // ============================== Latest ================================
@@ -129,7 +105,7 @@ abstract class HV2TComics : KeiSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("sort", "latest")
             .build()
-        return client.get(url).parseAs<ComicListResponse>().toMangasPage()
+        return client.get(url, Fetch.XHR).parseAs<ComicListResponse>().toMangasPage()
     }
 
     // ============================== Search ================================
@@ -166,7 +142,7 @@ abstract class HV2TComics : KeiSource() {
             if (names.isNotEmpty()) urlBuilder.addQueryParameter("translator_names_exc", names.joinToString(","))
         }
 
-        return client.get(urlBuilder.build()).parseAs<ComicListResponse>().toMangasPage()
+        return client.get(urlBuilder.build(), Fetch.XHR).parseAs<ComicListResponse>().toMangasPage()
     }
 
     // ============================== Details ===============================
@@ -178,7 +154,7 @@ abstract class HV2TComics : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
         loadAuthToken()
-        val detailResponse = client.get("$baseUrl/api/comics/${manga.url}").parseAs<ComicDetailResponse>()
+        val detailResponse = client.get("$baseUrl/api/comics/${manga.url}", Fetch.XHR).parseAs<ComicDetailResponse>()
 
         SMangaUpdate(
             manga = detailResponse.data.toSManga(),
@@ -193,7 +169,7 @@ abstract class HV2TComics : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val slug = url.pathSegments.getOrNull(1) ?: return null
-        return client.get("$baseUrl/api/comics/$slug").parseAs<ComicDetailResponse>().data.toSManga()
+        return client.get("$baseUrl/api/comics/$slug", Fetch.XHR).parseAs<ComicDetailResponse>().data.toSManga()
     }
 
     // =============================== Pages ================================
@@ -271,9 +247,9 @@ abstract class HV2TComics : KeiSource() {
 
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
         loadAuthToken()
-        val tags = async { client.get("$baseUrl/api/tags").parseAs<TagResponse>().data.map { TagOption(it.id, it.name, it.slug) } }
+        val tags = async { client.get("$baseUrl/api/tags", Fetch.XHR).parseAs<TagResponse>().data.map { TagOption(it.id, it.name, it.slug) } }
         val translators = async {
-            client.get("$baseUrl/api/translators?view=top-by-comics-v1")
+            client.get("$baseUrl/api/translators?view=top-by-comics-v1", Fetch.XHR)
                 .parseAs<TranslatorResponse>()
                 .data
                 .map { TranslatorOption(it) }

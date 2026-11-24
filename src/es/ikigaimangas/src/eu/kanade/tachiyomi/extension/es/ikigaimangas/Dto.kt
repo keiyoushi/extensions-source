@@ -17,32 +17,22 @@ class QwikData(
     @SerialName("_objs") val objects: List<JsonElement>,
 ) {
     inline fun <reified T> parseAsList(): List<T> {
-        val arr = objects
         val results = mutableListOf<T>()
         var i = 0
 
-        while (i < arr.size) {
+        while (i < objects.size) {
             var mapIndex = i
-            while (mapIndex < arr.size && arr[mapIndex] !is JsonObject) {
+            while (mapIndex < objects.size && objects[mapIndex] !is JsonObject) {
                 mapIndex++
             }
-            if (mapIndex >= arr.size) break
+            if (mapIndex >= objects.size) break
 
-            val map = arr[mapIndex].jsonObject
+            val map = objects[mapIndex].jsonObject
 
             val objContent = buildMap {
                 for ((key, jsonIndex) in map) {
-                    val ref = jsonIndex.jsonPrimitive.content
-
-                    val index = try {
-                        ref.toInt(radix = 36)
-                    } catch (_: Exception) {
-                        throw Exception("Invalid base36 index: $ref")
-                    }
-
-                    val rawValue = arr.getOrNull(index)
-
-                    put(key, unwrapJson(rawValue))
+                    val index = jsonIndex.jsonPrimitive.content.toInt(radix = 36)
+                    put(key, unwrapJson(objects.getOrNull(index)))
                 }
             }
 
@@ -57,19 +47,22 @@ class QwikData(
     fun unwrapJson(el: JsonElement?): JsonElement = when (el) {
         is JsonPrimitive -> el
         is JsonObject -> el
-        is JsonArray -> JsonArray(el.map { unwrapJson(it) })
+        is JsonArray -> JsonArray(el.map { unwrapJson(objects.getOrNull(it.jsonPrimitive.content.toInt(radix = 36))) })
         else -> JsonNull
     }
 }
 
 @Serializable
 class QwikSeriesDto(
-    val name: String,
+    private val name: String,
+    @SerialName("other_names") private val otherNames: List<String>? = null,
     private val slug: String,
     private val cover: String? = null,
     val type: String? = null,
     @SerialName("is_mature") val isMature: Boolean = false,
 ) {
+    val titles get() = listOf(name) + otherNames.orEmpty()
+
     fun toSManga(imageCdnUrl: String) = SManga.create().apply {
         url = slug
         title = name

@@ -6,15 +6,14 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -36,7 +35,7 @@ abstract class MangaPlusCreators : KeiSource() {
     // POPULAR Section
     override suspend fun getPopularManga(page: Int): MangasPage {
         val popularUrl = "$baseUrl/titles/popular/?p=m&l=$lang".toHttpUrl()
-        return parseMangasPageFromElement(client.get(popularUrl), "div.item-recent")
+        return parseMangasPageFromElement(client.get(popularUrl, Fetch.DOCUMENT), "div.item-recent")
     }
 
     private fun parseMangasPageFromElement(response: Response, selector: String): MangasPage {
@@ -67,7 +66,7 @@ abstract class MangaPlusCreators : KeiSource() {
             .addQueryParameter("t", "episode")
             .build()
 
-        val result = client.get(apiUrl).parseAs<MpcResponse>()
+        val result = client.get(apiUrl, Fetch.XHR).parseAs<MpcResponse>()
 
         val titles = result.titles.orEmpty().map { title -> title.toSManga() }
 
@@ -99,14 +98,14 @@ abstract class MangaPlusCreators : KeiSource() {
         val id = url.pathSegments[idIndex]
         return when (url.pathSegments[pathIndex]) {
             "episodes" -> {
-                val result = client.get("$baseUrl/episodes/$id").asJsoup()
+                val result = client.get("$baseUrl/episodes/$id", Fetch.DOCUMENT).asJsoup()
                 val readerElement = result.selectFirst("div[react=viewer]")!!
                 val dataTitle = readerElement.attr("data-title")
                 val dataTitleResult = dataTitle.parseAs<MpcReaderDataTitle>()
                 MangasPage(listOf(dataTitleResult.toSManga()), false)
             }
             "authors" -> {
-                val result = client.get("$baseUrl/authors/$id").asJsoup()
+                val result = client.get("$baseUrl/authors/$id", Fetch.DOCUMENT).asJsoup()
                 val elements = result.select("#works .manga-list li .md\\:block")
                 val smangas = elements.map { element ->
                     val titleThumbnailUrl = element.selectFirst(".image-area img")!!.attr("src")
@@ -121,7 +120,7 @@ abstract class MangaPlusCreators : KeiSource() {
             }
             "titles" -> {
                 val titleUrl = "$baseUrl/titles/$id"
-                val result = client.get(titleUrl).asJsoup()
+                val result = client.get(titleUrl, Fetch.DOCUMENT).asJsoup()
                 val bookBox = result.selectFirst(".book-box")!!
                 val title = SManga.create().apply {
                     title = bookBox.selectFirst("div.title")!!.text()
@@ -143,7 +142,7 @@ abstract class MangaPlusCreators : KeiSource() {
                 .addQueryParameter("lang", lang)
                 .build()
 
-            return parseMangasPageFromElement(client.get(searchUrl), "div.item-search")
+            return parseMangasPageFromElement(client.get(searchUrl, Fetch.DOCUMENT), "div.item-search")
         }
 
         // nothing to search, filters active -> browsing /genres instead
@@ -167,7 +166,7 @@ abstract class MangaPlusCreators : KeiSource() {
                 }
             }.build()
 
-        return parseMangasPageFromElement(client.get(genreUrl), "div.item-recent")
+        return parseMangasPageFromElement(client.get(genreUrl, Fetch.DOCUMENT), "div.item-recent")
     }
 
     private fun MpcReaderDataTitle.toSManga(): SManga {
@@ -185,16 +184,10 @@ abstract class MangaPlusCreators : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async {
-            if (fetchDetails) mangaDetailsParse(client.get(getMangaUrl(manga)).asJsoup()) else manga
-        }
-        val chapterList = async {
-            if (fetchChapters) getChapterList(manga) else chapters
-        }
-
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) mangaDetailsParse(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()) else manga },
+        chapters = { if (fetchChapters) getChapterList(manga) else chapters },
+    )
 
     private fun mangaDetailsParse(result: Document): SManga {
         val bookBox = result.selectFirst(".book-box")!!
@@ -218,14 +211,14 @@ abstract class MangaPlusCreators : KeiSource() {
     // CHAPTER Section
     private suspend fun getChapterList(manga: SManga): List<SChapter> {
         val titleContentId = (baseUrl + manga.url).toHttpUrl().pathSegments[1]
-        val chapterListResponse = chapterListPageParse(client.get(chapterListPageUrl(1, titleContentId)))
+        val chapterListResponse = chapterListPageParse(client.get(chapterListPageUrl(1, titleContentId), Fetch.DOCUMENT))
         val chapterListResult = chapterListResponse.chapters.toMutableList()
 
         var hasNextPage = chapterListResponse.hasNextPage
         var page = 1
         while (hasNextPage) {
             page += 1
-            val nextPageResult = chapterListPageParse(client.get(chapterListPageUrl(page, titleContentId)))
+            val nextPageResult = chapterListPageParse(client.get(chapterListPageUrl(page, titleContentId), Fetch.DOCUMENT))
             if (nextPageResult.chapters.isEmpty()) {
                 break
             }
@@ -270,7 +263,7 @@ abstract class MangaPlusCreators : KeiSource() {
     // PAGES & IMAGES Section
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val refererUrl = getChapterUrl(chapter)
-        val result = client.get(refererUrl).asJsoup()
+        val result = client.get(refererUrl, Fetch.DOCUMENT).asJsoup()
         val readerElement = result.selectFirst("div[react=viewer]")!!
         val dataPages = readerElement.attr("data-pages")
         return dataPages.parseAs<MpcReaderDataPages>().pc.map { page ->
@@ -278,8 +271,7 @@ abstract class MangaPlusCreators : KeiSource() {
         }
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
-        .removeHeader("Origin")
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("Referer", page.url)
         .build()
 

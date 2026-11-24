@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.yskcomics
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.ratingStars
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
@@ -36,22 +37,9 @@ class NamedEntity(
 
 private fun getRatingString(rate: String, rateCount: Int): String {
     val ratingValue = rate.toDoubleOrNull() ?: 0.0
-    val ratingStar = when {
-        ratingValue >= 4.75 -> "★★★★★"
-        ratingValue >= 4.25 -> "★★★★✬"
-        ratingValue >= 3.75 -> "★★★★☆"
-        ratingValue >= 3.25 -> "★★★✬☆"
-        ratingValue >= 2.75 -> "★★★☆☆"
-        ratingValue >= 2.25 -> "★★✬☆☆"
-        ratingValue >= 1.75 -> "★★☆☆☆"
-        ratingValue >= 1.25 -> "★✬☆☆☆"
-        ratingValue >= 0.75 -> "★☆☆☆☆"
-        ratingValue >= 0.25 -> "✬☆☆☆☆"
-        else -> "☆☆☆☆☆"
-    }
     return if (ratingValue > 0.0) {
         buildString {
-            append("$ratingStar $rate")
+            append("${ratingStars(ratingValue, max = 5)} $rate")
             if (rateCount > 0) {
                 append(" ($rateCount)")
             }

@@ -8,10 +8,10 @@ typealias ListDto = ResponseDto<ListDataDto>
 
 @Serializable
 @SerialName(MDConstants.LIST)
-data class ListDataDto(override val attributes: ListAttributesDto? = null) : EntityDto()
+class ListDataDto(override val attributes: ListAttributesDto? = null) : EntityDto()
 
 @Serializable
-data class ListAttributesDto(
+class ListAttributesDto(
     val name: String,
     val visibility: String,
     val version: Int,

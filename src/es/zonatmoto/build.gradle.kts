@@ -6,18 +6,24 @@ plugins {
 
 keiyoushi {
     name = "Zonatmo.to (unoriginal)"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.MIXED
-    libVersion = "1.4"
+    libVersion = "1.6"
 
     source {
         lang = "es"
-        baseUrl = "https://zonatmo.to"
+        baseUrl {
+            mirrors(
+                "https://zonatmo.to",
+                "https://otakuteca.net",
+            )
+        }
     }
 
     deeplink {
         host("zonatmo.to")
         host("www.zonatmo.to")
+        host("otakuteca.net")
         path("/manga/..*")
     }
 }

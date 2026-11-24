@@ -7,14 +7,14 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -27,7 +27,6 @@ import org.jsoup.nodes.Document
 
 @Source
 abstract class MangaToshokanZ : KeiSource() {
-
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addNetworkInterceptor(::r18Interceptor)
         .addInterceptor(DescrambleInterceptor())
 
@@ -51,6 +50,7 @@ abstract class MangaToshokanZ : KeiSource() {
             val r18Request = Request.Builder()
                 .url(url)
                 .head()
+                .fetch(Fetch.DOCUMENT)
                 .build()
 
             isR18 = true
@@ -61,7 +61,7 @@ abstract class MangaToshokanZ : KeiSource() {
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val mangas = client.get("$baseUrl/ranking/views").asJsoup().toMangas("ul.rankingListThum > li")
+        val mangas = client.get("$baseUrl/ranking/views", Fetch.DOCUMENT).asJsoup().toMangas("ul.rankingListThum > li")
         return MangasPage(mangas, false)
     }
 
@@ -73,7 +73,7 @@ abstract class MangaToshokanZ : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        return client.get(url, xhrHeaders).asJsoup().toMangasPage()
+        return client.get(url, xhrHeaders, Fetch.XHR).asJsoup().toMangasPage()
     }
 
     private fun Document.toMangasPage(): MangasPage {
@@ -106,7 +106,7 @@ abstract class MangaToshokanZ : KeiSource() {
             }
         }
 
-        return client.get(url.build(), xhrHeaders).asJsoup().toMangasPage()
+        return client.get(url.build(), xhrHeaders, Fetch.XHR).asJsoup().toMangasPage()
     }
 
     private fun Document.toMangas(selector: String): List<SManga> = select(selector).filterNot { li ->
@@ -134,12 +134,10 @@ abstract class MangaToshokanZ : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) getMangaDetails(manga) else manga }
-        val chapterList = async { if (fetchChapters) getChapterList(manga) else chapters }
-
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) getMangaDetails(manga) else manga },
+        chapters = { if (fetchChapters) getChapterList(manga) else chapters },
+    )
 
     // in this manga details section we use book/detail/id since it have tags over series/detail/id
     override fun getMangaUrl(manga: SManga): String {
@@ -163,7 +161,7 @@ abstract class MangaToshokanZ : KeiSource() {
     }
 
     private suspend fun getMangaDetails(manga: SManga): SManga {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         // credit label is e.g. 作, 原作, 著 (writer) or 画, 作画, マンガ (artist)
         val (artists, authors) = document.select("span.bookinfoDetailAuthor:has(a)").partition { span ->
@@ -190,7 +188,7 @@ abstract class MangaToshokanZ : KeiSource() {
             .addPathSegment(manga.url)
             .build()
 
-        val response = client.get(seriesUrl)
+        val response = client.get(seriesUrl, Fetch.DOCUMENT)
         val isBook = response.request.url.pathSegments.first() == "book"
         val document = response.asJsoup()
 
@@ -224,7 +222,7 @@ abstract class MangaToshokanZ : KeiSource() {
         .toString()
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val encodedDoc = client.get(getChapterUrl(chapter)).asJsoup().selectFirst("#doc")!!.text()
+        val encodedDoc = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup().selectFirst("#doc")!!.text()
         val doc = Base64.decode(encodedDoc, Base64.DEFAULT).toString(Charsets.UTF_8).parseAs<ViewerDoc>()
         val dir = doc.location.base + doc.location.scrambleDir
 

@@ -5,16 +5,15 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDateTime
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -54,7 +53,7 @@ abstract class TaoSect : KeiSource() {
             .addQueryParameter("_fields", DEFAULT_FIELDS)
             .build()
 
-        return projectListParse(client.get(apiUrl, apiHeaders), page)
+        return projectListParse(client.get(apiUrl, apiHeaders, Fetch.XHR), page)
     }
 
     private fun projectListParse(response: Response, page: Int): MangasPage {
@@ -90,7 +89,7 @@ abstract class TaoSect : KeiSource() {
                 .addQueryParameter("_fields", "post_id")
                 .build()
 
-            val response = client.get(apiUrl, apiHeaders)
+            val response = client.get(apiUrl, apiHeaders, Fetch.XHR)
             val lastPage = response.headers["X-Wp-TotalPages"]!!.toInt()
             val result = response.parseAs<List<TaoSectChapterDto>>()
 
@@ -113,7 +112,7 @@ abstract class TaoSect : KeiSource() {
             .addQueryParameter("orderby", "include")
             .addQueryParameter("_fields", DEFAULT_FIELDS)
             .build()
-        val projectsResult = client.get(projectsApiUrl, apiHeaders).parseAs<List<TaoSectProjectDto>>()
+        val projectsResult = client.get(projectsApiUrl, apiHeaders, Fetch.XHR).parseAs<List<TaoSectProjectDto>>()
 
         val projectList = projectsResult.map(::popularMangaFromObject)
 
@@ -127,7 +126,7 @@ abstract class TaoSect : KeiSource() {
         val projectSlug = url.pathSegments.getOrNull(1)?.takeIf(String::isNotBlank)
             ?: return null
 
-        return client.get(projectApiUrl(projectSlug, DEFAULT_FIELDS), apiHeaders)
+        return client.get(projectApiUrl(projectSlug, DEFAULT_FIELDS), apiHeaders, Fetch.XHR)
             .parseAs<List<TaoSectProjectDto>>()
             .firstOrNull()
             ?.let(::popularMangaFromObject)
@@ -146,7 +145,7 @@ abstract class TaoSect : KeiSource() {
         filters.filterIsInstance<QueryParameterFilter>()
             .forEach { it.toQueryParameter(apiUrl, query) }
 
-        return projectListParse(client.get(apiUrl.build(), apiHeaders), page)
+        return projectListParse(client.get(apiUrl.build(), apiHeaders, Fetch.XHR), page)
     }
 
     private fun projectApiUrl(projectSlug: String, fields: String): HttpUrl = "$baseUrl/$API_BASE_PATH/projetos".toHttpUrl().newBuilder()
@@ -160,23 +159,20 @@ abstract class TaoSect : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val projectSlug = manga.url
             .substringAfterLast("projeto/")
             .substringBefore("/")
 
-        val details = if (fetchDetails) async { fetchMangaDetails(manga, projectSlug) } else null
-        val chapterList = if (fetchChapters) async { fetchChapterList(projectSlug) } else null
-
-        SMangaUpdate(
-            manga = details?.await() ?: manga,
-            chapters = chapterList?.await() ?: chapters,
+        return SMangaUpdate(
+            manga = { if (fetchDetails) fetchMangaDetails(manga, projectSlug) else manga },
+            chapters = { if (fetchChapters) fetchChapterList(projectSlug) else chapters },
         )
     }
 
     private suspend fun fetchMangaDetails(manga: SManga, projectSlug: String): SManga {
         val apiUrl = projectApiUrl(projectSlug, "title,informacoes,content,thumbnail,link")
-        val result = client.get(apiUrl, apiHeaders).parseAs<List<TaoSectProjectDto>>()
+        val result = client.get(apiUrl, apiHeaders, Fetch.XHR).parseAs<List<TaoSectProjectDto>>()
 
         if (result.isEmpty()) {
             throw Exception(PROJECT_NOT_FOUND)
@@ -206,7 +202,7 @@ abstract class TaoSect : KeiSource() {
             .addQueryParameter("_fields", "nome_capitulo,post_id,slug,data_insercao")
             .build()
 
-        val result = client.get(apiUrl, apiHeaders).parseAs<List<TaoSectChapterDto>>()
+        val result = client.get(apiUrl, apiHeaders, Fetch.XHR).parseAs<List<TaoSectChapterDto>>()
 
         if (result.isEmpty()) {
             throw Exception(CHAPTERS_NOT_FOUND)
@@ -239,7 +235,7 @@ abstract class TaoSect : KeiSource() {
             .addQueryParameter("_fields", "id_capitulo,paginas,post_id")
             .build()
 
-        val result = client.get(apiUrl, apiHeaders).parseAs<TaoSectChapterDto>()
+        val result = client.get(apiUrl, apiHeaders, Fetch.XHR).parseAs<TaoSectChapterDto>()
 
         if (result.pages.isEmpty()) {
             return emptyList()
@@ -260,7 +256,7 @@ abstract class TaoSect : KeiSource() {
         val hasExceededViewLimit = runCatching {
             val firstPageRequest = imageRequest(firstPage)
 
-            client.get(firstPageRequest.url, firstPageRequest.headers, ensureSuccess = false).use {
+            client.get(firstPageRequest.url, firstPageRequest.headers, Fetch.IMAGE, ensureSuccess = false).use {
                 val isHtml = it.headers["Content-Type"]!!.contains("text/html")
 
                 GoogleDriveResponse(!isHtml && it.isSuccessful, it.code)
@@ -277,8 +273,7 @@ abstract class TaoSect : KeiSource() {
         return pages
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
-        .header("Accept", ACCEPT_IMAGE)
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("Referer", page.url)
         .build()
 
@@ -292,7 +287,7 @@ abstract class TaoSect : KeiSource() {
         }
 
         runCatching {
-            client.post("$baseUrl/wp-admin/admin-ajax.php", formBodyBuilder.build()).close()
+            client.post("$baseUrl/wp-admin/admin-ajax.php", Fetch.XHR, formBodyBuilder.build()).close()
         }
     }
 
@@ -366,7 +361,6 @@ abstract class TaoSect : KeiSource() {
     }
 
     companion object {
-        private const val ACCEPT_IMAGE = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
         private const val ACCEPT_JSON = "application/json"
         private val USER_AGENT = "Tachiyomi " + System.getProperty("http.agent")
 

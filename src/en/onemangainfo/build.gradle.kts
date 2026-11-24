@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "OneManga.info"
-    versionCode = 0
+    versionCode = 1
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "mangahub"
@@ -14,5 +14,6 @@ keiyoushi {
     source {
         lang = "en"
         baseUrl = "https://onemanga.info"
+        versionId = 2
     }
 }

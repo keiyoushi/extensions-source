@@ -1,23 +1,17 @@
 package eu.kanade.tachiyomi.multisrc.keyoapp
 
-import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
 import app.cash.quickjs.QuickJs
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
-import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
-import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -25,28 +19,13 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.time.format.DateTimeFormatter
-import java.util.Calendar
 import java.util.Locale
 
-abstract class Keyoapp :
-    KeiSource(),
-    ConfigurableSource {
-
-    protected val preferences = getPreferences()
-
-    open val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
-
-    protected val intl = Intl(
-        language = lang,
-        baseLanguage = "en",
-        availableLanguages = setOf("ar", "en", "fr"),
-        classLoader = this::class.java.classLoader!!,
-    )
+abstract class Keyoapp : KeyoappBase() {
 
     // ============================== Popular ==============================
 
-    override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get(baseUrl).asJsoup())
+    override suspend fun getPopularManga(page: Int) = popularMangaParse(client.get(baseUrl, Fetch.DOCUMENT).asJsoup())
 
     open val popularMangaTitleSelector = listOf(
         "Popular",
@@ -77,7 +56,7 @@ abstract class Keyoapp :
 
     // ============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int) = latestUpdatesParse(client.get("$baseUrl/latest/").asJsoup())
+    override suspend fun getLatestUpdates(page: Int) = latestUpdatesParse(client.get("$baseUrl/latest/", Fetch.DOCUMENT).asJsoup())
 
     open fun latestUpdatesSelector(): String = "div.grid > div.group"
 
@@ -96,7 +75,7 @@ abstract class Keyoapp :
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val segments = url.pathSegments.getOrNull(1) ?: return null
-        return mangaDetailsParse(client.get(url).asJsoup())
+        return mangaDetailsParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     open fun searchUrlBuilder(query: String, page: Int) = "$baseUrl/series".toHttpUrl().newBuilder().apply {
@@ -110,7 +89,7 @@ abstract class Keyoapp :
             }
         }.build()
 
-        return parseSearchManga(client.get(url))
+        return parseSearchManga(client.get(url, Fetch.DOCUMENT))
     }
 
     open fun searchMangaSelector() = "#searched_series_page > button"
@@ -118,8 +97,6 @@ abstract class Keyoapp :
     open fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     open fun searchMangaNextPageSelector(): String? = null
-
-    open fun Element.isNovel() = select("""[data-type="novel" i], span:matchesOwn((?i)^novel$)""").isNotEmpty()
 
     open fun Element.matchesQuery(query: String) = attr("title").contains(query, ignoreCase = true)
 
@@ -152,15 +129,13 @@ abstract class Keyoapp :
 
     // ========================= Details + Chapters ========================
 
-    override val supportRelatedMangasBySearch = true
-
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(mangaDetailsParse(doc), chapterListParse(doc))
     }
 
@@ -219,7 +194,7 @@ abstract class Keyoapp :
         setUrlWithoutDomain(element.selectFirst("a[href]")!!.attr("abs:href"))
         name = element.selectFirst(".text-sm")!!.text()
         element.selectFirst(dateSelector)?.run {
-            date_upload = text().trim().parseDate()
+            date_upload = text().parseDate()
         }
         if (element.select(paidChapterSelector).isNotEmpty()) {
             name = "🔒 $name"
@@ -228,7 +203,7 @@ abstract class Keyoapp :
 
     // =============================== Pages ===============================
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter)).asJsoup())
+    override suspend fun getPageList(chapter: SChapter): List<Page> = pageListParse(client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup())
 
     open fun pageListParse(document: Document): List<Page> {
         val cdnUrl = getCdnUrl(document)
@@ -260,11 +235,9 @@ abstract class Keyoapp :
             "https://$cdnHost/uploads"
         }
 
-    private val oldImgCdnRegex = Regex("""^(https?:)?//cdn\d*\.keyoapp\.com""")
+    private val oldImgCdnRegex = """^(https?:)?//cdn\d*\.keyoapp\.com""".toRegex()
 
     // ============================== Filters ==============================
-
-    override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData() = parseGenres(requestGeneres().asJsoup()).toJsonElement()
 
@@ -280,12 +253,12 @@ abstract class Keyoapp :
         )
     }
 
-    open suspend fun requestGeneres() = client.get("$baseUrl/series/")
+    open suspend fun requestGeneres() = client.get("$baseUrl/series/", Fetch.DOCUMENT)
 
     protected open fun parseGenres(document: Document): Map<String, String> {
         val script = document
-            .select("script:containsData(initializeDropdownMenu)")
-            .firstOrNull() ?.data()
+            .selectFirst("script:containsData(initializeDropdownMenu)")
+            ?.data()
             ?: return emptyMap()
 
         val items = script
@@ -317,14 +290,6 @@ abstract class Keyoapp :
 
     // ============================= Utilities =============================
 
-    protected fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
-        "ongoing" -> SManga.ONGOING
-        "dropped" -> SManga.CANCELLED
-        "paused" -> SManga.ON_HIATUS
-        "completed" -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
-
     // From mangathemesia
     private fun Element.imgAttr(): String = when {
         hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
@@ -342,69 +307,13 @@ abstract class Keyoapp :
             }
     }
 
-    open fun String.parseDate(): Long = if (this.contains("ago")) {
-        this.parseRelativeDate()
-    } else {
-        dateFormat.tryParseDate(this)
-    }
-
-    private fun String.parseRelativeDate(): Long {
-        val now = Calendar.getInstance().apply {
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-
-        val match = RELATIVE_DATE_REGEX.find(this) ?: return 0L
-
-        val relativeDate = when (val d = match.groupValues[1]) {
-            "a", "one" -> 1
-            else -> d.toIntOrNull() ?: return 0L
-        }
-
-        when (match.groupValues[2]) {
-            // parse: 30 seconds ago
-            "m", "min", "mins", "minute", "minutes" -> now.add(Calendar.MINUTE, -relativeDate)
-
-            // parses: "42 minutes ago"
-            "h", "hr", "hrs", "hour", "hours" -> now.add(Calendar.HOUR, -relativeDate)
-
-            // parses: "1 hour ago" and "2 hours ago"
-            "d", "day", "days" -> now.add(Calendar.DAY_OF_YEAR, -relativeDate)
-
-            // parses: "2 days ago"
-            "w", "wk", "wks", "week", "weeks" -> now.add(Calendar.WEEK_OF_YEAR, -relativeDate)
-
-            // parses: "2 weeks ago"
-            "mo", "mos", "month", "months" -> now.add(Calendar.MONTH, -relativeDate)
-
-            // parses: "2 months ago"
-            "y", "yr", "yrs", "year", "years" -> now.add(Calendar.YEAR, -relativeDate) // parse: "2 years ago"
-        }
-        return now.timeInMillis
-    }
-
     private fun selector(selector: String, contains: List<String>): String = contains.joinToString { selector.replace("%s", it) }
 
     private fun HttpUrl.listParams(name: String) = queryParameterValues(name).filterNotNull().takeIf { it.isNotEmpty() }
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_PAID_CHAPTERS_PREF
-            title = intl["pref_show_paid_chapter_title"]
-            summaryOn = intl["pref_show_paid_chapter_summary_on"]
-            summaryOff = intl["pref_show_paid_chapter_summary_off"]
-            setDefaultValue(false)
-        }.also(screen::addPreference)
-    }
-
-    protected val showPaidChapters
-        get() = preferences.getBoolean(SHOW_PAID_CHAPTERS_PREF, false)
-
     companion object {
-        private const val SHOW_PAID_CHAPTERS_PREF = "pref_show_paid_chap"
         val CDN_HOST_REGEX = """realUrl\s*=\s*`[^`]+//([^/]+)""".toRegex()
         val CDN_CLEAN_REGEX = """\$\{[^}]*\}""".toRegex()
         val IMG_REGEX = """url\(['"]?([^(['")])]+)""".toRegex()
-        val RELATIVE_DATE_REGEX = """(a|one|\d+)\s*(\w+)\s+ago""".toRegex()
     }
 }

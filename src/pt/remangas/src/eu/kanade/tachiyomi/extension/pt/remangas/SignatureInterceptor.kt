@@ -1,11 +1,11 @@
 package eu.kanade.tachiyomi.extension.pt.remangas
 
 import android.util.Base64
+import keiyoushi.utils.sha256
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
-import java.security.MessageDigest
 
 class SignatureInterceptor(private val baseUrl: () -> String) : Interceptor {
 
@@ -72,7 +72,7 @@ class SignatureInterceptor(private val baseUrl: () -> String) : Interceptor {
     private class Signer(val slot: String, val key: String, val token: String) {
         fun sign(method: String, path: String): String {
             val payload = listOf(method.uppercase(), path, SITE_ID, slot, token, key).joinToString("|")
-            val digest = MessageDigest.getInstance("SHA-256").digest(payload.toByteArray())
+            val digest = payload.sha256()
             return Base64.encodeToString(digest, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
         }
     }

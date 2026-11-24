@@ -2,65 +2,40 @@ package eu.kanade.tachiyomi.extension.vi.daomeoden
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import kotlinx.serialization.Serializable
 
-fun getFilters(genres: List<GenreOption>? = null): FilterList {
+fun getFilters(genres: List<FilterOption>? = null, tags: List<FilterOption>? = null): FilterList {
     val filters = mutableListOf<Filter<*>>(
         StatusFilter(),
-        CategoryFilter(),
+        AdultFilter(),
+        SortFilter(),
     )
     if (!genres.isNullOrEmpty()) filters += GenreFilter(genres)
-    filters += ExplicitFilter()
-    filters += SortFilter()
+    if (!tags.isNullOrEmpty()) filters += TagFilter(tags)
     return FilterList(filters)
 }
 
-@Serializable
-class GenreOption(
+class FilterOption(
     val name: String,
-    val id: String,
+    val slug: String,
 )
 
 class StatusFilter :
     UriPartFilter(
         "Status",
         arrayOf(
-            Pair("All", "0"),
-            Pair("Full", "1"),
-            Pair("On Going", "2"),
-            Pair("Drop", "3"),
-            Pair("Comming Soon...", "9"),
+            Pair("All", ""),
+            Pair("Đang ra", "ongoing"),
+            Pair("Hoàn thành", "completed"),
         ),
     )
 
-class CategoryFilter :
-    UriPartFilter(
-        "Category",
-        arrayOf(
-            Pair("All", "all"),
-            Pair("Manga", "manga"),
-            Pair("Manhua", "manhua"),
-            Pair("Manhwa", "manhwa"),
-            Pair("Tự Sáng Tác", "tu-sang-tac"),
-        ),
-    )
-
-class GenreFilter(genres: List<GenreOption>) :
-    UriPartFilter(
-        "Genre",
-        genres
-            .map { it.name to it.id }
-            .toTypedArray(),
-    )
-
-class ExplicitFilter :
+class AdultFilter :
     UriPartFilter(
         "Explicit",
         arrayOf(
-            Pair("All", "0"),
-            Pair("Ecchi", "21"),
-            Pair("Hentai", "73"),
-            Pair("Oneshot", "230"),
+            Pair("All", ""),
+            Pair("Bỏ qua 18+", "safe"),
+            Pair("Chỉ 18+", "only18"),
         ),
     )
 
@@ -68,11 +43,28 @@ class SortFilter :
     UriPartFilter(
         "Order",
         arrayOf(
-            Pair("Ngày cập nhật", "updated_at"),
-            Pair("Ngày đăng", "created_at"),
-            Pair("Lượt xem", "viewsAll"),
+            Pair("Mới cập nhật", "latest"),
+            Pair("Lượt xem nhiều", "views"),
+            Pair("Đánh giá cao", "rating"),
+            Pair("Tên truyện (A → Z)", "az"),
         ),
     )
+
+class GenreFilter(options: List<FilterOption>) : CheckBoxGroupFilter("Thể Loại", options)
+
+class TagFilter(options: List<FilterOption>) : CheckBoxGroupFilter("Tags Truyện", options)
+
+open class CheckBoxGroupFilter(
+    displayName: String,
+    options: List<FilterOption>,
+) : Filter.Group<CheckBoxFilter>(
+    displayName,
+    options.map { CheckBoxFilter(it.name, it.slug) },
+) {
+    fun included(): List<String> = state.filter { it.state }.map { it.slug }
+}
+
+class CheckBoxFilter(name: String, val slug: String) : Filter.CheckBox(name)
 
 open class UriPartFilter(
     displayName: String,

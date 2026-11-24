@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Little Tyrant"
-    versionCode = 12
+    versionCode = 14
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "madara"

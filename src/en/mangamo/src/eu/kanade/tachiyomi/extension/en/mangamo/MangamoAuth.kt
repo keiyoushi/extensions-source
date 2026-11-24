@@ -6,6 +6,8 @@ import eu.kanade.tachiyomi.extension.en.mangamo.dto.FirebaseRegisterDto
 import eu.kanade.tachiyomi.extension.en.mangamo.dto.MangamoLoginDto
 import eu.kanade.tachiyomi.extension.en.mangamo.dto.TokenRefreshDto
 import eu.kanade.tachiyomi.network.POST
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -44,7 +46,7 @@ class MangamoAuth(
                 "${MangamoConstants.FIREBASE_FUNCTION_BASE_PATH}/v3/login",
                 helper.jsonHeaders,
                 "{\"purchaserInfo\":{\"originalAppUserId\":\"$userToken\"}}".toRequestBody(),
-            ),
+            ).newBuilder().fetch(Fetch.XHR).build(),
         ).execute()
 
         val customToken = mangamoLoginResponse.body.string().parseJson<MangamoLoginDto>().accessToken
@@ -53,7 +55,7 @@ class MangamoAuth(
             POST(
                 "https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${MangamoConstants.FIREBASE_API_KEY}",
                 body = "{\"token\":\"$customToken\",\"returnSecureToken\":true}".toRequestBody(),
-            ),
+            ).newBuilder().fetch(Fetch.XHR).build(),
         ).execute()
 
         val tokenInfo = googleIdentityResponse.body.string().parseJson<FirebaseAuthDto>()
@@ -74,7 +76,7 @@ class MangamoAuth(
                     "https://securetoken.googleapis.com/v1/token?key=${MangamoConstants.FIREBASE_API_KEY}",
                     headers,
                     "grant_type=refresh_token&refresh_token=$refreshToken".toRequestBody(),
-                ),
+                ).newBuilder().fetch(Fetch.XHR).build(),
             ).execute()
 
             if (refreshResponse.code == 200) {
@@ -96,7 +98,7 @@ class MangamoAuth(
                 POST(
                     "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${MangamoConstants.FIREBASE_API_KEY}",
                     body = "{\"returnSecureToken\":true}".toRequestBody(),
-                ),
+                ).newBuilder().fetch(Fetch.XHR).build(),
             ).execute()
 
             val tokenInfo = googleIdentityResponse.body.string().parseJson<FirebaseRegisterDto>()

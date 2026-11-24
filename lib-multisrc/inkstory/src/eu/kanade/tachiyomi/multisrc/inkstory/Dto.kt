@@ -2,232 +2,254 @@ package eu.kanade.tachiyomi.multisrc.inkstory
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParseZonedDateTime
+import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import java.time.format.DateTimeFormatter
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import java.util.Locale
+import kotlin.time.Instant
 
-// ============================== Search ===============================
 @Serializable
-class MangaFromSearchDto(
-    val book: BookFromSearchDto,
+class CatalogueInput(
+    private val size: Int,
+    private val page: Int,
+    private val sort: String? = null,
+    private val orderBy: String? = null,
+    private val readingRestriction: List<String>? = null,
+    private val search: String? = null,
+    private val relatedBookId: String? = null,
+    private val labelsInclude: List<String>? = null,
+    private val labelsExclude: List<String>? = null,
+    private val strictLabelEqual: Boolean? = null,
+    private val status: List<String>? = null,
+    private val country: List<String>? = null,
+    private val contentStatus: List<String>? = null,
+    private val formats: List<String>? = null,
+    private val averageRatingMin: Int? = null,
+    private val averageRatingMax: Int? = null,
+    private val yearMin: Int? = null,
+    private val yearMax: Int? = null,
+    private val chaptersCountMin: Int? = null,
+    private val chaptersCountMax: Int? = null,
 )
 
 @Serializable
-class BookFromSearchDto(
+class BookInput(
     private val slug: String,
-    private val id: String,
-    private val poster: String? = null,
-    private val name: MangaNameDto,
-) {
-    fun toSManga() = SManga.create().apply {
-        url = slug
-        thumbnail_url = poster
-        title = name.resolveTitle(slug)
-        memo = buildJsonObject {
-            put("id", id)
-        }
-    }
-}
+    private val createView: Boolean,
+)
 
 @Serializable
-class MangaNameDto(
-    private val ru: String? = null,
-    private val en: String? = null,
-    private val original: String? = null,
-) {
-    fun resolveTitle(fallback: String): String = ru?.takeIf(String::isNotBlank)
-        ?: en?.takeIf(String::isNotBlank)
-        ?: original?.takeIf(String::isNotBlank)
-        ?: fallback
-}
-
-// ============================== Manga ===============================
-@Serializable
-class MangaFullDto(
+class ChapterInput(
     private val id: String,
+    private val createView: Boolean,
+)
+
+@Serializable
+class CatalogueDto(
+    val total: Int,
+    val books: List<BookDto>,
+)
+
+@Serializable
+class BookDto(
+    val id: String,
     private val slug: String,
-    private val name: MangaNameDto,
     private val poster: String? = null,
+    private val name: NameDto,
+    private val altNames: List<AltNameDto> = emptyList(),
     private val description: String? = null,
     private val status: String? = null,
-    private val labels: List<LabelDto>? = null,
+    private val country: String? = null,
+    private val year: Int? = null,
     private val formats: List<String> = emptyList(),
-    private val relations: List<RelationDto>? = null,
-    private val externalLinks: List<String> = emptyList(),
-    private val averageRating: Float? = null,
+    private val averageRating: Double? = null,
     private val ratingVotesCount: Int? = null,
-    private val viewsCount: Int? = null,
-    private val likesCount: Int? = null,
-    private val bookmarksCount: Int? = null,
+    private val viewsCount: Int,
+    private val likesCount: Int,
+    private val labels: List<LabelDto> = emptyList(),
+    private val relations: List<RelationDto> = emptyList(),
+    private val externalLinks: List<String> = emptyList(),
 ) {
-    fun toSManga() = SManga.create().apply {
+    fun toSManga(titleLanguage: String) = SManga.create().apply {
         url = slug
+        title = name.title(titleLanguage)
         thumbnail_url = poster
-        title = name.resolveTitle(slug)
-        description = buildString {
-            this@MangaFullDto.description?.trim()?.takeIf(String::isNotEmpty)?.let { append(it) }
-            averageRating?.let {
-                if (isNotEmpty()) append("\n\n")
-                append("**Рейтинг**: %.2f".format(it))
-                ratingVotesCount?.let { r -> append(" (оценок: $r)") }
-            }
-            viewsCount?.let {
-                if (isNotEmpty()) append("\n")
-                append("**Просмотры**: ${formatInt(it)}")
-            }
-            likesCount?.let {
-                if (isNotEmpty()) append("\n")
-                append("**Лайки**: ${formatInt(it)}")
-            }
-            bookmarksCount?.let {
-                if (isNotEmpty()) append("\n")
-                append("**Закладки**: ${formatInt(it)}")
-            }
-            if (externalLinks.isNotEmpty()) {
-                if (isNotEmpty()) append("\n")
-                append("**Внешние ссылки**:\n")
-                append(
-                    externalLinks.joinToString("\n") {
-                        "- [${it.substringAfter("://").substringBefore("/").removePrefix("www.")}]($it)"
-                    },
-                )
-            }
-        }
-        author = relations
-            ?.mapNotNull { rel ->
-                rel.takeIf { it.type == "AUTHOR" }
-                    ?.publisher?.name?.trim()?.takeIf(String::isNotEmpty)
-            }
-            ?.distinct()
-            ?.joinToString()
-            ?.ifBlank { null }
-        artist = relations
-            ?.mapNotNull { rel ->
-                rel.takeIf { it.type == "ARTIST" }
-                    ?.publisher?.name?.trim()?.takeIf(String::isNotEmpty)
-            }
-            ?.distinct()
-            ?.joinToString()
-            ?.ifBlank { null }
-        status = when (this@MangaFullDto.status) {
+        memo = buildJsonObject { put("id", id) }
+    }
+
+    fun toSMangaDetails(titleLanguage: String) = toSManga(titleLanguage).apply {
+        author = relations.publishers("AUTHOR")
+        artist = relations.publishers("ARTIST")
+        status = when (this@BookDto.status) {
             "ONGOING" -> SManga.ONGOING
             "DONE" -> SManga.COMPLETED
             "FROZEN" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
         genre = buildList {
-            labels?.mapNotNull { it.name?.trim()?.takeIf(String::isNotEmpty) }?.let { addAll(it) }
-            addAll(formats.map { it.lowercase().replace("_", " ") })
-        }.joinToString()
-        memo = buildJsonObject {
-            put("id", id)
-        }
+            formats.mapNotNullTo(this) { FORMATS[it] }
+            labels.filter { it.kind == "GENRE" }.mapTo(this) { it.name }
+            labels.filter { it.kind == "TAG" }.mapTo(this) { it.name }
+        }.distinct().joinToString()
+        description = MarkdownDescription.Builder()
+            .rating(averageRating?.takeIf { ratingVotesCount != 0 }, votes = ratingVotesCount)
+            .info(year?.toString(), COUNTRIES[country], "Просмотры ${viewsCount.compact()}", "Лайки ${likesCount.compact()}")
+            .description(this@BookDto.description)
+            .field("Журнал", relations.publishers("MAGAZINE"))
+            .field("Издатель", relations.publishers("PUBLISHER"))
+            .altTitles((name.all + altNames.map { it.name }).filterNot { it == title }, "Другие названия")
+            .links(externalLinks.mapNotNull { link -> link.toHttpUrlOrNull()?.let { it.trackerName() to link } }, "Внешние трекеры")
+            .build()
     }
-
-    fun formatInt(value: Int): String = when {
-        value >= 1_000_000 -> "%.1fM".format(value / 1_000_000.0)
-        value >= 1_000 -> "%.1fk".format(value / 1_000.0)
-        else -> value.toString()
-    }
-
-    @Serializable
-    class LabelDto(
-        val name: String? = null,
-    )
-
-    @Serializable
-    class RelationDto(
-        val type: String? = null,
-        val publisher: PublisherDto? = null,
-    )
 }
+
+private fun List<RelationDto>.publishers(type: String) = filter { it.type == type }
+    .map { it.publisher.name.trim() }
+    .asReversed()
+    .distinct()
+    .joinToString()
+    .ifEmpty { null }
+
+private fun HttpUrl.trackerName(): String = host.removePrefix("www.").let { TRACKERS[it] ?: it }
+
+@Serializable
+class NameDto(
+    private val ru: String? = null,
+    private val en: String? = null,
+    private val original: String? = null,
+) {
+    val all get() = listOfNotNull(ru, en, original)
+
+    fun title(language: String) = when (language) {
+        "en" -> en
+        "original" -> original
+        else -> ru
+    } ?: all.first()
+}
+
+// Counts as the site shows them: 4.06M, 182k, 1.09k
+private fun Int.compact(): String {
+    val (value, suffix) = when {
+        this >= 999_500 -> this / 1_000_000.0 to "M"
+        this >= 1_000 -> this / 1_000.0 to "k"
+        else -> return toString()
+    }
+    val decimals = when {
+        value < 10 -> 2
+        value < 100 -> 1
+        else -> 0
+    }
+    return "%.${decimals}f".format(Locale.ROOT, value).trimEnd('0').trimEnd('.') + suffix
+}
+
+@Serializable
+class AltNameDto(
+    val name: String,
+)
+
+@Serializable
+class LabelDto(
+    val kind: String,
+    val name: String,
+)
+
+@Serializable
+class RelationDto(
+    val type: String,
+    val publisher: PublisherDto,
+)
 
 @Serializable
 class PublisherDto(
-    val name: String? = null,
+    val name: String,
 )
 
-// ============================== Chapters ===============================
 @Serializable
-class ChapterDto(
-    private val id: String,
-    private val name: String? = null,
-    private val title: String? = null,
-    private val number: Double? = null,
-    private val volume: Double? = null,
-    private val branchId: String? = null,
-    private val createdAt: String? = null,
-) {
-    fun toSChapter(branches: Map<String, String?>, slug: String): SChapter = SChapter.create().apply {
-        url = id
-        val vol = volume?.toString()?.removeSuffix(".0")?.takeIf(String::isNotBlank)
-        val num = number?.toString()?.removeSuffix(".0")?.takeIf(String::isNotBlank)
-        val baseChapterName = when {
-            vol != null && num != null -> "Том $vol Глава $num"
-            num != null -> "Глава $num"
-            vol != null -> "Том $vol"
-            else -> "Глава"
-        }
-        val subtitle = listOf(this@ChapterDto.name, title)
-            .firstOrNull { !it.isNullOrBlank() }
-            ?.trim()
-        name = if (!subtitle.isNullOrBlank() && !baseChapterName.equals(subtitle, true)) {
-            "$baseChapterName - $subtitle"
-        } else {
-            baseChapterName
-        }
-        chapter_number = number?.toFloat() ?: -1f
-        date_upload = zonedDateTimeFormat.tryParseZonedDateTime(createdAt)
-        branchId?.let { scanlator = branches[it]?.takeIf(String::isNotBlank) }
-        memo = buildJsonObject {
-            put("slug", slug)
-        }
-    }
-    companion object {
-        private val zonedDateTimeFormat = DateTimeFormatter.ofPattern("[yyyy-MM-dd'T'HH:mm:ss.SSSX][yyyy-MM-dd'T'HH:mm:ssX][yyyy-MM-dd'T'HH:mm:ss.SSSSSSX]")
-    }
-}
+class ChapterListDto(
+    val branches: List<BranchDto>,
+    val chapters: List<ChapterDto>,
+)
 
 @Serializable
 class BranchDto(
     val id: String,
-    private val publishers: List<PublisherDto> = emptyList(),
+)
+
+@Serializable
+class ChapterDto(
+    private val id: String,
+    private val title: String,
+    private val number: Double,
+    private val volume: Double? = null,
+    private val createdAt: String,
+    val branchId: String,
+    val publisherNames: String? = null,
 ) {
-    fun publisherName(): String? = publishers
-        .mapNotNull { it.name?.trim()?.takeIf(String::isNotEmpty) }
-        .distinct()
-        .joinToString()
-        .ifBlank { null }
+    val key get() = volume to number
+
+    fun toSChapter(slug: String) = SChapter.create().apply {
+        url = id
+        name = listOfNotNull(volume?.let { "Том ${it.toString().removeSuffix(".0")}" }, title).joinToString(" ")
+        chapter_number = number.toFloat()
+        date_upload = Instant.tryParse(createdAt)
+        scanlator = publisherNames
+        memo = buildJsonObject { put("slug", slug) }
+    }
 }
 
-// ============================== Pages ===============================
 @Serializable
-class PagesDto(
-    val pages: List<ChapterPageDto>,
+class ChapterPagesDto(
+    val pages: List<PageDto>,
 )
 
 @Serializable
-class ChapterPageDto(
-    val index: Int? = null,
-    val image: String? = null,
-)
-
-enum class ImageCodec {
-    SEC,
-    XOR,
-}
-
-// ============================== Filters ===============================
-@Serializable
-class FiltersData(
-    val genres: List<Pair<String, String>>? = emptyList(),
+class PageDto(
+    val index: Int,
+    val image: String,
 )
 
 @Serializable
-class GenresDto(
+class LabelListItemDto(
+    val id: String,
     val kind: String,
     val name: String,
-    val slug: String,
+)
+
+@Serializable
+class FilterData(
+    val genres: List<Pair<String, String>>,
+    val tags: List<Pair<String, String>>,
+)
+
+internal val FORMATS = mapOf(
+    "FOURTH_KOMA" to "Ёнкома",
+    "DOUJINSHI" to "Додзинси",
+    "COMPILATION" to "Сборник",
+    "COLORED" to "Цветной",
+    "SINGLE" to "Сингл",
+    "WEB" to "Веб",
+    "WEBTOON" to "Вебтун",
+    "ARTBOOK" to "Артбук",
+    "LIGHT" to "Печать",
+)
+
+internal val COUNTRIES = mapOf(
+    "JAPAN" to "Япония",
+    "CHINA" to "Китай",
+    "KOREA" to "Корея",
+    "RUSSIA" to "Россия",
+    "OTHER" to "Другая",
+)
+
+private val TRACKERS = mapOf(
+    "mangaupdates.com" to "MangaUpdates",
+    "mangabaka.org" to "MangaBaka",
+    "shikimori.one" to "Shikimori",
+    "shikimori.me" to "Shikimori",
+    "myanimelist.net" to "MyAnimeList",
+    "anilist.co" to "AniList",
 )

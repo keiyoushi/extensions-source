@@ -1,0 +1,25 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
+plugins {
+    alias(kei.plugins.extension)
+}
+
+keiyoushi {
+    name = "SchaleNetwork"
+    versionCode = 5
+    contentWarning = ContentWarning.NSFW
+    libVersion = "1.6"
+    pkgName = "all.koharu"
+
+    listOf("all", "en", "zh").forEach {
+        source {
+            lang = it
+            if (it == "en") id = 1484902275639232927L
+            baseUrl = "https://niyaniya.moe"
+        }
+    }
+
+    deeplink {
+        path("/g/..*/..*")
+    }
+}

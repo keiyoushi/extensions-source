@@ -5,10 +5,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -66,7 +67,7 @@ abstract class NuxScans : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(baseUrl)
 
     private suspend fun parseMangaList(url: String): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
 
         val mangas = document.select(".index-post").map { element ->
             SManga.create().apply {
@@ -100,7 +101,7 @@ abstract class NuxScans : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         manga.apply {
             title = document.selectFirst("h1.post-title")?.text() ?: title
@@ -143,7 +144,7 @@ abstract class NuxScans : KeiSource() {
     override fun getChapterUrl(chapter: SChapter): String = chapter.url
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(chapter.url).asJsoup()
+        val document = client.get(chapter.url, Fetch.DOCUMENT).asJsoup()
 
         return document.select(".post-body img, .holder img").filterNot { img ->
             val src = img.attr("abs:src").lowercase()

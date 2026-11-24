@@ -6,11 +6,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
@@ -47,13 +48,13 @@ abstract class Komiku : KeiSource() {
             .addQueryParameter("orderby", "meta_value_num")
             .build()
 
-        return mangaListParse(client.get(url).asJsoup())
+        return mangaListParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // =============================== Latest ===============================
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = mangaApiUrlBuilder(page).addQueryParameter("orderby", "modified").build()
-        return mangaListParse(client.get(url).asJsoup())
+        return mangaListParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // =============================== Search ===============================
@@ -68,7 +69,7 @@ abstract class Komiku : KeiSource() {
             }
         }.build()
 
-        return mangaListParse(client.get(url).asJsoup())
+        return mangaListParse(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -76,7 +77,7 @@ abstract class Komiku : KeiSource() {
         if (url.pathSegments.firstOrNull() != "manga") return null
         val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
         val targetUrl = "$baseUrl/manga/$slug/".toHttpUrl()
-        val document = client.get(targetUrl).asJsoup()
+        val document = client.get(targetUrl, Fetch.DOCUMENT).asJsoup()
         val manga = SManga.create().apply {
             setUrlWithoutDomain(targetUrl.toString())
         }
@@ -97,7 +98,7 @@ abstract class Komiku : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseDetails(document, manga),
             chapters = parseChapters(document),
@@ -106,7 +107,7 @@ abstract class Komiku : KeiSource() {
 
     private fun parseDetails(document: Document, manga: SManga): SManga = manga.apply {
         description = buildString {
-            append(document.select("#Sinopsis > p, p.desc[itemprop=description]").text())
+            document.selectFirst("#Sinopsis > p, p.desc[itemprop=description]")?.text()?.let { append(it) }
 
             document.selectFirst("table.inftable tr:contains(Judul Indonesia) td + td, table.inftable tr:contains(Judul Alternatif) td + td")?.text()?.let {
                 if (it.isNotEmpty()) {
@@ -170,15 +171,15 @@ abstract class Komiku : KeiSource() {
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = baseUrl + chapter.url
-        val document = client.get(chapterUrl).asJsoup()
-        return document.select("#Baca_Komik img")
-            .filterNot { it.attr("src").contains("komiku-promosi") }
+        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
+        return document.select("#Baca_Komik img[data-src]")
+            .filterNot { it.attr("data-src").contains("komiku-promosi") }
             .mapIndexed { i, element ->
-                Page(i, chapterUrl, imageUrl = element.attr("abs:src"))
+                Page(i, chapterUrl, imageUrl = element.absUrl("data-src"))
             }
     }
 
-    override fun imageRequest(page: Page): Request {
+    override fun getImageRequest(page: Page): Request {
         val headers = headersBuilder()
             .set("Referer", page.url)
             .build()

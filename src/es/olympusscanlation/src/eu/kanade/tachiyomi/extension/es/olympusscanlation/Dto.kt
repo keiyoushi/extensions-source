@@ -107,7 +107,7 @@ class PayloadChapterDto(var data: List<ChapterDto>, val meta: MetaDto)
 class ChapterDto(
     private val id: Int,
     private val name: String,
-    @SerialName("published_at") private val date: String,
+    @SerialName("published_at") private val date: String?,
 ) {
     fun toSChapter(mangaId: String) = SChapter.create().apply {
         name = "Capitulo ${this@ChapterDto.name}"
@@ -118,12 +118,6 @@ class ChapterDto(
 
 @Serializable
 class MetaDto(val total: Int)
-
-@Serializable
-class PayloadPagesDto(val chapter: PageDto)
-
-@Serializable
-class PageDto(val pages: List<String>)
 
 @Serializable
 class MangaStatusDto(

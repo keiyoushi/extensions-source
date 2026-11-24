@@ -27,7 +27,9 @@ class ClipStudioReaderInterceptor : Interceptor {
     }
 
     private fun interceptComicPage(chain: Interceptor.Chain, fragment: String): Response {
-        val request = chain.request()
+        val request = chain.request().newBuilder()
+            .header("Referer", chain.request().url.viewerReferer())
+            .build()
         val params = fragment.split(',')
         val gridWidth = params[1].toInt()
         val gridHeight = params[2].toInt()

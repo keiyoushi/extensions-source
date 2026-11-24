@@ -5,13 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -35,7 +34,7 @@ abstract class MangaTube : KeiSource() {
     // Popular
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val result = client.get("$baseUrl/api/home/top-manga", apiHeaders).parseAs<TopMangaResponse>()
+        val result = client.get("$baseUrl/api/home/top-manga", apiHeaders, Fetch.XHR).parseAs<TopMangaResponse>()
         return MangasPage(result.mangas, false)
     }
 
@@ -47,7 +46,7 @@ abstract class MangaTube : KeiSource() {
             .addPathSegments("api/home/updates")
             .addQueryParameter("offset", offset.toString())
             .build()
-        val result = client.get(url, apiHeaders).parseAs<LatestUpdatesResponse>()
+        val result = client.get(url, apiHeaders, Fetch.XHR).parseAs<LatestUpdatesResponse>()
         return MangasPage(result.mangas, offset < LATEST_PAGE_SIZE * 2)
     }
 
@@ -58,7 +57,7 @@ abstract class MangaTube : KeiSource() {
             .addPathSegments("api/manga/quick-search")
             .addQueryParameter("query", query)
             .build()
-        val result = client.get(url, apiHeaders).parseAs<QuickSearchResponse>()
+        val result = client.get(url, apiHeaders, Fetch.XHR).parseAs<QuickSearchResponse>()
         return MangasPage(result.mangas, false)
     }
 
@@ -76,24 +75,24 @@ abstract class MangaTube : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val slug = manga.url.substringAfterLast("/")
 
-        val details = async { if (fetchDetails) fetchMangaDetails(slug) else manga }
-        val chapterList = async {
-            if (fetchChapters) {
-                client.get("$baseUrl/api/manga/$slug/chapters", mangaApiHeaders(slug))
-                    .parseAs<MangaChaptersResponse>()
-                    .toSChapters(slug)
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(details.await(), chapterList.await())
+        return SMangaUpdate(
+            manga = { if (fetchDetails) fetchMangaDetails(slug) else manga },
+            chapters = {
+                if (fetchChapters) {
+                    client.get("$baseUrl/api/manga/$slug/chapters", mangaApiHeaders(slug), Fetch.XHR)
+                        .parseAs<MangaChaptersResponse>()
+                        .toSChapters(slug)
+                } else {
+                    chapters
+                }
+            },
+        )
     }
 
-    private suspend fun fetchMangaDetails(slug: String): SManga = client.get("$baseUrl/api/manga/$slug", mangaApiHeaders(slug))
+    private suspend fun fetchMangaDetails(slug: String): SManga = client.get("$baseUrl/api/manga/$slug", mangaApiHeaders(slug), Fetch.XHR)
         .parseAs<MangaDetailsResponse>()
         .toSManga()
 
@@ -112,7 +111,7 @@ abstract class MangaTube : KeiSource() {
             }
             else -> error("Unsupported chapter url: ${chapter.url}")
         }
-        val response = client.get("$baseUrl$apiPath", mangaApiHeaders(slug))
+        val response = client.get("$baseUrl$apiPath", mangaApiHeaders(slug), Fetch.XHR)
 
         return try {
             response.parseAs<ChapterDetailsResponse>().pages

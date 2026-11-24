@@ -2,12 +2,13 @@ package eu.kanade.tachiyomi.extension.en.comix
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import java.math.BigDecimal
-import java.math.RoundingMode
+import okhttp3.HttpUrl
 import java.util.Calendar
 
 const val MANGA_ID_MEMO = "mangaId"
@@ -17,6 +18,9 @@ const val CHAPTER_OFFICIAL_MEMO = "official"
 const val CHAPTER_GROUP_ID_MEMO = "groupId"
 const val CHAPTER_LIST_DEDUPLICATED_MEMO = "chapterListDeduplicated"
 const val CHAPTER_LIST_BLACKLIST_MEMO = "chapterListBlacklist"
+const val CHAPTER_LIST_COMPLETE_MEMO = "chapterListComplete"
+const val CHAPTER_LIST_FETCHED_AT_MEMO = "chapterListFetchedAt"
+const val CHAPTER_DATA_VERSION_MEMO = "chapterDataVersion"
 
 @Serializable
 class Term(
@@ -29,7 +33,7 @@ class TagSearchResponse(
 )
 
 @Serializable
-class TagSearchHit(val id: Int)
+class TagSearchHit(val id: Int, val label: String)
 
 @Serializable
 class Manga(
@@ -61,6 +65,7 @@ class Manga(
     private val originalLanguage: String? = null,
     private val links: Map<String, String?>? = null,
     private val url: String? = null,
+    val chapterUpdatedAtFormatted: String? = null,
 ) {
     @Serializable
     class Poster(
@@ -68,35 +73,15 @@ class Manga(
         private val medium: String? = null,
         private val large: String? = null,
     ) {
-        fun from(quality: String?) = when (quality) {
-            "large" -> large ?: medium ?: small ?: ""
-            "small" -> small ?: medium ?: large ?: ""
-            else -> medium ?: large ?: small ?: ""
-        }
+        fun from(baseUrl: HttpUrl, quality: String?) = when (quality) {
+            "large" -> large ?: medium ?: small
+            "small" -> small ?: medium ?: large
+            else -> medium ?: large ?: small
+        }?.let { baseUrl.resolve(it)?.toString() }
     }
 
-    private val fancyScore: String
-        get() {
-            if (ratedAvg == 0.0) return ""
-
-            val score = ratedAvg.toBigDecimal()
-            val stars = score.div(BigDecimal(2))
-                .setScale(0, RoundingMode.HALF_UP).toInt()
-
-            val scoreString = if (score.scale() == 0) {
-                score.toPlainString()
-            } else {
-                score.stripTrailingZeros().toPlainString()
-            }
-
-            return buildString {
-                append("★".repeat(stars))
-                if (stars < 5) append("☆".repeat(5 - stars))
-                append(" $scoreString")
-            }
-        }
-
     fun toSManga(
+        baseUrl: HttpUrl,
         posterQuality: String?,
         altTitlesInDesc: Boolean = false,
         scorePosition: String,
@@ -112,45 +97,22 @@ class Manga(
 
         author = actualAuthors?.joinToString { it.title }
         artist = actualArtists?.joinToString { it.title }
-        description = buildString {
-            if (scorePosition == "top") {
-                fancyScore.takeIf { it.isNotEmpty() }?.let {
-                    append(it)
-                    append("\n\n")
-                }
-            }
-
-            synopsis?.takeUnless { it.isEmpty() }?.let { append(it) }
-
-            val actualAltTitles = altTitles.ifEmpty { altTitlesOld }
-            if (altTitlesInDesc && actualAltTitles.isNotEmpty()) {
-                append("\n\n")
-                append("**Alternative Names**:\n")
-                append(actualAltTitles.joinToString("\n") { "- $it" })
-            }
-
+        description = MarkdownDescription.Builder().apply {
+            val score = ratedAvg.takeIf { it > 0 }
+            if (scorePosition == "top") rating(score)
+            markdown(synopsis)
+            if (altTitlesInDesc) altTitles(altTitles.ifEmpty { altTitlesOld })
             if (showExtraInfo) {
-                val extras = buildExtraInfo()
-                if (extras.isNotEmpty()) {
-                    if (isNotEmpty()) append("\n\n")
-                    append(extras.joinToString("\n"))
-                }
-
-                val trackerLinks = getTrackerLinks()
-                if (trackerLinks.isNotEmpty()) {
-                    if (isNotEmpty()) append("\n\n")
-                    append("**Trackers**:\n")
-                    append(trackerLinks.joinToString("\n") { "- $it" })
-                }
+                field("Year", year?.takeIf { it > 0 }?.toString())
+                field("Language", originalLanguage?.uppercase())
+                field("Content rating", contentRating.replaceFirstChar(Char::uppercase))
+                field("Rank", rank.takeIf { it > 0 }?.let { "#$it" })
+                field("Rated by", ratedCount.takeIf { it > 0 }?.toString())
+                field("Followed by", followsTotal.takeIf { it > 0 }?.toString())
+                links(getTrackerLinks(), label = "Trackers")
             }
-
-            if (scorePosition == "bottom") {
-                fancyScore.takeIf { it.isNotEmpty() }?.let {
-                    if (isNotEmpty()) append("\n\n")
-                    append(it)
-                }
-            }
-        }
+            if (scorePosition == "bottom") rating(score)
+        }.build()
         initialized = true
         status = when (this@Manga.status) {
             "releasing" -> SManga.ONGOING
@@ -159,47 +121,30 @@ class Manga(
             "discontinued" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
-        thumbnail_url = this@Manga.poster?.from(posterQuality)
+        thumbnail_url = this@Manga.poster?.from(baseUrl, posterQuality)
         genre = getGenres(showTags)
     }
 
-    fun toBasicSManga(posterQuality: String?) = SManga.create().apply {
+    fun toBasicSManga(baseUrl: HttpUrl, posterQuality: String?) = SManga.create().apply {
         url = this@Manga.url?.substringAfter("/title") ?: "/$hid"
         memo = buildJsonObject { put(MANGA_ID_MEMO, hid) }
         title = this@Manga.title
-        thumbnail_url = this@Manga.poster?.from(posterQuality)
+        thumbnail_url = this@Manga.poster?.from(baseUrl, posterQuality)
     }
 
-    private fun buildExtraInfo(): List<String> = buildList {
-        year?.takeIf { it > 0 }?.let { add("**Year**: $it") }
-        originalLanguage?.takeIf { it.isNotBlank() }?.let { add("**Language**: ${it.uppercase()}") }
-        contentRating.takeIf { it.isNotBlank() }?.let {
-            add("**Content rating**: ${it.replaceFirstChar(Char::uppercase)}")
-        }
-        rank.takeIf { it > 0 }?.let { add("**Rank**: #$it") }
-        ratedCount.takeIf { it > 0 }?.let { add("**Rated by**: $it") }
-        followsTotal.takeIf { it > 0 }?.let { add("**Followed by**: $it") }
-    }
-
-    private fun getTrackerLinks(): List<String> {
+    private fun getTrackerLinks(): List<Pair<String, String?>> {
         val linkMap = links ?: return emptyList()
-        val siteNames = listOf(
+        val siteNames = mapOf(
             "al" to "AniList",
             "mal" to "MyAnimeList",
             "mu" to "MangaUpdates",
             "md" to "MangaDex",
             "mb" to "MangaBaka",
         )
-        val knownLinks = siteNames.mapNotNull { (key, name) ->
-            val url = linkMap[key]?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            "[$name]($url)"
-        }
-        val unknownLinks = linkMap.filterKeys { k -> siteNames.none { it.first == k } }
-            .mapNotNull { (key, url) ->
-                val validUrl = url?.takeIf { it.startsWith("http") } ?: return@mapNotNull null
-                "[${key.uppercase()}]($validUrl)"
-            }
-        return knownLinks + unknownLinks
+        val known = siteNames.map { (key, name) -> name to linkMap[key] }
+        val unknown = linkMap.filterKeys { it !in siteNames }
+            .map { (key, url) -> key.uppercase() to url?.takeIf { it.startsWith("http") } }
+        return known + unknown
     }
 
     // Tags are separate from the curated genres in the site's detail UI.
@@ -260,22 +205,12 @@ class SearchResponse(
 }
 
 @Serializable
-class ChapterDetailsResponse(
-    val result: Items,
-) {
-    @Serializable
-    class Items(
-        val items: List<Chapter> = emptyList(),
-        private val meta: Meta? = null,
-        private val pagination: Pagination? = null,
-    ) {
-        fun hasNextPage(): Boolean = when {
-            meta != null -> meta.page < meta.actualLastPage
-            pagination != null -> pagination.page < pagination.actualLastPage
-            else -> false
-        }
-    }
-}
+class ChapterList(
+    val chapters: List<Chapter>,
+    val complete: Boolean,
+    val error: String? = null,
+    val queries: JsonObject? = null,
+)
 
 @Serializable
 class Chapter(
@@ -293,10 +228,6 @@ class Chapter(
         val id: Int? = null,
         val name: String,
     )
-
-    companion object {
-        private val DATE_REGEX = Regex("""^(\d+)\s*(s|m|h|d|w|mo|mos|y|yr|yrs|min|mins|sec|secs|hr|hrs|day|days|week|weeks|month|months|year|years)$""")
-    }
 
     fun toSChapter(mangaSlug: String) = SChapter.create().apply {
         url = this@Chapter.url.indexOf("/title/").let { index ->
@@ -327,47 +258,45 @@ class Chapter(
             "Unknown"
         }
     }
+}
 
-    private fun parseRelativeDate(dateStr: String): Long {
-        if (dateStr.isEmpty()) return 0L
-        val trimmed = dateStr.trim().lowercase().removeSuffix(" ago")
-        val match = DATE_REGEX.find(trimmed) ?: return 0L
+// One message from the reader page walk
+@Serializable
+class CaptureMessage(
+    val type: String,
+    val total: Int? = null,
+    val index: Int? = null,
+    val url: String? = null,
+)
 
-        val amount = match.groupValues[1].toIntOrNull() ?: return 0L
-        val unit = match.groupValues[2]
+private val DATE_REGEX = Regex("""^(\d+)\s*(s|m|h|d|w|mo|mos|y|yr|yrs|min|mins|sec|secs|hr|hrs|day|days|week|weeks|month|months|year|years)$""")
 
-        val calendar = Calendar.getInstance()
-        when (unit) {
-            "s", "sec", "secs" -> calendar.add(Calendar.SECOND, -amount)
-            "m", "min", "mins" -> calendar.add(Calendar.MINUTE, -amount)
-            "h", "hr", "hrs" -> calendar.add(Calendar.HOUR_OF_DAY, -amount)
-            "d", "day", "days" -> calendar.add(Calendar.DAY_OF_YEAR, -amount)
-            "w", "week", "weeks" -> calendar.add(Calendar.WEEK_OF_YEAR, -amount)
-            "mo", "mos", "month", "months" -> calendar.add(Calendar.MONTH, -amount)
-            "y", "yr", "yrs", "year", "years" -> calendar.add(Calendar.YEAR, -amount)
-        }
-        return calendar.timeInMillis
+// Relative site date ("2w ago"); with latest, the latest time the text can stand for
+fun parseRelativeDate(dateStr: String, latest: Boolean = false): Long {
+    if (dateStr.isEmpty()) return 0L
+    val trimmed = dateStr.trim().lowercase().removeSuffix(" ago")
+    val match = DATE_REGEX.find(trimmed) ?: return 0L
+
+    val amount = (match.groupValues[1].toIntOrNull() ?: return 0L) - if (latest) 1 else 0
+    val unit = match.groupValues[2]
+
+    val calendar = Calendar.getInstance()
+    when (unit) {
+        "s", "sec", "secs" -> calendar.add(Calendar.SECOND, -amount)
+        "m", "min", "mins" -> calendar.add(Calendar.MINUTE, -amount)
+        "h", "hr", "hrs" -> calendar.add(Calendar.HOUR_OF_DAY, -amount)
+        "d", "day", "days" -> calendar.add(Calendar.DAY_OF_YEAR, -amount)
+        "w", "week", "weeks" -> calendar.add(Calendar.WEEK_OF_YEAR, -amount)
+        "mo", "mos", "month", "months" -> calendar.add(Calendar.MONTH, -amount)
+        "y", "yr", "yrs", "year", "years" -> calendar.add(Calendar.YEAR, -amount)
     }
+    return calendar.timeInMillis
 }
 
 @Serializable
-class ChapterResponse(
-    val result: ChapterResult,
-) {
-    @Serializable
-    class ChapterResult(
-        val pages: Pages,
-    )
+class WafVerifyRequest(
+    @SerialName("cf_turnstile_token") private val cfTurnstileToken: String,
+)
 
-    @Serializable
-    class Pages(
-        val baseUrl: String = "",
-        val items: List<PageDto>,
-    )
-
-    @Serializable
-    class PageDto(
-        val url: String,
-        val s: Int = 0,
-    )
-}
+@Serializable
+class WafVerifyResponse(val success: Boolean)

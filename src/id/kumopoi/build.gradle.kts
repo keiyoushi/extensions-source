@@ -6,9 +6,10 @@ plugins {
 
 keiyoushi {
     name = "KumoPoi"
-    versionCode = 2
+    versionCode = 5
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
+    theme = "aesir"
 
     source {
         lang = "id"
@@ -18,10 +19,7 @@ keiyoushi {
     }
 
     deeplink {
-        host("beta.kumopoi.com")
         host("kumopoi.com")
-        host("kumopoi.org")
         path("/comic/..*")
-        path("/manga/..*")
     }
 }

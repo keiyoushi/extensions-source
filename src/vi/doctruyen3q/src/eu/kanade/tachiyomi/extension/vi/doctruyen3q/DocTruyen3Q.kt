@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.utils.asJsoup
@@ -70,7 +71,7 @@ abstract class DocTruyen3Q :
             }
         }.build()
 
-        return parseMangaPage(client.get(url), searchMangaSelector(), ::searchMangaFromElement)
+        return parseMangaPage(client.get(url, Fetch.DOCUMENT), searchMangaSelector(), ::searchMangaFromElement)
     }
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {

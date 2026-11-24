@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.kagane
 
 import eu.kanade.tachiyomi.extension.all.kagane.Kagane.Companion.CONTENT_RATINGS
+import eu.kanade.tachiyomi.extension.all.kagane.Kagane.Companion.CONTENT_RATING_LABELS
 import eu.kanade.tachiyomi.source.model.Filter
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObjectBuilder
@@ -34,7 +35,7 @@ internal class SortFilter(
 
     fun toUriPart(): String {
         val base = selected.value
-        val order = if (state?.ascending == true) "" else ",desc"
+        val order = if (state?.ascending == true) ",asc" else ",desc"
         return if (base.isNotEmpty()) base + order else ""
     }
 }
@@ -47,8 +48,7 @@ private fun getSortFilter() = listOf(
     SelectFilterOption("Popular (Week)", "avg_views_week"),
     SelectFilterOption("Popular (Month)", "avg_views_month"),
     SelectFilterOption("Latest", "updated_at"),
-    SelectFilterOption("By Name", "series_name"),
-    SelectFilterOption("Books count", "books_count"),
+    SelectFilterOption("Books count", "current_books"),
     SelectFilterOption("Created at", "created_at"),
 )
 
@@ -56,17 +56,43 @@ internal class SelectFilterOption(val name: String, val value: String)
 
 internal class ContentRatingFilter(
     defaultRatings: Set<String>,
+    private val pornographic: Boolean,
+    private val disturbing: Boolean,
     ratings: List<FilterData> = CONTENT_RATINGS.map {
-        FilterData(it.replaceFirstChar { c -> c.uppercase() }, it.replaceFirstChar { c -> c.uppercase() })
+        FilterData(it, CONTENT_RATING_LABELS.getValue(it))
     },
-) : JsonMultiSelectFilter(
+) : Filter.Group<MultiSelectOption>(
     "Content Rating",
-    "content_rating",
     ratings.map {
         MultiSelectOption(it.name, it.id).apply {
-            state = defaultRatings.contains(it.id.lowercase())
+            state = defaultRatings.contains(it.id)
         }
     },
+),
+    JsonFilter {
+    override fun addToJsonObject(
+        builder: JsonObjectBuilder,
+        key: String,
+        matchAll: Boolean?,
+    ) {
+        val selected = state.filter { it.state }.map { it.id }
+        if (selected.isEmpty()) return
+        builder.putJsonArray("age_rating") {
+            selected.map { AGE_RATINGS.getValue(it) }.distinct().forEach { add(it) }
+        }
+        if (!pornographic) {
+            builder.put("is_pornographic", false)
+        }
+        if (!disturbing) {
+            builder.put("is_disturbing", false)
+        }
+    }
+}
+
+private val AGE_RATINGS = mapOf(
+    "safe" to "Safe",
+    "fifteenplus" to "FifteenPlus",
+    "eighteenplus" to "EighteenPlus",
 )
 
 internal class GenresFilter(
@@ -81,7 +107,31 @@ internal class GenresFilter(
 
 internal class TagsSearchFilter(
     val tagData: Map<String, String>,
-) : Filter.Text(" Tags (e.g. Medieval, -Politics)")
+) : Filter.Text("Tags (e.g. Medieval, -Politics)")
+
+internal class StaffSearchFilter : Filter.Text("Person (e.g. ONE, -Kokou no Hashiguchi)")
+
+internal class GroupsSearchFilter : Filter.Text("Group (e.g. Asura Scans, -The Hours Between)")
+
+internal open class RangeTextFilter(
+    name: String,
+) : Filter.Text(name) {
+    // Accepts "a", "a-b", or "a+" (open-ended).
+    fun parseRange(): Pair<Int?, Int?>? {
+        val input = state.trim()
+        val (minText, maxText) = when {
+            input.endsWith("+") -> input.removeSuffix("+") to null
+            else -> input.split("-", limit = 2).let { it[0] to it.getOrNull(1) }
+        }
+        val min = minText.trim().toIntOrNull()
+        val max = maxText?.trim()?.toIntOrNull()
+        return if (min == null && max == null) null else min to max
+    }
+}
+
+internal class YearFilter : RangeTextFilter("Year (e.g. 2024, 2024-2026, or 2024+)")
+
+internal class ChapterCountFilter : RangeTextFilter("Chapters (e.g. 1-20, 21-100, 101+)")
 
 internal class SourcesFilter(
     sources: List<FilterData>,
@@ -167,14 +217,19 @@ internal open class JsonMultiSelectTriFilter(
     }
 }
 
-internal class FormatFilter :
-    JsonMultiSelectFilter(
-        "Format",
-        "format",
-        FORMAT_OPTIONS.map { MultiSelectOption(it) },
-    )
+internal class FormatFilter(
+    excluded: Set<String> = emptySet(),
+) : JsonMultiSelectFilter(
+    "Format",
+    "format",
+    FORMAT_OPTIONS.map {
+        MultiSelectOption(it).apply {
+            state = excluded.isNotEmpty() && it !in excluded
+        }
+    },
+)
 
-private val FORMAT_OPTIONS = listOf("Manga", "Manhwa", "Manhua", "Comic", "Other")
+internal val FORMAT_OPTIONS = listOf("Manga", "Manhwa", "Manhua", "Comic", "Other")
 
 internal class PublicationStatusFilter :
     JsonMultiSelectFilter(

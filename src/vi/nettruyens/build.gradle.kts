@@ -9,9 +9,12 @@ keiyoushi {
     versionCode = 0
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
+    theme = "wpcomics"
 
     source {
         lang = "vi"
-        baseUrl = "https://nettruyen13s.com"
+        baseUrl {
+            custom("https://nettruyen16s.com")
+        }
     }
 }

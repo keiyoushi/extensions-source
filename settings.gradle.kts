@@ -32,8 +32,6 @@ dependencyResolutionManagement {
     }
 }
 
-enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
-
 rootProject.name = "Keiyoushi"
 
 /**
@@ -47,6 +45,7 @@ loadLanguageExtensions("zh")
  */
 include(":core")
 include(":compiler")
+include(":lint-rules")
 
 // Load all modules under /lib
 File(rootDir, "lib").eachDir { include("lib:${it.name}") }

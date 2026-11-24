@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "NetTruyenCO (unoriginal)"
-    versionCode = 8
+    versionCode = 9
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "wpcomics"
@@ -14,5 +14,9 @@ keiyoushi {
     source {
         lang = "vi"
         baseUrl = "https://nettruyenar.com"
+    }
+
+    deeplink {
+        path("/truyen-tranh/..*")
     }
 }

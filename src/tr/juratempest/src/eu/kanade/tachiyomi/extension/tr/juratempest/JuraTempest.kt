@@ -5,16 +5,16 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -24,8 +24,6 @@ import kotlin.time.Duration.Companion.seconds
 abstract class JuraTempest : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 3, period = 1.seconds)
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = add("Sec-Fetch-Site", "same-origin")
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/explore/${manga.url.removePrefix("/explore/").trim('/')}"
 
@@ -39,7 +37,7 @@ abstract class JuraTempest : KeiSource() {
         val slug = segments[1]
         val manga = SManga.create().apply { this.url = slug }
         return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false)
-            .manga
+            .manga()
             .apply {
                 initialized = true
                 this.url = slug
@@ -50,6 +48,7 @@ abstract class JuraTempest : KeiSource() {
         val offset = (page - 1) * SEARCH_PAGE_SIZE
         val response = client.post(
             "$baseUrl/api/rpc/search/manga",
+            fetch = Fetch.XHR,
             body = RpcRequest(SearchRequestPayload(q = WILDCARD_QUERY, limit = SEARCH_PAGE_SIZE, offset = offset)).toJsonRequestBody(),
         ).parseAs<RpcResponse<SearchResultDto>>()
 
@@ -67,6 +66,7 @@ abstract class JuraTempest : KeiSource() {
 
         val response = client.post(
             "$baseUrl/api/rpc/release/latest",
+            fetch = Fetch.XHR,
             body = RpcRequest(EmptyPayload()).toJsonRequestBody(),
         ).parseAs<RpcResponse<List<LatestReleaseDto>>>()
 
@@ -90,6 +90,7 @@ abstract class JuraTempest : KeiSource() {
         val offset = (page - 1) * SEARCH_PAGE_SIZE
         val response = client.post(
             "$baseUrl/api/rpc/search/manga",
+            fetch = Fetch.XHR,
             body = RpcRequest(SearchRequestPayload(q = trimmed, limit = SEARCH_PAGE_SIZE, offset = offset)).toJsonRequestBody(),
         ).parseAs<RpcResponse<SearchResultDto>>()
 
@@ -125,6 +126,7 @@ abstract class JuraTempest : KeiSource() {
     private suspend fun fetchCatalogueBatch(offset: Int): List<MangaDto> = try {
         val response = client.post(
             "$baseUrl/api/rpc/search/manga",
+            fetch = Fetch.XHR,
             body = RpcRequest(SearchRequestPayload(q = WILDCARD_QUERY, limit = 50, offset = offset)).toJsonRequestBody(),
         ).parseAs<RpcResponse<SearchResultDto>>()
         response.json.hits
@@ -137,34 +139,32 @@ abstract class JuraTempest : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val slug = manga.url.removePrefix("/explore/").trim('/')
 
-        val detailsDeferred = if (fetchDetails) {
-            async {
-                client.post(
-                    "$baseUrl/api/rpc/manga/bySlug",
-                    body = RpcRequest(MangaSlugPayload(slug)).toJsonRequestBody(),
-                ).parseAs<RpcResponse<MangaDto>>().json.toSMangaDetails()
-            }
-        } else {
-            null
-        }
-
-        val chaptersDeferred = if (fetchChapters) {
-            async {
-                client.post(
-                    "$baseUrl/api/rpc/chapter/byMangaSlug",
-                    body = RpcRequest(MangaSlugPayload(slug)).toJsonRequestBody(),
-                ).parseAs<RpcResponse<List<ChapterDto>>>().json.map { it.toSChapter(slug) }
-            }
-        } else {
-            null
-        }
-
-        SMangaUpdate(
-            manga = detailsDeferred?.await() ?: manga,
-            chapters = chaptersDeferred?.await() ?: chapters,
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    client.post(
+                        "$baseUrl/api/rpc/manga/bySlug",
+                        fetch = Fetch.XHR,
+                        body = RpcRequest(MangaSlugPayload(slug)).toJsonRequestBody(),
+                    ).parseAs<RpcResponse<MangaDto>>().json.toSMangaDetails()
+                } else {
+                    manga
+                }
+            },
+            chapters = {
+                if (fetchChapters) {
+                    client.post(
+                        "$baseUrl/api/rpc/chapter/byMangaSlug",
+                        fetch = Fetch.XHR,
+                        body = RpcRequest(MangaSlugPayload(slug)).toJsonRequestBody(),
+                    ).parseAs<RpcResponse<List<ChapterDto>>>().json.map { it.toSChapter(slug) }
+                } else {
+                    chapters
+                }
+            },
         )
     }
 
@@ -176,6 +176,7 @@ abstract class JuraTempest : KeiSource() {
 
         val response = client.post(
             "$baseUrl/api/rpc/release/byChapterSlug",
+            fetch = Fetch.XHR,
             body = RpcRequest(ChapterReleasePayload(mangaSlug, chapterSlug)).toJsonRequestBody(),
         ).parseAs<RpcResponse<List<ReleaseDto>>>()
 

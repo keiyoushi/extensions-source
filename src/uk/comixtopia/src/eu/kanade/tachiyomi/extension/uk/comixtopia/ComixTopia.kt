@@ -6,10 +6,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.array
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
@@ -25,19 +26,18 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
 abstract class ComixTopia : KeiSource() {
-
     private val apiUrl get() = "https://supa.${baseUrl.toHttpUrl().host}/rest/v1"
 
     private val apiHeaders: Headers get() = headersBuilder()
         .set("apikey", API_KEY)
         .set("authorization", "Bearer $API_KEY")
-        .set("x-client-info", "supabase-ssr/0.10.3 createBrowserClient")
+        .set("x-client-info", "supabase-ssr/0.12.5 createBrowserClient")
         .build()
 
     private val apiCountHeaders: Headers get() = headersBuilder()
         .set("apikey", API_KEY)
         .set("authorization", "Bearer $API_KEY")
-        .set("x-client-info", "supabase-ssr/0.10.3 createBrowserClient")
+        .set("x-client-info", "supabase-ssr/0.12.5 createBrowserClient")
         .set("Prefer", "count=exact")
         .build()
 
@@ -56,7 +56,7 @@ abstract class ComixTopia : KeiSource() {
             addPathSegment("comics")
             addQueryParameter("select", "slug,ukrainian_name,cover,authors:authors!inner(id),genres:genres!inner(id),publishers:publishers!inner(id),metadata:comics_metadata!inner(state,views)")
             addQueryParameter("metadata.state", "eq.approved")
-            if (!query.isBlank()) addQueryParameter("or", "(ukrainian_name.ilike.*$query*,original_name.ilike.*$query*)")
+            if (query.isNotBlank()) addQueryParameter("or", "(ukrainian_name.ilike.*$query*,original_name.ilike.*$query*)")
 
             filters?.forEach { filter ->
                 when (filter) {
@@ -79,7 +79,7 @@ abstract class ComixTopia : KeiSource() {
             addQueryParameter("offset", ((page - 1) * PAGINATION).toString())
         }.build()
 
-        return client.get(url, apiCountHeaders).use { response ->
+        return client.get(url, apiCountHeaders, Fetch.XHR).use { response ->
             val contentRange = response.header("content-range")?.substringAfter("/")?.toIntOrNull() ?: 0
             val hasNextPage = (page * 10) < contentRange
             val manga = response.parseAs<List<TitlesList>>().map { it.toSManga() }
@@ -94,7 +94,7 @@ abstract class ComixTopia : KeiSource() {
                 this.url = url.pathSegments[1]
             }
 
-            return fetchMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+            return fetchMangaUpdate(tmpManga, emptyList(), fetchDetails = true, fetchChapters = false).manga()
         }
 
         return null
@@ -116,16 +116,17 @@ abstract class ComixTopia : KeiSource() {
             addQueryParameter(
                 "select",
                 "slug,original_name,ukrainian_name,release_year,comic_status,age_limit,description,cover," +
-                    "authors:authors!inner(name)," +
-                    "publishers:publishers!inner(name)," +
-                    "genres:genres!inner(name)," +
-                    "votes:votes!inner(rating)," +
-                    "issues:issues!inner(id,issue_no,translator,created_at,image_list,metadata:issues_metadata!inner(state))",
+                    "authors:authors(name)," +
+                    "publishers:publishers(name)," +
+                    "genres:genres(name)," +
+                    "votes:votes(rating)," +
+                    "issues:issues(id,issue_no,translator,created_at,image_list,metadata:issues_metadata!inner(state))",
             )
             addQueryParameter("slug", "eq.$mangaUrl")
+            addQueryParameter("issues.metadata.state", "eq.approved")
         }.build()
 
-        val data = client.get(url, apiHeaders).parseAs<List<MangaFull>>().first()
+        val data = client.get(url, apiHeaders, Fetch.XHR).parseAs<List<MangaFull>>().first()
         val newManga = data.toSManga()
         val newChapters = data.toSChapters(mangaUrl).sortedWith(
             compareByDescending<SChapter> { it.chapter_number }.thenByDescending { it.date_upload },
@@ -151,12 +152,12 @@ abstract class ComixTopia : KeiSource() {
 
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
         val genres = async {
-            client.get("$apiUrl/genres?select=id,name", apiHeaders).use {
+            client.get("$apiUrl/genres?select=id,name", apiHeaders, Fetch.XHR).use {
                 it.parseAs<List<IdNameDto>>().sortedBy { dto -> dto.name }.map { dto -> dto.name to dto.id.toString() }
             }
         }
         val authors = async {
-            val data = client.get("$apiUrl/authors?select=id,name", apiHeaders).use {
+            val data = client.get("$apiUrl/authors?select=id,name", apiHeaders, Fetch.XHR).use {
                 it.parseAs<List<IdNameDto>>()
             }
             // 530 Authors
@@ -165,7 +166,7 @@ abstract class ComixTopia : KeiSource() {
             }
         }
         val publishers = async {
-            client.get("$apiUrl/publishers?select=id,name", apiHeaders).use {
+            client.get("$apiUrl/publishers?select=id,name", apiHeaders, Fetch.XHR).use {
                 it.parseAs<List<IdNameDto>>().sortedBy { dto -> dto.name }.map { dto -> dto.name to dto.id.toString() }
             }
         }

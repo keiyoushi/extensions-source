@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.inkr
 
+import keiyoushi.utils.aesCbc
 import keiyoushi.zip.fixedLength
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -7,9 +8,6 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import okio.buffer
 import okio.cipherSource
-import javax.crypto.Cipher
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 class ImageInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -25,9 +23,7 @@ class ImageInterceptor : Interceptor {
         // First 4 bytes are little-endian plaintext size; next 16 are IV. AES-CBC with no padding.
         val originalSize = source.readIntLe().toLong()
         val iv = source.readByteArray(IV_SIZE.toLong())
-        val cipher = Cipher.getInstance(TRANSFORM).apply {
-            init(Cipher.DECRYPT_MODE, SecretKeySpec(KEY, ALGORITHM), IvParameterSpec(iv))
-        }
+        val cipher = aesCbc(KEY, iv, padding = false)
 
         return response.newBuilder()
             .body(
@@ -41,8 +37,6 @@ class ImageInterceptor : Interceptor {
 
     companion object {
         private const val IV_SIZE = 16
-        private const val ALGORITHM = "AES"
-        private const val TRANSFORM = "AES/CBC/NoPadding"
         private const val KEY_XOR = 0x5A
         private val MEDIA_TYPE = "image/webp".toMediaType()
 

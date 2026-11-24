@@ -5,11 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.tryParseDate
 import okhttp3.HttpUrl
@@ -31,7 +32,7 @@ abstract class FuryoSquad : KeiSource() {
     // ========================= Popular =========================
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get("$baseUrl/mangas").asJsoup()
+        val document = client.get("$baseUrl/mangas", Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("div#fs-tous div.fs-card-body").mapNotNull { element ->
             val titleElement = element.selectFirst("span.fs-comic-title a") ?: return@mapNotNull null
             SManga.create().apply {
@@ -47,7 +48,7 @@ abstract class FuryoSquad : KeiSource() {
     // ========================= Latest =========================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val document = client.get(baseUrl).asJsoup()
+        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("table.table-striped tr").mapNotNull { element ->
             val titleElement = element.selectFirst("span.fs-comic-title a") ?: return@mapNotNull null
             SManga.create().apply {
@@ -81,7 +82,7 @@ abstract class FuryoSquad : KeiSource() {
             chapters = emptyList(),
             fetchDetails = true,
             fetchChapters = false,
-        ).manga
+        ).manga()
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -98,7 +99,7 @@ abstract class FuryoSquad : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(baseUrl + manga.url).asJsoup()
+        val document = client.get(baseUrl + manga.url, Fetch.DOCUMENT).asJsoup()
 
         manga.apply {
             title = document.selectFirst("h1.fs-comic-title")?.text() ?: title
@@ -134,7 +135,7 @@ abstract class FuryoSquad : KeiSource() {
     // ========================= Pages =========================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(baseUrl + chapter.url).asJsoup()
+        val document = client.get(baseUrl + chapter.url, Fetch.DOCUMENT).asJsoup()
         return document.select("div.fs-read img[id]").mapIndexed { i, img ->
             Page(i, "", img.attr("abs:src"))
         }

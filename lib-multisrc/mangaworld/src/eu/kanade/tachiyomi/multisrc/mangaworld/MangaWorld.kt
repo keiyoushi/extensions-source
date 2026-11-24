@@ -5,9 +5,10 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
@@ -32,21 +33,21 @@ abstract class MangaWorld : KeiSource() {
 
     override fun OkHttpClient.Builder.configureClient() = addInterceptor(CookieRedirectInterceptor(network.client))
 
-    override suspend fun getPopularManga(page: Int) = parseMangasPage(client.get("$baseUrl/archive?sort=most_read&page=$page").asJsoup())
+    override suspend fun getPopularManga(page: Int) = parseMangasPage(client.get("$baseUrl/archive?sort=most_read&page=$page", Fetch.DOCUMENT).asJsoup())
 
-    override suspend fun getLatestUpdates(page: Int) = parseMangasPage(client.get("$baseUrl/?page=$page").asJsoup())
+    override suspend fun getLatestUpdates(page: Int) = parseMangasPage(client.get("$baseUrl/?page=$page", Fetch.DOCUMENT).asJsoup())
 
-    private fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        thumbnail_url = element.selectFirst("a.thumb img")?.attr("abs:src")
-        element.selectFirst("a")?.let {
+    protected open fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        thumbnail_url = element.selectFirst(".card-cover img")?.attr("abs:src")
+        element.selectFirst(".card-title a")!!.let {
             setUrlWithoutDomain(it.attr("abs:href").removeSuffix("/"))
-            title = it.attr("title")
+            title = it.attr("title").ifBlank { it.text() }
         }
     }
 
-    private fun parseMangasPage(document: Document): MangasPage {
-        val mangas = document.select("div.comics-grid .entry").map { searchMangaFromElement(it) }
-        val hasNextPage = mangas.size == 16
+    protected open fun parseMangasPage(document: Document): MangasPage {
+        val mangas = document.select(".archive-grid .archive-card, article.card").map { searchMangaFromElement(it) }
+        val hasNextPage = document.selectFirst(".pager a[rel=next]") != null
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -84,18 +85,15 @@ abstract class MangaWorld : KeiSource() {
                 else -> {}
             }
         }
-        return parseMangasPage(client.get(url.build()).asJsoup())
+        return parseMangasPage(client.get(url.build(), Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "manga" || url.pathSegments.size < 3) return null
 
         val mangaUrl = url.pathSegments.take(3).joinToString("/", prefix = "/")
-        val document = client.get(baseUrl + mangaUrl).asJsoup()
-        return mangaDetailsParse(document).apply {
-            this.url = mangaUrl
-            title = document.selectFirst("div.comic-info h1")!!.text()
-        }
+        val document = client.get(baseUrl + mangaUrl, Fetch.DOCUMENT).asJsoup()
+        return mangaDetailsParse(document).apply { this.url = mangaUrl }
     }
 
     // details and chapters come from the same page
@@ -105,31 +103,40 @@ abstract class MangaWorld : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
-        val details = mangaDetailsParse(document).apply { title = manga.title }
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        val details = mangaDetailsParse(document)
         return SMangaUpdate(details, chapterListParse(document))
     }
 
-    private fun mangaDetailsParse(document: Document): SManga {
-        val infoElement = document.selectFirst("div.comic-info")
+    protected open fun mangaDetailsParse(document: Document): SManga {
+        val infoElement = document.selectFirst(".manga-info")
             ?: throw Exception("Page not found")
 
         return SManga.create().apply {
-            author = infoElement.selectFirst("a[href*=/archive?author=]")?.text()
-            artist = infoElement.selectFirst("a[href*=/archive?artist=]")?.text() ?: ""
-            thumbnail_url = infoElement.selectFirst(".thumb > img")?.attr("abs:src")
+            title = infoElement.selectFirst("h1.manga-title")?.text() ?: ""
+            author = infoElement.selectFirst(".manga-facts a[href*='author=']")?.text()
+            artist = infoElement.selectFirst(".manga-facts a[href*='artist=']")?.text() ?: ""
+            thumbnail_url = document.selectFirst(".manga-cover img")?.attr("abs:src")
 
             description = buildString {
-                append(document.select("div#noidungm").text())
-                val otherTitle = document.selectFirst("div.meta-data > div")?.text()
+                infoElement.selectFirst("a[href*='year=']")?.let {
+                    append("Anno di uscita: ${it.text()}")
+                    append("\n\n")
+                }
+
+                append(document.select(".manga-plot").text())
+
+                val otherTitle = infoElement.selectFirst(".manga-alt")?.text()
                 if (!otherTitle.isNullOrEmpty() && otherTitle.contains("Titoli alternativi")) {
                     append("\n\n").append(otherTitle)
                 }
             }
 
-            genre = infoElement.select("div.meta-data a.badge").joinToString { it.text() }
+            genre = listOf("a[href*='type=']", ".hero-chips a").flatMap {
+                infoElement.select(it)
+            }.joinToString { it.text() }
 
-            val statusText = infoElement.selectFirst("a[href*=/archive?status=]")?.text()
+            val statusText = infoElement.selectFirst(".manga-facts a[href*='status=']")?.text()
             status = parseStatus(statusText)
         }
     }
@@ -142,12 +149,12 @@ abstract class MangaWorld : KeiSource() {
         else -> SManga.UNKNOWN
     }
 
-    private fun chapterListParse(document: Document): List<SChapter> = document.select(".chapters-wrapper .chapter").map { element ->
+    protected open fun chapterListParse(document: Document): List<SChapter> = document.select(".volume-list .ch-row").map { element ->
         SChapter.create().apply {
-            val urlElement = element.selectFirst("a.chap") ?: throw Exception("Url not found")
+            val urlElement = element.selectFirst("a.ch") ?: throw Exception("Url not found")
             setUrlWithoutDomain(fixChapterUrl(urlElement.attr("abs:href")))
-            name = element.selectFirst("span.d-inline-block")?.text() ?: ""
-            date_upload = parseChapterDate(element.select(".chap-date").last()?.text())
+            name = element.selectFirst(".ch-name")?.text() ?: ""
+            date_upload = parseChapterDate(element.select(".ch-date").last()?.text())
             parseChapterNumber(name)?.let { chapter_number = it }
         }
     }
@@ -159,6 +166,7 @@ abstract class MangaWorld : KeiSource() {
             params.contains("style=list") -> url
             params.contains("style=pages") -> url.replace("style=pages", "style=list")
             params.isEmpty() -> "$url?style=list"
+
             else -> "$url&style=list"
         }
     }
@@ -168,13 +176,13 @@ abstract class MangaWorld : KeiSource() {
     protected fun parseChapterNumber(name: String): Float? = chapterNumberRegex.find(name)?.let { it.groups[1]?.value?.toFloatOrNull() }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
-        return document.select("div#page img.page-image").mapIndexed { index, it ->
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
+        return document.select("img.reader-page").mapIndexed { index, it ->
             Page(index, imageUrl = it.attr("abs:src"))
         }
     }
 
-    override fun imageRequest(page: Page): Request = super.imageRequest(page).newBuilder()
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
         .header("User-Agent", "Mozilla/5.0 (Linux; U; Android 4.1.1; en-gb; Build/KLP) AppleWebKit/534.30 (KHTML, like Gecko) Version/4.0 Safari/534.30")
         .build()
 

@@ -1,12 +1,12 @@
 package eu.kanade.tachiyomi.extension.zh.bakamh
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.network.rateLimit
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import java.time.format.DateTimeFormatter
@@ -17,8 +17,7 @@ abstract class Bakamh : Madara() {
     override val chapterDateFormat = DateTimeFormatter.ofPattern("yyyy 年 M 月 d 日", Locale.CHINESE)
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor(UserAgentClientHintsInterceptor())
-        rateLimit(2) // Rate limit added to prevent 429 errors during library updates
+        rateLimit(2) // Site answers 429 during library updates
     }
 
     override fun Headers.Builder.configureHeaders() = apply {
@@ -26,7 +25,11 @@ abstract class Bakamh : Madara() {
     }
 
     override val mangaDetailsSelectorStatus = ".post-content_item:contains(状态) .summary-content"
-    override fun chapterListSelector() = ".chapter-loveYou"
+
+    // Site keeps renaming the chapter <li> class, so match the list structure instead
+    override fun chapterListSelector() = "ul.version-chap > li"
+
+    override val chapterDateSelector = "span.chapter-release-date i"
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -42,8 +45,12 @@ abstract class Bakamh : Madara() {
         fetchChapters,
     )
 
-    override fun parsePages(document: Document) = document.selectFirst(".mkjp-ea-lock")?.let { error("本章节需要登录后阅读") }
-        ?: super.parsePages(document)
-
-    fun String.slug() = toHttpUrl().encodedPath.trimEnd('/').substringAfterLast('/')
+    override fun parsePages(document: Document): List<Page> {
+        document.selectFirst(".mkjp-ea-lock__title")?.let { title ->
+            val needsLogin = document.selectFirst(".mkjp-ea-lock [data-target='#form-login']") != null
+            error(if (needsLogin) "需在 WebView 中登录，账号有封禁风险" else title.text())
+        }
+        document.selectFirst(".mkjp-tool-warning")?.let { error(it.text()) }
+        return super.parsePages(document)
+    }
 }

@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "HentaiTnT"
     pkgName = "en.manhwaxxl"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 

@@ -54,7 +54,9 @@ class MangaDexFilters {
         override fun addQueryParameter(url: HttpUrl.Builder, dexLang: String) {
             if (state) {
                 url.addQueryParameter("hasAvailableChapters", "true")
-                url.addQueryParameter("availableTranslatedLanguage[]", dexLang)
+                if (dexLang != MDConstants.ALL_LANGUAGES) {
+                    url.addQueryParameter("availableTranslatedLanguage[]", dexLang)
+                }
             }
         }
     }

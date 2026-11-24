@@ -15,7 +15,10 @@ class SearchSeriesDto(
     private val title: String,
     private val slug: String,
     @SerialName("cover_url") private val coverUrl: String? = null,
+    private val chapters: List<LatestChapterDto>? = null,
 ) {
+    val latestChapterTimestamp: Long get() = chapters?.firstOrNull()?.timestamp ?: Long.MIN_VALUE
+
     fun toSManga(baseUrl: String) = SManga.create().apply {
         this.title = this@SearchSeriesDto.title
         this.url = id
@@ -112,6 +115,14 @@ class ChapterInfo(
 class SeriesSlugDto(
     val slug: String,
 )
+
+@Serializable
+class LatestChapterDto(
+    @SerialName("created_at") private val createdAt: String? = null,
+) {
+    val timestamp: Long get() = createdAt
+        ?.let { Instant.parseOrNull(it) }?.toEpochMilliseconds() ?: Long.MIN_VALUE
+}
 
 @Serializable
 class GenreInfo(

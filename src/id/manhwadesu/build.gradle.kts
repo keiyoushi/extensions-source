@@ -6,13 +6,15 @@ plugins {
 
 keiyoushi {
     name = "ManhwaDesu"
-    versionCode = 12
+    versionCode = 15
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     theme = "mangathemesia"
 
     source {
         lang = "id"
-        baseUrl = "https://manhwadesu.wiki"
+        baseUrl {
+            custom("https://manhwadesu.rest")
+        }
     }
 }

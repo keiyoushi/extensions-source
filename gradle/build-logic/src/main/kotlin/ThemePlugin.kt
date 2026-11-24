@@ -6,7 +6,9 @@ import io.github.keiyoushi.gradle.internal.extensions.compileOnly
 import io.github.keiyoushi.gradle.internal.extensions.implementation
 import io.github.keiyoushi.gradle.internal.extensions.kei
 import io.github.keiyoushi.gradle.internal.extensions.libs
+import io.github.keiyoushi.gradle.internal.extensions.lintChecks
 import io.github.keiyoushi.gradle.internal.extensions.plugins
+import io.github.keiyoushi.gradle.internal.extensionsLib
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
@@ -44,8 +46,9 @@ class ThemePlugin : Plugin<Project> {
 
         dependencies {
             compileOnly(libs.bundles.common)
-            compileOnly(keiyoushi.libVersion.flatMap { if (it == "1.6") libs.tachiyomi.lib.v16 else libs.tachiyomi.lib.v14 })
+            compileOnly(keiyoushi.libVersion.flatMap { libs.extensionsLib(it) })
             implementation(project(":core"))
+            lintChecks(project(":lint-rules"))
         }
 
         afterEvaluate {

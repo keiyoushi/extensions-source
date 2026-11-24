@@ -1,15 +1,10 @@
 package eu.kanade.tachiyomi.extension.zh.favcomic
 
 import android.util.Base64
+import keiyoushi.utils.aesDecryptWithPrependedIv
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.asResponseBody
-import okio.buffer
-import okio.cipherSource
-import javax.crypto.Cipher
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 class ImageDecryptInterceptor : Interceptor {
 
@@ -23,15 +18,12 @@ class ImageDecryptInterceptor : Interceptor {
             return response
         }
 
-        val source = response.body.source()
-        val iv = source.readByteArray(16)
-        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-        cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes, "AES"), IvParameterSpec(iv))
-
         val contentType = getMimeType(request.url.toString()).toMediaType()
-        val body = source.cipherSource(cipher).buffer().asResponseBody(contentType)
-
-        return response.newBuilder().body(body).build()
+        return response.aesDecryptWithPrependedIv(
+            key = keyBytes,
+            ivSize = 16,
+            contentType = contentType,
+        )
     }
 
     private fun getMimeType(url: String): String {

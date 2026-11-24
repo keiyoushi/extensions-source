@@ -7,14 +7,18 @@ import android.graphics.Typeface
 import android.net.Uri
 import android.text.Html
 import android.text.Layout
+import android.text.SpannableString
+import android.text.Spanned
 import android.text.StaticLayout
 import android.text.TextPaint
+import android.text.style.MetricAffectingSpan
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.ByteArrayOutputStream
+import java.io.File
 
 // Designer values:
 private const val WIDTH: Int = 1000
@@ -28,7 +32,28 @@ private const val SPACING_ADD: Float = 2f
 // No need to touch this one:
 private const val HOST = TextInterceptorHelper.HOST
 
-class TextInterceptor : Interceptor {
+/**
+ * Draws the text pages made with [TextInterceptorHelper.createUrl] as images.
+ *
+ * @param fallbackFont path of a font in the extension's APK (e.g. `/assets/fonts/font.ttf`), used for the characters
+ * that the device's fonts can't draw.
+ */
+class TextInterceptor(private val fallbackFont: String? = null) : Interceptor {
+
+    // A font that fails to load leaves the pages drawn with the device's fonts only
+    private val fallbackTypeface: Typeface? by lazy {
+        val path = fallbackFont ?: return@lazy null
+        runCatching {
+            val file = File.createTempFile("font", ".ttf")
+            try {
+                javaClass.getResourceAsStream(path)!!.use { input -> file.outputStream().use(input::copyTo) }
+                Typeface.createFromFile(file)
+            } finally {
+                file.delete()
+            }
+        }.getOrNull()
+    }
+
     // With help from:
     // https://github.com/tachiyomiorg/tachiyomi-extensions/pull/13304#issuecomment-1234532897
     // https://medium.com/over-engineering/drawing-multiline-text-to-canvas-on-android-9b98f0bfa16a
@@ -50,7 +75,7 @@ class TextInterceptor : Interceptor {
 
             @Suppress("DEPRECATION")
             StaticLayout(
-                title,
+                title.withFallbackFont(paintHeading),
                 paintHeading,
                 (WIDTH - 2 * X_PADDING).toInt(),
                 Layout.Alignment.ALIGN_NORMAL,
@@ -73,7 +98,7 @@ class TextInterceptor : Interceptor {
 
             @Suppress("DEPRECATION")
             StaticLayout(
-                story,
+                story.withFallbackFont(paintBody),
                 paintBody,
                 (WIDTH - 2 * X_PADDING).toInt(),
                 Layout.Alignment.ALIGN_NORMAL,
@@ -110,12 +135,38 @@ class TextInterceptor : Interceptor {
 
     private fun textFixer(htmlString: String): String = Html.fromHtml(htmlString, Html.FROM_HTML_MODE_LEGACY).toString()
 
+    private fun String.withFallbackFont(paint: TextPaint): CharSequence {
+        val font = fallbackTypeface ?: return this
+        val fallbackPaint = TextPaint(paint).apply { typeface = font }
+        val text = SpannableString(this)
+        var start = 0
+        while (start < length) {
+            val end = offsetByCodePoints(start, 1)
+            val char = substring(start, end)
+            if (!paint.hasGlyph(char) && fallbackPaint.hasGlyph(char)) {
+                text.setSpan(FontSpan(font), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+            start = end
+        }
+        return text
+    }
+
     @Suppress("SameParameterValue")
     private fun StaticLayout.draw(canvas: Canvas, x: Float, y: Float) {
         canvas.save()
         canvas.translate(x, y)
         this.draw(canvas)
         canvas.restore()
+    }
+
+    private class FontSpan(private val font: Typeface) : MetricAffectingSpan() {
+        override fun updateMeasureState(paint: TextPaint) {
+            paint.typeface = font
+        }
+
+        override fun updateDrawState(paint: TextPaint) {
+            paint.typeface = font
+        }
     }
 }
 

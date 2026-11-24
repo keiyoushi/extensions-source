@@ -20,7 +20,7 @@ class ImageInterceptor : Interceptor {
         val response = chain.proceed(request)
         val fragment = request.url.fragment
 
-        if (fragment.isNullOrEmpty() || fragment != "scramble" || !response.isSuccessful) return response
+        if (fragment != "scramble" || !response.isSuccessful) return response
 
         val source = response.body.source()
         val contentLength = response.body.contentLength()

@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.asJsoup
 import java.time.LocalDate
@@ -24,7 +25,7 @@ abstract class ShonenJumpPlus : GigaViewer() {
 
     override suspend fun fetchCollection(ids: List<String>): List<SManga> = fetchSeriesPage(ids.single(), "ul.series-list li a")
 
-    private suspend fun fetchSeriesPage(path: String, selector: String): List<SManga> = client.get("$baseUrl/series$path").asJsoup().select(selector).map {
+    private suspend fun fetchSeriesPage(path: String, selector: String): List<SManga> = client.get("$baseUrl/series$path", Fetch.DOCUMENT).asJsoup().select(selector).map {
         SManga.create().apply {
             title = it.selectFirst("h2.series-list-title")!!.text()
             thumbnail_url = it.selectFirst("div.series-list-thumb img")?.absUrl("data-src")

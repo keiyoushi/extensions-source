@@ -1,7 +1,12 @@
 package eu.kanade.tachiyomi.extension.uk.faust
 
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
+import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha256
 import keiyoushi.utils.string
+import keiyoushi.utils.xorInPlace
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
@@ -13,11 +18,8 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import java.security.MessageDigest
 import java.time.Instant
 import java.util.Base64
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 
 class AuthInterceptor(
     private val clientProvider: () -> OkHttpClient,
@@ -35,8 +37,6 @@ class AuthInterceptor(
             byteArrayOf()
         }
     }
-
-    private val secretKeySpec by lazy { SecretKeySpec(secretBytes, "HmacSHA256") }
 
     private var accessToken: String? = null
     private var tokenExpiresAt: Long = 0L
@@ -57,7 +57,7 @@ class AuthInterceptor(
         val currentToken = getValidAccessToken()
         val timestamp = Instant.now().epochSecond.toString()
         val pathAndQuery = url.encodedPath + if (url.encodedQuery != null) "?${url.encodedQuery}" else ""
-        val signature = hmacSha256("$timestamp:$pathAndQuery")
+        val signature = sign("$timestamp:$pathAndQuery")
 
         val requestBuilder = originalRequest.newBuilder()
             .header(HEADER_TIMESTAMP, timestamp)
@@ -78,7 +78,7 @@ class AuthInterceptor(
                 val freshToken = refreshAccessToken()
                 if (!freshToken.isNullOrEmpty()) {
                     val retryTimestamp = Instant.now().epochSecond.toString()
-                    val retrySignature = hmacSha256("$retryTimestamp:$pathAndQuery")
+                    val retrySignature = sign("$retryTimestamp:$pathAndQuery")
                     val retryRequest = originalRequest.newBuilder()
                         .header(HEADER_TIMESTAMP, retryTimestamp)
                         .header(HEADER_SIGN, retrySignature)
@@ -124,7 +124,7 @@ class AuthInterceptor(
         try {
             val url = "${baseUrlProvider()}$AUTH_PATH"
             val timestamp = Instant.now().epochSecond.toString()
-            val signature = hmacSha256("$timestamp:$AUTH_PATH")
+            val signature = sign("$timestamp:$AUTH_PATH")
 
             val request = Request.Builder()
                 .url(url)
@@ -133,6 +133,7 @@ class AuthInterceptor(
                 .header(HEADER_SIGN, signature)
                 .header(HEADER_OBFUSCATION, OBFUSCATION_MODE)
                 .header(HEADER_CONTENT, JSON_CONTENT_TYPE)
+                .fetch(Fetch.XHR)
                 .build()
 
             val client = clientProvider()
@@ -175,25 +176,15 @@ class AuthInterceptor(
         Instant.now().epochSecond + 3600
     }
 
-    private fun hmacSha256(data: String): String {
+    private fun sign(data: String): String {
         if (secretBytes.isEmpty()) return ""
-        val mac = Mac.getInstance("HmacSHA256")
-        mac.init(secretKeySpec)
-        return mac.doFinal(data.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+        return data.hmacSha256(secretBytes).toHexString()
     }
 
     private fun xorDecrypt(cipherBytes: ByteArray, timestamp: String, secret: ByteArray): ByteArray {
         if (secret.isEmpty()) return cipherBytes
-        val digest = MessageDigest.getInstance("SHA-256")
-        digest.update("$timestamp:".toByteArray(Charsets.UTF_8))
-        digest.update(secret)
-        val key = digest.digest()
-
-        val decrypted = ByteArray(cipherBytes.size)
-        for (i in cipherBytes.indices) {
-            decrypted[i] = (cipherBytes[i].toInt() xor key[i % key.size].toInt()).toByte()
-        }
-        return decrypted
+        val key = ("$timestamp:".encodeToByteArray() + secret).sha256()
+        return cipherBytes.xorInPlace(key)
     }
 
     companion object {

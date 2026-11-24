@@ -2,6 +2,8 @@ package eu.kanade.tachiyomi.extension.en.setsuscans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.rateLimit
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -51,6 +53,7 @@ abstract class SetsuScans : Madara() {
 
             val newRequest = chain.request().newBuilder()
                 .url(newUrl.build())
+                .fetch(Fetch.IMAGE)
                 .build()
             return client.newCall(newRequest).execute()
         }

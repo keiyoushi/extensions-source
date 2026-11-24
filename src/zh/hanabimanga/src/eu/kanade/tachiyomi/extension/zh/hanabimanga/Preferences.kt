@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.zh.hanabimanga
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.text.InputType
 import android.util.Patterns
 import android.widget.Toast
 import androidx.preference.EditTextPreference
@@ -13,15 +14,22 @@ const val PREF_PASSWORD = "PASSWORD"
 const val PREF_POPULAR_MANGA = "POPULAR_MANGA"
 const val PREF_AI_SR = "AI_SUPER_RESOLUTION"
 
-fun preferencesInternal(context: Context, pref: SharedPreferences) = arrayOf(
+private fun String?.orUnset() = if (isNullOrEmpty()) "未设置" else this
+
+private fun String?.masked() = if (isNullOrEmpty()) orUnset() else "*".repeat(length)
+
+fun preferencesInternal(context: Context, pref: SharedPreferences, onAccountChange: () -> Unit) = arrayOf(
     EditTextPreference(context).apply {
         key = PREF_EMAIL
         title = "登录邮箱"
-        summary = pref.getString(key, "未设置")
+        summary = pref.getString(key, null).orUnset()
         setDefaultValue(null)
+        setOnBindEditTextListener { it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS }
         setOnPreferenceChangeListener { _, newValue ->
-            if (Patterns.EMAIL_ADDRESS.matcher(newValue as String).matches()) {
-                summary = newValue
+            val email = newValue as String
+            if (email.isEmpty() || Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                summary = email.orUnset()
+                onAccountChange()
                 true
             } else {
                 Toast.makeText(context, "邮箱格式不正确！", Toast.LENGTH_SHORT).show()
@@ -32,10 +40,12 @@ fun preferencesInternal(context: Context, pref: SharedPreferences) = arrayOf(
     EditTextPreference(context).apply {
         key = PREF_PASSWORD
         title = "登录密码"
-        summary = pref.getString(key, null)?.let { "*".repeat(it.length) } ?: "未设置"
+        summary = pref.getString(key, null).masked()
         setDefaultValue(null)
+        setOnBindEditTextListener { it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD }
         setOnPreferenceChangeListener { _, newValue ->
-            summary = "*".repeat((newValue as String).length)
+            summary = (newValue as String).masked()
+            onAccountChange()
             true
         }
     },

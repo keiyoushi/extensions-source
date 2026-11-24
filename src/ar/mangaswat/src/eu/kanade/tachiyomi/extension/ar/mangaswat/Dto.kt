@@ -2,54 +2,61 @@ package eu.kanade.tachiyomi.extension.ar.mangaswat
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.time.Instant
 
 @Serializable
 class MangaListDto(
     val results: List<MangaDto>,
-    private val next: String? = null,
-) {
-    fun hasNext(): Boolean = next != null
-}
+    val next: String? = null,
+)
 
 @Serializable
 class MangaDto(
     private val id: Int? = null,
-    private val serie_id: Int? = null,
+    @SerialName("serie_id") private val serieId: Int? = null,
     private val title: String,
     private val poster: PosterDto,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         title = this@MangaDto.title
-        thumbnail_url = poster.medium
-        url = (id ?: serie_id)!!.toString()
+        thumbnail_url = poster.medium.toAppHost()
+        url = (id ?: serieId)!!.toString()
     }
 }
 
 @Serializable
-internal class MangaDetailsDto(
+class MangaDetailsDto(
+    private val id: Int,
     private val title: String,
     private val poster: PosterDto,
+    private val alternative: String? = null,
+    private val type: AttributesDto? = null,
     private val genres: List<AttributesDto> = emptyList(),
     private val story: String? = null,
     private val author: AttributesDto? = null,
     private val artist: AttributesDto? = null,
-    private val status: AttributesDto? = null,
+    private val status: StatusDto? = null,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
+        url = id.toString()
         title = this@MangaDetailsDto.title
-        thumbnail_url = poster.medium
-        description = story
-        genre = genres.joinToString { it.name }
+        thumbnail_url = poster.medium.toAppHost()
+        description = MarkdownDescription.Builder()
+            .description(story)
+            .altTitles(alternative?.split("|").orEmpty())
+            .build()
+        genre = (listOfNotNull(type) + genres).joinToString { it.name }
         author = this@MangaDetailsDto.author?.name
         artist = this@MangaDetailsDto.artist?.name
-        status = when (this@MangaDetailsDto.status?.name) {
-            "ongoing" -> SManga.ONGOING
-            "completed" -> SManga.COMPLETED
+        status = when (this@MangaDetailsDto.status?.id) {
+            79 -> SManga.ONGOING
+            80 -> SManga.COMPLETED
+            81 -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
     }
@@ -63,12 +70,23 @@ class ChapterListDto(
 
 @Serializable
 class PageListDto(
+    val serie: SerieRefDto,
     val images: List<PageDto>,
+)
+
+@Serializable
+class SerieRefDto(
+    val id: Int,
 )
 
 @Serializable
 class PosterDto(
     val medium: String,
+)
+
+@Serializable
+class StatusDto(
+    val id: Int,
 )
 
 @Serializable
@@ -86,17 +104,21 @@ class ChapterDto(
     fun toSChapter(): SChapter = SChapter.create().apply {
         name = chapter
         url = "/chapters/$id/$slug/"
-        date_upload = Instant.parseOrNull(createdAt)?.toEpochMilliseconds() ?: 0L
-
-        // Not used
-        memo = buildJsonObject {
-            put("id", id)
-            put("slug", slug)
-        }
+        date_upload = Instant.tryParse(createdAt)
     }
 }
 
 @Serializable
 class PageDto(
     val image: String,
+    val order: Int,
 )
+
+@Serializable
+class GenreDto(
+    val id: Int,
+    val name: String,
+)
+
+// Cached API responses can carry the website's host
+fun String.toAppHost(): String = toHttpUrl().newBuilder().host(MangaSwat.APP_HOST).build().toString()

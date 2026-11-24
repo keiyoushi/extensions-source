@@ -2,34 +2,17 @@ package eu.kanade.tachiyomi.extension.es.catharsisworld
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-class SortFilter(state: Selection = Selection(0, false)) : Filter.Sort("Ordenar por", SORTS.map { it.first }.toTypedArray(), state) {
-    val value: String
-        get() {
-            val selection = state ?: Selection(0, false)
-            val prefix = if (selection.ascending) "" else "-"
-            return prefix + SORTS[selection.index].second
-        }
+class SortFilter(labels: List<String>, default: Int) : Filter.Sort("Ordenar por", labels.toTypedArray(), Selection(default, false))
 
-    companion object {
-        private val SORTS = listOf(
-            "Última actualización" to "fecha_ultimo_capitulo",
-            "Visitas" to "n_visitas",
-            "Fecha de creación" to "date_created",
-            "Nombre" to "nombre",
-        )
-    }
+class StatusFilter(private val statuses: List<String>) : Filter.Select<String>("Estado", (listOf("Todos") + statuses).toTypedArray()) {
+    val value get() = statuses.getOrNull(state - 1)
 }
 
-class StatusFilter : Filter.Select<String>("Estado", STATUSES.map { it.first }.toTypedArray()) {
-    val value get() = STATUSES[state].second
+class LetterFilter : Filter.Select<String>("Letra", LETTERS.toTypedArray()) {
+    val value get() = LETTERS[state].takeIf { state > 0 }
 
     companion object {
-        private val STATUSES = listOf(
-            "Todos" to null,
-            "En emisión" to "curso",
-            "Hiatus" to "pausado",
-            "Terminado" to "terminado",
-        )
+        private val LETTERS = listOf("Todas", "#") + ('A'..'Z').map(Char::toString)
     }
 }
 

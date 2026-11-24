@@ -9,22 +9,33 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.BaseUrlFetchInterceptor
+import keiyoushi.network.BrowserCallInterceptor
+import keiyoushi.network.BrowserHeadersInterceptor
 import keiyoushi.network.CacheControlInterceptor
+import keiyoushi.network.Deflate
+import keiyoushi.network.Fetch
 import keiyoushi.network.RateLimitInterceptor
+import keiyoushi.network.fetch
+import keiyoushi.network.kind
 import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.jsonInstance
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.okio.decodeFromBufferedSource
 import kotlinx.serialization.json.okio.encodeToBufferedSink
 import okhttp3.CompressionInterceptor
+import okhttp3.Dispatcher
 import okhttp3.Gzip
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -43,6 +54,10 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.seconds
+import eu.kanade.tachiyomi.source.model.SMangaUpdate as LibSMangaUpdate
+
+private val BASE_URL_FETCH_TIMEOUT = 10.seconds
 
 abstract class KeiSource : HttpSource() {
 
@@ -101,6 +116,11 @@ abstract class KeiSource : HttpSource() {
                 }
             }
 
+            // first, so source interceptors only see the fetched url
+            fetchableBaseUrl?.let { preferences ->
+                addInterceptor(BaseUrlFetchInterceptor({ baseUrl }) { fetchBaseUrlsBlocking(preferences) })
+            }
+
             configureClient()
 
             // cf interceptor below source specific interceptors
@@ -113,11 +133,15 @@ abstract class KeiSource : HttpSource() {
                 }
             }
 
-            // last application interceptor
-            addInterceptor(CompressionInterceptor(Brotli, Gzip, Zstd))
+            // the browser headers for requests with a Fetch
+            addInterceptor(BrowserCallInterceptor({ baseUrl }, { imageFetch }))
+            // last application interceptor; the encodings and order browsers send
+            addInterceptor(CompressionInterceptor(Gzip, Deflate, Brotli, Zstd))
 
             // allow caching when server doesn't explicitly say anything
             addNetworkInterceptor(CacheControlInterceptor())
+
+            addNetworkInterceptor(BrowserHeadersInterceptor)
 
             // keep the source's rate limiter as the last network interceptor
             networkInterceptors().apply {
@@ -131,16 +155,49 @@ abstract class KeiSource : HttpSource() {
     }
 
     /**
+     * Base url preferences of a source overriding [fetchBaseUrls].
+     * Do not override by hand.
+     */
+    protected open val fetchableBaseUrl: FetchableBaseUrl? get() = null
+
+    /**
+     * Fetches the site's current base urls, in the site's order: one url, or every mirror it lists.
+     *
+     * Needs a `mirrors(...)` or `custom(...)` baseUrl. Runs once per source per app launch, before its first request:
+     * the urls replace the mirror list, or the first one becomes the custom url and its default.
+     *
+     * @param client the client to use for the lookup: requests on [KeiSource.client] wait for it to finish.
+     */
+    protected open suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = emptyList()
+
+    private fun fetchBaseUrlsBlocking(preferences: FetchableBaseUrl) {
+        // Without the interceptor that waits for this lookup, and with its own request slots
+        val lookupClient = client.newBuilder()
+            .dispatcher(Dispatcher())
+            .callTimeout(BASE_URL_FETCH_TIMEOUT)
+            .apply { interceptors().removeAll { it is BaseUrlFetchInterceptor } }
+            .build()
+        try {
+            val urls = runBlocking { withTimeout(BASE_URL_FETCH_TIMEOUT) { fetchBaseUrls(lookupClient) } }
+                .mapNotNull { it.toHttpUrlOrNull()?.resolve("/")?.toString()?.removeSuffix("/") }
+                .distinct()
+            if (urls.isNotEmpty()) preferences.update(urls)
+        } catch (e: Exception) {
+            Log.e(name, "Failed to fetch base urls", e)
+        }
+    }
+
+    /**
      * Customizes the base Headers builder. Subclasses can override this to append source-specific
      * headers.
      *
-     * Note: "User-Agent", "Referer", and "Origin" are already added by default.
+     * Note: `User-Agent` and `Referer` are set here. The other browser headers, `Origin` included, are added per
+     * request kind; headers set here or on a request are kept.
      */
     protected open fun Headers.Builder.configureHeaders(): Headers.Builder = this
 
     final override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
-        .set("Origin", baseUrl)
         .configureHeaders()
 
     /**
@@ -365,20 +422,26 @@ abstract class KeiSource : HttpSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
+    ): LibSMangaUpdate {
         check(fetchDetails || fetchChapters) { "getMangaUpdate called with nothing to fetch (fetchDetails=false, fetchChapters=false)" }
 
-        check(updatesInFlight.putIfAbsent(manga.url, true) == null) { "getMangaUpdate must not be called concurrently for same manga" }
+        val key = manga.url
+        check(updatesInFlight.putIfAbsent(key, true) == null) { "getMangaUpdate must not be called concurrently for same manga" }
 
         try {
             val update = fetchMangaUpdate(manga, chapters, fetchDetails, fetchChapters)
 
-            return SMangaUpdate(
-                manga = update.manga.apply { initialized = true },
-                chapters = update.chapters,
-            )
+            return coroutineScope {
+                val details = async { update.manga() }
+                val chapterList = async { update.chapters() }
+
+                LibSMangaUpdate(
+                    manga = details.await().apply { initialized = true },
+                    chapters = chapterList.await(),
+                )
+            }
         } finally {
-            updatesInFlight.remove(manga.url)
+            updatesInFlight.remove(key)
         }
     }
 
@@ -439,9 +502,26 @@ abstract class KeiSource : HttpSource() {
      */
     abstract override suspend fun getPageList(chapter: SChapter): List<Page>
 
-    override fun imageRequest(page: Page): Request = Request.Builder()
+    /**
+     * How page images and the covers the app loads go out: [Fetch.IMAGE] sends the headers a browser sends for them;
+     * [Fetch.NONE] sends them as built.
+     */
+    protected open val imageFetch: Fetch get() = Fetch.IMAGE
+
+    /**
+     * Builds the request for a page's image. A GET without a [Fetch] is sent with [imageFetch].
+     *
+     * @param page the page.
+     * @return the request for its image.
+     */
+    protected open fun getImageRequest(page: Page): Request = Request.Builder()
         .url(page.imageUrl!!)
         .headers(headers)
-        .get()
         .build()
+
+    final override fun imageRequest(page: Page): Request {
+        val request = getImageRequest(page)
+        val image = request.kind == null && request.method == "GET"
+        return if (image) request.newBuilder().fetch(imageFetch).build() else request
+    }
 }

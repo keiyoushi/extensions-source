@@ -25,12 +25,9 @@ abstract class NHentaiCom : HentaiHand() {
         "la" -> listOf(13)
         "ceb" -> listOf(14)
         "tl" -> listOf(15)
-        "fi" -> listOf(16)
         "tr" -> listOf(17)
         "sr" -> listOf(18)
         "el" -> listOf(19)
-        "ko" -> listOf(20)
-        "ro" -> listOf(21)
         else -> emptyList()
     }
 }

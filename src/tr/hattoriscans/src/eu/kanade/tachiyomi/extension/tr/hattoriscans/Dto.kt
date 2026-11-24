@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.tr.hattoriscans
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -57,6 +58,8 @@ class MangaDetailsDto(
     private val type: String? = null,
     private val status: String? = null,
     private val genres: List<GenreDto> = emptyList(),
+    private val ratingAverage: Float? = null,
+    private val ratingCount: Int? = null,
 ) {
     fun toSManga(baseUrl: String) = SManga.create().apply {
         url = slug
@@ -68,14 +71,11 @@ class MangaDetailsDto(
             type?.let { add(it.replaceFirstChar(Char::uppercase)) }
             genres.mapTo(this) { it.name }
         }.joinToString().ifBlank { null }
-        description = buildString {
-            this@MangaDetailsDto.description?.let { append(it.trim()) }
-            if (alternativeTitles.isNotEmpty()) {
-                if (isNotEmpty()) append("\n\n")
-                append("Alternatif isimler: ")
-                append(alternativeTitles.joinToString())
-            }
-        }.ifBlank { null }
+        description = MarkdownDescription.Builder()
+            .rating(ratingAverage?.takeIf { ratingCount != 0 }, max = 5, votes = ratingCount)
+            .description(this@MangaDetailsDto.description)
+            .altTitles(alternativeTitles, label = "Alternatif isimler")
+            .build()
         status = this@MangaDetailsDto.status.toStatus()
     }
 }
@@ -112,5 +112,5 @@ class ChapterDto(
 
 @Serializable
 class ChapterPagesDto(
-    val pages: List<String>,
+    val chapterImages: List<String>,
 )

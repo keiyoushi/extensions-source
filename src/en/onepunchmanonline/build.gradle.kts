@@ -6,12 +6,13 @@ plugins {
 
 keiyoushi {
     name = "One Punch Man Online"
-    versionCode = 0
+    versionCode = 4
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
+    theme = "solomanga"
 
     source {
         lang = "en"
-        baseUrl = "https://1punchman.com"
+        baseUrl = "https://w21.1punchman.com"
     }
 }

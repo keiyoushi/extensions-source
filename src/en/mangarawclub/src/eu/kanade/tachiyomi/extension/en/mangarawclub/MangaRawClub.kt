@@ -8,16 +8,15 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDateTime
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -63,7 +62,7 @@ abstract class MangaRawClub :
                 addQueryParameter("results", page.toString())
             }.build()
 
-            val document = client.get(url).asJsoup()
+            val document = client.get(url, Fetch.DOCUMENT).asJsoup()
             val mangas = document.select(".novel-item").map { element ->
                 SManga.create().apply {
                     title = element.selectFirst(".novel-title")!!.text()
@@ -135,7 +134,7 @@ abstract class MangaRawClub :
     }
 
     private suspend fun browseMangaList(url: HttpUrl): MangasPage {
-        val data = client.get(url).parseAs<Dto>()
+        val data = client.get(url, Fetch.XHR).parseAs<Dto>()
         val document = Jsoup.parseBodyFragment(data.html, baseUrl)
         val mangas = document.select(".comic-card").map { searchMangaFromElement(it) }
 
@@ -156,15 +155,13 @@ abstract class MangaRawClub :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = if (fetchDetails) async { fetchMangaDetails(manga) } else null
-        val chapterList = if (fetchChapters) async { fetchChapterList(manga) } else null
-
-        SMangaUpdate(details?.await() ?: manga, chapterList?.await() ?: chapters)
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) fetchMangaDetails(manga) else manga },
+        chapters = { if (fetchChapters) fetchChapterList(manga) else chapters },
+    )
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga = SManga.create().apply {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         document.selectFirst(".novel-header") ?: throw Exception("Page not found")
 
         url = manga.url
@@ -217,7 +214,7 @@ abstract class MangaRawClub :
 
     // ============================= Chapters ==============================
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
-        val document = client.get(baseUrl + manga.url + "all-chapters/").asJsoup()
+        val document = client.get(baseUrl + manga.url + "all-chapters/", Fetch.DOCUMENT).asJsoup()
         return document.select("ul.chapter-list > li").map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
@@ -238,7 +235,7 @@ abstract class MangaRawClub :
 
     // =============================== Pages ===============================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("#chapter-reader img")
             .filterNot { it.absUrl("src").contains("credits-mgeko.png") }
             .mapIndexed { i, img ->

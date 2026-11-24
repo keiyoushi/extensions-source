@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "RawDEX"
-    versionCode = 56
+    versionCode = 57
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 

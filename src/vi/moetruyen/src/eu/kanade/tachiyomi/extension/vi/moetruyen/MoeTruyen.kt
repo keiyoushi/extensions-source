@@ -1,32 +1,24 @@
 package eu.kanade.tachiyomi.extension.vi.moetruyen
 
-import android.app.Activity
-import android.app.AlertDialog
-import android.app.Application
-import android.os.Bundle
-import android.widget.EditText
-import android.widget.FrameLayout
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.applicationContext
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
+import keiyoushi.utils.tryParseDate
+import keiyoushi.utils.ui.askInput
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -39,8 +31,6 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.lang.ref.WeakReference
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Collections
@@ -55,40 +45,15 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class MoeTruyen : KeiSource() {
-    private var currentActivity: WeakReference<Activity>? = null
-
-    init {
-        try {
-            applicationContext.registerActivityLifecycleCallbacks(
-                object : Application.ActivityLifecycleCallbacks {
-                    override fun onActivityResumed(a: Activity) {
-                        currentActivity = WeakReference(a)
-                    }
-                    override fun onActivityPaused(a: Activity) {
-                        if (currentActivity?.get() === a) currentActivity = null
-                    }
-                    override fun onActivityDestroyed(a: Activity) {
-                        if (currentActivity?.get() === a) currentActivity = null
-                    }
-                    override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
-                    override fun onActivityStarted(activity: Activity) = Unit
-                    override fun onActivityStopped(activity: Activity) = Unit
-                    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
-                },
-            )
-        } catch (_: Throwable) {
-        }
-    }
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = apply {
-        set("Sec-Fetch-Dest", "document")
-        set("Sec-Fetch-Mode", "navigate")
-    }
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
         addInterceptor(imgxInterceptor())
         rateLimit(3)
     }
+
+    // Server withholds the reader token when Accept-Encoding is set (OkHttp transparent
+    // gzip injects "gzip"), so force identity to look like a real navigation.
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("Accept-Encoding", "identity")
 
     // ============================== Popular ===============================
 
@@ -98,7 +63,7 @@ abstract class MoeTruyen : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        return parseMangaList(client.get(url).asJsoup())
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     // ============================== Latest ================================
@@ -108,7 +73,7 @@ abstract class MoeTruyen : KeiSource() {
             .addQueryParameter("page", page.toString())
             .build()
 
-        return parseMangaList(client.get(url).asJsoup())
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
@@ -181,7 +146,7 @@ abstract class MoeTruyen : KeiSource() {
             }
             .build()
 
-        return parseMangaList(client.get(url).asJsoup())
+        return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -189,7 +154,7 @@ abstract class MoeTruyen : KeiSource() {
 
         val slug = url.pathSegments.getOrNull(1) ?: return null
         val manga = SManga.create().apply { setUrlWithoutDomain("/manga/$slug") }
-        return fetchMangaUpdate(manga, emptyList(), true, false).manga
+        return fetchMangaUpdate(manga, emptyList(), true, false).manga()
     }
 
     // ============================== Details ===============================
@@ -226,7 +191,7 @@ abstract class MoeTruyen : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         return SMangaUpdate(
             manga = parseMangaDetails(document, manga),
             chapters = if (fetchChapters) fetchChapterList(document) else chapters,
@@ -267,7 +232,7 @@ abstract class MoeTruyen : KeiSource() {
             }
 
             currentPageUrl = nextChapterPageUrl
-            currentDocument = client.get(currentPageUrl).asJsoup()
+            currentDocument = client.get(currentPageUrl, Fetch.DOCUMENT).asJsoup()
         }
 
         return chapters
@@ -310,25 +275,17 @@ abstract class MoeTruyen : KeiSource() {
         return (Clock.System.now() - duration).toEpochMilliseconds()
     }
 
-    private fun parseAbsoluteDate(date: String?): Long {
-        if (date == null) return 0L
-        return runCatching {
-            LocalDate.parse(date, dateFormat)
-                .atStartOfDay(dateZone)
-                .toInstant()
-                .toEpochMilli()
-        }.getOrDefault(0L)
-    }
+    private fun parseAbsoluteDate(date: String?): Long = dateFormat.tryParseDate(date, dateZone)
 
     // ============================== Pages =================================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = "$baseUrl${chapter.url}"
-        var document = client.get(chapterUrl).asJsoup()
+        var document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
 
         if (isCommentLocked(document)) {
             unlockByComment(chapter, document, chapterUrl)
-            document = client.get(chapterUrl).asJsoup()
+            document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
             if (isCommentLocked(document)) {
                 throw Exception("Không thể mở khóa chương này")
             }
@@ -378,7 +335,7 @@ abstract class MoeTruyen : KeiSource() {
         return text.contains("Bạn phải bình luận") || text.contains("yêu cầu bình luận")
     }
 
-    private suspend fun isLoggedIn(): Boolean = client.get("$baseUrl/auth/session", ensureSuccess = false).use { response ->
+    private suspend fun isLoggedIn(): Boolean = client.get("$baseUrl/auth/session", Fetch.XHR, ensureSuccess = false).use { response ->
         response.isSuccessful && response.parseAs<AuthSession>().session != null
     }
 
@@ -393,61 +350,12 @@ abstract class MoeTruyen : KeiSource() {
             ?.takeIf { it.isNotBlank() }
             ?: throw Exception(loginRequiredMessage)
 
-        val comment = promptForComment(chapter.name)
+        val comment = askInput(
+            title = chapter.name,
+            message = "Chương này yêu cầu bình luận ở chương trước\n\nBình luận vô nghĩa tài khoản sẽ bị khoá",
+            hint = "Bình luận",
+        ) ?: throw Exception("Đã hủy bình luận")
         postChapterComment(previousUrl, chapterUrl, comment)
-    }
-
-    // Some chapters require comment in previous chapter to unlock
-    private suspend fun promptForComment(chapterTitle: String): String {
-        val activity = currentActivity?.get()
-            ?: throw Exception(loginRequiredMessage)
-
-        val deferred = CompletableDeferred<String>()
-        var dialog: AlertDialog? = null
-
-        try {
-            withContext(Dispatchers.Main.immediate) {
-                val input = EditText(activity).apply {
-                    hint = "Bình luận"
-                }
-                val container = FrameLayout(activity).apply {
-                    val pad = (16 * resources.displayMetrics.density).toInt()
-                    setPadding(pad, pad / 2, pad, 0)
-                    addView(input)
-                }
-
-                dialog = AlertDialog.Builder(activity)
-                    .setTitle(chapterTitle)
-                    .setMessage("Chương này yêu cầu bình luận ở chương trước\n\nBình luận vô nghĩa tài khoản sẽ bị khoá")
-                    .setView(container)
-                    .setPositiveButton("Mở khóa") { _, _ ->
-                        val text = input.text.toString().trim()
-                        if (text.isNotBlank()) {
-                            deferred.complete(text)
-                        } else {
-                            deferred.completeExceptionally(Exception("Bình luận không được để trống"))
-                        }
-                    }
-                    .setNegativeButton("Hủy") { _, _ ->
-                        deferred.completeExceptionally(Exception("Đã hủy bình luận"))
-                    }
-                    .setOnCancelListener {
-                        deferred.completeExceptionally(Exception("Đã đóng hộp thoại"))
-                    }
-                    .setOnDismissListener {
-                        if (!deferred.isCompleted) {
-                            deferred.completeExceptionally(Exception("Đã đóng hộp thoại"))
-                        }
-                    }
-                    .show()
-            }
-
-            return deferred.await()
-        } finally {
-            withContext(NonCancellable + Dispatchers.Main.immediate) {
-                dialog?.takeIf { it.isShowing }?.dismiss()
-            }
-        }
     }
 
     private suspend fun postChapterComment(previousChapterUrl: String, referer: String, content: String) {
@@ -458,7 +366,7 @@ abstract class MoeTruyen : KeiSource() {
             .set("Accept", "application/json")
             .set("Idempotency-Key", requestId)
             .build()
-        val response = client.post("$previousChapterUrl/comments", requestHeaders, body, ensureSuccess = false)
+        val response = client.post("$previousChapterUrl/comments", requestHeaders, Fetch.XHR, body, ensureSuccess = false)
         if (!response.isSuccessful) {
             val code = response.code
             val errorBody = response.body.string()
@@ -487,7 +395,7 @@ abstract class MoeTruyen : KeiSource() {
 
     private fun imgxInterceptor() = Interceptor { chain ->
         val request = chain.request()
-        val grantEntry = imgxGrants.remove(request.url.toString())
+        val grantEntry = imgxGrants[request.url.toString()]
             ?: return@Interceptor chain.proceed(request)
         val (grant, storageKey) = grantEntry
         val response = chain.proceed(request)
@@ -517,12 +425,12 @@ abstract class MoeTruyen : KeiSource() {
         }
         Response.Builder()
             .request(request)
-            .protocol(Protocol.HTTP_1_1)
+            .protocol(Protocol.HTTP_2)
             .code(200)
             .message("OK")
             .header("Content-Type", "image/webp")
             .header("Content-Length", webp.size.toString())
-            .header("Cache-Control", "no-store")
+            .header("Cache-Control", "no-cache, no-store")
             .body(webp.toResponseBody("image/webp".toMediaType()))
             .build()
     }
@@ -548,7 +456,7 @@ abstract class MoeTruyen : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/manga").asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/manga", Fetch.DOCUMENT).asJsoup()
         .select(".filter-option[data-genre]")
         .mapNotNull { element ->
             val id = element.attr("data-genre").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
@@ -566,7 +474,7 @@ abstract class MoeTruyen : KeiSource() {
     override val supportsRelatedMangas get() = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val document = client.get("$baseUrl${manga.url}").asJsoup()
+        val document = client.get("$baseUrl${manga.url}", Fetch.DOCUMENT).asJsoup()
         val section = document.selectFirst("section[aria-labelledby=manga-related-similar-title]")
             ?: return emptyList()
 

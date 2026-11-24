@@ -2,88 +2,121 @@ package eu.kanade.tachiyomi.extension.zh.vomic
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParseDateTime
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonPrimitive
-import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 
-val SManga.id get() = url.substring(1, 1 + 32)
+private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
 
 @Serializable
-class MangaDto(
-    private val mid: String,
-    private val title: String,
-    private val site: SiteDto? = null,
-    private val cover_img_url: String?,
-    private val authors_name: List<String>? = null,
-    private val status: String? = null,
-    private val categories: JsonElement? = null,
-    private val description: String? = null,
+class Result<T>(
+    val data: T,
+    private val code: Int? = null,
+    private val message: String? = null,
 ) {
-    fun toSMangaOrNull() = if (title.isEmpty()) null else toSManga()
+    val result
+        get(): T {
+            if (code != 200) throw Exception(message ?: "Request Failed ($code)")
+            return data
+        }
+}
 
-    private fun toSManga() = SManga.create().apply {
-        url = "/${mid}_c/"
-        title = this@MangaDto.title
-        thumbnail_url = cover_img_url
-    }
+@Serializable
+class Token(
+    val token: String,
+)
 
-    fun toSMangaDetails() = toSManga().apply {
-        author = authors_name!!.joinToString()
-        description = "站点：" + site + "\n\n" + this@MangaDto.description
-        genre = categories!!.jsonArray.joinToString { it.jsonPrimitive.content }
-        status = when (this@MangaDto.status!!) {
+@Serializable
+class LoginPayload(
+    val identity: String,
+    val password: String,
+)
+
+@Serializable
+class Manga(
+    private val id: Int,
+    private val name: String,
+    private val intro: String? = null,
+    private val cover: String? = null,
+    private val author: String? = null,
+    private val process: String? = null,
+    private val tags: String? = null,
+    private val cat: List<Category> = emptyList(),
+    private val tag: List<MangaTag> = emptyList(),
+    @SerialName("likes_num") private val likes: Int = 0,
+    @SerialName("view_num") private val views: Int = 0,
+    @SerialName("chapter_list")
+    private val chapterList: List<ChapterGroup> = emptyList(),
+) {
+    fun toSManga() = SManga.create().apply {
+        url = id.toString()
+        title = name
+        thumbnail_url = cover
+        author = this@Manga.author
+
+        genre = buildList {
+            cat.mapTo(this) { it.name }
+            tag.mapTo(this) { it.name }
+            tags?.split(' ')?.filter(String::isNotBlank)?.let(::addAll)
+        }.distinct().joinToString()
+
+        status = when (process) {
             "连载中" -> SManga.ONGOING
             "已完结" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
+        description = buildString {
+            append(" 👁️ ${"%,d".format(views)} - ❤️ ${"%,d".format(likes)}")
+            if (!intro.isNullOrBlank()) append("\n\n$intro")
+        }
         initialized = true
     }
+
+    val chapters get() = chapterList.flatMap { it.values }
 }
 
 @Serializable
-class SiteDto(
-    private val site_en: String,
-    private val site_cn: String? = null,
-) {
-    override fun toString() = "$site_cn ($site_en)"
-}
+class Category(
+    val id: Int,
+    val name: String,
+)
 
-val SChapter.id: Pair<String, String>
-    get() {
-        val url = url
-        val length = url.length
-        val mangaId = url.substring(length - 32, length)
-        val chapterId = url.substring(3, 3 + 32)
-        return Pair(mangaId, chapterId)
+@Serializable
+class MangaTag(
+    val name: String,
+)
+
+@Serializable
+class ChapterGroup(
+    val values: List<Chapter> = emptyList(),
+)
+
+@Serializable
+class Chapter(
+    private val id: Int,
+    private val name: String,
+    private val sort: String,
+    @SerialName("car_id") private val mangaId: Int,
+    @SerialName("group_name") private val groupName: String? = null,
+    @SerialName("updated_at") private val updatedAt: String? = null,
+    @SerialName("created_at") private val createdAt: String? = null,
+) {
+    fun toSChapter(): SChapter = SChapter.create().apply {
+        url = "$mangaId/$id"
+        name = this@Chapter.name
+        date_upload = dateFormat.tryParseDateTime(createdAt ?: updatedAt)
+        scanlator = groupName
     }
-
-@Serializable
-class ChapterDto(
-    private val title: String,
-    private val cid: String,
-    private val update_time: String,
-) {
-    fun toSChapter(mangaId: String, dateFormat: SimpleDateFormat) = SChapter.create().apply {
-        url = "/m_$cid/chapterimage.ashx?mid=$mangaId"
-        name = title
-        date_upload = dateFormat.parse(update_time)!!.time
-    }
 }
 
 @Serializable
-class MangaListDto(
-    private val page: Int,
-    private val result_count: Int,
-    private val result: List<MangaDto>,
-) {
-    val entries get() = if (result_count != 0) result else emptyList()
-    val hasNextPage get() = page < 100 && page * 12 < result_count
-}
+class Pages(
+    @SerialName("img_list")
+    val images: List<Image> = emptyList(),
+)
 
 @Serializable
-class RankingDto(val result: List<MangaDto>)
-
-@Serializable
-class ResponseDto<T>(val data: T)
+class Image(
+    val url: String? = null,
+)

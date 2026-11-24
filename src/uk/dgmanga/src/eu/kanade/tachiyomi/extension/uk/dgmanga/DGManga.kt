@@ -10,14 +10,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -29,7 +28,6 @@ import kotlin.text.ifEmpty
 abstract class DGManga :
     KeiSource(),
     ConfigurableSource {
-
     private val domain get() = baseUrl.toHttpUrl().host
     private val apiUrl get() = "https://$domain/api"
 
@@ -75,7 +73,7 @@ abstract class DGManga :
             }
         }.build()
 
-        client.get(url).use { response ->
+        client.get(url, Fetch.XHR).use { response ->
             val data = response.parseAs<CatalogResponseDto>()
             val ignoredGenres = ignoreGenres()
             val mangas = data.titles.mapNotNull { it.toSManga(ignoredGenres) }
@@ -104,28 +102,25 @@ abstract class DGManga :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val mangaAsync = async {
+    ): SMangaUpdate = SMangaUpdate(
+        manga = {
             if (fetchDetails) {
                 val url = "$apiUrl/titles/${manga.url}"
-                client.get(url).use { it.parseAs<SMangaDto>().toSManga() }
+                client.get(url, Fetch.XHR).use { it.parseAs<SMangaDto>().toSManga() }
             } else {
                 manga
             }
-        }
-
-        val chaptersAsync = async {
+        },
+        chapters = {
             if (fetchChapters) {
                 val chaptersUrl = "$apiUrl/chapters/title/${manga.url}"
-                val data = client.get(chaptersUrl).use { it.parseAs<List<ChapterResponseDto>>() }
+                val data = client.get(chaptersUrl, Fetch.XHR).use { it.parseAs<List<ChapterResponseDto>>() }
                 data.map { it.toSChapter() }
             } else {
                 chapters
             }
-        }
-
-        SMangaUpdate(mangaAsync.await(), chaptersAsync.await())
-    }
+        },
+    )
 
     // ============================== Manga/Chapters ===============================
     // WebView url
@@ -138,7 +133,7 @@ abstract class DGManga :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (chapterId, _, _) = chapter.url.split("/", limit = 3)
         val url = "$apiUrl/chapters/$chapterId"
-        val data = client.get(url).parseAs<PagesList>()
+        val data = client.get(url, Fetch.XHR).parseAs<PagesList>()
         return data.pages.mapIndexed { i, page ->
             Page(i, imageUrl = page)
         }
@@ -149,7 +144,7 @@ abstract class DGManga :
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val url = "$apiUrl/titles/${manga.url}/similar"
-        val data = client.get(url).parseAs<List<SearchResponseTitlesDto>>()
+        val data = client.get(url, Fetch.XHR).parseAs<List<SearchResponseTitlesDto>>()
         val ignoredGenres = ignoreGenres()
         return data.mapNotNull { it.toSManga(ignoredGenres) }
     }

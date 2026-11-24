@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.all.mangadex.dto
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class PaginatedResponseDto<T : EntityDto>(
+class PaginatedResponseDto<T : EntityDto>(
     val result: String,
     val response: String = "",
     val data: List<T> = emptyList(),
@@ -17,7 +17,7 @@ data class PaginatedResponseDto<T : EntityDto>(
 }
 
 @Serializable
-data class ResponseDto<T : EntityDto>(
+class ResponseDto<T : EntityDto>(
     val result: String,
     val response: String = "",
     val data: T? = null,

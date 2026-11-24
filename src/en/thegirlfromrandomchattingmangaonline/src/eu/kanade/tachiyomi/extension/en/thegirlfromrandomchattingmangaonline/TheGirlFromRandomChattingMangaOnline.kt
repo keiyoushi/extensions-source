@@ -5,11 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 
@@ -38,26 +39,20 @@ abstract class TheGirlFromRandomChattingMangaOnline : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val updatedManga = if (fetchDetails) createManga() else manga
-        val updatedChapters = if (fetchChapters) {
-            client.get("$baseUrl/wp-json/mg/v1/chapters-list").parseAs<ChaptersListDto>().map(ChapterDto::toSChapter)
-        } else {
-            chapters
-        }
-
-        return SMangaUpdate(updatedManga, updatedChapters)
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) createManga() else manga },
+        chapters = { if (fetchChapters) client.get("$baseUrl/wp-json/mg/v1/chapters-list", Fetch.XHR).parseAs<ChaptersListDto>().map(ChapterDto::toSChapter) else chapters },
+    )
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/manga/${chapter.url}"
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter)).asJsoup()
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         .select("p > noscript > img")
         .map { img -> img.attr("src") }
         .mapIndexed { i, src -> Page(i, imageUrl = src) }
 
     private suspend fun createManga(): SManga {
-        val mainPage = client.get(baseUrl).asJsoup()
+        val mainPage = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
 
         return SManga.create().apply {
             url = "the-girl-from-random-chatting"

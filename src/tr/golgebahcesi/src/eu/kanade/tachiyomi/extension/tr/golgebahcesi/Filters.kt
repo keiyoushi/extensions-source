@@ -1,13 +1,20 @@
 package eu.kanade.tachiyomi.extension.tr.golgebahcesi
 
 import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
 
-class SortFilter :
+class SortFilter(state: Int = 0) :
     Filter.Select<String>(
         "Sıralama",
         arrayOf("Varsayılan", "En Yeni", "Popüler", "Puan", "A-Z", "En Eski"),
+        state,
     ) {
     fun toUriPart() = arrayOf("default", "updatedAt", "popular", "rating", "name", "createdAt")[state]
+
+    companion object {
+        val POPULAR = FilterList(SortFilter(2))
+        val LATEST = FilterList(SortFilter(1))
+    }
 }
 
 class StatusFilter :
@@ -26,130 +33,14 @@ class TypeFilter :
     fun toUriPart() = arrayOf("", "MANHWA", "MANHUA", "MANGA")[state]
 }
 
-class GenreFilter :
+class GenreFilter(genres: List<Pair<String, String>>) :
     Filter.Select<String>(
         "Tür",
-        arrayOf(
-            "Tümü",
-            "Aksiyon",
-            "Fantastik",
-            "Harem",
-            "Komedi",
-            "Macera",
-            "Bilim Kurgu",
-            "Dövüş Sanatları",
-            "Shounen",
-            "Doğaüstü",
-            "Dram",
-            "Romantizm",
-            "Seinen",
-            "Sistem",
-            "Tarihsel",
-            "Aşırı Güçlü",
-            "İkinci Şans",
-            "İntikam",
-            "Murim",
-            "Yeniden Doğuş",
-            "Gizli Kimlik",
-            "Okul",
-            "Süper Güçler",
-            "Süper Kahramanlar",
-            "Okul Hayatı",
-            "Komplo",
-            "Gerilim",
-            "Karanlık Fantezi",
-            "Korku",
-            "Manhwa",
-            "Büyü",
-            "Genç",
-            "Modern",
-            "Gerileme",
-            "Yaşamdan Kesitler",
-            "Dahi Mc",
-            "Şiddet",
-            "Drama",
-            "Fantezi",
-            "Olgun",
-            "Psikolojik",
-            "Romantik",
-            "Fantazi",
-            "Canavar",
-            "Dedektif",
-            "Gizem",
-            "Kıyamet",
-            "Lise",
-            "Ecchi",
-            "Manga",
-            "İsekai",
-            "Reenkarnasyon",
-            "Supernatural",
-            "Dövüş",
-            "Trajedi",
-            "Oyun",
-            "Sanal Gerçeklik",
-            "makine",
-        ),
+        (listOf("Tümü") + genres.map { it.first }).toTypedArray(),
     ) {
-    fun toUriPart() = arrayOf(
-        "",
-        "Aksiyon",
-        "Fantastik",
-        "Harem",
-        "Komedi",
-        "Macera",
-        "Bilim Kurgu",
-        "Dövüş Sanatları",
-        "Shounen",
-        "Doğaüstü",
-        "Dram",
-        "Romantizm",
-        "Seinen",
-        "Sistem",
-        "Tarihsel",
-        "Aşırı Güçlü",
-        "İkinci Şans",
-        "İntikam",
-        "Murim",
-        "Yeniden Doğuş",
-        "Gizli Kimlik",
-        "Okul",
-        "Süper Güçler",
-        "Süper Kahramanlar",
-        "Okul Hayatı",
-        "Komplo",
-        "Gerilim",
-        "Karanlık Fantezi",
-        "Korku",
-        "Manhwa",
-        "Büyü",
-        "Genç",
-        "Modern",
-        "Gerileme",
-        "Yaşamdan Kesitler",
-        "Dahi Mc",
-        "Şiddet",
-        "Drama",
-        "Fantezi",
-        "Olgun",
-        "Psikolojik",
-        "Romantik",
-        "Fantazi",
-        "Canavar",
-        "Dedektif",
-        "Gizem",
-        "Kıyamet",
-        "Lise",
-        "Ecchi",
-        "Manga",
-        "İsekai",
-        "Reenkarnasyon",
-        "Supernatural",
-        "Dövüş",
-        "Trajedi",
-        "Oyun",
-        "Sanal Gerçeklik",
-        "makine",
-    )[state]
+    private val uriParts = listOf("") + genres.map { it.second }
+
+    fun toUriPart() = uriParts[state]
 }
 
 class MinChaptersFilter :

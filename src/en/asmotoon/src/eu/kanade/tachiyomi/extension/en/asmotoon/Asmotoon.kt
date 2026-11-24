@@ -1,43 +1,39 @@
 package eu.kanade.tachiyomi.extension.en.asmotoon
 
-import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
+import eu.kanade.tachiyomi.multisrc.keyoapp.KeyoappV2
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import keiyoushi.network.rateLimit
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
-import java.util.Locale
-import kotlin.time.Duration.Companion.seconds
+import keiyoushi.utils.textOrNull
+import org.jsoup.nodes.Document
 
 @Source
-abstract class Asmotoon : Keyoapp() {
+abstract class Asmotoon : KeyoappV2() {
+    override fun parseMangaDetails(document: Document, slug: String): SManga = super.parseMangaDetails(document, slug).apply {
+        // "By Author, Artist" -> "Author", "Artist"
+        // "By Author, Artist, Artist2" -> "Author", "Artist, Artist2"
+        val byText = document.selectFirst("p.l2-by")?.textOrNull()?.removePrefix("By ")?.trim()
+        if (byText != null) {
+            author = byText.substringBefore(",").trim()
+            val artistText = byText.substringAfter(",", "").trim()
+            if (artistText.isNotEmpty()) {
+                artist = artistText
+            }
+        }
 
-    private val baseUrlHost get() = baseUrl.toHttpUrl().host
+        // "Completed series", falling back to "Manga · Action · Completed"
+        val kickerText = (
+            document.selectFirst("p.l2-kicker")?.textOrNull()
+                ?: document.selectFirst("div.l2-meta span")?.textOrNull()
+            )?.lowercase()
 
-    override fun OkHttpClient.Builder.configureClient() = apply {
-        rateLimit(3, 5.seconds) { it.host == baseUrlHost }
-    }
-
-    override fun popularMangaSelector() = "div:contains(Trending) + div .group"
-    override fun latestUpdatesSelector() = ".group"
-    override fun searchMangaSelector() = latestUpdatesSelector()
-
-    override val genreSelector: String = ".gap-3 .gap-1 a"
-
-    private fun titleToSlug(title: String): String = title
-        .lowercase(Locale.ENGLISH)
-        .replace("[^a-z0-9\\s-]".toRegex(), "")
-        .trim()
-        .replace("[\\s-]+".toRegex(), "-")
-        .trim('-')
-
-    private fun SManga.fix(): SManga = apply {
-        url = url.replace(OLD_CHAPTER_SLUG_REGEX) { titleToSlug(title) }
-    }
-
-    override fun getMangaUrl(manga: SManga): String = super.getMangaUrl(manga.fix())
-
-    companion object {
-        private val OLD_CHAPTER_SLUG_REGEX = "(?<=/series/)[0-9a-f]{11}(?=/)".toRegex()
+        if (kickerText != null) {
+            status = when {
+                "ongoing" in kickerText -> SManga.ONGOING
+                "completed" in kickerText -> SManga.COMPLETED
+                "dropped" in kickerText -> SManga.CANCELLED
+                "paused" in kickerText || "hiatus" in kickerText -> SManga.ON_HIATUS
+                else -> status
+            }
+        }
     }
 }

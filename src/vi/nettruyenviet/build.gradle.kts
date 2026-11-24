@@ -9,11 +9,22 @@ keiyoushi {
     versionCode = 0
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
+    theme = "wpcomics"
 
     source {
         lang = "vi"
         baseUrl {
             custom("https://nettruyenviet10.com")
         }
+    }
+
+    deeplink {
+        host("nettruyenviet10.com")
+        host("www.nettruyenviet10.com")
+        host("nettruyenviet11.com")
+        host("www.nettruyenviet11.com")
+        host("hinettruyen.com")
+        host("www.hinettruyen.com")
+        path("/truyen-tranh/..*")
     }
 }

@@ -19,13 +19,13 @@ class SeriesDto(
     val id: String,
     val title: String,
     val slug: String,
-    val coverImage: String,
+    val coverImage: String? = null,
 ) {
     fun toSManga(baseUrl: String) = SManga.create().apply {
         url = slug
         memo = buildJsonObject { put("id", id) }
         title = this@SeriesDto.title
-        thumbnail_url = "$baseUrl/${coverImage.replace("storage/", "api/")}"
+        thumbnail_url = "$baseUrl/api/covers/$slug.webp"
     }
 }
 
@@ -40,7 +40,7 @@ class MangaDto(
     val title: String,
     val slug: String,
     val description: String? = null,
-    val coverImage: String,
+    val coverImage: String? = null,
     val status: String? = null,
     val author: String? = null,
     val artist: String? = null,
@@ -52,7 +52,7 @@ class MangaDto(
         url = slug
         memo = buildJsonObject { put("id", id) }
         title = this@MangaDto.title
-        thumbnail_url = "$baseUrl/${coverImage.replace("storage/", "api/")}"
+        thumbnail_url = "$baseUrl/api/covers/$slug.webp"
         description = listOfNotNull(
             this@MangaDto.description,
             this@MangaDto.alternativeNames?.let { "Noms alternatifs : $it" },

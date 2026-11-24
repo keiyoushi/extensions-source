@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.all.comicklive
 
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -10,11 +9,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
@@ -78,11 +78,11 @@ abstract class Comick :
                 4, 5, 6 -> "most_follow_new"
                 else -> throw UnsupportedOperationException()
             }
-            addQueryParameter("days", days.toString())
+            addQueryParameter("day", days.toString())
             addQueryParameter("type", type)
         }.build()
 
-        val data = client.get(url).parseAs<Data<List<BrowseComic>>>()
+        val data = client.get(url, Fetch.XHR).parseAs<Data<List<BrowseComic>>>()
 
         return MangasPage(
             mangas = data.data.map(BrowseComic::toSManga),
@@ -94,7 +94,11 @@ abstract class Comick :
     private var searchNextCursor: String? = null
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        if (page == 1) latestNextCursor = null
+        if (page == 1) {
+            latestNextCursor = null
+        } else {
+            checkNotNull(latestNextCursor) { "Can't load page $page before page 1" }
+        }
 
         val url = "$baseUrl/api/chapters/latest".toHttpUrl().newBuilder().apply {
             addQueryParameter("order", "new")
@@ -102,7 +106,7 @@ abstract class Comick :
             if (page > 1) addQueryParameter("cursor", latestNextCursor)
         }.build()
 
-        val data = client.get(url).parseAs<SearchResponse>()
+        val data = client.get(url, Fetch.XHR).parseAs<SearchResponse>()
 
         latestNextCursor = data.cursor
 
@@ -112,11 +116,15 @@ abstract class Comick :
         )
     }
 
-    override suspend fun getMangaByUrl(url: HttpUrl) = parseDetails(client.get(url))
+    override suspend fun getMangaByUrl(url: HttpUrl) = parseDetails(client.get(url, Fetch.DOCUMENT))
 
     private val spaceSlashRegex = Regex("[ /]")
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        if (page == 1) searchNextCursor = null
+        if (page == 1) {
+            searchNextCursor = null
+        } else {
+            checkNotNull(searchNextCursor) { "Can't load page $page before page 1" }
+        }
 
         val url = "$baseUrl/api/search".toHttpUrl().newBuilder().apply {
             filters.firstInstance<SortFilter>().let {
@@ -193,7 +201,7 @@ abstract class Comick :
             }
         }.build()
 
-        val data = client.get(url).parseAs<SearchResponse>()
+        val data = client.get(url, Fetch.XHR).parseAs<SearchResponse>()
 
         searchNextCursor = data.cursor
 
@@ -210,17 +218,10 @@ abstract class Comick :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val detailsDeferred = async {
-            if (fetchDetails) {
-                parseDetails(client.get(getMangaUrl(manga)))
-            } else {
-                manga
-            }
-        }
-        val chaptersDeferred = async { if (fetchChapters) getChapterList(manga) else chapters }
-        SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) parseDetails(client.get(getMangaUrl(manga), Fetch.DOCUMENT)) else manga },
+        chapters = { if (fetchChapters) getChapterList(manga) else chapters },
+    )
 
     private fun parseDetails(response: Response): SManga {
         val data = response.asJsoup()
@@ -274,7 +275,7 @@ abstract class Comick :
         val langParam = languageWhitelist.takeIf { it.size == 1 }?.first()?.let { "?lang=$it" }.orEmpty()
         val url = "$baseUrl/api/comics/${manga.url}/chapter-list$langParam"
 
-        val data = client.get(url).parseAs<ChapterList>()
+        val data = client.get(url, Fetch.XHR).parseAs<ChapterList>()
         val chapters = data.data.toMutableList()
 
         coroutineScope {
@@ -284,7 +285,7 @@ abstract class Comick :
                         .addQueryParameter("page", it.toString())
                         .build()
 
-                    client.get(pageUrl).parseAs<ChapterList>().data
+                    client.get(pageUrl, Fetch.XHR).parseAs<ChapterList>().data
                 }
             }.awaitAll().forEach(chapters::addAll)
         }
@@ -308,7 +309,7 @@ abstract class Comick :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get(getChapterUrl(chapter)).asJsoup()
+        val data = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
             .selectFirst("#sv-data")!!.data()
             .parseAs<PageListData>()
 
@@ -319,7 +320,7 @@ abstract class Comick :
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData() = client.get("$baseUrl/api/metadata").parseAs<Metadata>().toJsonElement()
+    override suspend fun fetchFilterData() = client.get("$baseUrl/api/metadata", Fetch.XHR).parseAs<Metadata>().toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val filters = mutableListOf(

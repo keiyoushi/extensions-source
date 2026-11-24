@@ -27,7 +27,17 @@ internal object BannerChecker {
         val width: Int,
         val height: Int,
         val rowAverages: IntArray, // size = height * 3
+        val sampleXPositions: IntArray,
     )
+
+    private fun sampleXPositions(width: Int): IntArray {
+        val startCol = (width * 0.2).toInt()
+        val endCol = (width * 0.8).toInt()
+        val step = ((endCol - startCol).toFloat() / SIGNATURE_COLS).coerceAtLeast(1f)
+        return IntArray(SIGNATURE_COLS) { index ->
+            (startCol + (index * step).toInt()).coerceIn(0, width - 1)
+        }
+    }
 
     private val bannerSig by lazy {
         buildSignature(BANNER_BASE64, BANNER_W, BANNER_H)
@@ -51,6 +61,7 @@ internal object BannerChecker {
             full.width,
             NARROW_BANNER_BOTTOM_BASE_H,
             slicedAvgs,
+            full.sampleXPositions,
         )
     }
 
@@ -66,30 +77,29 @@ internal object BannerChecker {
     private val narrowSigCache = ConcurrentHashMap<Int, BannerSignature>()
     private val narrowBottomSigCache = ConcurrentHashMap<Int, BannerSignature>()
 
-    private fun buildScaledNarrowSignature(targetW: Int): BannerSignature {
-        val buffer = Base64.decode(NARROWBANNER_BASE64, Base64.DEFAULT)
-        val bmp = BitmapFactory.decodeByteArray(buffer, 0, buffer.size)
-            ?: error("Unable to decode narrow banner")
+    private fun scaleSignature(source: BannerSignature, targetW: Int, targetH: Int): BannerSignature {
+        val averages = IntArray(targetH * 3)
+        for (row in 0 until targetH) {
+            val sourceY = ((row + 0.5) * source.height / targetH - 0.5)
+                .coerceIn(0.0, (source.height - 1).toDouble())
+            val rowBefore = sourceY.toInt()
+            val rowAfter = (rowBefore + 1).coerceAtMost(source.height - 1)
+            val fraction = sourceY - rowBefore
 
-        val targetH = scaledHeight(NARROW_BANNER_H, targetW)
-
-        val scaledBmp = if (bmp.width != targetW || bmp.height != targetH) {
-            Bitmap.createScaledBitmap(bmp, targetW, targetH, true)
-        } else {
-            bmp
+            for (component in 0 until 3) {
+                val before = source.rowAverages[rowBefore * 3 + component]
+                val after = source.rowAverages[rowAfter * 3 + component]
+                averages[row * 3 + component] = (before + (after - before) * fraction).roundToInt()
+            }
         }
-
-        return try {
-            createSignature(scaledBmp, 0, 0, targetW, targetH)
-        } finally {
-            if (scaledBmp !== bmp) scaledBmp.recycle()
-            bmp.recycle()
-        }
+        return BannerSignature(targetW, targetH, averages, sampleXPositions(targetW))
     }
 
     private fun narrowSigForWidth(targetW: Int): BannerSignature {
         if (targetW == NARROW_BANNER_W) return narrowBannerSig
-        return narrowSigCache.getOrPut(targetW) { buildScaledNarrowSignature(targetW) }
+        return narrowSigCache.getOrPut(targetW) {
+            scaleSignature(narrowBannerSig, targetW, scaledHeight(NARROW_BANNER_H, targetW))
+        }
     }
 
     private fun narrowBottomSigForWidth(targetW: Int): BannerSignature {
@@ -97,9 +107,14 @@ internal object BannerChecker {
 
         return narrowBottomSigCache.getOrPut(targetW) {
             val full = narrowSigForWidth(targetW)
-            val bottomH = scaledHeight(NARROW_BANNER_BOTTOM_BASE_H, targetW).coerceAtMost(full.height)
-            val slicedAvgs = full.rowAverages.copyOf(bottomH * 3)
-            BannerSignature(full.width, bottomH, slicedAvgs)
+            val bottomHeight = scaledHeight(NARROW_BANNER_BOTTOM_BASE_H, targetW)
+                .coerceAtMost(full.height)
+            BannerSignature(
+                full.width,
+                bottomHeight,
+                full.rowAverages.copyOf(bottomHeight * 3),
+                full.sampleXPositions,
+            )
         }
     }
 
@@ -135,13 +150,7 @@ internal object BannerChecker {
     ): BannerSignature {
         val avgs = IntArray(regionH * 3)
 
-        val marginFraction = 0.2
-        val startCol = (regionW * marginFraction).toInt()
-        val endCol = (regionW * (1.0 - marginFraction)).toInt()
-        val step = ((endCol - startCol).toFloat() / SIGNATURE_COLS).coerceAtLeast(1f)
-        val sampleXPositions = IntArray(SIGNATURE_COLS) { i ->
-            (startCol + (i * step).toInt()).coerceIn(0, regionW - 1)
-        }
+        val sampleXPositions = sampleXPositions(regionW)
 
         val rowPixels = IntArray(regionW)
         for (row in 0 until regionH) {
@@ -160,7 +169,7 @@ internal object BannerChecker {
             avgs[idx + 1] = (sumG / SIGNATURE_COLS).toInt()
             avgs[idx + 2] = (sumB / SIGNATURE_COLS).toInt()
         }
-        return BannerSignature(regionW, regionH, avgs)
+        return BannerSignature(regionW, regionH, avgs, sampleXPositions)
     }
 
     // ---------------------------------------------------------------------------
@@ -172,6 +181,7 @@ internal object BannerChecker {
         imgX: Int,
         imgY: Int,
         sig: BannerSignature,
+        rowPixels: IntArray,
     ): Boolean {
         val regionW = sig.width
         val regionH = sig.height
@@ -183,17 +193,7 @@ internal object BannerChecker {
 
         val refAvg = sig.rowAverages
         val totalThreshold = regionH * 3 * MAX_AVG_ERROR_PER_COMPONENT
-        val perRowBudget = 3 * MAX_AVG_ERROR_PER_COMPONENT
-
-        val marginFraction = 0.2
-        val startCol = (regionW * marginFraction).toInt()
-        val endCol = (regionW * (1.0 - marginFraction)).toInt()
-        val step = ((endCol - startCol).toFloat() / SIGNATURE_COLS).coerceAtLeast(1f)
-        val sampleXPositions = IntArray(SIGNATURE_COLS) { i ->
-            (startCol + (i * step).toInt()).coerceIn(0, regionW - 1)
-        }
-
-        val rowPixels = IntArray(regionW)
+        val sampleXPositions = sig.sampleXPositions
 
         // Phase 1: Quick scan — every 4th row for fast rejection
         val quickStride = 4
@@ -222,8 +222,9 @@ internal object BannerChecker {
         }
 
         // Phase 2: Full scan
-        var totalDiff = 0
+        var totalDiff = quickDiff
         for (row in 0 until regionH) {
+            if (row % quickStride == 0) continue
             image.getPixels(rowPixels, 0, regionW, imgX, imgY + row, regionW, 1)
             var sumR = 0L
             var sumG = 0L
@@ -274,24 +275,25 @@ internal object BannerChecker {
         val padOld = if (canCheckOld) (imgW - OLD_BANNER_W) / 2 else 0
         // Both narrow variants share the same width and therefore the same X pad
         val padNarrow = if (useScaledNarrow) 0 else (imgW - NARROW_BANNER_W) / 2
+        val rowPixels = IntArray(minOf(imgW, BANNER_W))
 
         val isNormal = level != 2
 
         // Top scan: try all signatures at the current top offset.
-        // Narrow top uses the full 200-row signature.
+        // Narrow top uses the full-height signature.
         fun matchAtTop(y: Int): Int {
             if (canCheckNew && y + BANNER_H <= imgH &&
-                matchesSignature(image, padNew, y, bannerSig)
+                matchesSignature(image, padNew, y, bannerSig, rowPixels)
             ) {
                 return BANNER_H
             }
             if (canCheckOld && y + OLD_BANNER_H <= imgH &&
-                matchesSignature(image, padOld, y, oldBannerSig)
+                matchesSignature(image, padOld, y, oldBannerSig, rowPixels)
             ) {
                 return OLD_BANNER_H
             }
             if (canCheckNarrowTop && y + narrowTopSigToUse.height <= imgH &&
-                matchesSignature(image, padNarrow, y, narrowTopSigToUse)
+                matchesSignature(image, padNarrow, y, narrowTopSigToUse, rowPixels)
             ) {
                 return narrowTopSigToUse.height
             }
@@ -322,15 +324,15 @@ internal object BannerChecker {
             val yNarrowBottom = imgH - narrowBottomSigToUse.height - bottom
 
             if (canCheckOld && yOld >= top &&
-                matchesSignature(image, padOld, yOld, oldBannerSig)
+                matchesSignature(image, padOld, yOld, oldBannerSig, rowPixels)
             ) {
                 bottom += OLD_BANNER_H
             } else if (canCheckNew && yNew >= top &&
-                matchesSignature(image, padNew, yNew, bannerSig)
+                matchesSignature(image, padNew, yNew, bannerSig, rowPixels)
             ) {
                 bottom += BANNER_H
             } else if (canCheckNarrowBottom && yNarrowBottom >= top &&
-                matchesSignature(image, padNarrow, yNarrowBottom, narrowBottomSigToUse)
+                matchesSignature(image, padNarrow, yNarrowBottom, narrowBottomSigToUse, rowPixels)
             ) {
                 bottom += narrowBottomSigToUse.height
             } else {

@@ -8,8 +8,10 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -65,7 +67,7 @@ abstract class RizzComic : MangaThemesiaAlt() {
                 .add("search_value", query.trim())
                 .build()
 
-            client.post("$baseUrl/Index/live_search", apiHeaders, form)
+            client.post("$baseUrl/Index/live_search", apiHeaders, Fetch.XHR, form)
         } else {
             val form = FormBody.Builder().apply {
                 filters.filterIsInstance<FormBodyFilter>().forEach {
@@ -73,7 +75,7 @@ abstract class RizzComic : MangaThemesiaAlt() {
                 }
             }.build()
 
-            client.post("$baseUrl/Index/filter_series", apiHeaders, form)
+            client.post("$baseUrl/Index/filter_series", apiHeaders, Fetch.XHR, form)
         }
 
         return parseSearchManga(res)
@@ -146,8 +148,12 @@ abstract class RizzComic : MangaThemesiaAlt() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ) = super.fetchMangaUpdate(manga, chapters, fetchDetails, fetchChapters).apply {
-        this.manga.description = manga.description
+    ): SMangaUpdate {
+        val update = super.fetchMangaUpdate(manga, chapters, fetchDetails, fetchChapters)
+        return SMangaUpdate(
+            manga = { update.manga().apply { description = manga.description } },
+            chapters = update.chapters,
+        )
     }
 
     private fun String.capitalize() = replaceFirstChar {

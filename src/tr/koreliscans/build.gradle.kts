@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Koreli Scans"
-    versionCode = 19
+    versionCode = 20
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "mangathemesia"

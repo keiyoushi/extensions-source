@@ -79,6 +79,7 @@ private val configurable = ClassName("eu.kanade.tachiyomi.source", "Configurable
 private val preferenceScreen = ClassName("androidx.preference", "PreferenceScreen")
 private val mirrorPrefsClass = ClassName("keiyoushi.source", "MirrorPreferences")
 private val customUrlPrefsClass = ClassName("keiyoushi.source", "CustomUrlPreferences")
+private val fetchableBaseUrlClass = ClassName("keiyoushi.source", "FetchableBaseUrl")
 private val getPreferencesFn = MemberName("keiyoushi.utils", "getPreferences")
 
 class SourceProcessor(
@@ -152,30 +153,34 @@ class SourceProcessor(
             .mapNotNull { it.declaration.qualifiedName?.asString() }
             .toSet()
         val isConfigurable = "eu.kanade.tachiyomi.source.ConfigurableSource" in superTypeNames
-        val isKeiSource = KEI_SOURCE in superTypeNames
 
-        if (HTTP_SOURCE !in superTypeNames) {
-            logger.error("@Source class must derive from HttpSource", annotated)
+        if (KEI_SOURCE !in superTypeNames) {
+            logger.error("@Source class must derive from KeiSource (directly or through a theme); HttpSource is no longer supported", annotated)
             return emptyList()
         }
 
-        // any overrides below HttpSource
+        // any overrides below HttpSource; findOverridee, as KSP leaves OVERRIDE out of modifiers for compiled (theme) declarations
         val overridden = annotated.getAllProperties()
-            .filter { Modifier.OVERRIDE in it.modifiers && Modifier.ABSTRACT !in it.modifiers }
+            .filter { it.findOverridee() != null && Modifier.ABSTRACT !in it.modifiers }
             .filter { prop ->
                 val owner = prop.parentDeclaration as? KSClassDeclaration
                 owner != null && owner.qualifiedName?.asString() != HTTP_SOURCE && owner.derivesFromHttpSource()
             }
             .map { it.simpleName.asString() }
             .toSet()
+            .plus(
+                annotated.getAllFunctions()
+                    .filter { it.simpleName.asString() == "fetchBaseUrls" && it.findOverridee() != null }
+                    .map { it.simpleName.asString() },
+            )
 
         val fileProps = mutableListOf<PropertySpec>()
 
         val isConcrete = Modifier.ABSTRACT !in annotated.modifiers
         val generatedClass = if (sources.size == 1 && !isConcrete) {
-            buildSingleSourceClass(annotatedClass, sources.single(), isConfigurable, isKeiSource, overridden, annotated, fileProps)
+            buildSingleSourceClass(annotatedClass, sources.single(), isConfigurable, overridden, annotated, fileProps)
         } else {
-            buildSourceFactoryClass(annotatedClass, sources, isConfigurable, isKeiSource, overridden, annotated, fileProps)
+            buildSourceFactoryClass(annotatedClass, sources, isConfigurable, overridden, annotated, fileProps)
         }
 
         FileSpec.builder(GENERATED_CLASS_PACKAGE, GENERATED_CLASS_NAME)
@@ -191,21 +196,19 @@ class SourceProcessor(
         annotatedClass: ClassName,
         source: SourceDef,
         isConfigurable: Boolean,
-        isKeiSource: Boolean,
         overridden: Set<String>,
         node: KSClassDeclaration,
         fileProps: MutableList<PropertySpec>,
     ): TypeSpec = TypeSpec.classBuilder(GENERATED_CLASS_NAME)
         .addModifiers(KModifier.INTERNAL)
         .superclass(annotatedClass)
-        .applySourceMembers(source, "", fileProps, isConfigurable, isKeiSource, overridden, node)
+        .applySourceMembers(source, "", fileProps, isConfigurable, overridden, node)
         .build()
 
     private fun buildSourceFactoryClass(
         annotatedClass: ClassName,
         sources: List<SourceDef>,
         isConfigurable: Boolean,
-        isKeiSource: Boolean,
         overridden: Set<String>,
         node: KSClassDeclaration,
         fileProps: MutableList<PropertySpec>,
@@ -237,7 +240,7 @@ class SourceProcessor(
                             "%L,\n",
                             TypeSpec.anonymousClassBuilder()
                                 .superclass(annotatedClass)
-                                .applySourceMembers(source, index.toString(), fileProps, isConfigurable, isKeiSource, overridden, node)
+                                .applySourceMembers(source, index.toString(), fileProps, isConfigurable, overridden, node)
                                 .build(),
                         )
                     }
@@ -321,22 +324,19 @@ class SourceProcessor(
         suffix: String,
         fileProps: MutableList<PropertySpec>,
         isConfigurable: Boolean,
-        isKeiSource: Boolean,
         overridden: Set<String>,
         node: KSClassDeclaration,
     ): TypeSpec.Builder = apply {
         val className = node.simpleName.asString()
 
-        if (isKeiSource) {
-            if ("filterFetchHint" in overridden) {
-                logger.error("filterFetchHint is owned by the DSL; remove 'override val filterFetchHint' from $className (it is generated per language from core/translations)", node)
-            } else {
-                addProperty(
-                    PropertySpec.builder("filterFetchHint", String::class.asClassName(), KModifier.OVERRIDE, KModifier.PROTECTED)
-                        .getter(FunSpec.getterBuilder().addStatement("return %S", stringsForLang(source.lang).filterFetchHint).build())
-                        .build(),
-                )
-            }
+        if ("filterFetchHint" in overridden) {
+            logger.error("filterFetchHint is owned by the DSL; remove 'override val filterFetchHint' from $className (it is generated per language from core/translations)", node)
+        } else {
+            addProperty(
+                PropertySpec.builder("filterFetchHint", String::class.asClassName(), KModifier.OVERRIDE, KModifier.PROTECTED)
+                    .getter(FunSpec.getterBuilder().addStatement("return %S", stringsForLang(source.lang).filterFetchHint).build())
+                    .build(),
+            )
         }
 
         if ("name" in overridden) {
@@ -374,6 +374,10 @@ class SourceProcessor(
         }
 
         val urlSpec = source.baseUrl
+        val fetchesBaseUrl = "fetchBaseUrls" in overridden
+        if (fetchesBaseUrl && urlSpec.type == "static") {
+            logger.error("fetchBaseUrls is overridden in $className but needs a mirrors(...) or custom(...) baseUrl", node)
+        }
         when {
             "baseUrl" in overridden && urlSpec.type == "static" ->
                 logger.warn("baseUrl is provided by $className; skipping generated baseUrl (DSL baseUrl is used for metadata/hosts only)", node)
@@ -393,7 +397,7 @@ class SourceProcessor(
                     .add("%T(\n", mirrorPrefsClass)
                     .indent()
                     .add("preferences = %M(%LL),\n", getPreferencesFn, source.id)
-                    .add("mirrors = arrayOf(\n")
+                    .add("defaultMirrors = arrayOf(\n")
                     .indent()
                     .apply {
                         urlSpec.mirrors.forEach { mirror ->
@@ -415,6 +419,7 @@ class SourceProcessor(
                         .getter(FunSpec.getterBuilder().addStatement("return %N.baseUrl", prefsName).build())
                         .build(),
                 )
+                if (fetchesBaseUrl) addFetchableBaseUrl(prefsName)
                 addPreferenceScreen(isConfigurable) { addStatement("%N.setupPreferenceScreen(screen)", prefsName) }
                 if (!isConfigurable) addSuperinterface(configurable)
             }
@@ -425,7 +430,7 @@ class SourceProcessor(
                     .add("%T(\n", customUrlPrefsClass)
                     .indent()
                     .add("preferences = %M(%LL),\n", getPreferencesFn, source.id)
-                    .add("defaultUrl = %S,\n", urlSpec.defaultUrl)
+                    .add("hardcodedUrl = %S,\n", urlSpec.defaultUrl)
                     .add("title = %S,\n", strings.customUrlTitle)
                     .add("dialogMessage = %S,\n", strings.customUrlDialogMessage)
                     .unindent()
@@ -440,10 +445,19 @@ class SourceProcessor(
                         .getter(FunSpec.getterBuilder().addStatement("return %N.baseUrl", prefsName).build())
                         .build(),
                 )
+                if (fetchesBaseUrl) addFetchableBaseUrl(prefsName)
                 addPreferenceScreen(isConfigurable) { addStatement("%N.setupPreferenceScreen(screen)", prefsName) }
                 if (!isConfigurable) addSuperinterface(configurable)
             }
         }
+    }
+
+    private fun TypeSpec.Builder.addFetchableBaseUrl(prefsName: String) {
+        addProperty(
+            PropertySpec.builder("fetchableBaseUrl", fetchableBaseUrlClass, KModifier.OVERRIDE, KModifier.PROTECTED)
+                .getter(FunSpec.getterBuilder().addStatement("return %N", prefsName).build())
+                .build(),
+        )
     }
 
     private fun TypeSpec.Builder.addPreferenceScreen(

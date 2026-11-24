@@ -6,13 +6,16 @@ plugins {
 
 keiyoushi {
     name = "Milftoon"
-    versionCode = 2
+    versionCode = 60
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
-    theme = "madara"
 
     source {
         lang = "en"
         baseUrl = "https://milftoon.xxx"
+    }
+
+    deeplink {
+        path("/comics/..*")
     }
 }

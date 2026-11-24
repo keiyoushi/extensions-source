@@ -5,11 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
@@ -57,7 +58,7 @@ abstract class EgoToons : KeiSource() {
             }
             .build()
 
-        val result = client.get(url).parseAs<MangaListDto>()
+        val result = client.get(url, Fetch.XHR).parseAs<MangaListDto>()
         return MangasPage(result.mangas.map { it.toSManga(baseUrl) }, result.pagination.hasNextPage)
     }
 
@@ -66,7 +67,7 @@ abstract class EgoToons : KeiSource() {
         val mangaId = url.pathSegments.getOrNull(1)?.toIntOrNull() ?: return null
         val manga = SManga.create().apply { this.url = "/obra/$mangaId" }
 
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga.apply {
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga().apply {
             initialized = true
         }
     }
@@ -76,23 +77,21 @@ abstract class EgoToons : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val mangaId = manga.url.mangaId()
-        val details = if (fetchDetails) {
-            async {
-                client.get("$baseUrl/api/obras/$mangaId")
-                    .parseAs<MangaDetailsDto>()
-                    .manga
-                    .toSManga(baseUrl)
-            }
-        } else {
-            null
-        }
-        val chapterList = if (fetchChapters) async { getChapterList(mangaId) } else null
 
-        SMangaUpdate(
-            manga = details?.await() ?: manga,
-            chapters = chapterList?.await() ?: chapters,
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    client.get("$baseUrl/api/obras/$mangaId", Fetch.XHR)
+                        .parseAs<MangaDetailsDto>()
+                        .manga
+                        .toSManga(baseUrl)
+                } else {
+                    manga
+                }
+            },
+            chapters = { if (fetchChapters) getChapterList(mangaId) else chapters },
         )
     }
 
@@ -112,13 +111,13 @@ abstract class EgoToons : KeiSource() {
             .addQueryParameter("ordenar", "desc")
             .addQueryParameter("fields", "list")
             .build()
-        return client.get(url).parseAs()
+        return client.get(url, Fetch.XHR).parseAs()
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val mangaId = chapter.url.mangaId()
         val chapterNumber = chapter.url.chapterNumber()
-        val chapterId = client.get("$baseUrl/api/obras/$mangaId/capitulos/$chapterNumber/index.js")
+        val chapterId = client.get("$baseUrl/api/obras/$mangaId/capitulos/$chapterNumber/index.js", Fetch.XHR)
             .parseAs<ChapterDetailsDto>()
             .chapter
             .id
@@ -137,6 +136,7 @@ abstract class EgoToons : KeiSource() {
             val manifest = client.get(
                 "$apiUrl/api/leitor/capitulos/$chapterId/manifest?offset=$offset&limit=$MANIFEST_PAGE_SIZE",
                 headers,
+                Fetch.XHR,
             ).parseAs<ChapterManifestDto>()
             manifest.pages.mapTo(pages) {
                 Page(it.index, readerUrl, imageUrl = requireNotNull(cdnUrl.resolve(it.url)).toString())
@@ -146,7 +146,7 @@ abstract class EgoToons : KeiSource() {
         return pages
     }
 
-    override fun imageRequest(page: Page): Request = Request.Builder()
+    override fun getImageRequest(page: Page): Request = Request.Builder()
         .url(page.imageUrl!!)
         .headers(
             headersBuilder()
@@ -160,13 +160,13 @@ abstract class EgoToons : KeiSource() {
 
     override suspend fun fetchFilterData(): JsonElement = coroutineScope {
         val formats = async {
-            client.get("$baseUrl/api/filtros/formatos.js").parseAs<FormatListDto>().formats
+            client.get("$baseUrl/api/filtros/formatos.js", Fetch.XHR).parseAs<FormatListDto>().formats
         }
         val statuses = async {
-            client.get("$baseUrl/api/filtros/status.js").parseAs<StatusListDto>().statuses
+            client.get("$baseUrl/api/filtros/status.js", Fetch.XHR).parseAs<StatusListDto>().statuses
         }
         val tags = async {
-            client.get("$baseUrl/api/filtros/tags.js").parseAs<TagListDto>().tags
+            client.get("$baseUrl/api/filtros/tags.js", Fetch.XHR).parseAs<TagListDto>().tags
         }
 
         FilterData(formats.await(), statuses.await(), tags.await()).toJsonElement()

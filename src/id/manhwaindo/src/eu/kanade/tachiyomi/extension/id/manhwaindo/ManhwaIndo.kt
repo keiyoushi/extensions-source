@@ -1,56 +1,7 @@
 package eu.kanade.tachiyomi.extension.id.manhwaindo
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import keiyoushi.annotation.Source
-import keiyoushi.network.rateLimit
-import okhttp3.Headers
-import okhttp3.Interceptor
-import okhttp3.OkHttpClient
-import okhttp3.Response
-import org.jsoup.nodes.Document
+import eu.kanade.tachiyomi.multisrc.manhwaindo.ManhwaIndo as ManhwaIndoTheme
 
 @Source
-abstract class ManhwaIndo : MangaThemesia() {
-    override val mangaUrlDirectory = "/series"
-    override val hasProjectPage = true
-
-    override fun Headers.Builder.configureHeaders() = apply {
-        set("Accept-Language", "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7")
-    }
-
-    override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor(::headersInterceptor)
-        rateLimit(4)
-    }
-
-    override fun pageListParse(document: Document) = super.pageListParse(document).distinctBy {
-        it.imageUrl!!
-    }
-
-    private fun headersInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val url = request.url
-        val urlString = url.toString()
-        val newHeaders = request.headers.newBuilder().apply {
-            removeAll("X-Requested-With")
-            if (urlString.contains("gmbr.pro") || urlString.contains("manhwaindo.my")) {
-                set("Sec-Fetch-Site", if (urlString.contains("manhwaindo.my")) "same-origin" else "cross-site")
-                set("Sec-Fetch-Mode", "no-cors")
-                set("Sec-Fetch-Dest", "image")
-            }
-        }.build()
-
-        val newRequest = if (url.scheme == "http" && (urlString.contains("gmbr.pro") || urlString.contains("manhwaindo.my"))) {
-            request.newBuilder()
-                .url(url.newBuilder().scheme("https").build())
-                .headers(newHeaders)
-                .build()
-        } else {
-            request.newBuilder()
-                .headers(newHeaders)
-                .build()
-        }
-
-        return chain.proceed(newRequest)
-    }
-}
+abstract class ManhwaIndo : ManhwaIndoTheme()

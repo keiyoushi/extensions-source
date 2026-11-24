@@ -7,12 +7,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -21,6 +20,7 @@ import okhttp3.Response
 
 /** MangAdventure base source. */
 abstract class MangAdventure : KeiSource() {
+
     /** The site's manga categories. */
     protected open val categories = DEFAULT_CATEGORIES
 
@@ -44,9 +44,9 @@ abstract class MangAdventure : KeiSource() {
 
     override fun Headers.Builder.configureHeaders() = set("User-Agent", userAgent)
 
-    override suspend fun getLatestUpdates(page: Int) = parseMangasPage(client.get("$apiUrl/series?page=$page&sort=-latest_upload"))
+    override suspend fun getLatestUpdates(page: Int) = parseMangasPage(client.get("$apiUrl/series?page=$page&sort=-latest_upload", Fetch.XHR))
 
-    override suspend fun getPopularManga(page: Int) = parseMangasPage(client.get("$apiUrl/series?page=$page&sort=-views"))
+    override suspend fun getPopularManga(page: Int) = parseMangasPage(client.get("$apiUrl/series?page=$page&sort=-views", Fetch.XHR))
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.size < 2) return null
@@ -62,7 +62,7 @@ abstract class MangAdventure : KeiSource() {
             }
         }.build()
 
-        return parseMangasPage(client.get(url))
+        return parseMangasPage(client.get(url, Fetch.XHR))
     }
 
     private fun parseMangasPage(response: Response) = response.parseAs<Paginator<Series>>().let {
@@ -74,15 +74,14 @@ abstract class MangAdventure : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) fetchManga(manga.url) else manga }
-        val chapterList = async { if (fetchChapters) fetchChapterList(manga) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) fetchManga(manga.url) else manga },
+        chapters = { if (fetchChapters) fetchChapterList(manga) else chapters },
+    )
 
-    private suspend fun fetchManga(slug: String) = mangaFromJSON(client.get("$apiUrl/series/$slug").parseAs<Series>())
+    private suspend fun fetchManga(slug: String) = mangaFromJSON(client.get("$apiUrl/series/$slug", Fetch.XHR).parseAs<Series>())
 
-    private suspend fun fetchChapterList(manga: SManga) = client.get("$apiUrl/series/${manga.url}/chapters?date_format=timestamp")
+    private suspend fun fetchChapterList(manga: SManga) = client.get("$apiUrl/series/${manga.url}/chapters?date_format=timestamp", Fetch.XHR)
         .parseAs<Results<Chapter>>().map { chapter ->
             SChapter.create().apply {
                 url = chapter.id.toString()
@@ -96,7 +95,7 @@ abstract class MangAdventure : KeiSource() {
             }
         }
 
-    override suspend fun getPageList(chapter: SChapter) = client.get("$apiUrl/chapters/${chapter.url}/pages?track=true")
+    override suspend fun getPageList(chapter: SChapter) = client.get("$apiUrl/chapters/${chapter.url}/pages?track=true", Fetch.XHR)
         .parseAs<Results<MAPage>>().map { page ->
             Page(page.number, imageUrl = page.image)
         }

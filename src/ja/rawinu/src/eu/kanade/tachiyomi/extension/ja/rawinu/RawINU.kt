@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
@@ -55,7 +56,7 @@ abstract class RawINU : FMReader() {
     // ============================== Chapters ==============================
     override suspend fun fetchChapterList(manga: SManga, mangaPage: Document): List<SChapter> {
         val slug = manga.url.substringAfter("/manga-").substringBefore(".html")
-        val doc = client.get("$apiEndpoint/cont.Listchapter.php?slug=$slug").asJsoup()
+        val doc = client.get("$apiEndpoint/cont.Listchapter.php?slug=$slug", Fetch.DOCUMENT).asJsoup()
         doc.setBaseUri(baseUrl) // Fixes chapter URLs
         return doc.select(chapterListSelector()).map(::chapterFromElement)
     }
@@ -68,10 +69,10 @@ abstract class RawINU : FMReader() {
 
     // =============================== Pages ================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val id = document.selectFirst("input[name=chapter]#chapter")!!.attr("value")
 
-        return client.get("$apiEndpoint/cont.imagesChap.php?cid=$id").asJsoup().select(pageListImageSelector).mapIndexed { i, img ->
+        return client.get("$apiEndpoint/cont.imagesChap.php?cid=$id", Fetch.DOCUMENT).asJsoup().select(pageListImageSelector).mapIndexed { i, img ->
             Page(i, document.location(), getImgAttr(img))
         }
     }

@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Webnex"
-    versionCode = 1
+    versionCode = 12
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -17,5 +17,8 @@ keiyoushi {
 
     deeplink {
         path("/manga/..*")
+        path("/read/..*")
+        path("/browse")
+        path("/groups/..*")
     }
 }

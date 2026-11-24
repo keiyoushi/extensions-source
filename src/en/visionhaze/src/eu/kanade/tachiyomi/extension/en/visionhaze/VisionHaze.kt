@@ -5,10 +5,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import java.lang.UnsupportedOperationException
 
@@ -24,7 +25,6 @@ abstract class VisionHaze : KeiSource() {
     }
 
     override val supportsLatest: Boolean = false
-
     override suspend fun getPopularManga(page: Int): MangasPage = MangasPage(
         mangas = listOf(manga()),
         hasNextPage = false,
@@ -47,7 +47,7 @@ abstract class VisionHaze : KeiSource() {
             return SMangaUpdate(manga, chapters)
         }
 
-        val document = client.get("$baseUrl/archive/").asJsoup()
+        val document = client.get("$baseUrl/archive/", Fetch.DOCUMENT).asJsoup()
         val chapterTitles = document.select(".archive").map {
             it.select("b").text()
         }

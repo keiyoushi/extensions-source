@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.pam
 
-import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -9,55 +8,44 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import keiyoushi.lib.ece.Ece
 import keiyoushi.lib.i18n.Intl
-import keiyoushi.lib.secretstream.SecretStream
-import keiyoushi.lib.secretstream.State
-import keiyoushi.lib.secretstream.X25519
-import keiyoushi.network.get
-import keiyoushi.network.post
-import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.asJsoup
+import keiyoushi.source.SMangaUpdate
+import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.WebViewScope
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJsonRequestBody
-import keiyoushi.utils.tryParseDateTime
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import okhttp3.Headers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
-import okhttp3.ResponseBody.Companion.toResponseBody
-import okio.Buffer
-import okio.Timeout
 import okio.buffer
+import okio.source
+import java.io.File
 import java.io.IOException
-import java.net.URLDecoder
-import java.security.MessageDigest
-import java.security.SecureRandom
-import java.time.format.DateTimeFormatter
-import java.util.Locale
-import java.util.TimeZone
-import java.util.concurrent.ConcurrentHashMap
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
-import kotlin.math.abs
-import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 
 abstract class Pam :
     KeiSource(),
     ConfigurableSource {
 
-    protected val baseHttpUrl get() = baseUrl.toHttpUrl()
-
-    private val preferences by getPreferencesLazy()
+    private val preferences by getPreferencesLazy {
+        if (contains(OLD_HIDE_PREMIUM_PREF)) edit().remove(OLD_HIDE_PREMIUM_PREF).apply()
+    }
 
     protected val intl = Intl(
         language = lang,
@@ -67,56 +55,10 @@ abstract class Pam :
     )
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
-        addInterceptor(::imageInterceptor)
-        // The reader's static bundle is scraped for its signer and doesn't need throttling.
-        rateLimit(1, 2.seconds) { it.fragment != THUMBNAIL_FRAGMENT && !it.encodedPath.startsWith("/build/") }
+        addInterceptor(::pageInterceptor)
     }
 
-    private var version: String? = null
-    private var csrfToken: String? = null
-    private val tokenMutex = Mutex()
-
-    private suspend fun apiHeaders(
-        includeXSRFToken: Boolean,
-        includeCSRFToken: Boolean,
-        includeVersion: Boolean,
-    ): Headers = tokenMutex.withLock {
-        var xsrfToken = client.cookieJar.loadForRequest(baseHttpUrl)
-            .firstOrNull { it.name == "XSRF-TOKEN" }?.let { URLDecoder.decode(it.value, "UTF-8") }
-
-        if (
-            (includeXSRFToken && xsrfToken == null) ||
-            (includeCSRFToken && csrfToken == null) ||
-            (includeVersion && version == null)
-        ) {
-            val document = client.get(baseHttpUrl).asJsoup()
-
-            version = document.selectFirst("#app")!!
-                .attr("data-page")
-                .parseAs<Version>().version
-
-            csrfToken = document.selectFirst("meta[name=csrf-token]")!!
-                .attr("content")
-
-            xsrfToken = client.cookieJar.loadForRequest(baseHttpUrl)
-                .first { it.name == "XSRF-TOKEN" }.let { URLDecoder.decode(it.value, "UTF-8") }
-        }
-
-        headersBuilder().apply {
-            set("Accept", "application/json")
-            set("X-Requested-With", "XMLHttpRequest")
-            if (includeVersion) {
-                set("X-Inertia", "true")
-                set("X-Inertia-Version", version!!)
-            }
-            if (includeXSRFToken) {
-                set("X-XSRF-TOKEN", xsrfToken!!)
-            }
-            if (includeCSRFToken) {
-                set("X-CSRF-TOKEN", csrfToken!!)
-            }
-        }.build()
-    }
+    private val siteView = SiteView(baseUrl) { headers["User-Agent"]!! }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", popularFilters)
 
@@ -126,530 +68,233 @@ abstract class Pam :
     protected abstract val latestFilters: FilterList
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val apiHeaders = apiHeaders(
-            includeXSRFToken = true,
-            includeCSRFToken = false,
-            includeVersion = false,
-        )
-
-        if (query.isNotEmpty()) {
-            val url = baseHttpUrl.newBuilder().apply {
-                addPathSegments("api/v1/search/series")
-                addQueryParameter("q", query)
-            }.build()
-
-            val data = client.get(url, apiHeaders).parseAs<SearchResponse>().data
-
-            return MangasPage(
-                mangas = data.map { it.toSManga(::createThumbnailUrl) },
-                hasNextPage = false,
-            )
-        }
-
-        val url = baseHttpUrl.newBuilder().apply {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("library")
-            if (page > 1) {
-                addQueryParameter("page", page.toString())
-            }
+            if (query.isNotBlank()) addQueryParameter("search", query.trim())
 
             filters.filterIsInstance<TriStateGroupFilter>().forEach { group ->
-                when (group.name) {
-                    "Genres", "Genres/Thèmes" -> {
-                        group.included.takeIf { it.isNotEmpty() }?.also { addQueryParameter("include_genres", it.joinToString(",")) }
-                        group.excluded.takeIf { it.isNotEmpty() }?.also { addQueryParameter("exclude_genres", it.joinToString(",")) }
-                    }
-                    "Types" -> {
-                        group.included.takeIf { it.isNotEmpty() }?.also { addQueryParameter("include_types", it.joinToString(",")) }
-                        group.excluded.takeIf { it.isNotEmpty() }?.also { addQueryParameter("exclude_types", it.joinToString(",")) }
-                    }
-                }
+                val kind = if (group is TypeGroupFilter) "types" else "genres"
+                group.included.takeIf { it.isNotEmpty() }?.also { addQueryParameter("include_$kind", it.joinToString(",")) }
+                group.excluded.takeIf { it.isNotEmpty() }?.also { addQueryParameter("exclude_$kind", it.joinToString(",")) }
             }
-
             filters.firstInstanceOrNull<CheckBoxGroup>()?.also { status ->
-                if (status.checked.isNotEmpty()) {
-                    addQueryParameter("status", status.checked.joinToString(","))
-                }
+                if (status.checked.isNotEmpty()) addQueryParameter("status", status.checked.joinToString(","))
+            }
+            filters.filterIsInstance<NumberFilter>().forEach { number ->
+                number.value?.also { addQueryParameter(number.parameter, it.toString()) }
             }
             filters.firstInstanceOrNull<SortFilter>()?.also { sort ->
                 addQueryParameter("orderby", sort.sort)
-                if (sort.ascending) {
-                    addQueryParameter("order", "asc")
-                }
+                if (sort.ascending) addQueryParameter("order", "asc")
             }
+            if (page > 1) addQueryParameter("page", page.toString())
         }.build()
 
-        val data = client.get(url, apiHeaders).parseAs<LibraryResponse>().series
-
+        val library = siteView.drive(url.toString(), "(${siteView.asset("library.js")})($SETTLE_MS)") { _, result ->
+            Step.Done(result.parseAs<LibraryPage>())
+        }
         return MangasPage(
-            mangas = data.data.map { it.toSManga(::createThumbnailUrl) },
-            hasNextPage = data.meta?.let { it.current < it.last } ?: false,
+            mangas = library.items.map { it.toSManga(COVER_FRAGMENT) },
+            hasNextPage = library.hasNextPage,
         )
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/serie/${manga.url}"
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val segments = url.pathSegments
+        if (segments.size < 2 || segments[0] != "serie") return null
+        val manga = SManga.create().apply { this.url = segments[1] }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val apiHeaders = apiHeaders(
-            includeXSRFToken = true,
-            includeCSRFToken = false,
-            includeVersion = true,
-        )
-        val data = client.get(getMangaUrl(manga), apiHeaders).parseAs<MangaResponse>().props.serie
+    ): SMangaUpdate = readSerie(manga, chapters, fetchChapters)
 
-        // Some sites leave the chapters out of the page and serve them from a paged API instead.
-        val sourceChapters = when {
-            data.chapters != null -> data.chapters
-            fetchChapters -> fetchChapterList(data.uid)
-            else -> null
+    /** Reads the series page: its details from both tabs, then each page of its chapter list through the site's pager. */
+    private suspend fun readSerie(manga: SManga, known: List<SChapter>, withChapters: Boolean): SMangaUpdate {
+        var synopsis: String? = null
+        val rows = linkedMapOf<String, SeriePage.Row>()
+        var lastFirst: String? = null
+        var tappedFor = 0
+
+        val serie = siteView.drive(getMangaUrl(manga), "(${siteView.asset("serie.js")})()") { _, result ->
+            val page = result.parseAs<SeriePage>()
+            if (page.synopsis != null) synopsis = page.synopsis
+            // Status, year and alternative titles are on the Information tab
+            page.infoTab?.let { return@drive touch(page, it) }
+            if (page.info == null || !withChapters) return@drive if (page.info != null) Step.Done(page) else Step.Wait
+            if (page.chapterCount == 0) return@drive Step.Done(page)
+            val first = page.chapters.firstOrNull()?.path ?: return@drive Step.Wait
+            if (first != lastFirst && page.page > tappedFor) {
+                lastFirst = first
+                tappedFor = page.page
+                page.chapters.forEach { rows[it.path] = it }
+            }
+            when {
+                page.next != null && tappedFor == page.page -> touch(page, page.next)
+                page.next == null && tappedFor == page.page -> Step.Done(page)
+                else -> Step.Wait
+            }
         }
 
-        return SMangaUpdate(
-            manga = mangaDetailsParse(data),
-            chapters = sourceChapters?.let { chapterListParse(data, it) } ?: chapters,
-        )
-    }
-
-    private fun mangaDetailsParse(data: MangaResponse.Props.Manga): SManga = SManga.create().apply {
-        url = data.slug
-        title = data.title
-        thumbnail_url = createThumbnailUrl(data.image)
-        author = data.author
-        artist = data.artist
-        description = buildString {
-            data.description?.also {
-                append(it.trim(), "\n\n")
+        val details = SManga.create().apply {
+            url = manga.url
+            title = serie.title
+            thumbnail_url = serie.cover?.let { "$it#$COVER_FRAGMENT" }
+            val info = serie.info!!
+            author = info.author.joinToString().ifEmpty { null }
+            artist = info.artist.joinToString().ifEmpty { null }
+            genre = (serie.types + info.genres).distinct().joinToString().ifEmpty { null }
+            status = when (info.status) {
+                "ongoing", "upcoming" -> SManga.ONGOING
+                "finished" -> SManga.COMPLETED
+                "dropped" -> SManga.CANCELLED
+                "onhold" -> SManga.ON_HIATUS
+                else -> SManga.UNKNOWN
             }
-            data.releaseYear?.also {
-                append(intl["release_year"], ": ", it, "\n\n")
-            }
-            data.alternativeName?.also {
-                append(intl["alternative_names"], ": ", it)
-            }
-        }.trim()
-        genre = buildList {
-            data.type?.name?.also(::add)
-            data.genres.mapTo(this) { it.name }
-        }.joinToString()
-        status = when (data.status?.lowercase()) {
-            "ongoing", "upcoming" -> SManga.ONGOING
-            "finished" -> SManga.COMPLETED
-            "dropped" -> SManga.CANCELLED
-            "onhold" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
+            description = MarkdownDescription.Builder().apply {
+                rating(serie.rating?.substringBefore("/")?.toFloatOrNull())
+                info(info.year?.let { "${intl["release_year"]}: $it" })
+                description(synopsis)
+                field(intl["translated_by"], serie.teams)
+                altTitles(info.altTitles, intl["alternative_names"])
+            }.build()
         }
-    }
+        if (!withChapters) return SMangaUpdate(details, known)
 
-    protected open fun createThumbnailUrl(imagePath: String?): String? {
-        if (imagePath == null) return null
-        return "$baseUrl$imagePath#$THUMBNAIL_FRAGMENT"
-    }
-
-    private fun chapterListParse(data: MangaResponse.Props.Manga, chapters: List<MangaResponse.Props.Chapter>): List<SChapter> {
-        val hidePremium = preferences.getBoolean(HIDE_PREMIUM_PREF, false)
-
-        return chapters
-            .filter { !(it.isPremium && hidePremium) }
-            .map {
-                SChapter.create().apply {
-                    url = "/serie/${data.slug}/chapter/${it.slug}"
-                    name = buildString {
-                        if (it.isPremium) {
-                            append("\uD83D\uDD12 ")
-                        }
-                        append(it.title)
-                    }
-                    date_upload = it.createdAt.substringBefore(".").let { dateStr ->
-                        dateFormat.tryParseDateTime(dateStr)
-                    }
-                }
-            }.asReversed()
-    }
-
-    /** Oldest first, like the inline list. */
-    private suspend fun fetchChapterList(uid: String): List<MangaResponse.Props.Chapter> {
+        // Ages are rounded down to days, weeks, months or years, so a chapter keeps the date it was first stored with
+        val stored = known.associate { it.url to it.date_upload }
         val now = System.currentTimeMillis()
-        val isFree = { freeAt: String -> dateFormat.tryParseDateTime(freeAt.substringBefore(".")) in 1..now }
-        val apiHeaders = apiHeaders(includeXSRFToken = true, includeCSRFToken = false, includeVersion = false)
-
-        return buildList {
-            var page = 1
-            do {
-                val url = "$baseUrl/api/v1/series/$uid/chapters".toHttpUrl().newBuilder()
-                    .addQueryParameter("page", page.toString())
-                    .addQueryParameter("sort", "asc")
-                    .build()
-                val response = client.get(url, apiHeaders).parseAs<ChapterListResponse>()
-
-                response.items.mapTo(this) { it.toChapter(isFree) }
-            } while (page++ < response.lastPage)
-        }
-    }
-
-    private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT)
-        .withZone(TimeZone.getTimeZone("UTC").toZoneId())
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = HIDE_PREMIUM_PREF
-            title = intl["pref_hide_premium_title"]
-            setDefaultValue(false)
-        }.also(screen::addPreference)
-    }
-
-    @Volatile
-    private var readerModule: ReaderModule? = null
-    private val readerModuleMutex = Mutex()
-
-    private suspend fun readerModule(): ReaderModule = readerModuleMutex.withLock {
-        readerModule ?: client.fetchReaderModule(baseUrl, headers).also { readerModule = it }
-    }
-
-    /**
-     * The signer holds 16 MB of WASM memory, so it is built per chapter and dropped again
-     * instead of being kept for the source's lifetime.
-     */
-    private suspend fun <T> withSigner(block: suspend Signer.() -> T): T = try {
-        Signer(readerModule()).block()
-    } catch (e: Exception) {
-        // Most likely the site rebuilt its reader; pick the new one up on the next attempt.
-        readerModule = null
-        throw e
-    }
-
-    private val secureRandom = SecureRandom()
-
-    private class ChapterSession(
-        val chapterToken: String,
-        val sharedSecret: ByteArray,
-        val clientPubkeyB64: String,
-        /** Reader v2 only: input keying material for this chapter's encrypted pages. */
-        val contentKey: ByteArray? = null,
-    )
-
-    private class ChapterState(
-        val session: ChapterSession,
-        val manifest: ManifestResponse?,
-    )
-
-    private val sessions = ConcurrentHashMap<String, ChapterSession>()
-    private val sessionMutexes = ConcurrentHashMap<String, Mutex>()
-
-    private fun sessionKey(serieSlug: String, chapterSlug: String) = "${name.take(3).lowercase()}-$serieSlug--$chapterSlug"
-
-    private suspend fun openChapter(body: PageListResponse): ChapterState {
-        val props = body.props
-        val serverPub = Base64.decode(props.serverPubkey, Base64.DEFAULT)
-        require(serverPub.size == 32) { "server pubkey must be 32 bytes" }
-
-        val priv = ByteArray(32).also(secureRandom::nextBytes)
-        val clientPub = X25519.publicKey(priv)
-        val shared = X25519.scalarMult(priv, serverPub)
-        val clientPubkeyB64 = Base64.encodeToString(clientPub, Base64.NO_WRAP)
-
-        try {
-            if (!props.readerV2) {
-                val token = props.chapterToken ?: throw IOException("Chapter token missing")
-                return ChapterState(ChapterSession(token, shared, clientPubkeyB64), null)
+        val showPremium = preferences.getBoolean(SHOW_PREMIUM_PREF, false)
+        val chapters = rows.values
+            .filter { showPremium || !it.premium }
+            .map { row ->
+                SChapter.create().apply {
+                    url = row.path
+                    name = buildString {
+                        if (row.premium || row.account) append("🔒 ")
+                        append(row.name)
+                        row.title?.takeIf { it != row.name }?.let { append(" - ", it) }
+                    }
+                    date_upload = stored[row.path]?.takeIf { it > 0 } ?: row.age?.let { ageMillis(it) }?.let { now - it } ?: 0L
+                }
             }
+        return SMangaUpdate(details, chapters)
+    }
 
-            return withSigner {
-                val token = attest(body, clientPubkeyB64)
-                val manifest = requestManifest(props.data.uid, token, clientPubkeyB64)
-
-                ChapterState(
-                    ChapterSession(token, shared, clientPubkeyB64, contentKey(manifest, priv, serverPub)),
-                    manifest,
-                )
+    /** Taps [point] once nothing covers it, scrolling it to the upper part of the screen first. */
+    private fun WebViewScope<SeriePage>.touch(page: SeriePage, point: Point): Step<SeriePage> {
+        val height = page.viewport.height
+        return Step.Act { done ->
+            if (point.clear) {
+                tap(page.scale, point.x, point.y)
+                later(TAP_WAIT_MS, done)
+            } else {
+                val travel = (point.y - height * 0.3f).coerceIn(-height * 0.7f, height * 0.7f)
+                val from = if (travel > 0) height * 0.85f else height * 0.15f
+                swipe(page.scale, page.viewport.width * 0.2f, from, page.viewport.width * 0.2f, from - travel)
+                later(SWIPE_WAIT_MS, done)
             }
-        } finally {
-            // The signer needs the private key for its own key exchange, so it is wiped only afterwards.
-            priv.fill(0)
         }
     }
 
-    /**
-     * Reader v2 mints the chapter token from an attestation exchange instead of shipping it
-     * in the page props. The first exchange is always answered with `refresh`, which retires
-     * the challenge embedded in the page: only the challenge handed back by the partial
-     * reload gets a token.
-     */
-    private suspend fun Signer.attest(body: PageListResponse, clientPubkeyB64: String): String {
-        val attestation = body.props.attestation ?: throw IOException("Missing attestation challenge")
-        val device = deviceReport(attestation.webglSeed)
-        var challenge = attestation.challenge
-
-        val reloadUrl = "$baseUrl/serie/${body.props.data.serie.slug}/chapter/${body.props.data.slug}"
-        val reloadHeaders = headersBuilder()
-            .set("X-Requested-With", "XMLHttpRequest")
-            .set("X-Inertia", "true")
-            .set("X-Inertia-Version", body.version)
-            .set("X-Inertia-Partial-Component", body.component)
-            .set("X-Inertia-Partial-Data", "chapter_token,attestation")
-            .build()
-
-        repeat(ATTESTATION_ATTEMPTS) {
-            val request = AttestationRequest(
-                c = challenge,
-                v = hmacSha256Hex(device, challenge.toByteArray()),
-                sp = signAttestation(challenge, "$device\u0000$clientPubkeyB64"),
-                d = device,
-                pk = clientPubkeyB64,
-            )
-            val apiHeaders = apiHeaders(includeXSRFToken = true, includeCSRFToken = false, includeVersion = false)
-            val minted = client.post("$baseUrl/api/v1/t", apiHeaders, request.toJsonRequestBody())
-                .parseAs<AttestationResponse>()
-
-            if (!minted.supported) throw IOException("Attestation refused: device not supported")
-            minted.ct?.also { return it }
-
-            val reloaded = client.get(reloadUrl, reloadHeaders).parseAs<AttestationReload>().props
-            reloaded.chapterToken?.also { return it }
-            challenge = reloaded.attestation?.challenge ?: throw IOException("Attestation refused")
-        }
-
-        throw IOException("Attestation refused")
-    }
-
-    /**
-     * Stands in for the browser fingerprint the site collects through canvas and WebGL. The
-     * reader renders `webgl_proof` from the seed while `canvas_hash` draws a fixed string, and
-     * the server's `refresh` round checks that they react to a new seed accordingly.
-     */
-    private fun deviceReport(webglSeed: String): String = """{"webdriver":false,"webgl_vendor":"Qualcomm","webgl_renderer":"Adreno (TM) 730",""" +
-        """"webgl_proof":"${sha256Hex("proof:$webglSeed")}","gl_sig":"8192|1|1|23",""" +
-        """"device_memory":null,"hardware_concurrency":8,"effective_type":null,"save_data":false,""" +
-        """"screen_width":1080,"screen_height":2340,"viewport_width":1080,"viewport_height":2130,""" +
-        """"device_pixel_ratio":2.75,"max_touch_points":5,"has_touch":true,""" +
-        """"locale":"en-US","timezone":"America/New_York","platform":"Linux armv8l",""" +
-        """"canvas_hash":"${sha256Hex("attest:canvas")}","visibility_state":"visible"}"""
-
-    private suspend fun Signer.requestManifest(uid: String, chapterToken: String, clientPubkeyB64: String): ManifestResponse {
-        val ts = System.currentTimeMillis() / 1000
-        val nonce = hexNonce()
-        val request = ManifestRequest(
-            v = MANIFEST_VERSION,
-            c = uid,
-            t = chapterToken,
-            ts = ts,
-            n = nonce,
-            s = signManifest(chapterToken, MANIFEST_VERSION, uid, ts, nonce),
-        )
-
-        val headers = apiHeaders(
-            includeXSRFToken = true,
-            includeCSRFToken = false,
-            includeVersion = false,
-        ).newBuilder().set("X-Client-Pubkey", clientPubkeyB64).build()
-
-        return client.post("$baseUrl/api/v1/m", headers, request.toJsonRequestBody()).parseAs<ManifestResponse>()
-    }
-
-    /**
-     * The manifest hint is the page key masked with a digest chain over the ECDH secret, so
-     * it is worthless to any other session.
-     */
-    private fun Signer.contentKey(manifest: ManifestResponse, privateKey: ByteArray, serverPubkey: ByteArray): ByteArray {
-        val segments = manifest.base.split('/').filter(String::isNotEmpty)
-        require(segments.size >= 4 && segments[0] == "p") { "unexpected manifest base: ${manifest.base}" }
-
-        val hint = Base64.decode(manifest.hint, Base64.DEFAULT)
-        return deriveContentKey(privateKey, serverPubkey, segments[1], segments[2].toInt(), hint)
-    }
-
-    private suspend fun ensureSession(serieSlug: String, chapterSlug: String): ChapterSession {
-        val id = sessionKey(serieSlug, chapterSlug)
-        sessions[id]?.let { return it }
-
-        return sessionMutexes.getOrPut(id) { Mutex() }.withLock {
-            sessions[id]?.let { return@withLock it }
-
-            val apiHeaders = apiHeaders(
-                includeXSRFToken = true,
-                includeCSRFToken = false,
-                includeVersion = true,
-            )
-            val body = client.get("$baseUrl/serie/$serieSlug/chapter/$chapterSlug", apiHeaders)
-                .parseAs<PageListResponse>()
-
-            openChapter(body).session.also { sessions[id] = it }
-        }
+    /** The age the site's chapter list shows, in any of its languages, as milliseconds. */
+    private fun ageMillis(age: String): Long? {
+        if (age in NOW_WORDS) return 0
+        if (age in YESTERDAY_WORDS) return 1.days.inWholeMilliseconds
+        val match = AGE_REGEX.matchEntire(age) ?: return null
+        val count = match.groupValues[1].toLong()
+        val unit = AGE_UNITS[match.groupValues[2]] ?: return null
+        return count * unit.inWholeMilliseconds
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val apiHeaders = apiHeaders(
-            includeXSRFToken = true,
-            includeCSRFToken = false,
-            includeVersion = true,
-        )
-        val body = client.get("$baseUrl${chapter.url}", apiHeaders).parseAs<PageListResponse>()
-        val props = body.props
-        val id = sessionKey(props.data.serie.slug, props.data.slug)
-        val state = openChapter(body)
-        sessions[id] = state.session
-
-        // Reader v1 pages are signed right before they are loaded, see getImageUrl.
-        val manifest = state.manifest
-            ?: return (1..props.pageCount).map { idx ->
-                Page(
-                    index = idx - 1,
-                    url = "/serie/${props.data.serie.slug}/chapter/${props.data.slug}/page/$idx",
-                )
-            }
-
-        // Some sites list oversized variants they never serve.
-        val variant = manifest.variants.minByOrNull { abs(it - MAX_VARIANT_WIDTH) }?.let { "-$it" }.orEmpty()
-
-        return (1..manifest.count).map { idx ->
-            Page(
-                index = idx - 1,
-                url = "$id#$idx",
-                imageUrl = "$baseUrl${manifest.base}$idx$variant.ece#$id",
-            )
+        val capture = capture(getChapterUrl(chapter).toHttpUrl().encodedPath, 0)
+        val count = capture.pageCount.await()
+        return List(count) { index ->
+            Page(index, imageUrl = "${getChapterUrl(chapter)}#$PAGE_FRAGMENT$index")
         }
     }
 
-    private fun hexNonce(byteCount: Int = 16): String {
-        val b = ByteArray(byteCount).also(secureRandom::nextBytes)
-        return b.joinToString("") { "%02x".format(it) }
+    private val captureScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val captures = linkedMapOf<String, ChapterCapture>()
+
+    /** The chapter's open reader that can still deliver page [index], or a new one starting there. */
+    @Synchronized
+    private fun capture(chapterPath: String, index: Int): ChapterCapture {
+        captures[chapterPath]?.takeIf { it.covers(index) }?.let { return it }
+        captures.remove(chapterPath)?.close()
+        while (captures.size >= MAX_CAPTURES) captures.remove(captures.keys.first())?.close()
+        val dir = File(applicationContext.cacheDir, "pam-pages/${chapterPath.hashCode().toUInt()}-$index")
+        return ChapterCapture("$baseUrl$chapterPath", index, siteView, dir, captureScope).also { captures[chapterPath] = it }
     }
 
-    private fun hmacSha256Hex(key: String, msg: String): String = hmacSha256Hex(key, msg.toByteArray(Charsets.US_ASCII))
+    private val covers = Covers(baseUrl, File(applicationContext.cacheDir, "pam-covers/$id"), captureScope) { headers["User-Agent"]!! }
 
-    private fun hmacSha256Hex(key: String, msg: ByteArray): String {
-        val mac = Mac.getInstance("HmacSHA256").apply {
-            init(SecretKeySpec(key.toByteArray(), "HmacSHA256"))
-        }
-        return mac.doFinal(msg).joinToString("") { "%02x".format(it) }
-    }
-
-    private fun sha256Hex(value: String): String = MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
-        .joinToString("") { "%02x".format(it) }
-
-    override suspend fun getImageUrl(page: Page): String {
-        val seg = "$baseUrl${page.url}".toHttpUrl().pathSegments
-        require(seg.size >= 6 && seg[0] == "serie" && seg[2] == "chapter" && seg[4] == "page") {
-            "unexpected page URL shape: ${page.url}"
-        }
-        val serieSlug = seg[1]
-        val chapterSlug = seg[3]
-        val pageIndex = seg[5].toInt()
-
-        val session = ensureSession(serieSlug, chapterSlug)
-        val sessionId = sessionKey(serieSlug, chapterSlug)
-
-        val ts = (System.currentTimeMillis() / 1000).toString()
-        val nonce = hexNonce()
-        val sig = hmacSha256Hex(session.chapterToken, "$pageIndex$ts$nonce")
-
-        return baseHttpUrl.newBuilder()
-            .addPathSegment("serie").addPathSegment(serieSlug)
-            .addPathSegment("chapter").addPathSegment(chapterSlug)
-            .addPathSegment("page").addPathSegment(pageIndex.toString())
-            .addQueryParameter("token", session.chapterToken)
-            .addQueryParameter("ts", ts)
-            .addQueryParameter("nonce", nonce)
-            .addQueryParameter("sig", sig)
-            .fragment(sessionId)
-            .build()
-            .toString()
-    }
-
-    private fun imageInterceptor(chain: Interceptor.Chain): Response {
+    /** Pages and covers come from the WebViews, never from the network. */
+    private fun pageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val session = request.url.fragment?.let(sessions::get) ?: return chain.proceed(request)
-
-        if (session.contentKey != null) {
-            val response = chain.proceed(request)
-            if (!response.isSuccessful) return response
-
-            return response.newBuilder()
-                .body(
-                    Ece.decrypt(response.body.bytes(), session.contentKey)
-                        .toResponseBody("image/webp".toMediaType()),
-                )
-                .build()
+        if (request.url.fragment == COVER_FRAGMENT) {
+            val url = request.url.newBuilder().fragment(null).build().toString()
+            val cover = awaitFile { covers.get(url).await() }
+            return fileResponse(request, cover.file, cover.type)
         }
+        val index = request.url.fragment?.takeIf { it.startsWith(PAGE_FRAGMENT) }?.removePrefix(PAGE_FRAGMENT)?.toIntOrNull()
+            ?: return chain.proceed(request)
+        val file = awaitFile { capture(request.url.encodedPath, index).page(index).await() }
+        return fileResponse(request, file, "image/jpeg")
+    }
 
-        val response = chain.proceed(
-            request.newBuilder().header("X-Client-Pubkey", session.clientPubkeyB64).build(),
-        )
-        val pageNameRaw = response.header("X-Page-Name") ?: return response
-        val keyHintB64 = response.header("X-Key-Hint") ?: return response
-        val keyHint = Base64.decode(keyHintB64, Base64.DEFAULT)
-        require(keyHint.size >= 32) { "X-Key-Hint must decode to >= 32 bytes" }
+    private fun <T> awaitFile(block: suspend () -> T): T = try {
+        runBlocking { withTimeout(PAGE_TIMEOUT) { block() } }
+    } catch (e: Throwable) {
+        throw e as? IOException ?: IOException(e.message ?: "The site's page did not load", e)
+    }
 
-        val streamKey = run {
-            val sha = MessageDigest.getInstance("SHA-256").run {
-                update(session.sharedSecret)
-                update(pageNameRaw.toByteArray(Charsets.UTF_8))
-                digest()
-            }
-            ByteArray(32) { i -> (sha[i].toInt() xor keyHint[i].toInt()).toByte() }
-        }
+    private fun fileResponse(request: Request, file: File, type: String) = Response.Builder()
+        .request(request)
+        .protocol(Protocol.HTTP_1_1)
+        .code(200)
+        .message("OK")
+        .body(file.source().buffer().asResponseBody(type.toMediaType(), file.length()))
+        .build()
 
-        val networkSource = response.body.source()
-        networkSource.skip(PREFIX_LENGTH.toLong())
-        val ssHeader = networkSource.readByteArray(STREAM_HEADER_LENGTH.toLong())
-
-        val decryptedSource = object : okio.Source {
-            private val secretStream = SecretStream()
-            private val state = State().apply {
-                secretStream.initPull(this, ssHeader, streamKey)
-            }
-            private val decryptedBuffer = Buffer()
-            private var isFinished = false
-
-            override fun read(sink: Buffer, byteCount: Long): Long {
-                if (decryptedBuffer.size == 0L) {
-                    if (isFinished) return -1
-
-                    networkSource.request(CHUNK_SIZE.toLong())
-
-                    val chunkSize = minOf(CHUNK_SIZE.toLong(), networkSource.buffer.size)
-
-                    if (chunkSize == 0L) {
-                        isFinished = true
-                        return -1
-                    }
-
-                    val encryptedData = Buffer().apply {
-                        networkSource.read(this, chunkSize)
-                    }.readByteArray()
-
-                    val result = secretStream.pull(state, encryptedData, encryptedData.size)
-                        ?: throw IOException("Decryption failed")
-
-                    decryptedBuffer.write(result.message)
-
-                    if (result.tag.toInt() == SecretStream.TAG_FINAL) {
-                        isFinished = true
-                    }
-                }
-
-                return decryptedBuffer.read(sink, byteCount)
-            }
-
-            override fun timeout(): Timeout = networkSource.timeout()
-
-            override fun close() = networkSource.close()
-        }.buffer()
-
-        return response.newBuilder()
-            .body(decryptedSource.asResponseBody("image/jpg".toMediaType()))
-            .build()
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_PREMIUM_PREF
+            title = intl["pref_show_premium_title"]
+            summary = intl["pref_show_premium_summary"]
+            setDefaultValue(false)
+        }.also(screen::addPreference)
     }
 }
 
-private const val THUMBNAIL_FRAGMENT = "thumbnail"
-private const val ATTESTATION_ATTEMPTS = 3
-private const val MANIFEST_VERSION = 2
-private const val MAX_VARIANT_WIDTH = 2160
-private const val HIDE_PREMIUM_PREF = "pref_hide_premium_chapters"
-private const val CHUNK_SIZE = 65536 + 17 // libsodium secretstream chunk + ABYTES
-private const val PREFIX_LENGTH = 192
-private const val STREAM_HEADER_LENGTH = 24
+private const val SETTLE_MS = 4000
+private const val PAGE_FRAGMENT = "pam-page-"
+private const val COVER_FRAGMENT = "pam-cover"
+private const val MAX_CAPTURES = 2
+private val PAGE_TIMEOUT = 5.minutes
+private const val TAP_WAIT_MS = 1200L
+private const val SWIPE_WAIT_MS = 900L
+private const val SHOW_PREMIUM_PREF = "pref_show_premium_chapters"
+private const val OLD_HIDE_PREMIUM_PREF = "pref_hide_premium_chapters"
+
+// The site's age formats, in the device's language: en "3 d", fr "3 j / 1 sem.", es "1 mes", de "3 T."; " min" and " h" in all
+private val AGE_REGEX = Regex("""(\d+) (\S+)""")
+private val NOW_WORDS = setOf("just now", "à l’instant", "ahora", "gerade eben")
+private val YESTERDAY_WORDS = setOf("yesterday", "hier", "ayer", "gestern")
+private val AGE_UNITS = mapOf(
+    "min" to 1.minutes,
+    "h" to 1.hours,
+    "d" to 1.days, "j" to 1.days, "T." to 1.days,
+    "w" to 7.days, "sem." to 7.days, "Wo." to 7.days,
+    "mo" to 30.days, "mois" to 30.days, "mes" to 30.days, "meses" to 30.days, "Mon." to 30.days,
+    "y" to 365.days, "an" to 365.days, "ans" to 365.days, "año" to 365.days, "años" to 365.days, "J." to 365.days,
+)

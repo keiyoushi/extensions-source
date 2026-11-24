@@ -3,28 +3,20 @@ package eu.kanade.tachiyomi.multisrc.initmanga
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.Jsoup
 
 @Serializable
-class Dto(
-    private val title: String? = null,
-    private val url: String? = null,
-    private val link: String? = null,
+class SearchDto(
+    private val title: String,
+    private val url: String,
     private val thumb: String? = null,
-    private val image: String? = null,
+    @SerialName("post_type") val postType: String,
 ) {
     fun toSManga() = SManga.create().apply {
-        this.title = this@Dto.title?.let { Jsoup.parseBodyFragment(it).text() }.orEmpty()
-        val fullUrl = this@Dto.url ?: this@Dto.link.orEmpty()
-
-        val urlPath = try {
-            fullUrl.toHttpUrlOrNull()?.encodedPath ?: fullUrl
-        } catch (_: Exception) {
-            fullUrl
-        }
-        this.url = urlPath
-        thumbnail_url = thumb ?: image
+        title = Jsoup.parseBodyFragment(this@SearchDto.title).text()
+        url = this@SearchDto.url.toHttpUrl().encodedPath
+        thumbnail_url = thumb
     }
 }
 
@@ -40,7 +32,7 @@ class EncryptedPayloadDto(
 
 @Serializable
 class InitMangaDataDto(
-    val restUrl: String? = null,
+    @SerialName("decryption_key") val decryptionKey: String,
     val nonce: String? = null,
 )
 
@@ -49,20 +41,22 @@ class ChapterKeyRequestDto(
     @SerialName("chapter_id") private val chapterId: Long,
     private val epoch: Long,
     private val grant: String,
-    private val verdict: String = "pass",
-    private val score: Int = 0,
-    private val codes: List<String> = emptyList(),
-    @SerialName("challenge_token") private val challengeToken: String = "",
+    private val verdict: String,
+    private val score: Int,
+    private val codes: List<String>,
+    @SerialName("challenge_token") private val challengeToken: String,
 )
 
 @Serializable
 class ChapterKeyResponseDto(
-    val key: String,
+    val key: String? = null,
+    val code: String? = null,
+    val data: ChapterKeyErrorDataDto? = null,
 )
 
 @Serializable
-class MangaIdDto(
-    val id: Int,
+class ChapterKeyErrorDataDto(
+    val token: String? = null,
 )
 
 @Serializable
@@ -73,10 +67,35 @@ class ChapterListDto(
 
 @Serializable
 class ChapterDto(
-    val title: String,
+    val title: String? = null,
     val number: Float,
     val slug: String,
     @SerialName("created_at") val createdAt: String,
-    @SerialName("lock_type") val lockType: String = "none",
-    @SerialName("is_purchased") val isPurchased: Boolean = false,
+    @SerialName("lock_type") val lockType: String,
+    @SerialName("is_purchased") val isPurchased: Boolean,
+)
+
+@Serializable
+class GenreData(
+    val name: String,
+    val path: String,
+)
+
+@Serializable
+class ImageVaultDto(
+    val url: String,
+    val nonce: String,
+    val tok: String,
+)
+
+@Serializable
+class ImageKeyResponseDto(
+    val data: ImageKeyDto,
+)
+
+@Serializable
+class ImageKeyDto(
+    val k: String,
+    val s: String? = null,
+    val u: String,
 )

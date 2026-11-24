@@ -1,79 +1,131 @@
 package eu.kanade.tachiyomi.extension.all.onisaga
 
-import kotlinx.serialization.SerialName
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import kotlinx.serialization.Serializable
 
 @Serializable
-class MangaLivewireRequest(
-    @SerialName("_token") val token: String,
-    val components: List<Component>,
+class RpcBody<T>(val json: T)
+
+@Serializable
+class BrowseInput(
+    private val limit: Int,
+    private val q: String? = null,
+    private val genres: Terms? = null,
+    private val themes: Terms? = null,
+    private val tags: Terms? = null,
+    private val origin: List<String>? = null,
+    private val form: List<String>? = null,
+    private val status: List<String>? = null,
+    private val demographic: List<String>? = null,
+    private val ratings: List<String>? = null,
+    private val year: YearRange? = null,
+    private val languages: List<String>? = null,
+    private val sort: String? = null,
 ) {
-    @Serializable
-    class Component(
-        val snapshot: String,
-        val updates: PostFilterUpdatesDto,
-        val calls: List<LivewireCall>,
-    )
+    var cursor: String? = null
 }
 
 @Serializable
-class ChapterLivewireRequest(
-    @SerialName("_token") val token: String,
-    val components: List<Component>,
-) {
-    @Serializable
-    class Component(
-        val snapshot: String,
-        val updates: ChapterUpdatesDto,
-        val calls: List<LivewireCall>,
-    )
-}
-
-@Serializable
-class LivewireCall(
-    val type: String = "call",
-    val path: String = "",
-    val method: String,
-    val params: List<String> = emptyList(),
+class Terms(
+    private val include: List<String>,
+    private val exclude: List<String>,
 )
 
 @Serializable
-class LivewireResponse(
-    val components: List<ComponentResponse> = emptyList(),
-) {
-    @Serializable
-    class ComponentResponse(
-        val effects: Effects = Effects(),
-        val snapshot: String = "",
-    )
+class YearRange(
+    private val from: Int? = null,
+    private val to: Int? = null,
+)
 
-    @Serializable
-    class Effects(
-        val html: String? = null,
-    )
+@Serializable
+class BrowseDto(
+    val items: List<WorkDto>,
+    val nextCursor: String?,
+)
+
+@Serializable
+class WorkDto(
+    private val slug: String,
+    private val title: String,
+    private val coverUrl: String?,
+) {
+    fun toSManga() = SManga.create().apply {
+        url = "/title/$slug"
+        title = this@WorkDto.title
+        thumbnail_url = coverUrl
+    }
 }
 
 @Serializable
-class PostFilterUpdatesDto(
-    val platform: String = "",
-    val status: String = "",
-    val sort: String = "created_at",
-    @SerialName("min_chapters") val minChapters: String = "",
-    val group: String? = null,
-    @SerialName("release_start") val releaseStart: String? = null,
-    @SerialName("release_end") val releaseEnd: String? = null,
+class SeriesDto(
+    val name: String,
+    val alternateName: List<String> = emptyList(),
+    val author: List<PersonDto> = emptyList(),
+    val creator: List<PersonDto> = emptyList(),
     val genre: List<String> = emptyList(),
-    var excludeGenre: List<String> = emptyList(),
 )
 
 @Serializable
-class PageApiResponse(
-    val url: String? = null,
-    val order: Int? = null,
-    val message: String? = null,
+class PersonDto(val name: String)
+
+@Serializable
+class ReadingStartDto(val alternatives: List<AlternativeDto>)
+
+@Serializable
+class AlternativeDto(
+    val href: String,
+    val current: Boolean,
 )
 
 @Serializable
-class ChapterUpdatesDto(
-    val language: String = "",
+class ReaderDto(private val manifest: ManifestDto) {
+    val pages get() = manifest.pages
+}
+
+@Serializable
+class ManifestDto(val pages: List<PageDto>)
+
+@Serializable
+class PageDto(val url: String)
+
+@Serializable
+class SlugInput(private val slug: String)
+
+@Serializable
+class ReleaseInput(
+    private val slug: String,
+    private val releaseId: String,
 )
+
+@Serializable
+class GatedTitleDto(
+    private val title: String,
+    private val synopsis: String?,
+    private val publicationStatus: String,
+    val language: String,
+    val units: List<GatedUnitDto>,
+) {
+    fun toSManga(slug: String) = SManga.create().apply {
+        url = "/title/$slug"
+        title = this@GatedTitleDto.title
+        description = MarkdownDescription.Builder().markdown(synopsis).build()
+        status = when (publicationStatus) {
+            "releasing" -> SManga.ONGOING
+            "completed" -> SManga.COMPLETED
+            "hiatus" -> SManga.ON_HIATUS
+            "cancelled" -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
+    }
+}
+
+@Serializable
+class GatedUnitDto(
+    val label: String,
+    val title: String?,
+    val releaseId: String?,
+)
+
+@Serializable
+class GatedReaderDto(val bootstrap: ReaderDto)

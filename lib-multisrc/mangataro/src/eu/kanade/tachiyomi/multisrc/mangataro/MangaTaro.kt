@@ -14,10 +14,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
@@ -25,8 +27,6 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Callback
 import okhttp3.HttpUrl
@@ -67,7 +67,7 @@ abstract class MangaTaro : KeiSource() {
             limit = 25,
         ).toJsonRequestBody()
 
-        val data = client.post("$baseUrl/auth/search", body).parseAs<SearchQueryResponse>().results
+        val data = client.post("$baseUrl/auth/search", Fetch.XHR, body).parseAs<SearchQueryResponse>().results
 
         val mangas = data.filter { it.type != "Novel" }
             .map {
@@ -106,7 +106,7 @@ abstract class MangaTaro : KeiSource() {
             genreMatchMode = filters.firstInstance<TagFilterMatch>().selected,
         ).toJsonRequestBody()
 
-        return client.post("$baseUrl/wp-json/manga/v1/load", body).parseAs()
+        return client.post("$baseUrl/wp-json/manga/v1/load", Fetch.XHR, body).parseAs()
     }
 
     private suspend fun browseManga(page: Int, query: String, filters: FilterList): MangasPage {
@@ -137,7 +137,7 @@ abstract class MangaTaro : KeiSource() {
         if (url.host != baseUrl.toHttpUrl().host) return null
 
         val slug = url.toString().toSlug()
-        val document = client.get("$baseUrl/manga/$slug").asJsoup()
+        val document = client.get("$baseUrl/manga/$slug", Fetch.DOCUMENT).asJsoup()
 
         val id = document.body().dataset()["manga-id"]!!
         val statusElement = document.select(".capitalize").firstOrNull {
@@ -177,13 +177,10 @@ abstract class MangaTaro : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async {
-            if (fetchDetails) fetchMangaDetails(manga.url.parseAs<MangaUrl>().id, manga.status) else manga
-        }
-        val chapterList = async { if (fetchChapters) fetchChapterList(manga) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) fetchMangaDetails(manga.url.parseAs<MangaUrl>().id, manga.status) else manga },
+        chapters = { if (fetchChapters) fetchChapterList(manga) else chapters },
+    )
 
     private suspend fun fetchMangaDetails(id: String, status: Int): SManga {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -192,7 +189,7 @@ abstract class MangaTaro : KeiSource() {
             addQueryParameter("_embed", null)
         }.build()
 
-        val data = client.get(url).parseAs<MangaDetails>()
+        val data = client.get(url, Fetch.XHR).parseAs<MangaDetails>()
 
         return SManga.create().apply {
             this.url = MangaUrl(data.id.toString(), data.slug).toJsonString()
@@ -240,7 +237,7 @@ abstract class MangaTaro : KeiSource() {
     }
 
     private suspend fun fetchChapterPage(dto: MangaUrl, offset: Int): ChapterList {
-        val response = client.get(chapterListUrl(dto, offset), ensureSuccess = false)
+        val response = client.get(chapterListUrl(dto, offset), Fetch.XHR, ensureSuccess = false)
         if (response.code != 403) {
             if (!response.isSuccessful) {
                 response.close()
@@ -252,7 +249,7 @@ abstract class MangaTaro : KeiSource() {
         val serverTime = response.headers.getDate("Date")
         response.close()
         serverTimeOffset = (serverTime ?: throw HttpException(403)).time - System.currentTimeMillis()
-        return client.get(chapterListUrl(dto, offset)).parseAs()
+        return client.get(chapterListUrl(dto, offset), Fetch.XHR).parseAs()
     }
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
@@ -311,7 +308,7 @@ abstract class MangaTaro : KeiSource() {
             .addQueryParameter("chapter_id", chapterId)
             .build()
 
-        return client.get(url).parseAs<Pages>().images.mapIndexed { idx, img ->
+        return client.get(url, Fetch.XHR).parseAs<Pages>().images.mapIndexed { idx, img ->
             Page(idx, imageUrl = img)
         }
     }
@@ -355,6 +352,9 @@ abstract class MangaTaro : KeiSource() {
         val payload = mapOf("post_id" to postId).toJsonRequestBody()
         val url = "$baseUrl/wp-json/pviews/v1/increment/"
         val request = POST(url, headers, payload)
+            .newBuilder()
+            .fetch(Fetch.XHR)
+            .build()
 
         client.newCall(request)
             .enqueue(
@@ -406,7 +406,7 @@ abstract class MangaTaroGroup :
     override suspend fun getPopularManga(page: Int): MangasPage {
         if (libraryCached.isNotEmpty()) return MangasPage(libraryCached, hasNextPage = false)
 
-        return client.get("$baseUrl/auth/groups/${groupsMapped[page - 1]}/titles?page=$page")
+        return client.get("$baseUrl/auth/groups/${groupsMapped[page - 1]}/titles?page=$page", Fetch.XHR)
             .parseAs<ProjectList>().titles
             .map(ProjectList.MangaDto::toSManga)
             .let { MangasPage(it, hasNextPage = page < groupsMapped.size) }

@@ -8,10 +8,17 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.min
+import kotlin.time.Clock
 
 private val dateFormat = DateTimeFormatter
     .ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
     .withZone(ZoneId.of("UTC"))
+
+@Serializable
+class GenreDto(
+    val name: String,
+    val slug: String,
+)
 
 @Serializable
 class Dto(
@@ -33,9 +40,7 @@ class Dto(
                     append(chapterName)
                 }
             }
-            date_upload = dateFormat.tryParseDateTime(lastUpdate).let {
-                if (it <= 0L) it else min(it, System.currentTimeMillis())
-            }
+            date_upload = min(dateFormat.tryParseDateTime(lastUpdate), Clock.System.now().toEpochMilliseconds())
         }
     }
 }

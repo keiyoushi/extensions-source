@@ -3,59 +3,44 @@ package eu.kanade.tachiyomi.extension.all.pornpics
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.lib.i18n.Intl
-import java.util.Locale
 
-data class SortOption(val name: String, val urlPart: String? = null) {
-    override fun toString() = this.name
-}
-
-class SortSelector(name: String, private val vals: Array<SortOption>) : Filter.Select<SortOption>(name, vals) {
-    fun toUriPart() = vals[state].urlPart
+class SortSelector(name: String, values: Array<String>) : Filter.Select<String>(name, values) {
+    val isRecent get() = state == 1
 }
 
 enum class CategoryType {
-    RECOMMEND,
     CATEGORY,
     TAG,
     PORN_STAR,
     CHANNEL,
-    ;
-
-    companion object {
-        private val mNameToCategoryType = CategoryType.values().associateBy { it.name.lowercase(Locale.US) }
-
-        fun of(name: String) = mNameToCategoryType[name.lowercase(Locale.US)]!!
-    }
 }
 
 data class CategoryOption(val name: String, val type: CategoryType, val urlPart: String) {
     override fun toString() = this.name
-    fun toUrlPart() = urlPart
-    fun useSearch() = urlPart.contains("/search/srch.php?")
 }
 
-data class ActiveCategoryOption(val name: String, val categoryType: CategoryType?) {
+data class ActiveCategoryOption(val name: String, val categoryType: CategoryType) {
     override fun toString() = this.name
 }
 
 class ActiveCategoryTypeSelector(name: String, values: Array<ActiveCategoryOption>) : Filter.Select<ActiveCategoryOption>(name, values) {
-    fun selected() = values[state].categoryType!!
-    fun selectedCategoryOption(filters: FilterList): CategoryOption {
-        val selectors = filters.filterIsInstance<CategorySelector>()
-        val selected = selected()
-        return selectors[selected.ordinal].selected()
+    fun selectedCategoryOption(filters: FilterList): CategoryOption? {
+        val selected = values.getOrNull(state)?.categoryType ?: return null
+        return filters.filterIsInstance<CategorySelector>()
+            .firstOrNull { it.type == selected }
+            ?.selected()
     }
 }
 
-class CategorySelector(name: String, values: Array<CategoryOption>) : Filter.Select<CategoryOption>(name, values) {
-    fun selected() = values[state]
+class CategorySelector(name: String, val type: CategoryType, values: Array<CategoryOption>) : Filter.Select<CategoryOption>(name, values) {
+    fun selected() = values.getOrNull(state)
 }
 
 fun createSortSelector(intl: Intl) = SortSelector(
     intl["filter.time.title"],
     arrayOf(
-        SortOption(intl["filter.time.option.popular"]),
-        SortOption(intl["filter.time.option.recent"], "recent?date=latest"),
+        intl["filter.time.option.popular"],
+        intl["filter.time.option.recent"],
     ),
 )
 
@@ -106,5 +91,5 @@ internal class NetworkFilters(
         .map { CategoryOption(it.name, categoryType, it.link) }
         .toTypedArray()
         .takeIf { it.isNotEmpty() }
-        ?.let { CategorySelector(title, it) }
+        ?.let { CategorySelector(title, categoryType, it) }
 }

@@ -39,9 +39,11 @@ class ImageDecoderInterceptor : Interceptor {
         val url = request.url.newBuilder()
             .fragment(null)
             .build()
+        val cookies = request.header("Cookie")?.split("; ").orEmpty()
+            .filterNot { it.startsWith("lt_sec_val=") } + "lt_sec_val=$token"
         return request.newBuilder()
             .url(url)
-            .header("Cookie", "lt_sec_val=$token")
+            .header("Cookie", cookies.joinToString("; "))
             .build()
     }
 

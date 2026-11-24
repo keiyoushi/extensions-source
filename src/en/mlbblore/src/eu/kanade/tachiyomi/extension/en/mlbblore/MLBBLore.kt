@@ -5,10 +5,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
 
@@ -28,7 +29,7 @@ abstract class MLBBLore : KeiSource() {
             .add("token", "")
             .build()
 
-        return client.post("$apiUrl/lore/album/detail", body).parseAs<ApiDetailResponse>().data
+        return client.post("$apiUrl/lore/album/detail", Fetch.XHR, body).parseAs<ApiDetailResponse>().data
     }
 
     private suspend fun fetchMangaList(page: Int, sort: Int): MangasPage {
@@ -41,7 +42,7 @@ abstract class MLBBLore : KeiSource() {
             .add("token", "")
             .build()
 
-        val result = client.post("$apiUrl/lore/album/list", body).parseAs<ApiListResponse>()
+        val result = client.post("$apiUrl/lore/album/list", Fetch.XHR, body).parseAs<ApiListResponse>()
         val mangas = result.data.filter { it.isComic() }.map { it.toSManga() }
         return MangasPage(mangas, result.data.size >= pageSize)
     }

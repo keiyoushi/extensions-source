@@ -6,6 +6,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import okhttp3.FormBody
@@ -55,7 +57,7 @@ abstract class AreaManga : MangaThemesia() {
             .set("Content-Type", "application/x-www-form-urlencoded")
             .build()
 
-        return POST("$baseUrl/wp-admin/admin-ajax.php", newHeaders, formBody)
+        return POST("$baseUrl/wp-admin/admin-ajax.php", newHeaders, formBody).newBuilder().fetch(Fetch.XHR).build()
     }
 
     override fun pageListParse(document: Document): List<Page> {

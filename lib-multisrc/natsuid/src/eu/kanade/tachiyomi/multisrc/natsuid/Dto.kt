@@ -27,6 +27,8 @@ class Manga(
     val meta: MangaMeta? = null,
     @SerialName("_embedded")
     val embedded: Embedded,
+    @SerialName("yoast_head_json")
+    private val yoast: Yoast? = null,
 ) {
     val isNovel get() = embedded.getTerms("type").contains("Novel")
 
@@ -50,7 +52,9 @@ class Manga(
                 append(altTitles.joinToString("\n") { "- $it" })
             }
         }.trim()
+        // private featured media embeds as a rest_forbidden error without source_url, yoast still has the cover
         thumbnail_url = embedded.featuredMedia?.firstOrNull()?.sourceUrl
+            ?: yoast?.ogImage?.firstOrNull()?.url
         author = embedded.getTerms("series-author").joinToString()
         artist = embedded.getTerms("artist").joinToString()
         genre = buildSet {
@@ -97,7 +101,18 @@ class Embedded(
 @Serializable
 class FeaturedMedia(
     @SerialName("source_url")
-    val sourceUrl: String,
+    val sourceUrl: String? = null,
+)
+
+@Serializable
+class Yoast(
+    @SerialName("og_image")
+    val ogImage: List<OgImage>? = null,
+)
+
+@Serializable
+class OgImage(
+    val url: String,
 )
 
 @Serializable

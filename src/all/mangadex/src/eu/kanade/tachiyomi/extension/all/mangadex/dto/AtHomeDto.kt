@@ -3,20 +3,20 @@ package eu.kanade.tachiyomi.extension.all.mangadex.dto
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class AtHomeDto(
+class AtHomeDto(
     val baseUrl: String,
     val chapter: AtHomeChapterDto,
 )
 
 @Serializable
-data class AtHomeChapterDto(
+class AtHomeChapterDto(
     val hash: String,
     val data: List<String>,
     val dataSaver: List<String>,
 )
 
 @Serializable
-data class ImageReportDto(
+class ImageReportDto(
     val url: String,
     val success: Boolean,
     val bytes: Int?,

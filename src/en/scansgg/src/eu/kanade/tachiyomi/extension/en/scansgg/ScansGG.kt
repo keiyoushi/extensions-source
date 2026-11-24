@@ -5,14 +5,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
@@ -37,7 +36,7 @@ abstract class ScansGG : KeiSource() {
             .addQueryParameter("limit", POPULAR_LIMIT.toString())
             .addQueryParameter("offset", ((page - 1) * POPULAR_LIMIT).toString())
             .build()
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         return popularMangaParse(response)
     }
 
@@ -61,7 +60,7 @@ abstract class ScansGG : KeiSource() {
             .addQueryParameter("group_details", "true")
             .addQueryParameter("sort", "date")
             .build()
-        val response = client.get(url)
+        val response = client.get(url, Fetch.XHR)
         return latestUpdatesParse(response)
     }
 
@@ -89,7 +88,7 @@ abstract class ScansGG : KeiSource() {
             addQueryParameter("q_status", statuses.joinToString(",", "[", "]"))
             addQueryParameter("q_tags", tags.joinToString(",", "[", "]"))
         }.build()
-        val response = client.get(url)
+        val response = client.get(url, Fetch.DOCUMENT)
         return popularMangaParse(response)
     }
 
@@ -97,14 +96,10 @@ abstract class ScansGG : KeiSource() {
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/series/${manga.url}"
 
-    override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate = coroutineScope {
-        val mangaDeferred = async { if (fetchDetails) getMangaDetails(manga) else manga }
-        val chaptersDeferred = async { if (fetchChapters) getChapterList(manga) else chapters }
-        SMangaUpdate(
-            manga = mangaDeferred.await(),
-            chapters = chaptersDeferred.await(),
-        )
-    }
+    override suspend fun fetchMangaUpdate(manga: SManga, chapters: List<SChapter>, fetchDetails: Boolean, fetchChapters: Boolean): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) getMangaDetails(manga) else manga },
+        chapters = { if (fetchChapters) getChapterList(manga) else chapters },
+    )
 
     private suspend fun getMangaDetails(manga: SManga): SManga {
         val url = "$apiUrl/series".toHttpUrl().newBuilder()
@@ -113,7 +108,7 @@ abstract class ScansGG : KeiSource() {
             .addQueryParameter("sources", "true")
             .build()
 
-        return client.get(url)
+        return client.get(url, Fetch.XHR)
             .parseAs<ResponseDto<SeriesDto>>()
             .data.toSManga(cdnUrl, tagsMap)
     }
@@ -138,7 +133,7 @@ abstract class ScansGG : KeiSource() {
                 .addQueryParameter("group_details", "true")
                 .build()
 
-            val dto = client.get(url)
+            val dto = client.get(url, Fetch.XHR)
                 .parseAs<ResponseDto<List<ChapterDto>>>()
 
             chapters += dto.data.map { it.toSChapter(manga.url, dateFormat) }
@@ -151,7 +146,7 @@ abstract class ScansGG : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.get(apiUrl + chapter.url)
+        val response = client.get(apiUrl + chapter.url, Fetch.XHR)
         val dto = response.parseAs<ResponseDto<PageListDto>>()
         return dto.data.toPages(cdnUrl)
     }

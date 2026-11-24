@@ -8,13 +8,14 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferences
@@ -43,6 +44,8 @@ abstract class PornPics :
             "ja" -> "jp"
             else -> lang
         }
+
+    private val langPath get() = if (lang == "en") "" else "/$language"
 
     private val intl = Intl(
         language = lang,
@@ -85,40 +88,55 @@ abstract class PornPics :
                 }
             }
         }
-        // response may be []. Add +1 to requested image count per page;
-        // compare actual received count with pageSize to determine next page.
-        val hasNextPage = mangas.size > QUERY_PAGE_SIZE
-        val readerMangas = if (hasNextPage) mangas.dropLast(1) else mangas
-        return MangasPage(readerMangas, hasNextPage)
+        // the site shuffles results inside each block of QUERY_PAGE_SIZE,
+        // so pages have to line up with those blocks. the last page may be [].
+        return MangasPage(mangas, mangas.size >= QUERY_PAGE_SIZE)
     }
 
     private suspend fun getMangasPage(page: Int, popular: Boolean): MangasPage {
         val categoryOption = Preferences.getCategoryOption(preferences)
-        val url = if (Preferences.DEFAULT_CATEGORY_OPTION == categoryOption) {
-            // the source of is the options under the pics menu in the nav bar
-            val period = if (popular) 1 else 2
-            val categoryId = 2585 + period
-            "$baseUrl/popular/api/galleries/list/".toHttpUrl().newBuilder()
-                .addQueryParameterPage(page)
-                .addQueryParameter("lang", language)
-                .addQueryParameter("period", period)
-                .addQueryParameter("category_id", categoryId)
-                .build()
-        } else {
+        if (Preferences.DEFAULT_CATEGORY_OPTION != categoryOption) {
             // the source is the options under the categories/tags/pornstars/channels menu in the nav bar
-            val requestBaseUrl = if (popular) "$baseUrl/$categoryOption/" else "$baseUrl/$categoryOption/recent/"
-            requestBaseUrl.toHttpUrl().newBuilder()
-                .addQueryParameterPage(page)
-                .addQueryParameter("lang", language)
-                .build()
+            return getListingPage("$langPath/$categoryOption", recent = !popular, page)
         }
-        return parseMangasPage(client.get(url))
+        // the source of is the options under the pics menu in the nav bar
+        val period = if (popular) 1 else 2
+        val categoryId = 2585 + period
+        val url = "$baseUrl/popular/api/galleries/list/".toHttpUrl().newBuilder()
+            .addQueryParameterPage(page)
+            .addQueryParameter("lang", language)
+            .addQueryParameter("period", period)
+            .addQueryParameter("category_id", categoryId)
+            .build()
+        return parseMangasPage(client.get(url, Fetch.XHR))
+    }
+
+    // the language of these pages comes from the path, a lang parameter only gets redirected away
+    private suspend fun getListingPage(path: String, recent: Boolean, page: Int): MangasPage {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addEncodedPathSegments(path.trim('/'))
+            if (recent) addPathSegment("recent")
+            addPathSegment("")
+            addQueryParameterPage(page)
+        }.build()
+        return parseMangasPage(client.get(url, if (page == 1) Fetch.DOCUMENT else Fetch.XHR))
+    }
+
+    private suspend fun getSearchPage(query: String, recent: Boolean, page: Int): MangasPage {
+        val url = "$baseUrl/search/srch.php".toHttpUrl().newBuilder().apply {
+            addQueryParameter("lang", language)
+            if (recent) addQueryParameter("date", "latest")
+            addQueryParameterPage(page)
+            addQueryParameter("q", query)
+        }.build()
+        return parseMangasPage(client.get(url, Fetch.XHR))
     }
 
     // Search
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host ||
-            url.pathSegments.count(String::isNotBlank) < 2
+            url.pathSegments.count(String::isNotBlank) < 2 ||
+            "galleries" !in url.pathSegments
         ) {
             return null
         }
@@ -127,31 +145,22 @@ abstract class PornPics :
             emptyList(),
             true,
             false,
-        ).manga
+        ).manga()
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val url = if (query.isBlank()) {
-            val activeCategoryTypeOption = filters.firstInstance<ActiveCategoryTypeSelector>()
-            val categoryOption = activeCategoryTypeOption.selectedCategoryOption(filters)
-            val sortOption = filters.firstInstance<SortSelector>()
-            baseUrl.toHttpUrl().newBuilder().apply {
-                addUrlPart(categoryOption.toUrlPart())
-                addQueryParameter("lang", language)
-                addUrlPart(sortOption.toUriPart(), addPath = !categoryOption.useSearch())
-                addQueryParameterPage(page)
-            }.build()
-        } else {
-            val sortOption = filters.firstInstance<SortSelector>()
-            "$baseUrl/search/srch.php".toHttpUrl().newBuilder().apply {
-                addQueryParameter("lang", language)
-                addUrlPart(sortOption.toUriPart(), addPath = false)
-                addQueryParameterPage(page)
-                addQueryParameter("q", query)
-            }.build()
+        val recent = filters.firstInstance<SortSelector>().isRecent
+        if (query.isNotBlank()) {
+            return getSearchPage(query, recent, page)
         }
 
-        return parseMangasPage(client.get(url))
+        val categoryOption = filters.firstInstance<ActiveCategoryTypeSelector>().selectedCategoryOption(filters)
+            ?: return getMangasPage(page, popular = !recent)
+        return when (categoryOption.type) {
+            // these pages ignore the offset, the site loads the rest by searching for the name
+            CategoryType.PORN_STAR, CategoryType.CHANNEL -> getSearchPage(categoryOption.name.lowercase(), recent, page)
+            CategoryType.CATEGORY, CategoryType.TAG -> getListingPage(categoryOption.urlPart, recent, page)
+        }
     }
 
     override val supportRelatedMangasBySearch = true
@@ -163,7 +172,7 @@ abstract class PornPics :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val thumbEl = document.selectFirst(mangaSelector)!!
         val imgEl = thumbEl.selectFirst("img")!!
         val infoEl = document.selectFirst("div.gallery-info.to-gall-info")
@@ -195,6 +204,7 @@ abstract class PornPics :
     // Pages
     override suspend fun getPageList(chapter: SChapter) = client.get(
         getChapterUrl(chapter),
+        Fetch.DOCUMENT,
     ).asJsoup().select(mangaSelector).mapIndexed { index, element ->
         Page(index, imageUrl = element.absUrl("href"))
     }
@@ -203,13 +213,10 @@ abstract class PornPics :
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val url = "$baseUrl/${if (lang == "en") "" else "$language/"}"
         val results = coroutineScope {
             listOf("tags/", "pornstars/list/", "channels/list/").map {
                 async {
-                    runCatching {
-                        parseFilters(client.get("$url$it"))
-                    }.getOrElse { emptyList() }
+                    parseFilters(client.get("$baseUrl$langPath/$it", Fetch.DOCUMENT))
                 }
             }.awaitAll()
         }
@@ -226,7 +233,7 @@ abstract class PornPics :
         ).toJsonElement()
     }
 
-    private fun parseFilters(response: Response) = response.asJsoup().select("#main-list .list-item > a")
+    private fun parseFilters(response: Response) = response.asJsoup().select("#main-list .list-item:not(.view-all) > a")
         .map { CategoryDto(it.attr("title").ifEmpty { it.text() }, it.attr("href")) }
 
     override fun getFilterList(data: JsonElement?) = FilterList(

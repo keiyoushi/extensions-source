@@ -5,11 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -22,13 +23,13 @@ abstract class PornComix : KeiSource() {
     // ======================== Popular ========================
 
     override suspend fun getPopularManga(page: Int): MangasPage = if (page == 1) {
-        parseMangaList("$baseUrl/multporn-net/".toHttpUrl())
+        parseMangaList("$baseUrl/allmultking/".toHttpUrl())
     } else {
-        parseMangaList("$baseUrl/multporn-net/page/$page/".toHttpUrl())
+        parseMangaList("$baseUrl/allmultking/page/$page/".toHttpUrl())
     }
 
     private suspend fun parseMangaList(url: HttpUrl): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("#loops-wrapper article").map { element ->
             SManga.create().apply {
                 val anchor = element.selectFirst("h2.post-title a")!!
@@ -73,24 +74,24 @@ abstract class PornComix : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val details = if (fetchDetails) fetchMangaDetails(manga) else manga
-        val chapterList = if (fetchChapters) {
-            listOf(
-                SChapter.create().apply {
-                    name = "CHAPTER"
-                    setUrlWithoutDomain(manga.url)
-                },
-            )
-        } else {
-            chapters
-        }
-
-        return SMangaUpdate(details, chapterList)
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) fetchMangaDetails(manga) else manga },
+        chapters = {
+            if (fetchChapters) {
+                listOf(
+                    SChapter.create().apply {
+                        name = "CHAPTER"
+                        setUrlWithoutDomain(manga.url)
+                    },
+                )
+            } else {
+                chapters
+            }
+        },
+    )
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         manga.title = document.selectFirst("h1.post-title, h1.entry-title")!!.text()
 
@@ -123,7 +124,7 @@ abstract class PornComix : KeiSource() {
     // ======================== Pages ========================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val pswp = document.select(".pswp-gallery__item")
 
         if (pswp.isNotEmpty()) {

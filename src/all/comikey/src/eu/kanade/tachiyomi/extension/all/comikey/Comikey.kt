@@ -11,12 +11,14 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.WebViewTimeoutException
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferences
@@ -58,9 +60,9 @@ abstract class Comikey :
 
     private val preferences = getPreferences()
 
-    override suspend fun getPopularManga(page: Int) = parsePopularManga(client.get("$baseUrl/comics/?order=-views&page=$page"))
+    override suspend fun getPopularManga(page: Int) = parsePopularManga(client.get("$baseUrl/comics/?order=-views&page=$page", Fetch.DOCUMENT))
 
-    override suspend fun getLatestUpdates(page: Int) = parsePopularManga(client.get("$baseUrl/comics/?page=$page"))
+    override suspend fun getLatestUpdates(page: Int) = parsePopularManga(client.get("$baseUrl/comics/?page=$page", Fetch.DOCUMENT))
 
     private fun parsePopularManga(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -74,7 +76,7 @@ abstract class Comikey :
         val segments = url.pathSegments
         if (segments.size < 3) return null
         val slug = "${segments[1]}/${segments[2]}"
-        return parseMangaDetails(client.get("$baseUrl/comics/$slug").asJsoup())
+        return parseMangaDetails(client.get("$baseUrl/comics/$slug", Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -92,7 +94,7 @@ abstract class Comikey :
                 .forEach { it.addToUri(this) }
         }.build()
 
-        return parsePopularManga(client.get(url))
+        return parsePopularManga(client.get(url, Fetch.DOCUMENT))
     }
 
     private fun searchMangaFromElement(element: Element) = SManga.create().apply {
@@ -116,7 +118,7 @@ abstract class Comikey :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return SMangaUpdate(
             manga = parseMangaDetails(document),
@@ -194,7 +196,7 @@ abstract class Comikey :
             gundamToken?.let { addQueryParameter("token", gundamToken) }
         }.build()
 
-        val data = client.get(chapterUrl).parseAs<ComikeyEpisodeListResponse>()
+        val data = client.get(chapterUrl, Fetch.XHR).parseAs<ComikeyEpisodeListResponse>()
         val currentTime = System.currentTimeMillis()
 
         return data.episodes
@@ -221,7 +223,7 @@ abstract class Comikey :
     override val supportsRelatedMangas = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val doc = client.get(getMangaUrl(manga)).asJsoup()
+        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
         return doc.select("div.similar-series li").mapNotNull {
             val a = it.selectFirst("a") ?: return@mapNotNull null
@@ -249,7 +251,7 @@ abstract class Comikey :
                     javaScriptEnabled = true
                     domStorageEnabled = true
 
-                    jsBridge(interfaceName) { message ->
+                    webMessageBridge(interfaceName, setOf(baseUrl)) { message ->
                         resolve(message.parseAs<Payload>())
                     }
 
@@ -262,27 +264,28 @@ abstract class Comikey :
                     // In order to avoid requesting again later, we intercept it here.
                     interceptRequest { request ->
                         val url = request.url
-                        if (url.host?.matches(RELAY_HOST_REGEX) == true || url.path?.endsWith("/manifest") == true) {
-                            val requestHeaders = headers.newBuilder().apply {
-                                request.requestHeaders.entries.forEach {
-                                    set(it.key, it.value)
-                                }
-                                removeAll("X-Requested-With")
-                            }.build()
-
-                            val response = client.newCall(GET(url.toString(), requestHeaders)).execute()
-                            manifestRedirect = response.request.url
-
-                            WebResourceResponse(
-                                response.headers["Content-Type"] ?: "application/divina+json+vnd.e4p.drm",
-                                null,
-                                response.code,
-                                "OK",
-                                response.headers.toMap(),
-                                response.body.byteStream(),
-                            )
+                        if (url.host?.matches(RELAY_HOST_REGEX) != true || url.path?.endsWith("/manifest") != true) {
+                            return@interceptRequest null
                         }
-                        null
+
+                        val requestHeaders = headers.newBuilder().apply {
+                            request.requestHeaders.entries.forEach {
+                                set(it.key, it.value)
+                            }
+                            removeAll("X-Requested-With")
+                        }.build()
+
+                        val response = client.newCall(GET(url.toString(), requestHeaders).newBuilder().fetch(Fetch.XHR).build()).execute()
+                        manifestRedirect = response.request.url
+
+                        WebResourceResponse(
+                            response.headers["Content-Type"] ?: "application/divina+json+vnd.e4p.drm",
+                            null,
+                            response.code,
+                            "OK",
+                            response.headers.toMap(),
+                            response.body.byteStream(),
+                        )
                     }
 
                     loadUrl(
@@ -374,14 +377,14 @@ abstract class Comikey :
     private fun webviewScript(interfaceName: String, intl: Intl) = """
         document.addEventListener("DOMContentLoaded", (e) => {
             if (document.querySelector("#unlock-full")) {
-                $interfaceName.post(JSON.stringify({error: "${intl["error_locked_chapter_unlock_in_webview"]}"}));
+                $interfaceName.postMessage(JSON.stringify({error: "${intl["error_locked_chapter_unlock_in_webview"]}"}));
             }
         });
 
         document.addEventListener(
             "you-right-now:reeeeeee",
             async (e) => {
-                const postError = (error) => $interfaceName.post(JSON.stringify({ error }));
+                const postError = (error) => $interfaceName.postMessage(JSON.stringify({ error }));
                 try {
                     const db = await new Promise((resolve, reject) => {
                         const request = indexedDB.open("firebase-app-check-database");
@@ -411,7 +414,7 @@ abstract class Comikey :
                     });
 
                     const manifest = JSON.parse(document.querySelector("#lmao-init").textContent).manifest;
-                    $interfaceName.post(JSON.stringify({
+                    $interfaceName.postMessage(JSON.stringify({
                         manifestUrl: manifest,
                         act,
                         manifest: JSON.parse(await e.detail)

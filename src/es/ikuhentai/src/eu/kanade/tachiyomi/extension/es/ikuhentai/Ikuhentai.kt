@@ -6,15 +6,14 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.tryParseDate
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -25,7 +24,6 @@ import java.util.Locale
 
 @Source
 abstract class Ikuhentai : KeiSource() {
-
     private val dateFormat = DateTimeFormatterBuilder()
         .parseCaseInsensitive()
         .appendPattern("MMMM d, yyyy")
@@ -33,12 +31,12 @@ abstract class Ikuhentai : KeiSource() {
 
     override suspend fun getPopularManga(page: Int): MangasPage {
         val pagePath = if (page > 1) "page/$page/" else ""
-        return parseMangaList(client.get("$baseUrl/$pagePath?s=&post_type=wp-manga&m_orderby=views").asJsoup())
+        return parseMangaList(client.get("$baseUrl/$pagePath?s=&post_type=wp-manga&m_orderby=views", Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val pagePath = if (page > 1) "page/$page/" else ""
-        return parseMangaList(client.get("$baseUrl/$pagePath?s=&post_type=wp-manga&m_orderby=latest").asJsoup())
+        return parseMangaList(client.get("$baseUrl/$pagePath?s=&post_type=wp-manga&m_orderby=latest", Fetch.DOCUMENT).asJsoup())
     }
 
     private fun parseMangaList(document: Document): MangasPage {
@@ -102,7 +100,7 @@ abstract class Ikuhentai : KeiSource() {
             }
         }
 
-        return parseMangaList(client.get(url.build()).asJsoup())
+        return parseMangaList(client.get(url.build(), Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun fetchMangaUpdate(
@@ -110,15 +108,13 @@ abstract class Ikuhentai : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = if (fetchDetails) async { fetchDetails(manga) } else null
-        val chapterList = if (fetchChapters) async { fetchChapterList(manga) } else null
-
-        SMangaUpdate(details?.await() ?: manga, chapterList?.await() ?: chapters)
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) fetchDetails(manga) else manga },
+        chapters = { if (fetchChapters) fetchChapterList(manga) else chapters },
+    )
 
     private suspend fun fetchDetails(manga: SManga): SManga {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val infoElement = document.selectFirst("div.site-content") ?: document
 
         return SManga.create().apply {
@@ -149,7 +145,7 @@ abstract class Ikuhentai : KeiSource() {
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val url = (baseUrl + manga.url).removeSuffix("/")
-        val document = client.post("$url/ajax/chapters/", headers, FormBody.Builder().build()).asJsoup()
+        val document = client.post("$url/ajax/chapters/", headers, Fetch.DOCUMENT, FormBody.Builder().build()).asJsoup()
 
         return document.select("li.wp-manga-chapter").map { element ->
             val urlElement = element.selectFirst("a")!!
@@ -171,7 +167,7 @@ abstract class Ikuhentai : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("div.reading-content * img").mapIndexedNotNull { i, element ->
             val url = element.absUrl("data-lazy-src").ifEmpty { element.absUrl("src") }
             if (url.isNotEmpty()) Page(i, imageUrl = url) else null

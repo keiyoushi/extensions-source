@@ -5,20 +5,45 @@ plugins {
 }
 
 keiyoushi {
-    name = "Toonz"
-    versionCode = 2
-    contentWarning = ContentWarning.NSFW
+    name = "Toonz/Toonx"
+    versionCode = 8
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
+        name = "Toonz"
         baseUrl = "https://toonz.to"
         lang = "en"
     }
 
+    source {
+        name = "Toonx"
+        baseUrl = "https://toonx.to"
+        lang = "en"
+    }
+
+    source {
+        name = "LewdManhwa"
+        baseUrl = "https://lewdmanhwa.com"
+        lang = "en"
+    }
+
     deeplink {
+        host("toonz.to")
         path("/manhwa/..*")
+        path("/manhua/..*")
         path("/manga/..*")
         path("/western/..*")
+    }
+
+    deeplink {
+        host("toonx.to")
         path("/comic/..*")
+        path("/adult/..*")
+    }
+
+    deeplink {
+        host("lewdmanhwa.com")
+        path("/webtoon/..*")
     }
 }

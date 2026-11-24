@@ -5,10 +5,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
@@ -20,7 +21,6 @@ import java.util.Locale
 abstract class LoadingArtist : KeiSource() {
 
     override val supportsLatest = false
-
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ENGLISH)
 
     @Serializable
@@ -63,7 +63,7 @@ abstract class LoadingArtist : KeiSource() {
     ): SMangaUpdate {
         if (!fetchChapters) return SMangaUpdate(manga, chapters)
 
-        val comics = client.get("$baseUrl/search.json").parseAs<List<Comic>>()
+        val comics = client.get("$baseUrl/search.json", Fetch.XHR).parseAs<List<Comic>>()
         val validTypes = listOf("comic", "game", "art")
         val chapterList = comics.filter { validTypes.any { type -> it.section == type } }.map {
             SChapter.create().apply {
@@ -79,7 +79,7 @@ abstract class LoadingArtist : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val url = getChapterUrl(chapter)
-        val imageUrl = client.get(url).asJsoup().selectFirst("div.main-image-container img")!!
+        val imageUrl = client.get(url, Fetch.DOCUMENT).asJsoup().selectFirst("div.main-image-container img")!!
             .attr("abs:src")
         return listOf(Page(0, url, imageUrl))
     }

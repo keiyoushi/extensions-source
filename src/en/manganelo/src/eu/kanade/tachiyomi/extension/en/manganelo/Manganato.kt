@@ -7,6 +7,12 @@ import keiyoushi.annotation.Source
 @Source
 abstract class Manganato : MangaBox() {
 
+    override val mirrorLegacyMap = mapOf(
+        "https://www.natomanga.com" to false,
+        "https://www.nelomanga.net" to true,
+        "https://www.manganato.gg" to true,
+    )
+
     override fun getMangaUrl(manga: SManga): String {
         if (LEGACY_DOMAINS.any { manga.url.startsWith(it) }) {
             throw Exception(MIGRATE_MESSAGE)

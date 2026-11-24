@@ -5,8 +5,8 @@ plugins {
 }
 
 keiyoushi {
-    name = "Toonily.me"
-    versionCode = 1
+    name = "ToonTop"
+    versionCode = 2
     contentWarning = ContentWarning.NSFW
     theme = "mangak"
     libVersion = "1.6"
@@ -14,5 +14,6 @@ keiyoushi {
     source {
         lang = "en"
         baseUrl = "https://toontop.io"
+        id = 1581110056159285576L
     }
 }

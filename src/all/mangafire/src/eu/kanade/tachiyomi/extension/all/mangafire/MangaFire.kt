@@ -10,11 +10,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
@@ -32,7 +33,6 @@ import okhttp3.Response
 abstract class MangaFire :
     KeiSource(),
     ConfigurableSource {
-
     private val langCode: String
         get() = when (lang) {
             "es-419" -> "es-la"
@@ -52,32 +52,26 @@ abstract class MangaFire :
 
     private val preferences = getPreferences()
 
-    // ============================== Popular ==============================
-
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = "$baseUrl/api/titles".toHttpUrl().newBuilder().apply {
             addQueryParameter("order[views_30d]", "desc")
+            addQueryParameter("languages[]", langCode)
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", "50")
             ContentRatingFilter(contentRating).addToUri(this)
         }.build()
-        return client.get(url).use { response ->
-            parseMangaList(response)
-        }
+        return parseMangaList(client.get(url, Fetch.XHR))
     }
-
-    // ============================== Latest ===============================
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = "$baseUrl/api/titles".toHttpUrl().newBuilder().apply {
             addQueryParameter("order[chapter_updated_at]", "desc")
+            addQueryParameter("languages[]", langCode)
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", "50")
             ContentRatingFilter(contentRating).addToUri(this)
         }.build()
-        return client.get(url).use { response ->
-            parseMangaList(response)
-        }
+        return parseMangaList(client.get(url, Fetch.XHR))
     }
 
     private fun parseMangaList(response: Response): MangasPage {
@@ -85,8 +79,6 @@ abstract class MangaFire :
         val mangas = data.items.map { it.toSManga() }
         return MangasPage(mangas, data.meta?.hasNext ?: false)
     }
-
-    // ============================== Search ===============================
 
     private val authorIdCache = object : LinkedHashMap<String, String?>() {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String?>?) = size > 20
@@ -101,7 +93,7 @@ abstract class MangaFire :
                 val tagUrl = "$baseUrl/api/tags".toHttpUrl().newBuilder().apply {
                     addQueryParameter("keyword", authorQuery)
                 }.build()
-                val tags = client.get(tagUrl).parseAs<TagResponse>()
+                val tags = client.get(tagUrl, Fetch.XHR).parseAs<TagResponse>()
                 tags.data.firstOrNull { it.type == "author" || it.type == "artist" }?.id?.toString()
             }
 
@@ -114,6 +106,7 @@ abstract class MangaFire :
             if (query.isNotBlank()) {
                 addQueryParameter("keyword", query.trim())
             }
+            addQueryParameter("languages[]", langCode)
             addQueryParameter("page", page.toString())
             addQueryParameter("limit", "50")
 
@@ -126,16 +119,12 @@ abstract class MangaFire :
                 .forEach { it.addToUri(this) }
         }.build()
 
-        return client.get(url).use { response ->
-            parseMangaList(response)
-        }
+        return parseMangaList(client.get(url, Fetch.XHR))
     }
-
-    // ============================== Details ==============================
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.size < 2) return null
-        return fetchMangaDetails(getHid(url.pathSegments[1]))
+        return fetchMangaDetails(getHid(url.pathSegments[1])).apply { initialized = true }
     }
 
     override suspend fun fetchMangaUpdate(
@@ -143,92 +132,57 @@ abstract class MangaFire :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val hid = getHid(manga.url)
-        val detailsDeferred = async { if (fetchDetails) fetchMangaDetails(hid) else manga }
-        val chaptersDeferred = async { if (fetchChapters) fetchChapters(manga) else chapters }
-        SMangaUpdate(detailsDeferred.await(), chaptersDeferred.await())
+
+        return SMangaUpdate(
+            manga = { if (fetchDetails) fetchMangaDetails(hid) else manga },
+            chapters = { if (fetchChapters) fetchChapters(hid, manga.url) else chapters },
+        )
     }
 
-    private suspend fun fetchMangaDetails(hid: String): SManga = client.get("$baseUrl/api/titles/$hid").parseAs<MangaDetailsResponse>().data.toSManga()
+    private suspend fun fetchMangaDetails(hid: String): SManga = client.get("$baseUrl/api/titles/$hid", Fetch.XHR).parseAs<MangaDetailsResponse>().data.toSManga()
 
-    private suspend fun fetchChapters(manga: SManga): List<SChapter> {
-        var page = 1
-        var lastPage: Int
-        var displayVolumes = showAsVolumes
-        val chapters = mutableListOf<SChapter>()
-
-        val hid = getHid(manga.url)
-
-        if (displayVolumes) {
-            val url = "$baseUrl/api/titles/$hid/volumes"
-            val volumes = client.get(url).parseAs<ApiResponse<VolumeDto>>().items
-            if (volumes.isNotEmpty()) {
-                val items = volumes.filter { it.language == langCode }
-                    .forEach { chapters.add(it.toSChapter(manga.url)) }
-            } else {
-                displayVolumes = false // Fallback to chapter display
-            }
+    private suspend fun fetchChapters(hid: String, mangaUrl: String): List<SChapter> {
+        if (showAsVolumes) {
+            val volumes = client.get("$baseUrl/api/titles/$hid/volumes", Fetch.XHR).parseAs<ApiResponse<VolumeDto>>().items
+                .filter { it.language == langCode }
+            if (volumes.isNotEmpty()) return volumes.map { it.toSChapter(mangaUrl) }
         }
 
-        if (!displayVolumes) {
-            chapters.addAll(
-                fetchAllChapters(hid).map { it.toSChapter(manga.url, langCode) },
-            )
-        }
+        val chapters = fetchAllChapters(hid).map { it.toSChapter(mangaUrl, langCode) }
+
+        if (!mergeChapters) return chapters
 
         return chapters
-            .let {
-                if (!displayVolumes && mergeChapters) {
-                    it.sortedBy { chapter ->
-                        val isOfficial = chapter.scanlator!!.lowercase() == "official"
-                        if (preferOfficial) !isOfficial else isOfficial
-                    }.distinctBy { it.chapter_number }.sortedByDescending { it.chapter_number }
-                } else {
-                    it
-                }
+            .sortedBy { chapter ->
+                val isOfficial = chapter.scanlator == "official"
+                if (preferOfficial) !isOfficial else isOfficial
             }
+            .distinctBy { it.chapter_number }
+            .sortedByDescending { it.chapter_number }
     }
 
     private suspend fun fetchAllChapters(hid: String): List<ChapterDto> = coroutineScope {
-        val firstUrl = "$baseUrl/api/titles/$hid/chapters".toHttpUrl().newBuilder()
+        fun url(page: Int) = "$baseUrl/api/titles/$hid/chapters".toHttpUrl().newBuilder()
             .addQueryParameter("language", langCode)
             .addQueryParameter("sort", "number")
             .addQueryParameter("order", "desc")
-            .addQueryParameter("page", "1")
+            .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", "200")
             .build()
-        val firstData = client.get(firstUrl).parseAs<ApiResponse<ChapterDto>>()
-        val lastPage = firstData.meta?.lastPage ?: 1
 
-        val allItems = mutableListOf<ChapterDto>()
-        allItems.addAll(firstData.items)
-
-        if (lastPage > 1) {
-            val deferred = (2..lastPage).map { page ->
-                async {
-                    val url = "$baseUrl/api/titles/$hid/chapters".toHttpUrl().newBuilder()
-                        .addQueryParameter("language", langCode)
-                        .addQueryParameter("sort", "number")
-                        .addQueryParameter("order", "desc")
-                        .addQueryParameter("page", page.toString())
-                        .addQueryParameter("limit", "200")
-                        .build()
-                    client.get(url).parseAs<ApiResponse<ChapterDto>>().items
-                }
-            }
-            deferred.awaitAll().forEach { allItems.addAll(it) }
+        val first = client.get(url(1), Fetch.XHR).parseAs<ApiResponse<ChapterDto>>()
+        val rest = (2..(first.meta?.lastPage ?: 1)).map { page ->
+            async { client.get(url(page), Fetch.XHR).parseAs<ApiResponse<ChapterDto>>().items }
         }
-
-        allItems
+        first.items + rest.awaitAll().flatten()
     }
 
     override val supportRelatedMangasBySearch = true
 
-    // =============================== Pages ===============================
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val segments = (baseUrl + chapter.url).toHttpUrl().pathSegments
+        val segments = getChapterUrl(chapter).toHttpUrl().pathSegments
         val last = segments.last()
 
         val url = if (segments.contains("volume")) {
@@ -238,13 +192,11 @@ abstract class MangaFire :
             "$baseUrl/api/chapters/$chapterId"
         }
 
-        val data = client.get(url).parseAs<PagesResponse>()
+        val data = client.get(url, Fetch.XHR).parseAs<PagesResponse>()
         return data.data.pages.mapIndexed { index, page ->
             Page(index, imageUrl = page.url)
         }
     }
-
-    // ============================== Filters ==============================
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
         ContentRatingFilter(contentRating),
@@ -266,8 +218,6 @@ abstract class MangaFire :
         SortFilter(),
     )
 
-    // ============================= Utilities =============================
-
     private fun getHid(url: String): String {
         val lastPart = url.removeSuffix("/").substringAfterLast("/")
         return when {
@@ -276,8 +226,6 @@ abstract class MangaFire :
             else -> lastPart
         }
     }
-
-    // ========================= Preferences =========================
 
     private val contentRating: Set<String>
         get() = preferences.getStringSet(CONTENT_RATING_PREF, emptySet()) ?: emptySet()
@@ -313,7 +261,7 @@ abstract class MangaFire :
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_SHOW_AS_VOLUMES
             title = "Prefer Volume Release"
-            summary = SUMMARY_MSG
+            summary = "Lists only the chapters collected in volumes. $SUMMARY_MSG"
             setDefaultValue(false)
         }.also(screen::addPreference)
 
@@ -322,14 +270,14 @@ abstract class MangaFire :
             title = "Merge duplicate chapters"
             summary = SUMMARY_MSG
             setDefaultValue(false)
-        }.also { screen.addPreference(it) }
+        }.also(screen::addPreference)
 
         val preferOfficialPref = SwitchPreferenceCompat(screen.context).apply {
             key = PREF_PREFER_OFFICIAL
             title = "Prefer official chapters"
             setDefaultValue(true)
             setEnabled(mergeChapters)
-        }.also { screen.addPreference(it) }
+        }.also(screen::addPreference)
 
         mergeChaptersPref.setOnPreferenceChangeListener { _, newValue ->
             preferOfficialPref.setEnabled(newValue as Boolean)

@@ -6,14 +6,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -32,7 +31,7 @@ abstract class Newxtoon : KeiSource() {
             .addQueryParameter("sort", sort)
             .addQueryParameter("page", page.toString())
             .build()
-        return parseComicList(client.get(url).asJsoup())
+        return parseComicList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -48,7 +47,7 @@ abstract class Newxtoon : KeiSource() {
         }
             .addQueryParameter("page", page.toString())
             .build()
-        return parseComicList(client.get(url).asJsoup())
+        return parseComicList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -57,7 +56,7 @@ abstract class Newxtoon : KeiSource() {
         if (segments.getOrNull(0) != "comics") return null
         val id = segments.getOrNull(1)?.takeIf { it.all(Char::isDigit) } ?: return null
         val manga = SManga.create().apply { this.url = id }
-        return parseMangaDetails(manga, client.get(getMangaUrl(manga)).asJsoup())
+        return parseMangaDetails(manga, client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup())
     }
 
     private fun parseComicList(document: Document): MangasPage {
@@ -77,11 +76,10 @@ abstract class Newxtoon : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) parseMangaDetails(manga, client.get(getMangaUrl(manga)).asJsoup()) else manga }
-        val chapterList = async { if (fetchChapters) getChapterList(manga) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) parseMangaDetails(manga, client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()) else manga },
+        chapters = { if (fetchChapters) getChapterList(manga) else chapters },
+    )
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/comics/${manga.url}"
 
@@ -111,7 +109,7 @@ abstract class Newxtoon : KeiSource() {
                 .addQueryParameter("sort", "latest")
                 .addQueryParameter("page", page.toString())
                 .build()
-            val response = client.get(url, jsonHeaders).parseAs<ChapterListDto>()
+            val response = client.get(url, jsonHeaders, Fetch.XHR).parseAs<ChapterListDto>()
             response.chapters.mapTo(chapters) { it.toSChapter(manga.url) }
             page++
         } while (response.hasMore)
@@ -119,7 +117,7 @@ abstract class Newxtoon : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         return document.select("[data-reader-canvas] [data-reader-page] img[data-reader-image]").mapIndexed { index, img ->
             Page(index, imageUrl = img.absUrl("src"))
         }

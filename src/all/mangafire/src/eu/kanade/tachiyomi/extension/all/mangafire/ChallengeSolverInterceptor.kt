@@ -11,7 +11,6 @@ import okhttp3.Response
 import java.io.IOException
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.withLock
-import kotlin.getValue
 
 class ChallengeSolverInterceptor(
     getCookieJar: () -> CookieJar,
@@ -28,7 +27,7 @@ class ChallengeSolverInterceptor(
     private var clientHintsHeaders: Map<String, String> = mapOf()
 
     @Serializable
-    private data class ErrorResponse(
+    private class ErrorResponse(
         val error: String?,
     )
 
@@ -90,7 +89,7 @@ class ChallengeSolverInterceptor(
                         .filterKeys { it.startsWith("sec-ch-ua", ignoreCase = true) }
                     null
                 }
-                jsBridge("bridge") { resolve(it == "true") }
+                webMessageBridge("bridge", setOf("https://${url.host}")) { resolve(it == "true") }
                 loadData("https://${url.host}/@waf/solver", html)
             }
         }

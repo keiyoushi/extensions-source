@@ -8,10 +8,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.Fetch
+import keiyoushi.network.fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
@@ -66,10 +68,14 @@ abstract class MangaThemesia : KeiSource() {
     // Search
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
-        return getMangaDetails(
-            SManga.create()
-                .apply { this.url = url.encodedPath },
-        ).takeIf { it.title.isNotEmpty() }
+        val page = client.get(url.newBuilder().query(null).fragment(null).build(), Fetch.DOCUMENT).asJsoup()
+        // A chapter page links to its series
+        val document = page.selectFirst(".allc a[href]")
+            ?.let { client.get(it.absUrl("href"), Fetch.DOCUMENT.from(page.location())).asJsoup() }
+            ?: page
+        // Other pages, like the home page, have no series title
+        document.selectFirst(seriesDetailsSelector)?.selectFirst(seriesTitleSelector) ?: return null
+        return mangaDetailsParse(document).apply { initialized = true }
     }
 
     open fun searchMangaUrl(page: Int, query: String) = baseUrl.toHttpUrl().newBuilder().apply {
@@ -121,7 +127,7 @@ abstract class MangaThemesia : KeiSource() {
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = searchMangaUrl(page, query, filters)
-        return searchMangaParse(client.get(url.build()).asJsoup())
+        return searchMangaParse(client.get(url.build(), Fetch.DOCUMENT).asJsoup())
     }
 
     open fun searchMangaParse(document: Document): MangasPage {
@@ -149,7 +155,7 @@ abstract class MangaThemesia : KeiSource() {
     // Related
     override val supportsRelatedMangas = true
     override suspend fun fetchRelatedMangaList(manga: SManga) = searchMangaParse(
-        client.get(getMangaUrl(manga)).asJsoup(),
+        client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup(),
     ).mangas.filterNot { it.title.isEmpty() }
 
     // Manga details + Chapters
@@ -164,13 +170,13 @@ abstract class MangaThemesia : KeiSource() {
 
         return if (sendViewCount && postId != null) {
             sendView(postId)
-            val doc = client.get(getMangaUrl(manga)).asJsoup()
+            val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
             SMangaUpdate(
                 mangaDetailsParse(doc).apply { memo = manga.memo },
                 chapterListParse(doc),
             )
         } else {
-            val doc = client.get(getMangaUrl(manga)).asJsoup()
+            val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
             val postId = doc.postId()
             sendView(postId)
             SMangaUpdate(
@@ -271,7 +277,7 @@ abstract class MangaThemesia : KeiSource() {
 
     open val altNamePrefix = "${intl["alt_names_heading"]} "
 
-    open suspend fun getMangaDetails(manga: SManga) = mangaDetailsParse(client.get(getMangaUrl(manga)).asJsoup())
+    open suspend fun getMangaDetails(manga: SManga) = mangaDetailsParse(client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup())
 
     protected open fun mangaDetailsParse(document: Document) = SManga.create().apply {
         setUrlWithoutDomain(document.location())
@@ -367,7 +373,7 @@ abstract class MangaThemesia : KeiSource() {
     open val pageSelector = "div#readerarea img"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val doc = client.get(getChapterUrl(chapter)).asJsoup()
+        val doc = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         sendView(doc.postId())
         return pageListParse(doc)
     }
@@ -412,7 +418,7 @@ abstract class MangaThemesia : KeiSource() {
             .add("post_id", postId)
             .build()
 
-        val request = POST("$baseUrl/wp-admin/admin-ajax.php", headers, formBody)
+        val request = POST("$baseUrl/wp-admin/admin-ajax.php", headers, formBody).newBuilder().fetch(Fetch.XHR).build()
 
         client.newCall(request).enqueue(
             object : Callback {
@@ -534,7 +540,7 @@ abstract class MangaThemesia : KeiSource() {
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData() = parseGenres(
-        client.get("$baseUrl/$mangaUrlDirectory").asJsoup(),
+        client.get("$baseUrl/$mangaUrlDirectory", Fetch.DOCUMENT).asJsoup(),
     ).toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList {

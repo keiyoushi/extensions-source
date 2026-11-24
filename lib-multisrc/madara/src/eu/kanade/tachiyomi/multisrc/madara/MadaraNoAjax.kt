@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.multisrc.madara
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.head
 import keiyoushi.utils.asJsoup
@@ -53,7 +54,7 @@ abstract class MadaraNoAjax : MadaraBase() {
     }
 
     protected open suspend fun archivePage(page: Int, order: String, path: String = "/$mangaSubString/", query: String = ""): MangasPage {
-        val document = client.get(archiveUrlBuilder(page, order, path, query).build()).asJsoup()
+        val document = client.get(archiveUrlBuilder(page, order, path, query).build(), Fetch.DOCUMENT).asJsoup()
         return MangasPage(parseArchive(document), document.selectFirst(nextPageSelector()) != null)
     }
 
@@ -66,7 +67,7 @@ abstract class MadaraNoAjax : MadaraBase() {
     private suspend fun htmlSearch(page: Int, query: String): MangasPage {
         if (page > 1 && supportsPostId) return MangasPage(emptyList(), false)
 
-        val document = client.get(searchUrlBuilder(page, query).build()).asJsoup()
+        val document = client.get(searchUrlBuilder(page, query).build(), Fetch.DOCUMENT).asJsoup()
         val hasNextPage = !supportsPostId && document.selectFirst(nextPageSelector()) != null
 
         val archiveMangas = parseArchive(document)
@@ -113,7 +114,7 @@ abstract class MadaraNoAjax : MadaraBase() {
                 .addQueryParameter("s", query)
                 .addQueryParameter("paged", page.toString())
                 .build()
-            val feed = runCatching { parseRss(client.get(url)) }.getOrElse { break }
+            val feed = runCatching { parseRss(client.get(url, Fetch.XHR)) }.getOrElse { break }
             feed.forEach { (id, card) -> values[card.path] = id }
             if (needed.all(values::containsKey) || feed.isEmpty()) break
         }
@@ -133,7 +134,7 @@ abstract class MadaraNoAjax : MadaraBase() {
         client.head(url, ensureSuccess = false).use { response ->
             response.headers.values("Link").firstNotNullOfOrNull { it.shortlinkId() }?.let { return it }
         }
-        return client.get(url).asJsoup().mangaId()
+        return client.get(url, Fetch.DOCUMENT).asJsoup().mangaId()
     }
 
     override suspend fun fetchRelatedMangaList(id: String, genres: List<GenreRoute>): List<SManga> = coroutineScope {

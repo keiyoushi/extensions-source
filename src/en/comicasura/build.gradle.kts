@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Comic Asura"
-    versionCode = 3
+    versionCode = 5
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "mangathemesia"

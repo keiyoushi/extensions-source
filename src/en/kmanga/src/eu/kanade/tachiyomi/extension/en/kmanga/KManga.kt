@@ -9,11 +9,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getLocalStorage
 import keiyoushi.utils.getPreferencesLazy
@@ -122,7 +123,7 @@ abstract class KManga :
         val manga = SManga.create().apply {
             this.url = "/title/$titleId"
         }
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga()
     }
 
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
@@ -250,9 +251,9 @@ abstract class KManga :
             .build()
 
         return if (body != null) {
-            client.post(url, newHeaders, body)
+            client.post(url, newHeaders, Fetch.XHR, body)
         } else {
-            client.get(url, newHeaders)
+            client.get(url, newHeaders, Fetch.XHR)
         }
     }
 

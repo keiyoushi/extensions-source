@@ -6,13 +6,22 @@ plugins {
 
 keiyoushi {
     name = "WNACG"
-    versionCode = 2
+    versionCode = 9
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
     source {
         name = "紳士漫畫"
         lang = "zh"
-        baseUrl = "https://www.wn07.cfd"
+        baseUrl {
+            mirrors(
+                "https://www.cloudwn.shop",
+                "https://www.wnmanga.shop",
+                "https://www.wnacg.buzz",
+                "https://www.wnacg.site",
+                "https://www.wn01.cfd",
+                "https://www.wnacg.com",
+            )
+        }
     }
 }

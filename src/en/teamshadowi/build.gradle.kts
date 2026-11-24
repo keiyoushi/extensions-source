@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Team Shadowi"
-    versionCode = 2
+    versionCode = 4
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 

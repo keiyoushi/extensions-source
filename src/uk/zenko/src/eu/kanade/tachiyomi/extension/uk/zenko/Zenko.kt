@@ -10,15 +10,14 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -113,7 +112,7 @@ abstract class Zenko :
             }
         }.build()
 
-        client.get(url).use { response ->
+        client.get(url, Fetch.XHR).use { response ->
             val result = response.parseAs<SearchResponse>()
             val lang = isEng()
             val mangas = result.data.map { it.toSManga(lang, imgUrl) }
@@ -142,34 +141,33 @@ abstract class Zenko :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val mangaId = manga.url.substringAfter("titles/")
 
-        val mangaAsync = async {
-            if (fetchDetails) {
-                val lang = isEng()
-                val url = "$apiUrl/titles/$mangaId"
-                val data = client.get(url).use { it.parseAs<MangaDetailsResponse>() }
-                data.toSManga(lang, imgUrl)
-            } else {
-                manga
-            }
-        }
-
-        val chaptersAsync = async {
-            if (fetchChapters) {
-                val chaptersUrl = "$apiUrl/titles/$mangaId/chapters"
-                val data = client.get(chaptersUrl).use { it.parseAs<List<ChapterResponseItem>>() }
-                data.sortedByDescending { item ->
-                    val id = StringProcessor.generateId(item.name)
-                    if (id > 0) id else item.id.toDouble()
-                }.map { it.toSChapter() }
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(mangaAsync.await(), chaptersAsync.await())
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    val lang = isEng()
+                    val url = "$apiUrl/titles/$mangaId"
+                    val data = client.get(url, Fetch.XHR).use { it.parseAs<MangaDetailsResponse>() }
+                    data.toSManga(lang, imgUrl)
+                } else {
+                    manga
+                }
+            },
+            chapters = {
+                if (fetchChapters) {
+                    val chaptersUrl = "$apiUrl/titles/$mangaId/chapters"
+                    val data = client.get(chaptersUrl, Fetch.XHR).use { it.parseAs<List<ChapterResponseItem>>() }
+                    data.sortedByDescending { item ->
+                        val id = StringProcessor.generateId(item.name)
+                        if (id > 0) id else item.id.toDouble()
+                    }.map { it.toSChapter() }
+                } else {
+                    chapters
+                }
+            },
+        )
     }
 
     // =========================== Related Manga (Komikku) ============================
@@ -178,7 +176,7 @@ abstract class Zenko :
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val mangaId = manga.url.substringAfter("titles/")
         val url = "$apiUrl/titles/$mangaId/similar"
-        val data = client.get(url).use { it.parseAs<List<SearchDetailsResponse>>() }
+        val data = client.get(url, Fetch.XHR).use { it.parseAs<List<SearchDetailsResponse>>() }
         val hiddenCat = hiddenCategories()
         return data.filter { !hiddenCat.contains(it.category) }.map { it.toSManga(lang, imgUrl) }
     }
@@ -187,7 +185,7 @@ abstract class Zenko :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (_, chapterId) = chapter.url.substringAfter("titles/").split("/", limit = 2)
         val url = "$apiUrl/chapters/$chapterId"
-        val data = client.get(url).use { it.parseAs<ChapterResponseItem>() }
+        val data = client.get(url, Fetch.XHR).use { it.parseAs<ChapterResponseItem>() }
         return data.pages.orEmpty().map { page ->
             Page(page.order, imageUrl = "$imgUrl/${page.content}")
         }

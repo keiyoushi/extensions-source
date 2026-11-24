@@ -5,14 +5,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
@@ -62,16 +61,14 @@ abstract class MayoTune : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) fetchDetails() else manga }
-        val chapterList = async { if (fetchChapters) fetchChapterList() else chapters }
-
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) fetchDetails() else manga },
+        chapters = { if (fetchChapters) fetchChapterList() else chapters },
+    )
 
     // Details
     private suspend fun fetchDetails(): SManga {
-        val document = client.get(baseUrl + source.url).asJsoup()
+        val document = client.get(baseUrl + source.url, Fetch.DOCUMENT).asJsoup()
         val statusText =
             document.selectFirst("div.text-center:contains(Status)")?.text()
                 ?.substringBefore("Status")
@@ -99,7 +96,7 @@ abstract class MayoTune : KeiSource() {
 
     // Chapters
     private suspend fun fetchChapterList(): List<SChapter> {
-        val chapters = client.get("$baseUrl/api/$chapterEndpoint/chapters").parseAs<List<ChapterDto>>()
+        val chapters = client.get("$baseUrl/api/$chapterEndpoint/chapters", Fetch.XHR).parseAs<List<ChapterDto>>()
         return chapters.sortedByDescending { it.number }.map { chapter ->
             SChapter.create().apply {
                 url = chapter.getChapterURL(chapterEndpoint)
@@ -112,7 +109,7 @@ abstract class MayoTune : KeiSource() {
 
     // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterDto = client.get(baseUrl + chapter.url).parseAs<ChapterDto>()
+        val chapterDto = client.get(baseUrl + chapter.url, Fetch.XHR).parseAs<ChapterDto>()
         return List(chapterDto.pageCount) { index ->
             Page(index, imageUrl = "$baseUrl/api/manga/${chapterDto.id}/${index + 1}")
         }

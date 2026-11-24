@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.mangasaison
 
+import keiyoushi.utils.aesCbc
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.parseAs
 import keiyoushi.zip.dataRange
@@ -14,9 +15,6 @@ import okio.BufferedSource
 import okio.ByteString.Companion.encodeUtf8
 import okio.buffer
 import okio.cipherSource
-import javax.crypto.Cipher
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.SecretKeySpec
 import okio.ByteString.Companion.decodeHex as decodeHexToByteString
 
 class ImageInterceptor : Interceptor {
@@ -37,8 +35,7 @@ class ImageInterceptor : Interceptor {
         if (!response.isSuccessful) return response
 
         // wasm func 217 (LSUZR::getData) AES-CBC
-        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-        cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(data.key.decodeHex(), "AES"), IvParameterSpec(IMAGE_IV))
+        val cipher = aesCbc(data.key.decodeHex(), IMAGE_IV)
 
         val ciphertext = readEntry(response.body.source(), data.compressedSize, data.method)
         val image = ciphertext.cipherSource(cipher).buffer()

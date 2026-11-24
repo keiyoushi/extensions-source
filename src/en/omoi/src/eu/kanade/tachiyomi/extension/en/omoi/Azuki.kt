@@ -10,10 +10,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
+import keiyoushi.network.XorInterceptor
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
@@ -39,7 +41,7 @@ abstract class Azuki :
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun OkHttpClient.Builder.configureClient() = apply {
-        addInterceptor(ImageInterceptor())
+        addInterceptor(XorInterceptor(XOR_KEY) { "drm" in it.url.queryParameterNames })
         addInterceptor {
             val request = it.request()
             val response = it.proceed(request)
@@ -86,7 +88,7 @@ abstract class Azuki :
     }
 
     private suspend fun parseMangaList(url: HttpUrl): MangasPage {
-        val document = client.get(url).asJsoup()
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val mangas = document.select("ol.o-series-card-list li").map {
             SManga.create().apply {
                 val link = it.selectFirst("a.a-card-link")!!
@@ -107,24 +109,13 @@ abstract class Azuki :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val url = "$baseUrl/${manga.url}".toHttpUrl()
         val slug = url.pathSegments.first()
 
-        val details = if (fetchDetails) {
-            async { client.get("$apiUrl/manga/slug/$slug/v0", apiHeaders()).parseAs<DetailsDto>().toSManga() }
-        } else {
-            null
-        }
-        val chapterList = if (fetchChapters) {
-            async { getChapterList(slug, url.fragment!!) }
-        } else {
-            null
-        }
-
-        SMangaUpdate(
-            manga = details?.await() ?: manga,
-            chapters = chapterList?.await() ?: chapters,
+        return SMangaUpdate(
+            manga = { if (fetchDetails) client.get("$apiUrl/manga/slug/$slug/v0", apiHeaders(), Fetch.XHR).parseAs<DetailsDto>().toSManga() else manga },
+            chapters = { if (fetchChapters) getChapterList(slug, url.fragment!!) else chapters },
         )
     }
 
@@ -138,11 +129,11 @@ abstract class Azuki :
             .addQueryParameter("order", "ascending")
             .addQueryParameter("count", "1000")
             .build()
-        val result = async { client.get(chapterUrl, apiHeaders()).parseAs<ChapterDto>() }
+        val result = async { client.get(chapterUrl, apiHeaders(), Fetch.XHR).parseAs<ChapterDto>() }
         val hideLocked = preferences.getBoolean(HIDE_LOCKED_PREF_KEY, false)
 
         val unlockedChapterIds = try {
-            val status = client.get("$apiUrl/user/mangas/$uuid/v0", apiHeaders()).parseAs<UserMangaStatusDto>()
+            val status = client.get("$apiUrl/user/mangas/$uuid/v0", apiHeaders(), Fetch.XHR).parseAs<UserMangaStatusDto>()
             (status.purchasedChapterUuids + status.unlockedChapterUuids).toSet()
         } catch (_: Exception) {
             emptySet()
@@ -171,7 +162,7 @@ abstract class Azuki :
     // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUuid = "$baseUrl/${chapter.url}".toHttpUrl().pathSegments.first()
-        val result = client.get("$apiUrl/chapters/$chapterUuid/pages/v1", apiHeaders()).parseAs<PageListDto>()
+        val result = client.get("$apiUrl/chapters/$chapterUuid/pages/v1", apiHeaders(), Fetch.XHR).parseAs<PageListDto>()
         return result.data.pages.mapIndexed { i, page ->
             val highRes = page.image.webp.maxBy { it.width }
             // This will give the highest possible resolution even if x2400 image doesn't exist.
@@ -213,5 +204,6 @@ abstract class Azuki :
 
     companion object {
         private const val HIDE_LOCKED_PREF_KEY = "hide_locked"
+        private const val XOR_KEY = 174.toByte()
     }
 }

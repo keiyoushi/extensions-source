@@ -8,15 +8,14 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -55,7 +54,7 @@ abstract class NineGrid :
     }
 
     private suspend fun getSeriesList(url: HttpUrl): MangasPage {
-        val data = client.get(url).parseAs<SeriesListResponse>()
+        val data = client.get(url, Fetch.XHR).parseAs<SeriesListResponse>()
         val mangas = data.content.map { it.toSManga(apiBase) }
         return MangasPage(mangas, data.page + 1 < data.totalPages)
     }
@@ -109,23 +108,13 @@ abstract class NineGrid :
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async {
-            if (fetchDetails) {
-                client.get("$apiBase/series/${manga.url}").parseAs<SeriesDto>().toSManga(apiBase)
-            } else {
-                manga
-            }
-        }
-        val chapterList = async {
-            if (fetchChapters) getChapterList(manga) else chapters
-        }
-
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) client.get("$apiBase/series/${manga.url}", Fetch.XHR).parseAs<SeriesDto>().toSManga(apiBase) else manga },
+        chapters = { if (fetchChapters) getChapterList(manga) else chapters },
+    )
 
     private suspend fun getChapterList(manga: SManga): List<SChapter> {
-        val data = client.get("$apiBase/series/${manga.url}/issues").parseAs<IssuesResponse>()
+        val data = client.get("$apiBase/series/${manga.url}/issues", Fetch.XHR).parseAs<IssuesResponse>()
         val chapters = mutableListOf<SChapter>()
 
         for (issue in data.issues) {
@@ -159,7 +148,7 @@ abstract class NineGrid :
     // Page List
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val data = client.get("$apiBase${chapter.url}").parseAs<PagesResponse>()
+        val data = client.get("$apiBase${chapter.url}", Fetch.XHR).parseAs<PagesResponse>()
         return data.pages.map { Page(it.index, imageUrl = it.url) }
     }
 

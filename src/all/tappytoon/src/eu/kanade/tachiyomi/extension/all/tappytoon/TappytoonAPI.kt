@@ -20,6 +20,7 @@ class Comic(
     val isHiatus: Boolean,
     override val isAccessible: Boolean,
     val isCompleted: Boolean,
+    val isSuperHighQualitySupported: Boolean,
     val ageRating: Name,
     val genres: List<Name>,
     val authors: List<Name>,

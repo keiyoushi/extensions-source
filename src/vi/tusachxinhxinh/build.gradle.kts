@@ -6,16 +6,13 @@ plugins {
 
 keiyoushi {
     name = "TuSachXinhXinh"
-    versionCode = 4
+    versionCode = 7
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
+    theme = "koi"
 
     source {
         lang = "vi"
         baseUrl = "https://tusachxinhxinh12.online"
-    }
-
-    deeplink {
-        path("/.*")
     }
 }

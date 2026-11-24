@@ -7,14 +7,14 @@ plugins {
 keiyoushi {
     name = "Kaguya"
     pkgName = "id.yubikiri"
-    versionCode = 5
-    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
+    versionCode = 66
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
-    theme = "madara"
+    theme = "aesir"
 
     source {
         lang = "id"
-        baseUrl = "https://02.kaguya.pro"
-        id = 1557304490417397104L
+        baseUrl = "https://01.kaguya.re"
+        versionId = 2
     }
 }

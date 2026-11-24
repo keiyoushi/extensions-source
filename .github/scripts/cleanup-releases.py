@@ -10,6 +10,7 @@ PUBLISH_JOB = "Publish extension repo"
 MIN_PUBLISH_AGE = timedelta(hours=1)
 POLL_INTERVAL = 60
 DELETE_INTERVAL = 1
+RELEASE_RETRY_INTERVAL = 100
 
 
 def get_json(endpoint: str):
@@ -95,6 +96,29 @@ def get_referenced_assets() -> set[str]:
     }
 
 
+def delete(endpoint: str) -> None:
+    started = time.monotonic()
+    run_gh("api", "--method", "DELETE", endpoint, success_errors=("http 404",))
+    time.sleep(max(0.0, DELETE_INTERVAL - (time.monotonic() - started)))
+
+
+def try_delete_release(release: dict) -> bool:
+    endpoint = f"repos/{REPO_NAME}/releases/{release['id']}"
+    try:
+        delete(endpoint)
+    except RuntimeError as e:
+        print(f"Could not delete release {release['tag_name']}: {e}")
+        # A 502 doesn't always mean the delete was rolled back; sometimes it
+        # still completes server-side.
+        try:
+            run_gh("api", endpoint)
+        except RuntimeError as e:
+            if "http 404" in str(e).lower():
+                return True
+        return False
+    return True
+
+
 def cleanup_releases(referenced: set[str]) -> tuple[int, int]:
     deleted_assets = 0
     deleted_releases = 0
@@ -102,52 +126,43 @@ def cleanup_releases(referenced: set[str]) -> tuple[int, int]:
 
     for release in releases:
         assets = get_pages(f"repos/{REPO_NAME}/releases/{release['id']}/assets")
+        unreferenced = [
+            asset for asset in assets if asset["browser_download_url"] not in referenced
+        ]
+        fully_unreferenced = len(unreferenced) == len(assets)
 
         # Fast path: every asset is unreferenced -> delete the release in one call,
         # which takes the assets with it.
-        if assets and not any(
-            asset["browser_download_url"] in referenced for asset in assets
-        ):
+        if assets and fully_unreferenced:
             print(
                 f"Deleting release {release['tag_name']} "
                 f"({len(assets)} unreferenced assets)"
             )
-            run_gh(
-                "api",
-                "--method",
-                "DELETE",
-                f"repos/{REPO_NAME}/releases/{release['id']}",
-            )
-            deleted_assets += len(assets)
-            deleted_releases += 1
-            time.sleep(DELETE_INTERVAL)
-            continue
-
-        remaining = len(assets)
-        for asset in assets:
-            if asset["browser_download_url"] in referenced:
+            if try_delete_release(release):
+                deleted_assets += len(assets)
+                deleted_releases += 1
                 continue
 
+        for i, asset in enumerate(unreferenced, 1):
             print(f"Deleting {release['tag_name']}/{asset['name']}")
-            run_gh(
-                "api",
-                "--method",
-                "DELETE",
-                f"repos/{REPO_NAME}/releases/assets/{asset['id']}",
-            )
+            delete(f"repos/{REPO_NAME}/releases/assets/{asset['id']}")
             deleted_assets += 1
-            remaining -= 1
-            time.sleep(DELETE_INTERVAL)
 
-        if remaining == 0:
-            print(f"Deleting empty release {release['tag_name']}")
-            run_gh(
-                "api",
-                "--method",
-                "DELETE",
-                f"repos/{REPO_NAME}/releases/{release['id']}",
-            )
-            deleted_releases += 1
+            # Releases with hundreds of assets time out (HTTP 502) when deleted
+            # whole, so retry the fast path as the release shrinks.
+            if (
+                fully_unreferenced
+                and i % RELEASE_RETRY_INTERVAL == 0
+                and try_delete_release(release)
+            ):
+                deleted_assets += len(unreferenced) - i
+                deleted_releases += 1
+                break
+        else:
+            if fully_unreferenced:
+                print(f"Deleting empty release {release['tag_name']}")
+                delete(f"repos/{REPO_NAME}/releases/{release['id']}")
+                deleted_releases += 1
 
     return deleted_assets, deleted_releases
 

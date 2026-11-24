@@ -6,14 +6,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -37,7 +36,7 @@ abstract class MiMi : KeiSource() {
             .addCommonParams(page)
             .build()
 
-        return client.get(url).use { parseMangaPage(it) }
+        return client.get(url, Fetch.DOCUMENT).use { parseMangaPage(it) }
     }
 
     // =============================== Latest ===============================
@@ -49,7 +48,7 @@ abstract class MiMi : KeiSource() {
             .addCommonParams(page)
             .build()
 
-        return client.get(url).use { parseMangaPage(it) }
+        return client.get(url, Fetch.DOCUMENT).use { parseMangaPage(it) }
     }
 
     // =============================== Search ===============================
@@ -99,13 +98,13 @@ abstract class MiMi : KeiSource() {
             if (query.isNotBlank()) addQueryParameter("title", query)
         }.build()
 
-        return client.get(url).use { parseMangaPage(it) }
+        return client.get(url, Fetch.DOCUMENT).use { parseMangaPage(it) }
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host == baseUrl.toHttpUrl().host && url.pathSegments.size >= 2 && url.pathSegments[0] == "manga") {
             val id = url.pathSegments[1]
-            return client.get("$apiUrl/manga/$id").use { response ->
+            return client.get("$apiUrl/manga/$id", Fetch.XHR).use { response ->
                 response.parseAs<MangaDto>().toSManga()
             }
         }
@@ -140,32 +139,28 @@ abstract class MiMi : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val id = manga.url.substringAfterLast("/")
 
-        val detailsDeferred = if (fetchDetails) {
-            async {
-                client.get("$apiUrl/manga/$id").use {
-                    it.parseAs<MangaDto>().toSManga()
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    client.get("$apiUrl/manga/$id", Fetch.XHR).use {
+                        it.parseAs<MangaDto>().toSManga()
+                    }
+                } else {
+                    manga
                 }
-            }
-        } else {
-            null
-        }
-
-        val chaptersDeferred = if (fetchChapters) {
-            async {
-                client.get("$apiUrl/manga/$id/chapters").use { response ->
-                    response.parseAs<List<ChapterDto>>().map { it.toSChapter(id) }
+            },
+            chapters = {
+                if (fetchChapters) {
+                    client.get("$apiUrl/manga/$id/chapters", Fetch.XHR).use { response ->
+                        response.parseAs<List<ChapterDto>>().map { it.toSChapter(id) }
+                    }
+                } else {
+                    chapters
                 }
-            }
-        } else {
-            null
-        }
-
-        SMangaUpdate(
-            manga = detailsDeferred?.await() ?: manga,
-            chapters = chaptersDeferred?.await() ?: chapters,
+            },
         )
     }
 
@@ -173,7 +168,7 @@ abstract class MiMi : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterId = chapter.url.substringAfter("/")
-        return client.get("$apiUrl/chapters/$chapterId").use { response ->
+        return client.get("$apiUrl/chapters/$chapterId", Fetch.XHR).use { response ->
             response.parseAs<PageDto>().toPage()
         }
     }
@@ -182,7 +177,7 @@ abstract class MiMi : KeiSource() {
 
     override val supportsFilterFetching get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres").use {
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres", Fetch.XHR).use {
         it.parseAs<JsonElement>()
     }
 

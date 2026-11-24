@@ -85,8 +85,9 @@ class ChapterDto(
     val scene: Float,
     val scheduled: Boolean,
 ) {
-    fun toSChapter() = SChapter.create().apply {
-        name = if (unlocked || free) title else "🔒 $title "
+    fun toSChapter(showEpisodeNumber: Boolean) = SChapter.create().apply {
+        val displayTitle = if (showEpisodeNumber) "${scene.toString().removeSuffix(".0")} - $title" else title
+        name = if (unlocked || free) displayTitle else "🔒 $displayTitle "
         date_upload = DATE_FORMAT.tryParse(date)
         chapter_number = scene
         url = "/episode/${this@ChapterDto.id}"

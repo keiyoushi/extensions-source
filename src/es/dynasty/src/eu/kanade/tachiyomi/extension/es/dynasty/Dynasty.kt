@@ -5,15 +5,14 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.Headers
@@ -54,7 +53,7 @@ abstract class Dynasty : KeiSource() {
     }
 
     private suspend fun mangaPageParse(url: HttpUrl, page: Int): MangasPage {
-        val result = client.get(url).parseAs<MangaPaginatedResponse>()
+        val result = client.get(url, Fetch.XHR).parseAs<MangaPaginatedResponse>()
         val sortType = url.queryParameter("sort")
 
         var mangasData = result.getMangas().filter {
@@ -78,19 +77,17 @@ abstract class Dynasty : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val mangaId = manga.url.substringBefore("|")
-        val details = if (fetchDetails) async { fetchDetails(mangaId) } else null
-        val chapterList = if (fetchChapters) async { fetchChapterList(mangaId) } else null
 
-        SMangaUpdate(
-            details?.await() ?: manga,
-            chapterList?.await() ?: chapters,
+        return SMangaUpdate(
+            manga = { if (fetchDetails) fetchDetails(mangaId) else manga },
+            chapters = { if (fetchChapters) fetchChapterList(mangaId) else chapters },
         )
     }
 
     private suspend fun fetchDetails(mangaId: String): SManga {
-        val json = client.get("$baseUrl/api/mangas/$mangaId").parseAs<JsonElement>()
+        val json = client.get("$baseUrl/api/mangas/$mangaId", Fetch.XHR).parseAs<JsonElement>()
         val data = if (json is JsonObject && json.containsKey("data")) {
             json["data"]!!
         } else {
@@ -105,7 +102,7 @@ abstract class Dynasty : KeiSource() {
         var totalPages: Int
 
         do {
-            val res = client.get("$baseUrl/api/chapters/paginated?manga_id=$mangaId&page=$page&limit=100&sort=desc")
+            val res = client.get("$baseUrl/api/chapters/paginated?manga_id=$mangaId&page=$page&limit=100&sort=desc", Fetch.XHR)
                 .parseAs<ChapterPaginatedResponse>()
             totalPages = res.getTotalPages()
             allChapters.addAll(res.getChapters().map { it.toSChapter() })
@@ -116,7 +113,7 @@ abstract class Dynasty : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val pages = client.get(getChapterUrl(chapter)).parseAs<List<PageDto>>()
+        val pages = client.get(getChapterUrl(chapter), Fetch.XHR).parseAs<List<PageDto>>()
         return pages.mapIndexed { index, page ->
             Page(index, imageUrl = page.getUrl())
         }

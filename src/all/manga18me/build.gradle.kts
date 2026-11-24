@@ -6,9 +6,10 @@ plugins {
 
 keiyoushi {
     name = "Manga18Me"
-    versionCode = 3
+    versionCode = 0
     contentWarning = ContentWarning.NSFW
-    libVersion = "1.4"
+    libVersion = "1.6"
+    theme = "yiimadara"
 
     listOf("all", "en").forEach {
         source {
@@ -16,5 +17,9 @@ keiyoushi {
             lang = it
             baseUrl = "https://manga18.me"
         }
+    }
+
+    deeplink {
+        path("/manga/..*")
     }
 }

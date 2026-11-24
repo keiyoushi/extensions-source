@@ -1,13 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.onereader
 
 import eu.kanade.tachiyomi.source.model.Filter
-import kotlinx.serialization.Serializable
-
-@Serializable
-internal class FilterData(
-    val tags: List<String>,
-    val types: List<String>,
-)
 
 internal open class SelectFilter(
     name: String,
@@ -16,12 +9,27 @@ internal open class SelectFilter(
     fun selected(): String = options[state].second
 }
 
-internal class OrderFilter :
+internal class SortFilter :
     SelectFilter(
         "Ordenar por",
         listOf(
-            "A-Z" to "az",
-            "Atualizados recentemente" to "recent",
+            "Mais vistos" to "VIEWS",
+            "A-Z" to "AZ",
+            "Recentes" to "DATE",
+            "Melhor avaliados" to "RATING",
+        ),
+    )
+
+internal class FormatFilter :
+    SelectFilter(
+        "Formato",
+        listOf(
+            "Todos" to "ALL",
+            "Webtoon" to "WEBTOON",
+            "Manhwa" to "MANHWA",
+            "Manhua" to "MANHUA",
+            "Mangá" to "MANGÁ",
+            "Shoujo" to "SHOUJO",
         ),
     )
 
@@ -29,22 +37,16 @@ internal class StatusFilter :
     SelectFilter(
         "Status",
         listOf(
-            "Todos" to "",
-            "Em lançamento" to "Em Lançamento",
-            "Completo" to "Completo",
-            "Hiato" to "Hiatus",
-            "Cancelado" to "Cancelado",
+            "Todos" to "ALL",
+            "Em lançamento" to "LANÇANDO",
+            "Completo" to "COMPLETO",
+            "Hiato" to "HIATO",
+            "Cancelado" to "CANCELADO",
         ),
     )
 
-internal class TypeFilter(types: List<String>) :
-    SelectFilter(
-        "Tipo",
-        listOf("Todos" to "") + types.map { it to it },
-    )
+internal class AllGenresFilter : Filter.CheckBox("Exigir todos os gêneros")
 
-internal class TagFilter(tags: List<String>) :
-    SelectFilter(
-        "Tag",
-        listOf("Todas" to "") + tags.map { it to it },
-    )
+internal class GenreOption(name: String) : Filter.TriState(name)
+
+internal class GenreFilter(genres: List<String>) : Filter.Group<GenreOption>("Gêneros", genres.map(::GenreOption))

@@ -1,3 +1,5 @@
+package eu.kanade.tachiyomi.extension.en.elftoon
+
 import eu.kanade.tachiyomi.multisrc.vinetheme.VineTheme
 import keiyoushi.annotation.Source
 

@@ -7,8 +7,6 @@ class CatalogFilter(
         "All" to "comics",
         "Manhwa" to "manhwa/browse",
         "Manga" to "manga/browse",
-        "Western" to "western/browse",
-        "Adult" to "adult/browse",
     ),
 ) : Filter.Select<String>("Catalog", options.map { it.first }.toTypedArray()) {
     fun getValue(): String = options[state].second

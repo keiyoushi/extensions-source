@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Soul Scans"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "loneseal"
 
     source {
-        baseUrl = "https://v1.soulscans.org"
+        baseUrl = "https://v1.soulscans.asia"
         lang = "id"
     }
 }

@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.tr.mangatilkisi
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.utils.asJsoup
 import okhttp3.FormBody
@@ -11,13 +12,21 @@ import java.util.Locale
 
 @Source
 abstract class MangaTilkisi : Madara() {
-    override val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.forLanguageTag("tr"))
+    override val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
     override val chapterMode = ChapterMode.MangaAjax
+
+    override val mangaDetailsSelectorTitle = "#mgcr-series-title"
+    override val mangaDetailsSelectorThumbnail = ".mgcr-modern-card__cover img"
+    override val mangaDetailsSelectorStatus = "div.mgcr-modern-card__fact:contains(Durum) strong"
+    override val mangaDetailsSelectorGenre = ".mgcr-modern-card__genres a"
+    override val altNameSelector = ".mgcr-modern-manga__alternative"
+
+    override val chapterUrlSelector = "a:not(.chapter-thumbnail)"
 
     override suspend fun fetchChapterDocument(chapterUrl: String): Document {
         val payload = FormBody.Builder()
             .add("verified", "1")
             .build()
-        return client.post(chapterUrl, headers, payload).use { it.asJsoup() }
+        return client.post(chapterUrl, Fetch.DOCUMENT, payload).asJsoup()
     }
 }

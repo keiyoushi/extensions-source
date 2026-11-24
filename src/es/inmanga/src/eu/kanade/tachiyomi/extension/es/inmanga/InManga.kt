@@ -5,17 +5,16 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.tryParseDateTime
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -48,6 +47,7 @@ abstract class InManga : KeiSource() {
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.post(
             url = "$baseUrl/manga/getMangasConsultResult",
+            fetch = Fetch.DOCUMENT,
             body = mangaRequestBody(page, 1),
         ).asJsoup()
         return parseMangasPage(document)
@@ -56,6 +56,7 @@ abstract class InManga : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val document = client.post(
             url = "$baseUrl/manga/getMangasConsultResult",
+            fetch = Fetch.DOCUMENT,
             body = mangaRequestBody(page, 3),
         ).asJsoup()
         return parseMangasPage(document)
@@ -64,6 +65,7 @@ abstract class InManga : KeiSource() {
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val document = client.post(
             url = "$baseUrl/manga/getMangasConsultResult",
+            fetch = Fetch.DOCUMENT,
             body = mangaRequestBody(page, 1, query),
         ).asJsoup()
         return parseMangasPage(document)
@@ -88,7 +90,7 @@ abstract class InManga : KeiSource() {
 
     private suspend fun mangaUrlFromChapter(url: HttpUrl): String? {
         val slug = url.pathSegments.getOrNull(2) ?: return null
-        val mangaId = client.get(url).asJsoup()
+        val mangaId = client.get(url, Fetch.DOCUMENT).asJsoup()
             .select("script:containsData(var mid =)")
             .firstNotNullOfOrNull { script ->
                 script.data()
@@ -116,14 +118,13 @@ abstract class InManga : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val mangaDeferred = async { if (fetchDetails) fetchMangaDetails(manga) else manga }
-        val chaptersDeferred = async { if (fetchChapters) fetchChapterList(manga) else chapters }
-        SMangaUpdate(mangaDeferred.await(), chaptersDeferred.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) fetchMangaDetails(manga) else manga },
+        chapters = { if (fetchChapters) fetchChapterList(manga) else chapters },
+    )
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
-        val document = client.get(getMangaUrl(manga)).asJsoup()
+        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return SManga.create().apply {
             document.selectFirst("div.col-md-3 div.panel.widget")?.let { info ->
                 thumbnail_url = info.selectFirst("img")?.absUrl("src")
@@ -144,7 +145,7 @@ abstract class InManga : KeiSource() {
     }
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
-        val data = client.get("$baseUrl/chapter/getall?mangaIdentification=${manga.url.substringAfterLast("/")}").parseAs<InMangaResultDto>()
+        val data = client.get("$baseUrl/chapter/getall?mangaIdentification=${manga.url.substringAfterLast("/")}", Fetch.XHR).parseAs<InMangaResultDto>()
         if (data.data.isNullOrEmpty()) {
             return emptyList()
         }
@@ -167,7 +168,7 @@ abstract class InManga : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter)).asJsoup()
+        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
         val chapterId = document.selectFirst("input#ChapterIdentification")!!.attr("value")
         val mangaId = document.selectFirst("input#MangaIdentification")!!.attr("value")
 
