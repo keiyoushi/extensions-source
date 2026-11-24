@@ -12,6 +12,7 @@ ktlint = "1.8.0"
 spotless = "8.10.1"
 tapmoc = "0.4.2"
 okhttp = "5.4.0"
+keiyoushi-runtime = "v1"
 
 [libraries]
 android-gradle = { module = "com.android.tools.build:gradle", version.ref = "android-gradle" }
@@ -49,6 +50,11 @@ jspecify = { module = "org.jspecify:jspecify", version = "1.0.1" }
 
 # app provides it as transitive dependency of okhttp-zstd
 zstd-kmp-okio = { module = "com.squareup.zstd:zstd-kmp-okio", version = "0.4.0" }
+
+# The Keiyoushi Runtime's contract (github.com/keiyoushi/runtime), bundled by libs that call a runtime module
+keiyoushi-runtime-contract = { module = "com.github.keiyoushi.runtime:contract", version.ref = "keiyoushi-runtime" }
+# A runtime module's contract interfaces (brings the contract via api); bundled by the lib that calls that module
+keiyoushi-runtime-api-webviewpatch = { module = "com.github.keiyoushi.runtime:api-webviewpatch", version.ref = "keiyoushi-runtime" }
 
 # Core unit tests only, to check the WebView glue against it (kept current by Renovate); the app doesn't ship it
 androidx-webkit = { module = "androidx.webkit:webkit", version = "1.18.0" }
