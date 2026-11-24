@@ -52,17 +52,6 @@ class LiveTokenDto(
     val ttl: Long,
 )
 
-// The backend's /system, for the Turnstile sitekey the login page uses
-@Serializable
-class AedexSystemDto(
-    @SerialName("turnstile_sitekey") val turnstileSitekey: String? = null,
-)
-
-@Serializable
-class AedexCsrfDto(
-    @SerialName("csrfToken") val csrfToken: String,
-)
-
 // The NextAuth session, which carries the backend access token used as a Bearer
 @Serializable
 class AedexSessionDto(

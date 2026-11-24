@@ -58,7 +58,7 @@ class FreeReader {
                             "error", "early_access" -> {
                                 webSocket.close(1000, null)
                                 val message = if (frame.code == "LOGIN_REQUIRED") {
-                                    LOGIN_REQUIRED_MESSAGE
+                                    loginRequiredMessage()
                                 } else {
                                     frame.code ?: frame.type
                                 }
