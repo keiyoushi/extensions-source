@@ -206,6 +206,7 @@ internal class CaptchaOverlayDialog(
     // Hidden but still attached: a WebView that was ever attached stops running once it leaves a visible window
     private var parked = false
     private var unwaitScreen: (() -> Unit)? = null
+    private var unfollow: (() -> Unit)? = null
 
     private fun runOnMain(block: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) block() else mainHandler.post(block)
@@ -269,6 +270,18 @@ internal class CaptchaOverlayDialog(
         }
     }
 
+    // Hidden, it moves to each screen the user opens over it: in a window that isn't drawn the page stops running
+    private fun followFront(app: Application): () -> Unit = app.onNextResumed { activity ->
+        unfollow = null
+        if (activity === shownOn) {
+            unfollow = followFront(app)
+            return@onNextResumed
+        }
+        val area = placed
+        dismiss()
+        open(activity, area, hidden = true)
+    }
+
     // The whole WebView, or a box of the area's size in the middle of the screen with the WebView moved under it, at
     // the size the area was measured at: off-screen, or the window's while the whole WebView is shown
     private fun place(area: Rect?) {
@@ -301,6 +314,8 @@ internal class CaptchaOverlayDialog(
 
     private fun park(hidden: Boolean) {
         parked = hidden
+        unfollow?.invoke()
+        unfollow = if (hidden) shownOn?.application?.let(::followFront) else null
         val window = dialog?.window ?: return
         val flags = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
         if (hidden) {
@@ -318,6 +333,8 @@ internal class CaptchaOverlayDialog(
     fun dismiss() = runOnMain {
         unwaitScreen?.invoke()
         unwaitScreen = null
+        unfollow?.invoke()
+        unfollow = null
         val d = dialog ?: return@runOnMain
         dialog = null
         shownOn = null
