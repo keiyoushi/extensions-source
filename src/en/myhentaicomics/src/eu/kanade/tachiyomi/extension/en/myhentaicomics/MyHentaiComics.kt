@@ -510,6 +510,13 @@ abstract class MyHentaiComics : KeiSource() {
                 ?.firstOrNull { it.ownText().startsWith("Pages:") }
                 ?.text()
 
+            // Server-rendered next to the favorite button, and the only number the site
+            // shows about a work's popularity.
+            val favoritesText = descriptionDiv
+                ?.selectFirst("span.js__count_favorite")
+                ?.text()
+                ?.trim()
+
             val author = artists.joinToString(", ").ifEmpty { null }
 
             manga.apply {
@@ -519,7 +526,10 @@ abstract class MyHentaiComics : KeiSource() {
                 this.artist = author
                 genre = (categories + groups + parodies).joinToString(", ")
                 status = SManga.COMPLETED
-                description = pagesText.orEmpty()
+                description = listOfNotNull(
+                    pagesText?.takeIf(String::isNotBlank),
+                    favoritesText?.takeIf(String::isNotBlank)?.let { "$it favorites" },
+                ).joinToString(" · ")
             }
         } else {
             manga
