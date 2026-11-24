@@ -34,12 +34,16 @@ abstract class MyHentaiComics : KeiSource() {
 
     private val tagIdCache = ConcurrentHashMap<String, String>()
 
-    /** Ranked suggestions, keyed by the lowercased name that missed. */
+    /** Ranked suggestions, keyed by the field and the lowercased name that missed. */
     private val suggestionCache = ConcurrentHashMap<String, List<String>>()
 
     /** Every tag name the site has, fetched on the first miss so a typo does not pay twice. */
     @Volatile
     private var siteTags: List<TagOption>? = null
+
+    /** Which names are artists, parodies, categories and groups; null until a miss needs it. */
+    @Volatile
+    private var namespaces: Namespaces? = null
 
     /** Resolved page image URLs, keyed by reader page URL. */
     private val pageImageUrls = ConcurrentHashMap<String, String>()
@@ -133,7 +137,7 @@ abstract class MyHentaiComics : KeiSource() {
     private suspend fun resolveName(name: String): String? {
         if (name.length < MIN_TAG_QUERY_LENGTH) return null
 
-        val key = name.lowercase()
+        val key = cacheKey("term", name)
         tagIdCache[key]?.let { return it.ifEmpty { null } }
 
         val hits = searchTags(name) ?: return null
@@ -150,22 +154,35 @@ abstract class MyHentaiComics : KeiSource() {
     /**
      * Turns a typed name into a tag id or fails with something the user can act on.
      *
-     * An exact name wins. Anything else is reported with the closest spellings from the
-     * whole catalogue rather than a bare "not found", because the site's own picker is a
-     * substring search that offers nothing at all once a name is misspelled.
+     * Only an exact name of the field's own kind is accepted. "LewdDoodler" is an artist,
+     * so it does not belong in the Parody field even though the site's picker returns it
+     * for either, and a category belongs in its checkbox rather than in a name field. Every
+     * other result is a miss: the closest names from this field's namespace are offered
+     * first, the other namespace only when this one has nothing, and a name that exists
+     * elsewhere gets told where it belongs.
      */
-    private suspend fun resolveOrFail(kind: String, name: String): String {
-        tagIdCache[name.lowercase()]?.takeIf { it.isNotEmpty() }?.let { return it }
+    private suspend fun resolveOrFail(field: String, name: String): String {
+        val key = cacheKey(field, name)
+        tagIdCache[key]?.takeIf { it.isNotEmpty() }?.let { return it }
 
-        val hits = searchTags(name) ?: failWith(unverifiedMessage(kind, name))
-        hits.firstOrNull { it.text.equals(name, ignoreCase = true) }?.let {
-            tagIdCache[name.lowercase()] = it.id.toString()
-            return it.id.toString()
+        val hits = searchTags(name) ?: failWith(unverifiedMessage(field, name))
+        hits.firstOrNull { it.text.equals(name, ignoreCase = true) }?.let { match ->
+            val kind = loadNamespaces()?.kindOf(match.text)
+            // Without the namespace lists the site's exact match is the best answer left.
+            if (kind == null || kind == field) {
+                tagIdCache[key] = match.id.toString()
+                return match.id.toString()
+            }
+            failWith(misplacedMessage(field, match.text, kind))
         }
 
-        // Nothing matches it, so it is a typo: rank the whole catalogue instead.
-        val tags = loadSiteTags() ?: failWith(unverifiedMessage(kind, name))
-        failWith(notFoundMessage(kind, name, closest(tags, name)))
+        suggestionsFor(field, name).takeIf { it.isNotEmpty() }
+            ?.let { failWith(notFoundMessage(field, name, it)) }
+
+        suggestionsFor(otherField(field), name).takeIf { it.isNotEmpty() }
+            ?.let { failWith(crossFieldMessage(field, name, it)) }
+
+        failWith(unknownMessage(field, name))
     }
 
     /**
@@ -176,6 +193,36 @@ abstract class MyHentaiComics : KeiSource() {
     private suspend fun loadSiteTags(): List<TagOption>? {
         siteTags?.let { return it }
         return searchTags("")?.also { siteTags = it }
+    }
+
+    /**
+     * Which names are parodies, categories and groups; everything else is an artist.
+     *
+     * The picker returns all four in one untyped list and /gallery/<type>/<id> ignores the
+     * type segment, so the split is rebuilt from the parody index plus the filter indexes:
+     * those three lists plus the artists make up the whole catalogue, which leaves every
+     * other name an artist. Null when an index cannot be read, which only costs the wording.
+     */
+    private suspend fun loadNamespaces(): Namespaces? {
+        namespaces?.let { return it }
+        val parodies = fetchParodyNames() ?: return null
+        loadTagIndexes()
+        val indexes = indexes ?: return null
+        return Namespaces(
+            parodies = parodies,
+            categories = indexes.categories.mapTo(HashSet()) { it.name.lowercase() },
+            groups = indexes.groups.mapTo(HashSet()) { it.name.lowercase() },
+        ).also { namespaces = it }
+    }
+
+    private suspend fun fetchParodyNames(): Set<String>? = try {
+        client.get("$baseUrl/tag/parody", Fetch.DOCUMENT).asJsoup()
+            .select("a[href*='/gallery/parody/']")
+            .mapTo(HashSet()) { it.text().replace(TAG_COUNT_REGEX, "").trim().lowercase() }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        null
     }
 
     /** The site's autocomplete; null when the lookup itself failed (offline, rate limit). */
@@ -191,27 +238,41 @@ abstract class MyHentaiComics : KeiSource() {
     }
 
     /**
-     * Closest names to a typo, by optimal string alignment so adjacent transpositions
-     * count as one edit. The site's picker is a substring search and returns nothing for
-     * a misspelled name, so ranking the full catalogue is what turns "derpixonn" back
-     * into "Derpixon" instead of guessing at a prefix.
+     * Names close to a typo, taken from one namespace at a time.
+     *
+     * Distance comes first, so a transposition beats an unrelated longer name, and names
+     * that contain the whole input follow, because "melkor mancin" is not a typo of
+     * "Romulo Melkor Mancin" — it is the part of the name the user remembers.
      */
-    private fun closest(tags: List<TagOption>, input: String): List<String> {
+    private suspend fun suggestionsFor(field: String, input: String): List<String> {
         if (input.length < MIN_SUGGESTION_LENGTH) return emptyList()
 
-        val key = input.lowercase()
+        val key = "$field\u0000${input.lowercase()}"
         suggestionCache[key]?.let { return it }
 
+        val all = loadSiteTags() ?: return emptyList()
+        val namespaces = loadNamespaces()
+        val candidates = all.asSequence()
+            .map { it.text }
+            .filter { namespaces == null || namespaces.kindOf(it) == field }
+            .toList()
+
         val limit = maxEdits(input.length)
-        val close = tags.asSequence()
-            .filter { abs(it.text.length - input.length) <= limit }
-            .map { it.text to editDistance(input, it.text) }
-            .filter { (name, distance) ->
-                distance <= limit && distance.toDouble() / maxOf(input.length, name.length) <= MAX_FUZZY_RATIO
+        val ranked = candidates.asSequence()
+            .filter { abs(it.length - input.length) <= limit }
+            .map { it to editDistance(input, it) }
+            .filter { (candidate, distance) ->
+                distance <= limit && distance.toDouble() / maxOf(input.length, candidate.length) <= MAX_FUZZY_RATIO
             }
             .sortedWith(compareBy({ it.second }, { it.first.length }))
-            .take(MAX_SUGGESTIONS)
             .map { it.first }
+
+        val contained = candidates.asSequence()
+            .filter { it.length > input.length && it.contains(input, ignoreCase = true) }
+
+        val close = (ranked + contained)
+            .distinctBy { it.lowercase() }
+            .take(MAX_SUGGESTIONS)
             .toList()
 
         suggestionCache[key] = close
@@ -251,23 +312,44 @@ abstract class MyHentaiComics : KeiSource() {
         return previous[b.length]
     }
 
-    private fun notFoundMessage(kind: String, name: String, suggestions: List<String>): String {
-        val hint = suggestions
-            .takeIf { it.isNotEmpty() }
-            ?.joinToString(", ") { annotated(it) }
-            ?.let { " Did you mean: $it?" }
-            .orEmpty()
-        val advice = if (hint.isEmpty()) " Check the spelling, or clear the field to drop this filter." else ""
-        return "No $kind named \"$name\" on MyHentaiComics.$hint$advice"
+    private fun notFoundMessage(field: String, name: String, suggestions: List<String>): String {
+        val shown = suggestions.joinToString(", ") { label(field, it) }
+        return "No $field named \"$name\" on MyHentaiComics. Did you mean: $shown?"
     }
 
     /**
-     * Names the filter index files under another namespace, so a suggestion that is a
-     * category is not offered as an artist. Silent until the filter lists are loaded.
+     * Nothing in this field's namespace comes close but the other one does. Naming the
+     * namespace is the point: a parody pasted into the Artist field should be moved, not
+     * silently used.
      */
-    private fun annotated(name: String): String = indexes?.kindOf(name)?.let { "$name ($it)" } ?: name
+    private fun crossFieldMessage(field: String, name: String, suggestions: List<String>): String {
+        val other = otherField(field)
+        val heading = if (suggestions.size == 1) "Closest $other" else "Closest ${other}s"
+        return "No $field named \"$name\" on MyHentaiComics. $heading: ${suggestions.joinToString(", ")}. " +
+            "Try the ${other.replaceFirstChar { it.uppercase() }} field."
+    }
 
-    private fun unverifiedMessage(kind: String, name: String): String = "Couldn't look up the $kind \"$name\" because MyHentaiComics is unreachable. Try again when you're online."
+    /** A name that exists, but as something this field cannot filter. */
+    private fun misplacedMessage(field: String, name: String, kind: String): String = when (kind) {
+        "category" ->
+            "\"$name\" is a category on MyHentaiComics, not ${article(field)}. Tick it in the Categories filter instead."
+        "group" ->
+            "\"$name\" is a group on MyHentaiComics, not ${article(field)}. Tick it in the Groups filter instead."
+        else ->
+            "\"$name\" is ${article(kind)} on MyHentaiComics, not ${article(field)}. " +
+                "Move it to the ${kind.replaceFirstChar { it.uppercase() }} field."
+    }
+
+    private fun unknownMessage(field: String, name: String): String = "No $field named \"$name\" on MyHentaiComics. Check the spelling, or clear the field to drop this filter."
+
+    private fun otherField(field: String) = if (field == "artist") "parody" else "artist"
+
+    /** Marks a suggestion the filter index files outside the field, when the ranking had to guess. */
+    private fun label(field: String, name: String): String = indexes?.kindOf(name)?.takeIf { it != field }?.let { "$name ($it)" } ?: name
+
+    private fun article(word: String) = if (word.firstOrNull()?.let { it in "aeiou" } == true) "an $word" else "a $word"
+
+    private fun unverifiedMessage(field: String, name: String): String = "Couldn't look up the $field \"$name\" because MyHentaiComics is unreachable. Try again when you're online."
 
     private fun toast(message: String) {
         try {
@@ -314,7 +396,7 @@ abstract class MyHentaiComics : KeiSource() {
             .select("#myList a.listNavItem")
             .mapNotNull { el ->
                 val id = el.attr("href").substringAfterLast('/')
-                val name = el.text().replace(GROUP_COUNT_REGEX, "").trim()
+                val name = el.text().replace(TAG_COUNT_REGEX, "").trim()
                 if (id.isNotEmpty() && name.isNotEmpty()) NamedTag(name, id) else null
             }
 
@@ -554,6 +636,30 @@ abstract class MyHentaiComics : KeiSource() {
 
     private fun String.encodeSpaces(): String = replace(" ", "%20")
 
+    /** Resolved ids are per caller: a name accepted as an artist is not accepted as a parody. */
+    private fun cacheKey(scope: String, name: String) = "$scope\u0000${name.lowercase()}"
+
+    /**
+     * The name spaces, as lowercased sets. `/gallery/<type>/<id>` answers 200 for every id,
+     * so this map — not the URL — is what can say "that name is an artist".
+     */
+    private class Namespaces(
+        private val parodies: Set<String>,
+        private val categories: Set<String>,
+        private val groups: Set<String>,
+    ) {
+        fun kindOf(name: String): String? {
+            val key = name.lowercase()
+            return when (key) {
+                in parodies -> "parody"
+                in categories -> "category"
+                in groups -> "group"
+                // Every catalogue name is in one of the four lists, so the rest are artists.
+                else -> "artist"
+            }
+        }
+    }
+
     private class TagIndexes(
         val categories: List<NamedTag>,
         val groups: List<NamedTag>,
@@ -571,7 +677,7 @@ abstract class MyHentaiComics : KeiSource() {
     }
 
     companion object {
-        private val GROUP_COUNT_REGEX = Regex("""\s*\(\d+\)$""")
+        private val TAG_COUNT_REGEX = Regex("""\s*\(\d+\)$""")
 
         private const val CATEGORY_GROUP = "Categories"
         private const val GROUP_GROUP = "Groups"
