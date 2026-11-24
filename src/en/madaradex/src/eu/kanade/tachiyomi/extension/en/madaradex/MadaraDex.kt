@@ -1,68 +1,38 @@
 package eu.kanade.tachiyomi.extension.en.madaradex
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.madara.MadaraNoAjax
 import keiyoushi.annotation.Source
-import keiyoushi.network.Fetch
-import keiyoushi.network.fetch
-import okhttp3.Cookie
-import okhttp3.FormBody
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.security.SecureRandom
+import org.jsoup.nodes.Element
+
 @Source
-abstract class MadaraDex : Madara() {
+abstract class MadaraDex : MadaraNoAjax() {
 
-    override val mangaSubString = "title"
-    override val genreDirectory = "genre"
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(MdxAuthInterceptor())
 
-    private val siteUrl get() = baseUrl.toHttpUrl()
+    override val mangaSubString = "all"
 
-    private fun randomHex16() = ByteArray(16)
-        .also { SecureRandom().nextBytes(it) }
-        .toHexString()
+    override val supportsPostId = false
+    override fun archiveSelector() = "article.mdxr-card"
+    override val archiveUrlSelector = "h3 a"
+    override fun nextPageSelector() = "a[rel=next]"
 
-    private fun refreshAuth() {
-        if (client.cookieJar.loadForRequest(siteUrl).none { it.name == "mdx_fp" }) {
-            client.cookieJar.saveFromResponse(
-                siteUrl,
-                listOf(
-                    Cookie.Builder()
-                        .domain("madaradex.org").path("/")
-                        .name("mdx_fp").value(randomHex16())
-                        .expiresAt(System.currentTimeMillis() + 2592000000L)
-                        .build(),
-                ),
-            )
-        }
-        runCatching {
-            client.newCall(
-                Request.Builder()
-                    .url("$baseUrl/wp-admin/admin-ajax.php")
-                    .post(FormBody.Builder().add("action", "mdx_auth_refresh").build())
-                    .header("X-Mdx-Auth-Refresh", "1")
-                    .fetch(Fetch.XHR)
-                    .build(),
-            ).execute().close()
-        }
-    }
+    override val mangaDetailsSelectorTitle = "#mdxr-series-title"
+    override val mangaDetailsSelectorAuthor = "[data-detail-field='author'] a"
+    override val mangaDetailsSelectorArtist = "[data-detail-field='artist'] a"
+    override val mangaDetailsSelectorStatus = "[data-detail-field='status']"
+    override val mangaDetailsSelectorDescription = "#mdxr-summary-text"
+    override val mangaDetailsSelectorThumbnail = ".mdxr-series-cover img"
+    override val mangaDetailsSelectorGenre = "[data-term-group='genres'] a.mdxr-detail-term"
+    override val mangaDetailsSelectorTag = "[data-term-group='tags'] a.mdxr-detail-term"
+    override val seriesTypeSelector = ".mdxr-type-badge"
+    override val altNameSelector = "[data-alternative-preview] bdi"
 
-    override fun OkHttpClient.Builder.configureClient() = addInterceptor { chain ->
-        val request = chain.request()
-        if (request.header("X-Mdx-Auth-Refresh") != null) {
-            return@addInterceptor chain.proceed(
-                request.newBuilder().removeHeader("X-Mdx-Auth-Refresh").build(),
-            )
-        }
-        client.cookieJar.loadForRequest(siteUrl).let {
-            if (it.none { c -> c.name == "mdx_fp" } || it.none { c -> c.name == "mdx_auth" }) refreshAuth()
-        }
-        chain.proceed(request).also {
-            if (it.code == 403 && request.url.host == "cdn.madaradex.org") {
-                it.close()
-                refreshAuth()
-                return@addInterceptor chain.proceed(request)
-            }
-        }
-    }
+    override val chapterMode = ChapterMode.MangaAjaxPaginated
+    override val chapterNameSelector = ".mdxr-chapter-name"
+    override val chapterDateSelector = "time.chapter-release-date"
+    override val chapterAjaxPaginatedParam = "mdxr_chapter_page"
+
+    override fun imageFromElement(element: Element) = super.imageFromElement(element)?.takeIf(String::isNotEmpty)
+        ?: element.attr("data-mdx-protected-src")
 }

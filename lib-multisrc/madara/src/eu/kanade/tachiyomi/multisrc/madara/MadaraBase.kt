@@ -272,13 +272,15 @@ abstract class MadaraBase : KeiSource() {
 
     private suspend fun fetchMangaAjaxChapters(mangaPath: String): List<SChapter> = parseChapterList(client.post(chapterAjaxUrl(mangaPath), xhrHeaders, Fetch.XHR.from(mangaPath), FormBody.Builder().build()).asJsoup(), mangaPath)
 
+    protected open val chapterAjaxPaginatedParam = "t"
+
     private suspend fun fetchPaginatedChapters(mangaPath: String): List<SChapter> {
         val result = mutableListOf<SChapter>()
         var lastUrl: String? = null
         var page = 1
         while (true) {
             val response = client.post(
-                "${chapterAjaxUrl(mangaPath)}?t=$page",
+                "${chapterAjaxUrl(mangaPath)}?$chapterAjaxPaginatedParam=$page",
                 xhrHeaders,
                 Fetch.XHR.from(mangaPath),
                 FormBody.Builder().build(),
