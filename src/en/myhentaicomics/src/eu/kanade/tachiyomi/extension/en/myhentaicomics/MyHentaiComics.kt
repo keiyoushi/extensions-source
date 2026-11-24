@@ -279,9 +279,9 @@ abstract class MyHentaiComics : KeiSource() {
         return close
     }
 
-    /** One edit for short names, two for medium, three for long; nonsense stays nonsense. */
+    /** One edit for four-character names, two from five up, three for long ones. */
     private fun maxEdits(length: Int): Int = when {
-        length <= 5 -> 1
+        length <= 4 -> 1
         length <= 9 -> 2
         else -> 3
     }
