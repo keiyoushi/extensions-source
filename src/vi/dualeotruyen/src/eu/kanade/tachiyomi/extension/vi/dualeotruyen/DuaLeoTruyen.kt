@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.dualeotruyen
 
+import android.util.Base64
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -13,6 +14,9 @@ import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.xor
+import keiyoushi.utils.sha256
+import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
@@ -159,30 +163,53 @@ abstract class DuaLeoTruyen : KeiSource() {
 
     // ============================== Pages =================================
 
-    private val imageDecryptor = ImageDecryptor()
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
-        imageDecryptor.extractSecret(document)
+        val config = document.selectFirst("script[data-v]")!!.attr("data-v")
+            .reversed()
+            .let { Base64.decode(it, Base64.URL_SAFE) }
+            .let { it.copyOfRange(1, it.size).lcgXor(it[0].toInt(), 29, 71) }
+            .decodeToString()
+            .parseAs<PageConfig>()
 
-        return document.select(".content_view_chap > img, .content_view_chap > canvas")
-            .mapNotNull { element ->
-                val dataImg = element.absUrl("data-img")
-                    .ifEmpty { element.absUrl("data-canvas-img") }
-                    .ifEmpty { element.attr("data-img").ifEmpty { element.attr("data-canvas-img") } }
-                val src = element.absUrl("src")
-
-                when {
-                    dataImg.isNotBlank() -> imageDecryptor.decryptImageUrl(dataImg)
-                    src.isNotBlank() && !src.startsWith("data:") -> src
-                    else -> null
-                }
-            }
-            .filterNot { "/banner/" in it }
-            .distinct()
+        val attrs = "[${config.urlAttr}][${config.prefixAttr}][${config.seedAttr}]"
+        return document.select("img.${config.imageClass}$attrs, canvas.${config.canvasClass}$attrs")
+            .mapNotNull { config.imageUrl(it) }
             .mapIndexed { index, imageUrl ->
                 Page(index, imageUrl = imageUrl)
             }
+    }
+
+    private fun PageConfig.imageUrl(element: Element): String? {
+        val url = Base64.decode(element.attr(prefixAttr) + element.attr(urlAttr), Base64.URL_SAFE)
+            .lcgXor(element.attr(seedAttr).toInt(), multiplier, increment)
+            .decodeToString()
+            .toHttpUrl()
+        val fileName = url.pathSegments.last()
+        if (!fileName.startsWith(namePrefix)) return null
+
+        val (version, nonce, salt, mac, cipherText) = Base64.decode(fileName.substringBefore('.').removePrefix(namePrefix), Base64.URL_SAFE)
+            .decodeToString()
+            .split('|')
+        val cipher = Base64.decode(cipherText, Base64.DEFAULT)
+        val keyStream = (0..(cipher.size - 1) / 32)
+            .map { "$key|STREAM|$nonce|$salt|$it".sha256() }
+            .reduce(ByteArray::plus)
+        val name = cipher.xor(keyStream).decodeToString()
+        if ("$version|$nonce|$salt|$name".hmacSha256(key.encodeToByteArray()).toHexString() != mac) return null
+
+        return url.newBuilder()
+            .setPathSegment(url.pathSegments.lastIndex, "$name.${fileName.substringAfter('.')}")
+            .build()
+            .toString()
+    }
+
+    private fun ByteArray.lcgXor(seed: Int, multiplier: Int, increment: Int): ByteArray {
+        var state = seed and 0xFF
+        return ByteArray(size) { i ->
+            state = (state * multiplier + increment) and 0xFF
+            (this[i].toInt() xor state).toByte()
+        }
     }
 
     private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
