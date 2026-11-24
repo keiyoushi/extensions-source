@@ -47,9 +47,6 @@ abstract class LibGroup :
         if (getString(SERVER_PREF, "main") == "fourth") {
             edit().putString(SERVER_PREF, "secondary").apply()
         }
-        if (getString(API_DOMAIN_PREF, API_DOMAIN_DEFAULT) == "https://api.cdnlibs.org") {
-            edit().putString(API_DOMAIN_PREF, API_DOMAIN_DEFAULT).apply()
-        }
     }
 
     private var bearerToken: String? = null
@@ -486,7 +483,7 @@ abstract class LibGroup :
 
         private const val API_DOMAIN_PREF = "MangaLibApiDomain"
         private const val API_DOMAIN_TITLE = "Выбор домена API"
-        private const val API_DOMAIN_DEFAULT = "https://api.cdnrulib.link"
+        private const val API_DOMAIN_DEFAULT = "https://api.cdnlibs.org"
 
         private const val PAID_CHAPTER_DISPLAY_PREF = "MangaLibPaidChapterDisplay"
 
@@ -551,8 +548,8 @@ abstract class LibGroup :
         val domainApiPref = ListPreference(screen.context).apply {
             key = API_DOMAIN_PREF
             title = API_DOMAIN_TITLE
-            entries = arrayOf("Основной (api.cdnrulib.link)", "Резервный (api2.mangalib.me)", "Резервный (hapi.hentaicdn.org)", "Резервный (api.imglib.info)")
-            entryValues = arrayOf(API_DOMAIN_DEFAULT, "https://api2.mangalib.me", "https://hapi.hentaicdn.org", "https://api.imglib.info")
+            entries = arrayOf("Основной (api.cdnlibs.org)", "Резервный (api.mangalib.me)", "Резервный (api.cdnrulib.link)", "Резервный (api2.mangalib.me)", "Резервный (hapi.hentaicdn.org)", "Резервный (api.imglib.info)")
+            entryValues = arrayOf(API_DOMAIN_DEFAULT, "https://api.mangalib.me", "https://api.cdnrulib.link", "https://api2.mangalib.me", "https://hapi.hentaicdn.org", "https://api.imglib.info")
             summary = "%s" +
                 "\n\nВыбор домена API, используемого для работы приложения." +
                 "\n\nПо умолчанию «Официальное приложение»" +
