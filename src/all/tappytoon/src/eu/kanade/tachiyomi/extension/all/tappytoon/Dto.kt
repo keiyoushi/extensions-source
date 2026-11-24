@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.tappytoon
 
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -13,19 +15,39 @@ inline val <A : Accessible> List<A>.accessible: List<A>
 @Serializable
 class Comic(
     private val id: Int,
-    val title: String,
+    private val title: String,
     private val slug: String,
-    val longDescription: String,
-    val posterThumbnailUrl: String,
-    val isHiatus: Boolean,
+    private val longDescription: String,
+    private val posterThumbnailUrl: String,
+    private val isHiatus: Boolean,
     override val isAccessible: Boolean,
-    val isCompleted: Boolean,
-    val isSuperHighQualitySupported: Boolean,
+    private val isCompleted: Boolean,
+    private val isSuperHighQualitySupported: Boolean,
     val ageRating: AgeRating,
-    val genres: List<Name>,
-    val authors: List<Name>,
+    private val genres: List<Name>,
+    private val authors: List<Name>,
 ) : Accessible {
-    override fun toString() = "$slug|$id"
+    fun toSManga(matureLoginMessage: String) = SManga.create().apply {
+        url = "$slug|$id"
+        title = this@Comic.title
+        description = MarkdownDescription.Builder()
+            .description(matureLoginMessage.takeUnless { ageRating.canUserRead })
+            .description(longDescription)
+            .build()
+        thumbnail_url = posterThumbnailUrl
+        author = authors.joinToString().ifEmpty { null }
+        artist = author
+        genre = buildList {
+            genres.mapTo(this, Name::toString)
+            add("Rating: $ageRating")
+            if (isSuperHighQualitySupported) add("HD")
+        }.joinToString()
+        status = when {
+            isCompleted -> SManga.COMPLETED
+            !isHiatus -> SManga.ONGOING
+            else -> SManga.UNKNOWN
+        }
+    }
 }
 
 @Serializable
@@ -55,9 +77,9 @@ class Chapter(
 ) : Accessible {
     override fun toString() = buildString {
         append(title)
-        if (subtitle.isNotEmpty()) {
+        if (subtitle.isNotBlank()) {
             append(" - ")
-            append(subtitle)
+            append(subtitle.trim())
         }
     }
 
@@ -66,27 +88,15 @@ class Chapter(
 }
 
 @Serializable
-class Media(private val media: List<URL>) : List<URL> by media
+class Media(private val media: List<Image>) : List<Image> by media
 
 @Serializable
-class URL(private val path: String) {
+class Image(private val path: String) {
     override fun toString() = path
 }
 
 @Serializable
 class ErrorResponse(val message: String)
-
-@Serializable
-class NextData(val props: NextProps)
-
-@Serializable
-class NextProps(val initialState: InitialState)
-
-@Serializable
-class InitialState(val axios: Axios)
-
-@Serializable
-class Axios(val headers: AxiosHeaders)
 
 @Serializable
 class AxiosHeaders(

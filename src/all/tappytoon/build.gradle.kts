@@ -17,3 +17,7 @@ keiyoushi {
         }
     }
 }
+
+dependencies {
+    implementation(project(":lib:i18n"))
+}
