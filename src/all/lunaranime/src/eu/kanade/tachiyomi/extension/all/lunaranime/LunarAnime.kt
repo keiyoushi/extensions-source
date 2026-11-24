@@ -22,9 +22,12 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Response
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
@@ -68,12 +71,20 @@ abstract class LunarAnime : KeiSource() {
     )
 
     override fun OkHttpClient.Builder.configureClient() = this
+        .addInterceptor(::authorize)
         .addInterceptor(VeilInterceptor(CDN_HOST))
         .addInterceptor(serenity.interceptor())
         .rateLimit(2) { it.host == API_HOST }
         .rateLimit(4) { it.host == CDN_HOST }
 
     private val crypto by lazy { LunarDecryptor(serenity) }
+
+    private fun authorize(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val token = client.cookieJar.loadForRequest(request.url).firstOrNull { it.name == AUTHORIZATION }?.value
+        if (request.url.host != API_HOST || token == null) return chain.proceed(request)
+        return chain.proceed(request.newBuilder().header(AUTHORIZATION, token).build())
+    }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", SortFilter.POPULAR)
 
@@ -280,20 +291,28 @@ abstract class LunarAnime : KeiSource() {
 
         val requestHeaders = headersBuilder().apply {
             if (turnstileToken != null) {
-                set("Catch-Me-If-You-Can-Monkey", turnstileToken)
-                set("Which-Monkey", "turnstile")
+                set(seeds.names.token, turnstileToken)
+                set(seeds.names.type, "turnstile")
             }
         }.build()
 
+        serenity.proofHeader = seeds.names.proof
         val response = client.get(url, requestHeaders, Fetch.XHR, ensureSuccess = false)
         if (!response.isSuccessful) {
-            if (response.code == 403 && response.body.contentType()?.subtype == "json" && response.parseAs<LunarLockedChapterDto>().isPointsLocked) {
-                error("This chapter is unlocked with ad points. Log in and unlock it in WebView.")
+            if (response.code == 401) {
+                response.close()
+                error(LOGIN_MESSAGE)
+            }
+            if (response.code == 403 && response.body.contentType()?.subtype == "json") {
+                val locked = response.parseAs<LunarLockedChapterDto>()
+                if (locked.accountOnly) error(LOGIN_MESSAGE)
+                if (locked.isPointsLocked) error("This chapter is unlocked with ad points. Log in and unlock it in WebView.")
             }
             response.close()
             throw HttpException(response.code)
         }
-        val sessionData = response.parseAs<LunarPageListResponse>().data.sessionData
+        val sessionData = response.parseAs<JsonObject>().renamed(seeds.names.outer)
+            .parseAs<LunarPageListResponse>().data.sessionData
 
         return crypto.unpack(sessionData, seeds, nonce).parseAs<LunarPageListDecrypted>()
     }
@@ -329,6 +348,8 @@ abstract class LunarAnime : KeiSource() {
     companion object {
         private const val API_HOST = "api.lunarx.to"
         private const val API_URL = "https://$API_HOST"
+        private const val AUTHORIZATION = "Authorization"
+        private const val LOGIN_MESSAGE = "Log in via WebView to read chapters"
         private const val CDN_HOST = "vault.lunarx.to"
         private const val DECOY_PATH = "/api/cdn/p/"
         private const val INTERSTITIAL_PATH = "/api/manga/pg/"

@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.niadd
 
 import android.util.LruCache
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,6 +15,7 @@ import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.booleanOrNull
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
@@ -37,6 +39,9 @@ import org.jsoup.nodes.Element
 import java.io.IOException
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 
 @Source
 abstract class Niadd : KeiSource() {
@@ -84,6 +89,13 @@ abstract class Niadd : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/list/New-Update.html", Fetch.DOCUMENT).asJsoup())
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (query.isBlank() && filters.firstInstance<TypeFilter>().isOriginal) {
+            val url = baseUrl.toHttpUrl().newBuilder()
+                .addPathSegments("category/original_$page.html")
+                .addQueryParameter("sort", filters.firstInstance<SortFilter>().value)
+                .build()
+            return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
+        }
         val url = "$baseUrl/search/".toHttpUrl().newBuilder().apply {
             addQueryParameter("name", query)
             filters.forEach { filter ->
@@ -185,10 +197,23 @@ abstract class Niadd : KeiSource() {
             SChapter.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
                 name = element.selectFirst("span.chp-title")!!.text()
-                date_upload = dateFormat.tryParseDate(element.selectFirst("span.chp-time")?.text())
+                date_upload = parseDate(element.selectFirst("span.chp-time")?.text())
                 if (isOriginal) memo = buildJsonObject { put("original", true) }
             }
         }
+    }
+
+    // Chapters under a day old show "6 minutes ago", "Il y a 18 heures", "2 несколько часов назад"
+    private fun parseDate(text: String?): Long {
+        text ?: return 0L
+        val amount = NUMBER_REGEX.find(text)?.value?.toInt()
+        val age = when {
+            amount == null -> null
+            MINUTES_REGEX.containsMatchIn(text) -> amount.minutes
+            HOURS_REGEX.containsMatchIn(text) -> amount.hours
+            else -> null
+        } ?: return dateFormat.tryParseDate(text)
+        return (Clock.System.now() - age).toEpochMilliseconds()
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
@@ -315,6 +340,10 @@ abstract class Niadd : KeiSource() {
         val filterData = data?.parseAs<FilterData>()
         return FilterList(
             listOfNotNull(
+                TypeFilter(),
+                SortFilter(),
+                Filter.Header("Original: only with an empty search, the filters below don't apply"),
+                Filter.Separator(),
                 AuthorFilter(),
                 ArtistFilter(),
                 SelectFilter("Completed", "completed_series", listOf("Either" to "", "Yes" to "YES", "No" to "NO")),
@@ -334,6 +363,9 @@ abstract class Niadd : KeiSource() {
         private val JUMP_URL_REGEX = Regex("""document\.location\s*=\s*'([^']+)'""")
         private val ALL_IMGS_URL_REGEX = Regex("""all_imgs_url\s*:\s*\[([\s\S]*?)\]""")
         private val IMAGE_URL_REGEX = Regex(""""(https?://[^"]+)"""")
+        private val NUMBER_REGEX = Regex("""\d+""")
+        private val MINUTES_REGEX = Regex("minut|минут", RegexOption.IGNORE_CASE)
+        private val HOURS_REGEX = Regex("""hour|hora|heure|\bor[ae]\b|stunde|час""", RegexOption.IGNORE_CASE)
         private val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
         private val ONGOING_STATUSES = setOf("ongoing", "en marcha", "em progresso", "in corso", "laufend", "en cours", "постоянный")
         private val COMPLETED_STATUSES = setOf("completed", "terminado", "concluído", "completato", "abgeschlossen", "complété", "завершенный")

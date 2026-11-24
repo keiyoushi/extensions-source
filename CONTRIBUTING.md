@@ -33,6 +33,7 @@ or fix them directly by submitting a Pull Request.
       - [Available libs](#available-libs)
       - [Adding a lib dependency](#adding-a-lib-dependency)
       - [Creating a new lib](#creating-a-new-lib)
+      - [Keiyoushi Runtime](#keiyoushi-runtime)
       - [keiyoushi.utils (core utilities)](#keiyoushiutils-core-utilities)
         - [JSON parsing - `parseAs`](#json-parsing---parseas)
         - [JSON serialization - `toJsonString` / `toJsonRequestBody` / `toJsonElement`](#json-serialization---tojsonstring--tojsonrequestbody--tojsonelement)
@@ -550,6 +551,7 @@ use case. Each lib is self-documented via KDoc comments in its Kotlin source fil
 | [`lib-synchrony`](https://github.com/keiyoushi/extensions-source/tree/main/lib/synchrony)                 | JavaScript deobfuscation via the Synchrony engine (QuickJS sandbox)                     |
 | [`lib-textinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/textinterceptor)     | Renders plain text or HTML as a PNG image page                                          |
 | [`lib-unpacker`](https://github.com/keiyoushi/extensions-source/tree/main/lib/unpacker)                   | Unpacks Dean Edwards-packed JavaScript; substring extraction helpers                    |
+| [`lib-webviewpatch`](https://github.com/keiyoushi/extensions-source/tree/main/lib/webviewpatch)           | Makes WebView send requests without X-Requested-With, through the Keiyoushi Runtime     |
 
 > [!NOTE]
 > The table above highlights the most commonly used libraries. Check the `lib/` directory for the full list of available modules and their source files.
@@ -617,6 +619,50 @@ dependencies {
 
 Place your code in the package `keiyoushi.lib.<mylibname>`. Document public API with KDoc so
 contributors can understand the lib without needing to read `CONTRIBUTING.md`.
+
+Unit tests go in `lib/<mylibname>/test`, with fixtures in `lib/<mylibname>/test-resources`. CI runs
+them for any lib that has a `test` directory.
+
+#### Keiyoushi Runtime
+
+The [Keiyoushi Runtime](https://github.com/keiyoushi/runtime) is an extension built in its own
+repo. It carries code that should exist once per app process, not once per extension: code that
+keeps process-wide state, native code, or anything large. Small pure helpers stay in an ordinary
+lib here. Users install it from the runtime's
+[GitHub releases](https://github.com/keiyoushi/runtime/releases/latest), and its own repo keeps it
+updated; it isn't listed in this repo's index.
+
+A runtime module is added in keiyoushi/runtime: its contract, an interface extending
+`RuntimeContract`, is published as `com.github.keiyoushi.runtime:api-<module>`, and the runtime
+serves the implementation. Contract rules and API levels are documented there.
+
+A lib here calls a module through its contract. It declares the module and the API level it
+needs, and depends on the module's api artifact, which brings in the runtime's `contract`
+(`libs.keiyoushi.runtime.contract`):
+
+```kotlin
+keiyoushiRuntime {
+    requires("<module>", api = 1)
+}
+
+dependencies {
+    implementation(libs.keiyoushi.runtime.api.<module>)
+}
+```
+
+```kotlin
+private val runtime by lazy { RuntimeModules.<module>.bind<MyContract>() }
+```
+
+`RuntimeModules` is generated in the lib's package. Calls go to the newest runtime loaded in the
+app. When the runtime is missing, older than the required API level, or lacks one of the
+contract's functions, `bind()` or the call throws an `IOException` that tells the user what to
+install or update. When a function reports a catalog ID it doesn't know (a patch, a format), turn
+it into `RuntimeModules.<module>.needsUpdate("<id>")`, the same "Update Keiyoushi Runtime" error,
+so "the runtime is too old" stays apart from "this device isn't supported".
+
+The build doesn't check `requires` against a runtime release; raise the `keiyoushi-runtime` version in
+`gradle/libs.versions.toml` when a lib needs a newer contract.
 
 #### keiyoushi.utils (core utilities)
 
