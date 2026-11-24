@@ -12,7 +12,7 @@ keiyoushi {
     libVersion = "1.6"
 
     source {
-        baseUrl = "https://ruhmanga.com"
+        baseUrl = "https://ruhmanga.net"
         lang = "tr"
         versionId = 2
     }
