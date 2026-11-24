@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.zinmangaart
+package eu.kanade.tachiyomi.multisrc.zinmangaart
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
