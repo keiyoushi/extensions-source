@@ -119,7 +119,18 @@ class LunarChapterDto(
 /**
  * The two seed strings every chapter token and session key is derived from.
  */
-class LunarSeeds(val axis: String, val pitch: String)
+@Serializable
+class LunarSeeds(val axis: String, val pitch: String, val names: LunarNames)
+
+@Serializable
+class LunarNames(
+    val token: String,
+    val type: String,
+    val proof: String,
+    val mintStep: Int,
+    val outer: List<List<String>>,
+    val inner: List<List<String>>,
+)
 
 @Serializable
 class LunarPageListResponse(
@@ -129,6 +140,7 @@ class LunarPageListResponse(
 @Serializable
 class LunarLockedChapterDto(
     @SerialName("is_points_locked") val isPointsLocked: Boolean = false,
+    @SerialName("account_only") val accountOnly: Boolean = false,
 )
 
 @Serializable

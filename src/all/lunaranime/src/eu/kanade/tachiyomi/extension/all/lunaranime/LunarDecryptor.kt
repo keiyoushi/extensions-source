@@ -60,9 +60,9 @@ class LunarDecryptor(private val serenity: LunarSerenity) {
         val script = "(${javaClass.getResource(RUNTIME_ASSET)!!.readText()})(${seedGroups.toJsonString()})"
         val chunkUrls = groups.keys.flatMap { it.chunkUrls }.toSet()
 
-        val pair = try {
+        return try {
             seedMutex.withLock {
-                runWebView<List<String>?>(timeout = 15.seconds) {
+                runWebView<LunarSeeds?>(timeout = 15.seconds) {
                     interceptRequest { request ->
                         when {
                             request.url.host == null -> null
@@ -71,7 +71,7 @@ class LunarDecryptor(private val serenity: LunarSerenity) {
                         }
                     }
                     onPageFinished {
-                        evaluateJs(script) { result -> resolve(result.parseAs<List<String>?>()) }
+                        evaluateJs(script) { result -> resolve(result.parseAs<LunarSeeds?>()) }
                     }
                     loadData(pageUrl.resolve("/")!!.toString(), "")
                 }
@@ -81,8 +81,6 @@ class LunarDecryptor(private val serenity: LunarSerenity) {
         } catch (e: Throwable) {
             throw IOException("Failed to find payload seeds", e)
         } ?: error("Failed to find payload seeds")
-
-        return LunarSeeds(pair[0], pair[1])
     }
 
     private data class SeedComponent(val moduleId: JsonElement, val chunkUrls: List<String>)
@@ -182,7 +180,7 @@ class LunarDecryptor(private val serenity: LunarSerenity) {
         val out = ArrayList<Int>(payload.length + 1)
         out.add(offset)
         payload.forEachIndexed { i, char ->
-            out.add(char.code xor key[(i + offset) % key.size] xor (offset + 83 * i and 0xFF) and 0xFF)
+            out.add(char.code xor key[(i + offset) % key.size] xor (offset + seeds.names.mintStep * i and 0xFF) and 0xFF)
         }
 
         return out.toByteArray().base64Url()
@@ -204,7 +202,7 @@ class LunarDecryptor(private val serenity: LunarSerenity) {
      * The response body is AES-CBC over a key derived from the first seed, the nonce that was
      * minted into the token, and - when the server enforces it - the Serenity key thumbprint.
      */
-    fun unpack(sessionData: String, seeds: LunarSeeds, nonce: String): String {
+    fun unpack(sessionData: String, seeds: LunarSeeds, nonce: String): JsonObject {
         val ciphertext = Base64.decode(
             sessionData.replace('-', '+').replace('_', '/'),
             Base64.DEFAULT,
@@ -218,7 +216,7 @@ class LunarDecryptor(private val serenity: LunarSerenity) {
                 continue
             }
 
-            if (plaintext.startsWith("{") || plaintext.startsWith("[")) return plaintext
+            if (plaintext.startsWith("{")) return plaintext.parseAs<JsonObject>().renamed(seeds.names.inner)
         }
         error("Failed to decrypt chapter session data")
     }
@@ -241,4 +239,16 @@ class LunarDecryptor(private val serenity: LunarSerenity) {
         private const val COMMA = ','.code.toByte()
         private const val TEXT_ROW = 'T'.code.toByte()
     }
+}
+
+internal fun JsonObject.renamed(pairs: List<List<String>>): JsonObject {
+    fun JsonObject.rename(): JsonObject {
+        val map = toMutableMap()
+        pairs.forEach { (from, to) -> map.remove(from)?.let { map[to] = it } }
+        return JsonObject(map)
+    }
+
+    val outer = rename().toMutableMap()
+    (outer["data"] as? JsonObject)?.let { outer["data"] = it.rename() }
+    return JsonObject(outer)
 }

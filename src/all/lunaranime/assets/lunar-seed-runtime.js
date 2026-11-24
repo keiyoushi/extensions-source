@@ -49,6 +49,9 @@
             xhr.send();
             if (xhr.status >= 200 && xhr.status < 300) {
                 loaded.add(url);
+                if (!xhr.responseText.startsWith('(globalThis.TURBOPACK')) {
+                    continue;
+                }
                 (0, eval)(xhr.responseText);
                 return true;
             }
@@ -169,36 +172,153 @@
 
     globalThis.TURBOPACK = {
         push(entry) {
-            for (let k = 1; k < entry.length; k += 2) {
-                registry[entry[k]] = entry[k + 1];
+            let ids = [];
+            for (let k = 1; k < entry.length; k++) {
+                if (typeof entry[k] === 'function') {
+                    ids.forEach((id) => {
+                        registry[id] = entry[k];
+                    });
+                    ids = [];
+                } else {
+                    ids.push(entry[k]);
+                }
             }
         },
     };
 
-    for (let g = 0; g < groups.length; g++) {
-        const group = groups[g];
-        activeUrls = group.chunkUrls;
-        activeIndex = group.chunkUrls.length - 1;
-        if (!ensure(group.moduleId)) {
-            continue;
-        }
-        const component = run(group.moduleId).esm.default;
-        if (typeof component !== 'function') {
-            continue;
-        }
-        const candidates = group.candidates;
-        for (let i = 0; i < candidates.length; i++) {
-            captured[0] = null;
-            captured[1] = null;
-            try {
-                component(candidates[i]);
-            } catch (error) {
+    function findSeeds() {
+        for (let g = 0; g < groups.length; g++) {
+            const group = groups[g];
+            activeUrls = group.chunkUrls;
+            activeIndex = group.chunkUrls.length - 1;
+            if (!ensure(group.moduleId)) {
                 continue;
             }
-            if (captured[0] && captured[1]) {
-                return [captured[0], captured[1]];
+            const component = run(group.moduleId).esm.default;
+            if (typeof component !== 'function') {
+                continue;
+            }
+            const candidates = group.candidates;
+            for (let i = 0; i < candidates.length; i++) {
+                captured[0] = null;
+                captured[1] = null;
+                try {
+                    component(candidates[i]);
+                } catch (error) {
+                    continue;
+                }
+                if (captured[0] && captured[1]) {
+                    return [captured[0], captured[1]];
+                }
+            }
+        }
+        return null;
+    }
+
+    function findModule(test, accept) {
+        activeUrls = [].concat(...groups.map((group) => group.chunkUrls));
+        activeIndex = activeUrls.length - 1;
+        const tried = new Set();
+        for (;;) {
+            const ids = Object.keys(registry);
+            for (let k = 0; k < ids.length; k++) {
+                if (!tried.has(ids[k]) && test(String(registry[ids[k]]))) {
+                    tried.add(ids[k]);
+                    const value = accept(ids[k]);
+                    if (value) {
+                        return value;
+                    }
+                }
+            }
+            if (!loadNext()) {
+                return null;
             }
         }
     }
-    return null;
+
+    function renames(fn) {
+        const pattern = /\(\s*[\w$]+\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)/g;
+        return [...String(fn).matchAll(pattern)].map((match) => [match[1], match[2]]);
+    }
+
+    function readNames(id) {
+        const exports = run(id).esm;
+        const headers = [];
+        const steps = [];
+        let outer = null;
+        let inner = null;
+        Object.keys(exports).forEach((key) => {
+            const value = exports[key];
+            if (typeof value === 'string' && /^[A-Za-z0-9-]+$/.test(value)) {
+                headers.push(value);
+            } else if (typeof value === 'number') {
+                steps.push(value);
+            } else if (typeof value === 'function' && String(value).includes('"session_data"')) {
+                outer = renames(value);
+            } else if (typeof value === 'function' && String(value).includes('"cache_status"')) {
+                inner = renames(value);
+            }
+        });
+        return headers.length === 3 && steps.length === 1 && outer && inner ? { headers, mintStep: steps[0], outer, inner } : null;
+    }
+
+    function readHeaderRoles(id, headers) {
+        const probe = 'lunar-header-probe';
+        let session;
+        try {
+            session = importNs(id);
+        } catch (error) {
+            return null;
+        }
+        const exported = Object.keys(session).map((key) => session[key]);
+        let token = null;
+        Object.keys(session).forEach((key) => {
+            const setter = session[key];
+            if (token || typeof setter !== 'function' || setter.length !== 2) {
+                return;
+            }
+            let result;
+            try {
+                result = setter({}, probe);
+            } catch (error) {
+                return;
+            }
+            if (result && typeof result === 'object') {
+                token = Object.keys(result).find((name) => result[name] === probe && headers.includes(name)) || null;
+            }
+        });
+        const type = headers.find((name) => name !== token && exported.includes(name));
+        if (!token || !type) {
+            return null;
+        }
+        return { token, type, proof: headers.find((name) => name !== token && name !== type) };
+    }
+
+    function findNames() {
+        const names = findModule(
+            (source) => source.includes('"session_data"') && source.includes('"cache_status"') && source.includes('hasOwnProperty'),
+            readNames,
+        );
+        if (!names) {
+            return null;
+        }
+        const roles = findModule(
+            (source) => source.includes('/api/captcha/config'),
+            (id) => readHeaderRoles(id, names.headers),
+        );
+        if (!roles) {
+            return null;
+        }
+        return { ...roles, mintStep: names.mintStep, outer: names.outer, inner: names.inner };
+    }
+
+    const seeds = findSeeds();
+    if (!seeds) {
+        return null;
+    }
+    const names = findNames();
+    if (!names) {
+        return null;
+    }
+    return { axis: seeds[0], pitch: seeds[1], names };
 })

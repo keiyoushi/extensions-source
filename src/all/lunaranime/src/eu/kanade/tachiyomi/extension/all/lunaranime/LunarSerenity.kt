@@ -22,7 +22,7 @@ import kotlin.time.Clock
 /**
  * The site's "Serenity" proof is a plain DPoP JWT. The browser generates its own P-256 key
  * pair, keeps it in IndexedDB and signs `<header>.<payload>` with ES256, sending the result in
- * the `cant-catch-this-monkey` header. The key pair is never issued or acknowledged by the
+ * a header. The key pair is never issued or acknowledged by the
  * server, so one generated here is just as valid. Like the site's reader, only the page-list
  * request carries it: a key that signed other requests gets decoy pages.
  */
@@ -33,6 +33,9 @@ class LunarSerenity(
 
     @Volatile
     private var keyPair: KeyPair = loadOrGenerateKeyPair()
+
+    @Volatile
+    lateinit var proofHeader: String
 
     private fun prefs() = getPreferences(sourceId)
 
@@ -72,7 +75,6 @@ class LunarSerenity(
     companion object {
         private const val KEY_PRIVATE = "ec_private_key"
         private const val KEY_PUBLIC = "ec_public_key"
-        private const val PROOF_HEADER = "cant-catch-this-monkey"
         private const val COORDINATE_SIZE = 32
         private val PAGE_LIST_PATH = listOf("api", "manga", "r")
     }
@@ -130,7 +132,7 @@ class LunarSerenity(
         response
     }
 
-    private fun Request.withProof(): Request = newBuilder().header(PROOF_HEADER, proof(method, url)).build()
+    private fun Request.withProof(): Request = newBuilder().header(proofHeader, proof(method, url)).build()
 
     private fun ByteArray.base64Url(): String = Base64.encodeToString(this, Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE)
 
