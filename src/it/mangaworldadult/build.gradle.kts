@@ -13,6 +13,6 @@ keiyoushi {
 
     source {
         lang = "it"
-        baseUrl = "https://www.mangaworldadult.net"
+        baseUrl = "https://www.mangaworldadult.org"
     }
 }

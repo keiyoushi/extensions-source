@@ -5,11 +5,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
@@ -44,7 +44,7 @@ abstract class YomuMangas : KeiSource() {
             emptyList(),
             true,
             false,
-        ).manga
+        ).manga()
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
@@ -97,35 +97,32 @@ abstract class YomuMangas : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val id = manga.url.substringBefore("#")
         val slug = manga.url.substringAfter("#", "")
 
-        val updatedManga = async {
-            if (fetchDetails) {
-                client.get("$apiUrl/mangas/$id", Fetch.XHR)
-                    .parseAs<MangaDetailsResponse>()
-                    .manga
-                    .toSManga()
-            } else {
-                manga
-            }
-        }
-        val updatedChapters = async {
-            if (fetchChapters) {
-                client.get("$apiUrl/mangas/$id/chapters", Fetch.XHR)
-                    .parseAs<ChaptersResponse>()
-                    .chapters
-                    .map { it.toSChapter(id, slug) }
-                    .reversed()
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(
-            updatedManga.await(),
-            updatedChapters.await(),
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    client.get("$apiUrl/mangas/$id", Fetch.XHR)
+                        .parseAs<MangaDetailsResponse>()
+                        .manga
+                        .toSManga()
+                } else {
+                    manga
+                }
+            },
+            chapters = {
+                if (fetchChapters) {
+                    client.get("$apiUrl/mangas/$id/chapters", Fetch.XHR)
+                        .parseAs<ChaptersResponse>()
+                        .chapters
+                        .map { it.toSChapter(id, slug) }
+                        .reversed()
+                } else {
+                    chapters
+                }
+            },
         )
     }
 

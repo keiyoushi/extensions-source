@@ -18,4 +18,10 @@ keiyoushi {
         lang = "ru"
         id = 7L
     }
+
+    deeplink {
+        host("manga-chan.me")
+        host("*.manga-chan.me")
+        path("/manga/..*\\.html")
+    }
 }

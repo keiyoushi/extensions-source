@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.vinetheme
 
+import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -8,16 +9,21 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
+import keiyoushi.utils.aesDecrypt
+import keiyoushi.utils.aesGcm
 import keiyoushi.utils.booleanOrNull
 import keiyoushi.utils.extractNextJs
+import keiyoushi.utils.extractNextJsRsc
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -25,10 +31,13 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 
 abstract class VineTheme :
     KeiSource(),
     ConfigurableSource {
+
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(FragmentInterceptor())
 
     private val preferences by getPreferencesLazy()
 
@@ -70,11 +79,9 @@ abstract class VineTheme :
         val segments = url.pathSegments
         if (segments.getOrNull(0) != "series" || segments.getOrNull(1) != "comic") return null
         val slug = segments.getOrNull(2)?.takeIf { it.isNotEmpty() } ?: return null
-        if (segments.getOrNull(3) == "chapter") return null
-        val detail = client.get("$baseUrl/series/comic/$slug", rscHeaders, Fetch.XHR)
-            .extractNextJs<DetailDto>(DetailDto::nextJsFilter)
-            ?: return null
-        return detail.series.toSManga(baseUrl, fallbackSlug = slug)
+        val body = getRsc("$baseUrl/series/comic/$slug".toHttpUrl()).body.string()
+        val detail = body.extractNextJsRsc<DetailDto>(DetailDto::nextJsFilter) ?: return null
+        return detail.series.toSManga(baseUrl, fallbackSlug = slug, author = body.parseAuthor())
     }
 
     override suspend fun fetchMangaUpdate(
@@ -83,9 +90,10 @@ abstract class VineTheme :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val details = client.get(getDetailsUrl(manga), rscHeaders, Fetch.XHR).extractNextJs<DetailDto>(DetailDto::nextJsFilter)
+        val body = getRsc(getDetailsUrl(manga)).body.string()
+        val details = body.extractNextJsRsc<DetailDto>(DetailDto::nextJsFilter)
 
-        val updatedManga = details?.series?.toSManga(baseUrl, manga) ?: manga
+        val updatedManga = details?.series?.toSManga(baseUrl, manga, author = body.parseAuthor()) ?: manga
         val updatedChapters = if (fetchChapters) fetchAllChapters(manga, details, chapters) else chapters
 
         return SMangaUpdate(updatedManga, updatedChapters)
@@ -93,11 +101,21 @@ abstract class VineTheme :
 
     override val supportsRelatedMangas: Boolean get() = true
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getDetailsUrl(manga), rscHeaders, Fetch.XHR)
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = getRsc(getDetailsUrl(manga))
         .extractNextJs<RelatedDto>(RelatedDto::nextJsFilter)
         ?.similarSeries
         .orEmpty()
+        .filter { it.isComic }
         .map { it.toSManga(baseUrl) }
+
+    private fun String.parseAuthor(): String? = extractNextJsRsc<JsonLdScriptDto>(JsonLdScriptDto::nextJsFilter)
+        ?.html
+        ?.parseAs<JsonLdBookDto>()
+        ?.author
+        ?.name
+
+    // Bare _rsc parameter, without which the site redirects every RSC fetch
+    private suspend fun getRsc(url: HttpUrl) = client.get(url.newBuilder().addQueryParameter("_rsc", null).build(), rscHeaders, Fetch.XHR)
 
     private fun getDetailsUrl(manga: SManga): HttpUrl = getMangaUrl(manga).toHttpUrl().newBuilder()
         .addQueryParameter("sort", "desc")
@@ -110,12 +128,10 @@ abstract class VineTheme :
             details.chapters + coroutineScope {
                 (2..details.totalPages).map { page ->
                     async {
-                        client.get(
+                        getRsc(
                             getDetailsUrl(manga).newBuilder()
                                 .addQueryParameter("page", page.toString())
                                 .build(),
-                            rscHeaders,
-                            Fetch.XHR,
                         ).extractNextJs<DetailDto>(DetailDto::nextJsFilter)
                             ?.chapters.orEmpty()
                     }
@@ -126,7 +142,7 @@ abstract class VineTheme :
         }
         val fetched = allChapters
             .filter { !(it.isLocked && hideLocked) }
-            .map { it.toSChapter(manga) }
+            .map { it.toSChapter(manga, details.series.team?.name) }
         val retained = existing.filter {
             !(hideLocked && it.memo["isLocked"]?.booleanOrNull == true)
         }
@@ -136,12 +152,39 @@ abstract class VineTheme :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        if (chapter.memo["isLocked"]?.booleanOrNull == true) return emptyList()
-        val response = client.get(getChapterUrl(chapter), rscHeaders, Fetch.XHR)
-        val dto = response.extractNextJs<ChapterDetailDto>(ChapterDetailDto::nextJsFilter)
-        return dto?.chapter?.pages.orEmpty().mapIndexedNotNull { index, pageDto ->
-            pageDto.imageUrl?.toAbsoluteUrl(baseUrl)?.let { Page(index, imageUrl = it) }
+        if (chapter.memo["isLocked"]?.booleanOrNull == true) throw Exception("This chapter is locked")
+        val chapterUrl = getChapterUrl(chapter)
+        val pages = getRsc(chapterUrl.toHttpUrl())
+            .extractNextJs<ChapterDetailDto>(ChapterDetailDto::nextJsFilter)
+            ?.chapter?.pages.orEmpty()
+        val masterKey = if (pages.any { it.fragmentMap != null }) {
+            client.get("$baseUrl/api/fragments/${chapter.memo["id"]!!.string}/key", Fetch.XHR.from(chapterUrl))
+                .parseAs<FragmentKeyDto>().key.decodeBase64()
+        } else {
+            null
         }
+        return pages.mapIndexed { index, page ->
+            val imageUrl = if (page.fragmentMap != null) page.toLayoutUrl(masterKey!!) else page.imageUrl!!.toAbsoluteUrl(baseUrl)
+            Page(index, imageUrl = imageUrl)
+        }
+    }
+
+    private fun PageDto.toLayoutUrl(masterKey: ByteArray): String {
+        val pageKey = id.hmacSha256(masterKey)
+        val map = fragmentMap!!.decodeBase64()
+            .aesDecrypt(aesGcm(pageKey, fragmentMapIv!!.decodeBase64()))
+            .decodeToString()
+            .parseAs<FragmentMapDto>()
+        val urls = fragments.associate { it.fragmentIndex to it.imageUrl.toAbsoluteUrl(baseUrl)!! }
+        val layout = PageLayout(
+            map.w,
+            map.h,
+            map.fragments.map { PagePart(urls[it.idx]!!, it.x, it.y, it.w, it.h) },
+        )
+        return layout.parts.first().url.toHttpUrl().newBuilder()
+            .fragment(layout.toJsonString())
+            .build()
+            .toString()
     }
 
     override val supportsFilterFetching: Boolean get() = true
@@ -190,6 +233,8 @@ abstract class VineTheme :
         val number = chapter.memo["number"]!!.string
         return "$baseUrl/series/comic/$slug/chapter/$number"
     }
+
+    private fun String.decodeBase64(): ByteArray = Base64.decode(this, Base64.DEFAULT)
 
     companion object {
         private const val HIDE_LOCKED_PREF = "pref_hide_locked_chapters"

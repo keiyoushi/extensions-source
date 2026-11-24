@@ -44,7 +44,7 @@ class MangaFull(
     private val votes: List<RatingDto>? = null,
     private val issues: List<ChapterDto>? = null,
 ) {
-    fun toSManga() = SManga.create().apply {
+    fun toSManga(): SManga = SManga.create().apply {
         url = slug
         title = ukrainianName
         thumbnail_url = "$IMG_HOST/$cover"
@@ -69,8 +69,7 @@ class MangaFull(
         }
     }
 
-    fun toSChapters(mangaUrl: String) = issues?.mapNotNull { chapter ->
-        if (chapter.metadata?.state != "approved") return@mapNotNull null
+    fun toSChapters(mangaUrl: String): List<SChapter> = issues?.map { chapter ->
         SChapter.create().apply {
             url = chapter.id.toString()
             name = "Розділ #${chapter.number}"
@@ -103,12 +102,6 @@ class ChapterDto(
     val translator: String,
     @SerialName("created_at") val createdAt: String,
     @SerialName("image_list") val images: List<String>? = null,
-    val metadata: MetadataDto? = null,
-)
-
-@Serializable
-class MetadataDto(
-    val state: String? = null,
 )
 
 // =========================== Filters ============================

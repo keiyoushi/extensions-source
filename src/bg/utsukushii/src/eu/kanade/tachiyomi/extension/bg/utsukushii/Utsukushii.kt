@@ -5,5 +5,5 @@ import keiyoushi.annotation.Source
 
 @Source
 abstract class Utsukushii : MMRCMS() {
-    override fun popularMangaUrl(page: Int) = "$baseUrl/manga-list"
+    override fun popularMangaUrl(page: Int) = "$baseUrl/manga-list?page=$page"
 }

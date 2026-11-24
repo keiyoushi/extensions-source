@@ -14,10 +14,45 @@ abstract class SelectFilter(
 
 class SearchType :
     SelectFilter(
-        name = "Search Type",
+        name = "Type",
         options = listOf(
-            "ALL" to null,
+            "All" to null,
             "Originals" to "originals",
             "Canvas" to "canvas",
+        ),
+    )
+
+class UpdateDayFilter :
+    SelectFilter(
+        name = "Update day (Originals)",
+        options = listOf("Any" to null) +
+            listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+                .map { it to it.lowercase() } +
+            ("Completed" to "complete"),
+    )
+
+class Genre(val name: String, val originals: String?, val canvas: String?) {
+    val label get() = when {
+        originals == null -> "$name (Canvas only)"
+        canvas == null -> "$name (Originals only)"
+        else -> name
+    }
+}
+
+class GenreFilter(private val genres: List<Genre>) :
+    Filter.Select<String>(
+        "Genre",
+        (listOf("Any") + genres.map { it.label }).toTypedArray(),
+    ) {
+    val selected get() = genres.getOrNull(state - 1)
+}
+
+class SortFilter :
+    SelectFilter(
+        name = "Sort",
+        options = listOf(
+            "Popularity" to "MANA",
+            "Likes" to "LIKEIT",
+            "Date updated" to "UPDATE",
         ),
     )

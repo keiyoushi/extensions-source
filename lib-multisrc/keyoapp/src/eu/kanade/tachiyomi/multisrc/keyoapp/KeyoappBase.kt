@@ -50,7 +50,7 @@ abstract class KeyoappBase :
     protected fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
         "ongoing" -> SManga.ONGOING
         "dropped" -> SManga.CANCELLED
-        "paused" -> SManga.ON_HIATUS
+        "paused", "hiatus" -> SManga.ON_HIATUS
         "completed" -> SManga.COMPLETED
         else -> SManga.UNKNOWN
     }

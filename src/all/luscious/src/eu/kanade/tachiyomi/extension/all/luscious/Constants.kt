@@ -17,33 +17,18 @@ val ALBUM_LIST_REQUEST_GQL = $$"""
             }
         }
     }
-""".replace("\n", " ").replace("\\s+".toRegex(), " ")
+""".replace("\n", " ").replace("""\s+""".toRegex(), " ")
 
-val ALBUM_PICTURES_REQUEST_GQL = $$"""
-    query AlbumListOwnPictures($input: PictureListInput!) {
-        picture {
-            list(input: $input) {
-                info {
-                    total_items
-                    total_pages
-                    page
-                    has_next_page
-                    items_per_page
-                }
-            items {
-                created
-                title
-                url_to_original
-                url_to_video
-                position
-                thumbnails {
-                    url
-                }
-            }
-        }
-      }
-    }
-""".replace("\n", " ").replace("\\s+".toRegex(), " ")
+const val PAGE_FIELDS = "url_to_original url_to_video thumbnails { url width height size }"
+val PICTURE_COUNT_QUERY = $$"""
+query AlbumGet($id: ID!) { album { get(id: $id) { ... on Album { number_of_pictures } } } }
+""".trimIndent()
+
+const val CHAPTER_FIELDS = "title url created"
+
+val PICTURE_GET_QUERY = $$"""
+query PictureGet($id: ID!) { picture { get(id: $id) { ... on Picture { $${PAGE_FIELDS} } } } }
+""".trimIndent()
 
 val albumInfoQuery = $$"""
 query AlbumGet($id: ID!) {
@@ -78,19 +63,19 @@ fragment AlbumInSearchList on Album {
 }
 """.trimIndent()
 
-const val MERGE_CHAPTER_PREF_KEY = "MERGE_CHAPTER"
-const val MERGE_CHAPTER_PREF_TITLE = "Merge Chapter"
-const val MERGE_CHAPTER_PREF_SUMMARY = "If checked, merges all content of one album into chapters of up to 1000 images each, labeled as 'Merged Chapter (Part 1)', 'Merged Chapter (Part 2)', and so on. Note: you must be logged into the WebView to access more than 1000 images."
-const val MERGE_CHAPTER_PREF_DEFAULT_VALUE = false
+const val PICTURES_PER_PAGE = 50
+const val PAGES_PER_REQUEST = 40
+
+// also where anonymous picture lists stop, in either order
+const val PICTURES_PER_CHAPTER = 1000
+
+const val PER_PICTURE_PREF_KEY = "PER_PICTURE"
+const val PER_PICTURE_PREF_TITLE = "One chapter per picture"
+const val PER_PICTURE_PREF_SUMMARY = "Applies when the chapter list is next refreshed"
 
 const val RESOLUTION_PREF_KEY = "RESOLUTION"
 const val RESOLUTION_PREF_TITLE = "Image resolution"
 val RESOLUTION_PREF_ENTRIES = arrayOf("Low", "Medium", "High", "Original")
 val RESOLUTION_PREF_ENTRY_VALUES = arrayOf("2", "1", "0", "-1")
 val RESOLUTION_PREF_DEFAULT_VALUE = RESOLUTION_PREF_ENTRY_VALUES[3]
-
-const val SORT_PREF_KEY = "SORT"
-const val SORT_PREF_TITLE = "Page Sort"
-val SORT_PREF_ENTRIES = arrayOf("Position", "Date", "Rating")
-val SORT_PREF_ENTRY_VALUES = arrayOf("date_oldest", "date_newest", "rating_all_time")
-val SORT_PREF_DEFAULT_VALUE = SORT_PREF_ENTRY_VALUES[0]
+val RESOLUTION_SIZES = mapOf("2" to "small", "1" to "medium", "0" to "xMax")

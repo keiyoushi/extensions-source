@@ -5,8 +5,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import kotlin.time.Instant
 
 @Serializable
@@ -52,8 +50,6 @@ class MangaDto(
         url = slug
         title = this@MangaDto.title
         thumbnail_url = cover
-        // The chapter list is only found by the series id
-        memo = buildJsonObject { put("id", id) }
     }
 
     fun toSMangaDetails() = toSManga().apply {
@@ -91,23 +87,20 @@ class FiltersDto(
 )
 
 @Serializable
-class ChapterListDto(
-    val chapters: List<ChapterDto>,
-    val hasMore: Boolean,
-)
+class ChapterListDto(val chapters: List<ChapterDto>)
 
 @Serializable
 class ChapterDto(
-    private val id: String,
+    val id: String,
     private val number: String,
-    private val title: String? = null,
     private val publishedAt: String? = null,
     private val createdAt: String? = null,
     private val group: TaxonomyDto? = null,
 ) {
     fun toSChapter() = SChapter.create().apply {
         url = id
-        name = title?.ifBlank { null } ?: "Capítulo $number"
+        // The site lists chapters by number; their titles mostly repeat the series title
+        name = "Capítulo $number"
         chapter_number = number.toFloatOrNull() ?: -1f
         scanlator = group?.name
         // The newest chapters can have no publication date yet
@@ -116,11 +109,7 @@ class ChapterDto(
 }
 
 @Serializable
-class ReaderDto(
-    val pages: List<String>,
-    val imageSigs: Map<String, String> = emptyMap(),
-    val manga: ReaderMangaDto,
-)
+class LinkedDataDto(val isPartOf: LinkedDataSeriesDto? = null)
 
 @Serializable
-class ReaderMangaDto(val slug: String)
+class LinkedDataSeriesDto(val url: String)

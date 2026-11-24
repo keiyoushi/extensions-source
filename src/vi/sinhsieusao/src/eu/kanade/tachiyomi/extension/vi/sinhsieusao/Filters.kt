@@ -11,13 +11,14 @@ open class UriPartFilter(
 
 class KindFilter :
     UriPartFilter(
-        "Loại",
+        "Hình thức",
         arrayOf(
             Pair("Tất cả", ""),
             Pair("Series", "series"),
             Pair("Oneshot", "oneshot"),
-            Pair("Album ảnh", "album-anh"),
             Pair("Short Manga", "short-manga"),
+            Pair("Album ảnh", "album-anh"),
+            Pair("Video", "video"),
         ),
     )
 
@@ -34,7 +35,6 @@ class SortFilter :
         "Sắp xếp",
         arrayOf(
             Pair("Mới nhất", ""),
-            Pair("Phổ biến", "views"),
-            Pair("Yêu thích", "likes"),
+            Pair("Xem nhiều nhất", "views"),
         ),
     )

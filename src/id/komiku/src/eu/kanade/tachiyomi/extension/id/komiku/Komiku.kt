@@ -6,12 +6,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
@@ -172,10 +172,10 @@ abstract class Komiku : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = baseUrl + chapter.url
         val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
-        return document.select("#Baca_Komik img")
-            .filterNot { it.attr("src").contains("komiku-promosi") }
+        return document.select("#Baca_Komik img[data-src]")
+            .filterNot { it.attr("data-src").contains("komiku-promosi") }
             .mapIndexed { i, element ->
-                Page(i, chapterUrl, imageUrl = element.attr("abs:src"))
+                Page(i, chapterUrl, imageUrl = element.absUrl("data-src"))
             }
     }
 

@@ -44,3 +44,16 @@ internal fun DependencyHandlerScope.compileOnly(dependencyNotation: ProjectDepen
 internal fun DependencyHandlerScope.ksp(dependencyNotation: ProjectDependency) {
     add("ksp", dependencyNotation)
 }
+
+internal fun DependencyHandlerScope.lintChecks(dependencyNotation: ProjectDependency) {
+    add("lintChecks", dependencyNotation)
+}
+
+@JvmName("testImplementationBundle")
+internal fun DependencyHandlerScope.testImplementation(dependencyNotation: Provider<ExternalModuleDependencyBundle>) {
+    add("testImplementation", dependencyNotation)
+}
+
+internal fun DependencyHandlerScope.testImplementation(dependencyNotation: Provider<MinimalExternalModuleDependency>) {
+    add("testImplementation", dependencyNotation)
+}

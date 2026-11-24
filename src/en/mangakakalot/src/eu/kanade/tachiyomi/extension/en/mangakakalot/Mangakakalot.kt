@@ -12,6 +12,11 @@ import kotlin.time.Duration.Companion.seconds
 @Source
 abstract class Mangakakalot : MangaBox() {
 
+    override val mirrorLegacyMap = mapOf(
+        "https://www.katamanga.com" to false,
+        "https://www.mangakakalove.com" to true,
+    )
+
     /* ================================
      * Slug Utilities
      * ================================ */

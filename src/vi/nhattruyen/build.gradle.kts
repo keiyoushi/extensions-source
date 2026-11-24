@@ -15,4 +15,8 @@ keiyoushi {
         lang = "vi"
         baseUrl = "https://nhattruyenqq.com"
     }
+
+    deeplink {
+        path("/truyen-tranh/..*")
+    }
 }

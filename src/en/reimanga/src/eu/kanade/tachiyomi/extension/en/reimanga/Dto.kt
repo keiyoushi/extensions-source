@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.reimanga
 
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.ratingStars
+import keiyoushi.utils.MarkdownDescription
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
@@ -74,26 +74,11 @@ class MangaPage(
             url = "$slug-$id"
             title = this@MangaDetails.title
             thumbnail_url = cover ?: "$baseUrl/covers/$id/thumbnail.png"
-            description = buildString {
-                if (rating > 0.0) {
-                    append(ratingStars(rating))
-                    append(" ")
-                    append(rating)
-                    append("\n\n")
-                }
-                (aiDescription ?: this@MangaDetails.description)?.takeIf { it.isNotBlank() }?.also {
-                    append(it.trim())
-                    append("\n\n")
-                }
-                altTitle?.takeIf { it.isNotBlank() }?.also {
-                    append("**Alternative Titles:**\n")
-                    it.split(",", ";", " / ").forEach { title ->
-                        append("- ")
-                        append(title.trim())
-                        append("\n")
-                    }
-                }
-            }.trim().ifEmpty { null }
+            description = MarkdownDescription.Builder()
+                .rating(rating.takeIf { it > 0.0 })
+                .description(aiDescription ?: this@MangaDetails.description)
+                .altTitles(altTitle?.split(",", ";", " / ").orEmpty(), label = "Alternative Titles")
+                .build()
             status = if (completed == 1) SManga.COMPLETED else SManga.ONGOING
             author = authors.joinToString { it.name.trim().removeSuffix(",").trim() }.ifEmpty { null }
             genre = buildList {
@@ -149,16 +134,90 @@ class ChapterList(
 }
 
 @Serializable
+class ChapterHandoff(
+    val chapter: Chapter,
+    val readerNonce: String,
+) {
+    @Serializable
+    class Chapter(
+        val mangaId: Long,
+        val chapterId: Long,
+    )
+}
+
+@Serializable
+class GuardRequest(
+    private val nonce: String,
+    private val mangaId: Long,
+)
+
+@Serializable
+class ChapterTokenRequest(
+    private val chapterId: Long,
+    private val nonce: String,
+    private val mangaId: Long,
+)
+
+@Serializable
+class ReaderGuard(
+    val data: Data,
+) {
+    @Serializable
+    class Data(
+        val kid: String,
+        val key: String,
+        val now: Long,
+        @SerialName("expires_in")
+        val expiresIn: Long,
+        @SerialName("turnstile_site_key")
+        val turnstileSiteKey: String?,
+    )
+}
+
+@Serializable
+class GuardRefusal(
+    val error: String? = null,
+    val guard: Boolean = false,
+)
+
+@Serializable
+class GuardVerifyRequest(
+    private val token: String,
+)
+
+@Serializable
+class ReaderPass(
+    val data: Data,
+) {
+    @Serializable
+    class Data(
+        val pass: String,
+        @SerialName("expires_in")
+        val expiresIn: Long,
+    )
+}
+
+@Serializable
+class ChapterToken(
+    val data: Data,
+) {
+    @Serializable
+    class Data(
+        val token: String,
+    )
+}
+
+@Serializable
 class Images(
     private val images: List<Image>,
     private val pack: Pack? = null,
 ) {
-    fun imageUrls() = pack?.imageUrls() ?: images.map { it.url }
+    fun imageUrls() = pack?.imageUrls() ?: images.map { it.url!! }
 
     @Serializable
     class Image(
         @SerialName("image_url")
-        val url: String,
+        val url: String?,
     )
 
     /** One file per segment holding its pages as consecutive WebPs. */

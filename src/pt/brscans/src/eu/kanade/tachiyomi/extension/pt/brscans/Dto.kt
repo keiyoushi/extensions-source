@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.pt.brscans
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -19,19 +20,22 @@ class ManhwaDto(
     private val title: String,
     private val description: String? = null,
     @SerialName("original_title") private val originalTitle: String? = null,
+    private val status: String? = null,
     private val thumbnail: ImagesDto? = null,
     val chapters: List<ChapterDto> = emptyList(),
 ) {
     fun toSManga() = SManga.create().apply {
         url = "/manga/$id"
         title = this@ManhwaDto.title
-        description = buildString {
-            this@ManhwaDto.description?.let(::append)
-            if (!originalTitle.isNullOrBlank() && !originalTitle.equals(title, ignoreCase = true)) {
-                if (isNotEmpty()) append("\n\n")
-                append("Título original: ", originalTitle)
-            }
-        }.ifEmpty { null }
+        description = MarkdownDescription.Builder()
+            .description(this@ManhwaDto.description)
+            .field("Título original", originalTitle?.takeUnless { it.equals(title, ignoreCase = true) })
+            .build()
+        status = when (this@ManhwaDto.status) {
+            "ongoing" -> SManga.ONGOING
+            "completed" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
         thumbnail_url = thumbnail?.original
     }
 }

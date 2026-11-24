@@ -1,28 +1,35 @@
 package eu.kanade.tachiyomi.extension.es.komiwa
 
 import android.util.Base64
+import android.webkit.WebResourceResponse
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
+import keiyoushi.utils.InjectionEvent
+import keiyoushi.utils.WebViewTimeoutException
+import keiyoushi.utils.asJsoup
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.stringOrNull
+import keiyoushi.utils.runWebView
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import kotlin.math.absoluteValue
+import java.io.ByteArrayInputStream
+import java.io.IOException
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class Komiwa : KeiSource() {
@@ -81,10 +88,10 @@ abstract class Komiwa : KeiSource() {
         if (url.host.removePrefix("www.") != host || segments.size != 2) return null
         val slug = when (segments[0]) {
             "manga" -> segments[1]
-            "chapter" -> fetchReader(segments[1]).manga.slug
+            "chapter" -> fetchChapterSeries(segments[1])
             else -> return null
         }
-        return fetchManga(slug).toSMangaDetails().apply { initialized = true }
+        return fetchMangaPage(slug).toSMangaDetails().apply { initialized = true }
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
@@ -97,56 +104,79 @@ abstract class Komiwa : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val id = manga.memo["id"]?.stringOrNull
-            ?: return fetchManga(manga.url).let { SMangaUpdate(it.toSMangaDetails(), if (fetchChapters) fetchChapters(it.id) else chapters) }
-        return coroutineScope {
-            val details = async { if (fetchDetails) fetchManga(manga.url).toSMangaDetails() else manga }
-            val chapterList = async { if (fetchChapters) fetchChapters(id) else chapters }
-            SMangaUpdate(details.await(), chapterList.await())
-        }
+        val details = fetchMangaPage(manga.url)
+        return SMangaUpdate(
+            if (fetchDetails) details.toSMangaDetails() else manga,
+            if (fetchChapters) fetchChapters(details.id, manga) else chapters,
+        )
     }
 
-    private suspend fun fetchManga(slug: String) = client.get("$API_URL/manga/$slug", Fetch.XHR.from("/manga/$slug"))
-        .parseAs<ResponseDto<MangaDto>>()
-        .data
+    private suspend fun fetchMangaPage(slug: String) = client.get("$baseUrl/manga/$slug", Fetch.DOCUMENT)
+        .extractNextJs<MangaDto> { it is JsonObject && "slug" in it && "synopsis" in it }!!
 
-    // The chapter list takes the series id, not its slug
-    private suspend fun fetchChapters(id: String): List<SChapter> {
-        val chapters = mutableListOf<SChapter>()
-        var page = 1
-        do {
-            val data = client.get("$API_URL/manga/$id/chapters?page=$page&limit=500&sort=desc", Fetch.XHR)
-                .parseAs<ResponseDto<ChapterListDto>>()
-                .data
-            chapters += data.chapters.map { it.toSChapter() }
-            page++
-        } while (data.hasMore)
-        return chapters
+    // The series page's own request for its full chapter list
+    private suspend fun fetchChapters(id: String, manga: SManga): List<SChapter> {
+        val url = API_URL.toHttpUrl().newBuilder()
+            .addPathSegments("manga/$id/chapters")
+            .addQueryParameter("page", "1")
+            .addQueryParameter("limit", "99999")
+            .addQueryParameter("sort", "desc")
+            .build()
+        return client.get(url.toString(), Fetch.XHR.from(getMangaUrl(manga)))
+            .parseAs<ResponseDto<ChapterListDto>>()
+            .data.chapters.map { it.toSChapter() }
     }
 
+    private suspend fun fetchChapterSeries(chapterId: String) = client.get("$baseUrl/chapter/$chapterId", Fetch.DOCUMENT)
+        .asJsoup()
+        .select("script[type=application/ld+json]")
+        .map { it.data().parseAs<JsonElement>() }
+        .filterIsInstance<JsonObject>()
+        .firstNotNullOf { it.parseAs<LinkedDataDto>().isPartOf }
+        .url.substringAfterLast('/')
+
+    // The site's reader decodes its pages in its own script; this reads the images it renders
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val reader = fetchReader(chapter.url)
-        return reader.pages.mapIndexed { index, url -> Page(index, imageUrl = proxyUrl(url, reader.imageSigs[url])) }
+        val origins = setOf(baseUrl)
+        val script = javaClass.getResource("/assets/pages.js")!!.readText()
+        val pages = try {
+            runWebView<List<String>>(READER_TIMEOUT) {
+                webMessageBridge(BRIDGE, origins, WORLD) { message, _ -> resolve(message.parseAs()) }
+                addJavaScriptOnEvent("($script)('$BRIDGE')", InjectionEvent.DOCUMENT_START, WORLD, origins)
+                // In place of the app's package name, which tells the site the page is open in the app
+                setOriginMatchedHeader("X-Requested-With", "", origins)
+                // A loaded pixel for each page image, which the app downloads itself
+                interceptRequest { request ->
+                    if (request.requestHeaders["Accept"]?.startsWith("image/") == true) pixel() else null
+                }
+                onReceivedError { request, error ->
+                    if (request.isForMainFrame) reject(IOException("No se pudo abrir el capítulo: ${error.errorCode}"))
+                }
+                loadUrl(getChapterUrl(chapter))
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: IOException) {
+            throw e
+        } catch (e: UnsupportedOperationException) {
+            throw IOException("Actualiza Android System WebView para leer este capítulo", e)
+        } catch (e: WebViewTimeoutException) {
+            throw IOException("El capítulo no cargó a tiempo", e)
+        } catch (e: Throwable) {
+            throw IOException(e.message, e)
+        }
+        if (pages.isEmpty()) throw IOException("No se encontraron páginas en el capítulo")
+        return pages.mapIndexed { index, url -> Page(index, imageUrl = url) }
     }
 
-    private suspend fun fetchReader(chapterId: String) = client.get("$API_URL/manga/chapter/$chapterId", Fetch.XHR.from("/chapter/$chapterId"))
-        .parseAs<ResponseDto<ReaderDto>>()
-        .data
-
-    // The site's reader loads every page through its image proxy, signed, on the server its script picks for the URL
-    private fun proxyUrl(url: String, signature: String?): String {
-        val encoded = Base64.encodeToString(url.toByteArray(), Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
-        val server = IMAGE_SERVERS[(url.hashCode().toLong().absoluteValue % IMAGE_SERVERS.size).toInt()]
-        return "$server/v/$encoded" + signature?.let { "?s=$it" }.orEmpty()
-    }
+    private fun pixel() = WebResourceResponse("image/gif", null, ByteArrayInputStream(PIXEL))
 
     override val supportsFilterFetching = true
 
     override suspend fun fetchFilterData(): JsonElement = fetchFilters().toJsonElement()
 
-    private suspend fun fetchFilters() = client.get("$API_URL/manga/filters", Fetch.XHR.from("/catalog"))
-        .parseAs<ResponseDto<FiltersDto>>()
-        .data
+    private suspend fun fetchFilters() = client.get("$baseUrl/catalog", Fetch.DOCUMENT)
+        .extractNextJs<FiltersDto>()!!
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val filters = data?.parseAs<FiltersDto>()
@@ -163,14 +193,14 @@ abstract class Komiwa : KeiSource() {
     }
 
     companion object {
-        private const val API_URL = "https://api.komiwaapp.lat"
+        private const val API_URL = "https://b78sk.komiwa.net"
         private const val PAGE_SIZE = 24
         private val LIST_PATHS = setOf("genero", "tipo", "demografia")
-        private val IMAGE_SERVERS = listOf(
-            "https://e5d7.komiwa.net",
-            "https://h9s2.komiwa.net",
-            "https://n7t9.komiwa.net",
-            "https://x4v1.komiwa.net",
-        )
+        private const val BRIDGE = "komiwaReader"
+        private const val WORLD = "komiwa"
+        private val READER_TIMEOUT = 30.seconds
+
+        // A 1x1 transparent GIF, served for the reader's images instead of downloading them
+        private val PIXEL = Base64.decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", Base64.DEFAULT)
     }
 }

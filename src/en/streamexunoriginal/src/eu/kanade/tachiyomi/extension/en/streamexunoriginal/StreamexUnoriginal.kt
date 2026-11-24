@@ -5,15 +5,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -53,17 +51,10 @@ abstract class StreamexUnoriginal : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) getDetails(manga.url) else manga }
-        val chapterList = async {
-            if (fetchChapters) {
-                client.get("$apiUrl/chapters?id=${manga.url}", Fetch.XHR).parseAs<ChaptersDto>().chapters.map { it.toSChapter(manga.url) }
-            } else {
-                chapters
-            }
-        }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) getDetails(manga.url) else manga },
+        chapters = { if (fetchChapters) client.get("$apiUrl/chapters?id=${manga.url}", Fetch.XHR).parseAs<ChaptersDto>().chapters.map { it.toSChapter(manga.url) } else chapters },
+    )
 
     private suspend fun getDetails(id: String) = client.get("$apiUrl/info/$id", Fetch.XHR).parseAs<MediaDto>().toSManga()
 

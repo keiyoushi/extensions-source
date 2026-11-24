@@ -2,16 +2,6 @@ package eu.kanade.tachiyomi.extension.ja.musicbookjp
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import okhttp3.HttpUrl.Companion.toHttpUrl
-
-@Serializable
-class RankingThumbnail(
-    private val id: String?,
-    private val thumbnail: String?,
-) {
-    val idThumbnail
-        get() = id to thumbnail?.toHttpUrl()?.newBuilder()?.query(null)?.build()?.toString()
-}
 
 @Suppress("unused")
 @Serializable

@@ -1,11 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.comix
 
-import android.app.Application
 import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
 import android.webkit.WebResourceResponse
-import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
@@ -18,21 +14,25 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
+import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.NativeWebViewApi
+import keiyoushi.utils.TURNSTILE_AREA
 import keiyoushi.utils.booleanOrNull
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.int
 import keiyoushi.utils.long
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import keiyoushi.utils.string
+import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -40,13 +40,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -60,10 +62,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okio.Buffer
 import org.json.JSONObject
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.random.Random
@@ -77,23 +76,16 @@ abstract class Comix :
     KeiSource(),
     ConfigurableSource {
 
-    private val preferences: SharedPreferences by getPreferencesLazy()
-
-    // A full chapter walk pages through the whole list at a paced rate, so warn once per session
-    private val chapterListHintShown = AtomicBoolean(false)
-
-    private fun showChapterListHint() {
-        if (!chapterListHintShown.compareAndSet(false, true)) return
-        Handler(Looper.getMainLooper()).post {
-            runCatching {
-                Toast.makeText(
-                    Injekt.get<Application>(),
-                    "Chapter List loading takes time for first time",
-                    Toast.LENGTH_LONG,
-                ).show()
-            }
-        }
+    private val preferences: SharedPreferences by getPreferencesLazy {
+        edit().remove(LEGACY_SOLVE_CAPTCHA_PREF).apply()
     }
+
+    private val siteCheckMutex = Mutex()
+    private val siteCheckPasses = AtomicInteger()
+
+    // Cloudflare's check in front of the site's pages: one run at a time holds it
+    private val cloudflareCheckHeldUntil = AtomicLong()
+    private val cloudflareCheckPasses = AtomicInteger()
 
     // Reader captures by chapter url, LRU; only finished ones are dropped
     private val captureScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -187,7 +179,7 @@ abstract class Comix :
     override suspend fun getPopularManga(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("browse")
-            addQueryParameter("order[score]", "desc")
+            addQueryParameter("sort", "score:desc")
             addQueryParameter("page", page.toString())
             applyPreferenceFilters()
         }.build()
@@ -196,7 +188,7 @@ abstract class Comix :
 
     private suspend fun getMangaListFromBrowse(url: HttpUrl): MangasPage {
         val searchResponse = runInWebView(
-            url = url.toString(),
+            url = url.joinListParameters().toString(),
             buildScript = { passPayloadName ->
                 """
                 (function () {
@@ -238,7 +230,7 @@ abstract class Comix :
     override suspend fun getLatestUpdates(page: Int): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("browse")
-            addQueryParameter("order[chapter_updated_at]", "desc")
+            addQueryParameter("sort", "chapter_updated_at:desc")
             addQueryParameter("page", page.toString())
             applyPreferenceFilters()
         }.build()
@@ -270,12 +262,12 @@ abstract class Comix :
                         }
                     }
 
-                authorIds.forEach { addQueryParameter("authors[]", it) }
-                artistIds.forEach { addQueryParameter("artists[]", it) }
-                tagIds.forEach { addQueryParameter("genres_in[]", it) }
+                authorIds.forEach { addQueryParameter("authors", it) }
+                artistIds.forEach { addQueryParameter("artists", it) }
+                tagIds.forEach { addQueryParameter("genres_in", it) }
 
                 if (query.isNotBlank()) {
-                    addQueryParameter("keyword", query)
+                    addQueryParameter("q", query)
                 }
 
                 addQueryParameter("page", page.toString())
@@ -294,7 +286,7 @@ abstract class Comix :
             this.url = "/$mangaSlug"
             memo = buildJsonObject { put(MANGA_ID_MEMO, mangaId) }
         }
-        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga.apply {
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga().apply {
             this.url = manga.url
         }
     }
@@ -497,7 +489,6 @@ abstract class Comix :
         manga: SManga,
         knownIds: List<Int>,
     ): ChapterList {
-        if (knownIds.isEmpty()) showChapterListHint()
         val mangaId = manga.url.removePrefix("/").substringBefore('-')
         val payload = runInWebView(getMangaUrl(manga), { it.isChapterListRequest() }) { passPayloadName, _, touchName ->
             """
@@ -629,12 +620,15 @@ abstract class Comix :
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
         val capture = capture(chapterUrl)
-        val total = try {
-            withTimeout(READER_FIRST_PAGE_SECONDS.seconds) { capture.total.await() }
-        } catch (_: TimeoutCancellationException) {
-            throw Exception("The reader didn't load any pages")
+        // Time on Cloudflare's check doesn't count against the first page
+        var passes = cloudflareCheckPasses.get()
+        while (true) {
+            val total = withTimeoutOrNull(READER_FIRST_PAGE_SECONDS.seconds) { capture.total.await() }
+            if (total != null) return List(total) { Page(it, url = chapterUrl) }
+            val checked = System.nanoTime() < cloudflareCheckHeldUntil.get() || cloudflareCheckPasses.get() != passes
+            if (!checked) throw Exception("The reader didn't load any pages")
+            passes = cloudflareCheckPasses.get()
         }
-        return List(total) { Page(it, url = chapterUrl) }
     }
 
     override suspend fun getImageUrl(page: Page): String {
@@ -781,6 +775,21 @@ abstract class Comix :
         var job: Job? = null
     }
 
+    // The site's Turnstile check from its /@waf/challenge page, answered through /@waf/verify
+    private suspend fun passSiteCheck(challengeUrl: HttpUrl, passesBefore: Int) = siteCheckMutex.withLock {
+        if (siteCheckPasses.get() != passesBefore) return@withLock
+        val page = client.get(challengeUrl, Fetch.DOCUMENT).body.string()
+        val siteKey = TURNSTILE_SITE_KEY.find(page)!!.groupValues[1]
+        val token = getTurnstileToken(challengeUrl.toString(), siteKey)
+        val verified = client.post(
+            "$baseUrl$WAF_VERIFY_PATH",
+            Fetch.XHR.from(challengeUrl.toString()),
+            WafVerifyRequest(token).toJsonRequestBody(),
+        ).parseAs<WafVerifyResponse>().success
+        check(verified)
+        siteCheckPasses.incrementAndGet()
+    }
+
     override fun getFilterList(data: JsonElement?) = sourceFilters().getFilterList()
 
     @OptIn(NativeWebViewApi::class)
@@ -800,6 +809,13 @@ abstract class Comix :
         val dataRequests = AtomicInteger()
         val (bridgeName, errorBridgeName, passPayloadName, rejectName) = List(4) { randomName() }
         val (touchBridgeName, touchName) = List(2) { randomName() }
+        // Main thread only
+        var onCloudflareCheck = false
+        var cloudflareCheckSince = 0L
+        var cloudflarePassesBefore = 0
+        var holdingCloudflareCheck = false
+        var showingCloudflareCheck = false
+        var waitingOnCloudflareCheck = false
         return runWebView(timeout = Duration.INFINITE) {
             userAgent = headers["User-Agent"].orEmpty()
             blockImages = !loadImages
@@ -809,20 +825,24 @@ abstract class Comix :
                 val requestUrl = request.url?.toString()?.toHttpUrlOrNull()
                     ?: return@interceptRequest emptyResponse
                 if (UNUSED_SITE_PATHS.any(requestUrl.encodedPath::startsWith)) return@interceptRequest emptyResponse
-                // The solver's own request for this path reads the site's page
-                val isFrameLoad = request.requestHeaders["Accept"].orEmpty().contains("text/html")
-                if (requestUrl.encodedPath == WAF_CHALLENGE_PATH && isFrameLoad) {
-                    if (!preferences.solveCaptchas()) {
-                        reject(Exception("Open in WebView to solve the captcha, or turn on \"Solve captchas\" in extension settings"))
+                // The site's check frame, answered the way its page does
+                // The site's check in a frame; as a full page it's handled when the page starts
+                if (requestUrl.encodedPath == WAF_CHALLENGE_PATH && !request.isForMainFrame) {
+                    val passesBefore = siteCheckPasses.get()
+                    timeoutDeadline.set(System.nanoTime() + SITE_CHECK_WAIT_SECONDS.seconds.inWholeNanoseconds)
+                    val passed = runCatching { runBlocking { passSiteCheck(requestUrl, passesBefore) } }
+                    timeoutDeadline.set(System.nanoTime() + timeoutSeconds.seconds.inWholeNanoseconds)
+                    if (passed.isFailure) {
+                        reject(Exception(SITE_CHECK_ERROR))
                         return@interceptRequest emptyResponse
                     }
-                    val page = "<script>(${asset("solve_captcha.js")})(parent.$rejectName)</script>"
+                    val page = "<script>parent.postMessage({ type: 'waf-captcha-solved' }, location.origin)</script>"
                     return@interceptRequest WebResourceResponse("text/html", "utf-8", page.byteInputStream())
                 }
                 val isData = isDataRequest?.invoke(requestUrl) == true
                 if (isData) dataRequests.incrementAndGet()
                 if (requestUrl.isChapterListRequest()) chapterListPacer.waitForSlot()
-                if (isData || requestUrl.encodedPath.startsWith(WAF_PATH)) {
+                if (isData) {
                     timeoutDeadline.set(System.nanoTime() + timeoutSeconds.seconds.inWholeNanoseconds)
                 }
                 val allowed = requestUrl.host == baseUrlHost ||
@@ -831,7 +851,8 @@ abstract class Comix :
                     requestUrl.host.endsWith(".comix.to") ||
                     requestUrl.host == "comix.ws" ||
                     requestUrl.host.endsWith(".comix.ws") ||
-                    requestUrl.host == "challenges.cloudflare.com"
+                    requestUrl.host == "challenges.cloudflare.com" ||
+                    requestUrl.host.endsWith(".challenges.cloudflare.com")
                 // Page images are off-site
                 if (allowed || loadImages) null else emptyResponse
             }
@@ -856,14 +877,96 @@ abstract class Comix :
                 it.settings.setSupportMultipleWindows(true)
             }
 
+            // The site's check as a full page, answered like the frame, then back to its same-site return path
+            onPageStarted { pageUrl ->
+                val challengeUrl = pageUrl.toHttpUrlOrNull()?.takeIf { it.encodedPath == WAF_CHALLENGE_PATH }
+                    ?: return@onPageStarted
+                stopLoading()
+                val passesBefore = siteCheckPasses.get()
+                timeoutDeadline.set(System.nanoTime() + SITE_CHECK_WAIT_SECONDS.seconds.inWholeNanoseconds)
+                captureScope.launch {
+                    try {
+                        passSiteCheck(challengeUrl, passesBefore)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        reject(Exception(SITE_CHECK_ERROR))
+                        return@launch
+                    }
+                    timeoutDeadline.set(System.nanoTime() + timeoutSeconds.seconds.inWholeNanoseconds)
+                    val target = challengeUrl.queryParameter("return")
+                        ?.takeIf { it.startsWith("/") && !it.startsWith("//") && !it.startsWith("/\\") }
+                        ?: "/"
+                    evaluateJs("location.replace(${target.toJsonString()})")
+                }
+            }
+
+            // Nothing runs on the site's or Cloudflare's check page
             val captureScript = buildScript?.invoke(passPayloadName)
+                ?.let { "location.pathname === '$WAF_CHALLENGE_PATH' || '_cf_chl_opt' in window ? null : $it" }
             if (captureScript != null) {
                 onPageStarted { evaluateJs(captureScript) }
                 onPageFinished { evaluateJs(captureScript) }
             }
             poll(SCRIPT_RETRY_INTERVAL_MS.milliseconds) {
-                if (System.nanoTime() >= timeoutDeadline.get()) {
+                val now = System.nanoTime()
+                // Null while the page navigates
+                evaluateJs(CLOUDFLARE_CHECK_SCRIPT) { it.toBooleanStrictOrNull()?.let { onCheck -> onCloudflareCheck = onCheck } }
+                // One run at a time holds the check and shows it; the others wait on a blank page, then load theirs again
+                when {
+                    waitingOnCloudflareCheck -> {
+                        val passed = cloudflareCheckPasses.get() != cloudflarePassesBefore
+                        if (passed || now >= cloudflareCheckHeldUntil.get()) {
+                            waitingOnCloudflareCheck = false
+                            onCloudflareCheck = false
+                            cloudflareCheckSince = 0L
+                            if (passed) timeoutDeadline.set(now + timeoutSeconds.seconds.inWholeNanoseconds)
+                            evaluateJs("location.replace(${url.toJsonString()})")
+                        }
+                    }
+                    onCloudflareCheck && !holdingCloudflareCheck -> {
+                        if (cloudflareCheckSince == 0L) {
+                            cloudflareCheckSince = now
+                            cloudflarePassesBefore = cloudflareCheckPasses.get()
+                            timeoutDeadline.set(now + CLOUDFLARE_CHECK_WAIT_SECONDS.seconds.inWholeNanoseconds)
+                        }
+                        val heldUntil = cloudflareCheckHeldUntil.get()
+                        if (now >= heldUntil && cloudflareCheckHeldUntil.compareAndSet(heldUntil, now + CLOUDFLARE_HOLD_SECONDS.seconds.inWholeNanoseconds)) {
+                            holdingCloudflareCheck = true
+                            // The check fails with its images blocked
+                            blockImages = false
+                        } else {
+                            waitingOnCloudflareCheck = true
+                            evaluateJs("location.replace('about:blank')")
+                        }
+                    }
+                    onCloudflareCheck -> {
+                        cloudflareCheckHeldUntil.set(now + CLOUDFLARE_HOLD_SECONDS.seconds.inWholeNanoseconds)
+                        if (!showingCloudflareCheck && now - cloudflareCheckSince >= CLOUDFLARE_SELF_PASS_SECONDS.seconds.inWholeNanoseconds) {
+                            if (!showToUser(TURNSTILE_AREA)) {
+                                cloudflareCheckHeldUntil.set(0L)
+                                reject(Exception(CLOUDFLARE_CHECK_ERROR))
+                                return@poll
+                            }
+                            showingCloudflareCheck = true
+                            // A check that started off screen fails the user's tap
+                            evaluateJs("location.reload()")
+                        }
+                    }
+                    holdingCloudflareCheck -> {
+                        cloudflareCheckPasses.incrementAndGet()
+                        cloudflareCheckHeldUntil.set(0L)
+                        holdingCloudflareCheck = false
+                        cloudflareCheckSince = 0L
+                        hideFromUser()
+                        showingCloudflareCheck = false
+                        blockImages = !loadImages
+                        timeoutDeadline.set(now + timeoutSeconds.seconds.inWholeNanoseconds)
+                    }
+                }
+                if (now >= timeoutDeadline.get()) {
                     val message = when {
+                        onCloudflareCheck || waitingOnCloudflareCheck -> CLOUDFLARE_CHECK_ERROR
                         isDataRequest == null -> "Timed out waiting for WebView"
                         dataRequests.get() == 0 -> "Site never requested the data"
                         else -> "Nothing read from ${dataRequests.get()} site requests"
@@ -871,6 +974,7 @@ abstract class Comix :
                     reject(Exception(message))
                     return@poll
                 }
+                if (onCloudflareCheck || waitingOnCloudflareCheck) return@poll
                 if (captureScript != null) evaluateJs(captureScript)
                 pollScript?.let { evaluateJs(it()) }
             }
@@ -880,7 +984,9 @@ abstract class Comix :
             val startFlagName = "window.${randomName()}"
             val bootstrapScript = """
                 (() => {
-                if (window.top !== window || $startFlagName) return;
+                if (window.top !== window || location.pathname === '$WAF_CHALLENGE_PATH' || $startFlagName) return;
+                // Cloudflare's check page comes with a 403
+                if (performance.getEntriesByType('navigation')[0]?.responseStatus === 403) return;
                 $startFlagName = true;
                 try { localStorage.setItem("__pu1", "[" + Date.now() + "]"); } catch (e) {}
                 window.$passPayloadName = payload => window.$bridgeName.postMessage(payload);
@@ -890,14 +996,28 @@ abstract class Comix :
                 })();
             """.trimIndent()
             injectAtDocumentStart(bootstrapScript, setOf(siteOrigin))
-            // The reader route refuses an app package here
-            if (loadImages) loadUrl(url, mapOf("X-Requested-With" to "com.android.chrome")) else loadUrl(url)
+            // The reader route refuses an app package here, also on the page's own navigations (Cloudflare's, the site check's)
+            when {
+                !loadImages -> loadUrl(url)
+                originMatchedHeaderSupported -> {
+                    setOriginMatchedHeader("X-Requested-With", "com.android.chrome", setOf(siteOrigin))
+                    loadUrl(url)
+                }
+                else -> loadUrl(url, mapOf("X-Requested-With" to "com.android.chrome"))
+            }
         }
     }
 
     private fun randomName() = (1..(10..20).random())
         .map { (('a'..'z') + ('A'..'Z')).random() }
         .joinToString("")
+
+    // The site reads list filters as one comma-separated value
+    private fun HttpUrl.joinListParameters(): HttpUrl = newBuilder().query(null).apply {
+        queryParameterNames.forEach { name ->
+            addQueryParameter(name, queryParameterValues(name).joinToString(","))
+        }
+    }.build()
 
     private fun asset(name: String) = javaClass.getResource("/assets/$name")!!.readText()
 
@@ -908,13 +1028,6 @@ abstract class Comix :
         pathSegments[4] == "chapters"
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = PREF_SOLVE_CAPTCHA
-            title = "Solve captchas"
-            summary = "Solve the site's \"Verify you're human\" captcha automatically"
-            setDefaultValue(false)
-        }.let(screen::addPreference)
-
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_FETCH_CHAPTERS_UNTIL_KNOWN
             title = "Faster chapter list fetching"
@@ -1037,8 +1150,6 @@ abstract class Comix :
         ?.filter { it.isNotEmpty() }
         ?.toSet() ?: emptySet()
 
-    private fun SharedPreferences.solveCaptchas() = getBoolean(PREF_SOLVE_CAPTCHA, false)
-
     private fun SharedPreferences.alternativeNamesInDescription() = getBoolean(ALTERNATIVE_NAMES_IN_DESCRIPTION, false)
 
     private fun SharedPreferences.scorePosition() = getString(PREF_SCORE_POSITION, "top") ?: "top"
@@ -1085,7 +1196,7 @@ abstract class Comix :
         private const val PREF_SHOW_EXTRA_INFO = "pref_show_extra_info"
         private const val PREF_SHOW_TAGS_IN_GENRES = "pref_show_tags_in_genres"
         private const val PREF_SCORE_POSITION = "pref_score_position"
-        private const val PREF_SOLVE_CAPTCHA = "pref_solve_captcha"
+        private const val LEGACY_SOLVE_CAPTCHA_PREF = "pref_solve_captcha"
 
         private const val DEFAULT_CONTENT_RATING = "suggestive"
         private const val WEBVIEW_TIMEOUT_SECONDS = 120L
@@ -1116,8 +1227,17 @@ abstract class Comix :
 
         // Site's captcha page, shown when the API answers 403 captcha_required
         private const val WAF_CHALLENGE_PATH = "/@waf/challenge"
+        private const val WAF_VERIFY_PATH = "/@waf/verify"
+        private const val SITE_CHECK_WAIT_SECONDS = 180L
+        private const val SITE_CHECK_ERROR = "Open in WebView to pass the site's check"
 
-        // Site's captcha endpoints, which also keep a WebView run alive while the solver works
-        private const val WAF_PATH = "/@waf/"
+        // Cloudflare's own check page, in front of any of the site's pages
+        // Null until the page has parsed: a check page that's still loading has no _cf_chl_opt yet
+        private const val CLOUDFLARE_CHECK_SCRIPT = "document.readyState === 'loading' ? null : '_cf_chl_opt' in window"
+        private const val CLOUDFLARE_SELF_PASS_SECONDS = 10L
+        private const val CLOUDFLARE_CHECK_WAIT_SECONDS = CLOUDFLARE_SELF_PASS_SECONDS + SITE_CHECK_WAIT_SECONDS
+        private const val CLOUDFLARE_HOLD_SECONDS = 2L
+        private const val CLOUDFLARE_CHECK_ERROR = "Open in WebView to pass Cloudflare's check"
+        private val TURNSTILE_SITE_KEY = Regex("""sitekey:\s*["']([^"']+)["']""")
     }
 }

@@ -2,10 +2,10 @@ package eu.kanade.tachiyomi.extension.en.webtoonlib
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
-import java.util.Locale
 import kotlin.time.Instant
 
 @Serializable
@@ -37,12 +37,24 @@ class Series(
     val publisherGroup: PublisherGroup? = null,
 ) {
     fun toSManga() = SManga.create().apply {
+        val summary = detailedSummary.takeUnless { detailedSummaryHasSpoiler } ?: this@Series.description
         url = slug
         title = this@Series.title
         thumbnail_url = cover
         author = this@Series.author
         artist = this@Series.artist
-        description = buildDescription()
+        description = MarkdownDescription.Builder()
+            .rating(rating?.takeIf { it > 0 })
+            .info(publisher)
+            .description(summary?.let { Jsoup.parseBodyFragment(it).body() })
+            .altTitles(listOfNotNull(alternativeTitle))
+            .links(
+                listOf(
+                    "MangaBaka" to mangaBakaId?.let { "https://mangabaka.org/$it" },
+                    "MyAnimeList" to malId?.let { "https://myanimelist.net/manga/$it" },
+                ),
+            )
+            .build()
         genre = (listOfNotNull(type) + genres + listOfNotNull("Adult".takeIf { isAdult })).distinct().joinToString().ifEmpty { null }
         status = when (this@Series.status) {
             "ongoing" -> SManga.ONGOING
@@ -50,30 +62,6 @@ class Series(
             "hiatus" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
-    }
-
-    private fun buildDescription(): String? {
-        val links = listOfNotNull(
-            mangaBakaId?.let { "- [MangaBaka](https://mangabaka.org/$it)" },
-            malId?.let { "- [MyAnimeList](https://myanimelist.net/manga/$it)" },
-        )
-        val facts = listOfNotNull(
-            rating?.takeIf { it > 0 }?.let { "★ %.1f".format(Locale.ROOT, it) },
-            publisher,
-        ).joinToString(" · ")
-        val summary = detailedSummary.takeUnless { detailedSummaryHasSpoiler } ?: description
-        return listOfNotNull(
-            facts.takeIf { it.isNotEmpty() },
-            summary?.let(::htmlToText)?.takeIf { it.isNotEmpty() },
-            alternativeTitle?.takeIf { it.isNotBlank() }?.let { "**Alternative titles:** $it" },
-            links.takeIf { it.isNotEmpty() }?.let { "**Links:**\n${it.joinToString("\n")}" },
-        ).joinToString("\n\n").ifEmpty { null }
-    }
-
-    private fun htmlToText(html: String): String {
-        if ('<' !in html) return html
-        val document = Jsoup.parseBodyFragment(html)
-        return document.select("p").eachText().joinToString("\n\n").ifEmpty { document.text() }
     }
 }
 
@@ -121,7 +109,10 @@ class Reader(
     val chapterType: String,
     val pages: List<String>,
     val manifestUrl: String? = null,
-)
+    private val readerAccessRequired: Boolean = false,
+) {
+    val needsAccess get() = readerAccessRequired && pages.isEmpty() && manifestUrl == null
+}
 
 @Serializable
 class Manifest(
@@ -162,7 +153,14 @@ class SearchAccess(
 )
 
 @Serializable
-class SearchVerification(private val token: String)
+class ReaderAccess(
+    val enabled: Boolean,
+    val verified: Boolean,
+    val siteKey: String?,
+)
+
+@Serializable
+class TurnstileVerification(private val token: String)
 
 @Serializable
 class FilterData(

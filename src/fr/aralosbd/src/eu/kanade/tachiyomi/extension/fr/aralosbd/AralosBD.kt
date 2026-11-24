@@ -5,14 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.parser.Parser
 
@@ -58,27 +56,21 @@ abstract class AralosBD : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val id = manga.url.toHttpUrl().queryParameter("id")!!
 
-        val details = async {
-            if (fetchDetails) {
-                client.get("$baseUrl/manga/api?get=manga&id=$id", Fetch.XHR).parseAs<AralosBDManga>().toSManga(manga)
-            } else {
-                manga
-            }
-        }
-        val chapterList = async {
-            if (fetchChapters) {
-                client.get("$baseUrl/manga/api?get=chapters&manga=$id", Fetch.XHR).parseAs<List<AralosBDChapter>>()
-                    .filter { it.isReleased }
-                    .map { it.toSChapter(baseUrl) }
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(details.await(), chapterList.await())
+        return SMangaUpdate(
+            manga = { if (fetchDetails) client.get("$baseUrl/manga/api?get=manga&id=$id", Fetch.XHR).parseAs<AralosBDManga>().toSManga(manga) else manga },
+            chapters = {
+                if (fetchChapters) {
+                    client.get("$baseUrl/manga/api?get=chapters&manga=$id", Fetch.XHR).parseAs<List<AralosBDChapter>>()
+                        .filter { it.isReleased }
+                        .map { it.toSChapter(baseUrl) }
+                } else {
+                    chapters
+                }
+            },
+        )
     }
 
     private fun AralosBDManga.toSManga(manga: SManga) = manga.apply {

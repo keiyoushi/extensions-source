@@ -10,14 +10,15 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 @Source
 abstract class MangaChan : MultiChan() {
 
+    override val siteDomains = listOf("manga-chan.me")
+
     override fun searchMangaUrl(page: Int, query: String, filters: FilterList): String {
-        val pageNum = page.coerceAtLeast(1)
         if (query.isNotEmpty()) {
             val url = baseUrl.toHttpUrl().newBuilder()
                 .addQueryParameter("do", "search")
                 .addQueryParameter("subaction", "search")
                 .addQueryParameter("story", query)
-                .addQueryParameter("search_start", pageNum.toString())
+                .addQueryParameter("search_start", page.toString())
                 .build()
                 .toString()
             return url
@@ -57,9 +58,9 @@ abstract class MangaChan : MultiChan() {
             } ?: ""
 
             if (statusParam) {
-                "$baseUrl/tags/${genres.dropLast(1)}$order?offset=${20 * (pageNum - 1)}&status=$status"
+                "$baseUrl/tags/${genres.dropLast(1)}$order?offset=${20 * (page - 1)}&status=$status"
             } else {
-                "$baseUrl/tags/$status/${genres.dropLast(1)}/$order?offset=${20 * (pageNum - 1)}"
+                "$baseUrl/tags/$status/${genres.dropLast(1)}/$order?offset=${20 * (page - 1)}"
             }
         } else {
             val order = orderBy?.let {
@@ -71,9 +72,9 @@ abstract class MangaChan : MultiChan() {
             } ?: "manga/new"
 
             if (statusParam) {
-                "$baseUrl/$order?offset=${20 * (pageNum - 1)}&status=$status"
+                "$baseUrl/$order?offset=${20 * (page - 1)}&status=$status"
             } else {
-                "$baseUrl/$order/$status?offset=${20 * (pageNum - 1)}"
+                "$baseUrl/$order/$status?offset=${20 * (page - 1)}"
             }
         }
 

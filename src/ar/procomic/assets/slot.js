@@ -20,9 +20,10 @@
     const count = list.children.length;
     const slot = list.children[index];
     if (!slot) return { count };
+    // Page images, without the reader's probe image laid over each page.
     const images = [...slot.querySelectorAll('img')].filter(
         (image) =>
-            /\.procomic\.im\/(i\/|chapters\/|api\/cdn-image\?)/.test(image.src) &&
+            /\.procomic\.im\/(i\/(?!reader\/)|chapters\/|api\/cdn-image\?)/.test(image.src) &&
             image.checkVisibility({ visibilityProperty: true, opacityProperty: true }),
     );
     // The reader loads images lazily, as they come near the screen.

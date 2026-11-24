@@ -33,6 +33,7 @@ or fix them directly by submitting a Pull Request.
       - [Available libs](#available-libs)
       - [Adding a lib dependency](#adding-a-lib-dependency)
       - [Creating a new lib](#creating-a-new-lib)
+      - [Keiyoushi Runtime](#keiyoushi-runtime)
       - [keiyoushi.utils (core utilities)](#keiyoushiutils-core-utilities)
         - [JSON parsing - `parseAs`](#json-parsing---parseas)
         - [JSON serialization - `toJsonString` / `toJsonRequestBody` / `toJsonElement`](#json-serialization---tojsonstring--tojsonrequestbody--tojsonelement)
@@ -550,6 +551,7 @@ use case. Each lib is self-documented via KDoc comments in its Kotlin source fil
 | [`lib-synchrony`](https://github.com/keiyoushi/extensions-source/tree/main/lib/synchrony)                 | JavaScript deobfuscation via the Synchrony engine (QuickJS sandbox)                     |
 | [`lib-textinterceptor`](https://github.com/keiyoushi/extensions-source/tree/main/lib/textinterceptor)     | Renders plain text or HTML as a PNG image page                                          |
 | [`lib-unpacker`](https://github.com/keiyoushi/extensions-source/tree/main/lib/unpacker)                   | Unpacks Dean Edwards-packed JavaScript; substring extraction helpers                    |
+| [`lib-webviewpatch`](https://github.com/keiyoushi/extensions-source/tree/main/lib/webviewpatch)           | Makes WebView send requests without X-Requested-With, through the Keiyoushi Runtime     |
 
 > [!NOTE]
 > The table above highlights the most commonly used libraries. Check the `lib/` directory for the full list of available modules and their source files.
@@ -617,6 +619,50 @@ dependencies {
 
 Place your code in the package `keiyoushi.lib.<mylibname>`. Document public API with KDoc so
 contributors can understand the lib without needing to read `CONTRIBUTING.md`.
+
+Unit tests go in `lib/<mylibname>/test`, with fixtures in `lib/<mylibname>/test-resources`. CI runs
+them for any lib that has a `test` directory.
+
+#### Keiyoushi Runtime
+
+The [Keiyoushi Runtime](https://github.com/keiyoushi/runtime) is an extension built in its own
+repo. It carries code that should exist once per app process, not once per extension: code that
+keeps process-wide state, native code, or anything large. Small pure helpers stay in an ordinary
+lib here. Users install it from the runtime's
+[GitHub releases](https://github.com/keiyoushi/runtime/releases/latest), and its own repo keeps it
+updated; it isn't listed in this repo's index.
+
+A runtime module is added in keiyoushi/runtime: its contract, an interface extending
+`RuntimeContract`, is published as `com.github.keiyoushi.runtime:api-<module>`, and the runtime
+serves the implementation. Contract rules and API levels are documented there.
+
+A lib here calls a module through its contract. It declares the module and the API level it
+needs, and depends on the module's api artifact, which brings in the runtime's `contract`
+(`libs.keiyoushi.runtime.contract`):
+
+```kotlin
+keiyoushiRuntime {
+    requires("<module>", api = 1)
+}
+
+dependencies {
+    implementation(libs.keiyoushi.runtime.api.<module>)
+}
+```
+
+```kotlin
+private val runtime by lazy { RuntimeModules.<module>.bind<MyContract>() }
+```
+
+`RuntimeModules` is generated in the lib's package. Calls go to the newest runtime loaded in the
+app. When the runtime is missing, older than the required API level, or lacks one of the
+contract's functions, `bind()` or the call throws an `IOException` that tells the user what to
+install or update. When a function reports a catalog ID it doesn't know (a patch, a format), turn
+it into `RuntimeModules.<module>.needsUpdate("<id>")`, the same "Update Keiyoushi Runtime" error,
+so "the runtime is too old" stays apart from "this device isn't supported".
+
+The build doesn't check `requires` against a runtime release; raise the `keiyoushi-runtime` version in
+`gradle/libs.versions.toml` when a lib needs a newer contract.
 
 #### keiyoushi.utils (core utilities)
 
@@ -924,6 +970,7 @@ val html = runWebView<String> {
   - **JavaScript Bridges:**
     - `webMessageBridge(name, allowedOriginRules, worldName, handler)`: Modern, asynchronous, origin-scoped 2-way message bridge (`window.<name>.postMessage(msg)` and `window.<name>.onmessage`). The handler receives `(message, replyProxy)` where `replyProxy.postMessage(reply)` and `replyProxy.evaluateJs(script)` can interact with the sender frame, and `replyProxy.sourceOrigin`/`replyProxy.isMainFrame` identify it. Both calls work from any thread, but a `replyProxy` belongs to the page that sent the message: calls may go unanswered once the frame navigates, so use a timeout and have the new page send a message. `replyProxy.evaluateJs` passes JSON text to its callback, gives null or the text `null` when the script failed or the page went away, and doesn't await promises. A simplified `(message) -> Unit` overload is also available. The handler runs on the main thread. The default `allowedOriginRules` of `*` lets every frame (including third-party iframes) post messages, so restrict it to the expected origin (e.g. `setOf("https://example.com")`) whenever a message can complete the run. Requires Chromium 116+ (`replyProxy.evaluateJs` requires Chromium 146+ and rejects otherwise); on older WebView engines (< Chromium 116), transparently falls back to an `addJavascriptInterface` bridge exposing `window.<name>.postMessage(message)` with debug logging (replying via `replyProxy` is unsupported on the fallback path and rejects; origin rules are ignored and the sender origin is null). With a `worldName`, the object exists only in that isolated world, so only scripts injected into the same world with `addJavaScriptOnEvent` can reach it; they share the page's DOM but none of its JavaScript. That requires Chromium 146+ and rejects otherwise, with no fallback.
   - **Execution & Navigation:** `loadUrl`, `loadData`, `stopLoading`, `evaluateJs`, and `poll(interval)` to repeat checks on the main thread until resolved.
+  - **Showing the WebView:** `showToUser(area)` shows the run's WebView over the app for a check that wants a tap, `hideFromUser()` hides it again, with the page still running. Call `showToUser` on the main thread, e.g. from `poll` or `onPageFinished`. With `area`, a CSS selector, only that element shows, e.g. `TURNSTILE_AREA` for a Turnstile checkbox. Show it only once the check hasn't passed by itself for a few seconds. It returns false when the app isn't in the foreground or the user dismissed it for the same site in the last few minutes; the run's timeout waits while it's shown and the user is in the app, for at most three minutes after it was first shown, and the run fails with "Captcha cancelled" if the user dismisses it.
 - For the common case of just reading a `localStorage` value after loading a page, use the ready-made `getLocalStorage(url, key)` helper instead of writing your own `runWebView` call.
 - `runWebViewBlocking(call, ...)` exists for non-suspend call sites (e.g. inside an OkHttp interceptor where you must pass the interceptor's chain.call()) - only use it there, never from a suspend function.
 
@@ -1388,15 +1435,32 @@ Optional overrides (each has a working default; override only when your source n
 | `fun getFilterList(data: JsonElement?): FilterList`                   | Returns an empty `FilterList`.                                   | The source has any filters at all, fetched or static.                                                                                                                                                    |
 | `suspend fun fetchBaseUrls(client: OkHttpClient): List<String>`       | Returns an empty list.                                           | The site publishes its current domain and the source uses `mirrors` or `custom` - see [baseUrl modes](#baseurl-modes).                                                                                  |
 | `fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder`    | No changes.                                                      | Timeouts, extra interceptors, cookie/cache/DNS config - `client` itself is `final` on `KeiSource`.                                                                                                       |
-| `fun Headers.Builder.configureHeaders(): Headers.Builder`             | No changes.                                                      | Extra default headers beyond the `Referer`/`Origin` `KeiSource` already sets - `headersBuilder()` itself is `final`.                                                                                     |
+| `fun Headers.Builder.configureHeaders(): Headers.Builder`             | No changes.                                                      | Extra default headers beyond the `Referer` `KeiSource` already sets - `headersBuilder()` itself is `final`.                                                                                              |
 
 **`fetchMangaUpdate`:** if manga details and the chapter list come from the same page or the same
 API response, fetch and parse it once and return both the updated `SManga` and the full chapter
 list, regardless of the `fetchDetails`/`fetchChapters` flags - there's no separate request to skip,
 so honoring the flags would just mean discarding data you already parsed. If details and chapters
 instead live behind separate pages/endpoints, only fetch what each flag actually asks for; when
-both `fetchDetails` and `fetchChapters` are `true`, prefer firing both requests concurrently (e.g.
-with `coroutineScope { async { ... } }`) instead of awaiting them sequentially.
+both `fetchDetails` and `fetchChapters` are `true`, run them concurrently: `fetchMangaUpdate` returns
+`keiyoushi.source.SMangaUpdate` (the callback shape of extensions-lib 1.7), and `KeiSource` runs its `manga` and
+`chapters` callbacks concurrently.
+
+```kotlin
+import keiyoushi.source.SMangaUpdate
+
+override suspend fun fetchMangaUpdate(
+    manga: SManga,
+    chapters: List<SChapter>,
+    fetchDetails: Boolean,
+    fetchChapters: Boolean,
+): SMangaUpdate = SMangaUpdate(
+    manga = { if (fetchDetails) getMangaDetails(manga) else manga },
+    chapters = { if (fetchChapters) getChapterList(manga) else chapters },
+)
+```
+
+`SMangaUpdate(manga, chapters)` takes values for the single-response case.
 
 Behavior `KeiSource` gives you for free:
 
@@ -1406,8 +1470,9 @@ Behavior `KeiSource` gives you for free:
 - **Automatic URL search:** `getSearchManga` inspects the query; if it parses as an `HttpUrl`, it
   calls `getMangasByUrl`/`getMangaByUrl` instead of `getSearchMangaList`. You do not need to handle
   this manually.
-- **Headers:** `headersBuilder()` already sets `Referer` to `"$baseUrl/"` (with trailing slash) and `Origin` to
-  `baseUrl`; override `Headers.Builder.configureHeaders()` instead of `headersBuilder()` to add more.
+- **Headers:** `headersBuilder()` already sets `Referer` to `"$baseUrl/"` (with trailing slash); `Origin` is added per
+  request by [browser headers](#browser-headers). Override `Headers.Builder.configureHeaders()` instead of
+  `headersBuilder()` to add more.
 - <a id="browser-headers"></a>**Browser headers:** a request with a `Fetch` other than `Fetch.NONE` (see
   [HTTP requests](#http-requests---okhttpclientget--post--put--head)), with a `User-Agent` identifying Chrome, Firefox, Safari or WKWebView, gets the headers
   that browser sends for that kind of request: client hints, `Accept-Language`, fetch metadata, `Accept`, `Priority`,
