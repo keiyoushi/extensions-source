@@ -14,6 +14,7 @@ import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.textOrNull
@@ -29,10 +30,18 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.jsoup.parser.Parser
+
+enum class UrlLayout {
+    MANGA_SLUG_CHAPTER_SLUG,
+    LEGACY_MANGA_PATH_CHAPTER_PATH,
+    LEGACY_MANGA_PATH_CHAPTER_SLUG,
+}
 
 @Source
 abstract class ZinMangaArt : KeiSource() {
     protected open val searchPath: String = "/"
+    protected open val urlLayout: UrlLayout = UrlLayout.MANGA_SLUG_CHAPTER_SLUG
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter.POPULAR))
     override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter.LATEST))
@@ -82,7 +91,10 @@ abstract class ZinMangaArt : KeiSource() {
         val image = element.selectFirst("img")
 
         return SManga.create().apply {
-            url = slug
+            url = when (urlLayout) {
+                UrlLayout.MANGA_SLUG_CHAPTER_SLUG -> slug
+                UrlLayout.LEGACY_MANGA_PATH_CHAPTER_PATH, UrlLayout.LEGACY_MANGA_PATH_CHAPTER_SLUG -> "/manga/$slug"
+            }
             title = link.text()
             thumbnail_url = image?.absUrl("data-backup")
                 ?.ifBlank { image.absUrl("data-src") }
@@ -93,18 +105,36 @@ abstract class ZinMangaArt : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.firstOrNull() != "manga") return null
         val slug = url.pathSegments.getOrNull(1) ?: return null
-        val manga = SManga.create().apply { this.url = slug }
+        val manga = SManga.create().apply {
+            this.url = when (urlLayout) {
+                UrlLayout.MANGA_SLUG_CHAPTER_SLUG -> slug
+                UrlLayout.LEGACY_MANGA_PATH_CHAPTER_PATH, UrlLayout.LEGACY_MANGA_PATH_CHAPTER_SLUG -> "/manga/$slug"
+            }
+        }
 
         return fetchMangaDetails(manga).apply {
             initialized = true
         }
     }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
+    override fun getMangaUrl(manga: SManga): String = when (urlLayout) {
+        UrlLayout.MANGA_SLUG_CHAPTER_SLUG -> "$baseUrl/manga/${manga.url}"
+        UrlLayout.LEGACY_MANGA_PATH_CHAPTER_PATH, UrlLayout.LEGACY_MANGA_PATH_CHAPTER_SLUG -> super.getMangaUrl(manga)
+    }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        val mangaSlug = chapter.memo["mangaSlug"]!!.stringOrNull!!
-        return "$baseUrl/manga/$mangaSlug/${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String = when (urlLayout) {
+        UrlLayout.MANGA_SLUG_CHAPTER_SLUG -> {
+            val mangaSlug = chapter.memo["mangaSlug"]!!.stringOrNull!!
+            "$baseUrl/manga/$mangaSlug/${chapter.url}"
+        }
+        UrlLayout.LEGACY_MANGA_PATH_CHAPTER_SLUG -> {
+            // Legacy: mirrors MadaraBase.getChapterUrl().
+            if (chapter.url.contains('/')) error("Refresh the chapter list.")
+            val mangaPath = chapter.memo.getStringOrNull("mangaPath")
+                ?: error("Refresh the chapter list.")
+            "$baseUrl${mangaPath.trimEnd('/')}/${chapter.url}/"
+        }
+        UrlLayout.LEGACY_MANGA_PATH_CHAPTER_PATH -> super.getChapterUrl(chapter)
     }
 
     override suspend fun fetchMangaUpdate(
@@ -134,7 +164,7 @@ abstract class ZinMangaArt : KeiSource() {
         title = document.selectFirst("div.post-title h1")!!.text()
 
         thumbnail_url = document.selectFirst(".summary_image img")?.absUrl("src")
-        author = authors?.joinToString()?.ifEmpty { null }
+        author = authors?.joinToString { Parser.unescapeEntities(it, false) }?.ifEmpty { null }
         memo = buildJsonObject {
             put(
                 "relatedMangas",
@@ -174,7 +204,13 @@ abstract class ZinMangaArt : KeiSource() {
     }
 
     private suspend fun fetchChapters(manga: SManga): List<SChapter> {
-        val url = "$baseUrl/api/comics/${manga.url}/chapters".toHttpUrl().newBuilder()
+        val slug = when (urlLayout) {
+            UrlLayout.MANGA_SLUG_CHAPTER_SLUG -> manga.url
+            UrlLayout.LEGACY_MANGA_PATH_CHAPTER_PATH, UrlLayout.LEGACY_MANGA_PATH_CHAPTER_SLUG ->
+                // Legacy: Madara-style slug extraction from stored manga path.
+                manga.url.trimEnd('/').substringAfterLast('/')
+        }
+        val url = "$baseUrl/api/comics/$slug/chapters".toHttpUrl().newBuilder()
             .addQueryParameter("per_page", "100")
             .addQueryParameter("order", "desc")
             .build()
@@ -189,7 +225,7 @@ abstract class ZinMangaArt : KeiSource() {
             (2..first.lastPage).map { async { fetchPage(it).chapters } }.awaitAll()
         }
 
-        return (first.chapters + rest.flatten()).map { it.toSChapter(manga.url) }
+        return (first.chapters + rest.flatten()).map { it.toSChapter(slug, urlLayout) }
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {

@@ -51,11 +51,21 @@ class ChapterDto(
     @SerialName("chapter_num") private val chapterNum: Float? = null,
     @SerialName("updated_at") private val updatedAt: String? = null,
 ) {
-    fun toSChapter(mangaSlug: String) = SChapter.create().apply {
-        url = chapterSlug
+    fun toSChapter(mangaSlug: String, urlLayout: UrlLayout) = SChapter.create().apply {
         name = chapterName
         chapter_number = chapterNum ?: -1f
         date_upload = Instant.tryParse(updatedAt)
+        if (urlLayout == UrlLayout.LEGACY_MANGA_PATH_CHAPTER_PATH) {
+            url = "/manga/$mangaSlug/$chapterSlug"
+            return@apply
+        }
+        if (urlLayout == UrlLayout.LEGACY_MANGA_PATH_CHAPTER_SLUG) {
+            url = chapterSlug
+            memo = buildJsonObject { put("mangaPath", "/manga/$mangaSlug") }
+            return@apply
+        }
+
+        url = chapterSlug
         memo = buildJsonObject { put("mangaSlug", mangaSlug) }
     }
 }

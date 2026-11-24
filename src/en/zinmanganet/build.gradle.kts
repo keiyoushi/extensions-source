@@ -6,10 +6,10 @@ plugins {
 
 keiyoushi {
     name = "Zinmanga.net"
-    versionCode = 3
+    versionCode = 64
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
-    theme = "madara"
+    theme = "zinmangaart"
 
     source {
         lang = "en"
