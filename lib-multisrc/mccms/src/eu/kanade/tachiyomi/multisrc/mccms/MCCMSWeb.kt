@@ -10,8 +10,11 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
@@ -22,6 +25,7 @@ import okio.IOException
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Evaluator
+import kotlin.time.Duration.Companion.milliseconds
 
 abstract class MCCMSWeb : KeiSource() {
 
@@ -38,6 +42,8 @@ abstract class MCCMSWeb : KeiSource() {
         }
         response
     }
+        // Searches closer than about 1.4 s get 429 "搜索过于频繁"
+        .rateLimit(1, 1500.milliseconds) { it.host == baseUrl.toHttpUrl().host && it.encodedPath.startsWith("/search") }
         .rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
 
     override fun Headers.Builder.configureHeaders() = set("User-Agent", System.getProperty("http.agent")!!)
@@ -61,7 +67,7 @@ abstract class MCCMSWeb : KeiSource() {
         val titleElement = element.selectFirst(Evaluator.Class("comic__title"))!!.child(0)
         url = titleElement.attr("href").removePathPrefix()
         title = titleElement.ownText()
-        thumbnail_url = element.selectFirst(Evaluator.Tag("img"))!!.attr("data-original")
+        thumbnail_url = element.selectFirst(Evaluator.Tag("img"))?.attrOrNull("data-original")
     }
 
     override suspend fun getPopularManga(page: Int) = parseListing(client.get("$baseUrl/category/order/hits/page/$page", pcHeaders, Fetch.DOCUMENT).asJsoup())
@@ -75,17 +81,20 @@ abstract class MCCMSWeb : KeiSource() {
             if (config.textSearchOnlyPageOne) {
                 "$baseUrl/search".toHttpUrl().newBuilder()
                     .addQueryParameter("key", query)
-                    .toString()
+                    .build()
             } else {
-                "$baseUrl/search/$query/$page"
+                "$baseUrl/search".toHttpUrl().newBuilder()
+                    .addPathSegment(query)
+                    .addPathSegment(page.toString())
+                    .build()
             }
         } else {
-            buildString {
-                append(baseUrl).append("/category/")
+            "$baseUrl/category".toHttpUrl().newBuilder().apply {
                 filters.filterIsInstance<MCCMSFilter>().map { it.query }.filter { it.isNotEmpty() }
-                    .joinTo(this, "/")
-                append("/page/").append(page)
-            }
+                    .forEach { addPathSegments(it) }
+                addPathSegment("page")
+                addPathSegment(page.toString())
+            }.build()
         }
         return searchMangaParse(client.get(url, searchHeaders, Fetch.DOCUMENT).asJsoup())
     }
@@ -95,7 +104,7 @@ abstract class MCCMSWeb : KeiSource() {
             val manga = SManga.create().apply {
                 url = "/search"
                 title = "验证码"
-                description = "请点击 WebView 按钮输入验证码，完成后返回重新搜索"
+                description = MarkdownDescription.Builder().description("请点击 WebView 按钮输入验证码，完成后返回重新搜索").build()
                 initialized = true
             }
             return MangasPage(listOf(manga), false)
@@ -126,10 +135,10 @@ abstract class MCCMSWeb : KeiSource() {
     protected open fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         val element = document.selectFirst(Evaluator.Class("de-info__box"))!!
         title = element.selectFirst(Evaluator.Class("comic-title"))!!.ownText()
-        thumbnail_url = element.selectFirst(Evaluator.Tag("img"))!!.attr("src")
-        author = element.selectFirst(Evaluator.Class("name"))!!.text()
-        genre = element.selectFirst(Evaluator.Class("comic-status"))!!.select(Evaluator.Tag("a")).joinToString { it.ownText() }
-        description = element.selectFirst(Evaluator.Class("intro-total"))!!.text()
+        thumbnail_url = element.selectFirst(Evaluator.Tag("img"))?.attrOrNull("src")
+        author = element.selectFirst(Evaluator.Class("name"))?.textOrNull()
+        genre = element.selectFirst(Evaluator.Class("comic-status"))?.select(Evaluator.Tag("a"))?.joinToString { it.ownText() }?.ifEmpty { null }
+        description = MarkdownDescription.Builder().description(element.selectFirst(Evaluator.Class("intro-total"))).build()
     }
 
     protected open fun chapterListParse(document: Document): List<SChapter> = getDescendingChapters(
