@@ -145,8 +145,15 @@ abstract class DuaLeoTruyen : KeiSource() {
             .decodeToString()
             .parseAs<PageConfig>()
 
-        val attrs = "[${config.urlAttr}][${config.prefixAttr}][${config.seedAttr}]"
-        return document.select("img.${config.imageClass}$attrs, canvas.${config.canvasClass}$attrs")
+        return document.allElements
+            .filter { element ->
+                val pageClass = when (element.normalName()) {
+                    "img" -> config.imageClass
+                    "canvas" -> config.canvasClass
+                    else -> return@filter false
+                }
+                element.hasClass(pageClass) && element.hasAttr(config.urlAttr) && element.hasAttr(config.prefixAttr) && element.hasAttr(config.seedAttr)
+            }
             .mapNotNull { config.imageUrl(it) }
             .mapIndexed { index, imageUrl ->
                 Page(index, imageUrl = imageUrl)
