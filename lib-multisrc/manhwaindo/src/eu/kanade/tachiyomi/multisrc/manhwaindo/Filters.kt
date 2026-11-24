@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.id.manhwaindo
+package eu.kanade.tachiyomi.multisrc.manhwaindo
 
 import eu.kanade.tachiyomi.source.model.Filter
 
@@ -8,12 +8,12 @@ open class UriPartFilter(displayName: String, private val vals: List<Pair<String
 
 class SortFilter(state: Int = 0) :
     UriPartFilter(
-        "Sort",
+        "Urutkan",
         listOf(
-            "Most read" to "views",
-            "Latest update" to "modified",
-            "Newest" to "date",
-            "Title A-Z" to "title",
+            "Update Terbaru" to "modified",
+            "Paling Banyak Dibaca" to "views",
+            "Terbaru Ditambahkan" to "date",
+            "Judul A–Z" to "title",
         ),
         state,
     )
@@ -22,7 +22,7 @@ class StatusFilter :
     UriPartFilter(
         "Status",
         listOf(
-            "All" to "",
+            "Semua" to "",
             "Ongoing" to "Ongoing",
             "Completed" to "Completed",
             "Hiatus" to "Hiatus",
@@ -31,9 +31,9 @@ class StatusFilter :
 
 class TypeFilter :
     UriPartFilter(
-        "Type",
+        "Tipe",
         listOf(
-            "All" to "",
+            "Semua" to "",
             "Manga" to "Manga",
             "Manhua" to "Manhua",
             "Manhwa" to "Manhwa",
@@ -41,6 +41,10 @@ class TypeFilter :
             "Novel" to "Novel",
         ),
     )
+
+class AuthorFilter : Filter.Text("Penulis")
+
+class ArtistFilter : Filter.Text("Artist")
 
 class Genre(name: String, val value: String) : Filter.CheckBox(name)
 

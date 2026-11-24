@@ -6,13 +6,15 @@ plugins {
 
 keiyoushi {
     name = "ManhwaLand.mom"
-    versionCode = 10
+    versionCode = 12
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
-    theme = "mangathemesia"
+    theme = "manhwaindo"
 
     source {
         lang = "id"
-        baseUrl = "https://02.manhwaland.land"
+        baseUrl {
+            custom("https://link.manhwaland.land")
+        }
     }
 }
