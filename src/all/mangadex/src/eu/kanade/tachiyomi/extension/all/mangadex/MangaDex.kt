@@ -479,7 +479,8 @@ class MangaDex(
 
         return toSManga(firstVolumeCover).apply {
             description = MarkdownDescription.Builder()
-                .markdown((attr.description[dexLang] ?: attr.description["en"])?.removeEntities())
+                // unescaped, text like <Twilight> is dropped as an html tag
+                .markdown((attr.description[dexLang] ?: attr.description["en"])?.removeEntities()?.replace(markdownTagRegex, "\\\\<"))
                 .altTitles(altTitles, intl["alternative_titles"])
                 .field(intl["final_chapter"], finalChapter.joinToString(" "))
                 .build()
@@ -1033,6 +1034,7 @@ private val romanizedLangCodes = mapOf(
 )
 
 private val uuidRegex = Regex("[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
+private val markdownTagRegex = "<(?!https?://)".toRegex()
 private val whitespaceRegex = "\\s".toRegex()
 private val titleSpecialCharactersRegex = "[^a-z0-9]+".toRegex()
 private val trailingHyphenRegex = "-+$".toRegex()
