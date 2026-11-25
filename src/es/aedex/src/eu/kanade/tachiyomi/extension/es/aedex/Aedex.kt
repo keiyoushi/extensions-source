@@ -31,7 +31,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.FormBody
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -87,29 +86,7 @@ abstract class Aedex :
 
     override fun mangaKey(manga: MangaDto) = manga.slug
 
-    // Mihon's WebView takes its User-Agent from `headers["user-agent"]`. A UA without a `Chrome/NNN` token keeps
-    // the real client hints (no "Google Chrome" brand), which the site flags when `window.chrome` is missing.
-    // Only with the runtime: without it the login can't work there, and the site's own "open it in your
-    // browser" notice is clearer than a `WebViewNotAllowed` error after typing the credentials.
-    private var realUserAgent: String? = null
-
-    override fun Headers.Builder.configureHeaders(): Headers.Builder {
-        if (!isRuntimeInstalled()) return this
-        realUserAgent = build()["User-Agent"]
-        return set("user-agent", WEBVIEW_UA)
-    }
-
-    private val realUserAgentInterceptor get() = Interceptor { chain ->
-        val request = chain.request()
-        val real = realUserAgent
-        if (real != null && request.header("User-Agent") == WEBVIEW_UA) {
-            chain.proceed(request.newBuilder().header("User-Agent", real).build())
-        } else {
-            chain.proceed(request)
-        }
-    }
-
-    override fun OkHttpClient.Builder.addReaderInterceptors(): OkHttpClient.Builder = addInterceptor(realUserAgentInterceptor).addInterceptor(bearerInterceptor).addInterceptor(ImageInterceptor(::renewSession))
+    override fun OkHttpClient.Builder.addReaderInterceptors(): OkHttpClient.Builder = addInterceptor(bearerInterceptor).addInterceptor(ImageInterceptor(::renewSession))
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/$mangaPath/${chapter.url}"
 
@@ -293,5 +270,3 @@ internal fun loginGuide(): String = buildString {
         append("Instálalo, reinicia Mihon, abre una obra de Aedex, menú ⋮, Abrir en WebView e inicia sesión.")
     }
 }
-
-private const val WEBVIEW_UA = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Mobile Safari/537.36"
