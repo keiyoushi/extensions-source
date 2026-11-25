@@ -143,13 +143,9 @@ class MangaDexHelper(private val lang: String) {
 
         val genreList = MDConstants.TAG_GROUPS_ORDER.flatMap { genresMap[it].orEmpty() } + nonGenres
 
-        val romanizedOriginalLang = MDConstants.romanizedLangCodes[attr.originalLanguage].orEmpty()
-        val allLanguages = lang == MDConstants.ALL_LANGUAGES
         val altTitles = attr.altTitles
-            .filter { allLanguages || it.containsKey(lang) || it.containsKey(romanizedOriginalLang) }
-            .mapNotNull { it.entries.singleOrNull() }
-            .map { (code, title) -> if (allLanguages) "[$code] $title" else title }
-            .map { it.removeEntities() }
+            .flatMap { it.entries }
+            .map { (code, title) -> "[$code] ${title.removeEntities()}" }
 
         val finalChapter = listOfNotNull(
             attr.lastVolume?.takeIf { it.isNotEmpty() }?.let { "Vol.$it" },
