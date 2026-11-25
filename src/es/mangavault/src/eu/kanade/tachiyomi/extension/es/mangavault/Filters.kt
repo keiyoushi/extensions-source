@@ -14,7 +14,7 @@ fun getFilters(genres: List<GenreOption>?) = FilterList(
 class TypeFilter :
     SelectFilter(
         "Tipo",
-        arrayOf("Todos" to null, "Manga" to "manga", "Manhwa" to "manhwa", "Manhua" to "manhua", "Comic" to "comic"),
+        arrayOf("Todos" to null, "Manga" to "manga", "Manhwa" to "manhwa", "Manhua" to "manhua", "Comic" to "comic", "Novela" to "novel"),
     )
 
 class DemographicFilter :

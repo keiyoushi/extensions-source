@@ -20,7 +20,6 @@ class MangaDto(
     private val slug: String,
     private val title: String,
     @SerialName("cover_url") private val coverUrl: String?,
-    @SerialName("content_type") val contentType: String?,
 ) {
     fun toSManga() = SManga.create().apply {
         url = "/manga/$slug"

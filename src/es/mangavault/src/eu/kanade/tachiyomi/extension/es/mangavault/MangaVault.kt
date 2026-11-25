@@ -56,9 +56,7 @@ abstract class MangaVault : KeiSource() {
             addQueryParameter("page", page.toString())
         }.build()
         val result = client.get(url, Fetch.XHR.from("/explore")).parseAs<SearchResponse>()
-        // Novels are text
-        val mangas = result.results.filter { it.contentType != "novel" }.map { it.toSManga() }
-        return MangasPage(mangas, result.hasMore)
+        return MangasPage(result.results.map { it.toSManga() }, result.hasMore)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
