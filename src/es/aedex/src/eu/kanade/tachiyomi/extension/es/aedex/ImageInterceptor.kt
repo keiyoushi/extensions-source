@@ -9,11 +9,13 @@ import keiyoushi.network.fetch
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.xor
+import keiyoushi.utils.xorInPlace
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
+import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
@@ -50,24 +52,25 @@ class ImageInterceptor(
         }
         if (!response.isSuccessful) return response
 
-        // The scramble key, XOR key and gutter ride masked in X-Page-Meta; the plain headers are a fallback
-        val meta = PageMeta.unmask(response.header("X-Page-Meta"), keys.signer.sessionKey, request.url.pathSegments[2])
+        val handle = request.url.pathSegments[2]
+        val bytes = response.body.use { it.bytes() }
+        // The scramble key, XOR key and gutter ride in a masked trailer after the image; the plain headers are a fallback
+        val meta = listOf(keys.token, keys.signer.sessionKey).firstNotNullOfOrNull { PageMeta.fromTrailer(bytes, it, handle) }
+        val data = if (meta != null) bytes.copyOf(meta.imageLength) else bytes
         val pageXorKey = meta?.xor ?: response.header("X-Page-Xor")?.toIntOrNull()
         val scrambleKey = meta?.key ?: response.header("X-Page-Key").orEmpty()
         // The reader spaces the shuffled strips apart by this many px
-        val tileGutter = meta?.gutter ?: response.header("X-Tile-Gutter")?.toIntOrNull() ?: 0
+        val tileGutter = (meta?.gutter ?: response.header("X-Tile-Gutter")?.toIntOrNull() ?: 0).takeIf { it in 1..63 } ?: 0
 
         // Plain, the page's XOR key, then 0x43 for older chapters, like the site's reader
-        val header = response.body.source().peek().readByteArray(HEADER_SIZE)
+        val header = data.copyOf(minOf(data.size, HEADER_SIZE))
         val xorKey = listOfNotNull(0, pageXorKey, LEGACY_XOR_KEY).firstOrNull { isImageHeader(header.xor(it)) }
-        if (xorKey == null) {
-            response.close()
-            throw IOException("Unknown page image format")
+            ?: throw IOException("Unknown page image format")
+        if (xorKey != 0) data.xorInPlace(xorKey)
+        if (scrambleKey.isBlank()) {
+            return response.newBuilder().body(data.toResponseBody(response.body.contentType())).build()
         }
-        val plain = if (xorKey == 0) response else response.xor(xorKey)
-        if (scrambleKey.isBlank()) return plain
-        val image = plain.body.use { BitmapFactory.decodeStream(it.byteStream()) }
-            ?: throw IOException("Undecodable page image")
+        val image = BitmapFactory.decodeByteArray(data, 0, data.size) ?: throw IOException("Undecodable page image")
         val result = descramble(image, tileGutter) { width, height -> tilePlan(mulberry32(scrambleKey.hashCode()), width, height) }
         image.recycle()
 
@@ -132,7 +135,7 @@ class ImageInterceptor(
 
     companion object {
         private const val LEGACY_XOR_KEY = 0x43
-        private const val HEADER_SIZE = 12L
+        private const val HEADER_SIZE = 12
         private const val MIN_LIVE_TTL = 5_000L
         private const val LIVE_MARGIN = 5_000L
         private val MEDIA_TYPE = "image/jpeg".toMediaType()
