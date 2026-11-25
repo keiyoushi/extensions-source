@@ -10,8 +10,10 @@ keiyoushi {
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
     theme = "zinmangaart"
+    pkgName = "en.manhwaclan"
 
     source {
+        id = 3313733609433811176L
         baseUrl = "https://www.manhwafan.com"
         lang = "en"
     }
