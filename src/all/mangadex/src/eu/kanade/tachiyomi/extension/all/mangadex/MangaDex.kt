@@ -384,21 +384,7 @@ class MangaDex(
 
     // Details
 
-    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url.replace("/manga/", "/title/") + "/" + titleToSlug(manga.title)
-
-    private fun titleToSlug(title: String) = title.trim()
-        .lowercase(Locale.US)
-        .replace(titleSpecialCharactersRegex, "-")
-        .replace(trailingHyphenRegex, "")
-        .split("-")
-        .reduce { accumulator, element ->
-            val currentSlug = "$accumulator-$element"
-            if (currentSlug.length > 100) {
-                accumulator
-            } else {
-                currentSlug
-            }
-        }
+    override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url.replace("/manga/", "/title/")
 
     private suspend fun getMangaDetails(manga: SManga): SManga = coroutineScope {
         val mangaId = manga.url.uuid()
@@ -938,5 +924,3 @@ private val romanizedLangCodes = mapOf(
 private val uuidRegex = Regex("[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
 private val markdownTagRegex = "<(?!https?://)".toRegex()
 private val whitespaceRegex = "\\s".toRegex()
-private val titleSpecialCharactersRegex = "[^a-z0-9]+".toRegex()
-private val trailingHyphenRegex = "-+$".toRegex()
