@@ -11,15 +11,15 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.array
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.int
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
@@ -29,10 +29,10 @@ abstract class MangaVault : KeiSource() {
 
     override val supportsFilterFetching = true
 
-    // The site's only ranking is the home page's popular series of the week
+    // The site's only ranking is the home page's trending series of the week
     override suspend fun getPopularManga(page: Int): MangasPage {
         val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
-        val section = document.selectFirst("h2:containsOwn(Popular de esta semana)")!!.closest("section")!!
+        val section = document.selectFirst("h2:containsOwn(Tendencias de la semana)")!!.closest("section")!!
         val mangas = section.select("a[href^=/manga/]").map { card ->
             SManga.create().apply {
                 setUrlWithoutDomain(card.absUrl("href"))
@@ -56,9 +56,7 @@ abstract class MangaVault : KeiSource() {
             addQueryParameter("page", page.toString())
         }.build()
         val result = client.get(url, Fetch.XHR.from("/explore")).parseAs<SearchResponse>()
-        // Novels are text
-        val mangas = result.results.filter { it.contentType != "novel" }.map { it.toSManga() }
-        return MangasPage(mangas, result.hasMore)
+        return MangasPage(result.results.map { it.toSManga() }, result.hasMore)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -75,7 +73,7 @@ abstract class MangaVault : KeiSource() {
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
-        val list = document.island<ChapterListProps>("ChapterList").chapters.map { it.toSChapter(manga.url) }
+        val list = document.island<ChapterListProps>("chapters").chapters.map { it.toSChapter(manga.url) }
         return SMangaUpdate(document.toSManga(manga.url), list)
     }
 
@@ -102,21 +100,21 @@ abstract class MangaVault : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        return document.island<ReaderProps>("MangaReader").imageUrls.mapIndexed { i, url -> Page(i, imageUrl = url) }
+        return document.island<ReaderProps>("imageUrls").imageUrls.mapIndexed { i, url -> Page(i, imageUrl = url) }
     }
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/explore", Fetch.DOCUMENT).asJsoup().islandProps("MangaExplorer")
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/explore", Fetch.DOCUMENT).asJsoup().islandProps("genreOptions")
 
     override fun getFilterList(data: JsonElement?) = getFilters(data?.parseAs<ExplorerProps>()?.genreOptions)
 
-    private inline fun <reified T> Document.island(component: String): T = islandProps(component).parseAs<T>()
+    private inline fun <reified T> Document.island(prop: String): T = islandProps(prop).parseAs<T>()
 
-    // An Astro component's server-side props, in Astro's own encoding: [0, value] or [1, array]
-    private fun Document.islandProps(component: String): JsonElement = selectFirst("astro-island[component-url*=/$component.]")!!.attr("props").parseAs<JsonElement>().fromAstro()
+    // The server-side props of the Astro island that has this prop, in Astro's own encoding: [0, value] or [1, array]
+    private fun Document.islandProps(prop: String): JsonElement = selectFirst("astro-island[props*='\"$prop\":']")!!.attr("props").parseAs<JsonElement>().fromAstro()
 
     private fun JsonElement.fromAstro(): JsonElement = when {
-        this is JsonArray && size == 2 && this[0] is JsonPrimitive -> when (this[0].jsonPrimitive.int) {
-            1 -> JsonArray(this[1].let { it as JsonArray }.map { it.fromAstro() })
+        this is JsonArray && size == 2 && this[0] is JsonPrimitive -> when (this[0].int) {
+            1 -> JsonArray(this[1].array.map { it.fromAstro() })
             else -> this[1].fromAstro()
         }
         this is JsonObject -> JsonObject(mapValues { it.value.fromAstro() })
