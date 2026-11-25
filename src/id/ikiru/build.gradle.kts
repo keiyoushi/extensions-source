@@ -8,7 +8,7 @@ keiyoushi {
     name = "Ikiru"
     pkgName = "id.mangatale"
     versionCode = 66
-    contentWarning = ContentWarning.SAFE
+    contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {

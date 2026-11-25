@@ -126,7 +126,6 @@ abstract class Ikiru : KeiSource() {
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data?.parseAs<List<IkiruGenreDto>>().orEmpty()
-            .filterNot { it.slug in explicitGenres }
             .map { Genre(it.name, it.slug) }
 
         return FilterList(
@@ -145,8 +144,5 @@ abstract class Ikiru : KeiSource() {
 
         // anchored so a suffixed older key like "chapter-12-5" fails instead of opening chapter 12
         private val chapterKeyRegex = Regex("""/manga/([^/]+)/chapter-([\d.]+)/?$""")
-
-        // the extension is SFW
-        private val explicitGenres = setOf("adult", "hentai", "lolicon", "shotacon", "smut")
     }
 }
