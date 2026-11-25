@@ -183,9 +183,12 @@ abstract class MMRCMS : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.size < 2 || url.pathSegments.first() != itemPath) return null
+        if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host.removePrefix("www.")) return null
+        if (url.pathSegments.size < 2 || url.pathSegments.first() != itemPath) return null
 
-        return mangaDetailsParse(client.get(url, Fetch.DOCUMENT).asJsoup()).apply { setUrlWithoutDomain(url.toString()) }
+        val mangaUrl = "/$itemPath/${url.pathSegments[1]}"
+        val manga = SManga.create().apply { this.url = mangaUrl }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga.apply { this.url = mangaUrl }
     }
 
     // Details and chapters come from the same page
