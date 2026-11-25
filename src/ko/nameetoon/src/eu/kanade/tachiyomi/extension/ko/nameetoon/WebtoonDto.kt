@@ -8,10 +8,11 @@ import kotlinx.serialization.Serializable
 class WebtoonDto(
     @SerialName("wt_idx") val id: String,
     @SerialName("wt_title") private val title: String,
-    @SerialName("wt_thumb") private val thumbnail: String? = null,
-    @SerialName("wt_author") val author: String? = null,
-    @SerialName("wt_company") val company: String? = null,
-    @SerialName("wt_fin") private val progress: String? = null,
+    @SerialName("wt_thumb") private val thumbnail: String?,
+    @SerialName("wt_author") val author: String?,
+    @SerialName("wt_company") val company: String?,
+    @SerialName("wt_genre") val genre: String?,
+    @SerialName("wt_fin") private val progress: String?,
 ) {
     val status get() = when (progress) {
         "연재중" -> SManga.ONGOING
