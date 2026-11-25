@@ -86,18 +86,22 @@ class MangaDexHelper(private val lang: String) {
         coverFileName: String?,
         coverSuffix: String?,
         lang: String,
-        preferExtensionLangTitle: Boolean,
+        preferredTitle: String,
     ): SManga = SManga.create().apply {
         url = "/manga/${mangaDto.id}"
 
         val titleMap = mangaDto.attributes.title
         val altTitles = mangaDto.attributes.altTitles
-        val resolvedTitle = titleMap[lang] ?: run {
+        val romanizedLang = MDConstants.romanizedLangCodes[mangaDto.attributes.originalLanguage]
+        val romanizedTitle = romanizedLang
+            ?.takeIf { preferredTitle == MDConstants.TITLE_PREF_VAL_ROMANIZED }
+            ?.let { titleMap[it] ?: altTitles.findTitleByLang(it) }
+        val resolvedTitle = romanizedTitle ?: titleMap[lang] ?: run {
             val mainTitle = titleMap.values.firstOrNull()
             val langTitle = altTitles.findTitleByLang(lang)
             val enTitle = altTitles.findTitleByLang("en")
 
-            if (preferExtensionLangTitle) {
+            if (preferredTitle == MDConstants.TITLE_PREF_VAL_EXTENSION) {
                 listOfNotNull(langTitle, mainTitle, enTitle)
             } else {
                 listOfNotNull(mainTitle, langTitle, enTitle)
@@ -119,7 +123,7 @@ class MangaDexHelper(private val lang: String) {
         firstVolumeCover: String?,
         lang: String,
         coverSuffix: String?,
-        preferExtensionLangTitle: Boolean,
+        preferredTitle: String,
     ): SManga {
         val attr = mangaDto.attributes
 
@@ -152,7 +156,7 @@ class MangaDexHelper(private val lang: String) {
             attr.lastChapter?.takeIf { it.isNotEmpty() }?.let { "Ch.$it" },
         )
 
-        return createBasicManga(mangaDto, firstVolumeCover ?: mangaDto.coverFileName, coverSuffix, lang, preferExtensionLangTitle).apply {
+        return createBasicManga(mangaDto, firstVolumeCover ?: mangaDto.coverFileName, coverSuffix, lang, preferredTitle).apply {
             description = MarkdownDescription.Builder()
                 .markdown((attr.description[lang] ?: attr.description["en"])?.removeEntities())
                 .altTitles(altTitles, intl["alternative_titles"])

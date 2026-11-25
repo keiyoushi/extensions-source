@@ -125,6 +125,14 @@ object MDConstants {
     const val TRY_USING_FIRST_VOLUME_COVER_DEFAULT = false
     fun getTryUsingFirstVolumeCoverPrefKey(dexLang: String): String = "${TRY_USING_FIRST_VOLUME_COVER_PREF}_$dexLang"
 
+    private const val TITLE_PREF = "preferredTitle"
+    const val TITLE_PREF_VAL_EXTENSION = "extension"
+    const val TITLE_PREF_VAL_ROMANIZED = "romanized"
+    const val TITLE_PREF_VAL_MAIN = "main"
+    const val TITLE_PREF_DEFAULT = TITLE_PREF_VAL_EXTENSION
+    val titlePrefValues = listOf(TITLE_PREF_VAL_EXTENSION, TITLE_PREF_VAL_ROMANIZED, TITLE_PREF_VAL_MAIN)
+    fun getTitlePrefKey(dexLang: String): String = "${TITLE_PREF}_$dexLang"
+
     private const val PREFER_EXTENSION_LANG_TITLE_PREF = "preferExtensionLangTitle"
     fun getPreferExtensionLangTitlePrefKey(dexLang: String): String = "${PREFER_EXTENSION_LANG_TITLE_PREF}_$dexLang"
 

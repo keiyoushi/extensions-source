@@ -79,6 +79,7 @@ class MangaDex(
 
     private val preferences by getPreferencesLazy {
         migrateContentRating()
+        migratePreferredTitle()
         migrateObsoletePrefs()
     }
 
@@ -323,10 +324,10 @@ class MangaDex(
 
     private fun List<MangaDto>.toSMangaList(firstVolumeCovers: Map<String, String>): List<SManga> {
         val coverSuffix = preferences.coverQuality
-        val preferExtensionLangTitle = preferences.preferExtensionLangTitle
+        val preferredTitle = preferences.preferredTitle
 
         return map { manga ->
-            helper.createBasicManga(manga, firstVolumeCovers[manga.id] ?: manga.coverFileName, coverSuffix, dexLang, preferExtensionLangTitle)
+            helper.createBasicManga(manga, firstVolumeCovers[manga.id] ?: manga.coverFileName, coverSuffix, dexLang, preferredTitle)
         }
     }
 
@@ -388,7 +389,7 @@ class MangaDex(
             firstVolumeCover,
             dexLang,
             preferences.coverQuality,
-            preferences.preferExtensionLangTitle,
+            preferences.preferredTitle,
         )
     }
 
@@ -595,11 +596,21 @@ class MangaDex(
             setOnBindEditTextListener(helper::setupEditTextUuidValidator)
         }
 
-        val preferExtensionLangTitlePref = SwitchPreferenceCompat(screen.context).apply {
-            key = MDConstants.getPreferExtensionLangTitlePrefKey(dexLang)
-            title = helper.intl["prefer_title_in_extension_language"]
-            summary = helper.intl["prefer_title_in_extension_language_summary"]
-            setDefaultValue(true)
+        val preferredTitlePref = ListPreference(screen.context).apply {
+            key = MDConstants.getTitlePrefKey(dexLang)
+            title = helper.intl["preferred_title"]
+            entries = MDConstants.titlePrefValues.map { helper.intl["preferred_title_$it"] }.toTypedArray()
+            entryValues = MDConstants.titlePrefValues.toTypedArray()
+            setDefaultValue(MDConstants.TITLE_PREF_DEFAULT)
+            summary = "%s"
+
+            // TachiyomiSY and Komikku read the old switch when delegating
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit()
+                    .putBoolean(MDConstants.getPreferExtensionLangTitlePrefKey(dexLang), newValue == MDConstants.TITLE_PREF_VAL_EXTENSION)
+                    .apply()
+                true
+            }
         }
 
         val includeUnavailablePref = SwitchPreferenceCompat(screen.context).apply {
@@ -613,7 +624,7 @@ class MangaDex(
         screen.addPreference(tryUsingFirstVolumeCoverPref)
         screen.addPreference(dataSaverPref)
         screen.addPreference(standardHttpsPortPref)
-        screen.addPreference(preferExtensionLangTitlePref)
+        screen.addPreference(preferredTitlePref)
         screen.addPreference(includeUnavailablePref)
         screen.addPreference(contentRatingPref)
         screen.addPreference(originalLanguagePref)
@@ -669,8 +680,8 @@ class MangaDex(
     private val SharedPreferences.useDataSaver
         get() = getBoolean(MDConstants.getDataSaverPreferenceKey(dexLang), false)
 
-    private val SharedPreferences.preferExtensionLangTitle
-        get() = getBoolean(MDConstants.getPreferExtensionLangTitlePrefKey(dexLang), true)
+    private val SharedPreferences.preferredTitle
+        get() = getString(MDConstants.getTitlePrefKey(dexLang), MDConstants.TITLE_PREF_DEFAULT)!!
 
     private val SharedPreferences.includeUnavailable
         get() = getBoolean(MDConstants.getIncludeUnavailablePrefKey(dexLang), false)
@@ -700,5 +711,13 @@ class MangaDex(
         MDConstants.allContentRatings.lastOrNull { it in legacy }
             ?.let { editor.putString(MDConstants.getContentRatingPrefKey(dexLang), it) }
         editor.apply()
+    }
+
+    /** The preferred title used to be a switch, on by default, between the extension's language and the main title. */
+    private fun SharedPreferences.migratePreferredTitle() {
+        val key = MDConstants.getTitlePrefKey(dexLang)
+        if (key in this || getBoolean(MDConstants.getPreferExtensionLangTitlePrefKey(dexLang), true)) return
+
+        edit().putString(key, MDConstants.TITLE_PREF_VAL_MAIN).apply()
     }
 }
