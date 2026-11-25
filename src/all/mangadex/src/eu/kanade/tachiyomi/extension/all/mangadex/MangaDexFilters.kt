@@ -318,6 +318,7 @@ class MangaDexFilters {
             Tag("2d1f5d56-a1e5-4d0d-a961-2193588b08ec", intl["theme_loli"]),
             Tag("85daba54-a71c-4554-8a28-9901a8b0afad", intl["theme_mafia"]),
             Tag("a1f53773-c69a-4ce5-8cab-fffcd90b1565", intl["theme_magic"]),
+            Tag("cb562697-929f-4d28-9d66-6d3995bf2592", intl["theme_mahjong"]),
             Tag("799c202e-7daa-44eb-9cf7-8a3c0441531e", intl["theme_martial_arts"]),
             Tag("ac72833b-c4e9-4878-b9db-6c8a4a99444a", intl["theme_military"]),
             Tag("dd1f77c5-dea9-4e2b-97ae-224af09caf99", intl["theme_monster_girls"]),
