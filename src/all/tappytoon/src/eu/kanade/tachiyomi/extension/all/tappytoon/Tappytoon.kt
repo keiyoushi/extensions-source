@@ -23,6 +23,8 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -71,14 +73,26 @@ abstract class Tappytoon :
 
     private var apiHeaders: Headers? = null
 
-    private suspend fun apiHeaders(): Headers = apiHeaders ?: run {
+    private var apiHeadersTokenState: String? = null
+
+    private val apiHeadersLock = Mutex()
+
+    private suspend fun apiHeaders(): Headers = apiHeadersLock.withLock {
+        apiHeaders?.takeIf { tokenState() == apiHeadersTokenState }?.let { return it }
+
         val axiosHeaders = client.get("$baseUrl/comics/discover", Fetch.DOCUMENT).asJsoup().extractNextJs<AxiosHeaders>()!!
         headers.newBuilder()
             .set("Authorization", axiosHeaders.authorization)
             .set("X-Device-Uuid", axiosHeaders.deviceUuid)
             .build()
-            .also { apiHeaders = it }
+            .also {
+                apiHeaders = it
+                apiHeadersTokenState = tokenState()
+            }
     }
+
+    // The site's token state cookie, replaced by a login in WebView
+    private fun tokenState() = client.cookieJar.loadForRequest(baseUrl.toHttpUrl()).firstOrNull { it.name == "__TST__" }?.value
 
     private suspend fun apiGet(url: HttpUrl, isRetry: Boolean = false): Response {
         val res = client.get(url, apiHeaders(), Fetch.XHR, ensureSuccess = isRetry)
