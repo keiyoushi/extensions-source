@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Tappytoon"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -16,4 +16,13 @@ keiyoushi {
             baseUrl = "https://www.tappytoon.com/$it"
         }
     }
+
+    deeplink {
+        path("/.*/comics/..*")
+        path("/.*/book/..*")
+    }
+}
+
+dependencies {
+    implementation(project(":lib:i18n"))
 }
