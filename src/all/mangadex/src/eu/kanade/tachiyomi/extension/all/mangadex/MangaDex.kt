@@ -40,6 +40,7 @@ import keiyoushi.utils.tryParse
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -146,7 +147,7 @@ class MangaDex(
 
     // Latest
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getChapterMangasPage(latestUpdatesUrl(page))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = client.get(latestUpdatesUrl(page), Fetch.XHR, CacheControl.FORCE_NETWORK).toChapterMangasPage()
 
     /**
      * Used by Komikku
@@ -156,20 +157,7 @@ class MangaDex(
     /**
      * Used by Komikku
      */
-    fun latestUpdatesParse(response: Response): MangasPage {
-        val chapters = response.parseAs<PagedDto<ChapterDto>>()
-        val mangaIds = chapters.data.map { it.mangaId }.distinct()
-        if (mangaIds.isEmpty()) return MangasPage(emptyList(), false)
-
-        val mangaList = blockingGet(mangaByIdsUrl(mangaIds)).parseAs<PagedDto<MangaDto>>().data
-        val covers = coversUrl(mangaList)
-            ?.let { firstVolumeCovers(mangaList, blockingGet(it).parseAs<PagedDto<CoverDto>>().data) }
-            .orEmpty()
-
-        return MangasPage(mangaList.orderedBy(mangaIds).toSMangaList(covers), chapters.hasNextPage)
-    }
-
-    private fun blockingGet(url: HttpUrl): Response = client.newCall(GET(url, headers, CacheControl.FORCE_NETWORK).newBuilder().fetch(Fetch.XHR).build()).execute()
+    fun latestUpdatesParse(response: Response): MangasPage = runBlocking { response.toChapterMangasPage() }
 
     private fun latestUpdatesUrl(page: Int, uploader: String? = null): HttpUrl = API_CHAPTER_URL.toHttpUrl().newBuilder()
         .addQueryParameter("offset", (LATEST_CHAPTER_LIMIT * (page - 1)).toString())
@@ -186,27 +174,26 @@ class MangaDex(
         .addQueryParameter("excludedUploaders[]", preferences.blockedUploaders)
         .build()
 
-    /** Manga of the chapters at [url], in the order of the chapters. */
-    private suspend fun getChapterMangasPage(url: HttpUrl): MangasPage {
-        val chapters = client.get(url, Fetch.XHR, CacheControl.FORCE_NETWORK).parseAs<PagedDto<ChapterDto>>()
-        val mangaIds = chapters.data.map { it.mangaId }.distinct()
-        if (mangaIds.isEmpty()) return MangasPage(emptyList(), false)
+    /** Manga of the chapters, in the order of the chapters. */
+    private suspend fun Response.toChapterMangasPage(): MangasPage {
+        val chapters = parseAs<PagedDto<ChapterDto>>()
 
-        return MangasPage(getMangaByIds(mangaIds), chapters.hasNextPage)
+        return MangasPage(getMangaByIds(chapters.data.map { it.mangaId }.distinct()), chapters.hasNextPage)
     }
 
     private suspend fun getMangaByIds(mangaIds: List<String>): List<SManga> {
-        val mangaList = client.get(mangaByIdsUrl(mangaIds), Fetch.XHR, CacheControl.FORCE_NETWORK).parseAs<PagedDto<MangaDto>>().data
+        if (mangaIds.isEmpty()) return emptyList()
 
-        return mangaList.orderedBy(mangaIds).toSMangaList(fetchFirstVolumeCovers(mangaList))
+        val url = API_MANGA_URL.toHttpUrl().newBuilder()
+            .addQueryParameter("includes[]", COVER_ART)
+            .addQueryParameter("limit", mangaIds.size.toString())
+            .addQueryParameter("contentRating[]", preferences.contentRating)
+            .addQueryParameter("ids[]", mangaIds)
+            .build()
+        val mangaList = client.get(url, Fetch.XHR, CacheControl.FORCE_NETWORK).parseAs<PagedDto<MangaDto>>().data
+
+        return mangaList.orderedBy(mangaIds).toSMangaList()
     }
-
-    private fun mangaByIdsUrl(mangaIds: List<String>): HttpUrl = API_MANGA_URL.toHttpUrl().newBuilder()
-        .addQueryParameter("includes[]", COVER_ART)
-        .addQueryParameter("limit", mangaIds.size.toString())
-        .addQueryParameter("contentRating[]", preferences.contentRating)
-        .addQueryParameter("ids[]", mangaIds)
-        .build()
 
     private fun List<MangaDto>.orderedBy(mangaIds: List<String>): List<MangaDto> {
         val byId = associateBy { it.id }
@@ -234,7 +221,7 @@ class MangaDex(
             getMangaByIdPage(getMangaIdFromChapterId(query.removePrefix(PREFIX_CH_SEARCH)))
 
         query.startsWith(PREFIX_USER_SEARCH) ->
-            getChapterMangasPage(latestUpdatesUrl(page, uploader = query.removePrefix(PREFIX_USER_SEARCH)))
+            client.get(latestUpdatesUrl(page, uploader = query.removePrefix(PREFIX_USER_SEARCH)), Fetch.XHR, CacheControl.FORCE_NETWORK).toChapterMangasPage()
 
         query.startsWith(PREFIX_LIST_SEARCH) ->
             getListPage(query.removePrefix(PREFIX_LIST_SEARCH), page, filters)
@@ -304,7 +291,7 @@ class MangaDex(
         val mangaList = client.get(url.addFilters(filters).build(), Fetch.XHR, CacheControl.FORCE_NETWORK)
             .parseAs<PagedDto<MangaDto>>().data
 
-        return MangasPage(mangaList.toSMangaList(fetchFirstVolumeCovers(mangaList)), offset + MANGA_LIMIT < mangaIds.size)
+        return MangasPage(mangaList.toSMangaList(), offset + MANGA_LIMIT < mangaIds.size)
     }
 
     private suspend fun addAuthorFilter(url: HttpUrl.Builder, filters: FilterList) {
@@ -332,17 +319,15 @@ class MangaDex(
         .addQueryParameter("includes[]", COVER_ART)
 
     private suspend fun Response.toMangasPage(): MangasPage {
-        if (code == 204) {
-            close()
-            return MangasPage(emptyList(), false)
-        }
-
         val mangaList = parseAs<PagedDto<MangaDto>>()
 
-        return MangasPage(mangaList.data.toSMangaList(fetchFirstVolumeCovers(mangaList.data)), mangaList.hasNextPage)
+        return MangasPage(mangaList.data.toSMangaList(), mangaList.hasNextPage)
     }
 
-    private fun List<MangaDto>.toSMangaList(firstVolumeCovers: Map<String, String>): List<SManga> = map { it.toSManga(firstVolumeCovers[it.id]) }
+    private suspend fun List<MangaDto>.toSMangaList(): List<SManga> {
+        val firstVolumeCovers = fetchFirstVolumeCovers(this)
+        return map { it.toSManga(firstVolumeCovers[it.id]) }
+    }
 
     private fun MangaDto.toSManga(firstVolumeCover: String?): SManga = SManga.create().apply {
         url = "/manga/$id"
@@ -377,29 +362,21 @@ class MangaDex(
 
     // Covers
 
+    /** The first cover of each manga in its original language. */
     private suspend fun fetchFirstVolumeCovers(mangaList: List<MangaDto>): Map<String, String> {
-        val url = coversUrl(mangaList) ?: return emptyMap()
-        return firstVolumeCovers(mangaList, client.get(url, Fetch.XHR).parseAs<PagedDto<CoverDto>>().data)
-    }
+        if (!preferences.tryUsingFirstVolumeCover || mangaList.isEmpty()) return emptyMap()
 
-    private fun coversUrl(mangaList: List<MangaDto>): HttpUrl? {
-        if (!preferences.tryUsingFirstVolumeCover || mangaList.isEmpty()) return null
+        val originalLanguages = mangaList.associate { it.id to it.attributes.originalLanguage }
+        val locales = originalLanguages.values.distinct()
 
-        val locales = mangaList.map { it.attributes.originalLanguage }.toSet()
-
-        return "$API_URL/cover".toHttpUrl().newBuilder()
+        val url = "$API_URL/cover".toHttpUrl().newBuilder()
             .addQueryParameter("order[volume]", "asc")
-            .addQueryParameter("manga[]", mangaList.map { it.id })
+            .addQueryParameter("manga[]", originalLanguages.keys)
             .addQueryParameter("locales[]", locales)
             .addQueryParameter("limit", (mangaList.size * locales.size).coerceAtMost(MANGA_IDS_LIMIT).toString())
             .build()
-    }
 
-    /** The first cover of each manga in its original language; [covers] are sorted by volume. */
-    private fun firstVolumeCovers(mangaList: List<MangaDto>, covers: List<CoverDto>): Map<String, String> {
-        val originalLanguages = mangaList.associate { it.id to it.attributes.originalLanguage }
-
-        return covers
+        return client.get(url, Fetch.XHR).parseAs<PagedDto<CoverDto>>().data
             .filter { it.attributes.locale == originalLanguages[it.mangaId] }
             .distinctBy { it.mangaId }
             .associate { it.mangaId to it.attributes.fileName }
@@ -519,7 +496,7 @@ class MangaDex(
 
     override val supportsRelatedMangas = true
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = coroutineScope {
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val relatedIds = client.get("$API_MANGA_URL/${manga.url.uuid()}", Fetch.XHR)
             .parseAs<DataDto<MangaDto>>()
             .data.relationships
@@ -528,10 +505,7 @@ class MangaDex(
             .map { it.id }
             .distinct()
 
-        relatedIds.chunked(MANGA_IDS_LIMIT)
-            .map { async { getMangaByIds(it) } }
-            .awaitAll()
-            .flatten()
+        return getMangaByIds(relatedIds.take(MANGA_IDS_LIMIT))
     }
 
     // Chapters
@@ -664,7 +638,9 @@ class MangaDex(
             ?.takeIf { now - it.fetchedAt < mdAtHomeTokenLifespan }
             ?.let { return it.url }
 
-        val host = blockingGet(atHomeUrl.toHttpUrl()).parseAs<AtHomeDto>().baseUrl
+        val host = client.newCall(GET(atHomeUrl, headers, CacheControl.FORCE_NETWORK).newBuilder().fetch(Fetch.XHR).build())
+            .execute()
+            .parseAs<AtHomeDto>().baseUrl
         atHomeHosts[atHomeUrl] = AtHomeHost(host, now)
         return host
     }
