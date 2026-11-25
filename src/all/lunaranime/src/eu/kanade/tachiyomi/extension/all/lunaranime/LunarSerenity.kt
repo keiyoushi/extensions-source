@@ -22,7 +22,7 @@ import kotlin.time.Clock
 /**
  * The site's "Serenity" proof is a plain DPoP JWT. The browser generates its own P-256 key
  * pair, keeps it in IndexedDB and signs `<header>.<payload>` with ES256, sending the result in
- * the `cant-catch-this-monkey` header. The key pair is never issued or acknowledged by the
+ * a header. The key pair is never issued or acknowledged by the
  * server, so one generated here is just as valid. Like the site's reader, only the page-list
  * request carries it: a key that signed other requests gets decoy pages.
  */
@@ -34,6 +34,9 @@ class LunarSerenity(
     @Volatile
     private var keyPair: KeyPair = loadOrGenerateKeyPair()
 
+    @Volatile
+    lateinit var proofHeader: String
+
     private fun prefs() = getPreferences(sourceId)
 
     private fun loadOrGenerateKeyPair(): KeyPair {
@@ -41,18 +44,14 @@ class LunarSerenity(
         val storedPrivate = prefs.getString(KEY_PRIVATE, null)
         val storedPublic = prefs.getString(KEY_PUBLIC, null)
         if (storedPrivate != null && storedPublic != null) {
-            // An unreadable stored key is replaced by a new one below
-            try {
-                val keyFactory = KeyFactory.getInstance("EC")
-                val privateKey = keyFactory.generatePrivate(
-                    PKCS8EncodedKeySpec(Base64.decode(storedPrivate, Base64.NO_WRAP)),
-                )
-                val publicKey = keyFactory.generatePublic(
-                    X509EncodedKeySpec(Base64.decode(storedPublic, Base64.NO_WRAP)),
-                )
-                return KeyPair(publicKey, privateKey)
-            } catch (_: Exception) {
-            }
+            val keyFactory = KeyFactory.getInstance("EC")
+            val privateKey = keyFactory.generatePrivate(
+                PKCS8EncodedKeySpec(Base64.decode(storedPrivate, Base64.NO_WRAP)),
+            )
+            val publicKey = keyFactory.generatePublic(
+                X509EncodedKeySpec(Base64.decode(storedPublic, Base64.NO_WRAP)),
+            )
+            return KeyPair(publicKey, privateKey)
         }
         return generateKeyPair().also { saveKeyPair(it) }
     }
@@ -76,31 +75,26 @@ class LunarSerenity(
     companion object {
         private const val KEY_PRIVATE = "ec_private_key"
         private const val KEY_PUBLIC = "ec_public_key"
-        private const val PROOF_HEADER = "cant-catch-this-monkey"
         private const val COORDINATE_SIZE = 32
         private val PAGE_LIST_PATH = listOf("api", "manga", "r")
     }
 
     private val publicPoint get() = (keyPair.public as ECPublicKey).w
 
-    private val coordinateX get() = publicPoint.affineX.toFixedWidth()
+    private val coordinateX get() = publicPoint.affineX.toByteArray32().base64Url()
 
-    private val coordinateY get() = publicPoint.affineY.toFixedWidth()
+    private val coordinateY get() = publicPoint.affineY.toByteArray32().base64Url()
 
     /**
      * RFC 7638 thumbprint of the public JWK, used by the site as extra key material when
      * decrypting a chapter's session data.
      */
     val thumbprint: String
-        get() {
-            return jwk().toJsonString().sha256().base64Url()
-        }
-
-    /** Members in RFC 7638 order, as the thumbprint hashes them. */
-    private fun jwk() = SerenityJwk(crv = "P-256", kty = "EC", x = coordinateX, y = coordinateY)
+        get() = """{"crv":"P-256","kty":"EC","x":"$coordinateX","y":"$coordinateY"}""".sha256().base64Url()
 
     fun proof(method: String, url: HttpUrl): String {
-        val header = SerenityProofHeader(alg = "ES256", typ = "dpop+jwt", jwk = jwk())
+        val jwk = SerenityJwk(kty = "EC", crv = "P-256", x = coordinateX, y = coordinateY)
+        val header = SerenityProofHeader(alg = "ES256", typ = "dpop+jwt", jwk = jwk)
         val payload = SerenityProofPayload(
             htu = "${url.scheme}://${url.host}${url.encodedPath}",
             htm = method.uppercase(),
@@ -108,10 +102,12 @@ class LunarSerenity(
             jti = UUID.randomUUID().toString(),
         )
 
-        val signingInput = "${header.toJsonString().toByteArray().base64Url()}.${payload.toJsonString().toByteArray().base64Url()}"
+        val encodedHeader = header.toJsonString().encodeToByteArray().base64Url()
+        val encodedPayload = payload.toJsonString().encodeToByteArray().base64Url()
+        val signingInput = "$encodedHeader.$encodedPayload"
         val signature = Signature.getInstance("SHA256withECDSA").run {
             initSign(keyPair.private)
-            update(signingInput.toByteArray())
+            update(signingInput.encodeToByteArray())
             sign()
         }
 
@@ -136,20 +132,9 @@ class LunarSerenity(
         response
     }
 
-    private fun Request.withProof(): Request = newBuilder().header(PROOF_HEADER, proof(method, url)).build()
+    private fun Request.withProof(): Request = newBuilder().header(proofHeader, proof(method, url)).build()
 
     private fun ByteArray.base64Url(): String = Base64.encodeToString(this, Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE)
-
-    /** P-256 coordinates are always sent as 32 bytes, big endian. */
-    private fun BigInteger.toFixedWidth(): String {
-        val bytes = toByteArray()
-        val fixed = when {
-            bytes.size == COORDINATE_SIZE -> bytes
-            bytes.size > COORDINATE_SIZE -> bytes.copyOfRange(bytes.size - COORDINATE_SIZE, bytes.size)
-            else -> ByteArray(COORDINATE_SIZE).also { bytes.copyInto(it, COORDINATE_SIZE - bytes.size) }
-        }
-        return fixed.base64Url()
-    }
 
     /** JOSE wants the raw `r || s` pair, while the JCA signs into a DER sequence. */
     private fun ByteArray.derToJose(): ByteArray {
@@ -170,6 +155,7 @@ class LunarSerenity(
         return r + s
     }
 
+    /** P-256 values are always 32 bytes, big endian. */
     private fun BigInteger.toByteArray32(): ByteArray {
         val bytes = toByteArray()
         return when {

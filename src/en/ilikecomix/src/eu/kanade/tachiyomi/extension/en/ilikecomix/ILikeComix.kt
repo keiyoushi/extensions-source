@@ -5,11 +5,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -62,26 +62,29 @@ abstract class ILikeComix : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate {
-        val updatedManga = if (fetchDetails) {
-            val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
-            parseMangaDetails(document, manga)
-        } else {
-            manga
-        }
-        val chapterList = if (fetchChapters) {
-            listOf(
-                SChapter.create().apply {
-                    url = manga.url
-                    name = "Oneshot"
-                    chapter_number = 1f
-                },
-            )
-        } else {
-            chapters
-        }
-        return SMangaUpdate(updatedManga, chapterList)
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = {
+            if (fetchDetails) {
+                val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+                parseMangaDetails(document, manga)
+            } else {
+                manga
+            }
+        },
+        chapters = {
+            if (fetchChapters) {
+                listOf(
+                    SChapter.create().apply {
+                        url = manga.url
+                        name = "Oneshot"
+                        chapter_number = 1f
+                    },
+                )
+            } else {
+                chapters
+            }
+        },
+    )
 
     private fun parseMangaDetails(document: Document, manga: SManga): SManga = manga.apply {
         val rawTitle = document.selectFirst("h1.post-title")?.text().orEmpty().trim()

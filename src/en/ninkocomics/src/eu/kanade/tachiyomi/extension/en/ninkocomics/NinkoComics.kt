@@ -1,17 +1,21 @@
 package eu.kanade.tachiyomi.extension.en.ninkocomics
 
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
+import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
@@ -22,7 +26,22 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
-abstract class NinkoComics : KeiSource() {
+abstract class NinkoComics :
+    KeiSource(),
+    ConfigurableSource {
+
+    private val preferences = getPreferences()
+
+    override val imageFetch = Fetch.NONE
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_LOCKED_PREF
+            title = "Show locked chapters"
+            summary = "Early access chapters that cost coins until their free day"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getComics("popular", "", "")
 
@@ -97,12 +116,15 @@ abstract class NinkoComics : KeiSource() {
             status,
         )
 
-        val chapterList = document.select("li[data-chapter-id] > a").map { link ->
+        val showLocked = preferences.getBoolean(SHOW_LOCKED_PREF, false)
+        val chapterList = document.select("li[data-chapter-id] > a").mapNotNull { link ->
+            // Early access chapters cost coins until their free day
+            val locked = link.hasAttr("data-unlock")
+            if (locked && !showLocked) return@mapNotNull null
             SChapter.create().apply {
                 setUrlWithoutDomain(link.absUrl("href"))
                 val title = link.selectFirst("span.min-w-0 > span")!!.text()
-                // Early access chapters cost coins until their free day
-                name = if (link.hasAttr("data-unlock")) "🔒 $title" else title
+                name = if (locked) "🔒 $title" else title
                 date_upload = DATE_FORMAT.tryParseDate(link.selectFirst("[data-percent-label]")?.attr("title"))
             }
         }
@@ -110,10 +132,14 @@ abstract class NinkoComics : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        return document.select("img[src*=/media/pages/]").mapIndexed { index, img ->
-            Page(index, imageUrl = img.absUrl("src"))
-        }
+        val chapterUrl = getChapterUrl(chapter)
+        val document = client.get(chapterUrl, Fetch.DOCUMENT).asJsoup()
+        val pagesUrl = document.selectFirst("[data-pages-url]")?.absUrl("data-pages-url")
+            ?: return emptyList()
+        return client.get(pagesUrl, Fetch.XHR.from(chapterUrl)).parseAs<PagesDto>().pages
+            .mapIndexed { index, page ->
+                Page(index, imageUrl = baseUrl.toHttpUrl().resolve(page.url)!!.toString())
+            }
     }
 
     override fun getFilterList(data: JsonElement?): FilterList = getFilters()
@@ -125,6 +151,7 @@ abstract class NinkoComics : KeiSource() {
     }
 
     companion object {
+        private const val SHOW_LOCKED_PREF = "show_locked"
         private val DATE_FORMAT = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
     }
 }

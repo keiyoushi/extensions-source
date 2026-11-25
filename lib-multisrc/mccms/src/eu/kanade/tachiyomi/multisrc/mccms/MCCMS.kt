@@ -5,22 +5,19 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import java.net.URLEncoder
 import keiyoushi.utils.parseAs as parseAsRaw
 
 /**
@@ -49,28 +46,24 @@ abstract class MCCMS : KeiSource() {
 
     protected open fun SManga.cleanup(): SManga = this
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangasPage(client.get("$baseUrl/api/data/comic?page=$page&size=$PAGE_SIZE&order=hits", Fetch.XHR))
+    private fun comicListUrl(page: Int) = "$baseUrl/api/data/comic".toHttpUrl().newBuilder()
+        .addQueryParameter("page", page.toString())
+        .addQueryParameter("size", PAGE_SIZE.toString())
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangasPage(client.get("$baseUrl/api/data/comic?page=$page&size=$PAGE_SIZE&order=addtime", Fetch.XHR))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangasPage(client.get(comicListUrl(page).addQueryParameter("order", "hits").build(), Fetch.XHR))
+
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangasPage(client.get(comicListUrl(page).addQueryParameter("order", "addtime").build(), Fetch.XHR))
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val queries = buildList {
-            add("page=$page")
-            add("size=$PAGE_SIZE")
+        val url = comicListUrl(page).apply {
             val isTextSearch = query.isNotBlank()
-            if (isTextSearch) add("key=" + URLEncoder.encode(query, "UTF-8"))
+            if (isTextSearch) addQueryParameter("key", query)
             for (filter in filters) {
-                if (filter is MCCMSFilter) {
-                    if (isTextSearch && filter.isTypeQuery) continue
-                    val part = filter.query
-                    if (part.isNotEmpty()) add(part)
-                }
+                if (filter !is MCCMSFilter || (isTextSearch && filter.isTypeQuery)) continue
+                val part = filter.query
+                if (part.isNotEmpty()) addQueryParameter(part.substringBefore('='), part.substringAfter('='))
             }
-        }
-        val url = buildString {
-            append(baseUrl).append("/api/data/comic?")
-            queries.joinTo(this, separator = "&")
-        }
+        }.build()
         return parseMangasPage(client.get(url, Fetch.XHR))
     }
 
@@ -79,18 +72,15 @@ abstract class MCCMS : KeiSource() {
         return MangasPage(list.map { it.toSManga().cleanup() }, list.size >= PAGE_SIZE)
     }
 
-    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
-
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) fetchMangaDetails(manga) else manga }
-        val chapterList = async { if (fetchChapters) fetchChapterList(manga) else chapters }
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) fetchMangaDetails(manga) else manga },
+        chapters = { if (fetchChapters) fetchChapterList(manga) else chapters },
+    )
 
     private suspend fun fetchMangaDetails(manga: SManga): SManga {
         val url = "$baseUrl/api/data/comic".toHttpUrl().newBuilder()
@@ -102,16 +92,16 @@ abstract class MCCMS : KeiSource() {
 
     private suspend fun fetchChapterList(manga: SManga): List<SChapter> {
         val id = manga.thumbnail_url!!.substringAfterLast('#', missingDelimiterValue = "").ifEmpty { throw Exception("请刷新漫画") }
-        val dataList: List<ChapterDataDto> = client.get("$baseUrl/api/data/chapter?mid=$id", Fetch.XHR).parseAs() // unordered
+        val dataUrl = "$baseUrl/api/data/chapter".toHttpUrl().newBuilder().addQueryParameter("mid", id).build()
+        val dataList: List<ChapterDataDto> = client.get(dataUrl, Fetch.XHR).parseAs() // unordered
         val dateMap = HashMap<Int, Long>(dataList.size * 2)
         dataList.forEach { dateMap[it.id.toInt()] = it.date }
-        val list: List<ChapterDto> = client.get("$baseUrl/api/comic/chapter?mid=$id", Fetch.XHR).parseAs()
+        val listUrl = "$baseUrl/api/comic/chapter".toHttpUrl().newBuilder().addQueryParameter("mid", id).build()
+        val list: List<ChapterDto> = client.get(listUrl, Fetch.XHR).parseAs()
         return list.map { it.toSChapter(date = dateMap[it.id.toInt()] ?: 0) }.asReversed()
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = config.pageListParse(client.get(baseUrl + chapter.url, if (config.useMobilePageList) headers else pcHeaders, Fetch.DOCUMENT))
-
-    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
+    override suspend fun getPageList(chapter: SChapter): List<Page> = config.pageListParse(client.get(getChapterUrl(chapter), if (config.useMobilePageList) headers else pcHeaders, Fetch.DOCUMENT))
 
     // Don't send referer
     override fun getImageRequest(page: Page) = super.getImageRequest(page).newBuilder().headers(pcHeaders).build()

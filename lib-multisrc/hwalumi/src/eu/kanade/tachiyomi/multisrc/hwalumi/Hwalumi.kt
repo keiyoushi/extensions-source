@@ -6,10 +6,10 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -81,7 +81,7 @@ abstract class Hwalumi : KeiSource() {
             emptyList(),
             fetchDetails = true,
             fetchChapters = true,
-        ).manga.apply { initialized = true }
+        ).manga().apply { initialized = true }
     }
 
     private fun mangaSlug(url: String): String = (if (url.startsWith("http")) url else "$baseUrl/${url.trimStart('/')}").toHttpUrl().pathSegments.last { it.isNotEmpty() }

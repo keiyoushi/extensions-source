@@ -33,3 +33,9 @@ class SeriesDto(
 class AuthorDto(
     val name: String,
 )
+
+@Serializable
+class PagesDto(val pages: List<PageDto>)
+
+@Serializable
+class PageDto(val url: String)

@@ -11,12 +11,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -65,7 +65,12 @@ abstract class CoronaEx :
     override fun Headers.Builder.configureHeaders() = set("X-Api-Environment-Key", API_KEY)
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        if (page == 1) cursor = null
+        if (page == 1) {
+            cursor = null
+        } else {
+            checkNotNull(cursor) { "Can't load page $page before page 1" }
+        }
+
         val url = "$apiUrl/comics".toHttpUrl().newBuilder()
             .addQueryParameter("limit", "24")
             .addQueryParameter("order", "asc")

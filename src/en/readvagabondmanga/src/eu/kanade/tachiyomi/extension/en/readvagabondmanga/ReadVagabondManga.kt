@@ -5,14 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
@@ -40,27 +38,21 @@ abstract class ReadVagabondManga : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val mangaId = "$baseUrl${manga.url}".toHttpUrl().fragment
 
-        val details = async {
-            if (fetchDetails) {
-                client.get("$baseUrl/api/mihon/mangas/$mangaId", Fetch.XHR).parseAs<MangaDto>().toSManga()
-            } else {
-                manga
-            }
-        }
-        val chapterList = async {
-            if (fetchChapters) {
-                client.get("$baseUrl/api/mihon/mangas/$mangaId/chapters", Fetch.XHR)
-                    .parseAs<List<ChapterDto>>()
-                    .map { chapter -> chapter.toSChapter() }
-            } else {
-                chapters
-            }
-        }
-
-        SMangaUpdate(details.await(), chapterList.await())
+        return SMangaUpdate(
+            manga = { if (fetchDetails) client.get("$baseUrl/api/mihon/mangas/$mangaId", Fetch.XHR).parseAs<MangaDto>().toSManga() else manga },
+            chapters = {
+                if (fetchChapters) {
+                    client.get("$baseUrl/api/mihon/mangas/$mangaId/chapters", Fetch.XHR)
+                        .parseAs<List<ChapterDto>>()
+                        .map { chapter -> chapter.toSChapter() }
+                } else {
+                    chapters
+                }
+            },
+        )
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {

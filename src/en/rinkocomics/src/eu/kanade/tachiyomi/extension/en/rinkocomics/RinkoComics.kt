@@ -10,22 +10,30 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
+import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -39,56 +47,43 @@ abstract class RinkoComics :
 
     private val preferences by getPreferencesLazy()
 
-    override suspend fun getPopularManga(page: Int): MangasPage {
-        val document = client.get(baseUrl, Fetch.DOCUMENT).asJsoup()
+    override fun OkHttpClient.Builder.configureClient() = rateLimit(3) { it.encodedPath == AJAX_PATH }
 
-        val entries = document.select(".comics-flex-pinned a.pinned-comic-card").mapNotNull { card ->
-            val url = card.attr("abs:href").trim()
-            if (url.isBlank()) return@mapNotNull null
-            val title = card.selectFirst(".pinned-comic-title")?.text()?.trim() ?: return@mapNotNull null
+    override suspend fun getPopularManga(page: Int): MangasPage = browse(page, "views")
 
-            SManga.create().apply {
-                setUrlWithoutDomain(url)
-                this.title = title
-                thumbnail_url = card.selectFirst(".comic-thumbnail img")?.let { imageFromElement(it) }
-            }
-        }
-
-        return MangasPage(entries, false)
-    }
-
-    override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val url = comicsUrl(page)
-            .addQueryParameter(SORT_PARAM, SortFilter.OPTIONS.first().second)
-            .build()
-
-        return parseComicsPage(client.get(url, Fetch.DOCUMENT).asJsoup())
-    }
+    override suspend fun getLatestUpdates(page: Int): MangasPage = browse(page, "updated")
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = comicsUrl(page)
-            .addQueryParameter("post_type", "comic")
 
         if (query.isNotBlank()) {
-            url.addQueryParameter("s", query)
+            url.addQueryParameter("q", query)
         }
 
         filters.forEach { filter ->
             when (filter) {
-                is GenreFilter -> {
-                    filter.state.filter { it.state }
-                        .forEach { url.addQueryParameter("genres[]", it.slug) }
-                }
-
-                is SortFilter -> {
-                    filter.toQuery()?.let { url.addQueryParameter(SORT_PARAM, it) }
-                }
-
+                is SortFilter -> url.addQueryParameter("sort", filter.value)
+                is StatusFilter -> filter.value.takeIf { it.isNotEmpty() }?.let { url.addQueryParameter("status", it) }
+                is GenreFilter -> filter.state.filter { it.state }.forEach { url.addQueryParameter("genres[]", it.slug) }
                 else -> {}
             }
         }
 
         return parseComicsPage(client.get(url.build(), Fetch.DOCUMENT).asJsoup())
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val slug = url.pathSegments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
+
+        val mangaUrl = when (url.pathSegments[0]) {
+            "comic" -> "$baseUrl/comic/$slug/"
+            "chapter" -> client.get(url, Fetch.DOCUMENT).asJsoup().selectFirst("main a[href*=/comic/]")!!.attr("abs:href")
+            else -> return null
+        }
+
+        val manga = SManga.create().apply { setUrlWithoutDomain(mangaUrl) }
+        return fetchMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga()
     }
 
     override suspend fun fetchMangaUpdate(
@@ -97,94 +92,97 @@ abstract class RinkoComics :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        val mangaUrl = getMangaUrl(manga)
+        val document = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
         val updatedManga = parseMangaDetails(document).apply { url = manga.url }
 
         if (!fetchChapters) return SMangaUpdate(updatedManga, chapters)
 
-        return SMangaUpdate(updatedManga, parseChapterList(document))
+        return SMangaUpdate(updatedManga, parseChapterList(document, mangaUrl))
     }
 
     private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
-        title = requireField(
-            document.selectFirst(".comic-info-upper h1")?.text()
-                ?: document.selectFirst("h1")?.text(),
-            "title",
-        )
+        title = document.selectFirst("main h1")!!.text()
+        thumbnail_url = document.selectFirst("main aside img")?.largestImage()
+        status = parseStatus(document.info("Status"))
+        genre = buildList {
+            document.info("Type")?.let(::add)
+            document.select("main a[href*=/comics_genres/]").mapTo(this) { it.text() }
+        }.joinToString()
 
-        thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("content")
-
-        val authors = document.select(".comic-graph > span")
-            .map { it.text() }
-            .filter { it.isNotBlank() && it != "•" }
-            .distinct()
-
-        author = authors.firstOrNull()
-        artist = authors.getOrNull(1)
-
-        status = parseStatus(
-            document.selectFirst(".comic-status span:last-child")?.text(),
-        )
-
-        genre = document.select(".comic-genres .genres .genre")
-            .joinToString { it.text() }
-
-        description = document.selectFirst(".comic-synopsis")?.text()?.trim()
+        val altTitles = document.selectFirst("main p:has(> span:containsOwn(Also known as))")
+            ?.ownText()
+            ?.split(" · ")
+            .orEmpty()
+        description = MarkdownDescription.Builder()
+            .description(document.selectFirst("#cwSynopsis"))
+            .altTitles(altTitles)
+            .build()
     }
 
-    private suspend fun parseChapterList(document: Document): List<SChapter> {
-        val hideLocked = preferences.getBoolean(PREF_HIDE_LOCKED, false)
+    private suspend fun parseChapterList(document: Document, mangaUrl: String): List<SChapter> {
+        val hideLocked = preferences.getBoolean(PREF_HIDE_LOCKED, true)
+        val firstPage = parseChapterElements(document.select("#cwChapters a.chapter-item"), hideLocked)
 
-        val chapters = LinkedHashMap<String, SChapter>()
-        fun addAll(items: List<SChapter>) {
-            items.forEach { chapter ->
-                if (!chapters.containsKey(chapter.url)) {
-                    chapters[chapter.url] = chapter
-                }
-            }
+        val moreButton = document.selectFirst("#cwMoreChapters") ?: return firstPage
+        val comicId = moreButton.attr("data-comic-id")
+        val pageSize = moreButton.attr("data-offset").toInt()
+        val total = document.info("Chapters")!!.toInt()
+        val nonce = NONCE_REGEX.find(document.selectFirst("script#comicworld-loadmore-js-extra")!!.data())!!.groupValues[1]
+
+        val morePages = coroutineScope {
+            (pageSize until total step pageSize).map { offset ->
+                async { fetchMoreChapters(mangaUrl, comicId, offset, nonce, hideLocked) }
+            }.awaitAll()
         }
 
-        addAll(parseChapterElements(document.select(CHAPTER_SELECTOR), hideLocked))
+        return firstPage + morePages.flatten()
+    }
 
-        val loadMoreBtn = document.selectFirst("#loadMoreChaptersBtn")
-        val comicId = loadMoreBtn?.attr("data-comic-id").orEmpty()
-        val nonce = extractNonce(document).orEmpty()
-        var offset = loadMoreBtn?.attr("data-offset")?.toIntOrNull() ?: 0
-        if (offset <= 0) {
-            offset = chapters.size
-        } else if (chapters.isNotEmpty() && offset > chapters.size) {
-            offset = chapters.size
+    private suspend fun fetchMoreChapters(
+        mangaUrl: String,
+        comicId: String,
+        offset: Int,
+        nonce: String,
+        hideLocked: Boolean,
+    ): List<SChapter> {
+        val body = FormBody.Builder()
+            .add("action", "load_more_chapters")
+            .add("nonce", nonce)
+            .add("comic_id", comicId)
+            .add("offset", offset.toString())
+            .add("order", "desc")
+            .add("ui", "v2")
+            .build()
+
+        val html = client.post(baseUrl.toHttpUrl().newBuilder().encodedPath(AJAX_PATH).build(), Fetch.XHR.from(mangaUrl), body)
+            .parseAs<AjaxResponse>()
+            .data.html
+        return parseChapterElements(Jsoup.parseBodyFragment(html, baseUrl).select("a.chapter-item"), hideLocked)
+    }
+
+    private fun parseChapterElements(elements: List<Element>, hideLocked: Boolean): List<SChapter> = elements.mapNotNull { element ->
+        val locked = element.hasAttr("data-reason")
+        if (locked && hideLocked) return@mapNotNull null
+
+        SChapter.create().apply {
+            setUrlWithoutDomain(if (locked) element.attr("abs:data-permalink") else element.attr("abs:href"))
+            val chapterName = element.selectFirst("> span > span:first-child")!!.text()
+            name = if (locked) "$LOCK_PREFIX$chapterName" else chapterName
+            date_upload = dateFormat.tryParseDate(
+                element.selectFirst("> span > span:nth-child(2)")?.text()?.substringBefore(" · "),
+            )
         }
-
-        if (comicId.isNotBlank() && nonce.isNotBlank()) {
-            while (true) {
-                val items = fetchMoreChapters(comicId, offset, nonce, hideLocked)
-                if (items.isEmpty()) break
-                addAll(items)
-                offset += CHAPTERS_PER_PAGE
-            }
-        }
-
-        return chapters.values.toList()
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        if (chapter.url.contains(LOCK_SUFFIX)) {
-            throw Exception("This chapter is locked. Use WebView to purchase it.")
-        }
-
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        val payload = document.selectFirst("script#cwPages")?.data()?.trim()
+        val payload = document.selectFirst("script#cwPages")?.data()
             ?: return emptyList()
-        val pages = decodePages(payload).mapIndexed { index, url ->
+
+        return decodePages(payload.trim()).mapIndexed { index, url ->
             Page(index, imageUrl = url)
         }
-
-        if (pages.isEmpty()) {
-            throw Exception("Chapter is locked or unavailable.")
-        }
-
-        return pages
     }
 
     override val supportsFilterFetching get() = true
@@ -192,23 +190,17 @@ abstract class RinkoComics :
     override suspend fun fetchFilterData(): JsonElement {
         val document = client.get(comicsUrl(1).build(), Fetch.DOCUMENT).asJsoup()
 
-        return document.select(".ac-filter-group.ac-genre input[name='genres[]']")
-            .mapNotNull { input ->
-                val slug = input.attr("value").trim()
-                val name = input.parent()?.selectFirst(".ac-option-text")?.text()?.trim().orEmpty()
-                if (slug.isBlank() || name.isBlank()) null else Pair(name, slug)
-            }
+        return document.select("#cwBrowse input[name='genres[]']")
+            .map { input -> input.nextElementSibling()!!.text() to input.attr("value") }
             .toJsonElement()
     }
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val filters = mutableListOf<Filter<*>>()
+        val filters = mutableListOf<Filter<*>>(SortFilter(), StatusFilter())
 
         data?.parseAs<List<Pair<String, String>>>()?.also { genres ->
             filters += GenreFilter(genres.map { Genre(it.first, it.second) })
         }
-
-        filters += SortFilter()
 
         return FilterList(filters)
     }
@@ -218,178 +210,69 @@ abstract class RinkoComics :
             key = PREF_HIDE_LOCKED
             title = "Hide paid chapters"
             summary = "Hide locked/paid chapters from the list."
-            setDefaultValue(false)
+            setDefaultValue(true)
         }.let(screen::addPreference)
     }
 
-    private fun comicsUrl(page: Int): HttpUrl.Builder {
-        val url = if (page <= 1) {
-            "$baseUrl/comic/"
-        } else {
-            "$baseUrl/comic/page/$page/"
-        }
-        return url.toHttpUrl().newBuilder()
+    private suspend fun browse(page: Int, sort: String): MangasPage {
+        val url = comicsUrl(page).addQueryParameter("sort", sort).build()
+        return parseComicsPage(client.get(url, Fetch.DOCUMENT).asJsoup())
+    }
+
+    private fun comicsUrl(page: Int): HttpUrl.Builder = baseUrl.toHttpUrl().newBuilder().apply {
+        addPathSegment("comic")
+        if (page > 1) addPathSegments("page/$page")
+        addPathSegment("")
     }
 
     private fun parseComicsPage(document: Document): MangasPage {
-        val entries = document.select("article.ac-card").mapNotNull { card ->
-            val url = card.selectFirst(".ac-title a")?.attr("abs:href")?.trim().orEmpty()
-            if (url.isBlank()) return@mapNotNull null
-            val title = requireField(card.selectFirst(".ac-title a")?.text(), "title")
-
+        val entries = document.select("#cwBrowse ul > li > a").map { card ->
             SManga.create().apply {
-                setUrlWithoutDomain(url)
-                this.title = title
-                thumbnail_url = card.selectFirst(".ac-thumb img")?.let { imageFromElement(it) }
+                setUrlWithoutDomain(card.attr("abs:href"))
+                title = card.selectFirst("> span:nth-of-type(2)")!!.text()
+                thumbnail_url = card.selectFirst("img")?.largestImage()
             }
         }
 
-        val hasNextPage = document.selectFirst(".ac-pagination a.next") != null
+        val hasNextPage = document.selectFirst("nav[aria-label=Pages] a.next") != null
 
         return MangasPage(entries, hasNextPage)
     }
 
-    private fun parseChapterElements(elements: List<Element>, hideLocked: Boolean): List<SChapter> {
-        return elements.mapNotNull { element ->
-            val permalink = element.attr("data-permalink").trim()
-            val href = element.selectFirst("a")?.attr("abs:href").orEmpty()
-            val url = permalink.ifBlank { href }
-            if (url.isBlank()) return@mapNotNull null
+    private fun Element.largestImage(): String? = attrOrNull("srcset")
+        ?.split(", ")
+        ?.maxBy { it.substringAfterLast(' ').removeSuffix("w").toIntOrNull() ?: 0 }
+        ?.substringBefore(' ')
 
-            val name = element.selectFirst(".chapter-number")?.text()
-                ?: element.attr("data-title")
-            val dateText = element.selectFirst(".chapter-date")?.text()
-            val locked = isLocked(element)
-
-            if (locked && hideLocked) return@mapNotNull null
-
-            SChapter.create().apply {
-                setUrlWithoutDomain(url)
-                this.name = name.trim()
-                date_upload = dateFormat.tryParseDate(dateText)
-
-                if (locked) {
-                    this.name = "$LOCK_PREFIX${this.name}"
-                    this.url += LOCK_SUFFIX
-                }
-            }
-        }
-    }
-
-    private fun isLocked(element: Element): Boolean {
-        val reason = element.attr("data-reason").lowercase(Locale.ROOT)
-        if (reason.isNotBlank() && reason != "free") return true
-        if (element.hasClass("locked-chapter")) return true
-
-        val href = element.selectFirst("a")?.attr("href").orEmpty()
-        if (href.isBlank() || href == "#") return true
-
-        return element.selectFirst(".chapter_price") != null
-    }
-
-    private suspend fun fetchMoreChapters(
-        comicId: String,
-        offset: Int,
-        nonce: String,
-        hideLocked: Boolean,
-    ): List<SChapter> {
-        val formBody = FormBody.Builder()
-            .add("action", "load_more_chapters")
-            .add("nonce", nonce)
-            .add("comic_id", comicId)
-            .add("offset", offset.toString())
-            .build()
-
-        val xhrHeaders = headers.newBuilder()
-            .add("X-Requested-With", "XMLHttpRequest")
-            .build()
-        val result = client.post("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, Fetch.XHR, formBody).parseAs<AjaxResponse>()
-        if (!result.success) return emptyList()
-
-        val html = result.data?.html.orEmpty()
-        if (html.isBlank()) return emptyList()
-
-        val doc = Jsoup.parseBodyFragment(html)
-        return parseChapterElements(doc.select(CHAPTER_SELECTOR), hideLocked)
-    }
+    private fun Document.info(label: String): String? = selectFirst("main dt:containsOwn($label) + dd")?.textOrNull()
 
     private fun decodePages(payload: String): List<String> {
         val raw = Base64.decode(payload, Base64.DEFAULT)
 
         return ByteArray(raw.size - 16) { i ->
             ((raw[i + 16].toInt() and 0xFF) xor (raw[i % 16].toInt() and 0xFF)).toByte()
-        }.toString(Charsets.UTF_8).parseAs()
+        }.decodeToString().parseAs()
     }
 
-    private fun extractNonce(document: Document): String? {
-        val match = NONCE_REGEX.find(document.html()) ?: return null
-        return match.groupValues[1]
-    }
-
-    private fun parseStatus(status: String?): Int = when (status?.trim()?.lowercase(Locale.ROOT)) {
+    private fun parseStatus(status: String?): Int = when (status?.lowercase(Locale.ROOT)) {
         "ongoing" -> SManga.ONGOING
         "completed" -> SManga.COMPLETED
-        "hiatus" -> SManga.UNKNOWN
-        "cancelled", "canceled" -> SManga.CANCELLED
+        "dropped" -> SManga.CANCELLED
         else -> SManga.UNKNOWN
     }
 
-    private fun imageFromElement(element: Element): String? {
-        val imageUrl = when {
-            element.hasAttr("data-src") -> element.attr("abs:data-src")
-            element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
-            else -> element.attr("abs:src")
-        }
-        return imageUrl.trim().ifEmpty { null }
-    }
-
-    private fun requireField(value: String?, label: String): String {
-        val trimmed = value?.trim()
-        if (trimmed.isNullOrBlank()) {
-            throw Exception("Missing $label")
-        }
-        return trimmed
-    }
-
-    class Genre(name: String, val slug: String) : Filter.CheckBox(name)
-
-    class GenreFilter(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres)
-
-    class SortFilter : Filter.Select<String>("Sort", OPTIONS.map { it.first }.toTypedArray()) {
-        fun toQuery(): String? = OPTIONS.getOrNull(state)?.second
-
-        companion object {
-            val OPTIONS = listOf(
-                Pair("Newest First", "newest"),
-                Pair("Oldest First", "oldest"),
-                Pair("A-Z", "az"),
-                Pair("Z-A", "za"),
-            )
-        }
-    }
+    @Serializable
+    private class AjaxResponse(val data: AjaxData)
 
     @Serializable
-    private class AjaxResponse(
-        val success: Boolean = false,
-        val data: AjaxData? = null,
-    )
-
-    @Serializable
-    private class AjaxData(
-        val html: String? = null,
-    )
+    private class AjaxData(val html: String)
 
     companion object {
         private const val PREF_HIDE_LOCKED = "hide_paid_chapters"
-        private const val SORT_PARAM = "sort"
         private const val LOCK_PREFIX = "🔒 "
-        private const val LOCK_SUFFIX = "#lock"
-        private const val CHAPTER_SELECTOR = "li.chapter"
-        private const val CHAPTERS_PER_PAGE = 10
-        private val NONCE_REGEX = Regex(
-            """comicworld_ajax\s*=\s*\{[^}]*"nonce"\s*:\s*"([^"]+)"""",
-        )
+        private const val AJAX_PATH = "/wp-admin/admin-ajax.php"
+        private val NONCE_REGEX = Regex(""""nonce":"([^"]+)"""")
     }
 }
 
-private val dateFormat = DateTimeFormatter.ofPattern("[MMMM][MMM] d, yyyy", Locale.ENGLISH)
+private val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)

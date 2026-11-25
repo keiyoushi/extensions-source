@@ -1,17 +1,19 @@
 package eu.kanade.tachiyomi.extension.pt.blitztoons
 
+import android.util.Base64
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
@@ -21,6 +23,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Instant
 
 @Source
@@ -69,9 +72,26 @@ abstract class BlitzToons : KeiSource() {
         return SMangaUpdate(document.toSManga(manga.url), document.toSChapters())
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        .select("[data-pages-wrap] img.page")
-        .mapIndexed { index, img -> Page(index, imageUrl = img.absUrl("src")) }
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val chapterUrl = getChapterUrl(chapter)
+        val readerUrl = chapterUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("_", System.currentTimeMillis().toString())
+            .build()
+        val document = client.get(readerUrl, Fetch.DOCUMENT).asJsoup()
+        val pageToken = document.selectFirst("[data-block][data-pt]")!!.attr("data-pt")
+        val key = readerKey(document.selectFirst("script[src*=/reader.js]")!!.absUrl("src"), chapterUrl)
+        val url = "$baseUrl/api/paginas".toHttpUrl().newBuilder().apply {
+            chapterUrl.toHttpUrl().pathSegments.drop(1).forEach(::addPathSegment)
+            addQueryParameter("t", pageToken)
+        }.build()
+        val signature = Base64.encodeToString("p|$pageToken".hmacSha256(key), Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+        val apiHeaders = headers.newBuilder()
+            .set("Accept", "application/json")
+            .set("X-BT-P", signature)
+            .build()
+        return client.get(url, apiHeaders, Fetch.XHR.from(chapterUrl)).parseAs<PagesDto>().paginas
+            .mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
+    }
 
     override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/obras", Fetch.DOCUMENT).asJsoup()
         .select(".filter-gen a.chip[href*=genero=]")
@@ -131,5 +151,16 @@ abstract class BlitzToons : KeiSource() {
         }
     }
 
+    private val readerKeys = ConcurrentHashMap<String, ByteArray>()
+
+    private suspend fun readerKey(scriptUrl: String, chapterUrl: String): ByteArray = readerKeys.getOrPut(scriptUrl) {
+        val script = client.get(scriptUrl, Fetch.SCRIPT.from(chapterUrl)).body.string()
+        HMAC_KEY_REGEX.findAll(script).single().groupValues[1].encodeToByteArray()
+    }
+
     private fun HttpUrl.isSiteUrl() = host.removePrefix("www.") == baseUrl.toHttpUrl().host
+
+    companion object {
+        private val HMAC_KEY_REGEX = Regex(""""([A-Za-z0-9_-]{32})"""")
+    }
 }

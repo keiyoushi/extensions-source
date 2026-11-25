@@ -62,6 +62,16 @@ class GenreDto(
 )
 
 @Serializable
+class ReaderPagesRequest(
+    private val access: String,
+)
+
+@Serializable
+class ReaderPagesResponse(
+    val pages: List<PageDto>,
+)
+
+@Serializable
 class PageDto(
     private val src: String,
 ) {

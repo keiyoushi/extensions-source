@@ -2,129 +2,27 @@ package eu.kanade.tachiyomi.extension.id.comicaso
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-    fun toUriPart() = vals[state].second
+open class SelectFilter(name: String, private val options: List<Pair<String, String?>>) : Filter.Select<String>(name, options.map { it.first }.toTypedArray()) {
+    val selected get() = options[state].second
 }
 
-class SourceFilter :
-    UriPartFilter(
-        "Source",
-        arrayOf(
-            Pair("All", "all"),
-            Pair("Comicazen", "comicazen"),
-            Pair("Medusa", "medusa"),
-        ),
-    )
-
 class TypeFilter :
-    UriPartFilter(
-        "Type",
-        arrayOf(
-            Pair("All", "all"),
-            Pair("Manga", "manga"),
-            Pair("Manhua", "manhua"),
-            Pair("Manhwa", "manhwa"),
-            Pair("One Shot", "one shot"),
-        ),
+    SelectFilter(
+        "Jenis",
+        listOf("Semua jenis" to null, "Manga" to "Manga", "Manhwa" to "Manhwa", "Manhua" to "Manhua"),
     )
 
-class GenreFilter :
-    UriPartFilter(
-        "Genre",
-        arrayOf(
-            Pair("All", ""),
-            Pair("Action", "action"),
-            Pair("Adaptation", "Adaptation"),
-            Pair("Adventure", "adventure"),
-            Pair("Age Gap", "Age Gap"),
-            Pair("Aliens", "Aliens"),
-            Pair("Animals", "Animals"),
-            Pair("Beasts", "Beasts"),
-            Pair("Bloody", "Bloody"),
-            Pair("Bodyswap", "Bodyswap"),
-            Pair("Boys", "boys"),
-            Pair("Cheating/Infidelity", "Cheating/Infidelity"),
-            Pair("Childhood Friends", "Childhood Friends"),
-            Pair("College life", "College life"),
-            Pair("Comedy", "Comedy"),
-            Pair("Cooking", "Cooking"),
-            Pair("Crime", "Crime"),
-            Pair("Crossdressing", "Crossdressing"),
-            Pair("Delinquents", "Delinquents"),
-            Pair("Demons", "Demons"),
-            Pair("Drama", "drama"),
-            Pair("Dungeons", "Dungeons"),
-            Pair("Ecchi", "ecchi"),
-            Pair("Emperor's daughte", "Emperor's daughte"),
-            Pair("Fantasy", "Fantasy"),
-            Pair("Fighting", "fighting"),
-            Pair("Full Color", "Full Color"),
-            Pair("Game", "Game"),
-            Pair("Gender Bender", "Gender Bender"),
-            Pair("Genderswap", "Genderswap"),
-            Pair("Ghosts", "Ghosts"),
-            Pair("Girl", "girl"),
-            Pair("Girls", "Girls"),
-            Pair("Gore", "gore"),
-            Pair("Harem", "Harem"),
-            Pair("Historical", "Historical"),
-            Pair("Horror", "horror"),
-            Pair("Incest", "Incest"),
-            Pair("Isekai", "Isekai"),
-            Pair("Josei(W)", "Josei(W)"),
-            Pair("Kids", "Kids"),
-            Pair("Magic", "Magic"),
-            Pair("Magical Girls", "Magical Girls"),
-            Pair("Manga", "manga"),
-            Pair("Manhua", "Manhua"),
-            Pair("Manhwa", "manhwa"),
-            Pair("Martial Arts", "Martial Arts"),
-            Pair("Mature", "Mature"),
-            Pair("Medical", "Medical"),
-            Pair("Military", "Military"),
-            Pair("Monster Girls", "Monster Girls"),
-            Pair("Monsters", "Monsters"),
-            Pair("Music", "Music"),
-            Pair("Mystery", "Mystery"),
-            Pair("NTR", "NTR"),
-            Pair("Office Workers", "Office Workers"),
-            Pair("Philosophical", "Philosophical"),
-            Pair("Police", "Police"),
-            Pair("Psychological", "Psychological"),
-            Pair("Regression", "Regression"),
-            Pair("Reincarnation", "Reincarnation"),
-            Pair("Revenge", "Revenge"),
-            Pair("Reverse Harem", "Reverse Harem"),
-            Pair("Reverse Isekai", "Reverse Isekai"),
-            Pair("Romance", "Romance"),
-            Pair("Royal family", "Royal family"),
-            Pair("Royalty", "Royalty"),
-            Pair("School Life", "School Life"),
-            Pair("Sci-Fi", "Sci-Fi"),
-            Pair("Seinen(M)", "Seinen(M)"),
-            Pair("Sejarah", "Sejarah"),
-            Pair("Shoujo(G)", "Shoujo(G)"),
-            Pair("Shounen ai", "Shounen ai"),
-            Pair("Shounen(B)", "Shounen(B)"),
-            Pair("Showbiz", "Showbiz"),
-            Pair("Slice of Life", "Slice of Life"),
-            Pair("Smut", "Smut"),
-            Pair("Sports", "Sports"),
-            Pair("Super Power", "Super Power"),
-            Pair("Superhero", "Superhero"),
-            Pair("Supernatural", "Supernatural"),
-            Pair("Survival", "Survival"),
-            Pair("Thriller", "Thriller"),
-            Pair("Time Travel", "Time Travel"),
-            Pair("Tower Climbing", "Tower Climbing"),
-            Pair("Tragedy", "Tragedy"),
-            Pair("Transmigration", "Transmigration"),
-            Pair("Vampires", "Vampires"),
-            Pair("Video Games", "Video Games"),
-            Pair("Villainess", "Villainess"),
-            Pair("Violence", "Violence"),
-            Pair("Western", "Western"),
-            Pair("Yuri(GL)", "Yuri(GL)"),
-            Pair("Zombies", "Zombies"),
-        ),
+// The site's own form sends the Indonesian labels, which the server matches to nothing
+class StatusFilter :
+    SelectFilter(
+        "Status",
+        listOf("Semua status" to null, "Berjalan" to "Ongoing", "Tamat" to "Completed"),
     )
+
+class SortFilter :
+    SelectFilter(
+        "Urutkan",
+        listOf("Terakhir diperbarui" to "updated", "Terbaru ditambahkan" to "new"),
+    )
+
+class GenreFilter(genres: List<GenreDto>) : SelectFilter("Genre", listOf("Semua genre" to null) + genres.map { it.name to it.value })

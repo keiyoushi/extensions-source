@@ -5,12 +5,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
@@ -152,20 +152,37 @@ abstract class Dilar : KeiSource() {
             }
     }
 
-    // The chapter response is encrypted with a scheme the server keeps rotating (and it ignores
-    // X-Crypto-Caps), so let the site's reader decrypt it and grab the result as it gets parsed.
+    // Encryption keeps rotating, so let the site decrypt and catch the release + id-less assets_enc pages as they're parsed.
     private fun captureScript(bridge: String, releaseId: String) = """
         (() => {
-            const parse = JSON.parse;
-            JSON.parse = function () {
-                const result = parse.apply(this, arguments);
-                if (result && String(result.id) === ${releaseId.toJsonString()} && result.storage_key && Array.isArray(result.pages)) {
+            let release = null;
+            const capture = (result) => {
+                if (!result || typeof result !== "object") return;
+                if (String(result.id) === ${releaseId.toJsonString()}) {
+                    release = {
+                        storage_key: result.storage_key || release?.storage_key,
+                        media_token: result.media_token || release?.media_token,
+                    };
+                }
+                const storageKey = result.storage_key || release?.storage_key;
+                if (release && storageKey && Array.isArray(result.pages) && result.pages.length) {
                     window.$bridge.postMessage(JSON.stringify({
-                        storage_key: result.storage_key,
-                        media_token: result.media_token,
+                        storage_key: storageKey,
+                        media_token: result.media_token || release.media_token,
                         pages: result.pages,
                     }));
                 }
+            };
+            const parse = JSON.parse;
+            JSON.parse = function () {
+                const result = parse.apply(this, arguments);
+                capture(result);
+                return result;
+            };
+            const json = Response.prototype.json;
+            Response.prototype.json = async function () {
+                const result = await json.apply(this, arguments);
+                capture(result);
                 return result;
             };
         })();

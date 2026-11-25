@@ -3,12 +3,12 @@ package eu.kanade.tachiyomi.extension.all.webtoons
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.textinterceptor.TextInterceptor
 import keiyoushi.lib.textinterceptor.TextInterceptorHelper
@@ -17,6 +17,7 @@ import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
@@ -24,6 +25,11 @@ import keiyoushi.utils.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -95,7 +101,7 @@ abstract class Webtoons :
 
     private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
         setUrlWithoutDomain(element.absUrl("href"))
-        title = element.selectFirst(".title")!!.text()
+        title = element.selectFirst(".title, .subj")!!.text()
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
@@ -118,11 +124,68 @@ abstract class Webtoons :
         return MangasPage(entries, hasNextPage = false)
     }
 
-    override fun getFilterList(data: JsonElement?): FilterList = FilterList(
-        SearchType(),
-    )
+    override val supportsFilterFetching: Boolean get() = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val originals = client.get("$baseUrl/$langCode/genres", Fetch.DOCUMENT).asJsoup()
+            .select("a[data-genre][href*=/genres/]")
+        val canvas = client.get("$baseUrl/$langCode/canvas/list?genreTab=ALL", Fetch.DOCUMENT).asJsoup()
+            .select("a[href*=genreTab]:not(.pg_page):not(.pg_next):not(.pg_prev)")
+
+        return buildJsonObject {
+            putJsonObject("originals") {
+                originals.forEach { put("genres/" + it.absUrl("href").toHttpUrl().pathSegments.last(), it.text()) }
+            }
+            putJsonObject("canvas") {
+                canvas.forEach {
+                    val genre = it.absUrl("href").toHttpUrl().queryParameter("genreTab")
+                    if (!genre.isNullOrEmpty()) put("canvas/list?genreTab=$genre", it.text())
+                }
+            }
+        }
+    }
+
+    override fun getFilterList(data: JsonElement?): FilterList {
+        // Originals and Canvas name the same genre "slice_of_life" and "SLICE_OF_LIFE"
+        fun group(key: String, slug: (String) -> String?) = data?.jsonObject?.get(key)?.jsonObject.orEmpty()
+            .mapNotNull { (path, name) -> slug(path)?.let { it.lowercase() to (path to name.jsonPrimitive.content) } }
+            .toMap()
+        val originals = group("originals") { it.removePrefix("genres/") }
+        val canvas = group("canvas") { path -> path.substringAfter("genreTab=").takeIf { it != "ALL" } }
+        val genres = (originals.keys + canvas.keys).map { slug ->
+            Genre(
+                name = (originals[slug] ?: canvas[slug])!!.second,
+                originals = originals[slug]?.first,
+                canvas = canvas[slug]?.first,
+            )
+        }.sortedBy { it.name }
+
+        return FilterList(
+            Filter.Header("Text search uses Type only"),
+            SearchType(),
+            Filter.Separator(),
+            UpdateDayFilter(),
+            GenreFilter(genres),
+            Filter.Header("Update day is used instead of Genre when both are set"),
+            SortFilter(),
+        )
+    }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (query.isBlank()) {
+            val type = filters.firstInstanceOrNull<SearchType>()?.selected
+            val day = filters.firstInstanceOrNull<UpdateDayFilter>()?.selected
+            val genre = filters.firstInstanceOrNull<GenreFilter>()?.selected
+            val path = when {
+                day != null -> "originals/$day"
+                genre != null -> if ((type == "canvas" && genre.canvas != null) || genre.originals == null) genre.canvas else genre.originals
+                type == "canvas" -> "canvas/list?genreTab=ALL"
+                type == "originals" -> "ranking/originals"
+                else -> return getPopularManga(page)
+            }!!
+            return browseManga(path, filters.firstInstanceOrNull<SortFilter>()?.selected, page)
+        }
+
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             var searchTypeAdded = false
             addPathSegment(langCode)
@@ -140,6 +203,20 @@ abstract class Webtoons :
         val document = client.get(url, Fetch.DOCUMENT).asJsoup()
         val entries = document.select(".webtoon_list li a").map(::mangaFromElement)
         val hasNextPage = document.selectFirst("a.pagination[aria-current=true] + a") != null
+
+        return MangasPage(entries, hasNextPage)
+    }
+
+    // Only Canvas lists are paginated; Originals genre and day pages hold every title at once.
+    private suspend fun browseManga(path: String, sortOrder: String?, page: Int): MangasPage {
+        val url = "$baseUrl/$langCode/$path".toHttpUrl().newBuilder().apply {
+            sortOrder?.let { setQueryParameter("sortOrder", it) }
+            if (page > 1) setQueryParameter("page", page.toString())
+        }.build()
+
+        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
+        val entries = document.select(".webtoon_list li a, .challenge_lst li a").map(::mangaFromElement)
+        val hasNextPage = document.selectFirst(".paginate a[aria-current=true] + a") != null
 
         return MangasPage(entries, hasNextPage)
     }

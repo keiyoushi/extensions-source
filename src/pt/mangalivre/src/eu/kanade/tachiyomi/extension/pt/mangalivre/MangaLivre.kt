@@ -1,13 +1,9 @@
 package eu.kanade.tachiyomi.extension.pt.mangalivre
 
-import android.content.ComponentName
-import android.content.Intent
-import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.os.ResultReceiver
+import android.os.LocaleList
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -15,29 +11,28 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.applicationContext
+import keiyoushi.source.SMangaUpdate
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getTurnstileToken
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.toJsonRequestBody
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
-import okhttp3.Response
 import java.io.IOException
-import kotlin.time.Duration.Companion.minutes
+import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -46,74 +41,47 @@ abstract class MangaLivre :
     ConfigurableSource {
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
 
-    private val apiUrl: String get() = "$baseUrl/api"
+    private val apiUrl get() = "$baseUrl/api".toHttpUrl()
 
     private val preferences by getPreferencesLazy()
-    private val verificationMutex = Mutex()
+    private val turnstileMutex = Mutex()
 
-    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("Accept-Language", "pt-BR,en-US;q=0.9,en;q=0.8")
+    override fun Headers.Builder.configureHeaders(): Headers.Builder = set("Accept-Language", acceptLanguage())
 
-    // ============================== Popular =======================================
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter()))
 
-    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(
-        page,
-        "",
-        FilterList(
-            listOf(
-                OrderByFilter(options = listOf("" to SORT_POPULAR)),
-                OrderDirectionFilter(options = listOf("" to DIRECTION_DESC)),
-            ),
-        ),
-    )
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter(Filter.Sort.Selection(2, false))))
 
-    // ============================== Latest =======================================
-
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(
-        page,
-        "",
-        FilterList(
-            listOf(
-                OrderByFilter(options = listOf("" to SORT_UPDATED)),
-                OrderDirectionFilter(options = listOf("" to DIRECTION_DESC)),
-            ),
-        ),
-    )
-
-    // ============================== Search =======================================
-
-    override suspend fun getSearchMangaList(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): MangasPage {
-        val url =
-            "$apiUrl/mangas/search"
-                .toHttpUrl()
-                .newBuilder()
-                .addQueryParameter("page", page.toString())
-                .addQueryParameter("limit", "24")
-
-        if (query.isNotBlank()) {
-            url.addQueryParameter("q", query)
-        }
-
-        filters.forEach { filter ->
-            when (filter) {
-                is OrderByFilter -> {
-                    url.addQueryParameter("sortBy", filter.selected())
-                }
-                is OrderDirectionFilter -> {
-                    url.addQueryParameter("sortOrder", filter.selected())
-                }
-                else -> {}
-            }
-        }
-        val dto = client.get(url.build(), Fetch.XHR).parseJson<WrapperDto>()
-        val mangas = dto.mangas.map { it.toSManga(useAlternativeTitle) }
-        return MangasPage(mangas, dto.hasNextPage)
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val sort = filters.firstInstance<SortFilter>()
+        val url = apiUrl.newBuilder()
+            .addPathSegments("mangas/search")
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("limit", "24")
+            .apply { if (query.isNotBlank()) addQueryParameter("q", query) }
+            .addQueryParameter("sortBy", sort.sortBy)
+            .addQueryParameter("sortOrder", if (sort.ascending) "asc" else "desc")
+            .apply { filters.filterIsInstance<CheckBoxGroup>().forEach { it.addTo(this) } }
+            .build()
+        val dto = client.get(url, Fetch.XHR).parseAs<WrapperDto>()
+        return MangasPage(dto.mangas.map { it.toSManga(useAlternativeTitle) }, dto.hasNextPage)
     }
 
-    // ============================== Details =======================================
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val segments = url.pathSegments.filter { it.isNotEmpty() }
+        val slug = when (segments.firstOrNull()) {
+            "read" -> segments.getOrNull(1)
+            "manga" -> segments.lastOrNull()
+            else -> segments.firstOrNull()
+        } ?: return null
+        client.get(mangaBySlugUrl(slug), Fetch.XHR, ensureSuccess = false).use { response ->
+            if (response.code == 404) return null
+            return response.parseAs<MangaDto>().toSManga(useAlternativeTitle).apply { initialized = true }
+        }
+    }
+
+    private fun mangaBySlugUrl(slug: String) = apiUrl.newBuilder().addPathSegment("manga-by-slug").addPathSegment(slug).build()
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/${manga.url}"
 
@@ -123,196 +91,92 @@ abstract class MangaLivre :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val dto = client.get("$apiUrl/manga-by-slug/${manga.url}", Fetch.XHR).parseJson<MangaDto>()
+        val dto = client.get(mangaBySlugUrl(manga.url), Fetch.XHR).parseAs<MangaDto>()
         return SMangaUpdate(
             manga = dto.toSManga(useAlternativeTitle),
             chapters = dto.toSChapterList(),
         )
     }
 
-    // ============================== Pages =======================================
-
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterUrl = "$baseUrl${chapter.url}".toHttpUrl()
-        val ref = chapter.memo.parseAs<ChapterReferenceDto>()
-        val chapterNumber = chapterUrl.pathSegments.last { it.isNotEmpty() }
-
-        return verificationMutex.withLock {
-            fetchReaderAccess(ref)?.let { access ->
-                return@withLock access.chapter.pages.toPageList(ref.mangaId, chapterNumber)
+        val reference = chapter.memo.parseAs<ChapterReferenceDto>()
+        val chapterUrl = getChapterUrl(chapter)
+        val access = fetchReaderAccess(reference, chapterUrl, null)
+            ?: turnstileMutex.withLock {
+                fetchReaderAccess(reference, chapterUrl, null)
+                    ?: fetchReaderAccess(reference, chapterUrl, getTurnstileToken(chapterUrl, TURNSTILE_SITE_KEY, action = TURNSTILE_ACTION))
             }
-
-            openVerificationWebView(chapterUrl.toString(), ref.mangaId, chapterNumber)
-                .toPageList(ref.mangaId, chapterNumber)
-        }
+            ?: throw IOException("Verificação de segurança falhou")
+        return access.chapter.pages.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
 
-    private suspend fun fetchReaderAccess(ref: ChapterReferenceDto): ReaderAccessResponseDto? {
-        client.post(
-            "$apiUrl/reader/chapter/access",
-            fetch = Fetch.XHR,
-            body = ref.toJsonRequestBody(),
-            ensureSuccess = false,
-        ).use { response ->
+    private suspend fun fetchReaderAccess(reference: ChapterReferenceDto, chapterUrl: String, turnstileToken: String?): ReaderAccessResponseDto? {
+        val body = ReaderAccessRequestDto(reference.mangaId, reference.chapterId, turnstileToken).toJsonRequestBody()
+        val url = apiUrl.newBuilder().addPathSegments("reader/chapter/access").build()
+        client.post(url, Fetch.XHR.from(chapterUrl), body, ensureSuccess = false).use { response ->
             if (response.isSuccessful) return response.parseAs()
-
-            val error = response.parseAs<ReaderAccessErrorDto>()
-            if (response.code == 403 && error.error == READER_VERIFICATION_REQUIRED) return null
-            throw IOException(error.error)
+            if (response.code == 403) return null
+            if (response.body.contentType()?.subtype != "json") throw HttpException(response.code)
+            throw IOException(response.parseAs<ReaderAccessErrorDto>().error)
         }
     }
 
-    private suspend fun openVerificationWebView(
-        readerUrl: String,
-        mangaId: String,
-        chapterNumber: String,
-    ): List<String> {
-        val result = CompletableDeferred<List<String>>()
-        val receiver =
-            object : ResultReceiver(Handler(Looper.getMainLooper())) {
-                override fun onReceiveResult(
-                    resultCode: Int,
-                    resultData: Bundle?,
-                ) {
-                    val pages = resultData?.getStringArrayList(ReaderVerificationActivity.EXTRA_PAGES).orEmpty()
-                    if (resultCode == ReaderVerificationActivity.RESULT_PAGES && pages.isNotEmpty()) {
-                        result.complete(pages)
-                    } else {
-                        result.completeExceptionally(IOException("Verificação cancelada."))
-                    }
-                }
-            }
-        val intent =
-            Intent().apply {
-                component = ComponentName(EXTENSION_PACKAGE, ReaderVerificationActivity::class.java.name)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                putExtra(ReaderVerificationActivity.EXTRA_URL, readerUrl)
-                putExtra(ReaderVerificationActivity.EXTRA_MANGA_ID, mangaId)
-                putExtra(ReaderVerificationActivity.EXTRA_CHAPTER_NUMBER, chapterNumber)
-                putExtra(ReaderVerificationActivity.EXTRA_RECEIVER, receiver)
-            }
-        applicationContext.startActivity(intent)
-        return withTimeout(VERIFICATION_TIMEOUT) { result.await() }
-    }
+    override val supportsFilterFetching get() = true
 
-    // ============================== Filters =======================================
+    override suspend fun fetchFilterData(): JsonElement = client.get(
+        apiUrl.newBuilder()
+            .addPathSegment("mangas")
+            .addQueryParameter("lite", "1")
+            .addQueryParameter("includeRecentChapters", "0")
+            .build(),
+        Fetch.XHR,
+    )
+        .parseAs<List<GenresDto>>()
+        .flatMap { it.genres.orEmpty() }
+        .distinct()
+        .sorted()
+        .toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
-        listOf(
-            OrderByFilter(
-                "Ordem",
-                listOf(
-                    "Mais Visualizados" to SORT_POPULAR,
-                    "Lançamentos" to SORT_RELEASE,
-                    "Última Atualização" to SORT_UPDATED,
-                    "Melhor Avaliação" to SORT_RATING,
-                    "A-Z" to SORT_TITLE,
-                ),
-            ),
-            Filter.Separator(),
-            OrderDirectionFilter(
-                "Direção",
-                listOf(
-                    "↑ Decrescente" to DIRECTION_DESC,
-                    "↓ Crescente" to DIRECTION_ASC,
-                ),
-            ),
+        listOfNotNull(
+            SortFilter(),
+            TypeFilter(),
+            StatusFilter(),
+            YearFilter(),
+            data?.parseAs<List<String>>()?.let(::GenreFilter),
         ),
     )
 
-    val useAlternativeTitle: Boolean get() =
-        preferences.getBoolean(ALTERNATIVE_TITLE_PREF, false)
+    private val useAlternativeTitle get() = preferences.getBoolean(ALTERNATIVE_TITLE_PREF, false)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context)
             .apply {
                 key = ALTERNATIVE_TITLE_PREF
-                title = "Titulo alternativo"
-                summary =
-                    buildString {
-                        append("Use titulos alternativos como principal quando disponivel.")
-                        append(" Essa opção não tem efeito sobre obras já adicionadas na sua biblioteca")
-                    }
+                title = "Título alternativo"
+                summary = "Usa o título alternativo como principal quando disponível. Não altera obras já na sua biblioteca."
                 setDefaultValue(false)
             }.also(screen::addPreference)
     }
 
-    // ============================== Utilities =======================================
-
-    private inline fun <reified T> Response.parseJson(): T {
-        val peek = peekBody(MAX_PEEK).string().trimStart()
-        if (peek.isEmpty() || peek.startsWith("<")) {
-            close()
-            throw IOException(NON_JSON_MESSAGE)
+    private fun acceptLanguage(): String {
+        val locales = LocaleList.getDefault().let { list -> List(list.size()) { list[it] } }
+            .let { locales -> if (locales.any { it.language == "pt" }) locales else locales + PORTUGUESE }
+        val tags = buildList {
+            locales.forEachIndexed { index, locale ->
+                val language = Locale.Builder().setLanguage(locale.language).build().toLanguageTag()
+                val tag = if (locale.country.isEmpty()) language else "$language-${locale.country}"
+                if (tag !in this) add(tag)
+                if (locales.getOrNull(index + 1)?.language != locale.language && language !in this) add(language)
+            }
         }
-        return parseAs<T>()
+        return tags.mapIndexed { index, tag -> if (index == 0) tag else "$tag;q=0.${(10 - index).coerceAtLeast(1)}" }.joinToString(",")
     }
 
     companion object {
-        private val VERIFICATION_TIMEOUT = 2.minutes
-        private const val EXTENSION_PACKAGE = "eu.kanade.tachiyomi.extension.pt.mangalivre"
-        private const val CDN_HOST = "cdn.toonlivre.net"
-        private const val PROXY_HOST = "slightly-free-mayfly.edgecompute.app"
-        private val PAGE_NUMBER_REGEX = Regex("""_(\d+)\.[^.]+$""")
-
         private const val ALTERNATIVE_TITLE_PREF = "alternativeTitlePref"
-        private const val MAX_PEEK = 1024L
-        private const val NON_JSON_MESSAGE =
-            "Resposta não-JSON (Cloudflare ou header desatualizado). Abra a fonte na WebView do app e tente de novo."
-        private const val READER_VERIFICATION_REQUIRED = "Reader verification required"
-
-        private const val SORT_POPULAR = "popular"
-        private const val SORT_RELEASE = "release"
-        private const val SORT_UPDATED = "updated"
-        private const val SORT_RATING = "rating"
-        private const val SORT_TITLE = "title"
-        private const val DIRECTION_DESC = "desc"
-        private const val DIRECTION_ASC = "asc"
+        private val PORTUGUESE = Locale.forLanguageTag("pt-BR")
+        private const val TURNSTILE_SITE_KEY = "0x4AAAAAAC_2UGhBWthpfExC"
+        private const val TURNSTILE_ACTION = "reader-chapter"
     }
-
-    private fun String.toCdnImageUrl(): String? {
-        val url = toHttpUrlOrNull() ?: return null
-        val candidate =
-            when (url.host) {
-                CDN_HOST -> url
-                PROXY_HOST -> url.queryParameter("url")?.toHttpUrlOrNull()
-                else -> null
-            } ?: return null
-
-        return candidate.takeIf { it.isHttps && it.host == CDN_HOST }?.toString()
-    }
-
-    private fun String.isChapterImage(
-        mangaId: String,
-        chapterNumber: String,
-    ): Boolean {
-        val pathSegments = toHttpUrl().pathSegments
-        return pathSegments.size >= 4 &&
-            pathSegments[0] == "obras" &&
-            pathSegments[1] == mangaId &&
-            pathSegments[2] == chapterNumber &&
-            pathSegments[3].isNotEmpty()
-    }
-
-    private fun List<String>.toPageList(
-        mangaId: String,
-        chapterNumber: String,
-    ): List<Page> {
-        val sortedUrls =
-            asSequence()
-                .mapNotNull { it.toCdnImageUrl() }
-                .filter { it.isChapterImage(mangaId, chapterNumber) }
-                .distinct()
-                .sortedWith(compareBy<String>({ it.pageNumber() ?: Int.MAX_VALUE }, { it }))
-                .toList()
-        return sortedUrls.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
-    }
-
-    private fun String.pageNumber(): Int? = toHttpUrl()
-        .pathSegments
-        .lastOrNull()
-        ?.let(PAGE_NUMBER_REGEX::find)
-        ?.groupValues
-        ?.get(1)
-        ?.toIntOrNull()
 }

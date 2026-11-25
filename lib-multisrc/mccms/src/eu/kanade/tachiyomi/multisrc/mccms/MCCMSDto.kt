@@ -2,11 +2,14 @@ package eu.kanade.tachiyomi.multisrc.mccms
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.Serializable
 import org.jsoup.nodes.Entities
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.days
 
 @Serializable
 class MangaDto(
@@ -25,9 +28,9 @@ class MangaDto(
     fun toSManga() = SManga.create().apply {
         url = cleanUrl
         title = Entities.unescape(name)
-        author = Entities.unescape(this@MangaDto.author)
-        description = Entities.unescape(content)
-        genre = Entities.unescape(tags.joinToString())
+        author = this@MangaDto.author.ifEmpty { null }?.let(Entities::unescape)
+        description = MarkdownDescription.Builder().description(Entities.unescape(content)).build()
+        genre = tags.joinToString().ifEmpty { null }?.let(Entities::unescape)
         status = when (serialize) {
             "连载", "连载中", "連載中", "En cours", "OnGoing" -> SManga.ONGOING
             "完结", "已完结", "已完結", "Terminé", "Complete", "Complété" -> SManga.COMPLETED
@@ -40,7 +43,7 @@ class MangaDto(
     companion object {
         private fun isUpdating(dateStr: String): Boolean {
             val date = DATE_FORMAT.tryParseDateTime(dateStr).takeIf { it != 0L } ?: return false
-            return System.currentTimeMillis() - date <= 30L * 24 * 3600 * 1000 // a month
+            return Clock.System.now().toEpochMilliseconds() - date <= 30.days.inWholeMilliseconds
         }
     }
 }
@@ -62,4 +65,7 @@ class ChapterDataDto(val id: String, private val addtime: String) {
 @Serializable
 class ResultDto<T>(val data: T)
 
-private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
+private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
+
+@Serializable
+class ImageListDto(val images: List<String>)

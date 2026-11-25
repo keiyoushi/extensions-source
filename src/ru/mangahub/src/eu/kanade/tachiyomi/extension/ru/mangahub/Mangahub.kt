@@ -6,20 +6,18 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -115,28 +113,30 @@ abstract class Mangahub : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
+    ): SMangaUpdate {
         val mangaUrl = manga.url
-        val mangaAsync = async {
-            if (fetchDetails) {
-                val url = "$baseUrl$mangaUrl"
-                val document = client.get(url, Fetch.DOCUMENT).asJsoup()
-                mangaDetailsParse(document, mangaUrl)
-            } else {
-                manga
-            }
-        }
-        val chaptersAsync = async {
-            if (fetchChapters) {
-                val url = "$baseUrl$mangaUrl/chapters"
-                val document = client.get(url, Fetch.DOCUMENT).asJsoup()
-                val translators = manga.memo["translators"]?.string
-                chapterListParse(document, translators)
-            } else {
-                chapters
-            }
-        }
-        SMangaUpdate(mangaAsync.await(), chaptersAsync.await())
+
+        return SMangaUpdate(
+            manga = {
+                if (fetchDetails) {
+                    val url = "$baseUrl$mangaUrl"
+                    val document = client.get(url, Fetch.DOCUMENT).asJsoup()
+                    mangaDetailsParse(document, mangaUrl)
+                } else {
+                    manga
+                }
+            },
+            chapters = {
+                if (fetchChapters) {
+                    val url = "$baseUrl$mangaUrl/chapters"
+                    val document = client.get(url, Fetch.DOCUMENT).asJsoup()
+                    val translators = manga.memo["translators"]?.string
+                    chapterListParse(document, translators)
+                } else {
+                    chapters
+                }
+            },
+        )
     }
 
     // =============================== Manga Utilities ===============================
