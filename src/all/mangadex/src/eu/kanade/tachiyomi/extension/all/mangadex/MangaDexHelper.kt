@@ -148,8 +148,8 @@ class MangaDexHelper(private val lang: String) {
         val genreList = MDConstants.TAG_GROUPS_ORDER.flatMap { genresMap[it].orEmpty() } + nonGenres
 
         val altTitles = attr.altTitles
-            .flatMap { it.entries }
-            .map { (code, title) -> "[$code] ${title.removeEntities()}" }
+            .flatMap { it.values }
+            .map { it.removeEntities() }
 
         val finalChapter = listOfNotNull(
             attr.lastVolume?.takeIf { it.isNotEmpty() }?.let { "Vol.$it" },
