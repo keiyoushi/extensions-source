@@ -7,13 +7,17 @@
     let tickedAt = 0;
     // Genres already in the page url when it opened
     const preset = new URLSearchParams(location.search).get('genre')?.split('|') ?? [];
-    const decode = (value) => {
-        try {
-            return JSON.parse([...atob(value)].map((c) => String.fromCharCode(c.charCodeAt(0) ^ 90)).join(''));
-        } catch {
-            return JSON.parse(value);
+    // The page's answered list requests
+    const requests = [];
+    new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+            const url = new URL(entry.name);
+            if (url.origin === location.origin && url.pathname === '/api/mangas') requests.push({ params: url.searchParams, entry });
         }
-    };
+    }).observe({ type: 'resource', buffered: true });
+    // The cards last read, and when they changed
+    let shown = null;
+    let shownAt = 0;
 
     return () => {
         const visible = (el) => el && el.getClientRects().length > 0;
@@ -90,15 +94,37 @@
             }
         }
 
+        // The cards show the request for the page's url once it is answered and they stop changing
         const wanted = applied ? { ...query, genre: applied } : query;
-        const params = new URLSearchParams();
-        for (const name of ['limit', 'page', 'name', 'letter', 'genre', 'status', 'sort']) {
-            if (wanted[name] !== undefined) params.append(name, wanted[name]);
+        const request = requests.findLast(({ params }) => Object.entries(wanted).every(([name, value]) => params.get(name) === value));
+        if (!request) return null;
+        if (request.entry.responseStatus >= 400) return { ...base, error: request.entry.responseStatus };
+        const cards = [...document.querySelectorAll('a[href]')].filter(
+            (card) => /^\/manga\/[^/]+\/?$/.test(new URL(card.href).pathname) && card.querySelector('h3'),
+        );
+        const seen = cards.map((card) => card.href).join();
+        if (seen !== shown) {
+            shown = seen;
+            shownAt = performance.now();
         }
-        let hash = 2166136261;
-        const key = 'mangas_' + params;
-        for (let i = 0; i < key.length; i++) hash = Math.imul(hash ^ key.charCodeAt(i), 16777619);
-        const cached = sessionStorage.getItem('__app_st_' + (hash >>> 0).toString(36));
-        return cached ? { ...base, list: decode(cached).data, ids } : null;
+        if (performance.now() - Math.max(shownAt, request.entry.responseEnd) < 500) return null;
+        const pages = [...document.querySelectorAll('button')].map((el) => el.textContent.trim()).filter((text) => /^\d+$/.test(text));
+        return {
+            ...base,
+            cards: cards.map((card) => {
+                const heading = card.querySelector('h3');
+                const spans = [...card.querySelectorAll('span')];
+                return {
+                    id: new URL(card.href).pathname.split('/')[2],
+                    title: heading.textContent.trim(),
+                    cover: card.querySelector('img[src*="/assets/"]')?.getAttribute('src') ?? null,
+                    // The badges on the cover, and the genres under the title
+                    badges: spans.filter((span) => !heading.parentElement.contains(span)).map((span) => span.textContent.trim()),
+                    genres: spans.filter((span) => heading.parentElement.contains(span)).map((span) => span.textContent.trim()),
+                };
+            }),
+            next: Math.max(0, ...pages.map(Number)) > Number(wanted.page),
+            ids,
+        };
     };
 }
