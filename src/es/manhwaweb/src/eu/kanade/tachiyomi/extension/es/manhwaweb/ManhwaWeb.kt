@@ -130,8 +130,8 @@ abstract class ManhwaWeb : KeiSource() {
 
         val response = client.get("$apiUrl/chapters/see_new/$slug", Fetch.XHR)
 
-        val result = response.parseAs<PayloadPageDto>()
-        return result.data.images.filter { it.startsWith("http") }
+        val result = response.parseAs<PageDto>()
+        return result.images.filter { it.startsWith("http") }
             .mapIndexed { i, img -> Page(i, imageUrl = img) }
     }
 
