@@ -16,7 +16,7 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.stringOrNull
+import keiyoushi.utils.string
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
@@ -124,7 +124,7 @@ abstract class ZinMangaArt : KeiSource() {
 
     override fun getChapterUrl(chapter: SChapter): String = when (urlLayout) {
         UrlLayout.MANGA_SLUG_CHAPTER_SLUG -> {
-            val mangaSlug = chapter.memo["mangaSlug"]!!.stringOrNull!!
+            val mangaSlug = chapter.memo["mangaSlug"]!!.string
             "$baseUrl/manga/$mangaSlug/${chapter.url}"
         }
         UrlLayout.LEGACY_MANGA_PATH_CHAPTER_SLUG -> {
@@ -176,6 +176,7 @@ abstract class ZinMangaArt : KeiSource() {
         }
         genre = document.select(".tab-summary .genres-content a")
             .joinToString { it.text() }
+            .ifEmpty { null }
 
         status = when (document.selectFirst(".post-status .post-content_item:has(.summary-heading h5:containsOwn(Status)) .summary-content")?.text()?.lowercase()) {
             "ongoing" -> SManga.ONGOING
@@ -190,16 +191,19 @@ abstract class ZinMangaArt : KeiSource() {
             ?.textOrNull()
         val rating = document.selectFirst("#averagerate")?.text()?.toDoubleOrNull()
         val ratingVotes = document.selectFirst("#countrate")?.text()?.toIntOrNull()
-        val alternative = document.selectFirst(".tab-summary .post-content_item:has(.summary-heading h5:containsOwn(Alternative)) .summary-content")
+        val altTitles = document.selectFirst(".tab-summary .post-content_item:has(.summary-heading h5:containsOwn(Alternative)) .summary-content")
             ?.textOrNull()
+            ?.split(',', ';', '/') // best effort
+            ?.map(String::trim)
+            .orEmpty()
         val release = document.selectFirst(".post-status .post-content_item:has(.summary-heading h5:containsOwn(Release)) .summary-content")
             ?.textOrNull()
         description = MarkdownDescription.Builder()
             .rating(rating, max = 5, votes = ratingVotes)
             .description(mainPlot)
-            .field("Views", viewCount)
-            .field("Alternative", alternative)
+            .field("View", viewCount)
             .field("Release", release)
+            .altTitles(altTitles)
             .build()
     }
 
