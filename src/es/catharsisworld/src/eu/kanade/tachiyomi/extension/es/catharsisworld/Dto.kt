@@ -1,70 +1,28 @@
 package eu.kanade.tachiyomi.extension.es.catharsisworld
 
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.MarkdownDescription
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
+// A series card of the site's list
 @Serializable
-class MangaListDto(
-    val data: List<MangaDto>,
-    @SerialName("total_pages") val totalPages: Int,
-)
-
-@Serializable
-class MangaDto(
-    private val id: Int,
-    private val nombre: String,
-    @SerialName("portada_url") private val portadaUrl: String?,
-    private val descripcion: String?,
-    private val estado: String?,
-    private val tipo: String?,
-    private val nsfw: Boolean = false,
-    @SerialName("nombre_alt_1") private val nombreAlt1: String?,
-    @SerialName("nombre_alt_2") private val nombreAlt2: String?,
-    @SerialName("fk_generos") private val generos: List<MangaGenreDto> = emptyList(),
+internal class Card(
+    private val id: String,
+    private val title: String,
+    private val cover: String?,
+    private val badges: List<String> = emptyList(),
+    private val genres: List<String> = emptyList(),
 ) {
     fun toSManga(baseUrl: String) = SManga.create().apply {
-        url = id.toString()
-        title = nombre
-        // A bare file id, or its path under /assets
-        thumbnail_url = portadaUrl?.let { baseUrl.toHttpUrl().resolve(if (it.startsWith("/")) it else "/assets/$it")?.toString() }
-        genre = buildList {
-            tipo?.let { add(typeName(it)) }
-            addAll(generos.map { it.genre.nombre })
-            if (nsfw) add("+18")
-        }.distinct().joinToString().takeIf { it.isNotEmpty() }
-        description = MarkdownDescription.Builder()
-            // The site prints "None" for series without a synopsis
-            .description(descripcion?.takeUnless { it == "None" })
-            .altTitles(listOfNotNull(nombreAlt1, nombreAlt2), "Nombres alternativos")
-            .build()
-        status = when (estado?.lowercase()) {
-            "curso", "ongoing" -> SManga.ONGOING
-            "pausado" -> SManga.ON_HIATUS
-            "terminado" -> SManga.COMPLETED
-            "abandonado" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
-    }
-
-    private fun typeName(tipo: String) = when (val type = tipo.lowercase()) {
-        "manwha" -> "Manhwa"
-        else -> type.replaceFirstChar(Char::uppercase)
+        url = id
+        title = this@Card.title
+        thumbnail_url = cover?.let { baseUrl.toHttpUrl().resolve(it)?.newBuilder()?.query(null)?.build()?.toString() }
+        genre = genres.joinToString().ifEmpty { null }
+        status = statusOf(badges)
     }
 }
-
-@Serializable
-class MangaGenreDto(
-    @SerialName("generos_id") val genre: GenreDto,
-)
-
-@Serializable
-class GenreDto(
-    val nombre: String,
-)
 
 @Serializable
 class SystemDto(
@@ -173,7 +131,9 @@ internal class ListingPage(
     val width: Float,
     val height: Float,
     val tap: Point?,
-    val list: MangaListDto?,
+    val error: Int?,
+    val cards: List<Card>?,
+    val next: Boolean = false,
     val ids: Map<String, String?> = emptyMap(),
 )
 
@@ -184,10 +144,9 @@ internal class GenrePanel(
     val height: Float,
     val tap: Point?,
     val names: List<String>?,
-    val ids: Map<String, String> = emptyMap(),
 )
 
-// A genre of the filter panel, with its id when the site's cached lists showed it
+// A genre of the filter panel, with its id in filter data stored by earlier versions
 @Serializable
 internal class GenreOption(val name: String, val id: String?)
 

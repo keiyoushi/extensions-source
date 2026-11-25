@@ -27,28 +27,5 @@
     }
     const options = [...field.parentElement.querySelectorAll('label')].filter((label) => label.querySelector('input[type=checkbox]'));
     if (!options.length) return { ...base, tap: point(field.parentElement.querySelector('button')) };
-    // Ids the site's cached series lists show for their genres
-    const decode = (value) => {
-        try {
-            return JSON.parse([...atob(value)].map((c) => String.fromCharCode(c.charCodeAt(0) ^ 90)).join(''));
-        } catch {
-            return JSON.parse(value);
-        }
-    };
-    const ids = {};
-    for (let i = 0; i < sessionStorage.length; i++) {
-        const key = sessionStorage.key(i);
-        if (!key.startsWith('__app_st_')) continue;
-        let list;
-        try {
-            list = decode(sessionStorage.getItem(key)).data?.data;
-        } catch {
-            continue;
-        }
-        if (!Array.isArray(list)) continue;
-        for (const series of list) {
-            for (const genre of series.fk_generos ?? []) if (genre.generos_id) ids[genre.generos_id.nombre] = genre.generos_id.id;
-        }
-    }
-    return { ...base, names: options.map((label) => label.textContent.trim()), ids };
+    return { ...base, names: options.map((label) => label.textContent.trim()) };
 }
