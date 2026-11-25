@@ -1,6 +1,5 @@
-package eu.kanade.tachiyomi.extension.all.mangadex.dto
+package eu.kanade.tachiyomi.extension.all.mangadex
 
-import eu.kanade.tachiyomi.extension.all.mangadex.MDConstants
 import keiyoushi.utils.firstInstanceOrNull
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.KSerializer
@@ -14,6 +13,13 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonTransformingSerializer
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+
+const val MANGA = "manga"
+const val COVER_ART = "cover_art"
+const val SCANLATION_GROUP = "scanlation_group"
+const val USER = "user"
+const val AUTHOR = "author"
+const val ARTIST = "artist"
 
 @Serializable
 class PagedDto<T>(
@@ -88,9 +94,9 @@ object RelationshipSerializer : JsonContentPolymorphicSerializer<RelationshipDto
         if ("attributes" !in obj) return BareRelationshipDto.serializer()
 
         return when (obj["type"]!!.jsonPrimitive.content) {
-            MDConstants.AUTHOR, MDConstants.ARTIST, MDConstants.SCANLATION_GROUP -> NamedRelationshipDto.serializer()
-            MDConstants.USER -> UserRelationshipDto.serializer()
-            MDConstants.COVER_ART -> CoverRelationshipDto.serializer()
+            AUTHOR, ARTIST, SCANLATION_GROUP -> NamedRelationshipDto.serializer()
+            USER -> UserRelationshipDto.serializer()
+            COVER_ART -> CoverRelationshipDto.serializer()
             else -> BareRelationshipDto.serializer()
         }
     }
@@ -136,7 +142,7 @@ class ChapterDto(
     val attributes: ChapterAttributesDto,
     val relationships: List<RelationshipDto>,
 ) {
-    val mangaId get() = relationships.first { it.type == MDConstants.MANGA }.id
+    val mangaId get() = relationships.first { it.type == MANGA }.id
 }
 
 @Serializable
@@ -165,7 +171,7 @@ class CoverDto(
     val attributes: CoverAttributesDto,
     private val relationships: List<RelationshipDto>,
 ) {
-    val mangaId get() = relationships.first { it.type == MDConstants.MANGA }.id
+    val mangaId get() = relationships.first { it.type == MANGA }.id
 }
 
 @Serializable
