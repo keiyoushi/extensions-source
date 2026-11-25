@@ -205,7 +205,9 @@ class MangaDex(
         return getSearchMangaList(page, url.toString(), getFilterList())
     }
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = when {
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = search(page, query.trim(), filters)
+
+    private suspend fun search(page: Int, query: String, filters: FilterList): MangasPage = when {
         query.startsWith(MDConstants.PREFIX_ID_SEARCH) ->
             getMangaByIdPage(query.removePrefix(MDConstants.PREFIX_ID_SEARCH))
 
@@ -228,7 +230,7 @@ class MangaDex(
                 query.startsWith(MDConstants.PREFIX_AUTHOR_SEARCH) ->
                     url.addQueryParameter("authorOrArtist", query.removePrefix(MDConstants.PREFIX_AUTHOR_SEARCH).requireUuid("invalid_author_id"))
 
-                else -> query.replace(MDConstants.whitespaceRegex, " ").trim()
+                else -> query.replace(MDConstants.whitespaceRegex, " ")
                     .takeIf(String::isNotEmpty)
                     ?.let { url.addQueryParameter("title", it) }
             }
@@ -300,7 +302,7 @@ class MangaDex(
         url.addQueryParameter("authorOrArtist", authorId)
     }
 
-    private fun String.requireUuid(errorKey: String): String = trim().takeIf(MDConstants.uuidRegex::matches)
+    private fun String.requireUuid(errorKey: String): String = MDConstants.uuidRegex.find(this)?.value
         ?: throw Exception(helper.intl[errorKey])
 
     // Manga lists
