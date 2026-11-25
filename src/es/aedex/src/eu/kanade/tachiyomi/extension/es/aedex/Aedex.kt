@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.es.aedex
 
 import android.util.Base64
 import android.util.LruCache
-import androidx.preference.Preference
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.catharsis.Catharsis
 import eu.kanade.tachiyomi.multisrc.catharsis.ChapterDto
@@ -24,7 +24,6 @@ import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.tryParse
-import keiyoushi.utils.ui.showInfo
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -67,23 +66,14 @@ abstract class Aedex :
         }
     }
 
-    // The extensions-lib stub of androidx.preference.Preference has only an empty constructor,
-    // but the app's real class has the usual (Context) one.
-    private fun clickablePreference(context: android.content.Context): Preference = Preference::class.java.getConstructor(android.content.Context::class.java).newInstance(context) as Preference
-
     // Logging in happens on the site's own page (Mihon's "Abrir en WebView"), so settings only explain how
-    @OptIn(DelicateCoroutinesApi::class)
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val account = clickablePreference(screen.context).apply {
+        EditTextPreference(screen.context).apply {
             key = "pref_account"
             title = "Cuenta de Aedex"
-            summary = "Toca para ver cómo iniciar sesión (sin cuenta solo se pueden leer 3 capítulos)"
-            setOnPreferenceClickListener {
-                GlobalScope.launch { showInfo("Cuenta de Aedex", loginGuide()) }
-                true
-            }
-        }
-        screen.addPreference(account)
+            summary = loginGuide()
+            setOnPreferenceClickListener { true }
+        }.also(screen::addPreference)
     }
 
     public override val apiUrl get() = "$baseUrl/api/backend"
@@ -284,8 +274,9 @@ internal fun isRuntimeInstalled(): Boolean = runCatching { applicationContext.pa
 internal fun loginRequiredMessage(): String = "Máx. 3 capítulos. Ve a Ajustes de Aedex > Cuenta de Aedex"
 
 /** Settings dialog: how to log in (and install the runtime first when it is missing). */
+// Fits Mihon's 10-line limit for a preference summary
 internal fun loginGuide(): String = buildString {
-    appendLine("Sin cuenta solo se pueden leer 3 capítulos. Cualquier cuenta gratuita quita el límite.")
+    appendLine("Sin cuenta solo se pueden leer 3 capítulos.")
     appendLine()
     if (isRuntimeInstalled()) {
         appendLine("Para iniciar sesión:")
@@ -294,15 +285,12 @@ internal fun loginGuide(): String = buildString {
         appendLine("3. Inicia sesión en la página")
         appendLine("4. Vuelve y lee: la extensión coge la sesión sola")
         appendLine()
-        append("Para cerrar sesión o cambiar de cuenta, hazlo en esa misma página.")
+        append("Para cambiar de cuenta, hazlo en esa misma página.")
     } else {
-        appendLine("Sin el Keiyoushi Runtime, el WebView no te dejará iniciar sesión (la web lo rechaza).")
+        appendLine("Para iniciar sesión hace falta el Keiyoushi Runtime:")
+        appendLine(RUNTIME_URL)
         appendLine()
-        appendLine("Guía de instalación: $RUNTIME_URL")
-        appendLine()
-        appendLine("Después reinicia Mihon, abre una obra de Aedex, menú ⋮, Abrir en WebView, e inicia sesión.")
-        appendLine()
-        append("Sin cuenta puedes seguir leyendo 3 capítulos sin runtime.")
+        append("Instálalo, reinicia Mihon, abre una obra de Aedex, menú ⋮, Abrir en WebView e inicia sesión.")
     }
 }
 
