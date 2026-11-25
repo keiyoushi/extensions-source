@@ -18,3 +18,8 @@ keiyoushi {
         lang = "ru"
     }
 }
+
+// The @Source processor only applies to the main source set.
+tasks.matching { it.name.startsWith("ksp") && it.name.contains("UnitTest") }.configureEach {
+    enabled = false
+}

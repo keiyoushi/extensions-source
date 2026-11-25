@@ -5,12 +5,21 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.ratingStars
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.time.Instant
@@ -35,6 +44,7 @@ class Constants(
     class IdLabelSiteType(
         val id: Int,
         val label: String,
+        @Serializable(with = SiteIdsSerializer::class)
         @SerialName("site_ids") val siteIds: List<Int>,
     )
 
@@ -42,6 +52,7 @@ class Constants(
     class IdNameSiteType(
         val id: Int,
         val name: String,
+        @Serializable(with = SiteIdsSerializer::class)
         @SerialName("site_ids") val siteIds: List<Int>,
     )
 
@@ -50,6 +61,7 @@ class Constants(
         val id: String,
         val label: String,
         val url: String,
+        @Serializable(with = SiteIdsSerializer::class)
         @SerialName("site_ids") val siteIds: List<Int>,
     )
 
@@ -66,6 +78,28 @@ class Constants(
     fun getScanlateStatuses(siteId: Int): List<IdLabelSiteType> = scanlateStatuses.filter { it.siteIds.contains(siteId) }
     fun getTitleStatuses(siteId: Int): List<IdLabelSiteType> = titleStatuses.filter { it.siteIds.contains(siteId) }
     fun getAgeRestrictions(siteId: Int): List<IdLabelSiteType> = ageRestrictions.filter { it.siteIds.contains(siteId) }
+}
+
+/**
+ * The site sometimes returns `site_ids` as a sparse array serialized to an object
+ * (`{"0": 0, "1": 1, "6": 7}`) instead of a plain array (`[0, 1, 7]`).
+ * In that case, values are the actual site ids and keys are just indexes.
+ */
+private object SiteIdsSerializer : KSerializer<List<Int>> {
+    private val delegate = ListSerializer(Int.serializer())
+
+    override val descriptor: SerialDescriptor = delegate.descriptor
+
+    override fun deserialize(decoder: Decoder): List<Int> {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("site_ids can be decoded only from JSON")
+        return when (val element = input.decodeJsonElement()) {
+            is JsonArray -> element.mapNotNull { it.jsonPrimitive.intOrNull }
+            is JsonObject -> element.values.mapNotNull { it.jsonPrimitive.intOrNull }
+            else -> throw SerializationException("Unexpected site_ids format: $element")
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: List<Int>) = delegate.serialize(encoder, value)
 }
 
 @Serializable
