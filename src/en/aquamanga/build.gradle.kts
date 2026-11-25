@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Aqua Manga"
-    versionCode = 18
+    versionCode = 19
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "madara"
 
     source {
         lang = "en"
-        baseUrl = "https://aquareader.org"
+        baseUrl = "https://aquamanga.io"
     }
 }

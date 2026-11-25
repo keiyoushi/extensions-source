@@ -14,19 +14,25 @@ import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstance
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.io.IOException
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Source
 abstract class HotComics : KeiSource() {
 
-    override fun OkHttpClient.Builder.configureClient() = addCookie("hc_vfs" to "Y")
+    override fun OkHttpClient.Builder.configureClient() = apply {
+        addCookie("hc_vfs" to "Y")
+        addInterceptor(fallbackInterceptor())
+    }
 
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/en", Fetch.DOCUMENT).asJsoup())
 
@@ -136,21 +142,49 @@ abstract class HotComics : KeiSource() {
         }.trim()
     }
 
-    private fun chapterListParse(document: Document): List<SChapter> = document.select("#tab-chapter a").map { element ->
-        SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("onclick").substringAfter("popupLogin('").substringBefore("'"))
-            name = element.selectFirst(".cell-num")!!.text()
-            date_upload = dateFormat.tryParseDate(element.selectFirst(".cell-time")?.text())
-        }
-    }.reversed()
+    private fun chapterListParse(document: Document): List<SChapter> = document.select("#tab-chapter a")
+        .mapNotNull { element ->
+            val cellNum = element.selectFirst(".cell-num") ?: return@mapNotNull null
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup().select("#viewer-img img").mapIndexed { idx, img ->
-        Page(idx, imageUrl = img.imgAttr())
-    }
+            SChapter.create().apply {
+                setUrlWithoutDomain(element.attr("onclick").substringAfter("popupLogin('").substringBefore("'"))
+                name = cellNum.text()
+                date_upload = dateFormat.tryParseDate(element.selectFirst(".cell-time")?.text())
+            }
+        }
+        .reversed()
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
+        .select("#viewer-img img")
+        .mapIndexed { idx, img ->
+            val image = img.imgAttr()
+            val fallbacks = img.attr("data-backup-sources")
+            Page(idx, imageUrl = if (fallbacks.isBlank()) image else "$image#fallback$fallbacks")
+        }
 
     private fun Element.imgAttr(): String = when {
         hasAttr("data-src") -> absUrl("data-src")
         else -> absUrl("src")
+    }
+
+    private fun fallbackInterceptor() = Interceptor { chain ->
+        val request = chain.request()
+        var response = chain.proceed(request)
+        if (response.isSuccessful) return@Interceptor response
+
+        val fallbacks = request.url.fragment.orEmpty()
+            .takeIf { it.startsWith("fallback") }
+            ?.substringAfter("fallback")
+            ?.parseAs<List<String>>()
+
+        fallbacks.orEmpty().forEach { url ->
+            response.close()
+            response = chain.proceed(request.newBuilder().url(url.toHttpUrl()).build())
+            if (response.isSuccessful) return@Interceptor response
+        }
+
+        response.close()
+        throw IOException("HTTP ${response.code}. Clear chapter cache and retry.")
     }
 }
 
