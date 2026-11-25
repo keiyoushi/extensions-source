@@ -199,10 +199,10 @@ class MangaDex(
             val searchPrefix = url.pathSegments.firstOrNull()?.let { MDConstants.pathToSearchPrefix[it] }
             val uuid = MDConstants.uuidRegex.find(url.toString())?.value
             if (searchPrefix != null && uuid != null) {
-                return getSearchMangaList(page, searchPrefix + uuid, FilterList())
+                return getSearchMangaList(page, searchPrefix + uuid, getFilterList())
             }
         }
-        return getSearchMangaList(page, url.toString(), FilterList())
+        return getSearchMangaList(page, url.toString(), getFilterList())
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = when {
