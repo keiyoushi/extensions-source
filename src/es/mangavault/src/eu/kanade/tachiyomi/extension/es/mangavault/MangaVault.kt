@@ -11,15 +11,15 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.array
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.int
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
@@ -115,8 +115,8 @@ abstract class MangaVault : KeiSource() {
     private fun Document.islandProps(prop: String): JsonElement = selectFirst("astro-island[props*='\"$prop\":']")!!.attr("props").parseAs<JsonElement>().fromAstro()
 
     private fun JsonElement.fromAstro(): JsonElement = when {
-        this is JsonArray && size == 2 && this[0] is JsonPrimitive -> when (this[0].jsonPrimitive.int) {
-            1 -> JsonArray(this[1].let { it as JsonArray }.map { it.fromAstro() })
+        this is JsonArray && size == 2 && this[0] is JsonPrimitive -> when (this[0].int) {
+            1 -> JsonArray(this[1].array.map { it.fromAstro() })
             else -> this[1].fromAstro()
         }
         this is JsonObject -> JsonObject(mapValues { it.value.fromAstro() })
