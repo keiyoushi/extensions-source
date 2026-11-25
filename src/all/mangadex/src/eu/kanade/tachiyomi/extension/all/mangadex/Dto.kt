@@ -1,18 +1,13 @@
 package eu.kanade.tachiyomi.extension.all.mangadex
 
-import keiyoushi.utils.firstInstanceOrNull
-import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonContentPolymorphicSerializer
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonTransformingSerializer
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 const val MANGA = "manga"
 const val COVER_ART = "cover_art"
@@ -35,72 +30,21 @@ class PagedDto<T>(
 @Serializable
 class DataDto<T>(val data: T)
 
-@Serializable(RelationshipSerializer::class)
-sealed class RelationshipDto {
-    abstract val id: String
-    abstract val type: String
-}
-
-/** A relationship whose attributes weren't requested with `includes[]`, or that isn't used. */
+/** [related] is how a manga is related, e.g. `sequel`; [attributes] are only there when asked for with `includes[]`. */
 @Serializable
-class BareRelationshipDto(override val id: String, override val type: String) : RelationshipDto()
-
-/** Another manga in a manga's relationships; [related] is how it's related, e.g. `sequel`. */
-@Serializable
-class RelatedMangaDto(
-    override val id: String,
-    override val type: String,
-    val related: String,
-) : RelationshipDto()
-
-/** An author, artist or scanlation group. */
-@Serializable
-class NamedRelationshipDto(
-    override val id: String,
-    override val type: String,
-    private val attributes: NameAttributesDto,
-) : RelationshipDto() {
-    val name get() = attributes.name
-}
+class RelationshipDto(
+    val id: String,
+    val type: String,
+    val related: String? = null,
+    val attributes: RelationshipAttributesDto? = null,
+)
 
 @Serializable
-class NameAttributesDto(val name: String)
-
-@Serializable
-class UserRelationshipDto(
-    override val id: String,
-    override val type: String,
-    private val attributes: UserAttributesDto,
-) : RelationshipDto() {
-    val username get() = attributes.username
-}
-
-@Serializable
-class UserAttributesDto(val username: String)
-
-@Serializable
-class CoverRelationshipDto(
-    override val id: String,
-    override val type: String,
-    private val attributes: CoverAttributesDto,
-) : RelationshipDto() {
-    val fileName get() = attributes.fileName
-}
-
-object RelationshipSerializer : JsonContentPolymorphicSerializer<RelationshipDto>(RelationshipDto::class) {
-    override fun selectDeserializer(element: JsonElement): DeserializationStrategy<RelationshipDto> {
-        val obj = element.jsonObject
-        if ("related" in obj) return RelatedMangaDto.serializer()
-        if ("attributes" !in obj) return BareRelationshipDto.serializer()
-
-        return when (obj["type"]!!.jsonPrimitive.content) {
-            AUTHOR, ARTIST, SCANLATION_GROUP -> NamedRelationshipDto.serializer()
-            USER -> UserRelationshipDto.serializer()
-            COVER_ART -> CoverRelationshipDto.serializer()
-            else -> BareRelationshipDto.serializer()
-        }
-    }
-}
+class RelationshipAttributesDto(
+    val name: String? = null,
+    val username: String? = null,
+    val fileName: String? = null,
+)
 
 @Serializable
 class MangaDto(
@@ -108,7 +52,7 @@ class MangaDto(
     val attributes: MangaAttributesDto,
     val relationships: List<RelationshipDto>,
 ) {
-    val coverFileName get() = relationships.firstInstanceOrNull<CoverRelationshipDto>()?.fileName
+    val coverFileName get() = relationships.firstOrNull { it.type == COVER_ART }?.attributes?.fileName
 }
 
 @Serializable

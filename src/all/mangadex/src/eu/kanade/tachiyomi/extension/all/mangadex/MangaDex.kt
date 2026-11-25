@@ -141,7 +141,7 @@ class MangaDex(
             )
             .build()
 
-        return getMangasPage(url)
+        return client.get(url, Fetch.XHR).toMangasPage()
     }
 
     // Latest
@@ -192,9 +192,13 @@ class MangaDex(
         val mangaIds = chapters.data.map { it.mangaId }.distinct()
         if (mangaIds.isEmpty()) return MangasPage(emptyList(), false)
 
+        return MangasPage(getMangaByIds(mangaIds), chapters.hasNextPage)
+    }
+
+    private suspend fun getMangaByIds(mangaIds: List<String>): List<SManga> {
         val mangaList = client.get(mangaByIdsUrl(mangaIds), Fetch.XHR, CacheControl.FORCE_NETWORK).parseAs<PagedDto<MangaDto>>().data
 
-        return MangasPage(mangaList.orderedBy(mangaIds).toSMangaList(fetchFirstVolumeCovers(mangaList)), chapters.hasNextPage)
+        return mangaList.orderedBy(mangaIds).toSMangaList(fetchFirstVolumeCovers(mangaList))
     }
 
     private fun mangaByIdsUrl(mangaIds: List<String>): HttpUrl = API_MANGA_URL.toHttpUrl().newBuilder()
@@ -254,7 +258,7 @@ class MangaDex(
                 addAuthorFilter(url, filters)
             }
 
-            getMangasPage(url.addFilters(filters).build(), CacheControl.FORCE_NETWORK)
+            client.get(url.addFilters(filters).build(), Fetch.XHR, CacheControl.FORCE_NETWORK).toMangasPage()
         }
     }
 
@@ -265,7 +269,7 @@ class MangaDex(
             .addQueryParameter("contentRating[]", allContentRatings)
             .build()
 
-        return getMangasPage(url, CacheControl.FORCE_NETWORK)
+        return client.get(url, Fetch.XHR, CacheControl.FORCE_NETWORK).toMangasPage()
     }
 
     private suspend fun getMangaIdFromChapterId(id: String): String {
@@ -327,14 +331,13 @@ class MangaDex(
         .addQueryParameter("offset", (MANGA_LIMIT * (page - 1)).toString())
         .addQueryParameter("includes[]", COVER_ART)
 
-    private suspend fun getMangasPage(url: HttpUrl, cacheControl: CacheControl? = null): MangasPage {
-        val response = if (cacheControl != null) client.get(url, Fetch.XHR, cacheControl) else client.get(url, Fetch.XHR)
-        if (response.code == 204) {
-            response.close()
+    private suspend fun Response.toMangasPage(): MangasPage {
+        if (code == 204) {
+            close()
             return MangasPage(emptyList(), false)
         }
 
-        val mangaList = response.parseAs<PagedDto<MangaDto>>()
+        val mangaList = parseAs<PagedDto<MangaDto>>()
 
         return MangasPage(mangaList.data.toSMangaList(fetchFirstVolumeCovers(mangaList.data)), mangaList.hasNextPage)
     }
@@ -468,17 +471,12 @@ class MangaDex(
             .flatMap { it.values }
             .map { it.removeEntities() }
 
-        val finalChapter = listOfNotNull(
-            attr.lastVolume?.takeIf { it.isNotEmpty() }?.let { "Vol.$it" },
-            attr.lastChapter?.takeIf { it.isNotEmpty() }?.let { "Ch.$it" },
-        )
-
         return toSManga(firstVolumeCover).apply {
             description = MarkdownDescription.Builder()
                 // unescaped, text like <Twilight> is dropped as an html tag
                 .markdown((attr.description[dexLang] ?: attr.description["en"])?.removeEntities()?.replace(markdownTagRegex, "\\\\<"))
                 .altTitles(altTitles, intl["alternative_titles"])
-                .field(intl["final_chapter"], finalChapter.joinToString(" "))
+                .field(intl["final_chapter"], formatNumber(attr.lastVolume, attr.lastChapter))
                 .build()
             author = relationships.names(AUTHOR)
             artist = relationships.names(ARTIST)
@@ -489,37 +487,33 @@ class MangaDex(
         }
     }
 
-    private fun List<RelationshipDto>.names(type: String) = filterIsInstance<NamedRelationshipDto>()
-        .filter { it.type == type }
-        .map { it.name }
+    private fun List<RelationshipDto>.names(type: String) = filter { it.type == type }
+        .mapNotNull { it.attributes?.name }
         .distinct()
         .joinToString()
 
     private fun getPublicationStatus(attr: MangaAttributesDto, volumes: Map<String, AggregateVolumeDto>): Int {
-        val chaptersList = volumes.values
-            .flatMap { it.chapters.values }
-            .map { it.chapter }
+        val hasLastChapter = volumes.values.any { volume -> volume.chapters.values.any { it.chapter == attr.lastChapter } }
+        val isEnded = attr.status == "completed" || attr.status == "cancelled"
 
-        val tempStatus = when (attr.status) {
-            "ongoing" -> SManga.ONGOING
-            "cancelled" -> SManga.CANCELLED
-            "completed" -> SManga.PUBLISHING_FINISHED
-            "hiatus" -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
-
-        val publishedOrCancelled = tempStatus == SManga.PUBLISHING_FINISHED ||
-            tempStatus == SManga.CANCELLED
-
-        val isOneShot = attr.tags.any { it.id == TAG_ONE_SHOT_UUID } &&
-            attr.tags.none { it.id == TAG_ANTHOLOGY_UUID }
+        val tagIds = attr.tags.map { it.id }
+        val isOneShot = TAG_ONE_SHOT_UUID in tagIds && TAG_ANTHOLOGY_UUID !in tagIds
 
         return when {
-            chaptersList.contains(attr.lastChapter) && publishedOrCancelled -> SManga.COMPLETED
+            hasLastChapter && isEnded -> SManga.COMPLETED
             isOneShot && volumes["none"]?.chapters?.get("none") != null -> SManga.COMPLETED
-            else -> tempStatus
+            attr.status == "ongoing" -> SManga.ONGOING
+            attr.status == "cancelled" -> SManga.CANCELLED
+            attr.status == "completed" -> SManga.PUBLISHING_FINISHED
+            attr.status == "hiatus" -> SManga.ON_HIATUS
+            else -> SManga.UNKNOWN
         }
     }
+
+    private fun formatNumber(volume: String?, chapter: String?) = listOfNotNull(
+        volume?.takeIf { it.isNotEmpty() }?.let { "Vol.$it" },
+        chapter?.takeIf { it.isNotEmpty() }?.let { "Ch.$it" },
+    ).joinToString(" ")
 
     // Related
 
@@ -529,22 +523,15 @@ class MangaDex(
         val relatedIds = client.get("$API_MANGA_URL/${manga.url.uuid()}", Fetch.XHR)
             .parseAs<DataDto<MangaDto>>()
             .data.relationships
-            .filterIsInstance<RelatedMangaDto>()
+            .filter { it.related != null }
             .sortedBy { relatedMangaOrder.indexOf(it.related).takeIf { i -> i >= 0 } ?: Int.MAX_VALUE }
             .map { it.id }
             .distinct()
 
-        val batches = relatedIds.chunked(MANGA_IDS_LIMIT)
-            .map { ids ->
-                async {
-                    val mangaList = client.get(mangaByIdsUrl(ids), Fetch.XHR).parseAs<PagedDto<MangaDto>>().data
-                    mangaList to fetchFirstVolumeCovers(mangaList)
-                }
-            }
+        relatedIds.chunked(MANGA_IDS_LIMIT)
+            .map { async { getMangaByIds(it) } }
             .awaitAll()
-
-        val covers = batches.fold(emptyMap<String, String>()) { acc, (_, batchCovers) -> acc + batchCovers }
-        batches.flatMap { it.first }.orderedBy(relatedIds).toSMangaList(covers)
+            .flatten()
     }
 
     // Chapters
@@ -571,32 +558,17 @@ class MangaDex(
         val attr = attributes
 
         val groups = relationships
-            .filterIsInstance<NamedRelationshipDto>()
-            .filter { it.type == SCANLATION_GROUP && it.id != LEGACY_NO_GROUP_ID } // 'no group' left over from MDv3
-            .joinToString(" & ") { it.name }
-            .ifEmpty {
-                // Fallback to uploader name if no group is set.
-                val users = relationships
-                    .filterIsInstance<UserRelationshipDto>()
-                    .map { it.username }
-                if (users.isNotEmpty()) intl.format("uploaded_by", users.joinToString(" & ")) else ""
-            }
-            .ifEmpty { intl["no_group"] } // "No Group" as final resort
-
-        val chapterName = mutableListOf<String>()
-
-        attr.volume?.takeIf { it.isNotEmpty() }?.let { chapterName.add("Vol.$it") }
-        attr.chapter?.takeIf { it.isNotEmpty() }?.let { chapterName.add("Ch.$it") }
-        attr.title?.takeIf { it.isNotEmpty() }?.let {
-            if (chapterName.isNotEmpty()) {
-                chapterName.add("-")
-            }
-            chapterName.add(it)
-        }
-
-        // if volume, chapter and title is empty its a oneshot
-        if (chapterName.isEmpty()) {
-            chapterName.add("Oneshot")
+            .filter { it.type == SCANLATION_GROUP && it.id != LEGACY_NO_GROUP_ID }
+            .mapNotNull { it.attributes?.name }
+            .joinToString(" & ")
+        val uploaders = relationships
+            .filter { it.type == USER }
+            .mapNotNull { it.attributes?.username }
+            .joinToString(" & ")
+        val credits = when {
+            groups.isNotEmpty() -> groups
+            uploaders.isNotEmpty() -> intl.format("uploaded_by", uploaders)
+            else -> intl["no_group"]
         }
 
         val unavailablePrefix = if (attr.isUnavailable) "${intl["chapter_unavailable_prefix"]} - " else ""
@@ -604,9 +576,13 @@ class MangaDex(
 
         return SChapter.create().apply {
             url = "/chapter/$id"
-            name = chapterName.joinToString(" ").removeEntities()
+            name = listOf(formatNumber(attr.volume, attr.chapter), attr.title.orEmpty())
+                .filter { it.isNotEmpty() }
+                .joinToString(" - ")
+                .ifEmpty { "Oneshot" }
+                .removeEntities()
             date_upload = Instant.tryParse(attr.publishAt)
-            scanlator = languagePrefix + unavailablePrefix + groups
+            scanlator = languagePrefix + unavailablePrefix + credits
             if (attr.isUnavailable) {
                 memo = buildJsonObject { put(MEMO_UNAVAILABLE, true) }
             }
@@ -696,111 +672,70 @@ class MangaDex(
     // Preferences
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val coverQualityPref = ListPreference(screen.context).apply {
-            key = "${COVER_QUALITY_PREF}_$dexLang"
-            title = intl["cover_quality"]
-            entries = arrayOf(intl["cover_quality_original"], intl["cover_quality_medium"], intl["cover_quality_low"])
-            entryValues = arrayOf("", ".512.jpg", ".256.jpg")
-            setDefaultValue("")
-            summary = "%s"
+        screen.addList(
+            COVER_QUALITY_PREF,
+            "cover_quality",
+            listOf("" to intl["cover_quality_original"], ".512.jpg" to intl["cover_quality_medium"], ".256.jpg" to intl["cover_quality_low"]),
+            default = "",
+        )
+        screen.addSwitch(TRY_USING_FIRST_VOLUME_COVER_PREF, "try_using_first_volume_cover")
+        screen.addSwitch(DATA_SAVER_PREF, "data_saver")
+        screen.addSwitch(STANDARD_HTTPS_PORT_PREF, "standard_https_port")
+        screen.addList(
+            TITLE_PREF,
+            "preferred_title",
+            listOf(TITLE_PREF_VAL_EXTENSION, TITLE_PREF_VAL_ROMANIZED, TITLE_PREF_VAL_MAIN).map { it to intl["preferred_title_$it"] },
+            default = TITLE_PREF_DEFAULT,
+        ).setOnPreferenceChangeListener { _, newValue ->
+            // TachiyomiSY and Komikku read the old switch when delegating
+            preferences.edit()
+                .putBoolean("${PREFER_EXTENSION_LANG_TITLE_PREF}_$dexLang", newValue == TITLE_PREF_VAL_EXTENSION)
+                .apply()
+            true
         }
+        screen.addSwitch(INCLUDE_UNAVAILABLE_PREF, "include_unavailable")
+        screen.addList(
+            CONTENT_RATING_PREF,
+            "standard_content_rating",
+            allContentRatings.map { it to intl.format("content_rating_up_to", intl["content_rating_$it"]) },
+            default = CONTENT_RATING_PREF_DEFAULT,
+        )
 
-        val tryUsingFirstVolumeCoverPref = SwitchPreferenceCompat(screen.context).apply {
-            key = "${TRY_USING_FIRST_VOLUME_COVER_PREF}_$dexLang"
-            title = intl["try_using_first_volume_cover"]
-            summary = intl["try_using_first_volume_cover_summary"]
-            setDefaultValue(false)
-        }
-
-        val dataSaverPref = SwitchPreferenceCompat(screen.context).apply {
-            key = "${DATA_SAVER_PREF}_$dexLang"
-            title = intl["data_saver"]
-            summary = intl["data_saver_summary"]
-            setDefaultValue(false)
-        }
-
-        val standardHttpsPortPref = SwitchPreferenceCompat(screen.context).apply {
-            key = "${STANDARD_HTTPS_PORT_PREF}_$dexLang"
-            title = intl["standard_https_port"]
-            summary = intl["standard_https_port_summary"]
-            setDefaultValue(false)
-        }
-
-        val contentRatingPref = ListPreference(screen.context).apply {
-            key = "${CONTENT_RATING_PREF}_$dexLang"
-            title = intl["standard_content_rating"]
-            entries = allContentRatings
-                .map { intl.format("content_rating_up_to", intl["content_rating_$it"]) }
-                .toTypedArray()
-            entryValues = allContentRatings.toTypedArray()
-            setDefaultValue(CONTENT_RATING_PREF_DEFAULT)
-            summary = "%s"
-        }
-
-        val originalLanguagePref = MultiSelectListPreference(screen.context).apply {
+        MultiSelectListPreference(screen.context).apply {
             key = "${ORIGINAL_LANGUAGE_PREF}_$dexLang"
             title = intl["filter_original_languages"]
             summary = intl["filter_original_languages_summary"]
-            entries = arrayOf(
-                intl.languageDisplayName("ja"),
-                intl.languageDisplayName("zh"),
-                intl.languageDisplayName("ko"),
-            )
             entryValues = arrayOf("ja", "zh", "ko")
+            entries = entryValues.map { intl.languageDisplayName(it.toString()) }.toTypedArray()
             setDefaultValue(emptySet<String>())
-        }
+        }.also(screen::addPreference)
 
-        val blockedGroupsPref = EditTextPreference(screen.context).apply {
-            key = "${BLOCKED_GROUPS_PREF}_$dexLang"
-            title = intl["block_group_by_uuid"]
-            summary = intl["block_group_by_uuid_summary"]
-
-            setOnBindEditTextListener(::setupEditTextUuidValidator)
-        }
-
-        val blockedUploaderPref = EditTextPreference(screen.context).apply {
-            key = "${BLOCKED_UPLOADER_PREF}_$dexLang"
-            title = intl["block_uploader_by_uuid"]
-            summary = intl["block_uploader_by_uuid_summary"]
-
-            setOnBindEditTextListener(::setupEditTextUuidValidator)
-        }
-
-        val preferredTitlePref = ListPreference(screen.context).apply {
-            key = "${TITLE_PREF}_$dexLang"
-            title = intl["preferred_title"]
-            entries = titlePrefValues.map { intl["preferred_title_$it"] }.toTypedArray()
-            entryValues = titlePrefValues.toTypedArray()
-            setDefaultValue(TITLE_PREF_DEFAULT)
-            summary = "%s"
-
-            // TachiyomiSY and Komikku read the old switch when delegating
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit()
-                    .putBoolean("${PREFER_EXTENSION_LANG_TITLE_PREF}_$dexLang", newValue == TITLE_PREF_VAL_EXTENSION)
-                    .apply()
-                true
-            }
-        }
-
-        val includeUnavailablePref = SwitchPreferenceCompat(screen.context).apply {
-            key = "${INCLUDE_UNAVAILABLE_PREF}_$dexLang"
-            title = intl["include_unavailable"]
-            summary = intl["include_unavailable_summary"]
-            setDefaultValue(false)
-        }
-
-        screen.addPreference(coverQualityPref)
-        screen.addPreference(tryUsingFirstVolumeCoverPref)
-        screen.addPreference(dataSaverPref)
-        screen.addPreference(standardHttpsPortPref)
-        screen.addPreference(preferredTitlePref)
-        screen.addPreference(includeUnavailablePref)
-        screen.addPreference(contentRatingPref)
-        screen.addPreference(originalLanguagePref)
-        screen.addPreference(blockedGroupsPref)
-        screen.addPreference(blockedUploaderPref)
+        screen.addUuidList(BLOCKED_GROUPS_PREF, "block_group_by_uuid")
+        screen.addUuidList(BLOCKED_UPLOADER_PREF, "block_uploader_by_uuid")
     }
+
+    private fun PreferenceScreen.addList(pref: String, name: String, options: List<Pair<String, String>>, default: String) = ListPreference(context).apply {
+        key = "${pref}_$dexLang"
+        title = intl[name]
+        entryValues = options.map { it.first }.toTypedArray()
+        entries = options.map { it.second }.toTypedArray()
+        setDefaultValue(default)
+        summary = "%s"
+    }.also(::addPreference)
+
+    private fun PreferenceScreen.addSwitch(pref: String, name: String) = SwitchPreferenceCompat(context).apply {
+        key = "${pref}_$dexLang"
+        title = intl[name]
+        summary = intl["${name}_summary"]
+        setDefaultValue(false)
+    }.also(::addPreference)
+
+    private fun PreferenceScreen.addUuidList(pref: String, name: String) = EditTextPreference(context).apply {
+        key = "${pref}_$dexLang"
+        title = intl[name]
+        summary = intl["${name}_summary"]
+        setOnBindEditTextListener(::setupEditTextUuidValidator)
+    }.also(::addPreference)
 
     /**
      * Adds a custom [TextWatcher] to the preference's [EditText] that show an
@@ -943,6 +878,8 @@ private const val API_LIST_URL = "$API_URL/list"
 private const val API_AUTHOR_URL = "$API_URL/author"
 
 private const val MEMO_UNAVAILABLE = "unavailable"
+
+/** "No group" left over from MDv3. */
 private const val LEGACY_NO_GROUP_ID = "00e03853-1b96-4f41-9542-c71b8692033b"
 
 private const val PREFIX_ID_SEARCH = "id:"
@@ -973,7 +910,6 @@ private const val INCLUDE_UNAVAILABLE_PREF = "includeUnavailable"
 private const val TAG_ANTHOLOGY_UUID = "51d83883-4103-437c-b4b1-731cb73d786c"
 private const val TAG_ONE_SHOT_UUID = "0234a31e-a729-4e28-9d6a-3f87c4966b9e"
 
-private val titlePrefValues = listOf(TITLE_PREF_VAL_EXTENSION, TITLE_PREF_VAL_ROMANIZED, TITLE_PREF_VAL_MAIN)
 private val tagGroupsOrder = listOf("content", "format", "genre", "theme")
 private val mdAtHomeTokenLifespan = 5.minutes.inWholeMilliseconds
 
@@ -987,19 +923,13 @@ private val pathToSearchPrefix = mapOf(
     "list" to PREFIX_LIST_SEARCH,
 )
 
-private const val GROUP_AZUKI = "5fed0576-8b94-4f9a-b6a7-08eecd69800d"
-private const val GROUP_BILIBILI = "06a9fecb-b608-4f19-b93c-7caab06b7f44"
-private const val GROUP_COMIKEY = "8d8ecf83-8d42-4f8c-add8-60963f9f28d9"
-private const val GROUP_INKR = "caa63201-4a17-4b7f-95ff-ed884a2b7e60"
-private const val GROUP_MANGA_HOT = "319c1b10-cbd0-4f55-a46e-c4ee17e65139"
-private const val GROUP_MANGA_PLUS = "4f1de6a2-f0c5-4ac5-bce5-02c7dbb67deb"
 private val defaultBlockedGroups = setOf(
-    GROUP_AZUKI,
-    GROUP_BILIBILI,
-    GROUP_COMIKEY,
-    GROUP_INKR,
-    GROUP_MANGA_HOT,
-    GROUP_MANGA_PLUS,
+    "5fed0576-8b94-4f9a-b6a7-08eecd69800d", // Azuki
+    "06a9fecb-b608-4f19-b93c-7caab06b7f44", // Bilibili
+    "8d8ecf83-8d42-4f8c-add8-60963f9f28d9", // Comikey
+    "caa63201-4a17-4b7f-95ff-ed884a2b7e60", // INKR
+    "319c1b10-cbd0-4f55-a46e-c4ee17e65139", // Manga Hot
+    "4f1de6a2-f0c5-4ac5-bce5-02c7dbb67deb", // MANGA Plus
 )
 
 /** Order of related manga by how they're related; unlisted ones go last. */
