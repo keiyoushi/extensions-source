@@ -222,43 +222,39 @@ class MangaDex(
         return getSearchMangaList(page, url.toString(), getFilterList())
     }
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val trimmedQuery = query.trim()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = when {
+        query.startsWith(PREFIX_ID_SEARCH) ->
+            getMangaByIdPage(query.removePrefix(PREFIX_ID_SEARCH))
 
-        return when {
-            trimmedQuery.startsWith(PREFIX_ID_SEARCH) ->
-                getMangaByIdPage(trimmedQuery.removePrefix(PREFIX_ID_SEARCH))
+        query.startsWith(PREFIX_CH_SEARCH) ->
+            getMangaByIdPage(getMangaIdFromChapterId(query.removePrefix(PREFIX_CH_SEARCH)))
 
-            trimmedQuery.startsWith(PREFIX_CH_SEARCH) ->
-                getMangaByIdPage(getMangaIdFromChapterId(trimmedQuery.removePrefix(PREFIX_CH_SEARCH)))
+        query.startsWith(PREFIX_USER_SEARCH) ->
+            getChapterMangasPage(latestUpdatesUrl(page, uploader = query.removePrefix(PREFIX_USER_SEARCH)))
 
-            trimmedQuery.startsWith(PREFIX_USER_SEARCH) ->
-                getChapterMangasPage(latestUpdatesUrl(page, uploader = trimmedQuery.removePrefix(PREFIX_USER_SEARCH)))
+        query.startsWith(PREFIX_LIST_SEARCH) ->
+            getListPage(query.removePrefix(PREFIX_LIST_SEARCH), page, filters)
 
-            trimmedQuery.startsWith(PREFIX_LIST_SEARCH) ->
-                getListPage(trimmedQuery.removePrefix(PREFIX_LIST_SEARCH), page, filters)
+        else -> {
+            val url = mangaListUrl(page)
 
-            else -> {
-                val url = mangaListUrl(page)
+            when {
+                query.startsWith(PREFIX_GRP_SEARCH) ->
+                    url.addQueryParameter("group", query.removePrefix(PREFIX_GRP_SEARCH).requireUuid("invalid_group_id"))
 
-                when {
-                    trimmedQuery.startsWith(PREFIX_GRP_SEARCH) ->
-                        url.addQueryParameter("group", trimmedQuery.removePrefix(PREFIX_GRP_SEARCH).requireUuid("invalid_group_id"))
+                query.startsWith(PREFIX_AUTHOR_SEARCH) ->
+                    url.addQueryParameter("authorOrArtist", query.removePrefix(PREFIX_AUTHOR_SEARCH).requireUuid("invalid_author_id"))
 
-                    trimmedQuery.startsWith(PREFIX_AUTHOR_SEARCH) ->
-                        url.addQueryParameter("authorOrArtist", trimmedQuery.removePrefix(PREFIX_AUTHOR_SEARCH).requireUuid("invalid_author_id"))
-
-                    else -> trimmedQuery.replace(whitespaceRegex, " ")
-                        .takeIf(String::isNotEmpty)
-                        ?.let { url.addQueryParameter("title", it) }
-                }
-
-                if (!trimmedQuery.startsWith(PREFIX_AUTHOR_SEARCH)) {
-                    addAuthorFilter(url, filters)
-                }
-
-                getMangasPage(url.addFilters(filters).build(), CacheControl.FORCE_NETWORK)
+                else -> query.replace(whitespaceRegex, " ")
+                    .takeIf(String::isNotEmpty)
+                    ?.let { url.addQueryParameter("title", it) }
             }
+
+            if (!query.startsWith(PREFIX_AUTHOR_SEARCH)) {
+                addAuthorFilter(url, filters)
+            }
+
+            getMangasPage(url.addFilters(filters).build(), CacheControl.FORCE_NETWORK)
         }
     }
 
