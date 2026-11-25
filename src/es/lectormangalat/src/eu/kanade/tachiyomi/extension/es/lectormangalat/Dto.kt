@@ -43,7 +43,8 @@ class SeriesDto(
     val capitulos: List<ChapterDto> = emptyList(),
 ) {
     fun toSManga() = SManga.create().apply {
-        url = id.toString()
+        // The web path, so apps that ignore `memo` still open the right page ("/64" is not a valid page).
+        url = "/comics/$slug"
         title = titulo
         thumbnail_url = portada
         memo = buildJsonObject { put("slug", slug) }
@@ -81,7 +82,8 @@ class ChapterDto(
     @SerialName("publicado_en") private val publicadoEn: String? = null,
 ) {
     fun toSChapter(seriesSlug: String) = SChapter.create().apply {
-        url = id.toString()
+        // Web path plus the chapter id after '#', which only the pages API needs.
+        url = "/comics/$seriesSlug/capitulo-${numero.content}#$id"
         name = buildString {
             append("Capítulo ", numero.content)
             titulo?.takeIf(String::isNotBlank)?.let { append(" - ", it) }

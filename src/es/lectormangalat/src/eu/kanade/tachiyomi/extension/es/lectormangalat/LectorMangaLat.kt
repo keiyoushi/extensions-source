@@ -60,9 +60,20 @@ abstract class LectorMangaLat : KeiSource() {
         return client.get("$apiUrl/series/${segments[1]}", Fetch.XHR).parseAs<SeriesDetailsDto>().data.toSMangaDetails()
     }
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl/comics/${manga.memo["slug"]!!.stringOrNull}"
+    // Entries saved before 2026-11 hold the numeric id in `url` and the slug in `memo`.
+    private fun SManga.slug(): String = if (url.startsWith("/comics/")) {
+        url.removePrefix("/comics/").substringBefore('/')
+    } else {
+        memo["slug"]?.stringOrNull ?: throw Exception("Obra guardada con un formato antiguo, vuelve a añadirla desde el catálogo")
+    }
 
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/comics/${chapter.memo["series"]!!.stringOrNull}/capitulo-${chapter.memo["number"]!!.stringOrNull}"
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/comics/${manga.slug()}"
+
+    override fun getChapterUrl(chapter: SChapter) = if (chapter.url.startsWith("/comics/")) {
+        baseUrl + chapter.url.substringBefore('#')
+    } else {
+        "$baseUrl/comics/${chapter.memo["series"]!!.stringOrNull}/capitulo-${chapter.memo["number"]!!.stringOrNull}"
+    }
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -70,11 +81,11 @@ abstract class LectorMangaLat : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val series = client.get("$apiUrl/series/${manga.memo["slug"]!!.stringOrNull}", Fetch.XHR).parseAs<SeriesDetailsDto>().data
+        val series = client.get("$apiUrl/series/${manga.slug()}", Fetch.XHR).parseAs<SeriesDetailsDto>().data
         return SMangaUpdate(series.toSMangaDetails(), series.capitulos.map { it.toSChapter(series.slug) })
     }
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/capitulos/${chapter.url}", Fetch.XHR)
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get("$apiUrl/capitulos/${chapter.url.substringAfter('#')}", Fetch.XHR)
         .parseAs<ChapterPagesDto>()
         .data.paginas
         .mapIndexed { i, url -> Page(i, imageUrl = url) }
