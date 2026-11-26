@@ -35,7 +35,7 @@ abstract class LuxManga :
 
     private val preferences by getPreferencesLazy()
 
-    private val apiUrl = "https://api.luxmanhwa.com".toHttpUrl()
+    private val apiUrl get() = "https://api.${baseUrl.toHttpUrl().host}".toHttpUrl()
 
     private fun api(vararg segments: String): HttpUrl.Builder = apiUrl.newBuilder().apply {
         segments.forEach(::addPathSegment)
