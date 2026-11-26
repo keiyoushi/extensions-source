@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.xxxyaoi
 
+import android.util.Base64
 import android.webkit.WebResourceResponse
 import eu.kanade.tachiyomi.network.HttpException
 import keiyoushi.utils.InjectionEvent
@@ -37,15 +38,18 @@ internal class SitePages(
     @Volatile
     private var readerSession: Map<String, String> = emptyMap()
 
-    /** The document at [url], once `assets/[readScript]` called with [args] returns it; [carrySession] keeps the last such page's session storage. */
-    suspend fun document(url: String, readScript: String, args: String = "", carrySession: Boolean = false): Document = mutex.withLock {
+    /** The document at [url], once `assets/[readScript]` called with [args] returns it. */
+    suspend fun document(url: String, readScript: String, args: String = ""): Document = read(url, readScript, args).let { it.html.asJsoup(it.url) }
+
+    /** The page at [url], once `assets/[readScript]` called with [args] returns it; [carrySession] keeps the last such page's session storage. */
+    suspend fun read(url: String, readScript: String, args: String = "", carrySession: Boolean = false): PageDocument = mutex.withLock {
         lastLoad?.let { delay(LOAD_GAP - it.elapsedNow()) }
         lastLoad = TimeSource.Monotonic.markNow()
         load(url, readScript, args, carrySession)
     }
 
     @OptIn(NativeWebViewApi::class)
-    private suspend fun load(url: String, readScript: String, args: String, carrySession: Boolean): Document {
+    private suspend fun load(url: String, readScript: String, args: String, carrySession: Boolean): PageDocument {
         val host = baseUrl().toHttpUrl().host
         val origins = setOf("https://$host")
         val bridge = randomName()
@@ -72,7 +76,7 @@ internal class SitePages(
                     }
                     when {
                         requestHost == null || requestHost.isHostOrSubdomainOf(host) || requestHost.isHostOrSubdomainOf(TURNSTILE_HOST) -> null
-                        else -> empty()
+                        else -> stub(request.url.lastPathSegment.orEmpty())
                     }
                 }
                 onReceivedError { request, error ->
@@ -109,7 +113,7 @@ internal class SitePages(
         }
         val result = page.result!!
         if (carrySession) readerSession = result.session
-        return result.html.asJsoup(result.url)
+        return result
     }
 
     private fun PageRead.waitsFor(posts: List<String>): Boolean = posts.groupingBy { it }.eachCount().any { (url, started) ->
@@ -121,7 +125,14 @@ internal class SitePages(
 
     private fun asset(name: String) = javaClass.getResource("/assets/$name")!!.readText()
 
-    private fun empty() = WebResourceResponse("text/plain", "utf-8", 200, "OK", mapOf("Access-Control-Allow-Origin" to "*"), ByteArrayInputStream(ByteArray(0)))
+    private fun stub(file: String): WebResourceResponse {
+        val (type, body) = when (file.substringAfterLast('.', "").lowercase()) {
+            "css" -> "text/css" to "\n".toByteArray()
+            "gif", "png", "jpg", "jpeg", "webp", "svg" -> "image/gif" to PIXEL
+            else -> "application/javascript" to "\n".toByteArray()
+        }
+        return WebResourceResponse(type, "utf-8", 200, "OK", mapOf("Access-Control-Allow-Origin" to "*"), ByteArrayInputStream(body))
+    }
 
     private fun String.isHostOrSubdomainOf(domain: String) = this == domain || endsWith(".$domain")
 
@@ -129,6 +140,8 @@ internal class SitePages(
         const val SOLVE_IN_WEBVIEW = "Abra o WebView para passar pela verificação do site"
 
         private const val TURNSTILE_HOST = "challenges.cloudflare.com"
+
+        private val PIXEL = Base64.decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", Base64.DEFAULT)
 
         private val TIMEOUT = 2.minutes
 

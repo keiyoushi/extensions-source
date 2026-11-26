@@ -3,7 +3,10 @@ package eu.kanade.tachiyomi.extension.all.mangafire
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.string
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import org.jsoup.Jsoup
 
 @Serializable
@@ -59,7 +62,8 @@ class MangaDetailsDto(
     private val rating: Float? = null,
     private val ratingCount: Int? = null,
     private val altTitles: List<String>? = null,
-    private val links: Map<String, String>? = null,
+    // Object of site links, or an empty array when the title has none
+    private val links: JsonElement? = null,
 ) {
     fun toSManga() = SManga.create().apply {
         url = "/title/$hid${slug?.let { "-$it" } ?: ""}"
@@ -72,7 +76,7 @@ class MangaDetailsDto(
             .info(year?.toString())
             .description(synopsisHtml?.let { Jsoup.parseBodyFragment(it).body() })
             .altTitles(altTitles.orEmpty())
-            .links(links.orEmpty().mapNotNull { (key, url) -> LINK_NAMES[key]?.let { it to url } })
+            .links((links as? JsonObject).orEmpty().mapNotNull { (key, url) -> LINK_NAMES[key]?.let { it to url.string } })
             .build()
         genre = buildList {
             type?.replaceFirstChar { it.uppercase() }?.let { add(it) }

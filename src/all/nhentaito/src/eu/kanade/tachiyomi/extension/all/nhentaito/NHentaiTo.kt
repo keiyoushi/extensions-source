@@ -1,12 +1,17 @@
 package eu.kanade.tachiyomi.extension.all.nhentaito
 
+import eu.kanade.tachiyomi.multisrc.galleryadults.FavoriteFilter
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
+import eu.kanade.tachiyomi.multisrc.galleryadults.RandomEntryFilter
 import eu.kanade.tachiyomi.multisrc.galleryadults.SortOrderFilter
+import eu.kanade.tachiyomi.multisrc.galleryadults.SpeechlessFilter
 import eu.kanade.tachiyomi.multisrc.galleryadults.imgAttr
 import eu.kanade.tachiyomi.multisrc.galleryadults.toDate
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
@@ -111,13 +116,34 @@ abstract class NHentaiTo : GalleryAdults() {
     override fun basicSearchUrl(page: Int, query: String, filters: FilterList): String {
         val sortOrderFilter = filters.firstInstanceOrNull<SortOrderFilter>()
         val excludeTags = filters.firstInstanceOrNull<ExcludeFilter>()
+        val pageCountFilter = filters.firstInstanceOrNull<PageCountFilter>()
 
         return "$baseUrl/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("q", query.ifEmpty { "*" })
             sortOrderFilter?.state?.let { addQueryParameter("sort", getSortOrderURIs()[it].second) }
             excludeTags?.state?.let { addQueryParameter("exclude", it) }
+            pageCountFilter?.let { filter ->
+                filter.min?.let { addQueryParameter("min_pages", it.toString()) }
+                filter.max?.let { addQueryParameter("max_pages", it.toString()) }
+            }
             addQueryParameter("lang", mangaLang)
         }.build().toString()
+    }
+
+    // Search
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val isSpecialPath = query.toIntOrNull() != null ||
+            filters.firstInstanceOrNull<RandomEntryFilter>()?.state == true ||
+            filters.firstInstanceOrNull<FavoriteFilter>()?.state == true ||
+            (supportSpeechless && filters.firstInstanceOrNull<SpeechlessFilter>()?.state == true)
+
+        if (isSpecialPath) return super.getSearchMangaList(page, query, filters)
+
+        // nhentai.to's /search endpoint natively supports sort/exclude/min_pages/max_pages.
+        // The theme routes empty-query searches to popularMangaUrl/latestUpdatesUrl,
+        // which are overridden here with a fresh FilterList and would drop the user's
+        // filters, so build the basic search URL directly with the active state.
+        return parseSearchManga(client.get(basicSearchUrl(page, query, filters).addPageUri(page), Fetch.DOCUMENT))
     }
 
     // Filters
@@ -126,6 +152,7 @@ abstract class NHentaiTo : GalleryAdults() {
     override fun getFilterList(data: JsonElement?) = FilterList(
         listOf(
             ExcludeFilter(),
+            PageCountFilter(),
         ) + super.getFilterList(data).list,
     )
 
@@ -137,6 +164,13 @@ abstract class NHentaiTo : GalleryAdults() {
     )
 
     class ExcludeFilter : Filter.Text("Exclude Tags (seperate by comma)")
+
+    class PageCountText(name: String) : Filter.Text(name)
+
+    class PageCountFilter : Filter.Group<PageCountText>("Pages", listOf(PageCountText("Min"), PageCountText("Max"))) {
+        val min get() = state[0].state.trim().toIntOrNull()
+        val max get() = state[1].state.trim().toIntOrNull()
+    }
 
     fun Response.isRealSuccess() = isSuccessful && !peekBody(64).string().contains("<html", true)
 }

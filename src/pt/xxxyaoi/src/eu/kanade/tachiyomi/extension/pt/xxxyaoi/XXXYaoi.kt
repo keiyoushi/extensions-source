@@ -6,11 +6,13 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
@@ -160,19 +162,21 @@ abstract class XXXYaoi : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = sitePages.document(getChapterUrl(chapter), "reader.js", carrySession = true)
-        if (document.selectFirst("iframe[src*=player]") != null) return emptyList()
-        val pages = document.select("img").mapNotNull { image ->
-            image.attributes().firstOrNull { "/WP-manga/data/" in it.value }?.let { image.absUrl(it.key) }
+        val reader = sitePages.read(getChapterUrl(chapter), "reader.js", carrySession = true)
+        if (reader.pages.isEmpty()) {
+            val document = reader.html.asJsoup(reader.url)
+            if (document.selectFirst("iframe[src*=player]") != null) return emptyList()
+            if (document.selectFirst("iframe[src*=challenges.cloudflare.com], input[name=cf-turnstile-response]") != null) {
+                throw IOException(SitePages.SOLVE_IN_WEBVIEW)
+            }
+            throw IOException("As páginas do capítulo não carregaram, tente novamente")
         }
-        if (pages.isEmpty() && document.selectFirst("iframe[src*=challenges.cloudflare.com], input[name=cf-turnstile-response]") != null) {
-            throw IOException(SitePages.SOLVE_IN_WEBVIEW)
-        }
-        return pages.mapIndexed { index, imageUrl -> Page(index, document.location(), imageUrl) }
+        return reader.pages.mapIndexed { index, imageUrl -> Page(index, url = reader.url, imageUrl = imageUrl) }
     }
 
     override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
-        .fetch(imageFetch.from(page.url))
+        .header("X-XY-R", "1")
+        .fetch(Fetch.XHR.from(page.url))
         .build()
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = seriesDocument(getMangaUrl(manga))

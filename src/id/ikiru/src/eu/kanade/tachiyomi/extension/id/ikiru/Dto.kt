@@ -10,68 +10,73 @@ import kotlin.time.Instant
 
 @Serializable
 class IkiruResponseDto<T>(
-    val success: Boolean,
-    val message: String? = null,
-    val data: T? = null,
-)
-
-@Serializable
-class IkiruSearchDataDto(
-    val mangas: List<IkiruMangaItemDto> = emptyList(),
-    val total: Int,
-)
-
-@Serializable
-class IkiruProjectDataDto(
-    val project: List<IkiruMangaItemDto> = emptyList(),
-    val total: Int,
-)
-
-@Serializable
-class IkiruMangaItemDto(
-    private val title: String,
-    private val slug: String,
-    private val featuredImage: String? = null,
+    private val success: Boolean,
+    private val message: String? = null,
+    private val data: T? = null,
+    val pagination: IkiruPaginationDto? = null,
 ) {
-    fun toSManga(): SManga = SManga.create().apply {
-        this.title = this@IkiruMangaItemDto.title
-        this.url = slug
-        thumbnail_url = featuredImage
+    // the API returns HTTP 200 with a failure envelope for bad input, so the flag must be checked explicitly
+    fun requireData(): T {
+        if (!success || data == null) {
+            throw Exception(message ?: "Request failed")
+        }
+        return data
     }
 }
 
 @Serializable
-class IkiruMangaDetailDto(
+class IkiruPaginationDto(
+    val hasNextPage: Boolean = false,
+)
+
+@Serializable
+class IkiruSeriesItemDto(
     private val title: String,
     private val slug: String,
-    private val description: String? = null,
-    private val status: String? = null,
-    private val featuredImage: String? = null,
-    private val metadata: IkiruMetadataDto? = null,
-    val chapters: IkiruChapterListDto = IkiruChapterListDto(),
+    private val coverUrl: String? = null,
 ) {
-    fun toSManga(): SManga {
-        // the site repeats the main title inside alternateTitles
-        val altTitles = metadata?.alternateTitles.orEmpty()
-            .filterNot { it.trim().equals(title, ignoreCase = true) }
+    fun toSManga(): SManga = SManga.create().apply {
+        this.title = this@IkiruSeriesItemDto.title
+        this.url = slug
+        thumbnail_url = coverUrl
+    }
+}
+
+@Serializable
+class IkiruSeriesDetailDto(
+    private val title: String,
+    private val slug: String,
+    private val altTitles: List<String> = emptyList(),
+    private val status: String? = null,
+    private val synopsis: String? = null,
+    private val coverUrl: String? = null,
+    private val author: String? = null,
+    private val artist: String? = null,
+    private val genreNames: List<String> = emptyList(),
+    val chapters: List<IkiruChapterItemDto> = emptyList(),
+) {
+    fun toSManga(baseUrl: String): SManga {
+        // the site repeats the main title inside altTitles
+        val altTitles = altTitles.filterNot { it.trim().equals(title, ignoreCase = true) }
 
         return SManga.create().apply {
-            this.title = this@IkiruMangaDetailDto.title
+            this.title = this@IkiruSeriesDetailDto.title
             this.url = slug
-            thumbnail_url = featuredImage
-            this.description = MarkdownDescription.Builder()
-                .description(this@IkiruMangaDetailDto.description?.let { Jsoup.parseBodyFragment(it).body() })
+            thumbnail_url = coverUrl
+            description = MarkdownDescription.Builder()
+                .description(synopsis?.let { Jsoup.parseBodyFragment(it, baseUrl).body() })
                 .altTitles(altTitles)
                 .build()
-            this.status = when (this@IkiruMangaDetailDto.status?.uppercase()) {
-                "ONGOING" -> SManga.ONGOING
-                "COMPLETED" -> SManga.COMPLETED
-                "HIATUS" -> SManga.ON_HIATUS
+            this.status = when (this@IkiruSeriesDetailDto.status?.lowercase()) {
+                "ongoing" -> SManga.ONGOING
+                "completed" -> SManga.COMPLETED
+                "hiatus" -> SManga.ON_HIATUS
+                "cancelled" -> SManga.CANCELLED
                 else -> SManga.UNKNOWN
             }
-            author = metadata?.author?.mapNotNull { it.name }?.joinToString()?.ifEmpty { null }
-            artist = metadata?.artist?.mapNotNull { it.name }?.joinToString()?.ifEmpty { null }
-            genre = metadata?.genre?.mapNotNull { it.name }?.joinToString()?.ifEmpty { null }
+            this.author = this@IkiruSeriesDetailDto.author
+            this.artist = this@IkiruSeriesDetailDto.artist
+            genre = genreNames.joinToString().ifEmpty { null }
         }
     }
 }
@@ -83,57 +88,49 @@ class IkiruLegacyMangaUrlDto(
 )
 
 @Serializable
-class IkiruMetadataDto(
-    val alternateTitles: List<String> = emptyList(),
-    val genre: List<IkiruNamedDto> = emptyList(),
-    val author: List<IkiruNamedDto> = emptyList(),
-    val artist: List<IkiruNamedDto> = emptyList(),
-)
-
-@Serializable
-class IkiruNamedDto(
-    val name: String? = null,
-)
-
-@Serializable
-class IkiruChapterListDto(
-    val chapters: List<IkiruChapterItemDto> = emptyList(),
-    val hasMore: Boolean = false,
-)
-
-@Serializable
 class IkiruChapterItemDto(
+    private val chapterNumber: Float,
     private val title: String? = null,
-    private val number: Float,
-    private val createdAt: String? = null,
+    private val publishedAt: String? = null,
 ) {
-    // the API no longer sends a chapter slug; the site's reader route is chapter-<number>
+    // the key keeps the old site's path so existing library chapters stay matched
     fun toSChapter(mangaSlug: String): SChapter = SChapter.create().apply {
-        this.url = "/manga/$mangaSlug/chapter-${formatChapterNumber(number)}"
-        this.name = cleanChapterName(title, number)
-        this.chapter_number = number
-        this.date_upload = Instant.tryParse(createdAt)
+        val number = chapterNumber.toString().removeSuffix(".0")
+        this.url = "/manga/$mangaSlug/chapter-$number"
+        this.name = cleanChapterName(number)
+        this.chapter_number = chapterNumber
+        this.date_upload = Instant.tryParse(publishedAt)
     }
 
-    private fun cleanChapterName(rawTitle: String?, num: Float?): String {
-        val match = chapterTitleRegex.findAll(rawTitle.orEmpty()).lastOrNull()
-        if (match != null) {
-            val matched = match.value
-            return if (matched.startsWith("chapter", ignoreCase = true)) {
-                "Chapter${matched.substring(7)}"
-            } else {
-                matched
-            }
+    private fun cleanChapterName(number: String): String {
+        val match = chapterTitleRegex.findAll(title.orEmpty()).lastOrNull()
+            ?: return "Chapter $number"
+        val matched = match.value
+        return if (matched.startsWith("chapter", ignoreCase = true)) {
+            "Chapter${matched.substring(7)}"
+        } else {
+            matched
         }
-        if (num != null && num >= 0) {
-            return "Chapter ${formatChapterNumber(num)}"
-        }
-        return rawTitle?.takeIf { it.isNotBlank() } ?: "Chapter"
     }
-
-    private fun formatChapterNumber(number: Float): String = if (number % 1 == 0f) number.toInt().toString() else number.toString()
 
     companion object {
         private val chapterTitleRegex = Regex("""(Chapter\s*[\d.]+(?:\s*[:\-].*)?)""", RegexOption.IGNORE_CASE)
     }
 }
+
+@Serializable
+class IkiruChapterPagesDto(
+    val pages: List<IkiruPageDto> = emptyList(),
+)
+
+@Serializable
+class IkiruPageDto(
+    val pageNumber: Int,
+    val imageUrl: String,
+)
+
+@Serializable
+class IkiruGenreDto(
+    val name: String,
+    val slug: String,
+)
