@@ -19,6 +19,7 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
@@ -316,11 +317,24 @@ abstract class DamCoNuong : KeiSource() {
         chapterPage: Document,
     ): PagesPayload {
         val secret = loadSecret(chapterPage)
-        val (token, body) = try {
-            fetchPages(mangaSlug, chapterSlug, secret)
-        } catch (_: InvalidPagesTokenException) {
-            fetchPages(mangaSlug, chapterSlug, loadSecret(chapterPage, knownStale = true))
+        try {
+            return decryptPages(mangaSlug, chapterSlug, path, secret)
+        } catch (e: Exception) {
+            if (e is CancellationException || e is LoginRequiredException) throw e
+            // Any failure — rejected token, unexpected response body, decrypt or
+            // parse error — may come from a stale cached secret key. Retry once
+            // with a freshly scraped key before giving up.
+            return decryptPages(mangaSlug, chapterSlug, path, loadSecret(chapterPage, knownStale = true))
         }
+    }
+
+    private suspend fun decryptPages(
+        mangaSlug: String,
+        chapterSlug: String,
+        path: String,
+        secret: ByteArray,
+    ): PagesPayload {
+        val (token, body) = fetchPages(mangaSlug, chapterSlug, secret)
         return PagesCrypto.decryptPages(body.parseAs<PagesResponse>().encrypted, token, path)
     }
 
@@ -336,19 +350,21 @@ abstract class DamCoNuong : KeiSource() {
 
     private class InvalidPagesTokenException : Exception("Pages token rejected by the site")
 
+    private class LoginRequiredException : Exception("Truyện này cần đăng nhập webview bằng tài khoản phù hợp để xem")
+
     private suspend fun fetchPagesJson(mangaSlug: String, chapterSlug: String, token: String): String {
         val cUrl = "$baseUrl/_c/mangas/$mangaSlug/chapters/$chapterSlug/pages?_=$token"
         val text = client.get(cUrl, Fetch.XHR, ensureSuccess = false).use { it.body.string() }
         if (text.contains("\"e\":")) {
             return text
         }
-        if (text.contains("invalid_token")) {
-            throw InvalidPagesTokenException()
-        }
         if (isLoginRequired(text)) {
-            throw Exception("Truyện này cần đăng nhập webview bằng tài khoản phù hợp để xem")
+            throw LoginRequiredException()
         }
-        return text
+        // A wrong token signature makes the site answer with an HTML error page
+        // instead of a JSON "invalid_token" body. Treat every unexpected response
+        // as a token failure so the key gets re-scraped and retried.
+        throw InvalidPagesTokenException()
     }
 
     // ============================== Filters ===============================
