@@ -366,7 +366,7 @@ abstract class MangaBox :
     open fun searchMangaFromElement(element: Element) = mangaFromElement(element)
 
     open fun searchMangaNextPageSelector() = if (useLegacy) {
-        "a.page_select + a:not(.page_last), a.page-select + a:not(.page-last)"
+        ".page_select + a[href]:not(.page_last), a.page-select + a:not(.page-last)"
     } else {
         popularMangaNextPageSelector()
     }
@@ -516,7 +516,7 @@ abstract class MangaBox :
         val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         val document = response.asJsoup()
 
-        val imageUrls = if (useLegacy) {
+        val imageUrls = if (document.selectFirst("div[data-page]") == null) {
             val content = document.select("script:containsData(cdns =)").joinToString("\n") { it.data() }
             val cdns = extractArray(content, cdnsRegex) + extractArray(content, backupImageRegex)
             val chapterImages = extractArray(content, chapterImagesRegex)

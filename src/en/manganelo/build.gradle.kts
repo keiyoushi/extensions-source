@@ -15,9 +15,10 @@ keiyoushi {
         lang = "en"
         baseUrl {
             mirrors(
-                "" to "https://www.natomanga.com",
+                "" to "https://www.saiyanmanga.com",
                 "www.nelomanga.net (legacy)" to "https://www.nelomanga.net",
                 "www.manganato.gg (legacy)" to "https://www.manganato.gg",
+                "www.natomanga.com (legacy)" to "https://www.natomanga.com",
             )
         }
         id = 1024627298672457456L
