@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.mangabox
 
-import android.annotation.SuppressLint
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -24,6 +23,7 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -52,6 +52,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
@@ -203,16 +204,14 @@ abstract class MangaBox :
 
             try {
                 // Proceed with the new request
-                chain.proceed(newRequest).use { tryResponse ->
+                val tryResponse = chain.proceed(newRequest)
+                if (tryResponse.isSuccessful) {
+                    // Move working cdn to first so it gets priority during iteration
+                    cdnSet.moveItemToFirst(newRequest.url.getBaseUrl())
 
-                    // Check if the response is successful
-                    if (tryResponse.isSuccessful) {
-                        // Move working cdn to first so it gets priority during iteration
-                        cdnSet.moveItemToFirst(newRequest.url.getBaseUrl())
-
-                        return tryResponse
-                    }
+                    return tryResponse
                 }
+                tryResponse.close()
             } catch (_: IOException) {}
         }
 
@@ -226,8 +225,6 @@ abstract class MangaBox :
 
     open val simpleQueryPath: String
         get() = if (useLegacy) "search/story/" else "search"
-
-    // ============================== Popular ==============================
 
     open fun popularMangaSelector() = if (useLegacy) {
         ":is(div.truyen-list > div.list-truyen-item-wrap, div.comic-list > .list-comic-item-wrap):has(a[data-id])"
@@ -254,8 +251,6 @@ abstract class MangaBox :
         "nav[aria-label=Pagination] a[aria-label*=Next], nav[aria-label=Pagination] a:contains(Next)"
     }
 
-    // ============================== Latest ===============================
-
     open fun latestUpdatesSelector() = popularMangaSelector()
 
     open fun parseLatestUpdates(response: Response): MangasPage {
@@ -272,8 +267,6 @@ abstract class MangaBox :
     open fun latestUpdatesFromElement(element: Element): SManga = mangaFromElement(element)
 
     open fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
-
-    // ============================== Search ===============================
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val response = if (useLegacy) {
@@ -366,7 +359,7 @@ abstract class MangaBox :
     open fun searchMangaFromElement(element: Element) = mangaFromElement(element)
 
     open fun searchMangaNextPageSelector() = if (useLegacy) {
-        "a.page_select + a:not(.page_last), a.page-select + a:not(.page-last)"
+        ".page_select + a[href]:not(.page_last), a.page-select + a:not(.page-last)"
     } else {
         popularMangaNextPageSelector()
     }
@@ -379,8 +372,6 @@ abstract class MangaBox :
         thumbnail_url = element.selectFirst("img")?.attr("abs:src")
     }
 
-    // ============================== Details ==============================
-
     open val mangaDetailsMainSelector: String
         get() = if (useLegacy) "div.manga-info-top, div.panel-story-info" else "div.relative.overflow-hidden:has(h1)"
 
@@ -392,8 +383,6 @@ abstract class MangaBox :
 
     open val altNameSelector: String
         get() = if (useLegacy) ".story-alternative, tr:has(.info-alternative) h2" else "div.relative.overflow-hidden:has(h1) h1 + p"
-
-    open val altName = "Alternative Name: "
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${getMangaSlug(manga)}"
 
@@ -417,49 +406,34 @@ abstract class MangaBox :
         if (infoElement != null) {
             title = infoElement.selectFirst("h1, h2")!!.text()
             if (useLegacy) {
-                author = infoElement.select("li:contains(author) a, td:containsOwn(author) + td a")
-                    .eachText().joinToString()
+                author = infoElement.selectFirst("li:contains(author), td:containsOwn(author) + td")
+                    ?.text()?.substringAfter(':')?.trim()?.takeIf { it.isNotEmpty() }
                 status = parseStatus(
                     infoElement.select("li:contains(status), td:containsOwn(status) + td").text(),
                 )
-                genre = infoElement.selectFirst("div.manga-info-top li:contains(genres)")
-                    ?.select("a")?.joinToString { it.text() } // kakalot
-                    ?: infoElement.select("td:containsOwn(genres) + td a")
-                        .joinToString { it.text() } // nelo
+                genre = (
+                    infoElement.selectFirst("div.manga-info-top li:contains(genres)")?.select("a") // kakalot
+                        ?: infoElement.select("td:containsOwn(genres) + td a") // nelo
+                    ).joinToString { it.text() }.takeIf { it.isNotEmpty() }
             } else {
                 author = infoElement.select("aside span:containsOwn(Author) + span")
-                    .eachText().joinToString()
+                    .eachText().joinToString().takeIf { it.isNotEmpty() }
                 status = parseStatus(
                     infoElement.select("aside span:containsOwn(Status) + span").text(),
                 )
-                genre = infoElement.select("a[href^=/genre/]").joinToString { it.text() }
+                genre = infoElement.select("a[href^=/genre/]").joinToString { it.text() }.takeIf { it.isNotEmpty() }
             }
         } else {
             checkForRedirectMessage(document)
         }
 
-        val rawDescription = if (useLegacy) {
-            document.selectFirst(descriptionSelector)?.ownText()
-        } else {
-            document.selectFirst(descriptionSelector)?.wholeText()?.trim()
-        }
-        description = rawDescription
-            ?.replace("""^$title summary:\s""".toRegex(), "")
-            ?.replace("""<\s*br\s*/?>""".toRegex(), "\n")
-            ?.replace("<[^>]*>".toRegex(), "")
+        val altNames = document.selectFirst(altNameSelector)?.ownText()?.replace(altNamePrefixRegex, "")
+        val descElement = document.selectFirst(descriptionSelector)?.clone()?.apply { select("h2").remove() }
+        description = MarkdownDescription.Builder()
+            .description(descElement, keepNewlines = true)
+            .altTitles(listOfNotNull(altNames))
+            .build()
         thumbnail_url = document.selectFirst(thumbnailSelector)?.attr("abs:src")
-
-        // add alternative name to manga description
-        val altNameElement = document.selectFirst(altNameSelector)
-        if (altNameElement != null) {
-            val altNameText = altNameElement.ownText()
-            if (altNameText.isNotEmpty()) {
-                description = when {
-                    description.isNullOrEmpty() -> altName + altNameText
-                    else -> description + "\n\n$altName" + altNameText
-                }
-            }
-        }
     }
 
     private fun parseStatus(status: String?) = when {
@@ -469,14 +443,20 @@ abstract class MangaBox :
         else -> SManga.UNKNOWN
     }
 
-    // ============================= Chapters ==============================
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) getMangaByUrl(getMangaUrl(manga).toHttpUrl()) ?: manga else manga },
+        chapters = { if (fetchChapters) parseChapterList(manga) else chapters },
+    )
 
     open suspend fun parseChapterList(manga: SManga): List<SChapter> {
         val slug = getMangaSlug(manga)
         val response = client.get("${apiChapterListUrl.replace("__SLUG__", slug)}?limit=-1", Fetch.XHR.from(manga.url))
-        val apiResult = runCatching {
-            response.parseAs<ApiResponse>()
-        }.getOrElse { return emptyList() }
+        val apiResult = response.parseAs<ApiResponse>()
 
         if (!apiResult.success) return emptyList()
 
@@ -484,11 +464,11 @@ abstract class MangaBox :
             val chapterSlug = apiChapter.chapterSlug ?: return@mapNotNull null
 
             SChapter.create().apply {
-                name = apiChapter.chapterName ?: "Chapter"
+                name = apiChapter.chapterName ?: return@mapNotNull null
                 url = apiChapterPageUrl
                     .replace("__MANGA__", slug)
                     .replace("__CHAPTER__", chapterSlug)
-                chapter_number = apiChapter.chapterNum ?: 0f
+                apiChapter.chapterNum?.let { chapter_number = it }
                 scanlator = baseUrl.replace("https://", "")
                 date_upload = dateFormat.tryParseDateTime(apiChapter.updatedAt, ZoneOffset.UTC)
                     .takeIf { it > 0L }
@@ -496,8 +476,6 @@ abstract class MangaBox :
             }
         }
     }
-
-    // =============================== Pages ===============================
 
     override fun getChapterUrl(chapter: SChapter): String = if (chapter.url.startsWith("http")) {
         chapter.url
@@ -516,7 +494,7 @@ abstract class MangaBox :
         val response = client.get(getChapterUrl(chapter), Fetch.DOCUMENT)
         val document = response.asJsoup()
 
-        val imageUrls = if (useLegacy) {
+        val imageUrls = if (document.selectFirst("div[data-page]") == null) {
             val content = document.select("script:containsData(cdns =)").joinToString("\n") { it.data() }
             val cdns = extractArray(content, cdnsRegex) + extractArray(content, backupImageRegex)
             val chapterImages = extractArray(content, chapterImagesRegex)
@@ -644,47 +622,18 @@ abstract class MangaBox :
         }
     }
 
-    override fun getImageRequest(page: Page): Request = GET(
-        page.imageUrl!!,
-        headers, // Headers are sometimes not added for image requests for some reason
-    )
+    override fun getImageRequest(page: Page): Request = super.getImageRequest(page)
         .newBuilder()
         .tag(MangaBoxFallBackTag::class.java, MangaBoxFallBackTag())
         .build()
 
-    // ============================== Updates ==============================
-
-    override suspend fun fetchMangaUpdate(
-        manga: SManga,
-        chapters: List<SChapter>,
-        fetchDetails: Boolean,
-        fetchChapters: Boolean,
-    ): SMangaUpdate = SMangaUpdate(
-        manga = { if (fetchDetails) getMangaByUrl(getMangaUrl(manga).toHttpUrl()) ?: manga else manga },
-        chapters = { if (fetchChapters) parseChapterList(manga) else chapters },
-    )
-
-    // ============================== Filters ==============================
-
     // Based on change_alias JS function from Mangakakalot's website
-    @SuppressLint("DefaultLocale")
-    open fun normalizeSearchQuery(query: String): String {
-        var str = query.lowercase()
-        str = str.replace("[àáạảãâầấậẩẫăằắặẳẵ]".toRegex(), "a")
-        str = str.replace("[èéẹẻẽêềếệểễ]".toRegex(), "e")
-        str = str.replace("[ìíịỉĩ]".toRegex(), "i")
-        str = str.replace("[òóọỏõôồốộổỗơờớợởỡ]".toRegex(), "o")
-        str = str.replace("[ùúụủũưừứựửữ]".toRegex(), "u")
-        str = str.replace("[ỳýỵỷỹ]".toRegex(), "y")
-        str = str.replace("đ".toRegex(), "d")
-        str = str.replace(
-            """!|@|%|\^|\*|\(|\)|\+|=|<|>|\?|/|,|\.|:|;|'| |"|&|#|\[|]|~|-|$|_""".toRegex(),
-            "_",
-        )
-        str = str.replace("_+_".toRegex(), "_")
-        str = str.replace("""^_+|_+$""".toRegex(), "")
-        return str
-    }
+    open fun normalizeSearchQuery(query: String): String = searchAccentRegexes
+        .fold(query.lowercase()) { str, (regex, letter) -> str.replace(regex, letter) }
+        .replace("đ", "d")
+        .replace(searchPunctuationRegex, "_")
+        .replace(searchRepeatedUnderscoreRegex, "_")
+        .replace(searchEdgeUnderscoreRegex, "")
 
     override fun getFilterList(data: JsonElement?) = FilterList(
         Filter.Header("NOTE: Ignored if using text search!"),
@@ -693,8 +642,6 @@ abstract class MangaBox :
         StatusFilter(getStatusFilters()),
         GenreFilter(getGenreFilters()),
     )
-
-    // ============================= Utilities =============================
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
@@ -726,7 +673,21 @@ abstract class MangaBox :
         private const val IMAGE_SIZE_RETRIES = 3
         private const val URL_PREFIX = "https://"
 
-        private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+        private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
+
+        private val altNamePrefixRegex = Regex("""^Alternative\s*:\s*""")
+
+        private val searchAccentRegexes = listOf(
+            Regex("[àáạảãâầấậẩẫăằắặẳẵ]") to "a",
+            Regex("[èéẹẻẽêềếệểễ]") to "e",
+            Regex("[ìíịỉĩ]") to "i",
+            Regex("[òóọỏõôồốộổỗơờớợởỡ]") to "o",
+            Regex("[ùúụủũưừứựửữ]") to "u",
+            Regex("[ỳýỵỷỹ]") to "y",
+        )
+        private val searchPunctuationRegex = Regex("""!|@|%|\^|\*|\(|\)|\+|=|<|>|\?|/|,|\.|:|;|'| |"|&|#|\[|]|~|-|$|_""")
+        private val searchRepeatedUnderscoreRegex = Regex("_+_")
+        private val searchEdgeUnderscoreRegex = Regex("""^_+|_+$""")
 
         private val cdnsRegex = Regex("""cdns\s*=\s*\[([^]]+)]""")
         private val backupImageRegex = Regex("""backupImage\s*=\s*\[([^]]+)]""")
