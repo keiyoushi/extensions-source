@@ -13,8 +13,10 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
@@ -24,7 +26,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import org.jsoup.select.Elements
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.min
@@ -183,9 +184,12 @@ abstract class MMRCMS : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.size < 2 || url.pathSegments.first() != itemPath) return null
+        if (url.host.removePrefix("www.") != baseUrl.toHttpUrl().host.removePrefix("www.")) return null
+        if (url.pathSegments.size < 2 || url.pathSegments.first() != itemPath) return null
 
-        return mangaDetailsParse(client.get(url, Fetch.DOCUMENT).asJsoup()).apply { setUrlWithoutDomain(url.toString()) }
+        val mangaUrl = "/$itemPath/${url.pathSegments[1]}"
+        val manga = SManga.create().apply { this.url = mangaUrl }
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga.apply { this.url = mangaUrl }
     }
 
     // Details and chapters come from the same page
@@ -214,22 +218,19 @@ abstract class MMRCMS : KeiSource() {
             document.location(),
             document.selectFirst(".row img.img-responsive")?.imgAttr(),
         )
-        description = document.select(".row .well").let {
-            it.select("h5").remove()
-            it.textWithNewlines()
-        }
+        description = MarkdownDescription.Builder()
+            .description(document.selectFirst(".row .well")?.apply { select("h5").remove() }, keepNewlines = true)
+            .build()
 
         document.select(".row .dl-horizontal dt").forEach { element ->
             when (element.text().lowercase().removeSuffix(":")) {
-                in detailAuthor -> author = element.nextElementSibling()!!.text()
+                in detailAuthor -> author = element.nextElementSibling()?.textOrNull()
 
-                in detailArtist -> artist = element.nextElementSibling()!!.text()
+                in detailArtist -> artist = element.nextElementSibling()?.textOrNull()
 
-                in detailGenre -> genre = element.nextElementSibling()!!.select("a").joinToString {
-                    it.text()
-                }
+                in detailGenre -> genre = element.nextElementSibling()?.select("a")?.joinToString { it.text() }?.ifEmpty { null }
 
-                in detailStatus -> status = when (element.nextElementSibling()!!.text().lowercase()) {
+                in detailStatus -> status = when (element.nextElementSibling()?.text()?.lowercase()) {
                     in detailStatusComplete -> SManga.COMPLETED
                     in detailStatusOngoing -> SManga.ONGOING
                     in detailStatusDropped -> SManga.CANCELLED
@@ -416,10 +417,5 @@ abstract class MMRCMS : KeiSource() {
         hasAttr("data-lazy-src") -> absUrl("data-lazy-src")
         hasAttr("data-src") -> absUrl("data-src")
         else -> absUrl("src")
-    }
-
-    protected fun Elements.textWithNewlines() = run {
-        select("p, br").prepend("\\n")
-        text().replace("\\n", "\n").replace("\n ", "\n")
     }
 }
