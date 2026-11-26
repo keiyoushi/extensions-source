@@ -375,7 +375,11 @@ class MangaDex(
             .addQueryParameter("limit", (mangaList.size * locales.size).coerceAtMost(MANGA_IDS_LIMIT).toString())
             .build()
 
-        return client.get(url, Fetch.XHR).parseAs<PagedDto<CoverDto>>().data
+        // optional, so the manga keep their main cover if this fails
+        val covers = runCatching { client.get(url, Fetch.XHR).parseAs<PagedDto<CoverDto>>().data }
+            .getOrElse { return emptyMap() }
+
+        return covers
             .filter { it.attributes.locale == originalLanguages[it.mangaId] }
             .distinctBy { it.mangaId }
             .associate { it.mangaId to it.attributes.fileName }
