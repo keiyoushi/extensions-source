@@ -203,16 +203,14 @@ abstract class MangaBox :
 
             try {
                 // Proceed with the new request
-                chain.proceed(newRequest).use { tryResponse ->
+                val tryResponse = chain.proceed(newRequest)
+                if (tryResponse.isSuccessful) {
+                    // Move working cdn to first so it gets priority during iteration
+                    cdnSet.moveItemToFirst(newRequest.url.getBaseUrl())
 
-                    // Check if the response is successful
-                    if (tryResponse.isSuccessful) {
-                        // Move working cdn to first so it gets priority during iteration
-                        cdnSet.moveItemToFirst(newRequest.url.getBaseUrl())
-
-                        return tryResponse
-                    }
+                    return tryResponse
                 }
+                tryResponse.close()
             } catch (_: IOException) {}
         }
 
@@ -417,8 +415,8 @@ abstract class MangaBox :
         if (infoElement != null) {
             title = infoElement.selectFirst("h1, h2")!!.text()
             if (useLegacy) {
-                author = infoElement.select("li:contains(author) a, td:containsOwn(author) + td a")
-                    .eachText().joinToString()
+                author = infoElement.selectFirst("li:contains(author), td:containsOwn(author) + td")
+                    ?.text()?.substringAfter(':')?.trim()
                 status = parseStatus(
                     infoElement.select("li:contains(status), td:containsOwn(status) + td").text(),
                 )
