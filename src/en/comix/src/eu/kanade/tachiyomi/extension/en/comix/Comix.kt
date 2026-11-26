@@ -29,6 +29,9 @@ import keiyoushi.utils.int
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
 import keiyoushi.utils.toJsonRequestBody
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -95,6 +98,8 @@ abstract class Comix :
             if (wait.isPositive()) delay(wait)
         }
     }
+
+    private fun hasSitePass() = client.cookieJar.loadForRequest(apiUrl).any { it.name == WAF_PASS_COOKIE }
 
     private fun altHostFallback(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -321,7 +326,7 @@ abstract class Comix :
         val knownDates = chapters.mapNotNull { chapter ->
             chapter.chapterId()?.let { it to chapter.date_upload }?.takeIf { it.second > 0 }
         }.toMap()
-        val fetched = getChapterList(manga, knownIds).map { it.toSChapter() }.onEach { chapter ->
+        val fetched = getChapterList(manga, knownIds, refreshing = chapters.isNotEmpty()).map { it.toSChapter() }.onEach { chapter ->
             chapter.chapterId()?.let(knownDates::get)?.let { chapter.date_upload = it }
         }
         val candidates = if (fetchUntilKnown) fetched + chapters else fetched
@@ -368,25 +373,36 @@ abstract class Comix :
             ?.substringBefore("-chapter-")
             ?.toIntOrNull()
 
-    private suspend fun getChapterList(manga: SManga, knownIds: Set<Int>): List<Chapter> {
-        val chapters = ArrayList<Chapter>()
-        var page = 1
-        while (true) {
-            chapterListPacer.waitForSlot()
-            val url = mangaApi(manga)
-                .addPathSegment("chapters")
-                .addQueryParameter("page", page.toString())
-                .addQueryParameter("limit", CHAPTER_PAGE_LIMIT.toString())
-                .addQueryParameter("order[number]", "desc")
-                .addQueryParameter("v", "0")
-                .addQueryParameter("w", "0")
-                .build()
-            val result = readApi<ApiResponse<ChapterItems>>(url, getMangaUrl(manga)).result
-            chapters += result.items
-            if (result.items.any { it.id in knownIds } || page >= result.meta.lastPage) break
-            page++
+    private suspend fun getChapterList(manga: SManga, knownIds: Set<Int>, refreshing: Boolean): List<Chapter> {
+        val first = getChapterPage(manga, 1, refreshing)
+        val lastPage = first.meta.lastPage
+        if (first.items.any { it.id in knownIds } || lastPage <= 1) return first.items
+        if (!refreshing || hasSitePass()) {
+            val rest = coroutineScope {
+                (2..lastPage).map { page -> async { getChapterPage(manga, page, refreshing = false).items } }.awaitAll()
+            }
+            return first.items + rest.flatten()
+        }
+        val chapters = first.items.toMutableList()
+        for (page in 2..lastPage) {
+            val items = getChapterPage(manga, page, refreshing = true).items
+            chapters += items
+            if (items.any { it.id in knownIds }) break
         }
         return chapters
+    }
+
+    private suspend fun getChapterPage(manga: SManga, page: Int, refreshing: Boolean): ChapterItems {
+        if (refreshing && !hasSitePass()) chapterListPacer.waitForSlot()
+        val url = mangaApi(manga)
+            .addPathSegment("chapters")
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("limit", CHAPTER_PAGE_LIMIT.toString())
+            .addQueryParameter("order[number]", "desc")
+            .addQueryParameter("v", "0")
+            .addQueryParameter("w", "0")
+            .build()
+        return readApi<ApiResponse<ChapterItems>>(url, getMangaUrl(manga)).result
     }
 
     private fun selectChapters(
@@ -656,6 +672,7 @@ abstract class Comix :
 
         private const val WAF_CHALLENGE_PATH = "/@waf/challenge"
         private const val WAF_VERIFY_PATH = "/@waf/verify"
+        private const val WAF_PASS_COOKIE = "waf_pass"
         private val TURNSTILE_SITE_KEY = Regex("""sitekey:\s*["']([^"']+)["']""")
         private const val SITE_CHECK_ERROR = "Open in WebView to pass the site's check"
 
