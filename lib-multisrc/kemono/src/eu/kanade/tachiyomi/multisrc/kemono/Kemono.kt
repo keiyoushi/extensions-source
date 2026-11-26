@@ -67,6 +67,10 @@ abstract class Kemono :
 
     private val imgUrl get() = baseUrl.replace("//", "//img.")
 
+    protected open val iconsOnImgHost = true
+
+    private val iconUrl get() = if (iconsOnImgHost) imgUrl else baseUrl
+
     private val hasFancards get() = "Pixiv Fanbox" in getTypes
 
     private val includeZips get() = preferences.getBoolean(INCLUDE_ZIP_IMAGES_PREF, false)
@@ -354,7 +358,7 @@ abstract class Kemono :
             return MangasPage(emptyList(), false)
         }
 
-        val final = sorted.subList(startIndex, endIndex).map { it.toSManga(baseUrl) }
+        val final = sorted.subList(startIndex, endIndex).map { it.toSManga(iconUrl) }
         return MangasPage(final, endIndex < sorted.size)
     }
 
@@ -385,7 +389,7 @@ abstract class Kemono :
             }
             val endIndex = minOf(startIndex + PAGE_POST_LIMIT, favorites.size)
             val mangas = favorites.subList(startIndex, endIndex)
-                .map { it.toSManga(creator = null, baseUrl = baseUrl, imgUrl = imgUrl, datePref = datePref) }
+                .map { it.toSManga(creator = null, baseUrl = baseUrl, imgUrl = imgUrl, iconUrl = iconUrl, datePref = datePref) }
             return MangasPage(mangas, endIndex < favorites.size)
         }
 
@@ -410,7 +414,7 @@ abstract class Kemono :
         }
         val mangas = posts
             .filter { it.isListed() && it.postPath !in favorited }
-            .map { it.toSManga(creator = null, baseUrl = baseUrl, imgUrl = imgUrl, datePref = datePref) }
+            .map { it.toSManga(creator = null, baseUrl = baseUrl, imgUrl = imgUrl, iconUrl = iconUrl, datePref = datePref) }
 
         return MangasPage(mangas, posts.size == PAGE_POST_LIMIT)
     }
@@ -432,13 +436,13 @@ abstract class Kemono :
         val (service, _, user) = segments
 
         return when {
-            segments.size == 3 -> fetchCreatorOrNull(service, user)?.toSManga(baseUrl)
+            segments.size == 3 -> fetchCreatorOrNull(service, user)?.toSManga(iconUrl)
             segments.size == 5 && segments[3] == "post" -> coroutineScope {
                 val postPath = "/$service/user/$user/post/${segments[4]}"
                 val creatorDeferred = async { fetchCreatorOrNull(service, user) }
                 val post = fetchPostOrNull(postPath) ?: return@coroutineScope null
                 val datePref = preferences.getString(POST_DATE_PREF, POST_DATE_PUBLISHED)!!
-                post.toSManga(creatorDeferred.await()?.name, baseUrl, imgUrl, datePref).apply {
+                post.toSManga(creatorDeferred.await()?.name, baseUrl, imgUrl, iconUrl, datePref).apply {
                     initialized = true
                 }
             }
@@ -462,7 +466,7 @@ abstract class Kemono :
             }
             (listOfNotNull(creator) + linksDeferred.await())
                 .distinctBy { it.service to it.id }
-                .map { it.toSManga(baseUrl) }
+                .map { it.toSManga(iconUrl) }
         }
     }
 
@@ -481,7 +485,7 @@ abstract class Kemono :
                 val creatorDeferred = if (fetchDetails) async { fetchCreatorOrNull(service, user) } else null
                 val post = fetchPost(manga.url)
                 val updatedManga = if (fetchDetails) {
-                    post.toSManga(creatorDeferred?.await()?.name ?: manga.author, baseUrl, imgUrl, datePref)
+                    post.toSManga(creatorDeferred?.await()?.name ?: manga.author, baseUrl, imgUrl, iconUrl, datePref)
                 } else {
                     manga
                 }
@@ -539,6 +543,7 @@ abstract class Kemono :
         val creator = profileDeferred.await() ?: return@coroutineScope manga
         creator.toDetailedSManga(
             baseUrl = baseUrl,
+            iconUrl = iconUrl,
             tags = tagsDeferred.await(),
             announcements = announcementsDeferred.await(),
             links = linksDeferred.await(),

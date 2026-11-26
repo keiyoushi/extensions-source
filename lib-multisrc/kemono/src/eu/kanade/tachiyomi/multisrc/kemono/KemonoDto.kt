@@ -43,20 +43,21 @@ class KemonoCreatorDto(
     val indexedDate get() = indexed.toEpochMillis()
     val updatedDate get() = updated.toEpochMillis()
 
-    fun toSManga(baseUrl: String) = SManga.create().apply {
+    fun toSManga(iconUrl: String) = SManga.create().apply {
         url = "/$service/user/$id"
         title = name
         author = service.serviceName()
-        thumbnail_url = "$baseUrl/icons/$service/$id"
+        thumbnail_url = "$iconUrl/icons/$service/$id"
         description = Kemono.PROMPT
     }
 
     fun toDetailedSManga(
         baseUrl: String,
+        iconUrl: String,
         tags: List<KemonoTagDto>,
         announcements: List<KemonoAnnouncementDto>,
         links: List<KemonoCreatorDto>,
-    ) = toSManga(baseUrl).apply {
+    ) = toSManga(iconUrl).apply {
         genre = tags.sortedByDescending { it.postCount }
             .mapNotNull { it.tag.trim().takeIf(String::isNotEmpty) }
             .distinct()
@@ -201,7 +202,7 @@ class KemonoPostDto(
         "Post from $postDateString"
     }
 
-    fun toSManga(creator: String?, baseUrl: String, imgUrl: String, datePref: String) = SManga.create().apply {
+    fun toSManga(creator: String?, baseUrl: String, imgUrl: String, iconUrl: String, datePref: String) = SManga.create().apply {
         val postDate = parseDate(datePref)
         url = postPath
         title = displayTitle(postDate)
@@ -214,7 +215,7 @@ class KemonoPostDto(
             .takeIf { it.isNotEmpty() }
             ?.joinToString()
         thumbnail_url = images.firstOrNull()?.thumbnailUrl(imgUrl)
-            ?: "$baseUrl/icons/$service/$user"
+            ?: "$iconUrl/icons/$service/$user"
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 

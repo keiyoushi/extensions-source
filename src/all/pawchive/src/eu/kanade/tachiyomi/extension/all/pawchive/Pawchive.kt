@@ -9,4 +9,6 @@ abstract class Pawchive : Kemono() {
         "Patreon",
         "Pixiv Fanbox",
     )
+
+    override val iconsOnImgHost = false
 }
