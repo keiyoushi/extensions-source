@@ -22,22 +22,34 @@ import keiyoushi.utils.getIntOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.stringOrNull
+import keiyoushi.utils.toJsonString
+import keiyoushi.zip.dataRange
+import keiyoushi.zip.range
+import keiyoushi.zip.rangeSource
+import keiyoushi.zip.readEntry
+import keiyoushi.zip.zipDirectory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import net.greypanther.natsort.CaseInsensitiveSimpleNaturalComparator
 import okhttp3.Cache
 import okhttp3.CacheControl
 import okhttp3.Dispatcher
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.buffer
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
@@ -57,6 +69,8 @@ abstract class Kemono :
 
     private val hasFancards get() = "Pixiv Fanbox" in getTypes
 
+    private val includeZips get() = preferences.getBoolean(INCLUDE_ZIP_IMAGES_PREF, false)
+
     @Volatile
     private var fileServersUnreachable = false
 
@@ -71,6 +85,7 @@ abstract class Kemono :
                 maxRequestsPerHost = 15
             },
         )
+        addInterceptor(::zipEntryInterceptor)
         addInterceptor(::apiAcceptInterceptor)
         addInterceptor(::thumbnailFallbackInterceptor)
         addInterceptor(::adaptiveRateLimitInterceptor)
@@ -230,9 +245,9 @@ abstract class Kemono :
     }
 
     private fun HttpUrl.toThumbnailUrl(): HttpUrl? = when {
-        pathSegments.firstOrNull() == "data" ->
+        pathSegments.firstOrNull() == "data" && encodedPath.isImageFile() ->
             "$imgUrl/thumbnail$encodedPath".toHttpUrl()
-        pathSegments.firstOrNull() == "f" && !fragment.isNullOrBlank() ->
+        pathSegments.firstOrNull() == "f" && fragment?.isImageFile() == true ->
             "$imgUrl/thumbnail/data$fragment".toHttpUrl()
         else -> null
     }
@@ -357,7 +372,7 @@ abstract class Kemono :
             val sName = service.serviceName().lowercase()
             val includeType = typeIncluded.isEmpty() || sName in typeIncluded
             val excludeType = typeExcluded.isNotEmpty() && sName in typeExcluded
-            return includeType && !excludeType && images.isNotEmpty()
+            return includeType && !excludeType && hasContent(includeZips)
         }
 
         if (fav == true) {
@@ -471,7 +486,7 @@ abstract class Kemono :
                     manga
                 }
                 val updatedChapters = if (fetchChapters) {
-                    if (post.images.isNotEmpty()) {
+                    if (post.hasContent(includeZips)) {
                         listOf(
                             post.toSChapter(datePref).apply {
                                 name = "Post"
@@ -572,7 +587,7 @@ abstract class Kemono :
                     hitKnown = true
                     break
                 }
-                if (post.images.isNotEmpty()) {
+                if (post.hasContent(includeZips)) {
                     newPosts.add(chapter)
                 }
             }
@@ -679,9 +694,59 @@ abstract class Kemono :
 
         val postData = fetchPost(chapter.url)
         val fallbackToThumbnail = preferences.getBoolean(FALLBACK_LOW_RES_IMG, true)
-        return postData.images.mapIndexed { i, file ->
-            Page(i, imageUrl = file.imageUrl(imgUrl, postData.hasFull, fallbackToThumbnail))
-        }
+        val imageUrls = postData.images.map { it.imageUrl(imgUrl, postData.hasFull, fallbackToThumbnail) }
+        val zipImageUrls = if (includeZips) fetchZipImageUrls(postData) else emptyList()
+        return (imageUrls + zipImageUrls).mapIndexed { i, imageUrl -> Page(i, imageUrl = imageUrl) }
+    }
+
+    private suspend fun fetchZipImageUrls(post: KemonoPostDto): List<String> = coroutineScope {
+        post.zips.filterNot { it.server.isNullOrBlank() }.map { zip ->
+            async {
+                val url = zip.dataUrl
+                val directory = try {
+                    client.zipDirectory(url, headers)
+                } catch (_: IOException) {
+                    return@async emptyList()
+                }
+                directory.entries
+                    .filter { !it.name.startsWith("__MACOSX/") && it.name.isImageFile() }
+                    .sortedWith(compareBy(NATURAL_ORDER) { it.name })
+                    .map { entry ->
+                        val page = KemonoZipPageDto(
+                            url = url,
+                            name = entry.name,
+                            offset = entry.localHeaderOffset,
+                            compressedSize = entry.compressedSize,
+                            method = entry.method,
+                            localHeaderAllowance = entry.localHeaderAllowance,
+                        )
+                        "https://$ZIP_PAGE_HOST/#${page.toJsonString()}"
+                    }
+            }
+        }.awaitAll().flatten()
+    }
+
+    private fun zipEntryInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        if (request.url.host != ZIP_PAGE_HOST) return chain.proceed(request)
+
+        val page = request.url.fragment!!.parseAs<KemonoZipPageDto>()
+        val rangeRequest = request.newBuilder()
+            .url(page.url)
+            .range(dataRange(page.offset, page.compressedSize, page.localHeaderAllowance))
+            .build()
+        val response = chain.proceed(rangeRequest)
+        val image = readEntry(response.rangeSource(), page.compressedSize, page.method).buffer()
+        val type = page.name.substringAfterLast('.').lowercase().let { if (it == "jpg") "jpeg" else it }
+
+        return response.newBuilder()
+            .removeHeader("Content-Range")
+            .removeHeader("Content-Length")
+            .code(200)
+            .message("OK")
+            .protocol(Protocol.HTTP_1_1)
+            .body(image.asResponseBody("image/$type".toMediaType()))
+            .build()
     }
 
     override fun getImageRequest(page: Page): Request {
@@ -730,6 +795,13 @@ abstract class Kemono :
             setDefaultValue(true)
         }.let(screen::addPreference)
 
+        SwitchPreferenceCompat(screen.context).apply {
+            key = INCLUDE_ZIP_IMAGES_PREF
+            title = "Include images from ZIP attachments"
+            summary = "Read images inside a post's .zip attachments as extra pages. Costs a few extra requests per ZIP; 7z, rar and password-protected archives are skipped."
+            setDefaultValue(false)
+        }.let(screen::addPreference)
+
         if (hasFancards) {
             SwitchPreferenceCompat(screen.context).apply {
                 key = SHOW_FANCARDS_PREF
@@ -762,6 +834,10 @@ abstract class Kemono :
         private const val USE_LOW_RES_IMG = "USE_LOW_RES_IMG"
         private const val FALLBACK_LOW_RES_IMG = "FALLBACK_LOW_RES_IMG"
         private const val SHOW_FANCARDS_PREF = "SHOW_FANCARDS"
+        private const val INCLUDE_ZIP_IMAGES_PREF = "INCLUDE_ZIP_IMAGES"
+
+        private const val ZIP_PAGE_HOST = "127.0.0.1"
+        private val NATURAL_ORDER = CaseInsensitiveSimpleNaturalComparator.getInstance<String>()
 
         private const val POST_DATE_PREF = "POST_DATE_PREF"
         const val POST_DATE_ADDED = "added"

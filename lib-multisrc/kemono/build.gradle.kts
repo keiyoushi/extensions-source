@@ -10,3 +10,7 @@ keiyoushi {
         path("/..*/user/..*")
     }
 }
+
+dependencies {
+    implementation("com.github.gpanther:java-nat-sort:natural-comparator-1.1")
+}

@@ -166,11 +166,15 @@ class KemonoPostDto(
 
     val images: List<KemonoFileDto>
         get() = files
-            .filter {
-                val path = it.path
-                !path.isNullOrBlank() && path.substringAfterLast('.').lowercase() in VALID_IMAGE_EXTENSIONS
-            }
+            .filter { it.path?.isImageFile() == true }
             .distinctBy { it.path }
+
+    val zips: List<KemonoFileDto>
+        get() = files
+            .filter { it.path?.endsWith(".zip", ignoreCase = true) == true }
+            .distinctBy { it.path }
+
+    fun hasContent(includeZips: Boolean) = images.isNotEmpty() || (includeZips && zips.isNotEmpty())
 
     fun fillServers(servers: Map<String, String>) {
         files.forEach { if (it.server.isNullOrBlank()) it.server = it.path?.let(servers::get) }
@@ -228,10 +232,13 @@ class KemonoFileDto(
     var server: String? = null,
     @SerialName("temp_url") private val tempUrl: String? = null,
 ) {
+    val dataUrl: String
+        get() = "$server/data${path.orEmpty()}"
+
     fun thumbnailUrl(imgUrl: String) = "$imgUrl/thumbnail/data${path.orEmpty()}"
 
     fun imageUrl(imgUrl: String, hasFull: Boolean? = null, fallbackToThumbnail: Boolean = true) = when {
-        !server.isNullOrBlank() && (hasFull != false || !fallbackToThumbnail) -> "$server/data${path.orEmpty()}"
+        !server.isNullOrBlank() && (hasFull != false || !fallbackToThumbnail) -> dataUrl
         !tempUrl.isNullOrBlank() -> tempUrl.toHttpUrlOrNull()
             ?.newBuilder()
             ?.fragment(path)
@@ -241,6 +248,18 @@ class KemonoFileDto(
         else -> thumbnailUrl(imgUrl)
     }
 }
+
+@Serializable
+class KemonoZipPageDto(
+    val url: String,
+    val name: String,
+    val offset: Long,
+    val compressedSize: Long,
+    val method: Int,
+    val localHeaderAllowance: Int,
+)
+
+internal fun String.isImageFile() = substringAfterLast('.').lowercase() in VALID_IMAGE_EXTENSIONS
 
 private val JST_ZONE: ZoneId = ZoneOffset.ofHours(9)
 private val chapterNameDateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd 'at' HH:mm:ss", Locale.ENGLISH)
