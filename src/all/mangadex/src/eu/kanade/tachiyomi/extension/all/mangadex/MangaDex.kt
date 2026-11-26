@@ -160,7 +160,7 @@ class MangaDex(
      */
     fun latestUpdatesParse(response: Response): MangasPage = runBlocking { response.toChapterMangasPage() }
 
-    private fun latestUpdatesUrl(page: Int, uploader: String? = null): HttpUrl = API_CHAPTER_URL.toHttpUrl().newBuilder()
+    private fun latestUpdatesUrl(page: Int, uploader: String? = null): HttpUrl = "$API_URL/chapter".toHttpUrl().newBuilder()
         .addQueryParameter("offset", (LATEST_CHAPTER_LIMIT * (page - 1)).toString())
         .addQueryParameter("limit", LATEST_CHAPTER_LIMIT.toString())
         .addQueryParameter("translatedLanguage[]", translatedLanguages)
@@ -185,7 +185,7 @@ class MangaDex(
     private suspend fun getMangaByIds(mangaIds: List<String>): List<SManga> {
         if (mangaIds.isEmpty()) return emptyList()
 
-        val url = API_MANGA_URL.toHttpUrl().newBuilder()
+        val url = "$API_URL/manga".toHttpUrl().newBuilder()
             .addQueryParameter("includes[]", COVER_ART)
             .addQueryParameter("limit", mangaIds.size.toString())
             .addQueryParameter("contentRating[]", preferences.contentRating)
@@ -236,7 +236,7 @@ class MangaDex(
                 query.startsWith(PREFIX_AUTHOR_SEARCH) ->
                     url.addQueryParameter("authorOrArtist", query.removePrefix(PREFIX_AUTHOR_SEARCH).requireUuid("invalid_author_id"))
 
-                else -> query.replace(whitespaceRegex, " ")
+                else -> query.replace(Regex("\\s"), " ")
                     .takeIf(String::isNotEmpty)
                     ?.let { url.addQueryParameter("title", it) }
             }
@@ -250,7 +250,7 @@ class MangaDex(
     }
 
     private suspend fun getMangaByIdPage(mangaId: String): MangasPage {
-        val url = API_MANGA_URL.toHttpUrl().newBuilder()
+        val url = "$API_URL/manga".toHttpUrl().newBuilder()
             .addQueryParameter("ids[]", mangaId.requireUuid("invalid_manga_id"))
             .addQueryParameter("includes[]", COVER_ART)
             .addQueryParameter("contentRating[]", allContentRatings)
@@ -260,7 +260,7 @@ class MangaDex(
     }
 
     private suspend fun getMangaIdFromChapterId(id: String): String {
-        val response = client.get("$API_CHAPTER_URL/$id", Fetch.XHR, ensureSuccess = false)
+        val response = client.get("$API_URL/chapter/$id", Fetch.XHR, ensureSuccess = false)
 
         if (!response.isSuccessful) {
             response.close()
@@ -271,7 +271,7 @@ class MangaDex(
     }
 
     private suspend fun getListPage(listId: String, page: Int, filters: FilterList): MangasPage {
-        val mangaIds = client.get("$API_LIST_URL/$listId", Fetch.XHR, CacheControl.FORCE_NETWORK)
+        val mangaIds = client.get("$API_URL/list/$listId", Fetch.XHR, CacheControl.FORCE_NETWORK)
             .parseAs<DataDto<CustomListDto>>()
             .data.relationships
             .filter { it.type == MANGA }
@@ -282,7 +282,7 @@ class MangaDex(
         }
 
         val offset = (page - 1) * MANGA_LIMIT
-        val url = API_MANGA_URL.toHttpUrl().newBuilder()
+        val url = "$API_URL/manga".toHttpUrl().newBuilder()
             .addQueryParameter("limit", MANGA_LIMIT.toString())
             .addQueryParameter("includes[]", COVER_ART)
             .addQueryParameter("ids[]", mangaIds.drop(offset).take(MANGA_LIMIT))
@@ -298,7 +298,7 @@ class MangaDex(
         val name = filters.firstInstanceOrNull<AuthorFilter>()?.state?.trim()
         if (name.isNullOrEmpty()) return
 
-        val authorUrl = API_AUTHOR_URL.toHttpUrl().newBuilder()
+        val authorUrl = "$API_URL/author".toHttpUrl().newBuilder()
             .addQueryParameter("name", name)
             .addQueryParameter("limit", "1")
             .build()
@@ -313,7 +313,7 @@ class MangaDex(
 
     // Manga lists
 
-    private fun mangaListUrl(page: Int): HttpUrl.Builder = API_MANGA_URL.toHttpUrl().newBuilder()
+    private fun mangaListUrl(page: Int): HttpUrl.Builder = "$API_URL/manga".toHttpUrl().newBuilder()
         .addQueryParameter("limit", MANGA_LIMIT.toString())
         .addQueryParameter("offset", (MANGA_LIMIT * (page - 1)).toString())
         .addQueryParameter("includes[]", COVER_ART)
@@ -333,7 +333,7 @@ class MangaDex(
         url = "/manga/$id"
         title = resolveTitle(attributes).removeEntities()
 
-        thumbnail_url = (firstVolumeCover ?: coverFileName)?.let { "$CDN_URL/covers/$id/$it${preferences.coverQuality}" }
+        thumbnail_url = (firstVolumeCover ?: coverFileName)?.let { "https://uploads.mangadex.org/covers/$id/$it${preferences.coverQuality}" }
     }
 
     private fun resolveTitle(attr: MangaAttributesDto): String {
@@ -394,13 +394,13 @@ class MangaDex(
         val mangaId = manga.url.uuid()
 
         val aggregate = async {
-            val url = "$API_MANGA_URL/$mangaId/aggregate".toHttpUrl().newBuilder()
+            val url = "$API_URL/manga/$mangaId/aggregate".toHttpUrl().newBuilder()
                 .addQueryParameter("translatedLanguage[]", translatedLanguages)
                 .build()
             client.get(url, Fetch.XHR).parseAs<AggregateDto>().volumes
         }
 
-        val url = "$API_MANGA_URL/$mangaId".toHttpUrl().newBuilder()
+        val url = "$API_URL/manga/$mangaId".toHttpUrl().newBuilder()
             .addQueryParameter("includes[]", COVER_ART)
             .addQueryParameter("includes[]", AUTHOR)
             .addQueryParameter("includes[]", ARTIST)
@@ -432,7 +432,7 @@ class MangaDex(
             .groupBy({ it.group }) { tagNames[it.id] }
             .mapValues { it.value.filterNotNull().sortedWith(intl.collator) }
 
-        val genreList = tagGroupsOrder.flatMap { genresMap[it].orEmpty() } + nonGenres
+        val genreList = listOf("content", "format", "genre", "theme").flatMap { genresMap[it].orEmpty() } + nonGenres
 
         val altTitles = attr.altTitles
             .flatMap { it.values }
@@ -441,7 +441,7 @@ class MangaDex(
         return toSManga(firstVolumeCover).apply {
             description = MarkdownDescription.Builder()
                 // unescaped, text like <Twilight> is dropped as an html tag
-                .markdown((attr.description[dexLang] ?: attr.description["en"])?.removeEntities()?.replace(markdownTagRegex, "\\\\<"))
+                .markdown((attr.description[dexLang] ?: attr.description["en"])?.removeEntities()?.replace(Regex("<(?!https?://)"), "\\\\<"))
                 .altTitles(altTitles, intl["alternative_titles"])
                 .field(intl["final_chapter"], formatNumber(attr.lastVolume, attr.lastChapter))
                 .build()
@@ -464,7 +464,8 @@ class MangaDex(
         val isEnded = attr.status == "completed" || attr.status == "cancelled"
 
         val tagIds = attr.tags.map { it.id }
-        val isOneShot = TAG_ONE_SHOT_UUID in tagIds && TAG_ANTHOLOGY_UUID !in tagIds
+        // oneshot, not anthology
+        val isOneShot = "0234a31e-a729-4e28-9d6a-3f87c4966b9e" in tagIds && "51d83883-4103-437c-b4b1-731cb73d786c" !in tagIds
 
         return when {
             hasLastChapter && isEnded -> SManga.COMPLETED
@@ -487,7 +488,7 @@ class MangaDex(
     override val supportsRelatedMangas = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val relatedIds = client.get("$API_MANGA_URL/${manga.url.uuid()}", Fetch.XHR)
+        val relatedIds = client.get("$API_URL/manga/${manga.url.uuid()}", Fetch.XHR)
             .parseAs<DataDto<MangaDto>>()
             .data.relationships
             .filter { it.related != null }
@@ -522,7 +523,7 @@ class MangaDex(
         val attr = attributes
 
         val groups = relationships
-            .filter { it.type == SCANLATION_GROUP && it.id != LEGACY_NO_GROUP_ID }
+            .filter { it.type == SCANLATION_GROUP && it.id != "00e03853-1b96-4f41-9542-c71b8692033b" } // "No group" left over from MDv3
             .mapNotNull { it.attributes?.name }
             .joinToString(" & ")
         val uploaders = relationships
@@ -553,10 +554,10 @@ class MangaDex(
         }
     }
 
-    private fun chapterFeedUrl(mangaId: String, offset: Int): HttpUrl = "$API_MANGA_URL/$mangaId/feed".toHttpUrl().newBuilder()
+    private fun chapterFeedUrl(mangaId: String, offset: Int): HttpUrl = "$API_URL/manga/$mangaId/feed".toHttpUrl().newBuilder()
         .addQueryParameter("includes[]", SCANLATION_GROUP)
         .addQueryParameter("includes[]", USER)
-        .addQueryParameter("limit", CHAPTER_FEED_LIMIT.toString())
+        .addQueryParameter("limit", "500")
         .addQueryParameter("offset", offset.toString())
         .addQueryParameter("order[volume]", "desc")
         .addQueryParameter("order[chapter]", "desc")
@@ -810,7 +811,7 @@ class MangaDex(
 
     /** The content rating used to be a multi-select; keep the highest rating that was chosen. */
     private fun SharedPreferences.migrateContentRating() {
-        val legacyKey = "${LEGACY_CONTENT_RATING_PREF}_$dexLang"
+        val legacyKey = "contentRating_$dexLang"
         val legacy = getStringSet(legacyKey, null) ?: return
 
         val editor = edit().remove(legacyKey)
@@ -834,19 +835,10 @@ const val ENGLISH = "en"
 private const val MANGA_LIMIT = 20
 private const val MANGA_IDS_LIMIT = 100
 private const val LATEST_CHAPTER_LIMIT = 100
-private const val CHAPTER_FEED_LIMIT = 500
 
-private const val CDN_URL = "https://uploads.mangadex.org"
 private const val API_URL = "https://api.mangadex.org"
-private const val API_MANGA_URL = "$API_URL/manga"
-private const val API_CHAPTER_URL = "$API_URL/chapter"
-private const val API_LIST_URL = "$API_URL/list"
-private const val API_AUTHOR_URL = "$API_URL/author"
 
 private const val MEMO_UNAVAILABLE = "unavailable"
-
-/** "No group" left over from MDv3. */
-private const val LEGACY_NO_GROUP_ID = "00e03853-1b96-4f41-9542-c71b8692033b"
 
 private const val PREFIX_ID_SEARCH = "id:"
 private const val PREFIX_CH_SEARCH = "ch:"
@@ -858,7 +850,6 @@ private const val PREFIX_LIST_SEARCH = "list:"
 private const val COVER_QUALITY_PREF = "thumbnailQuality"
 private const val DATA_SAVER_PREF = "dataSaverV5"
 private const val STANDARD_HTTPS_PORT_PREF = "usePort443"
-private const val LEGACY_CONTENT_RATING_PREF = "contentRating"
 private const val CONTENT_RATING_PREF = "contentRatingLevel"
 private const val CONTENT_RATING_PREF_DEFAULT = "erotica"
 private const val ORIGINAL_LANGUAGE_PREF = "originalLanguage"
@@ -873,10 +864,6 @@ private const val TITLE_PREF_DEFAULT = TITLE_PREF_VAL_EXTENSION
 private const val PREFER_EXTENSION_LANG_TITLE_PREF = "preferExtensionLangTitle"
 private const val INCLUDE_UNAVAILABLE_PREF = "includeUnavailable"
 
-private const val TAG_ANTHOLOGY_UUID = "51d83883-4103-437c-b4b1-731cb73d786c"
-private const val TAG_ONE_SHOT_UUID = "0234a31e-a729-4e28-9d6a-3f87c4966b9e"
-
-private val tagGroupsOrder = listOf("content", "format", "genre", "theme")
 private val mdAtHomeTokenLifespan = 5.minutes
 
 private val pathToSearchPrefix = mapOf(
@@ -926,5 +913,3 @@ private val romanizedLangCodes = mapOf(
 )
 
 private val uuidRegex = Regex("[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
-private val markdownTagRegex = "<(?!https?://)".toRegex()
-private val whitespaceRegex = "\\s".toRegex()
