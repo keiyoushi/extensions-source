@@ -33,13 +33,13 @@ class WorkDto(
     private val id: String,
     private val slug: String,
     private val title: String,
-    @SerialName("cover_url") private val coverUrl: String? = null,
-    private val author: String? = null,
-    private val status: String? = null,
-    private val description: String? = null,
+    @SerialName("cover_url") private val coverUrl: String?,
+    private val author: String?,
+    private val status: String?,
+    private val description: String?,
     private val tags: List<String> = emptyList(),
     @SerialName("alt_titles") private val altTitles: List<String> = emptyList(),
-    private val genres: List<GenreDto>? = null,
+    private val genres: List<GenreDto>?,
 ) {
     fun toSManga(apiUrl: String, detailsGenres: List<GenreDto>? = null) = SManga.create().apply {
         url = id
@@ -68,7 +68,7 @@ class WorkDto(
 class GenreDto(
     val slug: String,
     @SerialName("name_en") val name: String,
-    @SerialName("work_count") val workCount: Int? = null,
+    @SerialName("work_count") val workCount: Int?,
 )
 
 @Serializable
