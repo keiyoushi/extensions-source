@@ -617,7 +617,7 @@ class MangaDex(
     override fun getImageRequest(page: Page): Request {
         val (host, atHomeUrl, fetchedAt) = page.url.split(",")
         val validHost = if (System.currentTimeMillis() - fetchedAt.toLong() < mdAtHomeTokenLifespan) host else atHomeHost(atHomeUrl)
-        return GET(validHost + page.imageUrl, headers)
+        return GET(validHost + page.imageUrl, headers).newBuilder().fetch(Fetch.IMAGE).build()
     }
 
     /** MD@Home urls expire, so pages loaded later need a fresh one. */
