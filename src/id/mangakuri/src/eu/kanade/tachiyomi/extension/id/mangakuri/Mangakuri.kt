@@ -33,6 +33,7 @@ abstract class Mangakuri :
     ConfigurableSource {
     override val urlLayout = UrlLayout.LEGACY_COMIC
     override val overloadedGenres = super.overloadedGenres + setOf("yaoi")
+    override val includeOrientationFilter = true
 
     private val preferences by getPreferencesLazy()
     private val email get() = preferences.getString(EMAIL_PREF, "")!!

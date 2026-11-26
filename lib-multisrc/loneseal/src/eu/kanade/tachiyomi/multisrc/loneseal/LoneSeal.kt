@@ -49,6 +49,7 @@ abstract class LoneSeal : KeiSource() {
     protected open val includeChapterTitle = false
     protected open val includeSeriesTagFilter = false
     protected open val includeProjectOnlyFilter = false
+    protected open val includeOrientationFilter = false
 
     override fun OkHttpClient.Builder.configureClient() = addUnscrambleInterceptor()
 
@@ -202,6 +203,9 @@ abstract class LoneSeal : KeiSource() {
             add(ReadingFilter(readingOptions))
             if (includeSeriesTagFilter) {
                 add(SelectFilter("Tag", "series_tag", seriesTagOptions))
+            }
+            if (includeOrientationFilter) {
+                add(SelectFilter("Orientation", "orientation", orientationOptions))
             }
             if (includeProjectOnlyFilter) {
                 add(CheckBoxFilter("Project Only", "project_only"))
