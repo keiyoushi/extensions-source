@@ -203,14 +203,13 @@ class MangaDex(
     // Search
 
     override suspend fun getMangasByUrl(url: HttpUrl, page: Int): MangasPage {
-        if (url.host.endsWith("mangadex.org")) {
-            val searchPrefix = url.pathSegments.firstOrNull()?.let { pathToSearchPrefix[it] }
-            val uuid = uuidRegex.find(url.toString())?.value
-            if (searchPrefix != null && uuid != null) {
-                return getSearchMangaList(page, searchPrefix + uuid, getFilterList())
-            }
-        }
-        return getSearchMangaList(page, url.toString(), getFilterList())
+        if (url.host != "mangadex.org" && url.host != "canary.mangadex.dev") return MangasPage(emptyList(), false)
+
+        val searchPrefix = pathToSearchPrefix[url.pathSegments[0]]
+        val uuid = url.pathSegments.getOrNull(1)
+        if (searchPrefix == null || uuid == null) return MangasPage(emptyList(), false)
+
+        return getSearchMangaList(page, searchPrefix + uuid, getFilterList())
     }
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = when {
