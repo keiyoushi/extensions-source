@@ -68,7 +68,7 @@ abstract class YuriNeko : KeiSource() {
         val host = chain.request().url.host
         val baseHost = baseUrl.toHttpUrl().host
         val isApiHost = host == baseHost || host == "api.$baseHost"
-        val request = if (token.isNullOrBlank() || !isApiHost) {
+        val request = if (token == null || !isApiHost) {
             chain.request()
         } else {
             chain.request().newBuilder()
@@ -93,10 +93,10 @@ abstract class YuriNeko : KeiSource() {
     }
 
     private suspend fun loadAuthToken() = authTokenMutex.withLock {
-        if (!cachedAuthToken.isNullOrBlank()) return@withLock
-        cachedAuthToken = runCatching {
-            getLocalStorage(baseUrl, "accessToken")?.takeIf(String::isNotBlank)
-        }.getOrNull()
+        // Re-read whenever the cache is empty so users can log in via WebView
+        // and retry without restarting the app.
+        if (cachedAuthToken != null) return@withLock
+        cachedAuthToken = runCatching { getLocalStorage(baseUrl, "accessToken") }.getOrNull()
     }
 
     // ============================== Popular ===============================
@@ -393,7 +393,7 @@ abstract class YuriNeko : KeiSource() {
     // ============================== Pages =================================
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         loadAuthToken()
-        if (cachedAuthToken.isNullOrBlank()) throw IOException(loginRequiredMessage)
+        if (cachedAuthToken == null) throw IOException(loginRequiredMessage)
 
         val document = client.get("$baseUrl${chapter.url}", Fetch.DOCUMENT).asJsoup()
         val imageUrls = parsePageUrls(document)
