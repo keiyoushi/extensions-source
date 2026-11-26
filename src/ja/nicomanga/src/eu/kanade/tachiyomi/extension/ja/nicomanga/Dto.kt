@@ -33,14 +33,14 @@ class NPagination(
 
 @Serializable
 class NListManga(
-    private val n: String,
-    private val c: String?,
-    private val ur: String,
+    @SerialName("n") private val name: String,
+    @SerialName("c") private val cover: String?,
+    @SerialName("ur") private val mangaUrl: String,
 ) {
     fun toSManga() = SManga.create().apply {
-        title = n
-        url = ur.toHttpUrlOrNull()?.encodedPath ?: ur
-        thumbnail_url = c
+        title = name
+        url = mangaUrl.toHttpUrlOrNull()?.encodedPath ?: mangaUrl
+        thumbnail_url = cover
     }
 }
 
@@ -54,8 +54,8 @@ class Payload(
 
 @Serializable
 class NManga(
-    private val n: String,
-    private val c: String?,
+    @SerialName("n") private val name: String,
+    @SerialName("c") private val cover: String?,
     private val artists: String?,
     @SerialName("other_name") private val otherName: String?,
     private val description: String?,
@@ -64,11 +64,11 @@ class NManga(
     @SerialName("genres_list") private val genresList: List<NLink> = emptyList(),
 ) {
     fun toSManga(baseUrl: String) = SManga.create().apply {
-        title = n
-        thumbnail_url = c
-        author = authorsList.takeIf { it.isNotEmpty() }?.joinToString { it.n }
-        artist = artists?.ifEmpty { null } ?: authorsList.firstOrNull()?.n
-        genre = genresList.takeIf { it.isNotEmpty() }?.joinToString { it.n }
+        title = name
+        thumbnail_url = cover
+        author = authorsList.takeIf { it.isNotEmpty() }?.joinToString { it.name }
+        artist = artists?.ifEmpty { null } ?: authorsList.firstOrNull()?.name
+        genre = genresList.takeIf { it.isNotEmpty() }?.joinToString { it.name }
         status = when (statusText?.lowercase()) {
             "on going", "ongoing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
@@ -88,20 +88,20 @@ class NManga(
 @Serializable
 class NChapter(
     private val chapter: String?,
-    private val n: String?,
-    private val u: Long?,
-    private val ur: String,
+    @SerialName("n") private val title: String?,
+    @SerialName("u") private val updatedAt: Long?,
+    @SerialName("ur") private val chapterUrl: String,
 ) {
     fun toSChapter() = SChapter.create().apply {
-        url = ur.toHttpUrlOrNull()?.encodedPath ?: ur
-        name = n?.takeIf { it.isNotBlank() } ?: "Chapter ${chapter.orEmpty()}"
-        date_upload = u?.times(1000L) ?: 0L
+        url = chapterUrl.toHttpUrlOrNull()?.encodedPath ?: chapterUrl
+        name = title?.takeIf { it.isNotBlank() } ?: "Chapter ${chapter.orEmpty()}"
+        date_upload = updatedAt?.times(1000L) ?: 0L
     }
 }
 
 @Serializable
 class NLink(
-    val n: String,
+    @SerialName("n") val name: String,
 )
 
 @Serializable
