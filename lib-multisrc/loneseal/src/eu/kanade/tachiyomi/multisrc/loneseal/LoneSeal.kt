@@ -130,7 +130,7 @@ abstract class LoneSeal : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val detail = client.get("$apiUrl/series/comic/${mangaSlug(manga.url)}", Fetch.XHR)
+        val detail = client.get("$apiUrl/series/comic/${mangaSlug(manga.url)}", apiHeaders(), Fetch.XHR)
             .parseAs<SeriesDetailDto>()
         return SMangaUpdate(
             detail.toSManga(urlLayout),
@@ -164,13 +164,13 @@ abstract class LoneSeal : KeiSource() {
     private suspend fun searchByGenre(genre: String): List<MangaDto> = client.get(searchUrl(1) { addQueryParameter("genre", genre) }, Fetch.XHR)
         .parseAs<SearchResponseDto>().data
 
-    protected open suspend fun Headers.Builder.configureChapterHeaders() = this
+    protected open suspend fun Headers.Builder.configureApiHeaders() = this
 
-    private suspend fun chapterHeaders() = headersBuilder().apply { configureChapterHeaders() }.build()
+    private suspend fun apiHeaders() = headersBuilder().apply { configureApiHeaders() }.build()
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val (seriesSlug, chapterSlug) = chapterParts(chapter.url)
-        val dto = client.get("$apiUrl/series/comic/$seriesSlug/chapter/$chapterSlug", chapterHeaders(), Fetch.XHR)
+        val dto = client.get("$apiUrl/series/comic/$seriesSlug/chapter/$chapterSlug", apiHeaders(), Fetch.XHR)
             .parseAs<ChapterPagesResponseDto>()
         if (dto.chapter.isScrambled && dto.chapter.pages.isNotEmpty() && dto.chapter.pages.all { it.scrambleData == null }) {
             error("Gambar bab ini diacak tanpa kunci dari situs")

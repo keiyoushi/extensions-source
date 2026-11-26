@@ -74,10 +74,12 @@ class ChapterDto(
     private val number: String,
     private val title: String? = null,
     @SerialName("created_at") private val createdAt: String? = null,
+    @SerialName("is_locked") private val isLocked: Boolean = false,
 ) {
     fun toSChapter(seriesSlug: String, urlLayout: UrlLayout, includeChapterTitle: Boolean) = SChapter.create().apply {
         url = urlLayout.chapterUrl(seriesSlug, slug)
         name = buildString {
+            if (isLocked) append("🔒 ")
             append("Chapter ${formatChapterNumber(number)}")
             if (includeChapterTitle && title != null) append(" - $title")
         }
@@ -93,8 +95,10 @@ class ChapterPagesResponseDto(
 
 @Serializable
 class ChapterPagesDto(
-    @SerialName("login_required") val loginRequired: Boolean? = null,
+    @SerialName("login_required") val loginRequired: Boolean = false,
     @SerialName("password_required") val passwordRequired: Boolean = false,
+    @SerialName("is_locked") val isLocked: Boolean = false,
+    @SerialName("rate_limited") val rateLimited: Boolean = false,
     @SerialName("is_scrambled") val isScrambled: Boolean = false,
     val pages: List<PageDto> = emptyList(),
 )
