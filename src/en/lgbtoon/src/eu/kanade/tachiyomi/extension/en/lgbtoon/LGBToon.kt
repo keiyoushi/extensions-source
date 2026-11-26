@@ -55,25 +55,6 @@ abstract class LGBToon :
         return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
-    private fun titlesUrl(page: Int, sort: String) = baseUrl.toHttpUrl().newBuilder()
-        .addPathSegments("api/titles")
-        .addQueryParameter("sort", sort)
-        .addQueryParameter("page", page.toString())
-        .addQueryParameter("limit", "24")
-
-    private fun HttpUrl.Builder.addSubgenre(value: String) = apply {
-        if (value.isNotEmpty()) addQueryParameter("demographics", value)
-    }
-
-    private fun HttpUrl.Builder.addListParameter(name: String, values: List<String>) {
-        if (values.isNotEmpty()) addQueryParameter(name, values.joinToString(","))
-    }
-
-    private suspend fun getTitles(url: HttpUrl): MangasPage {
-        val data = client.get(url, Fetch.XHR).parseAs<TitlesDto>().data
-        return MangasPage(data.items.map { it.toSManga() }, data.page < data.totalPages)
-    }
-
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -100,6 +81,25 @@ abstract class LGBToon :
             setDefaultValue("")
             summary = "%s\nShown in Popular and Latest, and the default of the Subgenre filter"
         }.let(screen::addPreference)
+    }
+
+    private fun titlesUrl(page: Int, sort: String) = baseUrl.toHttpUrl().newBuilder()
+        .addPathSegments("api/titles")
+        .addQueryParameter("sort", sort)
+        .addQueryParameter("page", page.toString())
+        .addQueryParameter("limit", "24")
+
+    private fun HttpUrl.Builder.addSubgenre(value: String) = apply {
+        if (value.isNotEmpty()) addQueryParameter("demographics", value)
+    }
+
+    private fun HttpUrl.Builder.addListParameter(name: String, values: List<String>) {
+        if (values.isNotEmpty()) addQueryParameter(name, values.joinToString(","))
+    }
+
+    private suspend fun getTitles(url: HttpUrl): MangasPage {
+        val data = client.get(url, Fetch.XHR).parseAs<TitlesDto>().data
+        return MangasPage(data.items.map { it.toSManga() }, data.page < data.totalPages)
     }
 
     companion object {
