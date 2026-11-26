@@ -43,6 +43,19 @@ internal class FavoritesFilter : Filter.Select<String>("收藏夹", arrayOf("关
     fun isEnabled() = state == 1
 }
 
+internal const val FAVORITE_SORT_DEFAULT = "recent"
+
+// The favorites are searched and sorted in the app, so these values are not sent to the API
+internal class FavoritesSortFilter :
+    SelectFilter(
+        "收藏夹排序",
+        listOf(
+            "最近收藏" to FAVORITE_SORT_DEFAULT,
+            "最早收藏" to "oldest",
+            "标题" to "title",
+        ),
+    )
+
 internal open class SelectFilter(
     name: String,
     private val options: List<Pair<String, String>>,
