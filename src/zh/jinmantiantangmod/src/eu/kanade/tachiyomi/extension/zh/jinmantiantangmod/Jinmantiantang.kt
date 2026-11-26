@@ -106,7 +106,8 @@ abstract class Jinmantiantang :
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         if (filters.firstInstanceOrNull<FavoritesFilter>()?.isEnabled() == true) {
-            return fetchFavorites(page)
+            val favoriteSort = filters.firstInstanceOrNull<FavoritesSortFilter>()?.value ?: FAVORITE_SORT_DEFAULT
+            return fetchFavorites(page, query, favoriteSort)
         }
 
         // JM id search: JM123 or 123 opens the album
@@ -226,13 +227,72 @@ abstract class Jinmantiantang :
         return data.parseAs<ChapterImagesDto>().images.mapIndexed { index, image -> Page(index, imageUrl = image.image) }
     }
 
-    private suspend fun fetchFavorites(page: Int): MangasPage {
-        val url = favoritesUrl(page, loginHost())
-        val favorites = withLogin { apiGet<FavoriteListDto>(url, it.jwttoken, CacheControl.FORCE_NETWORK) }
+    // Without a search word and with the default sort the API pages are used as they are. Otherwise every page of the
+    // favorites is loaded once, and the search and the sort run in the app
+    private suspend fun fetchFavorites(page: Int, query: String, sort: String): MangasPage {
+        if (query.isBlank() && sort == FAVORITE_SORT_DEFAULT) {
+            val url = favoritesUrl(page, loginHost())
+            val favorites = withLogin { apiGet<FavoriteListDto>(url, it.jwttoken, CacheControl.FORCE_NETWORK) }
+            return MangasPage(
+                favorites.list.map { it.toSManga(coverHost) },
+                hasNextPage = page * FAVORITES_PAGE_SIZE < favorites.total.toInt(),
+            )
+        }
+        val matched = allFavorites().filterFavorites(query)
+        val sorted = when (sort) {
+            "oldest" -> matched.asReversed()
+            "title" -> matched.sortedBy { it.title.lowercase() }
+            else -> matched
+        }
+        val from = (page - 1) * FAVORITES_PAGE_SIZE
         return MangasPage(
-            favorites.list.map { it.toSManga(coverHost) },
-            hasNextPage = page * FAVORITES_PAGE_SIZE < favorites.total.toInt(),
+            sorted.drop(from).take(FAVORITES_PAGE_SIZE),
+            hasNextPage = from + FAVORITES_PAGE_SIZE < sorted.size,
         )
+    }
+
+    private class FavoritesCache(
+        val credentials: Pair<String, String>?,
+        val host: String,
+        val time: Long,
+        val mangas: List<SManga>,
+    )
+
+    @Volatile private var favoritesCache: FavoritesCache? = null
+    private val favoritesMutex = Mutex()
+
+    // Every page of the favorites, kept for a minute so that paging through a search does not load them again
+    private suspend fun allFavorites(): List<SManga> = favoritesMutex.withLock {
+        val host = loginHost()
+        val credentials = preferences.credentials
+        val now = System.currentTimeMillis()
+        favoritesCache
+            ?.takeIf { it.host == host && it.credentials == credentials && now - it.time < FAVORITES_CACHE_MILLIS }
+            ?.let { return@withLock it.mangas }
+        val result = mutableListOf<SManga>()
+        var page = 1
+        while (page <= FAVORITES_MAX_PAGES) {
+            val url = favoritesUrl(page, host)
+            val favorites = withLogin { apiGet<FavoriteListDto>(url, it.jwttoken, CacheControl.FORCE_NETWORK) }
+            result += favorites.list.map { it.toSManga(coverHost) }
+            if (favorites.list.isEmpty() || page * FAVORITES_PAGE_SIZE >= favorites.total.toInt()) break
+            page++
+        }
+        val mangas = result.distinctBy { it.url }
+        favoritesCache = FavoritesCache(credentials, host, now, mangas)
+        mangas
+    }
+
+    // Words split by spaces must all be found in the title, author or genre; "-word" leaves out a match
+    private fun List<SManga>.filterFavorites(query: String): List<SManga> {
+        val terms = query.lowercase().split(' ', '\u3000').filter { it.isNotBlank() }
+        val exclude = terms.filter { it.length > 1 && it.startsWith("-") }.map { it.substring(1) }
+        val include = terms.filterNot { it.startsWith("-") }.map { it.removePrefix("+") }.filter { it.isNotEmpty() }
+        if (include.isEmpty() && exclude.isEmpty()) return this
+        return filter { manga ->
+            val text = "${manga.title} ${manga.author.orEmpty()} ${manga.genre.orEmpty()}".lowercase()
+            include.all { it in text } && exclude.none { it in text }
+        }
     }
 
     // The list lagged behind the site while the album's is_favorite was already current, which points at a cache on
@@ -266,8 +326,10 @@ abstract class Jinmantiantang :
     private suspend fun setFavorite(aid: String, add: Boolean) {
         val wanted = if (add) "add" else "remove"
         val first = toggleFavorite(aid)
+        favoritesCache = null
         if (first.type == wanted) return
         val second = toggleFavorite(aid)
+        favoritesCache = null
         if (second.type != wanted) throw Exception("收藏状态异常：${second.msg}")
     }
 
@@ -295,6 +357,8 @@ abstract class Jinmantiantang :
         return FilterList(
             buildList {
                 add(FavoritesFilter())
+                add(FavoritesSortFilter())
+                add(Filter.Header("收藏夹的搜索和排序在本地进行，首次会加载全部收藏"))
                 add(Filter.Separator())
                 add(Filter.Header("搜索或选择标签时不按类型和时间筛选"))
                 filterData?.let { add(CategoryFilter(it.categories)) }
@@ -582,6 +646,8 @@ abstract class Jinmantiantang :
         private const val PREFIX_ID_SEARCH = "JM"
         private const val PAGE_SIZE = 80
         private const val FAVORITES_PAGE_SIZE = 20
+        private const val FAVORITES_CACHE_MILLIS = 60_000L
+        private const val FAVORITES_MAX_PAGES = 100
         private const val FAVORITE_PATH = "/favorite/"
         private const val FAVORITE_ADD_NAME = "☆【未收藏】点两次加入收藏"
         private const val FAVORITE_REMOVE_NAME = "★【已收藏】点两次取消收藏"
