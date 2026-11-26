@@ -148,47 +148,62 @@ abstract class OniSaga : KeiSource() {
     }
 
     private suspend fun Document.chapterList(): List<SChapter> {
-        if (siteLanguage != null) return chapterPages(this, null)
+        val alternatives = extractNextJs<ReadingStartDto>()?.alternatives.orEmpty()
+        siteLanguage?.let { return chapterPages(languagePage(it, alternatives), null) }
 
         // The "all" source lists each language the title reads in, starting with the one this page shows
-        val alternatives = extractNextJs<ReadingStartDto>()?.alternatives ?: return chapterPages(this, null)
-        val current = alternatives.firstOrNull { it.current }?.let(::languageOf)
-        val slug = location().toHttpUrl().pathSegments[1]
+        val languages = alternatives.mapNotNull(::languageOf).distinct()
+        if (languages.isEmpty()) return chapterPages(this, null)
         val chapters = coroutineScope {
-            alternatives.mapNotNull(::languageOf).distinct().map { language ->
-                async {
-                    val firstPage = if (language == current) this@chapterList else titlePage(slug, language)
-                    chapterPages(firstPage, language)
-                }
+            languages.map { language ->
+                async { chapterPages(languagePage(language, alternatives), language) }
             }.awaitAll().flatten()
         }
         return chapters.sortedByDescending { it.chapter_number }
+    }
+
+    // Some languages are only in another numbering of the title ("stream")
+    private suspend fun Document.languagePage(language: String, alternatives: List<AlternativeDto>): Document {
+        val matching = alternatives.filter { languageOf(it) == language }
+        val alternative = matching.firstOrNull { it.current } ?: matching.firstOrNull()
+        if (alternative == null || alternative.current) return this
+        val url = baseUrl.toHttpUrl().resolve(alternative.href)!!.newBuilder()
+            .setQueryParameter("chapters", "all")
+            .build()
+        return client.get(url, Fetch.DOCUMENT).asJsoup()
     }
 
     private fun languageOf(alternative: AlternativeDto) = baseUrl.toHttpUrl().resolve(alternative.href)?.queryParameter("lang")
 
     private suspend fun chapterPages(firstPage: Document, language: String?): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
+        val slug = firstPage.location().toHttpUrl().pathSegments[1]
         var page = firstPage
         while (true) {
             // Chapters not readable in this language stay in the list, without a link
-            page.select("a[data-unit], details[data-unit]").flatMapTo(chapters) { it.toSChapters(language) }
+            page.select("a[data-unit], details[data-unit], div[data-unit][data-releases~=\\d]")
+                .flatMapTo(chapters) { it.toSChapters(slug, language) }
             val next = page.selectFirst("nav[aria-label=\"Chapter pages\"] a[href*=\"cc=\"]") ?: break
             page = client.get(next.absUrl("href"), Fetch.DOCUMENT).asJsoup()
         }
         return chapters
     }
 
-    // A chapter is a link, or a list of versions when several groups have it
-    private fun Element.toSChapters(language: String?): List<SChapter> {
+    // A chapter is a link (a row with its release when it's in other languages too), or a list of versions when
+    // several groups have it
+    private fun Element.toSChapters(slug: String, language: String?): List<SChapter> {
         val row = selectFirst("> summary") ?: this
         val label = row.selectFirst("> span:has(> [data-read-text])")!!.ownText()
         val title = row.selectFirst("> span[dir=auto]")?.text()
         val versions = if (tagName() == "details") select("li") else listOf(this)
         return versions.map { version ->
             SChapter.create().apply {
-                val link = if (version.tagName() == "a") version else version.selectFirst("a[href^=/read/]")!!
-                setUrlWithoutDomain(link.absUrl("href"))
+                if (version.tagName() == "div") {
+                    url = "/read/$slug/${version.attr("data-releases")}"
+                } else {
+                    val link = if (version.tagName() == "a") version else version.selectFirst("a[href^=/read/]")!!
+                    setUrlWithoutDomain(link.absUrl("href"))
+                }
                 setName(label, title)
                 date_upload = Instant.tryParse(version.selectFirst("time[datetime]")?.attr("datetime"))
                 val group = version.select("a[href^=/group/]").joinToString { it.text() }.ifEmpty { null }
