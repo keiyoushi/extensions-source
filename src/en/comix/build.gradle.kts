@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Comix"
-    versionCode = 65
+    versionCode = 66
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
@@ -27,4 +27,8 @@ keiyoushi {
         host("www.comix.ws")
         path("/title/..*")
     }
+}
+
+dependencies {
+    implementation(project(":lib:cronet"))
 }
