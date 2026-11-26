@@ -6,12 +6,12 @@ plugins {
 
 keiyoushi {
     name = "LuxManga"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
     source {
-        baseUrl = "https://luxmanga.net"
+        baseUrl = "https://luxmanhwa.com"
         lang = "en"
         versionId = 2
     }
