@@ -130,11 +130,6 @@ class ChapterVersionDto(
 )
 
 @Serializable
-class PayloadPageDto(
-    @SerialName("chapter") val data: PageDto,
-)
-
-@Serializable
 class PageDto(
     @SerialName("img") val images: List<String>,
 )
