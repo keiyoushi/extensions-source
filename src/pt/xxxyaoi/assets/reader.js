@@ -1,4 +1,5 @@
 () => {
+    const MAX_PADDING = 64;
     const fetched = [];
     new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {
@@ -14,12 +15,21 @@
                     .then((blob) => blob.size),
             ),
         );
-        const left = [...fetched];
-        return sizes.map((size) => {
-            const index = left.findIndex(([, fetchedSize]) => fetchedSize === size);
-            if (index < 0) throw new Error();
-            return left.splice(index, 1)[0][0];
-        });
+        const matches = (padding) => {
+            const left = [...fetched];
+            const urls = [];
+            for (const size of sizes) {
+                const index = left.findIndex(([, fetchedSize]) => fetchedSize === size - padding);
+                if (index < 0) return null;
+                urls.push(left.splice(index, 1)[0][0]);
+            }
+            return urls;
+        };
+        for (let padding = 0; padding <= MAX_PADDING; padding++) {
+            const urls = matches(padding);
+            if (urls) return urls;
+        }
+        throw new Error();
     };
 
     let pages = null;

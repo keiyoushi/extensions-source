@@ -20,11 +20,14 @@ import org.jsoup.nodes.Document
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.security.SecureRandom
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
+
+internal class SiteRead(val document: PageDocument, val imageHeaders: Map<String, Map<String, String>>)
 
 internal class SitePages(
     private val baseUrl: () -> String,
@@ -39,17 +42,17 @@ internal class SitePages(
     private var readerSession: Map<String, String> = emptyMap()
 
     /** The document at [url], once `assets/[readScript]` called with [args] returns it. */
-    suspend fun document(url: String, readScript: String, args: String = ""): Document = read(url, readScript, args).let { it.html.asJsoup(it.url) }
+    suspend fun document(url: String, readScript: String, args: String = ""): Document = read(url, readScript, args).document.let { it.html.asJsoup(it.url) }
 
     /** The page at [url], once `assets/[readScript]` called with [args] returns it; [carrySession] keeps the last such page's session storage. */
-    suspend fun read(url: String, readScript: String, args: String = "", carrySession: Boolean = false): PageDocument = mutex.withLock {
+    suspend fun read(url: String, readScript: String, args: String = "", carrySession: Boolean = false): SiteRead = mutex.withLock {
         lastLoad?.let { delay(LOAD_GAP - it.elapsedNow()) }
         lastLoad = TimeSource.Monotonic.markNow()
         load(url, readScript, args, carrySession)
     }
 
     @OptIn(NativeWebViewApi::class)
-    private suspend fun load(url: String, readScript: String, args: String, carrySession: Boolean): PageDocument {
+    private suspend fun load(url: String, readScript: String, args: String, carrySession: Boolean): SiteRead {
         val host = baseUrl().toHttpUrl().host
         val origins = setOf("https://$host")
         val bridge = randomName()
@@ -59,6 +62,7 @@ internal class SitePages(
         var checkSince: TimeMark? = null
         var shown = false
         val posts = CopyOnWriteArrayList<String>()
+        val imageHeaders = ConcurrentHashMap<String, Map<String, String>>()
 
         val page = try {
             runWebView<PageRead>(timeout = TIMEOUT) {
@@ -73,9 +77,11 @@ internal class SitePages(
                     when {
                         request.isForMainFrame -> posts.clear()
                         request.method == "POST" && requestHost == host -> posts += request.url.toString()
+                        requestHost != null && requestHost.isHostOrSubdomainOf(host) && request.url.path.orEmpty().contains(IMAGE_PATH) ->
+                            imageHeaders[request.url.toString()] = request.requestHeaders.filterKeys { it.startsWith("X-", ignoreCase = true) && !it.equals("X-Requested-With", ignoreCase = true) }
                     }
                     when {
-                        requestHost == null || requestHost.isHostOrSubdomainOf(host) || requestHost.isHostOrSubdomainOf(TURNSTILE_HOST) -> null
+                        requestHost == null || requestHost.isHostOrSubdomainOf(host) || requestHost.isHostOrSubdomainOf(TURNSTILE_HOST) || requestHost == CDNJS_HOST -> null
                         else -> stub(request.url.lastPathSegment.orEmpty())
                     }
                 }
@@ -113,7 +119,7 @@ internal class SitePages(
         }
         val result = page.result!!
         if (carrySession) readerSession = result.session
-        return result
+        return SiteRead(result, imageHeaders)
     }
 
     private fun PageRead.waitsFor(posts: List<String>): Boolean = posts.groupingBy { it }.eachCount().any { (url, started) ->
@@ -140,6 +146,10 @@ internal class SitePages(
         const val SOLVE_IN_WEBVIEW = "Abra o WebView para passar pela verificação do site"
 
         private const val TURNSTILE_HOST = "challenges.cloudflare.com"
+
+        private const val CDNJS_HOST = "cdnjs.cloudflare.com"
+
+        private const val IMAGE_PATH = "/WP-manga/data/"
 
         private val PIXEL = Base64.decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", Base64.DEFAULT)
 

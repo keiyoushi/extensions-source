@@ -20,6 +20,7 @@ import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
@@ -162,7 +163,8 @@ abstract class XXXYaoi : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val reader = sitePages.read(getChapterUrl(chapter), "reader.js", carrySession = true)
+        val read = sitePages.read(getChapterUrl(chapter), "reader.js", carrySession = true)
+        val reader = read.document
         if (reader.pages.isEmpty()) {
             val document = reader.html.asJsoup(reader.url)
             if (document.selectFirst("iframe[src*=player]") != null) return emptyList()
@@ -171,13 +173,19 @@ abstract class XXXYaoi : KeiSource() {
             }
             throw IOException("As páginas do capítulo não carregaram, tente novamente")
         }
-        return reader.pages.mapIndexed { index, imageUrl -> Page(index, url = reader.url, imageUrl = imageUrl) }
+        return reader.pages.mapIndexed { index, imageUrl ->
+            val siteHeaders = read.imageHeaders[imageUrl].orEmpty().toJsonString()
+            Page(index, url = reader.url.toHttpUrl().newBuilder().fragment(siteHeaders).build().toString(), imageUrl = imageUrl)
+        }
     }
 
-    override fun getImageRequest(page: Page): Request = super.getImageRequest(page).newBuilder()
-        .header("X-XY-R", "1")
-        .fetch(Fetch.XHR.from(page.url))
-        .build()
+    override fun getImageRequest(page: Page): Request {
+        val siteHeaders = page.url.toHttpUrl().fragment?.parseAs<Map<String, String>>().orEmpty()
+        return super.getImageRequest(page).newBuilder()
+            .apply { siteHeaders.forEach { (name, value) -> header(name, value) } }
+            .fetch(Fetch.XHR.from(page.url))
+            .build()
+    }
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = seriesDocument(getMangaUrl(manga))
         .select("a.xyaoi-scan-work-item")
