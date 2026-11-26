@@ -247,11 +247,17 @@ abstract class Kemono :
         val typeIncluded = typeFilter?.state?.filter { it.isIncluded() }?.mapTo(HashSet()) { it.value }.orEmpty()
         val typeExcluded = typeFilter?.state?.filter { it.isExcluded() }?.mapTo(HashSet()) { it.value }.orEmpty()
 
-        if (isPostsMode) {
-            return searchPosts(page, query, typeIncluded, typeExcluded)
+        val fav = when (filters.firstInstanceOrNull<FavoritesFilter>()?.state?.firstOrNull()?.state) {
+            1 -> true
+            2 -> false
+            else -> null
         }
 
-        return searchCreators(page, query, filters, typeIncluded, typeExcluded)
+        if (isPostsMode) {
+            return searchPosts(page, query, typeIncluded, typeExcluded, fav)
+        }
+
+        return searchCreators(page, query, filters, typeIncluded, typeExcluded, fav)
     }
 
     private suspend fun searchCreators(
@@ -260,30 +266,20 @@ abstract class Kemono :
         filters: FilterList,
         typeIncluded: Set<String>,
         typeExcluded: Set<String>,
+        fav: Boolean?,
     ): MangasPage {
         val sortFilter = filters.firstInstanceOrNull<SortFilter>()
         val sort = sortFilter?.let {
             it.getValue() to if (it.state!!.ascending) "asc" else "desc"
         } ?: ("pop" to "desc")
 
-        val fav = when (filters.firstInstanceOrNull<FavoritesFilter>()?.state?.firstOrNull()?.state) {
-            1 -> true
-            2 -> false
-            else -> null
-        }
-
         val trimmedQuery = query.trim()
 
         val (mangas, favoritesMap) = coroutineScope {
             val favoritesDeferred = async(Dispatchers.IO) {
                 if (fav != null) {
-                    val url = "$baseUrl/$apiPath/account/favorites?type=artist"
-                    client.get(url, Fetch.XHR, ensureSuccess = false).use { response ->
-                        if (response.code == 401) throw Exception("Log in via WebView to use Favorites")
-                        if (!response.isSuccessful) throw HttpException(response.code)
-                        response.parseAs<List<KemonoFavoritesDto>>()
-                            .associate { (it.service to it.id) to it.favedSeq }
-                    }
+                    fetchFavorites<KemonoFavoritesDto>("artist")
+                        .associate { (it.service to it.id) to it.favedSeq }
                 } else {
                     emptyMap()
                 }
@@ -352,30 +348,65 @@ abstract class Kemono :
         query: String,
         typeIncluded: Set<String>,
         typeExcluded: Set<String>,
+        fav: Boolean?,
     ): MangasPage {
+        val trimmedQuery = query.trim()
+        val datePref = preferences.getString(POST_DATE_PREF, POST_DATE_PUBLISHED)!!
+
+        fun KemonoPostDto.isListed(): Boolean {
+            val sName = service.serviceName().lowercase()
+            val includeType = typeIncluded.isEmpty() || sName in typeIncluded
+            val excludeType = typeExcluded.isNotEmpty() && sName in typeExcluded
+            return includeType && !excludeType && images.isNotEmpty()
+        }
+
+        if (fav == true) {
+            val favorites = fetchFavorites<KemonoPostDto>("post")
+                .filter { it.isListed() && it.matches(trimmedQuery) }
+                .sortedByDescending { it.favedSeq }
+            val startIndex = (page - 1) * PAGE_POST_LIMIT
+            if (startIndex >= favorites.size) {
+                return MangasPage(emptyList(), false)
+            }
+            val endIndex = minOf(startIndex + PAGE_POST_LIMIT, favorites.size)
+            val mangas = favorites.subList(startIndex, endIndex)
+                .map { it.toSManga(creator = null, baseUrl = baseUrl, imgUrl = imgUrl, datePref = datePref) }
+            return MangasPage(mangas, endIndex < favorites.size)
+        }
+
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegments("$apiPath/posts")
             .addQueryParameter("o", ((page - 1) * PAGE_POST_LIMIT).toString())
             .apply {
-                val q = query.trim()
-                if (q.isNotEmpty()) addQueryParameter("q", q)
+                if (trimmedQuery.isNotEmpty()) addQueryParameter("q", trimmedQuery)
             }
             .build()
 
-        val posts = client.get(url, Fetch.XHR).parseAs<JsonElement>()
-            .let { (it as? JsonObject)?.get("posts") ?: it }
-            .parseAs<List<KemonoPostDto>>()
-        val datePref = preferences.getString(POST_DATE_PREF, POST_DATE_PUBLISHED)!!
-        val mangas = posts
-            .filter { post ->
-                val sName = post.service.serviceName().lowercase()
-                val includeType = typeIncluded.isEmpty() || sName in typeIncluded
-                val excludeType = typeExcluded.isNotEmpty() && sName in typeExcluded
-                includeType && !excludeType && post.images.isNotEmpty()
+        val (posts, favorited) = coroutineScope {
+            val favoritesDeferred = if (fav == false) {
+                async { fetchFavorites<KemonoPostDto>("post").mapTo(HashSet()) { it.postPath } }
+            } else {
+                null
             }
+            val posts = client.get(url, Fetch.XHR).parseAs<JsonElement>()
+                .let { (it as? JsonObject)?.get("posts") ?: it }
+                .parseAs<List<KemonoPostDto>>()
+            posts to favoritesDeferred?.await().orEmpty()
+        }
+        val mangas = posts
+            .filter { it.isListed() && it.postPath !in favorited }
             .map { it.toSManga(creator = null, baseUrl = baseUrl, imgUrl = imgUrl, datePref = datePref) }
 
         return MangasPage(mangas, posts.size == PAGE_POST_LIMIT)
+    }
+
+    private suspend inline fun <reified T> fetchFavorites(type: String): List<T> {
+        val url = "$baseUrl/$apiPath/account/favorites?type=$type"
+        return client.get(url, Fetch.XHR, ensureSuccess = false).use { response ->
+            if (response.code == 401) throw Exception("Log in via WebView to use Favorites")
+            if (!response.isSuccessful) throw HttpException(response.code)
+            response.parseAs()
+        }
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {

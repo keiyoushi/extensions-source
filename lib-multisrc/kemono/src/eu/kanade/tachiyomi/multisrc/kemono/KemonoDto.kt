@@ -152,7 +152,15 @@ class KemonoPostDto(
     private val file: KemonoFileDto? = null,
     private val attachments: List<KemonoFileDto> = emptyList(),
     @SerialName("has_full") val hasFull: Boolean? = null,
+    @SerialName("faved_seq") val favedSeq: Long = 0,
 ) {
+    val postPath: String
+        get() = "/$service/user/$user/post/$id"
+
+    fun matches(query: String) = query.isEmpty() ||
+        title?.contains(query, ignoreCase = true) == true ||
+        (content ?: substring)?.contains(query, ignoreCase = true) == true
+
     private val files: List<KemonoFileDto>
         get() = listOfNotNull(file) + attachments
 
@@ -191,7 +199,7 @@ class KemonoPostDto(
 
     fun toSManga(creator: String?, baseUrl: String, imgUrl: String, datePref: String) = SManga.create().apply {
         val postDate = parseDate(datePref)
-        url = "/$service/user/$user/post/$id"
+        url = postPath
         title = displayTitle(postDate)
         author = creator ?: service.serviceName()
         description = MarkdownDescription.Builder()
@@ -208,7 +216,7 @@ class KemonoPostDto(
 
     fun toSChapter(datePref: String) = SChapter.create().apply {
         val postDate = parseDate(datePref)
-        url = "/$service/user/$user/post/$id"
+        url = postPath
         date_upload = postDate
         name = displayTitle(postDate)
     }
