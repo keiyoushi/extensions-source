@@ -157,7 +157,7 @@ abstract class ArvenScans :
     }
 
     companion object {
-        private const val API_URL = "https://api.arvenscans.net"
+        private const val API_URL = "https://api.arventoons.com"
         private const val SHOW_PAID_PREF = "show_paid_chapters"
     }
 }
