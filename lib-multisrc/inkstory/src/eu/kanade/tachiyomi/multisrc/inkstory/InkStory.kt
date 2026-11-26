@@ -57,6 +57,7 @@ abstract class InkStory :
         .build()
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = apply {
+        addInterceptor(AnubisInterceptor(baseUrl.toHttpUrl()) { headers })
         rateLimit(2) { it.host == baseUrl.toHttpUrl().host }
         addInterceptor(XorInterceptor(IMAGE_KEY) { it.url.isXorImage() })
     }

@@ -253,3 +253,14 @@ private val TRACKERS = mapOf(
     "myanimelist.net" to "MyAnimeList",
     "anilist.co" to "AniList",
 )
+
+@Serializable
+class AnubisPageDto(val challenge: AnubisChallengeDto)
+
+@Serializable
+class AnubisChallengeDto(
+    val id: String,
+    val method: String,
+    val randomData: String,
+    val difficulty: Int,
+)
