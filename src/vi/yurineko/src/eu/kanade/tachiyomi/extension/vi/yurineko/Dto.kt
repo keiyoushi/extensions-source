@@ -23,6 +23,7 @@ class ChapterListDto(
 class MangaDto(
     val id: String,
     val title: String,
+    val type: String,
     val thumbnailUrl: String? = null,
 )
 
