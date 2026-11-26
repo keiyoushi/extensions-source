@@ -95,12 +95,14 @@ class ChapterPagesResponseDto(
 class ChapterPagesDto(
     @SerialName("login_required") val loginRequired: Boolean? = null,
     @SerialName("password_required") val passwordRequired: Boolean = false,
+    @SerialName("is_scrambled") val isScrambled: Boolean = false,
     val pages: List<PageDto> = emptyList(),
 )
 
 @Serializable
 class PageDto(
     @SerialName("image_url") val imageUrl: String,
+    @SerialName("scramble_data") val scrambleData: String?,
 )
 
 @Serializable

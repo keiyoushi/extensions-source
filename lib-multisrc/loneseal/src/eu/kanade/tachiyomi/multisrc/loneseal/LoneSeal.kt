@@ -18,6 +18,7 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 
 enum class UrlLayout(
     private val mangaPrefix: String,
@@ -48,6 +49,10 @@ abstract class LoneSeal : KeiSource() {
     protected open val includeChapterTitle = false
     protected open val includeSeriesTagFilter = false
     protected open val includeProjectOnlyFilter = false
+
+    override fun OkHttpClient.Builder.configureClient() = addUnscrambleInterceptor()
+
+    protected fun OkHttpClient.Builder.addUnscrambleInterceptor() = addInterceptor(UnscrambleInterceptor())
 
     override suspend fun getPopularManga(page: Int) = client.get(
         searchUrl(page) {
@@ -167,6 +172,9 @@ abstract class LoneSeal : KeiSource() {
         val (seriesSlug, chapterSlug) = chapterParts(chapter.url)
         val dto = client.get("$apiUrl/series/comic/$seriesSlug/chapter/$chapterSlug", chapterHeaders(), Fetch.XHR)
             .parseAs<ChapterPagesResponseDto>()
+        if (dto.chapter.isScrambled && dto.chapter.pages.isNotEmpty() && dto.chapter.pages.all { it.scrambleData == null }) {
+            error("Gambar bab ini diacak tanpa kunci dari situs")
+        }
         val pages = toPageList(dto)
         if (pages.isEmpty()) onEmptyPages(dto)
         return pages
@@ -174,7 +182,10 @@ abstract class LoneSeal : KeiSource() {
 
     protected open fun onEmptyPages(dto: ChapterPagesResponseDto) = Unit
 
-    protected open fun toPageList(dto: ChapterPagesResponseDto) = dto.chapter.pages.mapIndexed { index, page -> Page(index, imageUrl = page.imageUrl.toFullResolutionImageUrl()) }
+    protected open fun toPageList(dto: ChapterPagesResponseDto) = dto.chapter.pages.mapIndexed { index, page ->
+        val url = page.imageUrl.toFullResolutionImageUrl()
+        Page(index, imageUrl = page.scrambleData?.let { url.toHttpUrl().newBuilder().fragment(it).toString() } ?: url)
+    }
 
     override val supportsFilterFetching = true
 
