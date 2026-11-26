@@ -178,6 +178,7 @@ index = index_pb2.Index(
         discord="https://discord.gg/3FbCpdKbdY",
     ),
     extensionList=index_pb2.ExtensionList(extensions=final_extensions),
+    iconUrl="https://keiyoushi.github.io/android-chrome-192x192.png",
 )
 
 with REPO_DIR.joinpath("index.json").open("w", encoding="utf-8") as f:
