@@ -54,7 +54,7 @@ class WorkDto(
         }
         description = MarkdownDescription.Builder()
             .description(this@WorkDto.description)
-            .altTitles(altTitles)
+            .altTitles(altTitles, "Also known as")
             .build()
         genre = ((detailsGenres ?: genres).orEmpty().map { it.name } + tags)
             .distinctBy { it.lowercase() }
