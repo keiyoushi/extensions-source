@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.arvenscansnet
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -51,14 +52,10 @@ class WorkDto(
             "hiatus" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
-        description = buildString {
-            this@WorkDto.description?.let { append(it.replace("[", "\\[").replace("]", "\\]")) }
-            val altNames = altTitles.filter { it.isNotBlank() }
-            if (altNames.isNotEmpty()) {
-                if (isNotEmpty()) append("\n\n")
-                append("Alternative titles: ", altNames.joinToString(" · "))
-            }
-        }.ifEmpty { null }
+        description = MarkdownDescription.Builder()
+            .description(this@WorkDto.description)
+            .altTitles(altTitles)
+            .build()
         genre = ((detailsGenres ?: genres).orEmpty().map { it.name } + tags)
             .distinctBy { it.lowercase() }
             .joinToString()
