@@ -14,7 +14,12 @@ class PageRead(
 class FinishedRequest(val url: String, val ago: Int)
 
 @Serializable
-class PageDocument(val url: String, val html: String, val session: Map<String, String> = emptyMap())
+class PageDocument(
+    val url: String,
+    val html: String,
+    val session: Map<String, String> = emptyMap(),
+    val pages: List<String> = emptyList(),
+)
 
 @Serializable
 class Genre(val name: String, val slug: String)
