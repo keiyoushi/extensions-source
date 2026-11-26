@@ -6,19 +6,19 @@ plugins {
 
 keiyoushi {
     name = "Arven Scans"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
     source {
         lang = "en"
-        baseUrl = "https://arvenscans.net"
+        baseUrl = "https://arventoons.com"
         versionId = 2
     }
 
     deeplink {
-        host("arvenscans.net")
-        host("www.arvenscans.net")
+        host("arventoons.com")
+        host("www.arventoons.com")
         path("/series/..*")
         path("/reader/..*")
     }

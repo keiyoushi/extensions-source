@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.arvenscansnet
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -32,13 +33,13 @@ class WorkDto(
     private val id: String,
     private val slug: String,
     private val title: String,
-    @SerialName("cover_url") private val coverUrl: String? = null,
-    private val author: String? = null,
-    private val status: String? = null,
-    private val description: String? = null,
+    @SerialName("cover_url") private val coverUrl: String?,
+    private val author: String?,
+    private val status: String?,
+    private val description: String?,
     private val tags: List<String> = emptyList(),
     @SerialName("alt_titles") private val altTitles: List<String> = emptyList(),
-    private val genres: List<GenreDto>? = null,
+    private val genres: List<GenreDto>?,
 ) {
     fun toSManga(apiUrl: String, detailsGenres: List<GenreDto>? = null) = SManga.create().apply {
         url = id
@@ -51,14 +52,10 @@ class WorkDto(
             "hiatus" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
-        description = buildString {
-            this@WorkDto.description?.let { append(it.replace("[", "\\[").replace("]", "\\]")) }
-            val altNames = altTitles.filter { it.isNotBlank() }
-            if (altNames.isNotEmpty()) {
-                if (isNotEmpty()) append("\n\n")
-                append("Alternative titles: ", altNames.joinToString(" · "))
-            }
-        }.ifEmpty { null }
+        description = MarkdownDescription.Builder()
+            .description(this@WorkDto.description)
+            .altTitles(altTitles, "Also known as")
+            .build()
         genre = ((detailsGenres ?: genres).orEmpty().map { it.name } + tags)
             .distinctBy { it.lowercase() }
             .joinToString()
@@ -71,7 +68,7 @@ class WorkDto(
 class GenreDto(
     val slug: String,
     @SerialName("name_en") val name: String,
-    @SerialName("work_count") val workCount: Int? = null,
+    @SerialName("work_count") val workCount: Int?,
 )
 
 @Serializable
