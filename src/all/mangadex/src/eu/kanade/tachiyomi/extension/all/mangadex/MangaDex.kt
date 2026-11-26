@@ -56,6 +56,7 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
@@ -588,7 +589,7 @@ class MangaDex(
     /** MD@Home base urls by the at-home url they came from, reused until they expire. */
     private val atHomeHosts = ConcurrentHashMap<String, AtHomeHost>()
 
-    private class AtHomeHost(val url: String, val fetchedAt: Long)
+    private class AtHomeHost(val url: String, val fetchedAt: Instant)
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         // the API has no pages for these, so don't hit it for every chapter of a download queue
@@ -600,7 +601,7 @@ class MangaDex(
             if (preferences.forceStandardHttps) "?forcePort443=true" else ""
 
         val atHome = client.get(atHomeUrl, Fetch.XHR, CacheControl.FORCE_NETWORK).parseAs<AtHomeDto>()
-        val now = System.currentTimeMillis()
+        val now = Clock.System.now()
         atHomeHosts[atHomeUrl] = AtHomeHost(atHome.baseUrl, now)
 
         val hash = atHome.chapter.hash
@@ -611,18 +612,18 @@ class MangaDex(
         }
 
         // TachiyomiSY and Komikku build MD@Home pages in this format too, and load them through getImageRequest
-        return paths.mapIndexed { index, path -> Page(index, "${atHome.baseUrl},$atHomeUrl,$now", path) }
+        return paths.mapIndexed { index, path -> Page(index, "${atHome.baseUrl},$atHomeUrl,${now.toEpochMilliseconds()}", path) }
     }
 
     override fun getImageRequest(page: Page): Request {
         val (host, atHomeUrl, fetchedAt) = page.url.split(",")
-        val validHost = if (System.currentTimeMillis() - fetchedAt.toLong() < mdAtHomeTokenLifespan) host else atHomeHost(atHomeUrl)
+        val validHost = if (Clock.System.now() - Instant.fromEpochMilliseconds(fetchedAt.toLong()) < mdAtHomeTokenLifespan) host else atHomeHost(atHomeUrl)
         return GET(validHost + page.imageUrl, headers).newBuilder().fetch(Fetch.IMAGE).build()
     }
 
     /** MD@Home urls expire, so pages loaded later need a fresh one. */
     private fun atHomeHost(atHomeUrl: String): String {
-        val now = System.currentTimeMillis()
+        val now = Clock.System.now()
         atHomeHosts[atHomeUrl]
             ?.takeIf { now - it.fetchedAt < mdAtHomeTokenLifespan }
             ?.let { return it.url }
@@ -876,7 +877,7 @@ private const val TAG_ANTHOLOGY_UUID = "51d83883-4103-437c-b4b1-731cb73d786c"
 private const val TAG_ONE_SHOT_UUID = "0234a31e-a729-4e28-9d6a-3f87c4966b9e"
 
 private val tagGroupsOrder = listOf("content", "format", "genre", "theme")
-private val mdAtHomeTokenLifespan = 5.minutes.inWholeMilliseconds
+private val mdAtHomeTokenLifespan = 5.minutes
 
 private val pathToSearchPrefix = mapOf(
     "manga" to PREFIX_ID_SEARCH,
