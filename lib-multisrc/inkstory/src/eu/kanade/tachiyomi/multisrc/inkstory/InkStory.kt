@@ -71,7 +71,7 @@ abstract class InkStory :
         return client.get(url, serverFnHeaders, Fetch.XHR).parseAs<JsonObject>().serverFnResult()?.parseAs<T>()
     }
 
-    private suspend inline fun <reified T> serverFn(id: String, data: JsonElement): T = serverFnOrNull<T>(id, data) ?: throw Exception("Not found")
+    private suspend inline fun <reified T> serverFn(id: String, data: JsonElement): T = serverFnOrNull<T>(id, data) ?: throw Exception(NOT_FOUND)
 
     private suspend fun getBook(slug: String): BookDto? = serverFnOrNull(FN_BOOK, BookInput(slug, createView = false).toJsonElement())
 
@@ -132,7 +132,7 @@ abstract class InkStory :
     ): SMangaUpdate = coroutineScope {
         val bookId = manga.memo["id"]?.string
         val details = async {
-            if (fetchDetails || bookId == null) (getBook(manga.url) ?: throw Exception("Not found")).toSMangaDetails(prefTitleLanguage) else null
+            if (fetchDetails || bookId == null) (getBook(manga.url) ?: throw Exception(NOT_FOUND)).toSMangaDetails(prefTitleLanguage) else null
         }
         val chapterList = async {
             if (fetchChapters) getChapters(manga.url, bookId ?: details.await()!!.memo["id"]!!.string) else chapters
@@ -167,7 +167,7 @@ abstract class InkStory :
     override val supportsRelatedMangas = true
 
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val bookId = manga.memo["id"]?.string ?: getBook(manga.url)!!.id
+        val bookId = manga.memo["id"]?.string ?: (getBook(manga.url) ?: throw Exception(NOT_FOUND)).id
         val input = CatalogueInput(RELATED_SIZE, 0, relatedBookId = bookId)
         val titleLanguage = prefTitleLanguage
         return serverFn<CatalogueDto>(FN_CATALOGUE, input.toJsonElement()).books.map { it.toSManga(titleLanguage) }
@@ -276,6 +276,7 @@ abstract class InkStory :
         private const val API_URL = "https://api.inuko.me/v2"
         private const val IMAGE_HOST = "static.inuko.me"
         private const val PAGE_SIZE = 40
+        private const val NOT_FOUND = "Не найдено"
         private const val RELATED_SIZE = 20
 
         // Server function ids: SHA-256 of the function's place in the site's code, the same for every inuko.me site
@@ -285,7 +286,7 @@ abstract class InkStory :
         private const val FN_CHAPTER = "c342d30c43b5931eec428542eb9d2bf68431a41a046ae931929f8f018d7f5505"
 
         private val READING_RESTRICTIONS = listOf("NONE", "AUTHORIZED_ONLY", "LIBRARY_ONLY")
-        private val IMAGE_KEY = "UySkp0BzPhwlvP2V".toByteArray()
+        private val IMAGE_KEY = "UySkp0BzPhwlvP2V".encodeToByteArray()
 
         private const val PREF_DEDUPE = "inkstory_one_per_chapter"
         private const val PREF_PREFERRED_GROUPS = "inkstory_preferred_groups"
