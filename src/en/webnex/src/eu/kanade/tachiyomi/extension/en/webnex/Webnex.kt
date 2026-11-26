@@ -185,8 +185,8 @@ abstract class Webnex :
 
     // Each row is one chapter: the upload the site picked, plus the other groups' uploads in its dropdown.
     private fun parseChapters(document: Document, knownDates: Map<String, Long>): List<SChapter> {
-        val hiddenGroups = commaList(PREF_HIDDEN_GROUPS, "")
-        val preferredGroups = commaList(PREF_PREFERRED_GROUPS, DEFAULT_PREFERRED_GROUPS)
+        val hiddenGroups = commaList(PREF_HIDDEN_GROUPS)
+        val preferredGroups = commaList(PREF_PREFERRED_GROUPS)
         val onePerChapter = preferences.getString(PREF_CHAPTER_LIST, ONE_PER_GROUP) == ONE_PER_CHAPTER
 
         // Hidden rows are decoys the site's own page never shows
@@ -205,7 +205,6 @@ abstract class Webnex :
                     scanlator = element.selectFirst(".ch-source, .ch-source-name")?.textOrNull()
                     date_upload = Instant.tryParse(element.selectFirst("time.ch-time")?.attr("datetime"))
                 },
-                likes = element.selectFirst(".ch-likes")?.text()?.filter { it in '0'..'9' }?.toIntOrNull() ?: 0,
                 warning = false,
             )
             val others = element.select(".ch-sources-menu a.ch-sources-item").map { item ->
@@ -217,27 +216,22 @@ abstract class Webnex :
                         scanlator = item.selectFirst(".ch-sources-name")?.textOrNull()
                         date_upload = knownDates[url]?.takeIf { it != 0L } ?: item.selectFirst(".ch-sources-time")?.text().parseTimeAgo()
                     },
-                    likes = item.selectFirst(".ch-sources-likes")?.text()?.toIntOrNull() ?: 0,
                     // The site's warning dot, drawn only on the dropdown's other uploads
                     warning = item.selectFirst(".dot-warn") != null,
                 )
             }
 
-            val uploads = (listOf(picked) + others).filterNot { it.isFromGroup(hiddenGroups) }
+            val uploads = (listOf(picked) + others).filterNot { upload -> hiddenGroups.any(upload::isFrom) }
             if (!onePerChapter) return@flatMap uploads.map { it.chapter }
 
-            // Ties keep the site's pick, listed first
-            listOfNotNull(
-                uploads.sortedWith(
-                    compareBy<Upload>({ it.warning }, { upload -> preferredGroups.rankOf { upload.isFromGroup(listOf(it)) } })
-                        .thenByDescending { it.likes },
-                ).firstOrNull()?.chapter,
-            )
+            // First is the site's Best source
+            val preferred = preferredGroups.firstNotNullOfOrNull { group -> uploads.find { !it.warning && it.isFrom(group) } }
+            listOfNotNull((preferred ?: uploads.firstOrNull { !it.warning } ?: uploads.firstOrNull())?.chapter)
         }
     }
 
-    private class Upload(val chapter: SChapter, val likes: Int, val warning: Boolean) {
-        fun isFromGroup(groups: List<String>) = groups.any { it.equals(chapter.scanlator, ignoreCase = true) }
+    private class Upload(val chapter: SChapter, val warning: Boolean) {
+        fun isFrom(group: String) = group.equals(chapter.scanlator, ignoreCase = true)
     }
 
     // Inverts the site's timeAgo(): "4w ago" means 4 weeks up to the 30 days where "1mo" takes over, so take the middle.
@@ -303,17 +297,17 @@ abstract class Webnex :
         val preferredGroups = EditTextPreference(screen.context).apply {
             key = PREF_PREFERRED_GROUPS
             title = "Preferred groups"
-            summary = "Group names, comma-separated. One per chapter shows the first listed group that has an upload without the site's warning mark. " +
-                "Default: $DEFAULT_PREFERRED_GROUPS, the site's official translations"
+            summary = "Group names, comma-separated. One per chapter shows the first listed group that has an upload without the site's warning mark, " +
+                "otherwise the site's Best source"
             dialogTitle = "Preferred groups"
-            setDefaultValue(DEFAULT_PREFERRED_GROUPS)
+            setDefaultValue("")
             setEnabled(preferences.getString(PREF_CHAPTER_LIST, ONE_PER_GROUP) == ONE_PER_CHAPTER)
         }
 
         ListPreference(screen.context).apply {
             key = PREF_CHAPTER_LIST
             title = "Chapter list"
-            entries = arrayOf("One per group, like the site's list", "One per chapter")
+            entries = arrayOf("One per group, like the site's list", "One per chapter, the site's Best source")
             entryValues = arrayOf(ONE_PER_GROUP, ONE_PER_CHAPTER)
             summary = "%s"
             setDefaultValue(ONE_PER_GROUP)
@@ -334,9 +328,7 @@ abstract class Webnex :
         }.let(screen::addPreference)
     }
 
-    private fun commaList(key: String, default: String) = preferences.getString(key, default).orEmpty().split(',').map(String::trim).filter(String::isNotEmpty)
-
-    private fun List<String>.rankOf(matches: (String) -> Boolean) = indexOfFirst(matches).takeIf { it >= 0 } ?: size
+    private fun commaList(key: String) = preferences.getString(key, "").orEmpty().split(',').map(String::trim).filter(String::isNotEmpty)
 
     private val SharedPreferences.rating
         get() = getString(PREF_RATING, "")!!
@@ -359,9 +351,6 @@ abstract class Webnex :
 
         private const val ONE_PER_GROUP = "group"
         private const val ONE_PER_CHAPTER = "chapter"
-
-        // Groups the site marks as official translations
-        private const val DEFAULT_PREFERRED_GROUPS = "Webtoon, Tapas, Tappytoon"
 
         private val SCRIPT_COOKIE_REGEX = Regex(""""wnx_\w+=[^"]+"(?:\s*,\s*"[^"]*")*""")
         private val STRING_LITERAL_REGEX = Regex(""""([^"]*)"""")
