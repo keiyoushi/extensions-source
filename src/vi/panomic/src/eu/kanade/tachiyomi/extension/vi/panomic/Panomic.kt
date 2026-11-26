@@ -28,6 +28,5 @@ abstract class Panomic : Koi() {
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = super.getLatestUpdates(page).withoutNovels()
 
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage =
-        super.getSearchMangaList(page, query, filters).withoutNovels()
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = super.getSearchMangaList(page, query, filters).withoutNovels()
 }

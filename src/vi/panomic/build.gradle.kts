@@ -17,8 +17,4 @@ keiyoushi {
             custom("https://panomic.online")
         }
     }
-
-    deeplink {
-        path("/truyen/..*")
-    }
 }
