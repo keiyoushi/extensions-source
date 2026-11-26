@@ -8,7 +8,7 @@ import org.jsoup.nodes.Document
 
 @Source
 abstract class ManhwaClubNet : Madara() {
-    override val chapterMode = ChapterMode.AdminAjax
+    override val chapterMode = ChapterMode.MangaAjaxPaginated
 
     override suspend fun fetchChapters(mangaPath: String, id: String, mangaPage: Document?): List<SChapter> = super.fetchChapters(mangaPath, id, mangaPage).let { chapters ->
         when (lang) {
