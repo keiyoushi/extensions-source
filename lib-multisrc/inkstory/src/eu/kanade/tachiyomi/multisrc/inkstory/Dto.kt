@@ -58,16 +58,16 @@ class CatalogueDto(
 class BookDto(
     val id: String,
     private val slug: String,
-    private val poster: String? = null,
+    private val poster: String?,
     private val name: NameDto,
     private val altNames: List<AltNameDto> = emptyList(),
-    private val description: String? = null,
-    private val status: String? = null,
-    private val country: String? = null,
-    private val year: Int? = null,
+    private val description: String?,
+    private val status: String?,
+    private val country: String?,
+    private val year: Int?,
     private val formats: List<String> = emptyList(),
-    private val averageRating: Double? = null,
-    private val ratingVotesCount: Int? = null,
+    private val averageRating: Double?,
+    private val ratingVotesCount: Int?,
     private val viewsCount: Int,
     private val likesCount: Int,
     private val labels: List<LabelDto> = emptyList(),
@@ -118,9 +118,9 @@ private fun HttpUrl.trackerName(): String = host.removePrefix("www.").let { TRAC
 
 @Serializable
 class NameDto(
-    private val ru: String? = null,
-    private val en: String? = null,
-    private val original: String? = null,
+    private val ru: String?,
+    private val en: String?,
+    private val original: String?,
 ) {
     val all get() = listOfNotNull(ru, en, original)
 
@@ -184,10 +184,10 @@ class ChapterDto(
     private val id: String,
     private val title: String,
     private val number: Double,
-    private val volume: Double? = null,
+    private val volume: Double?,
     private val createdAt: String,
     val branchId: String,
-    val publisherNames: String? = null,
+    val publisherNames: String?,
 ) {
     val key get() = volume to number
 
@@ -252,4 +252,15 @@ private val TRACKERS = mapOf(
     "shikimori.me" to "Shikimori",
     "myanimelist.net" to "MyAnimeList",
     "anilist.co" to "AniList",
+)
+
+@Serializable
+class AnubisPageDto(val challenge: AnubisChallengeDto)
+
+@Serializable
+class AnubisChallengeDto(
+    val id: String,
+    val method: String,
+    val randomData: String,
+    val difficulty: Int,
 )
