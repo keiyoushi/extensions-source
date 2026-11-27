@@ -27,7 +27,7 @@ class SearchManga(
 
         return SManga.create().apply {
             title = name
-            thumbnail_url = baseUrl + img
+            thumbnail_url = baseUrl.toHttpUrl().resolve(img).toString()
             url = baseUrl.toHttpUrl().resolve(this@SearchManga.url)!!.encodedPath
             memo = buildJsonObject {
                 put("id", id.toString())
