@@ -140,9 +140,18 @@ abstract class Hentai3 :
     }
 
     // Search
-    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val url = searchMangaRequestUrl(page, query, filters)
-        return parseMangasPage(client.get(url, Fetch.DOCUMENT).asJsoup())
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage = when {
+        query.startsWith(PREFIX_ID_SEARCH) -> MangasPage(listOf(searchMangaById(query.removePrefix(PREFIX_ID_SEARCH).trim())), false)
+        else -> {
+            val url = searchMangaRequestUrl(page, query, filters)
+            parseMangasPage(client.get(url, Fetch.DOCUMENT).asJsoup())
+        }
+    }
+
+    private suspend fun searchMangaById(id: String): SManga {
+        if (id.toIntOrNull() == null) throw Exception("Incorrect ID")
+        val document = client.get("$baseUrl/d/$id", Fetch.DOCUMENT).asJsoup()
+        return parseMangaDetails(document)
     }
 
     private fun searchMangaRequestUrl(page: Int, query: String, filters: FilterList): HttpUrl {
@@ -211,9 +220,9 @@ abstract class Hentai3 :
         if (url.host != baseUrl.toHttpUrl().host) return null
         if (url.pathSegments.getOrNull(0) != "d") return null
 
-        return url.pathSegments.getOrNull(1)?.let { id ->
-            parseMangaDetails(client.get("$baseUrl/d/$id", Fetch.DOCUMENT).asJsoup())
-        }
+        return url.pathSegments.getOrNull(1)
+            ?.takeIf { it.toIntOrNull() != null }
+            ?.let { searchMangaById(it) }
     }
 
     private fun parseMangaDetails(document: Document): SManga {
@@ -310,5 +319,6 @@ abstract class Hentai3 :
 
     companion object {
         private val SHORT_TITLE_REGEX = Regex("""(\[(?:[^\[\]]|\[[^\[\]]*])*\]|[({][^)}]*[)}])""")
+        private const val PREFIX_ID_SEARCH = "id:"
     }
 }

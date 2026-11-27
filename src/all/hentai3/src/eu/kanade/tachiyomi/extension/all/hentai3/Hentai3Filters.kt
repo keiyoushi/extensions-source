@@ -26,6 +26,8 @@ fun getFilters(showLanguage: Boolean): FilterList = FilterList(
         Filter.Separator(),
         Filter.Header("Filter by pages, for example: 20 or >20 or <20"),
         TextFilter("Pages", "pages"),
+        Filter.Separator(),
+        Filter.Header("Search manga directly with `id:<code>`"),
     ),
 )
 
