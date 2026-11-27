@@ -23,7 +23,7 @@ class SearchManga(
     fun toSManga(baseUrl: String): SManga? {
         // If there is no img, it's (probably) deleted manga, but site still shows it in search results
         // Example: https://manga.in.ua/mangas/?sort=name
-        if (name == "." && img.isEmpty()) return null
+        if (img.isEmpty()) return null
 
         return SManga.create().apply {
             title = name
