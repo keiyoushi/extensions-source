@@ -68,7 +68,7 @@ class BaoziBannerInterceptor(var level: Int) : Interceptor {
         const val NORMAL = 1
         const val EXTRA = 2
 
-        const val VERSION_NAME = "2.1"
+        const val VERSION_NAME = "2.2"
         const val PREF = "BAOZI_BANNER"
         const val PREF_TITLE = "移除包子漫画横幅 (v$VERSION_NAME)"
         const val PREF_SUMMARY = "已选择：%s\n" +

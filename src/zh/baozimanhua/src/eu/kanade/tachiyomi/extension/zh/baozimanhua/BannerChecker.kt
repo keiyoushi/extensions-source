@@ -21,6 +21,7 @@ internal object BannerChecker {
     private const val NARROW_BANNER_BOTTOM_BASE_H = 160
 
     private const val SIGNATURE_COLS = 16
+    private const val SCALED_BANNER_SIGNATURE_COLS = 128
     private const val MAX_AVG_ERROR_PER_COMPONENT = 6
 
     private class BannerSignature(
@@ -30,11 +31,11 @@ internal object BannerChecker {
         val sampleXPositions: IntArray,
     )
 
-    private fun sampleXPositions(width: Int): IntArray {
+    private fun sampleXPositions(width: Int, count: Int = SIGNATURE_COLS): IntArray {
         val startCol = (width * 0.2).toInt()
         val endCol = (width * 0.8).toInt()
-        val step = ((endCol - startCol).toFloat() / SIGNATURE_COLS).coerceAtLeast(1f)
-        return IntArray(SIGNATURE_COLS) { index ->
+        val step = ((endCol - startCol).toFloat() / count).coerceAtLeast(1f)
+        return IntArray(count) { index ->
             (startCol + (index * step).toInt()).coerceIn(0, width - 1)
         }
     }
@@ -47,6 +48,13 @@ internal object BannerChecker {
     }
     private val narrowBannerSig by lazy {
         buildSignature(NARROWBANNER_BASE64, NARROW_BANNER_W, NARROW_BANNER_H)
+    }
+    private val scaledBannerSigs by lazy {
+        val full = buildSignature(BANNER_BASE64, BANNER_W, BANNER_H, SCALED_BANNER_SIGNATURE_COLS)
+        listOf(
+            scaleSignature(full, 640, 160),
+            scaleSignature(full, 400, 100),
+        )
     }
 
     /**
@@ -92,7 +100,7 @@ internal object BannerChecker {
                 averages[row * 3 + component] = (before + (after - before) * fraction).roundToInt()
             }
         }
-        return BannerSignature(targetW, targetH, averages, sampleXPositions(targetW))
+        return BannerSignature(targetW, targetH, averages, sampleXPositions(targetW, source.sampleXPositions.size))
     }
 
     private fun narrowSigForWidth(targetW: Int): BannerSignature {
@@ -107,7 +115,8 @@ internal object BannerChecker {
 
         return narrowBottomSigCache.getOrPut(targetW) {
             val full = narrowSigForWidth(targetW)
-            val bottomHeight = scaledHeight(NARROW_BANNER_BOTTOM_BASE_H, targetW)
+            val bottomHeight = (NARROW_BANNER_BOTTOM_BASE_H * (targetW.toFloat() / NARROW_BANNER_W))
+                .toInt()
                 .coerceAtMost(full.height)
             BannerSignature(
                 full.width,
@@ -126,6 +135,7 @@ internal object BannerChecker {
         base64: String,
         expectedW: Int,
         expectedH: Int,
+        sampleCount: Int = SIGNATURE_COLS,
     ): BannerSignature {
         val buffer = Base64.decode(base64, Base64.DEFAULT)
         val bmp = BitmapFactory.decodeByteArray(buffer, 0, buffer.size)
@@ -135,7 +145,7 @@ internal object BannerChecker {
             error("Bitmap ${bmp.width}x${bmp.height} is smaller than expected ${expectedW}x$expectedH")
         }
         return try {
-            createSignature(bmp, 0, 0, expectedW, expectedH)
+            createSignature(bmp, 0, 0, expectedW, expectedH, sampleCount)
         } finally {
             bmp.recycle()
         }
@@ -147,10 +157,11 @@ internal object BannerChecker {
         srcY: Int,
         regionW: Int,
         regionH: Int,
+        sampleCount: Int,
     ): BannerSignature {
         val avgs = IntArray(regionH * 3)
 
-        val sampleXPositions = sampleXPositions(regionW)
+        val sampleXPositions = sampleXPositions(regionW, sampleCount)
 
         val rowPixels = IntArray(regionW)
         for (row in 0 until regionH) {
@@ -165,9 +176,9 @@ internal object BannerChecker {
                 sumB += px and 0xFF
             }
             val idx = row * 3
-            avgs[idx] = (sumR / SIGNATURE_COLS).toInt()
-            avgs[idx + 1] = (sumG / SIGNATURE_COLS).toInt()
-            avgs[idx + 2] = (sumB / SIGNATURE_COLS).toInt()
+            avgs[idx] = (sumR / sampleCount).toInt()
+            avgs[idx + 1] = (sumG / sampleCount).toInt()
+            avgs[idx + 2] = (sumB / sampleCount).toInt()
         }
         return BannerSignature(regionW, regionH, avgs, sampleXPositions)
     }
@@ -194,6 +205,7 @@ internal object BannerChecker {
         val refAvg = sig.rowAverages
         val totalThreshold = regionH * 3 * MAX_AVG_ERROR_PER_COMPONENT
         val sampleXPositions = sig.sampleXPositions
+        val sampleCount = sampleXPositions.size
 
         // Phase 1: Quick scan — every 4th row for fast rejection
         val quickStride = 4
@@ -212,9 +224,9 @@ internal object BannerChecker {
                 sumB += px and 0xFF
             }
             val idx = quickRow * 3
-            quickDiff += abs((sumR / SIGNATURE_COLS).toInt() - refAvg[idx])
-            quickDiff += abs((sumG / SIGNATURE_COLS).toInt() - refAvg[idx + 1])
-            quickDiff += abs((sumB / SIGNATURE_COLS).toInt() - refAvg[idx + 2])
+            quickDiff += abs((sumR / sampleCount).toInt() - refAvg[idx])
+            quickDiff += abs((sumG / sampleCount).toInt() - refAvg[idx + 1])
+            quickDiff += abs((sumB / sampleCount).toInt() - refAvg[idx + 2])
             if (quickDiff > quickThreshold) {
                 return false
             }
@@ -236,9 +248,9 @@ internal object BannerChecker {
                 sumB += px and 0xFF
             }
             val idx = row * 3
-            totalDiff += abs((sumR / SIGNATURE_COLS).toInt() - refAvg[idx])
-            totalDiff += abs((sumG / SIGNATURE_COLS).toInt() - refAvg[idx + 1])
-            totalDiff += abs((sumB / SIGNATURE_COLS).toInt() - refAvg[idx + 2])
+            totalDiff += abs((sumR / sampleCount).toInt() - refAvg[idx])
+            totalDiff += abs((sumG / sampleCount).toInt() - refAvg[idx + 1])
+            totalDiff += abs((sumB / sampleCount).toInt() - refAvg[idx + 2])
             if (totalDiff > totalThreshold) {
                 return false
             }
@@ -296,6 +308,14 @@ internal object BannerChecker {
                 matchesSignature(image, padNarrow, y, narrowTopSigToUse, rowPixels)
             ) {
                 return narrowTopSigToUse.height
+            }
+            // Some pages have the current banner scaled down and centered on a wider canvas.
+            for (sig in scaledBannerSigs) {
+                if (imgW >= sig.width && y + sig.height <= imgH &&
+                    matchesSignature(image, (imgW - sig.width) / 2, y, sig, rowPixels)
+                ) {
+                    return sig.height
+                }
             }
             return 0
         }
