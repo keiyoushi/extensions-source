@@ -7,7 +7,13 @@ class SortFilter : Filter.Select<String>("Sort", SORTS.map { it.first }.toTypedA
     val value get() = SORTS[state].second
 }
 
-class SubgenreFilter : Filter.Select<String>("Subgenre", SUBGENRES.map { it.first }.toTypedArray()) {
+class SubgenreFilter(
+    default: String?,
+) : Filter.Select<String>(
+    "Subgenre",
+    SUBGENRES.map { it.first }.toTypedArray(),
+    SUBGENRES.indexOfFirst { it.second == default }.coerceAtLeast(0),
+) {
     val value get() = SUBGENRES[state].second
 }
 
@@ -24,9 +30,9 @@ class TagFilter : Filter.Group<Tag>("Tags", TAGS.map(::Tag)) {
     val excluded get() = state.filter { it.isExcluded() }.map { it.name }
 }
 
-fun getFilters() = FilterList(
+fun getFilters(subgenre: String?) = FilterList(
     SortFilter(),
-    SubgenreFilter(),
+    SubgenreFilter(subgenre),
     TypeFilter(),
     Filter.Header("Titles need any one of the included tags"),
     TagFilter(),
@@ -40,7 +46,7 @@ private val SORTS = listOf(
     "Most Followed" to "follows_total:desc",
 )
 
-private val SUBGENRES = listOf(
+val SUBGENRES = listOf(
     "All" to null,
     "Boys' Love" to "boys-love",
     "Girls' Love" to "girls-love",
