@@ -99,7 +99,7 @@ abstract class Mangainua :
         client.get(url, Fetch.XHR).use { response ->
             val data = response.parseAs<SearchWrapper>()
             val mangas = data.items.mapNotNull { it.toSManga(baseUrl) }
-            return MangasPage(mangas, page <= data.pages!!)
+            return MangasPage(mangas, page < data.pages!!)
         }
     }
 
