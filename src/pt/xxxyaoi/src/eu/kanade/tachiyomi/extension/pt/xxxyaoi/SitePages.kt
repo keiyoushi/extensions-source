@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.xxxyaoi
 
-import android.util.Base64
-import android.webkit.WebResourceResponse
 import eu.kanade.tachiyomi.network.HttpException
 import keiyoushi.utils.InjectionEvent
 import keiyoushi.utils.NativeWebViewApi
@@ -16,8 +14,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import java.io.IOException
+import java.io.SequenceInputStream
 import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
@@ -30,6 +30,7 @@ internal class SiteRead(val document: PageDocument, val imageHeaders: Map<String
 
 internal class SitePages(
     private val baseUrl: () -> String,
+    private val client: OkHttpClient,
     private val userAgent: () -> String,
 ) {
 
@@ -43,15 +44,15 @@ internal class SitePages(
     /** The document at [url], once `assets/[readScript]` called with [args] returns it. */
     suspend fun document(url: String, readScript: String, args: String = ""): Document = read(url, readScript, args).document.let { it.html.asJsoup(it.url) }
 
-    /** The page at [url], once `assets/[readScript]` called with [args] returns it; [carrySession] keeps the last such page's session storage. */
-    suspend fun read(url: String, readScript: String, args: String = "", carrySession: Boolean = false): SiteRead = mutex.withLock {
+    /** The page at [url] opened from [referer], once `assets/[readScript]` called with [args] returns it; [carrySession] keeps the last such page's session storage. */
+    suspend fun read(url: String, readScript: String, args: String = "", carrySession: Boolean = false, referer: String? = null): SiteRead = mutex.withLock {
         lastLoad?.let { delay(LOAD_GAP - it.elapsedNow()) }
         lastLoad = TimeSource.Monotonic.markNow()
-        load(url, readScript, args, carrySession)
+        load(url, readScript, args, carrySession, referer)
     }
 
     @OptIn(NativeWebViewApi::class)
-    private suspend fun load(url: String, readScript: String, args: String, carrySession: Boolean): SiteRead {
+    private suspend fun load(url: String, readScript: String, args: String, carrySession: Boolean, referer: String?): SiteRead {
         val host = baseUrl().toHttpUrl().host
         val origins = setOf("https://$host")
         val bridge = randomName()
@@ -78,8 +79,8 @@ internal class SitePages(
                         request.method == "POST" && requestHost == host -> posts += request.url.toString()
                     }
                     if (requestHost == host && request.url.path.orEmpty().contains(IMAGE_PATH)) {
-                        imageHeaders[request.url.toString()] = request.requestHeaders.filterKeys { it.startsWith("X-", ignoreCase = true) && !it.equals("X-Requested-With", ignoreCase = true) }
-                        WebResourceResponse("image/gif", null, (PIXEL + request.url.toString().toByteArray()).inputStream())
+                        imageHeaders[request.url.toString()] = request.requestHeaders.filterKeys { it.startsWith("X-", ignoreCase = true) }
+                        proxyRequest(request, client)?.apply { data = data?.let { SequenceInputStream(it, (request.url.toString().encodeToByteArray() + 0).inputStream()) } }
                     } else {
                         null
                     }
@@ -91,19 +92,24 @@ internal class SitePages(
                     val snapshot = message.parseAs<PageRead>()
                     if (snapshot.check) {
                         val since = checkSince ?: TimeSource.Monotonic.markNow().also { checkSince = it }
-                        if (!shown && since.elapsedNow() > SHOW_AFTER) shown = showToUser(TURNSTILE_AREA)
+                        if (!shown) shown = showToUser(TURNSTILE_AREA)
                         if (!shown && since.elapsedNow() > CHECK_WAIT) return@webMessageBridge reject(IOException(SOLVE_IN_WEBVIEW))
                         return@webMessageBridge reply.postMessage("")
                     }
                     checkSince = null
+                    if (shown) {
+                        hideFromUser()
+                        shown = false
+                    }
                     when {
-                        snapshot.status != null -> reject(HttpException(snapshot.status))
+                        snapshot.status != null -> reject(snapshot.title?.ifBlank { null }?.let { IOException("$it (HTTP ${snapshot.status})") } ?: HttpException(snapshot.status))
+                        snapshot.result?.reload == true && imageHeaders.isNotEmpty() -> reply.postMessage("")
                         snapshot.waitsFor(posts) -> reply.postMessage("")
                         else -> resolve(snapshot)
                     }
                 }
                 addJavaScriptOnEvent(script, InjectionEvent.DOCUMENT_START, world, origins)
-                loadUrl(url)
+                loadUrl(url, referer?.let { mapOf("Referer" to it) }.orEmpty())
             }
         } catch (e: CancellationException) {
             throw e
@@ -135,13 +141,9 @@ internal class SitePages(
 
         private const val IMAGE_PATH = "/WP-manga/data/"
 
-        private val PIXEL = Base64.decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", Base64.DEFAULT)
-
         private val TIMEOUT = 2.minutes
 
         private val LOAD_GAP = 2.seconds
-
-        private val SHOW_AFTER = 8.seconds
 
         private val CHECK_WAIT = 30.seconds
 

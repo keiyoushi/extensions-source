@@ -16,4 +16,10 @@ keiyoushi {
         lang = "zh"
         baseUrl = "https://m.rumanhua2.com"
     }
+
+    deeplink {
+        host("m.rumanhua2.com")
+        host("www.rumanhua2.com")
+        path("/..*")
+    }
 }

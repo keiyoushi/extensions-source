@@ -16,4 +16,10 @@ keiyoushi {
         lang = "zh"
         baseUrl = "https://m.dumanwu1.com"
     }
+
+    deeplink {
+        host("m.dumanwu1.com")
+        host("www.dumanwu1.com")
+        path("/..*")
+    }
 }

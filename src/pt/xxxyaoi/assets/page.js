@@ -10,7 +10,7 @@
         if ([...document.scripts].some((script) => script.textContent.includes('_cf_chl_opt'))) return { check: true };
         if (document.readyState === 'loading') return null;
         const status = performance.getEntriesByType('navigation')[0]?.responseStatus ?? 0;
-        if (status >= 400) return { status };
+        if (status >= 400) return { status, title: document.title };
         const result = read();
         if (result !== null) {
             const now = performance.now();
@@ -19,6 +19,7 @@
         const widget = [...document.querySelectorAll('iframe[src*="challenges.cloudflare.com"]')].find(
             (frame) => frame.getBoundingClientRect().height > 0,
         );
-        return widget ? { check: true } : null;
+        const pending = [...document.querySelectorAll('[name="cf-turnstile-response"]')].some((input) => !input.value);
+        return widget || pending ? { check: true } : null;
     };
 }

@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.arabshentai
 
-import android.util.Base64
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,12 +12,13 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -28,12 +28,16 @@ import java.util.Locale
 
 @Source
 abstract class ArabsHentai : KeiSource() {
-    private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ENGLISH)
+    private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
 
     override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(2)
 
-    // ============================== Popular ===============================
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/manga/page/$page/?orderby=new-manga", Fetch.DOCUMENT))
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get(mangaListUrl(page, "new-manga"), Fetch.DOCUMENT))
+
+    private fun mangaListUrl(page: Int, orderBy: String): HttpUrl = baseUrl.toHttpUrl().newBuilder()
+        .addPathSegments(if (page > 1) "manga/page/$page/" else "manga/")
+        .addQueryParameter("orderby", orderBy)
+        .build()
 
     private fun parseMangaList(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -51,10 +55,8 @@ abstract class ArabsHentai : KeiSource() {
         }
     }
 
-    // =============================== Latest ===============================
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/manga/page/$page/?orderby=new_chapter", Fetch.DOCUMENT))
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get(mangaListUrl(page, "new_chapter"), Fetch.DOCUMENT))
 
-    // =============================== Search ===============================
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = "$baseUrl/page/$page/".toHttpUrl().newBuilder()
         url.addQueryParameter("s", query)
@@ -83,7 +85,6 @@ abstract class ArabsHentai : KeiSource() {
         }
     }
 
-    // =========================== Manga Details ============================
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -92,80 +93,83 @@ abstract class ArabsHentai : KeiSource() {
     ): SMangaUpdate {
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
 
-        val content = document.selectFirst(".content") ?: throw Exception("Failed to parse manga details")
+        val content = document.selectFirst(".content") ?: throw Exception("تعذر قراءة تفاصيل المانجا")
+        val info = content.selectFirst("#manga-info")
         val updatedManga = manga.apply {
             content.selectFirst(".sheader .data h1")?.let { title = it.text() }
             thumbnail_url = content.selectFirst(".sheader .poster img")?.imgAttr()
-            val genres = mutableListOf<String>()
-            content.selectFirst("#manga-info")?.let { info ->
-                description = "؜" + info.select(".wp-content p").text() + "\n" + "أسماء أُخرى: " + info.select("div b:contains(أسماء أُخرى) + span").text()
-                status = info.select("div b:contains(حالة المانجا) + span").text().parseStatus()
-                author = info.select("div b:contains(الكاتب) + span a").text()
-                artist = info.select("div b:contains(الرسام) + span a").text()
-                genres += info.select("div b:contains(نوع العمل) + span a").text()
+            if (info != null) {
+                description = MarkdownDescription.Builder()
+                    .description(info.selectFirst(".wp-content"))
+                    .altTitles(info.field("أسماء أُخرى")?.text()?.split(",").orEmpty(), "أسماء أُخرى")
+                    .build()
+                status = info.field("حالة المانجا")?.text().parseStatus()
+                author = info.names("الكاتب")
+                artist = info.names("الرسام")
             }
-            genres += content.select(".data .sgeneros a").map { it.text() }
-            genre = genres.joinToString()
+            genre = (info?.field("نوع العمل")?.select("a").orEmpty() + content.select(".data .sgeneros a"))
+                .map { it.text() }
+                .distinct()
+                .joinToString()
+                .ifEmpty { null }
         }
 
+        val translators = info?.names("اسم المترجم")
         val chapterList = document.select("#chapter-list:not(.oneshot-reader) a[href*='/manga/'], .oneshot-reader .image-item a[href$='style=paged']")
-            .map { it.toChapter() }
+            .map { it.toChapter().apply { scanlator = translators } }
             .distinctBy { it.url }
 
         return SMangaUpdate(updatedManga, chapterList)
     }
 
+    private fun Element.field(label: String): Element? = selectFirst(".custom_fields b:containsOwn($label) + span")
+
+    private fun Element.names(label: String): String? = field(label)?.select("a")?.eachText()?.joinToString()?.ifEmpty { null }
+
     private fun String?.parseStatus() = when {
         this == null -> SManga.UNKNOWN
-        contains("مستمر", ignoreCase = true) -> SManga.ONGOING
-        contains("مكتمل", ignoreCase = true) -> SManga.COMPLETED
-        contains("متوقف", ignoreCase = true) -> SManga.ON_HIATUS
-        contains("ملغية", ignoreCase = true) -> SManga.CANCELLED
+        contains("مستمر") -> SManga.ONGOING
+        contains("مكتمل") -> SManga.COMPLETED
+        contains("متوقف") -> SManga.ON_HIATUS
+        contains("ملغية") -> SManga.CANCELLED
         else -> SManga.UNKNOWN
     }
 
-    // ============================== Chapters ==============================
     private fun Element.toChapter(): SChapter = SChapter.create().apply {
         val url = absUrl("href")
         if (url.contains("style=paged")) {
             setUrlWithoutDomain(url.substringBeforeLast("?"))
             name = "ونشوت"
-            date_upload = 0L
         } else {
-            name = select(".chapternum").text()
-            date_upload = dateFormat.tryParseDate(select(".chapterdate").text())
+            name = selectFirst(".chapternum")!!.text()
+            date_upload = dateFormat.tryParseDate(selectFirst(".chapterdate")?.text())
             setUrlWithoutDomain(url)
         }
     }
 
-    // =============================== Pages ================================
-    override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val script = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-            .selectFirst("script:containsData(const images = [)")!!.data()
-        return script.substringAfter("const images = ").substringBefore("];").plus("]").parseAs<List<ImageDto>>()
-            .mapIndexed { index, image ->
-                Page(index, imageUrl = String(Base64.decode(image.url, Base64.DEFAULT)))
-            }
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}/"
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
+        .select(".chapter_image img.wp-manga-chapter-img")
+        .mapIndexed { index, img -> Page(index, imageUrl = img.absUrl("src")) }
 
     private fun Element.imgAttr(): String? = when {
         hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
         hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
         hasAttr("data-src") -> attr("abs:data-src")
         hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-        hasAttr("bv-data-src") -> attr("bv-data-src")
+        hasAttr("bv-data-src") -> attr("abs:bv-data-src")
         else -> attr("abs:src")
     }
 
-    // =============================== Filters ==============================
     override val supportsFilterFetching get() = true
 
     override suspend fun fetchFilterData(): JsonElement {
-        val items = client.get("$baseUrl/%d8%aa%d8%b5%d9%86%d9%8a%d9%81%d8%a7%d8%aa", Fetch.DOCUMENT).asJsoup()
+        val items = client.get("$baseUrl/%d8%aa%d8%b5%d9%86%d9%8a%d9%81%d8%a7%d8%aa/", Fetch.DOCUMENT).asJsoup()
             .select("#archive-content ul.genre-list li.item-genre .genre-data a")
         return items.map {
             val value = it.ownText()
-            Pair(value, value)
+            value to value
         }.toJsonElement()
     }
 
@@ -179,6 +183,3 @@ abstract class ArabsHentai : KeiSource() {
         return FilterList(filters)
     }
 }
-
-@Serializable
-class ImageDto(val url: String)
