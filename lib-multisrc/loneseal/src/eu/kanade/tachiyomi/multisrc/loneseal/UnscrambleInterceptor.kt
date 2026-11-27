@@ -39,10 +39,10 @@ class UnscrambleInterceptor : Interceptor {
         scrambled.recycle()
 
         val buffer = Buffer()
-        result.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
+        result.compress(Bitmap.CompressFormat.WEBP, 100, buffer.outputStream())
         result.recycle()
         return response.newBuilder()
-            .body(buffer.asResponseBody("image/jpeg".toMediaType(), buffer.size))
+            .body(buffer.asResponseBody("image/webp".toMediaType(), buffer.size))
             .build()
     }
 
