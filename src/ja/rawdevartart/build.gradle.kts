@@ -15,4 +15,9 @@ keiyoushi {
         lang = "ja"
         baseUrl = "https://rawdevart.art"
     }
+
+    deeplink {
+        path("/g/..*")
+        path("/read/..*")
+    }
 }
