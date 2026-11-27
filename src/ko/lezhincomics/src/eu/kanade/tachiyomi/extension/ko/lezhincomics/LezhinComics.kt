@@ -78,13 +78,23 @@ abstract class LezhinComics :
                 addQueryParameter("limit", PAGE_SIZE.toString())
             }
         }.build()
-        val result = client.get(url, Fetch.XHR).parseAs<ListDto<ContentDto>>()
+        val result = client.get(url, listHeaders, Fetch.XHR).parseAs<ListDto<ContentDto>>()
         return MangasPage(result.data.map { it.toSManga() }, !ranking && result.hasNext)
     }
 
+    private val showAdult get() = preferences.getBoolean(PREF_SHOW_ADULT, false)
+
+    // The site's client asks for adult series with these headers once adult mode is on
+    private val listHeaders get() = headers.newBuilder().apply {
+        if (showAdult) {
+            set("x-lz-adult", "1")
+            set("x-lz-allowadult", "true")
+        }
+    }.build()
+
     private var searchOffset = 0
 
-    // Search lists adult series, which open only after an adult-verified login; pages skip them
+    // Search lists adult series, which open only after an adult-verified login; pages skip them unless shown
     private suspend fun search(page: Int, query: String, completedOnly: Boolean): MangasPage {
         if (page == 1) searchOffset = 0
         val mangas = mutableListOf<SManga>()
@@ -98,9 +108,9 @@ abstract class LezhinComics :
                 .addQueryParameter("offset", searchOffset.toString())
                 .addQueryParameter("limit", PAGE_SIZE.toString())
                 .build()
-            val list = client.get(url, Fetch.XHR.from("/ko/search")).parseAs<ListDto<ContentDto>>()
+            val list = client.get(url, listHeaders, Fetch.XHR.from("/ko/search")).parseAs<ListDto<ContentDto>>()
             searchOffset += list.data.size
-            mangas += list.data.filterNot { it.adult }.map { it.toSManga() }
+            mangas += list.data.filter { showAdult || !it.adult }.map { it.toSManga() }
             hasNextPage = list.hasNext && list.data.isNotEmpty()
         } while (mangas.size < PAGE_SIZE / 2 && hasNextPage)
         return MangasPage(mangas, hasNextPage)
@@ -133,10 +143,10 @@ abstract class LezhinComics :
 
     private suspend fun comicPage(manga: SManga): ComicPageDto {
         val response = client.get(getMangaUrl(manga), Fetch.DOCUMENT)
-        // Adult series redirect to the login page
-        if (response.request.url.pathSegments.getOrNull(1) == "login") {
+        // Adult series redirect to the login or adult verification page
+        if (response.request.url.pathSegments.getOrNull(1) != "comic") {
             response.close()
-            throw Exception("로그인이 필요한 작품입니다. WebView에서 로그인해 주세요")
+            throw Exception("로그인과 성인 인증이 필요한 작품입니다. WebView에서 로그인해 주세요")
         }
         return response.extractNextJs<ComicPageDto>()
             ?: throw Exception("작품 정보를 찾을 수 없습니다. WebView에서 확인해 주세요")
@@ -296,6 +306,12 @@ abstract class LezhinComics :
             summary = "구매가 필요한 회차를 🔒 표시와 함께 목록에 보여줍니다"
             setDefaultValue(false)
         }.also(screen::addPreference)
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_SHOW_ADULT
+            title = "성인 작품 표시"
+            summary = "성인 인증을 마친 계정으로 WebView에서 로그인해야 볼 수 있습니다"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
     }
 
     companion object {
@@ -308,5 +324,6 @@ abstract class LezhinComics :
         private const val IMAGE_URL = "https://$IMAGE_HOST/v2"
         private const val QUALITY = "40"
         private const val PREF_SHOW_LOCKED = "show_locked"
+        private const val PREF_SHOW_ADULT = "show_adult"
     }
 }
