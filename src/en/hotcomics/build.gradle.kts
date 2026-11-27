@@ -6,9 +6,13 @@ plugins {
 
 keiyoushi {
     name = "HotComics"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
+
+    deeplink {
+        path("/en/..*/..*\\.html")
+    }
 
     source {
         lang = "en"

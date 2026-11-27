@@ -1,5 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.hotcomics
 
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -12,29 +15,45 @@ import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.firstInstance
+import keiyoushi.utils.getBooleanOrNull
+import keiyoushi.utils.getIntOrNull
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonElement
+import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParseDate
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.io.IOException
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 @Source
-abstract class HotComics : KeiSource() {
+abstract class HotComics :
+    KeiSource(),
+    ConfigurableSource {
 
-    override fun OkHttpClient.Builder.configureClient() = apply {
-        addCookie("hc_vfs" to "Y")
-        addInterceptor(fallbackInterceptor())
-    }
+    override val supportsFilterFetching = true
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/en", Fetch.DOCUMENT).asJsoup())
+    private val preferences by getPreferencesLazy()
+
+    override fun OkHttpClient.Builder.configureClient() = addCookie("hc_vfs" to "Y")
+        .addInterceptor(::imageBackupInterceptor)
+
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/en/ranking", Fetch.DOCUMENT).asJsoup())
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/en/new", Fetch.DOCUMENT).asJsoup())
 
@@ -46,50 +65,12 @@ abstract class HotComics : KeiSource() {
             } else {
                 val filter = filters.firstInstance<BrowseFilter>()
                 addEncodedPathSegments(filter.selected)
-                addQueryParameter("page", page.toString())
             }
+            addQueryParameter("page", page.toString())
         }.build()
 
         return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
-
-    abstract class SelectFilter(
-        name: String,
-        private val options: List<Pair<String, String>>,
-    ) : Filter.Select<String>(
-        name,
-        options.map { it.first }.toTypedArray(),
-    ) {
-        val selected get() = options[state].second
-    }
-
-    private val browseList = listOf(
-        Pair("Home", "en"),
-        Pair("Weekly", "en/weekly"),
-        Pair("New", "en/new"),
-        Pair("Genre: All", "en/genres"),
-        Pair("Genre: Sports", "en/genres/Sports"),
-        Pair("Genre: Historical", "en/genres/Historical"),
-        Pair("Genre: Drama", "en/genres/Drama"),
-        Pair("Genre: BL", "en/genres/BL"),
-        Pair("Genre: Thriller", "en/genres/Thriller"),
-        Pair("Genre: School life", "en/genres/School_life"),
-        Pair("Genre: Comedy", "en/genres/Comedy"),
-        Pair("Genre: GL", "en/genres/GL"),
-        Pair("Genre: Action", "en/genres/Action"),
-        Pair("Genre: Sci-fi", "en/genres/Sci-fi"),
-        Pair("Genre: Horror", "en/genres/Horror"),
-        Pair("Genre: Fantasy", "en/genres/Fantasy"),
-        Pair("Genre: Romance", "en/genres/Romance"),
-    )
-
-    class BrowseFilter(browseList: List<Pair<String, String>>) : SelectFilter("Browse", browseList)
-
-    override fun getFilterList(data: JsonElement?) = FilterList(
-        Filter.Header("Doesn't work with Text search"),
-        Filter.Separator(),
-        BrowseFilter(browseList),
-    )
 
     private fun parseMangaList(document: Document): MangasPage {
         val entries = document.select("li[itemtype*=ComicSeries]:not(.no-comic) > a").map { element ->
@@ -104,6 +85,20 @@ abstract class HotComics : KeiSource() {
         return MangasPage(entries, hasNextPage)
     }
 
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val segments = url.pathSegments
+        if (url.host != baseUrl.toHttpUrl().host || segments.size != 3 || segments[0] != "en" || !segments[2].endsWith(".html")) return null
+        val mangaPath = when {
+            segments[2].startsWith("episode-") ->
+                client.get(baseUrl.toHttpUrl().resolve(url.encodedPath)!!, Fetch.DOCUMENT).asJsoup()
+                    .selectFirst("a.vlist")!!.absUrl("href").toHttpUrl().encodedPath
+            else -> url.encodedPath
+        }
+        val manga = SManga.create().apply { this.url = mangaPath }
+
+        return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
+    }
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -114,78 +109,147 @@ abstract class HotComics : KeiSource() {
 
         return SMangaUpdate(
             mangaDetailsParse(manga, document),
-            chapterListParse(document),
+            chapters = { if (fetchChapters) chapterListParse(document, chapters) else chapters },
         )
     }
 
     private fun mangaDetailsParse(manga: SManga, document: Document) = manga.apply {
         title = document.selectFirst("h2.episode-title")!!.text()
-        with(document.selectFirst("p.type_box")!!) {
-            author = selectFirst("span.writer")?.text()
-                ?.substringAfter("ⓒ")?.trim()
-            genre = selectFirst("span.type")?.text()
-                ?.split("/")?.joinToString { it.trim() }
-            status = when (selectFirst("span.date")?.text()) {
-                "End", "Ende" -> SManga.COMPLETED
-                null -> SManga.UNKNOWN
-                else -> SManga.ONGOING
-            }
+        thumbnail_url = document.selectFirst("meta[property=og:image]")?.absUrl("content")
+        author = document.selectFirst("p.type_box span.writer")?.text()?.removePrefix("Ⓒ")?.trim()
+        genre = document.selectFirst("p.type_box span.type")?.text()
+            ?.split("/")?.joinToString { it.trim() }
+        val schedule = document.selectFirst("div.episode-contents header h2")?.text()
+        status = when {
+            schedule == null -> SManga.UNKNOWN
+            "completed" in schedule -> SManga.COMPLETED
+            else -> SManga.ONGOING
         }
-        description = buildString {
-            document.selectFirst("div.episode-contents header")
-                ?.text()?.let {
-                    append(it)
-                    append("\n\n")
-                }
-            document.selectFirst("div.title_content > h2:not(.episode-title)")
-                ?.text()?.let { append(it) }
-        }.trim()
+        description = MarkdownDescription.Builder()
+            .info(schedule)
+            .description(document.selectFirst("#descText")?.text())
+            .build()
     }
 
-    private fun chapterListParse(document: Document): List<SChapter> = document.select("#tab-chapter a")
-        .mapNotNull { element ->
-            val cellNum = element.selectFirst(".cell-num") ?: return@mapNotNull null
-
+    private suspend fun chapterListParse(document: Document, stored: List<SChapter>): List<SChapter> {
+        val seriesTitle = document.selectFirst("h2.episode-title")!!.text()
+        val chapters = document.select("#tab-chapter a:has(.cell-num)").map { element ->
             SChapter.create().apply {
-                setUrlWithoutDomain(element.attr("onclick").substringAfter("popupLogin('").substringBefore("'"))
-                name = cellNum.text()
+                setUrlWithoutDomain(chapterUrlRegex.find(element.attr("onclick"))!!.groupValues[1])
+                name = buildString {
+                    append(element.selectFirst(".cell-mobile .cell-num")!!.text())
+                    element.selectFirst(".cell-title strong")?.text()
+                        ?.takeUnless { seriesTitle.startsWith(it) }
+                        ?.let { append(" - ", it) }
+                }
                 date_upload = dateFormat.tryParseDate(element.selectFirst(".cell-time")?.text())
             }
-        }
-        .reversed()
+        }.reversed()
+        val lockedCount = lockedCount(chapters, stored)
+        val showLocked = preferences.getBoolean(SHOW_LOCKED_PREF, false)
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        .select("#viewer-img img")
-        .mapIndexed { idx, img ->
-            val image = img.imgAttr()
-            val fallbacks = img.attr("data-backup-sources")
-            Page(idx, imageUrl = if (fallbacks.isBlank()) image else "$image#fallback$fallbacks")
+        return chapters.mapIndexedNotNull { index, chapter ->
+            when {
+                index >= lockedCount -> chapter.apply {
+                    memo = buildJsonObject {
+                        put(FREE_MEMO, true)
+                        if (index == lockedCount) put(LOCKED_ABOVE_MEMO, lockedCount)
+                    }
+                }
+                showLocked -> chapter.apply { name = "🔒 $name" }
+                else -> null
+            }
         }
+    }
+
+    // Locked episodes are the newest ones; probe from the end where the last refresh puts the first free one
+    private suspend fun lockedCount(chapters: List<SChapter>, stored: List<SChapter>): Int {
+        val storedMemos = stored.associate { it.url to it.memo }
+        val lastFree = chapters.indexOfFirst { storedMemos[it.url]?.getBooleanOrNull(FREE_MEMO) == true }
+        val unknown = if (lastFree == -1) chapters.size else lastFree
+        val expected = chapters.getOrNull(lastFree)?.let { storedMemos[it.url]?.getIntOrNull(LOCKED_ABOVE_MEMO) } ?: 0
+
+        return if (lastFree == -1 || expected < unknown - expected) {
+            (0 until unknown).firstOrNull { !isLocked(chapters[it]) } ?: unknown
+        } else {
+            (unknown - 1 downTo 0).firstOrNull { isLocked(chapters[it]) }?.plus(1) ?: 0
+        }
+    }
+
+    private suspend fun isLocked(chapter: SChapter) = fetchImageSources(chapter).isPlaceholder()
+
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val images = fetchImageSources(chapter)
+        if (images.isPlaceholder()) return emptyList()
+
+        return images.mapIndexed { idx, sources ->
+            val imageUrl = sources.first().toHttpUrl().newBuilder()
+                .fragment(sources.drop(1).takeIf { it.isNotEmpty() }?.toJsonString())
+                .build()
+            Page(idx, imageUrl = imageUrl.toString())
+        }
+    }
+
+    private suspend fun fetchImageSources(chapter: SChapter) = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
+        .select("#viewer-img img").map { it.attrOrNull("data-backup-sources")?.parseAs<List<String>>() ?: listOf(it.imgAttr()) }
+
+    // Locked episodes show a single placeholder image from the site's own host
+    private fun List<List<String>>.isPlaceholder() = singleOrNull()?.first()?.toHttpUrl()?.host == baseUrl.toHttpUrl().host
+
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/en/genres", Fetch.DOCUMENT).asJsoup()
+        .select("li.genres-li a")
+        .map { "Genre: ${it.text()}" to it.absUrl("href").toHttpUrl().encodedPath.removePrefix("/") }
+        .toJsonElement()
+
+    override fun getFilterList(data: JsonElement?) = FilterList(
+        Filter.Header("Doesn't work with Text search"),
+        Filter.Separator(),
+        BrowseFilter(browseList + data?.parseAs<List<Pair<String, String>>>().orEmpty()),
+    )
+
+    // Image hosts that refused a page, tried last for later pages
+    private val refusedHosts = ConcurrentHashMap.newKeySet<String>()
+
+    // The site reader's next host for an image that fails to load
+    private fun imageBackupInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        // Page lists cached by 1.6.4 prefix the backups with "fallback"
+        val backups = request.url.fragment?.removePrefix("fallback")?.takeIf { it.startsWith("[") }?.parseAs<List<String>>()
+            ?: return chain.proceed(request)
+
+        val urls = (listOf(request.url) + backups.map { it.toHttpUrl() }).sortedBy { it.host in refusedHosts }
+        for (url in urls.dropLast(1)) {
+            val response = try {
+                chain.proceed(request.newBuilder().url(url).build())
+            } catch (_: IOException) {
+                null
+            }
+            if (response?.isSuccessful == true) return response
+            if (response != null && response.code < 500) refusedHosts += url.host
+            response?.close()
+        }
+        return chain.proceed(request.newBuilder().url(urls.last()).build())
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_LOCKED_PREF
+            title = "Show locked episodes"
+            summary = "The newest episodes the site keeps for VIP members are listed with 🔒. They can't be read here until they unlock."
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
 
     private fun Element.imgAttr(): String = when {
         hasAttr("data-src") -> absUrl("data-src")
         else -> absUrl("src")
     }
-
-    private fun fallbackInterceptor() = Interceptor { chain ->
-        val request = chain.request()
-        var response = chain.proceed(request)
-        if (response.isSuccessful) return@Interceptor response
-
-        val fallbacks = request.url.fragment.orEmpty()
-            .takeIf { it.startsWith("fallback") }
-            ?.substringAfter("fallback")
-            ?.parseAs<List<String>>()
-
-        fallbacks.orEmpty().forEach { url ->
-            response.close()
-            response = chain.proceed(request.newBuilder().url(url.toHttpUrl()).build())
-            if (response.isSuccessful) return@Interceptor response
-        }
-
-        response.close()
-        throw IOException("HTTP ${response.code}. Clear chapter cache and retry.")
-    }
 }
+
+private const val SHOW_LOCKED_PREF = "show_locked_episodes"
+private const val FREE_MEMO = "free"
+private const val LOCKED_ABOVE_MEMO = "lockedAbove"
+
+private val chapterUrlRegex = Regex("""popupLogin\('([^']+)'""")
 
 private val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
