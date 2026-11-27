@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.hotcomics
+package eu.kanade.tachiyomi.extension.all.hotcomics
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.lib.i18n.Intl
 import keiyoushi.network.Fetch
 import keiyoushi.network.addCookie
 import keiyoushi.network.get
@@ -48,19 +49,29 @@ abstract class HotComics :
 
     override val supportsFilterFetching = true
 
+    // The site's German "new" list is empty
+    override val supportsLatest get() = lang == "en"
+
     private val preferences by getPreferencesLazy()
+
+    private val intl = Intl(
+        language = lang,
+        baseLanguage = "en",
+        availableLanguages = setOf("en", "de"),
+        classLoader = this::class.java.classLoader!!,
+    )
 
     override fun OkHttpClient.Builder.configureClient() = addCookie("hc_vfs" to "Y")
         .addInterceptor(::imageBackupInterceptor)
 
-    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/en/ranking", Fetch.DOCUMENT).asJsoup())
+    override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/$lang/ranking", Fetch.DOCUMENT).asJsoup())
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/en/new", Fetch.DOCUMENT).asJsoup())
+    override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/$lang/new", Fetch.DOCUMENT).asJsoup())
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             if (query.isNotEmpty()) {
-                addEncodedPathSegments("en/search")
+                addEncodedPathSegments("$lang/search")
                 addQueryParameter("keyword", query.trim())
             } else {
                 val filter = filters.firstInstance<BrowseFilter>()
@@ -86,15 +97,16 @@ abstract class HotComics :
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        val segments = url.pathSegments
-        if (url.host != baseUrl.toHttpUrl().host || segments.size != 3 || segments[0] != "en" || !segments[2].endsWith(".html")) return null
-        val mangaPath = when {
+        val segments = url.encodedPathSegments
+        if (url.host != baseUrl.toHttpUrl().host || segments.size != 3 || segments[0] != lang || !segments[2].endsWith(".html")) return null
+        val seriesSegments = when {
             segments[2].startsWith("episode-") ->
                 client.get(baseUrl.toHttpUrl().resolve(url.encodedPath)!!, Fetch.DOCUMENT).asJsoup()
-                    .selectFirst("a.vlist")!!.absUrl("href").toHttpUrl().encodedPath
-            else -> url.encodedPath
+                    .selectFirst("a.vlist")!!.absUrl("href").toHttpUrl().encodedPathSegments
+            else -> segments
         }
-        val manga = SManga.create().apply { this.url = mangaPath }
+        // Episode pages link back to the series under /en whatever their language
+        val manga = SManga.create().apply { this.url = "/$lang/${seriesSegments[1]}/${seriesSegments[2]}" }
 
         return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
@@ -122,7 +134,7 @@ abstract class HotComics :
         val schedule = document.selectFirst("div.episode-contents header h2")?.text()
         status = when {
             schedule == null -> SManga.UNKNOWN
-            "completed" in schedule -> SManga.COMPLETED
+            "completed" in schedule || "abgeschlossen" in schedule -> SManga.COMPLETED
             else -> SManga.ONGOING
         }
         description = MarkdownDescription.Builder()
@@ -135,7 +147,9 @@ abstract class HotComics :
         val seriesTitle = document.selectFirst("h2.episode-title")!!.text()
         val chapters = document.select("#tab-chapter a:has(.cell-num)").map { element ->
             SChapter.create().apply {
-                setUrlWithoutDomain(chapterUrlRegex.find(element.attr("onclick"))!!.groupValues[1])
+                // German series link their episodes under /en
+                val episode = chapterUrlRegex.find(element.attr("onclick"))!!.groupValues[1].toHttpUrl().encodedPathSegments
+                url = "/$lang/${episode[1]}/${episode[2]}"
                 name = buildString {
                     append(element.selectFirst(".cell-mobile .cell-num")!!.text())
                     element.selectFirst(".cell-title strong")?.text()
@@ -196,16 +210,26 @@ abstract class HotComics :
     // Locked episodes show a single placeholder image from the site's own host
     private fun List<List<String>>.isPlaceholder() = singleOrNull()?.first()?.toHttpUrl()?.host == baseUrl.toHttpUrl().host
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/en/genres", Fetch.DOCUMENT).asJsoup()
+    override suspend fun fetchFilterData(): JsonElement = client.get("$baseUrl/$lang/genres", Fetch.DOCUMENT).asJsoup()
         .select("li.genres-li a")
-        .map { "Genre: ${it.text()}" to it.absUrl("href").toHttpUrl().encodedPath.removePrefix("/") }
+        .map { it.text() to it.absUrl("href").toHttpUrl().encodedPath.removePrefix("/") }
         .toJsonElement()
 
-    override fun getFilterList(data: JsonElement?) = FilterList(
-        Filter.Header("Doesn't work with Text search"),
-        Filter.Separator(),
-        BrowseFilter(browseList + data?.parseAs<List<Pair<String, String>>>().orEmpty()),
-    )
+    override fun getFilterList(data: JsonElement?): FilterList {
+        val pages = listOfNotNull(
+            intl["browse_ranking"] to "$lang/ranking",
+            intl["browse_home"] to lang,
+            intl["browse_weekly"] to "$lang/weekly",
+            (intl["browse_new"] to "$lang/new").takeIf { supportsLatest },
+        )
+        val genres = data?.parseAs<List<Pair<String, String>>>().orEmpty().map { (name, path) -> intl.format("browse_genre", name) to path }
+
+        return FilterList(
+            Filter.Header(intl["browse_text_search"]),
+            Filter.Separator(),
+            BrowseFilter(intl["browse"], pages + genres),
+        )
+    }
 
     // Image hosts that refused a page, tried last for later pages
     private val refusedHosts = ConcurrentHashMap.newKeySet<String>()
@@ -234,8 +258,8 @@ abstract class HotComics :
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = SHOW_LOCKED_PREF
-            title = "Show locked episodes"
-            summary = "The newest episodes the site keeps for VIP members are listed with 🔒. They can't be read here until they unlock."
+            title = intl["show_locked_title"]
+            summary = intl["show_locked_summary"]
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
