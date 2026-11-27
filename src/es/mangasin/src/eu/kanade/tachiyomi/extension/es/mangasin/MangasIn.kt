@@ -128,11 +128,7 @@ abstract class MangasIn : MMRCMS() {
         val unsaltedCipherText = Base64.decode(chapterData.ct, Base64.DEFAULT)
         val cipherText = SALTED + salt + unsaltedCipherText
 
-        val decrypted = decrypt(cipherText).decodeToString()
-
-        val unescaped = decrypted.unescapeJava().removeSurrounding("\"").unescape()
-
-        val chapters = unescaped.parseAs<List<Chapter>>()
+        val chapters = decrypt(cipherText).decodeToString().parseAs<String>().parseAs<List<Chapter>>()
 
         return chapters.map {
             SChapter.create().apply {
@@ -160,12 +156,9 @@ abstract class MangasIn : MMRCMS() {
     }
 
     private fun String.unescape(): String = UNESCAPE_REGEX.replace(this, "$1")
-
-    private fun String.unescapeJava(): String = UNICODE_ESCAPE_REGEX.replace(this) { it.groupValues[1].toInt(16).toChar().toString() }
 }
 
 private val UNESCAPE_REGEX = """\\(.)""".toRegex()
-private val UNICODE_ESCAPE_REGEX = """\\u([0-9a-fA-F]{4})""".toRegex()
 private val CHAPTER_DATA_REGEX = """\{(?=.*\\"ct\\")(?=.*\\"iv\\")(?=.*\\"s\\").*?\}""".toRegex()
 private val KEY_REGEX = """decrypt\(.*?,\s*(.*?)\s*,.*\)""".toRegex()
 private val SALTED = "Salted__".encodeToByteArray()
