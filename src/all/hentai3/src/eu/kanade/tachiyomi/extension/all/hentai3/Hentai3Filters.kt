@@ -43,9 +43,11 @@ internal open class SelectFilter(name: String, private val vals: List<Pair<Strin
     fun getValue() = vals[state].second
 }
 
-private val getSortsList: List<Pair<String, String>> = listOf(
-    Pair("Recent", ""),
+internal val popularSortsList: List<Pair<String, String>> = listOf(
     Pair("Popular: All Time", "popular"),
+    Pair("Popular: Month", "popular-30d"),
     Pair("Popular: Week", "popular-7d"),
     Pair("Popular: Today", "popular-24h"),
 )
+
+internal val getSortsList: List<Pair<String, String>> = listOf(Pair("Recent", "")) + popularSortsList

@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.hentai3
 
+import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.all.hentai3.Hentai3Utils.getArtists
@@ -102,10 +103,10 @@ abstract class Hentai3 :
 
     // Popular + Latest
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val url = if (searchLang.isNotEmpty()) {
-            "$baseUrl/language/$searchLang/${if (page > 1) page else ""}?sort=popular"
-        } else {
-            "$baseUrl/search?q=pages%3A>0&page=$page&sort=popular"
+        val url = when {
+            searchLang.isEmpty() -> "$baseUrl/search?q=pages%3A>0&sort=$defaultPopularSort&page=$page"
+            page == 1 -> "$baseUrl/language/$searchLang?sort=$defaultPopularSort"
+            else -> "$baseUrl/language/$searchLang/$page?sort=$defaultPopularSort"
         }
         val doc = client.get(url, Fetch.DOCUMENT).asJsoup()
         return parseMangasPage(doc)
@@ -330,15 +331,29 @@ abstract class Hentai3 :
     private val displayFullTitle
         get() = prefs.getBoolean("full_title", false)
 
+    private val defaultPopularSort
+        get() = prefs.getString(DEFAULT_POPULAR_SORT_KEY, DEFAULT_POPULAR_SORT_DEFAULT)!!
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = "full_title"
             title = "Display full title"
+        }.also(screen::addPreference)
+
+        ListPreference(screen.context).apply {
+            key = DEFAULT_POPULAR_SORT_KEY
+            title = "Default popular"
+            entries = popularSortsList.map { it.first }.toTypedArray()
+            entryValues = popularSortsList.map { it.second }.toTypedArray()
+            setDefaultValue(DEFAULT_POPULAR_SORT_DEFAULT)
+            summary = "%s"
         }.also(screen::addPreference)
     }
 
     companion object {
         private val SHORT_TITLE_REGEX = Regex("""(\[(?:[^\[\]]|\[[^\[\]]*])*\]|[({][^)}]*[)}])""")
         private const val PREFIX_ID_SEARCH = "id:"
+        private const val DEFAULT_POPULAR_SORT_KEY = "default_popular_sort"
+        private const val DEFAULT_POPULAR_SORT_DEFAULT = "popular-7d"
     }
 }
