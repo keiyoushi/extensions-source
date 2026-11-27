@@ -25,6 +25,7 @@ import org.jsoup.nodes.Document
 import java.net.URLDecoder
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import javax.crypto.BadPaddingException
 import kotlin.time.Duration.Companion.seconds
 
 @Source
@@ -34,7 +35,7 @@ abstract class MangasIn : MMRCMS() {
 
     override val dateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)
 
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(1, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(1, 1.seconds) { it.host == baseUrl.toHttpUrl().host && it.pathSegments.first() != "uploads" }
 
     override fun latestUpdatesUrl(page: Int) = "$baseUrl/lasted?p=$page"
 
@@ -59,7 +60,7 @@ abstract class MangasIn : MMRCMS() {
 
         // Site's minimum: 3 bytes of the trimmed query
         if (query.trim().encodeToByteArray().size < 3) {
-            throw Exception("Search query must be at least 3 characters")
+            throw Exception("La búsqueda debe tener al menos 3 caracteres")
         }
 
         return "$baseUrl/search".toHttpUrl().newBuilder().apply {
@@ -104,6 +105,19 @@ abstract class MangasIn : MMRCMS() {
             ?: throw Exception("No se pudo encontrar la clave")
     }
 
+    private suspend fun decrypt(cipherText: ByteArray): ByteArray {
+        val fresh = key.isEmpty()
+        if (fresh) key = getKey()
+        return try {
+            cipherText.cryptoJsDecrypt(key)
+        } catch (e: BadPaddingException) {
+            if (fresh) throw e
+            // Key rotated since it was read
+            key = getKey()
+            cipherText.cryptoJsDecrypt(key)
+        }
+    }
+
     override suspend fun chapterListParse(document: Document): List<SChapter> {
         val mangaUrl = document.location().removeSuffix("/")
         val encodeChapterData = CHAPTER_DATA_REGEX.find(document.html())?.value ?: throw Exception("No se pudo encontrar la lista de capítulos")
@@ -114,14 +128,7 @@ abstract class MangasIn : MMRCMS() {
         val unsaltedCipherText = Base64.decode(chapterData.ct, Base64.DEFAULT)
         val cipherText = SALTED + salt + unsaltedCipherText
 
-        val decrypted = runCatching { cipherText.cryptoJsDecrypt(key) }.getOrElse {
-            key = getKey()
-            cipherText.cryptoJsDecrypt(key)
-        }.decodeToString()
-
-        val unescaped = decrypted.unescapeJava().removeSurrounding("\"").unescape()
-
-        val chapters = unescaped.parseAs<List<Chapter>>()
+        val chapters = decrypt(cipherText).decodeToString().parseAs<String>().parseAs<List<Chapter>>()
 
         return chapters.map {
             SChapter.create().apply {
@@ -131,6 +138,7 @@ abstract class MangasIn : MMRCMS() {
                     "Capítulo ${it.number}: ${it.name}"
                 }
 
+                chapter_number = it.number.toFloatOrNull() ?: -1f
                 date_upload = dateFormat.tryParseDateTime(it.createdAt)
 
                 setUrlWithoutDomain("$mangaUrl/${it.slug}")
@@ -141,34 +149,16 @@ abstract class MangasIn : MMRCMS() {
     override fun pageListParse(document: Document): List<Page> = document.select("#all > img.img-responsive").mapIndexed { i, it ->
         var url = it.imgAttr()
         if (url.toHttpUrlOrNull() == null) {
-            val decodedB64 = String(Base64.decode(url.substringAfter("://"), Base64.DEFAULT))
+            val decodedB64 = Base64.decode(url.substringAfter("://"), Base64.DEFAULT).decodeToString()
             url = URLDecoder.decode(decodedB64, "UTF-8")
         }
         Page(i, imageUrl = url)
     }
 
     private fun String.unescape(): String = UNESCAPE_REGEX.replace(this, "$1")
-
-    private fun String.unescapeJava(): String {
-        var escaped = this
-        if (!escaped.contains("\\u")) return escaped
-        val builder = StringBuilder()
-        var position = escaped.indexOf("\\u")
-        while (position != -1) {
-            if (position != 0) {
-                builder.append(escaped, 0, position)
-            }
-            val token = escaped.substring(position + 2, position + 6)
-            escaped = escaped.substring(position + 6)
-            builder.append(Integer.parseInt(token, 16).toChar())
-            position = escaped.indexOf("\\u")
-        }
-        builder.append(escaped)
-        return builder.toString()
-    }
 }
 
 private val UNESCAPE_REGEX = """\\(.)""".toRegex()
 private val CHAPTER_DATA_REGEX = """\{(?=.*\\"ct\\")(?=.*\\"iv\\")(?=.*\\"s\\").*?\}""".toRegex()
 private val KEY_REGEX = """decrypt\(.*?,\s*(.*?)\s*,.*\)""".toRegex()
-private val SALTED = "Salted__".toByteArray(Charsets.UTF_8)
+private val SALTED = "Salted__".encodeToByteArray()
