@@ -162,7 +162,7 @@ abstract class Mangainua :
                     .add("news_id", mangaId)
                     .build()
                 val data = client.post("$baseUrl/engine/ajax/controller.php?mod=mgchapters", Fetch.XHR, body).parseAs<ChaptersWrapper>()
-                data.chapters.map { it.toSChapter() }.asReversed()
+                data.chapters.map { it.toSChapter(baseUrl) }.asReversed()
             } else {
                 chapters
             }

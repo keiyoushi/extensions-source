@@ -21,18 +21,12 @@ class SearchManga(
     private val url: String,
 ) {
     fun toSManga(baseUrl: String): SManga? {
-        // If there is no img, it's (probably) deleted manga, but site still shows it in search results
-        // Example: https://manga.in.ua/mangas/?sort=name
         if (img.isEmpty()) return null
 
         return SManga.create().apply {
             title = name
             thumbnail_url = baseUrl + img
-            url = if (this@SearchManga.url.startsWith("http")) {
-                this@SearchManga.url.toHttpUrl().encodedPath
-            } else {
-                this@SearchManga.url
-            }
+            url = baseUrl.toHttpUrl().resolve(this@SearchManga.url)!!.encodedPath
             memo = buildJsonObject {
                 put("id", id.toString())
             }
@@ -54,12 +48,8 @@ class Chapter(
     private val date: Int,
     private val team: String,
 ) {
-    fun toSChapter() = SChapter.create().apply {
-        url = if (link.startsWith("http")) {
-            link.toHttpUrl().encodedPath
-        } else {
-            link
-        }
+    fun toSChapter(baseUrl: String) = SChapter.create().apply {
+        url = baseUrl.toHttpUrl().resolve(link)!!.encodedPath
         scanlator = team.takeIf(String::isNotEmpty)
         date_upload = date.times(1000L)
         chapter_number = num.toFloatOrNull() ?: -1f
