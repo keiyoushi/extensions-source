@@ -30,6 +30,7 @@ import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -141,10 +142,10 @@ abstract class MadaraBase : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val page = client.get(url, Fetch.DOCUMENT).asJsoup()
-        // A chapter page carries the post id of its series, and ?p= leads to the series
+        // A chapter page carries the post id of its series
         val document = if (page.body().hasClass("reading-manga")) {
             val seriesId = page.mangaId() ?: return null
-            client.get("$baseUrl/?p=$seriesId", Fetch.DOCUMENT.from(page.location())).asJsoup()
+            client.get(postUrl(seriesId), Fetch.DOCUMENT.from(page.location())).asJsoup()
         } else {
             page
         }
@@ -161,7 +162,7 @@ abstract class MadaraBase : KeiSource() {
     override fun getMangaUrl(manga: SManga): String = memoPath(manga)
         ?.let { baseUrl.toHttpUrl().resolve(it)?.toString() }
         ?: manga.url.takeIf { !it.all(Char::isDigit) }?.let { baseUrl.toHttpUrl().resolve(it)?.toString() }
-        ?: "$baseUrl/?p=${mangaId(manga) ?: manga.url}"
+        ?: postUrl(mangaId(manga) ?: manga.url).toString()
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -211,7 +212,7 @@ abstract class MadaraBase : KeiSource() {
             }
             id = id ?: redirectedId
         }
-        return client.get("$baseUrl/?p=${id ?: error("Missing Madara post ID from redirection")}", Fetch.DOCUMENT)
+        return client.get(postUrl(id ?: error("Missing Madara post ID from redirection")), Fetch.DOCUMENT)
     }
 
     protected open fun parseDetails(document: Document, id: String, preserveUrl: String?): SManga = SManga.create().apply {
@@ -510,7 +511,14 @@ abstract class MadaraBase : KeiSource() {
     protected open fun mangaId(manga: SManga): String? = manga.url.takeIf { it.all(Char::isDigit) }
         ?: manga.memo.getStringOrNull("id")
 
-    protected fun memoPath(manga: SManga): String? = manga.memo.getStringOrNull("path")
+    // Entries refreshed while ?p= led to the home page stored "/" as their path
+    protected fun memoPath(manga: SManga): String? = manga.memo.getStringOrNull("path")?.takeIf { it != "/" }
+
+    // Some sites send a bare ?p= to the home page
+    private fun postUrl(id: String): HttpUrl = "$baseUrl/".toHttpUrl().newBuilder()
+        .addQueryParameter("post_type", "wp-manga")
+        .addQueryParameter("p", id)
+        .build()
 
     protected fun mangaMemo(path: String, genres: List<GenreRoute>, legacyId: String? = null): JsonObject = buildJsonObject {
         put("path", path)
@@ -521,8 +529,7 @@ abstract class MadaraBase : KeiSource() {
     protected open fun Document.mangaId(): String? = selectFirst("[id^=manga-chapters-holder]")?.attr("data-id")?.takeIf(String::isNotBlank)
         ?: selectFirst("input.rating-post-id")?.attr("value")?.takeIf(String::isNotBlank)
         ?: selectFirst("a[data-post]")?.attr("data-post")?.takeIf(String::isNotBlank)
-        ?: selectFirst("link[rel=shortlink]")?.attr("href")?.takeIf { it.contains("?p=") }
-            ?.substringAfter("?p=")?.substringBefore('&')?.takeIf(String::isNotBlank)
+        ?: selectFirst("link[rel=shortlink]")?.attr("abs:href")?.toHttpUrlOrNull()?.queryParameter("p")?.takeIf(String::isNotBlank)
 
     protected open val completedStatus = arrayOf(
         "completed", "completo", "completado", "concluído", "concluido", "finalizado",
