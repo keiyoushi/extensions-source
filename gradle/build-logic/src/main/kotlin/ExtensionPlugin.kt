@@ -13,13 +13,16 @@ import io.github.keiyoushi.gradle.internal.ExtensionMetadata
 import io.github.keiyoushi.gradle.internal.ResolvedSource
 import io.github.keiyoushi.gradle.internal.SourceMetadata
 import io.github.keiyoushi.gradle.internal.VALID_LIB_VERSIONS
+import io.github.keiyoushi.gradle.internal.configureRuntimeConsumer
 import io.github.keiyoushi.gradle.internal.extensions.alias
 import io.github.keiyoushi.gradle.internal.extensions.compileOnly
 import io.github.keiyoushi.gradle.internal.extensions.implementation
 import io.github.keiyoushi.gradle.internal.extensions.kei
 import io.github.keiyoushi.gradle.internal.extensions.ksp
 import io.github.keiyoushi.gradle.internal.extensions.libs
+import io.github.keiyoushi.gradle.internal.extensions.lintChecks
 import io.github.keiyoushi.gradle.internal.extensions.plugins
+import io.github.keiyoushi.gradle.internal.extensions.testImplementation
 import io.github.keiyoushi.gradle.internal.extensionsLib
 import io.github.keiyoushi.gradle.internal.toMetadata
 import io.github.keiyoushi.gradle.tasks.ComputeContentHashTask
@@ -35,6 +38,7 @@ import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.create
 import org.gradle.kotlin.dsl.dependencies
 import org.gradle.kotlin.dsl.findByType
+import org.gradle.kotlin.dsl.named
 import org.gradle.kotlin.dsl.property
 import org.gradle.kotlin.dsl.register
 import org.gradle.kotlin.dsl.withType
@@ -70,6 +74,16 @@ class ExtensionPlugin : Plugin<Project> {
                     assets.directories.clear()
                     assets.directories.add("assets")
                 }
+                named("test") {
+                    kotlin.directories.clear()
+                    kotlin.directories.add("test")
+                    resources.directories.clear()
+                    resources.directories.add("test-resources")
+                }
+            }
+
+            testOptions {
+                unitTests.isReturnDefaultValues = true
             }
 
             lint {
@@ -138,6 +152,8 @@ class ExtensionPlugin : Plugin<Project> {
                 libVersion.split(".").joinToString("") { it.padStart(2, '0') }.toInt().times(1000) + versionCode
             }
         }
+
+        configureRuntimeConsumer(provider { "eu.kanade.tachiyomi.extension.$dirSuffix" })
 
         val themeDeeplinks = themeExtension
             .flatMap { it.deeplinks }
@@ -258,6 +274,11 @@ class ExtensionPlugin : Plugin<Project> {
             compileOnly(libs.bundles.common)
             compileOnly(keiyoushi.libVersion.flatMap { libs.extensionsLib(it) })
             ksp(project(":compiler"))
+            lintChecks(project(":lint-rules"))
+
+            testImplementation(libs.bundles.common)
+            testImplementation(keiyoushi.libVersion.flatMap { libs.extensionsLib(it) })
+            testImplementation(libs.junit)
         }
 
         afterEvaluate {

@@ -15,17 +15,17 @@ class ChapterListDto(
 @Serializable
 class TokenDto(
     val success: Boolean = false,
-    val token: String? = null,
-    @SerialName("chapter_id") val chapterId: String? = null,
-    val error: String? = null,
-    val message: String? = null,
+    val token: String?,
+    @SerialName("chapter_id") val chapterId: String?,
+    val error: String?,
+    val message: String?,
 )
 
 @Serializable
 class ChallengeDto(
     val success: Boolean = false,
-    @SerialName("challenge_id") val challengeId: String? = null,
-    @SerialName("challenge_js") val challengeJs: String? = null,
+    @SerialName("challenge_id") val challengeId: String?,
+    @SerialName("challenge_js") val challengeJs: String?,
 )
 
 @Serializable

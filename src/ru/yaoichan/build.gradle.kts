@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "YaoiChan"
     versionCode = 0
-    contentWarning = ContentWarning.NSFW // or MIXED, please confirm
+    contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     theme = "multichan"
 
@@ -17,5 +17,11 @@ keiyoushi {
         }
         lang = "ru"
         id = 2466512768990363955L
+    }
+
+    deeplink {
+        host("yaoi-chan.me")
+        host("*.yaoi-chan.me")
+        path("/manga/..*\\.html")
     }
 }

@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.luxmanga
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -33,10 +34,10 @@ class WorkId(
 class Work(
     private val id: String,
     private val title: String,
-    private val description: String? = null,
-    @SerialName("cover_url") private val coverUrl: String? = null,
-    private val author: String? = null,
-    private val status: String? = null,
+    private val description: String?,
+    @SerialName("cover_url") private val coverUrl: String?,
+    private val author: String?,
+    private val status: String?,
 ) {
     fun toSManga(apiUrl: HttpUrl, metadata: Metadata? = null, genres: List<Genre> = emptyList()) = SManga.create().apply {
         url = id
@@ -56,14 +57,10 @@ class Work(
             .takeIf { it.isNotEmpty() }
 
         val altTitles = metadata?.alternativeTitles.orEmpty().filterNot { it.equals(this@Work.title, ignoreCase = true) }
-        description = buildString {
-            this@Work.description?.takeIf { it.isNotBlank() }?.let(::append)
-            if (altTitles.isNotEmpty()) {
-                if (isNotEmpty()) append("\n\n")
-                append("**Also known as:**\n")
-                altTitles.joinTo(this, "\n") { "- $it" }
-            }
-        }.takeIf { it.isNotEmpty() }
+        description = MarkdownDescription.Builder()
+            .description(this@Work.description)
+            .altTitles(altTitles, "Also known as")
+            .build()
     }
 }
 
@@ -95,9 +92,9 @@ class ChapterList(
 class Chapter(
     private val id: String,
     @SerialName("chapter_number") private val chapterNumber: Float,
-    private val title: String? = null,
+    private val title: String?,
     val coins: Int,
-    @SerialName("created_at") private val createdAt: String? = null,
+    @SerialName("created_at") private val createdAt: String?,
     val images: List<String> = emptyList(),
 ) {
     fun toSChapter() = SChapter.create().apply {

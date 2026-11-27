@@ -1,23 +1,33 @@
 package keiyoushi.utils
 
 import android.app.Activity
+import android.app.Application
 import android.app.Dialog
 import android.content.res.Configuration
 import android.graphics.Color
+import android.graphics.Point
+import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
 import android.os.Handler
 import android.os.Looper
+import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.WindowManager
 import android.webkit.WebView
+import android.widget.FrameLayout
 import keiyoushi.utils.ui.onDestroyed
+import keiyoushi.utils.ui.onNextResumed
 import keiyoushi.utils.ui.topActivity
 import keiyoushi.utils.ui.usable
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+
+/** A CSS selector for a Turnstile widget, for [WebViewScope.showToUser]. */
+const val TURNSTILE_AREA = "div:has(> input[name=\"cf-turnstile-response\"])"
 
 /**
  * Solves Cloudflare Turnstile challenges and returns the token.
@@ -57,6 +67,7 @@ suspend fun getTurnstileToken(
 
             val d = CaptchaOverlayDialog(
                 webView = webView,
+                transparent = true,
                 onCancel = { reject(Exception("Captcha cancelled")) },
                 onNoActivity = {
                     reject(IllegalStateException("Captcha needs interaction, but the app isn't in the foreground"))
@@ -170,28 +181,58 @@ private fun reducedChromeUserAgent(webViewUserAgent: String): String? {
     return "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$major.0.0.0 Mobile Safari/537.36"
 }
 
-private fun foregroundActivity(): Activity? = runCatching { topActivity() }.getOrNull()?.takeIf { it.usable() }
+internal fun foregroundActivity(): Activity? = runCatching { topActivity() }.getOrNull()?.takeIf { it.usable() }
 
-private class CaptchaOverlayDialog(
+/**
+ * Shows [webView] over the foreground Activity, dimmed around it, for a check that wants the user's tap: all of it, or
+ * only an area of it. A [transparent] WebView shows the app through it, for a page that is only the widget.
+ * [onScreenGone] runs when the Activity it is shown on goes away, after it is dismissed; hidden, it moves to the app's
+ * next screen instead. [onFailure] runs when showing or placing it throws.
+ */
+internal class CaptchaOverlayDialog(
     private val webView: WebView,
+    private val transparent: Boolean,
     private val onCancel: () -> Unit,
     private val onNoActivity: () -> Unit,
+    private val onScreenGone: () -> Unit = onCancel,
+    private val onFailure: (Throwable) -> Unit = { onCancel() },
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var dialog: Dialog? = null
+    private var shownOn: Activity? = null
     private var unhook: (() -> Unit)? = null
+    private var placed: Rect? = null
+
+    // Hidden but still attached: a WebView that was ever attached stops running once it leaves a visible window
+    private var parked = false
+    private var unwaitScreen: (() -> Unit)? = null
+    private var unfollow: (() -> Unit)? = null
 
     private fun runOnMain(block: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) block() else mainHandler.post(block)
     }
 
-    fun show() = runOnMain {
-        if (dialog != null) return@runOnMain
+    /**
+     * Shows the WebView, or only its [area] (in the WebView's pixels at its current size, which it keeps) when given;
+     * moves the area if it is already shown.
+     */
+    fun show(area: Rect? = null) = runOnMain {
+        if (dialog != null) {
+            if (parked) park(false)
+            // The same area again leaves the view where it is, so a tap isn't lost
+            if (area != placed) runCatching { place(area) }.onFailure(onFailure)
+            return@runOnMain
+        }
+        unwaitScreen?.invoke()
+        unwaitScreen = null
         val activity = foregroundActivity() ?: return@runOnMain onNoActivity()
+        open(activity, area, hidden = false)
+    }
 
+    private fun open(activity: Activity, area: Rect?, hidden: Boolean) {
         try {
             (webView.parent as? ViewGroup)?.removeView(webView)
-            webView.setBackgroundColor(Color.TRANSPARENT)
+            if (transparent) webView.setBackgroundColor(Color.TRANSPARENT)
 
             val d = Dialog(activity, android.R.style.Theme_Translucent_NoTitleBar).apply {
                 window?.apply {
@@ -200,24 +241,105 @@ private class CaptchaOverlayDialog(
                     addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
                     setDimAmount(0.6f)
                 }
-                setContentView(webView)
                 setOnCancelListener { onCancel() }
                 setOnDismissListener { onCancel() }
             }
             dialog = d
+            shownOn = activity
+            place(area)
+            if (hidden) park(true)
             unhook = activity.onDestroyed {
+                if (parked) return@onDestroyed followScreen(activity.application)
                 dismiss()
-                onCancel()
+                onScreenGone()
             }
             d.show()
-        } catch (_: Throwable) {
-            onCancel()
+        } catch (t: Throwable) {
+            onFailure(t)
         }
     }
 
+    // Hidden, it moves to the app's next screen: out of a window the page stops running
+    private fun followScreen(app: Application) {
+        val area = placed
+        dismiss()
+        foregroundActivity()?.let { return open(it, area, hidden = true) }
+        unwaitScreen = app.onNextResumed { activity ->
+            unwaitScreen = null
+            open(activity, area, hidden = true)
+        }
+    }
+
+    // Hidden, it moves to each screen the user opens over it: in a window that isn't drawn the page stops running
+    private fun followFront(app: Application): () -> Unit = app.onNextResumed { activity ->
+        unfollow = null
+        if (activity === shownOn) {
+            unfollow = followFront(app)
+            return@onNextResumed
+        }
+        val area = placed
+        dismiss()
+        open(activity, area, hidden = true)
+    }
+
+    // The whole WebView, or a box of the area's size in the middle of the screen with the WebView moved under it, at
+    // the size the area was measured at: off-screen, or the window's while the whole WebView is shown
+    private fun place(area: Rect?) {
+        val d = dialog ?: return
+        placed = area
+        val size = if (webView.width > 0 && webView.height > 0) Point(webView.width, webView.height) else offscreenSize()
+        (webView.parent as? ViewGroup)?.removeView(webView)
+        webView.translationX = 0f
+        webView.translationY = 0f
+        if (area == null || area.isEmpty) return d.setContentView(webView)
+        val box = FrameLayout(d.context).apply {
+            addView(webView, FrameLayout.LayoutParams(size.x, size.y))
+            webView.translationX = -area.left.toFloat()
+            webView.translationY = -area.top.toFloat()
+        }
+        val root = FrameLayout(d.context).apply {
+            addView(box, FrameLayout.LayoutParams(area.width(), area.height(), Gravity.CENTER))
+        }
+        d.setContentView(root)
+    }
+
+    /** Whether it's on screen; main thread only. */
+    val isShowing: Boolean get() = dialog != null && !parked
+
+    /** Whether it's on screen over an Activity the user is in, not one left in the background; main thread only. */
+    val isInFront: Boolean get() = isShowing && foregroundActivity() === shownOn
+
+    /** Hides it from the user, keeping the WebView in its window, invisible and letting touches through, until [show] or [dismiss]. */
+    fun hide() = runOnMain { if (dialog != null && !parked) park(true) }
+
+    private fun park(hidden: Boolean) {
+        parked = hidden
+        unfollow?.invoke()
+        unfollow = if (hidden) shownOn?.application?.let(::followFront) else null
+        val window = dialog?.window ?: return
+        val flags = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        if (hidden) {
+            window.addFlags(flags)
+            window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        } else {
+            window.clearFlags(flags)
+            window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        }
+        window.attributes = window.attributes.apply { alpha = if (hidden) 0f else 1f }
+        webView.importantForAccessibility =
+            if (hidden) View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS else View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+    }
+
     fun dismiss() = runOnMain {
+        unwaitScreen?.invoke()
+        unwaitScreen = null
+        unfollow?.invoke()
+        unfollow = null
         val d = dialog ?: return@runOnMain
         dialog = null
+        shownOn = null
+        placed = null
+        parked = false
         unhook?.invoke()
         unhook = null
         try {
@@ -226,6 +348,9 @@ private class CaptchaOverlayDialog(
             runCatching { if (d.isShowing) d.dismiss() }
         } finally {
             runCatching { (webView.parent as? ViewGroup)?.removeView(webView) }
+            webView.translationX = 0f
+            webView.translationY = 0f
+            layOutOffscreen(webView)
         }
     }
 }

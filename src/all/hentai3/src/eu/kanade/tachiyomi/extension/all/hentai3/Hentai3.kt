@@ -8,12 +8,12 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
@@ -21,8 +21,8 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Instant
 
 @Source
 abstract class Hentai3 :
@@ -212,7 +212,7 @@ abstract class Hentai3 :
         SChapter.create().apply {
             name = "Chapter"
             setUrlWithoutDomain(doc.location())
-            date_upload = dateFormat.tryParse(doc.select("time").attr("datetime"))
+            date_upload = Instant.tryParse(doc.select("time").attr("datetime"))
         },
     )
 
@@ -256,7 +256,7 @@ abstract class Hentai3 :
     private fun String.shortenTitle() = if (displayFullTitle) {
         this
     } else {
-        replace(SHORT_TITLE_REGEX, "").trim()
+        replace(SHORT_TITLE_REGEX, "").trim().ifBlank { this }
     }
 
     private val displayFullTitle
@@ -270,8 +270,7 @@ abstract class Hentai3 :
     }
 
     companion object {
-        private val SHORT_TITLE_REGEX = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
+        private val SHORT_TITLE_REGEX = Regex("""(\[(?:[^\[\]]|\[[^\[\]]*])*\]|[({][^)}]*[)}])""")
         private val REMOVE_THUMB_REGEX = Regex("t(?=\\.)")
-        private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZZZZZ", Locale.ROOT)
     }
 }

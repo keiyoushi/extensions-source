@@ -6,18 +6,19 @@ plugins {
 
 keiyoushi {
     name = "Bbato"
-    versionCode = 4
+    versionCode = 6
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
 
     source {
         lang = "en"
         baseUrl {
-            custom("https://bato1.com")
+            custom("https://bato1.co.uk")
         }
     }
 
     deeplink {
+        host("bato1.co.uk")
         host("bato1.com")
         host("bbato.com")
         host("xbato.co.uk")

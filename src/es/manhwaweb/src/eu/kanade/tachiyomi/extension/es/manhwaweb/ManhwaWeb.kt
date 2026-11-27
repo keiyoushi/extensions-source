@@ -6,11 +6,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -128,10 +128,10 @@ abstract class ManhwaWeb : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val slug = chapter.url.removeSuffix("/").substringAfterLast("/")
 
-        val response = client.get("$apiUrl/chapters/see/$slug", Fetch.XHR)
+        val response = client.get("$apiUrl/chapters/see_new/$slug", Fetch.XHR)
 
-        val result = response.parseAs<PayloadPageDto>()
-        return result.data.images.filter { it.startsWith("http") }
+        val result = response.parseAs<PageDto>()
+        return result.images.filter { it.startsWith("http") }
             .mapIndexed { i, img -> Page(i, imageUrl = img) }
     }
 

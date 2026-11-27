@@ -22,3 +22,11 @@ internal class ChapterProtectorData(
     @SerialName("ct") val ciphertext: String,
     @SerialName("s") val salt: String,
 )
+
+@Serializable
+internal class MangaViewData(
+    @SerialName("enable_manga_view") val enableMangaView: String? = null,
+    @SerialName("manga_id") val mangaId: String? = null,
+    @SerialName("chapter_slug") val chapterSlug: String? = null,
+    val nonce: String? = null,
+)

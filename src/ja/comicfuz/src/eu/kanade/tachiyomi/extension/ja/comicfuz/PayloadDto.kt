@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.ja.comicfuz
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
-import java.util.Calendar
+import java.time.LocalDate
 
 @Serializable
 class DeviceInfo(
@@ -34,11 +34,9 @@ enum class DayOfWeek(private val dayNum: Int) {
 
     companion object {
         fun today(): DayOfWeek {
-            val calendar = Calendar.getInstance()
-            val dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK)
-            val adjustedDayOfWeek = if (dayOfWeek == Calendar.SUNDAY) 7 else dayOfWeek - 1
+            val today = LocalDate.now().dayOfWeek.value
 
-            return values().first { it.dayNum == adjustedDayOfWeek }
+            return entries.first { it.dayNum == today }
         }
     }
 }
@@ -47,8 +45,8 @@ enum class DayOfWeek(private val dayNum: Int) {
 class SearchRequest(
     @ProtoNumber(1) private val deviceInfo: DeviceInfo,
     @ProtoNumber(2) private val query: String,
-    @ProtoNumber(3) private val pageIndexOfMangas: Int,
-    @ProtoNumber(4) private val pageIndexOfBooks: Int,
+    @ProtoNumber(4) private val pageIndexOfMangas: Int,
+    @ProtoNumber(5) private val pageIndexOfBooks: Int,
 )
 
 @Serializable

@@ -3,6 +3,18 @@ package eu.kanade.tachiyomi.extension.all.niadd
 import eu.kanade.tachiyomi.source.model.Filter
 import kotlinx.serialization.Serializable
 
+class TypeFilter : Filter.Select<String>("Type", arrayOf("Manga", "Original")) {
+    val isOriginal get() = state == 1
+}
+
+class SortFilter : Filter.Select<String>("Sort (Original)", SORTS.map { it.first }.toTypedArray()) {
+    val value get() = SORTS[state].second
+
+    private companion object {
+        val SORTS = listOf("Updated" to "updated", "Views" to "views", "Rating" to "rating")
+    }
+}
+
 class AuthorFilter : Filter.Text("Author")
 
 class ArtistFilter : Filter.Text("Artist")

@@ -1,24 +1,29 @@
 package eu.kanade.tachiyomi.extension.all.niadd
 
+import android.util.LruCache
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.booleanOrNull
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
@@ -34,11 +39,15 @@ import org.jsoup.nodes.Element
 import java.io.IOException
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 
 @Source
 abstract class Niadd : KeiSource() {
 
-    override fun OkHttpClient.Builder.configureClient() = addNetworkInterceptor(::blockedUserInterceptor)
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::expiredImageInterceptor)
+        .addNetworkInterceptor(::blockedUserInterceptor)
 
     // The site flags networks with a cookie and then serves a fake "404 Not Found" page with status 200 on every route.
     // A flagged network gets that page with or without the cookie, so the cookie only keeps blocking after a network change.
@@ -80,6 +89,13 @@ abstract class Niadd : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/list/New-Update.html", Fetch.DOCUMENT).asJsoup())
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        if (query.isBlank() && filters.firstInstance<TypeFilter>().isOriginal) {
+            val url = baseUrl.toHttpUrl().newBuilder()
+                .addPathSegments("category/original_$page.html")
+                .addQueryParameter("sort", filters.firstInstance<SortFilter>().value)
+                .build()
+            return parseMangaList(client.get(url, Fetch.DOCUMENT).asJsoup())
+        }
         val url = "$baseUrl/search/".toHttpUrl().newBuilder().apply {
             addQueryParameter("name", query)
             filters.forEach { filter ->
@@ -118,12 +134,10 @@ abstract class Niadd : KeiSource() {
         chapters: List<SChapter>,
         fetchDetails: Boolean,
         fetchChapters: Boolean,
-    ): SMangaUpdate = coroutineScope {
-        val details = async { if (fetchDetails) fetchDetails(manga) else manga }
-        val chapterList = async { if (fetchChapters) fetchChapterList(manga) else chapters }
-
-        SMangaUpdate(details.await(), chapterList.await())
-    }
+    ): SMangaUpdate = SMangaUpdate(
+        manga = { if (fetchDetails) fetchDetails(manga) else manga },
+        chapters = { if (fetchChapters) fetchChapterList(manga) else chapters },
+    )
 
     private suspend fun fetchDetails(manga: SManga): SManga {
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
@@ -183,53 +197,128 @@ abstract class Niadd : KeiSource() {
             SChapter.create().apply {
                 setUrlWithoutDomain(element.absUrl("href"))
                 name = element.selectFirst("span.chp-title")!!.text()
-                date_upload = dateFormat.tryParseDate(element.selectFirst("span.chp-time")?.text())
+                date_upload = parseDate(element.selectFirst("span.chp-time")?.text())
                 if (isOriginal) memo = buildJsonObject { put("original", true) }
             }
         }
     }
 
+    // Chapters under a day old show "6 minutes ago", "Il y a 18 heures", "2 несколько часов назад"
+    private fun parseDate(text: String?): Long {
+        text ?: return 0L
+        val amount = NUMBER_REGEX.find(text)?.value?.toInt()
+        val age = when {
+            amount == null -> null
+            MINUTES_REGEX.containsMatchIn(text) -> amount.minutes
+            HOURS_REGEX.containsMatchIn(text) -> amount.hours
+            else -> null
+        } ?: return dateFormat.tryParseDate(text)
+        return (Clock.System.now() - age).toEpochMilliseconds()
+    }
+
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
-        val chapterId = chapterUrl.toHttpUrl().pathSegments[2].removeSuffix(".html")
-        val url = readerJumpUrl().newBuilder().apply {
-            setQueryParameter("cid", chapterId)
-            // Users' original works have their own reader type in every language
-            if (chapter.memo["original"]?.booleanOrNull == true) setQueryParameter("type", "ogniadd")
-        }.build()
-        val imageUrls = try {
-            val html = client.get(url, Fetch.DOCUMENT.from(chapterUrl)).body.string()
-            val imageList = ALL_IMGS_URL_REGEX.find(html)?.groupValues?.get(1) ?: throw Exception(PAGES_NOT_FOUND)
-            IMAGE_URL_REGEX.findAll(imageList).map { it.groupValues[1] }.toList()
+        val isOriginal = chapter.memo["original"]?.booleanOrNull == true
+        return imageUrls(chapterUrl, isOriginal).mapIndexed { i, imageUrl ->
+            // Chapter and index for expiredImageInterceptor
+            val url = imageUrl.toHttpUrl().newBuilder().fragment("$chapterUrl|$isOriginal|$i").build()
+            Page(i, imageUrl = url.toString())
+        }
+    }
+
+    private suspend fun imageUrls(chapterUrl: String, isOriginal: Boolean): List<String> {
+        val chapterHttpUrl = chapterUrl.toHttpUrl()
+        val chapterId = chapterHttpUrl.pathSegments[2].removeSuffix(".html")
+        val jumpUrl = readerJumpUrl(isOriginal)
+        return try {
+            if (jumpUrl == null) {
+                siteReaderImageUrls(chapterHttpUrl, chapterId)
+            } else {
+                jumpReaderImageUrls(jumpUrl, chapterHttpUrl, chapterId)
+            }
         } catch (e: Exception) {
-            cachedJumpUrl = null
+            readerJumpMutex.withLock { jumpUrls.remove(isOriginal) }
             throw e
         }
+    }
 
-        return imageUrls.mapIndexed { i, imageUrl -> Page(i, imageUrl = imageUrl) }
+    // The site's reader shows at most 10 images per view
+    private suspend fun siteReaderImageUrls(chapterUrl: HttpUrl, chapterId: String): List<String> = coroutineScope {
+        fun viewUrl(view: Int) = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("chapter")
+            .addPathSegment(chapterUrl.pathSegments[1])
+            .addPathSegment("$chapterId-10-$view.html")
+            .build()
+
+        val firstView = client.get(viewUrl(1), Fetch.DOCUMENT.from(chapterUrl)).asJsoup()
+        val otherViews = (2..firstView.select("option[value*=/$chapterId-10-]").size)
+            .map { async { client.get(viewUrl(it), Fetch.DOCUMENT.from(chapterUrl)).asJsoup() } }
+            .awaitAll()
+        (listOf(firstView) + otherViews).flatMap { view ->
+            view.select("img.manga_pic").map { it.absUrl("src") }.ifEmpty { throw Exception(PAGES_NOT_FOUND) }
+        }
+    }
+
+    private suspend fun jumpReaderImageUrls(jumpUrl: HttpUrl, chapterUrl: HttpUrl, chapterId: String): List<String> {
+        val url = jumpUrl.newBuilder().setQueryParameter("cid", chapterId).build()
+        val html = client.get(url, Fetch.DOCUMENT.from(chapterUrl)).body.string()
+        val imageList = ALL_IMGS_URL_REGEX.find(html)?.groupValues?.get(1) ?: throw Exception(PAGES_NOT_FOUND)
+        return IMAGE_URL_REGEX.findAll(imageList).map { it.groupValues[1] }.toList()
+    }
+
+    private val refreshedImageUrls = LruCache<String, List<String>>(5)
+    private val refreshMutex = Mutex()
+
+    // Image urls are signed for about 18 hours and then answer 410, while the app keeps them in its page list cache
+    private fun expiredImageInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val (chapterUrl, isOriginal, index) = request.url.fragment?.split('|')?.takeIf { it.size == 3 } ?: return chain.proceed(request)
+        var url = request.url.newBuilder().fragment(null).build().toString()
+        var response = chain.proceed(request)
+        // A refreshed list from the cache can have expired too
+        repeat(2) {
+            if (response.code != 410) return response
+            response.close()
+            url = refreshedImageUrl(chapterUrl, isOriginal.toBoolean(), index.toInt(), url)
+            response = chain.proceed(request.newBuilder().url(url).build())
+        }
+        return response
+    }
+
+    private fun refreshedImageUrl(chapterUrl: String, isOriginal: Boolean, index: Int, expiredUrl: String): String = try {
+        // Reader pages sit on other hosts than the images, outside the image hosts' dispatcher slots
+        runBlocking {
+            refreshMutex.withLock {
+                refreshedImageUrls.get(chapterUrl)?.takeIf { expiredUrl !in it }
+                    ?: imageUrls(chapterUrl, isOriginal).also { refreshedImageUrls.put(chapterUrl, it) }
+            }
+        }.getOrNull(index) ?: throw IOException(PAGES_NOT_FOUND)
+    } catch (e: IOException) {
+        throw e
+    } catch (e: Exception) {
+        throw IOException(e)
     }
 
     private val readerJumpMutex = Mutex()
-    private var cachedJumpUrl: HttpUrl? = null
-    private var hasNoReader = false
 
-    // The site's /chapter/ links redirect to a dead host. Its chapter lists link each chapter through /go/rds/
+    // Reader jump url for manga (false) and users' original works (true); null where the site links its own reader
+    private val jumpUrls = HashMap<Boolean, HttpUrl?>()
+
+    // Where the site's /chapter/ links redirect to a dead host, its pages link each chapter through /go/rds/
     // to a reader jump url that only differs in cid
-    private suspend fun readerJumpUrl(): HttpUrl = readerJumpMutex.withLock {
-        cachedJumpUrl?.let { return@withLock it }
-        if (hasNoReader) throw Exception(NO_READER)
+    private suspend fun readerJumpUrl(isOriginal: Boolean): HttpUrl? = readerJumpMutex.withLock {
+        if (jumpUrls.containsKey(isOriginal)) return@withLock jumpUrls[isOriginal]
 
-        val mangaUrl = getMangaUrl(getLatestUpdates(1).mangas.first())
-        val redirectUrl = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
+        val listUrl = if (isOriginal) "$baseUrl/category/original/" else "$baseUrl/list/New-Update.html"
+        val entryUrl = getMangaUrl(parseMangaList(client.get(listUrl, Fetch.DOCUMENT).asJsoup()).mangas.first())
+        val redirectUrl = client.get(entryUrl, Fetch.DOCUMENT).asJsoup()
             .selectFirst("a[href*=/go/rds/]")
             ?.absUrl("href")
-        if (redirectUrl == null) {
-            hasNoReader = true
-            throw Exception(NO_READER)
+        val jumpUrl = redirectUrl?.let {
+            val script = client.get(it, Fetch.DOCUMENT.from(entryUrl)).body.string()
+            JUMP_URL_REGEX.find(script)?.groupValues?.get(1)?.toHttpUrl() ?: throw Exception(PAGES_NOT_FOUND)
         }
-        val script = client.get(redirectUrl, Fetch.DOCUMENT.from(mangaUrl)).body.string()
-        val jumpUrl = JUMP_URL_REGEX.find(script)?.groupValues?.get(1) ?: throw Exception(PAGES_NOT_FOUND)
-        jumpUrl.toHttpUrl().also { cachedJumpUrl = it }
+        jumpUrl.also { jumpUrls[isOriginal] = it }
     }
 
     override val supportsFilterFetching get() = true
@@ -251,6 +340,10 @@ abstract class Niadd : KeiSource() {
         val filterData = data?.parseAs<FilterData>()
         return FilterList(
             listOfNotNull(
+                TypeFilter(),
+                SortFilter(),
+                Filter.Header("Original: only with an empty search, the filters below don't apply"),
+                Filter.Separator(),
                 AuthorFilter(),
                 ArtistFilter(),
                 SelectFilter("Completed", "completed_series", listOf("Either" to "", "Yes" to "YES", "No" to "NO")),
@@ -265,12 +358,14 @@ abstract class Niadd : KeiSource() {
         private const val PAGES_NOT_FOUND = "Chapter pages not found on the site"
         private const val BLOCKED_COOKIE = "niadd_bad_user_2"
         private const val BLOCKED_NETWORK = "Niadd has blocked this network, try another network"
-        private const val NO_READER = "The site has no reader for this language"
         private val ENTRY_PATHS = setOf("manga", "original")
         private val GENRE_ID_REGEX = Regex("""'(\d+)'""")
         private val JUMP_URL_REGEX = Regex("""document\.location\s*=\s*'([^']+)'""")
         private val ALL_IMGS_URL_REGEX = Regex("""all_imgs_url\s*:\s*\[([\s\S]*?)\]""")
         private val IMAGE_URL_REGEX = Regex(""""(https?://[^"]+)"""")
+        private val NUMBER_REGEX = Regex("""\d+""")
+        private val MINUTES_REGEX = Regex("minut|минут", RegexOption.IGNORE_CASE)
+        private val HOURS_REGEX = Regex("""hour|hora|heure|\bor[ae]\b|stunde|час""", RegexOption.IGNORE_CASE)
         private val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
         private val ONGOING_STATUSES = setOf("ongoing", "en marcha", "em progresso", "in corso", "laufend", "en cours", "постоянный")
         private val COMPLETED_STATUSES = setOf("completed", "terminado", "concluído", "completato", "abgeschlossen", "complété", "завершенный")

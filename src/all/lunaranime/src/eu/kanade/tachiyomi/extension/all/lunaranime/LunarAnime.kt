@@ -1,78 +1,84 @@
 package eu.kanade.tachiyomi.extension.all.lunaranime
 
-import eu.kanade.tachiyomi.network.HttpException
+import android.util.Base64
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.asJsoup
-import keiyoushi.utils.getTurnstileToken
+import keiyoushi.source.SMangaUpdate
+import keiyoushi.utils.TURNSTILE_AREA
+import keiyoushi.utils.WebViewScope
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
 import keiyoushi.utils.toJsonRequestBody
+import keiyoushi.utils.toJsonString
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
-import java.util.concurrent.ConcurrentHashMap
-import kotlin.time.Clock
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import java.io.IOException
+import kotlin.coroutines.resume
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.Instant
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 @Source
-abstract class LunarAnime : KeiSource() {
-    private val serenity by lazy { LunarSerenity(API_HOST, id) }
+abstract class LunarAnime :
+    KeiSource(),
+    ConfigurableSource {
+    private val preferences by getPreferencesLazy()
 
-    private class Clearance(val thumbprint: String, val expiresAt: Instant)
-
-    private val clearances = ConcurrentHashMap<String, Clearance>()
-
-    private val pageListMutex = Mutex()
-
-    private fun hasClearance(slug: String): Boolean {
-        val clearance = clearances[slug] ?: return false
-        return clearance.thumbprint == serenity.thumbprint && clearance.expiresAt > Clock.System.now()
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_AUTO_UNLOCK
+            title = "Auto-unlock with ad points"
+            summary = "Earn free ad points and unlock points-locked chapters automatically"
+            setDefaultValue(false)
+        }.let(screen::addPreference)
     }
-
-    private fun markCleared(slug: String, ttlSeconds: Long?) {
-        val ttl = ((ttlSeconds ?: DEFAULT_CLEARANCE_TTL_S) - CLEARANCE_MARGIN_S).coerceAtLeast(0).seconds
-        clearances[slug] = Clearance(serenity.thumbprint, Clock.System.now() + ttl)
-    }
-
-    private var cachedSiteKey: String? = null
-
-    private suspend fun siteKey(): String {
-        cachedSiteKey?.let { return it }
-        val url = API_URL.toHttpUrl().newBuilder().addPathSegments("api/captcha/config").build()
-        return client.get(url, Fetch.XHR).parseAs<LunarCaptchaConfig>().mangaTurnstileSitekey
-            .also { cachedSiteKey = it }
-    }
-
-    // Turnstile token bound to the chapter token's nonce, as in the site's reader
-    private suspend fun solveTurnstile(nonce: String): String = getTurnstileToken(
-        url = baseUrl,
-        siteKey = siteKey(),
-        action = "read",
-        cData = nonce,
-    )
 
     override fun OkHttpClient.Builder.configureClient() = this
-        .addInterceptor(serenity.interceptor())
-        .rateLimit(2) { it.host == API_HOST || it.host == CDN_HOST }
+        .addInterceptor(::authorize)
+        .addInterceptor(VeilInterceptor(CDN_HOST))
+        .rateLimit(2) { it.host == API_HOST }
+        .rateLimit(4) { it.host == CDN_HOST }
 
-    private val crypto by lazy { LunarDecryptor(serenity) }
+    private fun authorize(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val token = client.cookieJar.loadForRequest(request.url).firstOrNull { it.name == AUTHORIZATION }?.value
+        if (request.url.host != API_HOST || token == null) return chain.proceed(request)
+        return chain.proceed(request.newBuilder().header(AUTHORIZATION, token).build())
+    }
 
     override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", SortFilter.POPULAR)
 
@@ -214,87 +220,164 @@ abstract class LunarAnime : KeiSource() {
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = (baseUrl + chapter.url).toHttpUrl()
-        val language = chapterUrl.queryParameter("lang") ?: "en"
         val (slug, chapterNumber) = chapterUrl.pathSegments.takeLast(2)
+        val language = chapterUrl.queryParameter("lang") ?: "en"
+        val script = "(${javaClass.getResource(READER_SCRIPT)!!.readText()})(${slug.toJsonString()}, ${chapterNumber.toJsonString()}, ${language.toJsonString()})"
 
-        val seeds = crypto.extractSeeds(client.get(chapterUrl, Fetch.DOCUMENT).asJsoup())
+        val state = readerMutex.withLock { readerTab(chapterUrl.toString()).read(chapterUrl.toString(), script) }
 
-        // Without this call first the page list is decoys
-        val chapterLockUrl = API_URL.toHttpUrl().newBuilder()
-            .addPathSegments("api/manga/chapter-lock")
-            .addPathSegment(slug)
-            .build()
-        client.get(chapterLockUrl, Fetch.XHR, ensureSuccess = false).close()
-
-        // One key in play at a time: a retry replaces the key other page lists are signed with
-        val result = pageListMutex.withLock {
-            var attempt = fetchChapter(seeds, slug, chapterNumber, language, withTurnstile = !hasClearance(slug))
-
-            if (attempt.needsRevalidation()) {
-                clearances.remove(slug)
-                serenity.reset()
-                attempt = fetchChapter(seeds, slug, chapterNumber, language, withTurnstile = true)
+        val pages = when {
+            state.price != null -> {
+                if (!autoUnlock) {
+                    val balance = state.balance?.let { ", balance $it" }.orEmpty()
+                    error(
+                        "This chapter is unlocked with ad points (price ${state.price}$balance). " +
+                            "Turn on \"Auto-unlock with ad points\" in the extension settings, or unlock it in WebView.",
+                    )
+                }
+                unlock(slug, chapterNumber, language, state.price, state.balance ?: 0)
+                val unlocked = readerMutex.withLock { readerTab(chapterUrl.toString()).read(chapterUrl.toString(), script) }
+                unlocked.pages ?: error("Unlocked, but the chapter did not load. Open it in WebView.")
             }
-
-            if (attempt.needsRevalidation()) {
-                error("Could not load images. Open in WebView and try again.")
-            }
-
-            markCleared(slug, attempt.cacheTtl)
-            attempt
+            state.reason != null -> error(if ("account" in state.reason) LOGIN_MESSAGE else state.message ?: state.reason)
+            else -> state.pages.orEmpty()
         }
 
-        val viewUrl = API_URL.toHttpUrl().newBuilder().addPathSegments("api/manga/chapter/view").build()
-        val viewBody = ViewRequestBody(slug, chapterNumber, language).toJsonRequestBody()
-        client.post(viewUrl, Fetch.XHR, viewBody, ensureSuccess = false).close()
-
-        return result.data.images.mapIndexed { index, imageUrl ->
-            Page(index, imageUrl = imageUrl)
+        return pages.mapIndexed { index, page ->
+            val url = page.url.toHttpUrl()
+            Page(index, imageUrl = url.newBuilder().fragment(page.veil?.let { url.resolve(it)?.toString() }).build().toString())
         }
     }
 
-    private suspend fun fetchChapter(
-        seeds: LunarSeeds,
-        slug: String,
-        chapterNumber: String,
-        language: String,
-        withTurnstile: Boolean,
-    ): LunarPageListDecrypted {
-        val nonce = crypto.newNonce()
-        val turnstileToken = if (withTurnstile) solveTurnstile(nonce) else null
-
-        val url = API_URL.toHttpUrl().newBuilder()
-            .addPathSegments("api/manga/r")
-            // Minted after the solve: a token minted long before the request gets decoys
-            .addPathSegment(crypto.mint(seeds, slug, chapterNumber, nonce))
-            .apply { if (language != "en") addQueryParameter("language", language) }
-            .build()
-
-        val requestHeaders = headersBuilder().apply {
-            if (turnstileToken != null) {
-                set("Catch-Me-If-You-Can-Monkey", turnstileToken)
-                set("Which-Monkey", "turnstile")
-            }
-        }.build()
-
-        val response = client.get(url, requestHeaders, Fetch.XHR, ensureSuccess = false)
-        if (!response.isSuccessful) {
-            if (response.code == 403 && response.body.contentType()?.subtype == "json" && response.parseAs<LunarLockedChapterDto>().isPointsLocked) {
-                error("This chapter is unlocked with ad points. Log in and unlock it in WebView.")
-            }
-            response.close()
-            throw HttpException(response.code)
+    private suspend fun unlock(slug: String, chapter: String, language: String, price: Int, balance: Int) {
+        var points = balance
+        var attempts = 0
+        while (points < price) {
+            if (attempts++ >= MAX_EARN_ATTEMPTS) error("Not enough ad points yet ($points of $price). Try again shortly.")
+            val earned = earnPoints()
+            if (earned == null || earned <= points) error("Could not earn ad points right now ($points of $price). Try again shortly.")
+            points = earned
         }
-        val sessionData = response.parseAs<LunarPageListResponse>().data.sessionData
 
-        return crypto.unpack(sessionData, seeds, nonce).parseAs<LunarPageListDecrypted>()
+        val buyUrl = API_URL.toHttpUrl().newBuilder().addPathSegments("api/points-lock/buy").build()
+        val body = LunarBuyBody("manga", slug, chapter, language).toJsonRequestBody()
+        val result = client.post(buyUrl, Fetch.XHR, body, ensureSuccess = false).parseAs<LunarBuyResponse>()
+        if (!result.success) error(result.error ?: "Could not unlock this chapter")
     }
 
-    private fun LunarPageListDecrypted.needsRevalidation(): Boolean {
-        val images = data.images
-        return cacheStatus == "revalidate" ||
-            images.isEmpty() ||
-            images.any { it.toHttpUrlOrNull()?.host != CDN_HOST }
+    private suspend fun earnPoints(): Int? {
+        val grantUrl = baseUrl.toHttpUrl().newBuilder().addPathSegments("px/q").addQueryParameter("p", "1").build()
+        val grant = client.post(grantUrl, Fetch.XHR, "".toRequestBody(), ensureSuccess = false).use { response ->
+            if (!response.isSuccessful) return null
+            decodeGrant(response.body.string())
+        } ?: return null
+
+        val heartbeatUrl = API_URL.toHttpUrl().newBuilder().addPathSegments("api/presence/heartbeat").build()
+        val banked = client.post(heartbeatUrl, Fetch.XHR, LunarHeartbeatBody(grant).toJsonRequestBody(), ensureSuccess = false)
+            .use { it.isSuccessful }
+        if (!banked) return null
+
+        val pointsUrl = API_URL.toHttpUrl().newBuilder().addPathSegments("api/ads/points").build()
+        return client.get(pointsUrl, Fetch.XHR).parseAs<LunarAdPoints>().points
+    }
+
+    private fun decodeGrant(raw: String): String? {
+        val bytes = Base64.decode(raw.trim(), Base64.DEFAULT)
+        if (bytes.size < 4) return null
+        val decoded = CharArray(bytes.size) { i ->
+            val key = if (i < 4) 0 else bytes[(i - 4) % 4].toInt() and 0xFF
+            ((bytes[i].toInt() and 0xFF) xor key).toChar()
+        }
+        return GRANT_REGEX.find(String(decoded))?.value
+    }
+
+    private val readerMutex = Mutex()
+
+    private val tabScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    private var tab: ReaderTab? = null
+
+    private fun readerTab(url: String): ReaderTab = tab?.takeUnless { it.closed } ?: ReaderTab(url).also { tab = it }
+
+    // One reader tab, kept between chapters
+    private inner class ReaderTab(firstUrl: String) {
+        private val ready = CompletableDeferred<WebViewScope<Unit>>()
+
+        private var opened = false
+
+        @Volatile
+        private var navigations = 0
+
+        @Volatile
+        private var lastUsed = TimeSource.Monotonic.markNow()
+
+        @Volatile
+        private var failure: Throwable? = null
+
+        @Volatile
+        var closed = false
+            private set
+
+        init {
+            tabScope.launch {
+                try {
+                    runWebView<Unit>(TAB_TIMEOUT) {
+                        onPageStarted { navigations++ }
+                        poll(IDLE_TIMEOUT / 4) {
+                            if (lastUsed.elapsedNow() > IDLE_TIMEOUT) resolve(Unit)
+                        }
+                        loadUrl(firstUrl)
+                        ready.complete(this)
+                    }
+                } catch (e: Throwable) {
+                    failure = e
+                    ready.completeExceptionally(e)
+                } finally {
+                    closed = true
+                }
+            }
+        }
+
+        suspend fun read(url: String, script: String): LunarReaderState {
+            val scope = ready.await()
+            val before = if (opened) navigations else 0
+            if (opened) scope.evaluateJs("location.assign(${url.toJsonString()})")
+            opened = true
+
+            var deadline = TimeSource.Monotonic.markNow() + READ_TIMEOUT
+            var checkSince: TimeMark? = null
+            var shown = false
+            try {
+                while (true) {
+                    if (closed) throw failure as? IOException ?: IOException("The reader was closed, try again", failure)
+                    lastUsed = TimeSource.Monotonic.markNow()
+                    val state = if (navigations > before) scope.evaluate(script)?.parseAs<LunarReaderState?>() else null
+                    if (state != null && (state.pages != null || state.price != null || state.reason != null)) return state
+                    if (state?.check == true) {
+                        val since = checkSince ?: TimeSource.Monotonic.markNow().also { checkSince = it }
+                        if (since.elapsedNow() >= CHECK_GRACE) {
+                            if (!shown) deadline = TimeSource.Monotonic.markNow() + CHECK_TIMEOUT
+                            shown = withContext(Dispatchers.Main) { scope.showToUser(if (state.turnstile) TURNSTILE_AREA else state.area) }
+                            if (!shown) throw IOException("Open the chapter in WebView to pass the site's check")
+                        }
+                    } else if (state != null && shown) {
+                        scope.hideFromUser()
+                        shown = false
+                        checkSince = null
+                        deadline = TimeSource.Monotonic.markNow() + READ_TIMEOUT
+                    }
+                    if (deadline.hasPassedNow()) throw IOException("The chapter did not load, open it in WebView")
+                    delay(POLL_INTERVAL)
+                }
+            } finally {
+                if (shown) scope.hideFromUser()
+                scope.evaluateJs("location.replace('about:blank')")
+            }
+        }
+
+        private suspend fun WebViewScope<Unit>.evaluate(script: String): String? = withTimeoutOrNull(SCRIPT_TIMEOUT) {
+            suspendCancellableCoroutine { continuation -> evaluateJs(script) { continuation.resume(it) } }
+        }
     }
 
     override val supportsFilterFetching = true
@@ -320,8 +403,22 @@ abstract class LunarAnime : KeiSource() {
     companion object {
         private const val API_HOST = "api.lunarx.to"
         private const val API_URL = "https://$API_HOST"
+        private const val LOGIN_MESSAGE = "Log in via WebView to read chapters"
         private const val CDN_HOST = "vault.lunarx.to"
-        private const val DEFAULT_CLEARANCE_TTL_S = 300L
-        private const val CLEARANCE_MARGIN_S = 30L
+        private const val READER_SCRIPT = "/assets/lunar-reader.js"
+        private val TAB_TIMEOUT = 24.hours
+        private val IDLE_TIMEOUT = 30.minutes
+        private val READ_TIMEOUT = 60.seconds
+        private val CHECK_TIMEOUT = 3.minutes
+        private val CHECK_GRACE = 5.seconds
+        private val POLL_INTERVAL = 500.milliseconds
+        private val SCRIPT_TIMEOUT = 5.seconds
+
+        private const val AUTHORIZATION = "Authorization"
+        private const val PREF_AUTO_UNLOCK = "auto_unlock_points"
+        private const val MAX_EARN_ATTEMPTS = 3
+        private val GRANT_REGEX = Regex("""[0-9]{13}\.[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]{43}""")
     }
+
+    private val autoUnlock get() = preferences.getBoolean(PREF_AUTO_UNLOCK, false)
 }

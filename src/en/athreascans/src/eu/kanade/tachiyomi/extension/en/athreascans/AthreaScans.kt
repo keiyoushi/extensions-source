@@ -14,10 +14,10 @@ abstract class AthreaScans : MangaThemesia() {
 
     override fun mangaDetailsParse(document: Document) = super.mangaDetailsParse(document).apply {
         // Completed, with chapters still behind coins
-        if (status == SManga.COMPLETED && document.selectFirst("#chapterlist .eph-num a:not([href])") != null) {
+        if (status == SManga.COMPLETED && document.selectFirst("#chapterlist [data-athlc-amount]") != null) {
             status = SManga.PUBLISHING_FINISHED
         }
     }
 
-    override fun chapterListSelector() = "#chapterlist li:has(.eph-num a[href])"
+    override fun chapterListSelector() = "#chapterlist li:has(.eph-num a[href]):not(:has([data-athlc-amount]))"
 }

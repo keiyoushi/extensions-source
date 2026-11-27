@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.multisrc.catharsis
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Paint
 import android.graphics.Rect
 
 // Tile boundaries, with the order the reader shuffled the columns and rows into
@@ -20,7 +19,6 @@ fun descramble(bitmap: Bitmap, gutter: Int = 0, plan: (width: Int, height: Int) 
 
     val output = Bitmap.createBitmap(outputWidth, outputHeight, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(output)
-    val paint = Paint().apply { isFilterBitmap = false }
     for (row in 0 until GRID) {
         for (col in 0 until GRID) {
             val width = tiles.cols[col + 1] - tiles.cols[col]
@@ -34,7 +32,7 @@ fun descramble(bitmap: Bitmap, gutter: Int = 0, plan: (width: Int, height: Int) 
                 bitmap,
                 Rect(srcX, srcY, srcX + width, srcY + height),
                 Rect(tiles.cols[col], tiles.rows[row], tiles.cols[col] + width, tiles.rows[row] + height),
-                paint,
+                null,
             )
         }
     }

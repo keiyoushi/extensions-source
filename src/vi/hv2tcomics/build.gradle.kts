@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Học Viện 2Ten"
-    versionCode = 4
+    versionCode = 5
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
@@ -20,4 +20,8 @@ keiyoushi {
     deeplink {
         path("/truyen/..*")
     }
+}
+
+dependencies {
+    implementation(project(":lib:imagedecoder"))
 }

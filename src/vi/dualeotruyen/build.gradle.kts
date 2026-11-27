@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Dua Leo Truyen"
-    versionCode = 37
+    versionCode = 40
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
@@ -14,7 +14,7 @@ keiyoushi {
         name = "Dưa Leo Truyện"
         lang = "vi"
         baseUrl {
-            custom("https://dualeotruyenjv.com")
+            custom("https://dualeotruyengf.com")
         }
     }
 

@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Com-X"
-    versionCode = 44
+    versionCode = 45
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 

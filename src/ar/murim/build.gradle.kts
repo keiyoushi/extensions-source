@@ -6,13 +6,13 @@ plugins {
 
 keiyoushi {
     name = "Murim"
-    versionCode = 1
+    versionCode = 2
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "zeistmanga"
 
     source {
         lang = "ar"
-        baseUrl = "https://www.murim.site"
+        baseUrl = "https://murim-manga.blogspot.com"
     }
 }

@@ -6,24 +6,22 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
-import keiyoushi.utils.asJsoup
-import keiyoushi.utils.attrOrNull
+import keiyoushi.source.SMangaUpdate
+import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
-import org.jsoup.Jsoup
 
 @Source
 abstract class Nicomanga : KeiSource() {
@@ -34,11 +32,21 @@ abstract class Nicomanga : KeiSource() {
 
     // ============================== Popular ==============================
 
-    override suspend fun getPopularManga(page: Int): MangasPage = fetchMangaListPage("$baseUrl/manga-list.html?p=$page&pr=popular")
+    override suspend fun getPopularManga(page: Int): MangasPage = fetchMangaListPage(
+        "$baseUrl/manga-list.html".toHttpUrl().newBuilder()
+            .addQueryParameter("p", page.toString())
+            .addQueryParameter("pr", "popular")
+            .build(),
+    )
 
     // ============================== Latest ===============================
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = fetchMangaListPage("$baseUrl/manga-list.html?p=$page&pr=new")
+    override suspend fun getLatestUpdates(page: Int): MangasPage = fetchMangaListPage(
+        "$baseUrl/manga-list.html".toHttpUrl().newBuilder()
+            .addQueryParameter("p", page.toString())
+            .addQueryParameter("pr", "new")
+            .build(),
+    )
 
     // ============================== Search ===============================
 
@@ -94,7 +102,7 @@ abstract class Nicomanga : KeiSource() {
             url.addQueryParameter("gm", (logicFilter?.state ?: 1).toString())
         }
 
-        return fetchMangaListPage(url.build().toString())
+        return fetchMangaListPage(url.build())
     }
 
     // ========================== Details & chapters ========================
@@ -105,40 +113,9 @@ abstract class Nicomanga : KeiSource() {
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val payload = decodePayload(client.get(baseUrl + manga.url, Fetch.DOCUMENT).body.string())
-        val mangaDto = payload.manga!!
-
-        val details = SManga.create().apply {
-            title = mangaDto.n
-            thumbnail_url = mangaDto.c
-            author = mangaDto.authorsList.joinToString { it.n }
-            artist = mangaDto.artists?.ifEmpty { null } ?: mangaDto.authorsList.firstOrNull()?.n
-            genre = mangaDto.genresList.joinToString { it.n }
-            status = when (mangaDto.statusText?.lowercase()) {
-                "on going", "ongoing" -> SManga.ONGOING
-                "completed" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
-            description = buildString {
-                mangaDto.description
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let { it.htmlToText() }
-                    ?.takeIf { !it.equals("Updating", ignoreCase = true) }
-                    ?.let { append(it) }
-                mangaDto.otherName?.takeIf { it.isNotBlank() }?.let {
-                    if (isNotEmpty()) append("\n\n")
-                    append(it.trim())
-                }
-            }
-        }
-
-        val chapterList = payload.chaptersList.orEmpty().map { element ->
-            SChapter.create().apply {
-                setUrlWithoutDomain(element.ur.orEmpty())
-                name = element.n?.takeIf { it.isNotBlank() } ?: "Chapter ${element.chapter.orEmpty()}"
-                date_upload = parseDate(element.t)
-            }
-        }
+        val payload = fetchChaoticPayload(getMangaUrl(manga).toHttpUrl())
+        val details = payload.manga!!.toSManga(baseUrl)
+        val chapterList = payload.chaptersList.orEmpty().map { it.toSChapter() }
 
         return SMangaUpdate(details, chapterList)
     }
@@ -146,7 +123,7 @@ abstract class Nicomanga : KeiSource() {
     // =============================== Pages ===============================
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val images = decodePayload(client.get(baseUrl + chapter.url, Fetch.DOCUMENT).body.string()).images.orEmpty()
+        val images = fetchChaoticPayload(getChapterUrl(chapter).toHttpUrl()).images.orEmpty()
 
         return images.mapIndexed { i, url ->
             Page(i, imageUrl = url)
@@ -155,154 +132,66 @@ abstract class Nicomanga : KeiSource() {
 
     // ============================= Utilities =============================
 
-    /**
-     * Popular, latest, and search all render into the same manga list grid.
-     */
-    private suspend fun fetchMangaListPage(url: String): MangasPage {
-        val document = client.get(url, Fetch.DOCUMENT).asJsoup()
+    private suspend fun fetchMangaListPage(url: HttpUrl): MangasPage {
+        val response = fetchDeferredData<ListResponse>(url)
+        val mangas = parseListItems(response.items).map { it.toSManga() }
 
-        val mangas = document.select(".manga-grid .manga-card").map { element ->
-            val titleElement = element.selectFirst(".manga-title")!!
+        return MangasPage(mangas, response.pagination?.hasNextPage == true)
+    }
 
-            SManga.create().apply {
-                title = titleElement.text()
-                // The .manga-title contains the manga detail link, while .manga-cover links to the latest chapter
-                setUrlWithoutDomain(titleElement.attr("abs:href"))
-                thumbnail_url = element.selectFirst("img.manga-img")?.let { img ->
-                    img.attrOrNull("abs:data-src") ?: img.attrOrNull("abs:src")
-                }
+    private fun parseListItems(items: JsonElement?): List<NListManga> = when (items) {
+        is JsonPrimitive -> {
+            if (items.isString && items.content.isNotEmpty()) {
+                decodeXorStream(items.content, LIST_PAYLOAD_KEY).parseAs()
+            } else {
+                emptyList()
             }
         }
+        is JsonArray -> items.parseAs()
+        else -> emptyList()
+    }
 
-        val hasNextPage = document.select(".custom-pagination .page-link.next:not(.disabled)").isNotEmpty()
-        return MangasPage(mangas, hasNextPage)
+    private suspend fun fetchChaoticPayload(url: HttpUrl): Payload {
+        val response = fetchDeferredData<Payload>(url)
+        return response.chaoticPayload
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { decodeXorStream(it, DETAIL_PAYLOAD_KEY).parseAs<Payload>() }
+            ?: response
+    }
+
+    private suspend inline fun <reified T> fetchDeferredData(url: HttpUrl): T {
+        val payloadKey = client.get(url, Fetch.DOCUMENT)
+            .extractNextJs<DeferredPayload>()
+            ?.payloadKey
+            ?: throw Exception("Deferred payload key not found")
+
+        val dataUrl = "$baseUrl/ad-frame/data".toHttpUrl().newBuilder()
+            .addQueryParameter("k", payloadKey)
+            .build()
+
+        return client.get(dataUrl, Fetch.XHR.from(url)).parseAs()
     }
 
     /**
-     * The site renders details, chapters, and page data inside an obfuscated RSC text stream.
-     * Each character encodes one byte: (codePoint - 19968) xor key[index % key.length].
-     * The result is a UTF-8 JSON document.
+     * Deferred list items and detail/chapter chaotic payloads are XOR-obfuscated byte-by-byte,
+     * with each byte shifted by 19968 into CJK Unified Ideographs.
      */
-    private fun decodePayload(body: String): Payload {
-        val streamMarker = Regex("""([0-9a-z]+):T[0-9a-f]+,""")
-
-        for (match in streamMarker.findAll(body)) {
-            // The payload blob lives right after the marker (usually in the next script tag).
-            val windowEnd = minOf(body.length, match.range.last + 1 + 600)
-            var start = match.range.last + 1
-            var found = false
-            while (start < windowEnd) {
-                if (body.codePointAt(start) >= 0x3000) {
-                    found = true
-                    break
-                }
-                start++
-            }
-            if (!found) continue
-
-            val end = body.indexOf("</script>", start)
-            if (end == -1) continue
-            val decoded = decodeXorStream(body.substring(start, end))
-            if (!decoded.trimStart().startsWith("{")) continue
-
-            val jsonEnd = runCatching { findJsonObjectEnd(decoded) }.getOrNull() ?: continue
-            runCatching { jsonInstance.decodeFromString(Payload.serializer(), decoded.substring(0, jsonEnd)) }
-                .getOrNull()
-                ?.takeIf { it.manga != null }
-                ?.let { return it }
-        }
-
-        throw Exception("Encoded site payload not found")
-    }
-
-    private fun decodeXorStream(encoded: String): String {
-        val key = PAYLOAD_KEY
+    private fun decodeXorStream(encoded: String, key: String): String {
         val bytes = ByteArray(encoded.length)
         for (i in encoded.indices) {
             bytes[i] = (((encoded.codePointAt(i) - 19968) xor key[i % key.length].code) and 0xFF).toByte()
         }
-        return String(bytes, Charsets.UTF_8)
-    }
-
-    private fun findJsonObjectEnd(text: String): Int {
-        var depth = 0
-        var inString = false
-        var escaped = false
-        for (i in text.indices) {
-            val c = text[i]
-            if (inString) {
-                when {
-                    escaped -> escaped = false
-                    c == '\\' -> escaped = true
-                    c == '"' -> inString = false
-                }
-                continue
-            }
-            when {
-                c == '"' -> inString = true
-                c == '{' -> depth++
-                c == '}' -> {
-                    depth--
-                    if (depth == 0) return i + 1
-                }
-            }
-        }
-        throw Exception("Malformed encoded site payload")
-    }
-
-    /**
-     * Some payloads wrap the description in HTML (<p> paragraphs, <div class=sContent>,
-     * <br> line breaks) while others are plain text - convert either to plain text,
-     * keeping paragraphs separated.
-     */
-    private fun String.htmlToText(): String {
-        val document = Jsoup.parseBodyFragment(this)
-        document.select("br").append("\n")
-        document.select("p, div").append("\n\n")
-
-        return document.wholeText()
-            .lines()
-            .map { it.trim() }
-            .joinToString("\n")
-            .replace(Regex("\\n{3,}"), "\n\n")
-    }
-
-    /**
-     * The payload only carries relative time text for chapters, e.g. "7 days ago"
-     * (note the site also sends "2 year ago"). Returns 0 when unparseable.
-     */
-    private fun parseDate(text: String?): Long {
-        val match = relativeDateRegex.find(text?.trim() ?: return 0L) ?: return 0L
-        val amount = match.groupValues[1].toLongOrNull() ?: return 0L
-        // Week/month/year are date-based units that Instant arithmetic rejects, so
-        // convert to seconds directly (month/year use their average durations).
-        val unitSeconds = when (match.groupValues[2]) {
-            "second" -> 1L
-            "minute" -> 60L
-            "hour" -> 3600L
-            "day" -> 86400L
-            "week" -> 604800L
-            "month" -> 2629746L
-            "year" -> 31556952L
-            else -> return 0L
-        }
-        return System.currentTimeMillis() - amount * unitSeconds * 1000
+        return bytes.decodeToString()
     }
 
     // ============================== Filters ==============================
 
     override val supportsFilterFetching = true
 
-    override suspend fun fetchFilterData(): JsonElement = GenresPayload(
-        client.get("$baseUrl/manga-list.html", Fetch.DOCUMENT).asJsoup()
-            .select("a.genre-tag")
-            .mapNotNull { element ->
-                val id = element.attr("abs:href").toHttpUrlOrNull()?.queryParameter("g")
-                val name = element.textOrNull()
-                if (id == null || name == null) return@mapNotNull null
-                NGenre(id = id, name = name)
-            },
-    ).toJsonElement()
+    override suspend fun fetchFilterData(): JsonElement {
+        val response = fetchDeferredData<ListResponse>("$baseUrl/manga-list.html".toHttpUrl())
+        return GenresPayload(response.genresList).toJsonElement()
+    }
 
     override fun getFilterList(data: JsonElement?): FilterList {
         val genres = data?.parseAs<GenresPayload>()
@@ -322,8 +211,7 @@ abstract class Nicomanga : KeiSource() {
     // ============================= Companion =============================
 
     private companion object {
-        const val PAYLOAD_KEY = "NicoMangaX2"
-
-        val relativeDateRegex = Regex("""(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago""")
+        const val LIST_PAYLOAD_KEY = "NicoManga"
+        const val DETAIL_PAYLOAD_KEY = "NicoMangaX2"
     }
 }

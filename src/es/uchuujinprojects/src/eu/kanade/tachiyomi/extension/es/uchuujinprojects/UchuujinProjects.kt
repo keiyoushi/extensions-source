@@ -9,7 +9,7 @@ import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class UchuujinProjects : MangaThemesia() {
-    override val datePattern = "dd 'de' MMMM 'de' yyyy"
+    override val datePattern = "d 'de' MMMM 'de' yyyy"
 
     override fun OkHttpClient.Builder.configureClient() = rateLimit(3, 1.seconds) { it.host == baseUrl.toHttpUrl().host }
 

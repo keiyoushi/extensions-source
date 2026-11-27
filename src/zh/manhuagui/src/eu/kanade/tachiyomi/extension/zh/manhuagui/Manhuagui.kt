@@ -10,7 +10,6 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import keiyoushi.annotation.Source
 import keiyoushi.lib.lzstring.LZString
 import keiyoushi.lib.unpacker.Unpacker
@@ -19,6 +18,7 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
+import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
@@ -182,7 +182,7 @@ abstract class Manhuagui :
         if (!url.host.endsWith("manhuagui.com") && !url.host.endsWith("mhgui.com")) return null
         val id = url.pathSegments.getOrNull(1) ?: return null
 
-        val document = client.get("$baseUrl/comic/$id", Fetch.DOCUMENT).asJsoup()
+        val document = client.get("$baseUrl/comic/$id/", Fetch.DOCUMENT).asJsoup()
         return SManga.create().apply {
             parseDetails(document)
             this.url = "/comic/$id/"

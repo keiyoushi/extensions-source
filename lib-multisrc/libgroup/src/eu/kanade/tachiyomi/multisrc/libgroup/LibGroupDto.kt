@@ -7,13 +7,23 @@ import keiyoushi.utils.ratingStars
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonTransformingSerializer
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.time.Instant
+
+object SiteIdsSerializer : JsonTransformingSerializer<List<Int>>(ListSerializer(Int.serializer())) {
+    override fun transformDeserialize(element: JsonElement): JsonElement = when (element) {
+        is JsonObject -> JsonArray(element.values.filterIsInstance<JsonPrimitive>())
+        else -> element
+    }
+}
 
 @Serializable
 class Data<T>(
@@ -35,6 +45,7 @@ class Constants(
     class IdLabelSiteType(
         val id: Int,
         val label: String,
+        @Serializable(with = SiteIdsSerializer::class)
         @SerialName("site_ids") val siteIds: List<Int>,
     )
 
@@ -42,6 +53,7 @@ class Constants(
     class IdNameSiteType(
         val id: Int,
         val name: String,
+        @Serializable(with = SiteIdsSerializer::class)
         @SerialName("site_ids") val siteIds: List<Int>,
     )
 
@@ -50,6 +62,7 @@ class Constants(
         val id: String,
         val label: String,
         val url: String,
+        @Serializable(with = SiteIdsSerializer::class)
         @SerialName("site_ids") val siteIds: List<Int>,
     )
 
