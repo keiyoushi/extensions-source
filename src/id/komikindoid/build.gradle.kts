@@ -9,13 +9,10 @@ keiyoushi {
     versionCode = 3
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
+    theme = "komikindo"
 
     source {
         lang = "id"
         baseUrl = "https://komikindo.ch"
-    }
-
-    deeplink {
-        path("/komik/..*")
     }
 }
