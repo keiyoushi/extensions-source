@@ -17,7 +17,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
-import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
@@ -77,12 +76,12 @@ internal class SitePages(
                     when {
                         request.isForMainFrame -> posts.clear()
                         request.method == "POST" && requestHost == host -> posts += request.url.toString()
-                        requestHost != null && requestHost.isHostOrSubdomainOf(host) && request.url.path.orEmpty().contains(IMAGE_PATH) ->
-                            imageHeaders[request.url.toString()] = request.requestHeaders.filterKeys { it.startsWith("X-", ignoreCase = true) && !it.equals("X-Requested-With", ignoreCase = true) }
                     }
-                    when {
-                        requestHost == null || requestHost.isHostOrSubdomainOf(host) || requestHost.isHostOrSubdomainOf(TURNSTILE_HOST) || requestHost == CDNJS_HOST -> null
-                        else -> stub(request.url.lastPathSegment.orEmpty())
+                    if (requestHost == host && request.url.path.orEmpty().contains(IMAGE_PATH)) {
+                        imageHeaders[request.url.toString()] = request.requestHeaders.filterKeys { it.startsWith("X-", ignoreCase = true) && !it.equals("X-Requested-With", ignoreCase = true) }
+                        WebResourceResponse("image/gif", null, (PIXEL + request.url.toString().toByteArray()).inputStream())
+                    } else {
+                        null
                     }
                 }
                 onReceivedError { request, error ->
@@ -131,23 +130,8 @@ internal class SitePages(
 
     private fun asset(name: String) = javaClass.getResource("/assets/$name")!!.readText()
 
-    private fun stub(file: String): WebResourceResponse {
-        val (type, body) = when (file.substringAfterLast('.', "").lowercase()) {
-            "css" -> "text/css" to "\n".toByteArray()
-            "gif", "png", "jpg", "jpeg", "webp", "svg" -> "image/gif" to PIXEL
-            else -> "application/javascript" to "\n".toByteArray()
-        }
-        return WebResourceResponse(type, "utf-8", 200, "OK", mapOf("Access-Control-Allow-Origin" to "*"), ByteArrayInputStream(body))
-    }
-
-    private fun String.isHostOrSubdomainOf(domain: String) = this == domain || endsWith(".$domain")
-
     companion object {
         const val SOLVE_IN_WEBVIEW = "Abra o WebView para passar pela verificação do site"
-
-        private const val TURNSTILE_HOST = "challenges.cloudflare.com"
-
-        private const val CDNJS_HOST = "cdnjs.cloudflare.com"
 
         private const val IMAGE_PATH = "/WP-manga/data/"
 

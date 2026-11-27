@@ -1,36 +1,15 @@
 () => {
-    const MAX_PADDING = 64;
-    const fetched = [];
-    new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) {
-            if (entry.name.includes('/WP-manga/data/') && entry.responseStatus === 200) fetched.push([entry.name, entry.decodedBodySize]);
-        }
-    }).observe({ type: 'resource', buffered: true });
+    const ORIGIN = `${location.origin}/`;
 
-    const inOrder = async (slots) => {
-        const sizes = await Promise.all(
-            slots.map((image) =>
-                fetch(image.src)
-                    .then((response) => response.blob())
-                    .then((blob) => blob.size),
-            ),
-        );
-        const matches = (padding) => {
-            const left = [...fetched];
-            const urls = [];
-            for (const size of sizes) {
-                const index = left.findIndex(([, fetchedSize]) => fetchedSize === size - padding);
-                if (index < 0) return null;
-                urls.push(left.splice(index, 1)[0][0]);
-            }
-            return urls;
-        };
-        for (let padding = 0; padding <= MAX_PADDING; padding++) {
-            const urls = matches(padding);
-            if (urls) return urls;
-        }
-        throw new Error();
-    };
+    const urlIn = (image) =>
+        fetch(image.src)
+            .then((response) => response.arrayBuffer())
+            .then((buffer) => {
+                const text = new TextDecoder('latin1').decode(buffer);
+                const start = text.indexOf(ORIGIN);
+                if (start < 0) throw new Error();
+                return text.slice(start).match(/^[\x21-\x7e]+/)[0];
+            });
 
     let pages = null;
     let state = '';
@@ -48,9 +27,9 @@
         const shown = [...document.images].filter((image) => image.src.startsWith('blob:'));
         const slots = shown.length ? [...shown[0].parentElement.parentElement.querySelectorAll('img')] : [];
         const pending = slots.filter((image) => !image.src.startsWith('blob:'));
-        const loaded = slots.length && !pending.length && fetched.length >= slots.length;
+        const loaded = slots.length && !pending.length;
         if (loaded && state !== 'ordering') {
-            inOrder(slots).then(
+            Promise.all(slots.map(urlIn)).then(
                 (list) => {
                     pages = list;
                 },
@@ -60,7 +39,7 @@
             );
         }
         pending[0]?.scrollIntoView({ block: 'center' });
-        const now = loaded ? 'ordering' : `${shown.length}/${slots.length}/${fetched.length}`;
+        const now = loaded ? 'ordering' : `${shown.length}/${slots.length}`;
         if (now !== state) {
             state = now;
             changedAt = Date.now();
