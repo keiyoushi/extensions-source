@@ -58,6 +58,7 @@ abstract class Hentai3 :
             "is" -> "icelandic"
             "la" -> "latin"
             "ar" -> "arabic"
+            "ceb" -> "cebuano"
             else -> ""
         }
 

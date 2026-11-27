@@ -13,7 +13,7 @@ keiyoushi {
     listOf(
         "all", "en", "ja", "ko", "zh", "es", "pt", "id", "jv",
         "tl", "vi", "th", "my", "tr", "ru", "uk", "pl", "de",
-        "it", "fr", "nl", "cs", "hu", "bg", "is", "la", "ar",
+        "it", "fr", "nl", "cs", "hu", "bg", "is", "la", "ar", "ceb",
     ).forEach {
         source {
             lang = it
