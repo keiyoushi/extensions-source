@@ -67,6 +67,35 @@ abstract class Hentai3 :
             else -> ""
         }
 
+    private val flagLang: String
+        get() = when (lang) {
+            "all" -> ""
+            "en" -> "eng"
+            "ja" -> "jpn"
+            "ko" -> "kor"
+            "zh" -> "zho"
+            "es" -> "spa"
+            "pt" -> "por"
+            "id" -> "ind"
+            "jv" -> "jav"
+            "vi" -> "vie"
+            "th" -> "tha"
+            "tr" -> "tur"
+            "ru" -> "rus"
+            "uk" -> "ukr"
+            "de" -> "deu"
+            "it" -> "ita"
+            "fr" -> "fra"
+            "nl" -> "nld"
+            "cs" -> "ces"
+            "hu" -> "hun"
+            "is" -> "isl"
+            "la" -> "lat"
+            "ar" -> "ara"
+            "ceb" -> "ceb"
+            else -> ""
+        }
+
     private val prefs by getPreferencesLazy()
 
     // Popular + Latest
@@ -228,8 +257,14 @@ abstract class Hentai3 :
     // Related manga
     override val supportsRelatedMangas = true
 
+    private fun relatedMangaListSelector(): String = if (flagLang.isNotEmpty()) {
+        "#similar-content .doujin.flag-$flagLang a.cover, #similar-content .doujin:not(.flag) a.cover"
+    } else {
+        "#similar-content a.cover"
+    }
+
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
-        .select("#similar-content .doujin-col .doujin a.cover").mapNotNull(::popularMangaFromElement)
+        .select(relatedMangaListSelector()).mapNotNull(::popularMangaFromElement)
 
     // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
