@@ -3,23 +3,30 @@ package eu.kanade.tachiyomi.extension.all.hentai3
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(): FilterList = FilterList(
-    SelectFilter("Sort by", getSortsList),
-    Filter.Separator(),
-    Filter.Header("Separate tags with commas (,)"),
-    Filter.Header("Prepend with dash (-) to exclude"),
-    Filter.Header("Use 'Male Tags' or 'Female Tags' for specific categories. 'Tags' searches all categories."),
-    TextFilter("Tags", "tags"),
-    TextFilter("Male Tags", "tags", "male"),
-    TextFilter("Female Tags", "tags", "female"),
-    TextFilter("Series", "series"),
-    TextFilter("Characters", "characters"),
-    TextFilter("Artists", "artist"),
-    TextFilter("Groups", "groups"),
-    TextFilter("Languages", "language"),
-    Filter.Separator(),
-    Filter.Header("Filter by pages, for example: (>20)"),
-    TextFilter("Pages", "page"),
+fun getFilters(showLanguage: Boolean): FilterList = FilterList(
+    listOfNotNull(
+        Filter.Header("Add quote (\"...\") for exact search query match"),
+        SelectFilter("Sort by", getSortsList),
+        Filter.Separator(),
+        Filter.Header("Separate tags with commas (,)"),
+        Filter.Header("Prepend with dash (-) to exclude"),
+        Filter.Header("Use 'Male Tags' or 'Female Tags' for specific categories. 'Tags' searches all other categories."),
+        TextFilter("Tags", "tag"),
+        TextFilter("Male Tags", "tag", "male"),
+        TextFilter("Female Tags", "tag", "female"),
+        TextFilter("Series", "series"),
+        TextFilter("Characters", "character"),
+        TextFilter("Artists", "artist"),
+        TextFilter("Groups", "group"),
+        if (showLanguage) TextFilter("Languages", "language") else null,
+        TextFilter("Categories", "category"),
+        Filter.Header("Uploaded valid units are h, d, w, m, y."),
+        Filter.Header("example: >20d or <20d"),
+        TextFilter("Uploaded", "added"),
+        Filter.Separator(),
+        Filter.Header("Filter by pages, for example: 20 or >20 or <20"),
+        TextFilter("Pages", "pages"),
+    ),
 )
 
 internal open class TextFilter(name: String, val type: String, val specific: String = "") : Filter.Text(name)

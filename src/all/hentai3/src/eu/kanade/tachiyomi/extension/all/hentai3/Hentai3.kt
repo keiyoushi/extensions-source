@@ -22,6 +22,7 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -140,57 +141,70 @@ abstract class Hentai3 :
 
     // Search
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        var sort = ""
-
-        val tags = buildString {
-            filters.forEach { filter ->
-                when (filter) {
-                    is SelectFilter -> sort = filter.getValue()
-
-                    is TextFilter -> {
-                        filter.state.split(",")
-                            .asSequence()
-                            .map(String::trim)
-                            .filter(String::isNotEmpty)
-                            .forEach { rawTag ->
-                                val tag = rawTag.lowercase()
-
-                                if (tag.startsWith("-")) append("-")
-
-                                append(filter.type)
-
-                                if (filter.type == "page") {
-                                    append(":$tag")
-                                } else {
-                                    append(":'")
-                                    append(tag.removePrefix("-"))
-
-                                    if (filter.specific.isNotEmpty()) {
-                                        append(" (${filter.specific})")
-                                    }
-                                    append("' ")
-                                }
-                            }
-                    }
-
-                    else -> {}
-                }
-            }
-        }
-
-        val language = if (searchLang.isNotEmpty()) "language:$searchLang" else ""
-
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("search")
-            addQueryParameter("q", "$query $language $tags")
-            if (page > 1) addQueryParameter("page", page.toString())
-            addQueryParameter("sort", sort)
-        }.build()
-
+        val url = searchMangaRequestUrl(page, query, filters)
         return parseMangasPage(client.get(url, Fetch.DOCUMENT).asJsoup())
     }
 
-    override fun getFilterList(data: JsonElement?): FilterList = getFilters()
+    private fun searchMangaRequestUrl(page: Int, query: String, filters: FilterList): HttpUrl {
+        val filterList = if (filters.isEmpty()) getFilterList() else filters
+        val queries = (
+            listOfNotNull(
+                query.replace("♀", "female").replace("♂", "male"),
+                if (searchLang.isNotEmpty()) "language:$searchLang" else null,
+            ) +
+                combineQuery(filterList)
+            )
+            .joinToString(" ") { it.trim() }
+            .trim()
+
+        return "$baseUrl/search".toHttpUrl().newBuilder().apply {
+            addQueryParameter("q", queries.ifEmpty { "pages:>0" })
+            addQueryParameter("page", page.toString())
+            filterList.firstInstanceOrNull<SelectFilter>()?.let { f ->
+                addQueryParameter("sort", f.getValue())
+            }
+        }.build()
+    }
+
+    private fun combineQuery(filters: FilterList): List<String> {
+        val advSearch = filters.filterIsInstance<TextFilter>().flatMap { filter ->
+            val splits = filter.state.split(",")
+                .map(String::trim)
+                .filter(String::isNotBlank)
+            splits.map { rawTag ->
+                val tag = rawTag.lowercase()
+                AdvSearchEntry(
+                    type = filter.type,
+                    text = tag.removePrefix("-"),
+                    exclude = tag.startsWith("-"),
+                    specific = filter.specific,
+                )
+            }
+        }
+
+        return advSearch
+            .filter { tag -> tag.text.isNotBlank() }
+            .map { tag ->
+                buildString {
+                    if (tag.exclude) append("-")
+                    append(tag.type, ":")
+                    // The site matches quoted page counts and upload ages as plain text
+                    if (tag.type == "pages" || tag.type == "added") {
+                        append(tag.text)
+                    } else {
+                        append("'", tag.text)
+                        if (tag.specific.isNotBlank()) {
+                            append(" (${tag.specific})")
+                        }
+                        append("'")
+                    }
+                }
+            }
+    }
+
+    data class AdvSearchEntry(val type: String, val text: String, val exclude: Boolean, val specific: String)
+
+    override fun getFilterList(data: JsonElement?): FilterList = getFilters(showLanguage = searchLang.isEmpty())
 
     // Details + Chapters
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
