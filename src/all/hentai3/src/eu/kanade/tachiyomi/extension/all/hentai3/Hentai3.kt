@@ -37,7 +37,7 @@ abstract class Hentai3 :
             "ko" -> "korean"
             "zh" -> "chinese"
             "es" -> "spanish"
-            "pt" -> "Portuguese"
+            "pt" -> "portuguese"
             "id" -> "indonesian"
             "jv" -> "javanese"
             "tl" -> "tagalog"
