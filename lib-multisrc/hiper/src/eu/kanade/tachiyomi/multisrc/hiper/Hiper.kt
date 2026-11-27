@@ -22,6 +22,7 @@ import keiyoushi.utils.getLongOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
+import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
@@ -400,12 +401,37 @@ abstract class Hiper :
 
     // ============================ Filters ====================================
 
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement {
+        val input = buildJsonObject {
+            putJsonObject("0") {
+                put("json", null)
+                putJsonObject("meta") {
+                    putJsonArray("values") {
+                        add("undefined")
+                    }
+                }
+            }
+        }
+
+        val url = "$baseUrl/api/trpc/search.genres".toHttpUrl().newBuilder()
+            .addQueryParameter("batch", "1")
+            .addQueryParameter("input", input.toString())
+            .build()
+
+        val element = client.get(url, Fetch.XHR).parseAs<List<JsonElement>>().first()
+        return element["result"]["data"]["json"]!!.parseAs<List<GenreDto>>().map { it.name }.toJsonElement()
+    }
+
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
-        SortFilter(intl),
-        RatingFilter(intl),
-        TypeFilter(intl),
-        StatusFilter(intl),
-        GenresFilter(genresList, intl),
+        listOfNotNull<Filter<*>>(
+            SortFilter(intl),
+            RatingFilter(intl),
+            TypeFilter(intl),
+            StatusFilter(intl),
+            data?.parseAs<List<String>>()?.takeIf { it.isNotEmpty() }?.let { GenresFilter(it, intl) },
+        ),
     )
 
     open class OrderByFilter(displayName: String, private val vals: Array<Pair<String, String>>, state: Int = 0) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
@@ -476,8 +502,6 @@ abstract class Hiper :
         ) {
         val checked get() = state.filter { it.state }.map { it.value }
     }
-
-    protected open val genresList: List<String> = emptyList()
 
     companion object {
         private const val MAX_RATING_PREF = "MAX_RATING"
