@@ -29,6 +29,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.io.IOException
 
 @Source
 abstract class Hentai3 :
@@ -144,7 +145,16 @@ abstract class Hentai3 :
         query.startsWith(PREFIX_ID_SEARCH) -> MangasPage(listOf(searchMangaById(query.removePrefix(PREFIX_ID_SEARCH).trim())), false)
         else -> {
             val url = searchMangaRequestUrl(page, query, filters)
-            parseMangasPage(client.get(url, Fetch.DOCUMENT).asJsoup())
+            val response = client.get(url, Fetch.DOCUMENT)
+            val document = response.asJsoup()
+
+            if (response.request.url.toString().contains("/login") &&
+                document.select("input[value=Login to my account]").isNotEmpty()
+            ) {
+                throw IOException("Log in via WebView to view favorites")
+            }
+
+            parseMangasPage(document)
         }
     }
 
@@ -166,10 +176,17 @@ abstract class Hentai3 :
             .joinToString(" ") { it.trim() }
             .trim()
 
+        val favoriteFilter = filterList.firstInstanceOrNull<FavoriteFilter>()
         val offsetPage =
             filterList.firstInstanceOrNull<OffsetPageFilter>()?.state?.toIntOrNull()?.coerceAtLeast(0)?.plus(page) ?: page
 
-        return "$baseUrl/search".toHttpUrl().newBuilder().apply {
+        val searchURL = if (favoriteFilter?.state == true) {
+            "$baseUrl/user/panel/favorites"
+        } else {
+            "$baseUrl/search"
+        }
+
+        return searchURL.toHttpUrl().newBuilder().apply {
             addQueryParameter("q", queries.ifEmpty { "pages:>0" })
             addQueryParameter("page", offsetPage.toString())
             filterList.firstInstanceOrNull<SelectFilter>()?.let { f ->

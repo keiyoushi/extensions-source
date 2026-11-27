@@ -27,6 +27,7 @@ fun getFilters(showLanguage: Boolean): FilterList = FilterList(
         Filter.Header("Filter by pages, for example: 20 or >20 or <20"),
         TextFilter("Pages", "pages"),
         OffsetPageFilter(),
+        FavoriteFilter(),
         Filter.Separator(),
         Filter.Header("Search manga directly with `id:<code>`"),
     ),
@@ -35,6 +36,8 @@ fun getFilters(showLanguage: Boolean): FilterList = FilterList(
 internal open class TextFilter(name: String, val type: String, val specific: String = "") : Filter.Text(name)
 
 class OffsetPageFilter : Filter.Text("Offset results by # pages")
+
+internal class FavoriteFilter : Filter.CheckBox("Favorites only", false)
 
 internal open class SelectFilter(name: String, private val vals: List<Pair<String, String>>, state: Int = 0) : Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
     fun getValue() = vals[state].second
