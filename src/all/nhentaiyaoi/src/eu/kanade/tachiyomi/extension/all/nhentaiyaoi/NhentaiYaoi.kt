@@ -91,7 +91,7 @@ abstract class NhentaiYaoi : MadaraNoAjax() {
     // Pages are linked over http, which redirects to https
     override fun imageFromElement(element: Element): String? = super.imageFromElement(element)?.replaceFirst("http://", "https://")
 
-    override fun processThumbnail(url: String?, fromSearch: Boolean): String? = url?.replace(THUMBNAIL_SIZE_REGEX, "")
+    override fun processThumbnail(url: String?, fromSearch: Boolean): String? = url?.withoutWordPressSize()
 
     override suspend fun fetchFilterData(): JsonElement {
         val document = client.get("$baseUrl/$mangaSubString/", Fetch.DOCUMENT).asJsoup()
@@ -119,8 +119,5 @@ abstract class NhentaiYaoi : MadaraNoAjax() {
 
     companion object {
         private val LIST_DIRECTORIES = setOf("manga-genre", "manga-tag", "manga-author", "manga-artist")
-
-        // WordPress resizes ("-175x238") of the original cover
-        private val THUMBNAIL_SIZE_REGEX = Regex("""-\d+x\d+(?=\.\w+$)""")
     }
 }

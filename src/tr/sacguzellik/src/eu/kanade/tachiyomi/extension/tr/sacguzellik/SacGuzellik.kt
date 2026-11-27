@@ -13,7 +13,6 @@ abstract class SacGuzellik : Madara() {
     override val mangaSubString = "seri-oku"
     override val genreDirectory = "seri-turleri"
     override val filterGenresSelector = ".mgcr-modern-archive__genre-cloud"
-    override val statusFilterOptions = super.statusFilterOptions + ("Upcoming" to "upcoming")
 
     override val mangaDetailsSelectorTitle = "#mgcr-series-title"
     override val mangaDetailsSelectorThumbnail = ".mgcr-modern-card__cover img"
@@ -24,7 +23,7 @@ abstract class SacGuzellik : Madara() {
     override val chapterUrlSelector = "a:not(:has(img))"
     override val chapterDateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
 
-    override fun processThumbnail(url: String?, fromSearch: Boolean) = url?.replace(THUMBNAIL_SIZE_REGEX, "$1")
+    override fun processThumbnail(url: String?, fromSearch: Boolean) = url?.withoutWordPressSize()
 
     override fun parseDetails(document: Document, id: String, preserveUrl: String?) = super.parseDetails(document, id, preserveUrl).apply {
         val altTitles = document.selectFirst(".mgcr-modern-manga__alternative")?.text()
@@ -43,12 +42,8 @@ abstract class SacGuzellik : Madara() {
 
     override fun parsePages(document: Document): List<Page> {
         if (document.selectFirst(".reading-content .mgcr-access-card") != null) {
-            throw Exception("Okumak için WebView üzerinden giriş yapın")
+            throw Exception(intl["login_required"])
         }
         return super.parsePages(document)
-    }
-
-    companion object {
-        private val THUMBNAIL_SIZE_REGEX = Regex("""-\d+x\d+(\.[a-zA-Z]+)$""")
     }
 }

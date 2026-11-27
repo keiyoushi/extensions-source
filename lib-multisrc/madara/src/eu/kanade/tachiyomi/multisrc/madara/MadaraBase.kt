@@ -69,7 +69,7 @@ abstract class MadaraBase : KeiSource() {
     protected val intl = Intl(
         language = lang,
         baseLanguage = "en",
-        availableLanguages = setOf("en", "ar", "pt-BR", "es", "uk"),
+        availableLanguages = setOf("en", "ar", "pt-BR", "es", "tr", "uk"),
         classLoader = this::class.java.classLoader!!,
     )
 
@@ -78,6 +78,7 @@ abstract class MadaraBase : KeiSource() {
         intl["status_filter_ongoing"] to "on-going",
         intl["status_filter_canceled"] to "canceled",
         intl["status_filter_on_hold"] to "on-hold",
+        intl["status_filter_upcoming"] to "upcoming",
     )
 
     protected open val orderByFilterOptions = listOf(
@@ -428,11 +429,16 @@ abstract class MadaraBase : KeiSource() {
     protected open fun parsePages(document: Document): List<Page> {
         val protector = document.selectFirst("#chapter-protector-data")
         if (protector == null) {
-            return document.select(pageListParseSelector).mapIndexedNotNull { index, element ->
+            val pages = document.select(pageListParseSelector).mapIndexedNotNull { index, element ->
                 element.selectFirst("img")?.let {
-                    Page(index, document.location(), imageFromElement(it) ?: return@mapIndexedNotNull null)
+                    Page(index, document.location(), imageUrl = imageFromElement(it) ?: return@mapIndexedNotNull null)
                 }
             }
+            // The notice WP Manga shows guests on chapters set to need an account
+            if (pages.isEmpty() && document.selectFirst(".content-blocked.login-required") != null) {
+                throw Exception(intl["login_required"])
+            }
+            return pages
         }
         val script = protector.attr("src").takeIf { it.startsWith("data:text/javascript;base64,") }
             ?.substringAfter(',')?.let { Base64.decode(it, Base64.DEFAULT).toString(Charsets.UTF_8) } ?: protector.html()
@@ -483,6 +489,9 @@ abstract class MadaraBase : KeiSource() {
     protected fun OkHttpClient.Builder.answerWebShield(): OkHttpClient.Builder = addInterceptor(
         WebShieldInterceptor(intl["webshield_error"]) { client },
     )
+
+    /** The original upload of a WordPress resize ("cover-175x238.jpg") */
+    protected fun String.withoutWordPressSize() = replace(WORDPRESS_SIZE_REGEX, "")
 
     protected fun String.getSrcSetImage(): String? {
         val images = split(',')
@@ -613,6 +622,7 @@ abstract class MadaraBase : KeiSource() {
         private val WHITESPACE_REGEX = Regex("""\s+""")
         private val IMAGE_DESCRIPTOR_REGEX = Regex("""^(\d+|\d+\.\d+)[wx]$""")
         private val NUMBER_REGEX = Regex("""\d+""")
+        private val WORDPRESS_SIZE_REGEX = Regex("""-\d+x\d+(?=\.\w+$)""")
 
         // Keywords must not be preceded by a letter, otherwise "ay" matches inside "mayıs", "may" and "days"
         private fun wordRegex(vararg words: String) = Regex("""(?<!\p{L})(?:${words.joinToString("|") { Regex.escape(it) }})""")

@@ -17,10 +17,5 @@ abstract class Manga24 : Madara() {
     // The site lists chapters oldest first
     override fun parseChapterList(document: Document, mangaPath: String): List<SChapter> = super.parseChapterList(document, mangaPath).reversed()
 
-    // Cards and covers show resized copies (name-WxH.ext) of the original image
-    override fun processThumbnail(url: String?, fromSearch: Boolean): String? = url?.replace(THUMBNAIL_SIZE_REGEX, "")
-
-    companion object {
-        private val THUMBNAIL_SIZE_REGEX = Regex("""-\d+x\d+(?=\.\w+$)""")
-    }
+    override fun processThumbnail(url: String?, fromSearch: Boolean): String? = url?.withoutWordPressSize()
 }

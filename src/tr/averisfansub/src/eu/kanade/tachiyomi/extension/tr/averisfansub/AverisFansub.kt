@@ -19,7 +19,7 @@ abstract class AverisFansub : Madara() {
 
     override val chapterDateFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.ROOT)
 
-    override fun processThumbnail(url: String?, fromSearch: Boolean): String? = url?.replace(THUMBNAIL_SIZE_REGEX, "")
+    override fun processThumbnail(url: String?, fromSearch: Boolean): String? = url?.withoutWordPressSize()
 
     override suspend fun getMangasByUrl(url: HttpUrl, page: Int): MangasPage {
         val segments = url.siteSegments() ?: return MangasPage(emptyList(), false)
@@ -45,8 +45,5 @@ abstract class AverisFansub : Madara() {
 
     companion object {
         private val LIST_DIRECTORIES = setOf("manga-genre", "manga-tag", "manga-author", "manga-artist", "manga-release")
-
-        // WordPress resizes ("-175x238") of the original cover
-        private val THUMBNAIL_SIZE_REGEX = Regex("""-\d+x\d+(?=\.\w+$)""")
     }
 }

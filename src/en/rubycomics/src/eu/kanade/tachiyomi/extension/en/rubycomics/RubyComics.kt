@@ -7,8 +7,8 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.annotation.Source
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.textOrNull
 import org.jsoup.nodes.Document
 
 @Source
@@ -21,12 +21,17 @@ abstract class RubyComics :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override fun processThumbnail(url: String?, fromSearch: Boolean) = url?.replace(THUMBNAIL_SIZE_REGEX, "$1")
+    override fun processThumbnail(url: String?, fromSearch: Boolean) = url?.withoutWordPressSize()
 
     override fun parseDetails(document: Document, id: String, preserveUrl: String?) = super.parseDetails(document, id, preserveUrl).apply {
-        document.selectFirst("#averagerate")?.textOrNull()?.let { rating ->
-            description = listOfNotNull("**Rating:** $rating", description).joinToString("\n\n")
-        }
+        description = MarkdownDescription.Builder()
+            .rating(
+                document.selectFirst("#averagerate")?.text()?.toDoubleOrNull(),
+                max = 5,
+                votes = document.selectFirst("#countrate")?.text()?.toIntOrNull(),
+            )
+            .markdown(description)
+            .build()
     }
 
     override fun parseChapterList(document: Document, mangaPath: String): List<SChapter> {
@@ -47,7 +52,6 @@ abstract class RubyComics :
 
     companion object {
         private const val PREF_DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
-        private val THUMBNAIL_SIZE_REGEX = Regex("""-\d+x\d+(\.[a-zA-Z]+)$""")
         private val VARIANT_REGEX = Regex("""\b(?:SPOILER|RAW)\b""")
     }
 }
