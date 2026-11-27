@@ -22,7 +22,6 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
-import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
