@@ -50,7 +50,7 @@ abstract class XXXYaoi : KeiSource() {
         rateLimit(3, 1.seconds)
     }
 
-    private val sitePages by lazy { SitePages({ baseUrl }) { headers["User-Agent"]!! } }
+    private val sitePages by lazy { SitePages({ baseUrl }, client) { headers["User-Agent"]!! } }
 
     override fun getHomeUrl() = "$baseUrl/biblioteca/"
 
@@ -163,12 +163,15 @@ abstract class XXXYaoi : KeiSource() {
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val read = sitePages.read(getChapterUrl(chapter), "reader.js", carrySession = true)
+        val chapterUrl = getChapterUrl(chapter)
+        val seriesUrl = chapterUrl.toHttpUrl().resolve("..")!!.toString()
+        val read = sitePages.read(chapterUrl, "reader.js", carrySession = true, referer = seriesUrl)
+            .let { if (it.document.reload) sitePages.read(chapterUrl, "reader.js", carrySession = true, referer = seriesUrl) else it }
         val reader = read.document
         if (reader.pages.isEmpty()) {
             val document = reader.html.asJsoup(reader.url)
             if (document.selectFirst("iframe[src*=player]") != null) return emptyList()
-            if (document.selectFirst("iframe[src*=challenges.cloudflare.com], input[name=cf-turnstile-response]") != null) {
+            if (document.selectFirst("iframe[src*=challenges.cloudflare.com], input[name=cf-turnstile-response]:not([value~=.])") != null) {
                 throw IOException(SitePages.SOLVE_IN_WEBVIEW)
             }
             throw IOException("As páginas do capítulo não carregaram, tente novamente")

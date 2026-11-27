@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 class PageRead(
     val check: Boolean = false,
     val status: Int?,
+    val title: String?,
     val result: PageDocument?,
     val finished: List<FinishedRequest> = emptyList(),
 )
@@ -19,6 +20,7 @@ class PageDocument(
     val html: String,
     val session: Map<String, String> = emptyMap(),
     val pages: List<String> = emptyList(),
+    val reload: Boolean = false,
 )
 
 @Serializable
