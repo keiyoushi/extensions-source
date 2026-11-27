@@ -10,8 +10,8 @@ class GenresOpFilter :
     UriPartFilter(
         "شرط التصنيفات",
         arrayOf(
-            Pair("يحتوي على إحدى التصنيفات المدرجة", ""),
-            Pair("يحتوي على جميع التصنيفات المدرجة", "1"),
+            "يحتوي على إحدى التصنيفات المدرجة" to "",
+            "يحتوي على جميع التصنيفات المدرجة" to "1",
         ),
     )
 
@@ -19,10 +19,10 @@ class StatusFilter :
     Filter.Group<FilterCheckbox>(
         "الحالة",
         arrayOf(
-            Pair("مستمرة", "on-going"),
-            Pair("مكتملة", "end"),
-            Pair("ملغية", "canceled"),
-            Pair("متوقفة حالياً", "on-hold"),
+            "مستمرة" to "on-going",
+            "مكتملة" to "end",
+            "ملغية" to "canceled",
+            "متوقفة حالياً" to "on-hold",
         ).map { FilterCheckbox(it.first, it.second) },
     )
 
