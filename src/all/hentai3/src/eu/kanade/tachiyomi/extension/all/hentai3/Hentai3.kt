@@ -2,6 +2,13 @@ package eu.kanade.tachiyomi.extension.all.hentai3
 
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.extension.all.hentai3.Hentai3Utils.getArtists
+import eu.kanade.tachiyomi.extension.all.hentai3.Hentai3Utils.getCodes
+import eu.kanade.tachiyomi.extension.all.hentai3.Hentai3Utils.getDescriptions
+import eu.kanade.tachiyomi.extension.all.hentai3.Hentai3Utils.getGroups
+import eu.kanade.tachiyomi.extension.all.hentai3.Hentai3Utils.getNumPages
+import eu.kanade.tachiyomi.extension.all.hentai3.Hentai3Utils.getTags
+import eu.kanade.tachiyomi.extension.all.hentai3.Hentai3Utils.getTime
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -16,14 +23,11 @@ import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.util.Locale
-import kotlin.time.Instant
 
 @Source
 abstract class Hentai3 :
@@ -170,58 +174,39 @@ abstract class Hentai3 :
     }
 
     private fun parseMangaDetails(document: Document): SManga {
-        fun String.capitalizeEach() = this.split(" ").joinToString(" ") { s ->
-            s.replaceFirstChar { sr ->
-                if (sr.isLowerCase()) sr.titlecase(Locale.getDefault()) else sr.toString()
-            }
-        }
+        val fullTitle = document.select("#main-info h1").text()
+
         return SManga.create().apply {
             setUrlWithoutDomain(document.location())
 
-            val authors = document.select("a[href*=/groups/]").eachText().joinToString()
-            val artists = document.select("a[href*=/artists/]").eachText().joinToString()
+            val authors = getGroups(document)
+            val artists = getArtists(document)
             initialized = true
 
-            title = document.select("h1").text().shortenTitle()
-            author = authors.ifEmpty { artists }
-            artist = artists.ifEmpty { authors }
-            genre = document.select("a[href*=/tags/]").eachText().joinToString {
-                val capitalized = it.capitalizeEach()
-                if (capitalized.contains("male")) {
-                    capitalized.replace("(female)", "♀").replace("(male)", "♂")
-                } else {
-                    "$capitalized ◊"
-                }
-            }
+            title = fullTitle.shortenTitle()
 
-            description = buildString {
-                document.select("a[href*=/characters/]").eachText().joinToString().ifEmpty { null }?.let {
-                    append("Characters: ", it.capitalizeEach(), "\n\n")
-                }
-                document.select("a[href*=/series/]").eachText().joinToString().ifEmpty { null }?.let {
-                    append("Series: ", it.capitalizeEach(), "\n\n")
-                }
-                document.select("a[href*=/groups/]").eachText().joinToString().ifEmpty { null }?.let {
-                    append("Groups: ", it.capitalizeEach(), "\n\n")
-                }
-                document.select("a[href*=/language/]").eachText().joinToString().ifEmpty { null }?.let {
-                    append("Languages: ", it.capitalizeEach(), "\n\n")
-                }
-                append(document.select("div.tag-container:contains(pages:)").text(), "\n")
-            }
-            thumbnail_url = document.selectFirst("img")!!.let { img ->
-                img.attr("data-src").ifEmpty { img.absUrl("src") }
-            }
+            author = authors ?: artists
+            artist = artists ?: authors
+
+            val code = getCodes(document)
+            // Some people want these additional details in description
+            description = (if (title == fullTitle) "" else "Full title: $fullTitle\n\n")
+                .plus(code ?: "")
+                .plus(getNumPages(document)?.let { "Pages: $it\n" } ?: "")
+                .plus(getDescriptions(document))
+            genre = getTags(document)
+
+            thumbnail_url = document.selectFirst("#main-info img")?.getImage()
             status = SManga.COMPLETED
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
     }
 
-    private fun parseChapterList(doc: Document): List<SChapter> = listOf(
+    private fun parseChapterList(document: Document, chapterUrl: String): List<SChapter> = listOf(
         SChapter.create().apply {
             name = "Chapter"
-            setUrlWithoutDomain(doc.location())
-            date_upload = Instant.tryParse(doc.select("time").attr("datetime"))
+            setUrlWithoutDomain(chapterUrl)
+            date_upload = getTime(document)
         },
     )
 
@@ -231,8 +216,13 @@ abstract class Hentai3 :
         fetchDetails: Boolean,
         fetchChapters: Boolean,
     ): SMangaUpdate {
-        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
-        return SMangaUpdate(parseMangaDetails(doc), parseChapterList(doc))
+        val mangaUrl = getMangaUrl(manga)
+        val document = client.get(mangaUrl, Fetch.DOCUMENT).asJsoup()
+
+        val updatedManga = parseMangaDetails(document)
+        val updatedChapters = parseChapterList(document, mangaUrl)
+
+        return SMangaUpdate(updatedManga, updatedChapters)
     }
 
     // Related manga
