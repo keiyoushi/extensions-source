@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.extension.zh.hanabimanga
 
-import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
+import androidx.preference.Preference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -14,14 +17,19 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
+import keiyoushi.utils.applicationContext
+import keiyoushi.utils.decodeHex
 import keiyoushi.utils.getLong
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.getString
+import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.hmacSha256
 import keiyoushi.utils.int
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.sha256
 import keiyoushi.utils.toJsonRequestBody
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.addAll
@@ -34,6 +42,7 @@ import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.Response
 import java.io.IOException
 import java.util.Locale
 
@@ -41,11 +50,12 @@ private const val ANONYMOUS_TOKEN =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVoa3ZxcnhtY2FwZ3Rwc3BnbHJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5NjgzMjksImV4cCI6MjA3OTU0NDMyOX0.uuHr888lp14ObW5eWowJrHPJGgQf3sF2l7NPmFN84g4"
 private const val COMIC_BODY =
     "id,title,summary,cover_url,release_date,is_finished,authors,region,latest_chapter_title,tags(id,name),categories(id,name)"
-private const val APP_VERSION = "2.4.13"
-private const val APP_VERSION_CODE = 2041399
-private const val CERT_FINGERPRINT = "13a8c9fbdaf19115f39b48dc0f3a7c99568ebb0c91ba1a71218c76f53f7877a8"
-private const val NATIVE_SECRET = "7c6cb7f919a688c4c1f5eacf047d97dcd542cae8e3fc84d926160ad879bf3845"
 private const val PAGE_SIZE = 20
+private const val MAX_PAGES_PER_REQUEST = 30
+private const val REFRESH_TOKEN_TTL_MS = 7L * 24 * 60 * 60 * 1000
+private const val KEY_ID = "android-2050499-release-1"
+private const val NATIVE_SECRET = "8c7856eb875e0a5150f61bda309f21c78c855590b132186a2216dda5d2949727"
+private const val CERT_FINGERPRINT = "13a8c9fbdaf19115f39b48dc0f3a7c99568ebb0c91ba1a71218c76f53f7877a8"
 
 @Source
 abstract class HanabiManga :
@@ -72,13 +82,32 @@ abstract class HanabiManga :
 
     private val pref by getPreferencesLazy()
 
+    private var loginPref: Preference? = null
+
+    @Volatile private var loginError: String? = null
+
+    @Volatile private var loginPending = false
+
+    @Volatile private var signedClientDisabled = false
+
+    private val signingKey by lazy {
+        "xfmanga/reader/v2|$CERT_FINGERPRINT".hmacSha256(NATIVE_SECRET.decodeHex())
+    }
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        preferencesInternal(screen.context, pref, ::clearTokens).forEach(screen::addPreference)
+        preferencesInternal(
+            screen.context,
+            pref,
+            ::onCredentialsChanged,
+            ::currentLoginStatus,
+            { loginError },
+        ).forEach { p ->
+            if (p.key == PREF_EMAIL) loginPref = p
+            screen.addPreference(p)
+        }
     }
 
     // Customize
-
-    private val signatureKey by lazy { (NATIVE_SECRET.hexToBytes() + CERT_FINGERPRINT.hexToBytes()).sha256() }
 
     private suspend fun token(): String {
         val httpUrl = getHomeUrl().toHttpUrl()
@@ -99,9 +128,9 @@ abstract class HanabiManga :
     }
 
     private suspend fun login(): String {
-        val email = pref.getString(PREF_EMAIL, null)
-        val password = pref.getString(PREF_PASSWORD, null)
-        if (email.isNullOrEmpty() || password.isNullOrEmpty()) return ANONYMOUS_TOKEN
+        val email = pref.getString(PREF_EMAIL, null)?.trim()?.takeIf(String::isNotEmpty)
+        val password = pref.getString(PREF_PASSWORD, null)?.takeIf(String::isNotEmpty)
+        if (email == null || password == null) return ANONYMOUS_TOKEN
 
         val body = buildJsonObject {
             put("email", email)
@@ -111,7 +140,7 @@ abstract class HanabiManga :
         val response = client.post("$baseUrl/auth/v1/token?grant_type=password", Fetch.XHR, body.toJsonRequestBody(), false)
         if (response.code == 400) throw Exception("登录失败，邮箱或密码错误")
 
-        return response.parseAs<JsonObject>().also(::saveTokens).getString("access_token")
+        return response.parseAs<JsonObject>().also(::saveTokens).getString("access_token").also { loginError = null }
     }
 
     private fun saveTokens(json: JsonObject) {
@@ -120,7 +149,7 @@ abstract class HanabiManga :
         val c1 = Cookie.Builder().name("access_token").value(json.getString("access_token")).domain(httpUrl.host)
             .expiresAt(expiresAt).build()
         val c2 = Cookie.Builder().name("refresh_token").value(json.getString("refresh_token")).domain(httpUrl.host)
-            .expiresAt(expiresAt + 259200000L).build()
+            .expiresAt(expiresAt + REFRESH_TOKEN_TTL_MS).build()
         client.cookieJar.saveFromResponse(httpUrl, listOf(c1, c2))
     }
 
@@ -130,6 +159,46 @@ abstract class HanabiManga :
             Cookie.Builder().name(it).value("").domain(httpUrl.host).expiresAt(0).build()
         }
         client.cookieJar.saveFromResponse(httpUrl, expired)
+    }
+
+    private fun hasSession() = client.cookieJar.loadForRequest(getHomeUrl().toHttpUrl()).any { it.name == "access_token" }
+
+    private fun currentLoginStatus() = when {
+        loginPending -> LoginStatus.PENDING
+        loginError != null -> LoginStatus.FAILED
+        hasCredentials() || hasSession() -> LoginStatus.ACTIVE
+        else -> LoginStatus.NONE
+    }
+
+    private fun hasCredentials() = !pref.getString(PREF_EMAIL, null).isNullOrBlank() &&
+        !pref.getString(PREF_PASSWORD, null).isNullOrBlank()
+
+    /** A credential edit takes effect at once: the old session goes and a complete new pair logs in right away. */
+    private fun onCredentialsChanged() {
+        clearTokens()
+        loginError = null
+        if (!hasCredentials()) {
+            toast("已退出登录")
+            refreshLoginSummary()
+            return
+        }
+        loginPending = true
+        refreshLoginSummary()
+        CoroutineScope(Dispatchers.IO).launch {
+            val error = runCatching { login() }.exceptionOrNull()
+            loginError = error?.let { it.message?.takeIf(String::isNotBlank) ?: "网络或服务异常" }
+            loginPending = false
+            toast(if (error == null) "登录成功" else "登录失败：$loginError")
+            refreshLoginSummary()
+        }
+    }
+
+    private fun refreshLoginSummary() = Handler(Looper.getMainLooper()).post {
+        loginPref?.summary = loginSummary(pref, currentLoginStatus(), loginError)
+    }
+
+    private fun toast(text: String) = Handler(Looper.getMainLooper()).post {
+        Toast.makeText(applicationContext, text, Toast.LENGTH_SHORT).show()
     }
 
     private fun HttpUrl.Builder.addPaginationParameters(page: Int, order: String) = addQueryParameter("select", COMIC_BODY)
@@ -145,36 +214,6 @@ abstract class HanabiManga :
             if (fetchChapters) append("chapters(id,idx,title,image_count,category,updated_at)")
         },
     )
-
-    private fun mobilePageRequest(chapter: SChapter): JsonObject {
-        val comicId = chapter.memo["cid"]!!.int
-        val pages = List(chapter.memo["size"]!!.int) { "%03d".format(Locale.ROOT, it + 1) }
-        val timestamp = System.currentTimeMillis() / 1000
-        val canonicalPayload = "v1|comic_id=$comicId|chapter_id=${chapter.url}|pages=${pages.joinToString(",")}|timestamp=$timestamp"
-        val signature = canonicalPayload.hmacSha256(signatureKey).toHexString()
-        return buildJsonObject {
-            put("comic_id", comicId)
-            put("chapter_id", chapter.url)
-            putJsonArray("pages") { addAll(pages) }
-            put("timestamp", timestamp)
-            put("signature", signature)
-            putJsonObject("client_diag") {
-                put("native_status", "ok")
-                put("native_fingerprint_prefix", CERT_FINGERPRINT.take(8))
-                put("canonical_payload_sha256", canonicalPayload.sha256().toHexString())
-                put("signature_prefix", signature.take(16))
-                put("app_version", APP_VERSION)
-                put("app_version_code", APP_VERSION_CODE)
-                put("brand", Build.BRAND)
-                put("manufacturer", Build.MANUFACTURER)
-                put("model", Build.MODEL)
-                put("product", Build.PRODUCT)
-                put("sdk_int", Build.VERSION.SDK_INT)
-            }
-        }
-    }
-
-    private fun String.hexToBytes() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 
     // Popular
 
@@ -255,22 +294,87 @@ abstract class HanabiManga :
     // Page
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val response = client.post(
-            "$baseUrl/functions/v1/${if (pref.getBoolean(PREF_AI_SR, false)) "vip" else "sd"}-image-url",
-            headers.newBuilder().add("Authorization", "Bearer ${token()}").build(),
-            Fetch.XHR,
-            mobilePageRequest(chapter).toJsonRequestBody(),
-            false,
-        )
-        if (response.code == 401) response.use { throw Exception("请先在插件设置中登录") }
-        if (response.code == 429) {
-            when (response.parseAs<JsonObject>().getString("code")) {
-                "ANON_QUOTA_EXCEEDED" -> throw Exception("请先在插件设置中登录")
-                "FREE_QUOTA_EXCEEDED" -> throw Exception("今日超分额度已用完")
+        val pageCount = chapter.memo["size"]!!.int
+        if (pageCount == 0) return emptyList()
+
+        val comicId = chapter.memo["cid"]!!.int
+        val ep = if (pref.getBoolean(PREF_AI_SR, false)) "hd" else "sd"
+        val pages = List(pageCount) { "%03d".format(Locale.ROOT, it + 1) }
+
+        if (!signedClientDisabled) {
+            try {
+                return getSignedPageList(comicId, chapter.url, pages, ep)
+            } catch (_: ClientSignatureRejectedException) {
+                signedClientDisabled = true
             }
         }
-        val result = response.parseAs<PagesResult>()
-        val fragment = result.scrambleInfo?.run { "#$ticket|$nonce|$cols|$rows" }.orEmpty()
-        return result.urls.mapIndexed { i, p -> Page(i, imageUrl = p.getString("url") + fragment) }
+        return getWebPageList(comicId, chapter.url, pages, ep)
     }
+
+    private suspend fun getSignedPageList(comicId: Int, chapterId: String, pages: List<String>, ep: String): List<Page> {
+        val timestamp = System.currentTimeMillis() / 1000
+        val canonical = "v2|scope=reader|ep=$ep|key_id=$KEY_ID|comic_id=$comicId|chapter_id=$chapterId|pages=${pages.joinToString(",")}|timestamp=$timestamp"
+        val body = buildJsonObject {
+            put("comic_id", comicId)
+            put("chapter_id", chapterId)
+            putJsonArray("pages") { addAll(pages) }
+            put("timestamp", timestamp)
+            put("signature", canonical.hmacSha256(signingKey).toHexString())
+            put("key_id", KEY_ID)
+        }
+        val response = postImageUrl(ep, body)
+        if (response.code == 401) response.use { throw Exception("请先在插件设置中登录") }
+        if (!response.isSuccessful) {
+            val error = parseError(response)
+            if (error.code == "CLIENT_SIGNATURE_RETIRED" || error.code == "CLIENT_VERIFY_FAILED") {
+                throw ClientSignatureRejectedException()
+            }
+            throw Exception(error.message)
+        }
+        return response.parseAs<PagesResult>().toPages(0)
+    }
+
+    private suspend fun getWebPageList(comicId: Int, chapterId: String, pages: List<String>, ep: String): List<Page> = pages.chunked(MAX_PAGES_PER_REQUEST).flatMap { chunk ->
+        val body = buildJsonObject {
+            put("comic_id", comicId)
+            put("chapter_id", chapterId)
+            putJsonArray("pages") { addAll(chunk) }
+        }
+        val response = postImageUrl(ep, body)
+        if (response.code == 401) response.use { throw Exception("请先在插件设置中登录") }
+        if (!response.isSuccessful) throw Exception(parseError(response).message)
+        response.parseAs<PagesResult>().toPages(chunk.first().toInt() - 1)
+    }
+
+    private suspend fun postImageUrl(ep: String, body: JsonObject): Response = client.post(
+        "$baseUrl/functions/v1/$ep-image-url",
+        headers.newBuilder().add("Authorization", "Bearer ${token()}").build(),
+        Fetch.XHR,
+        body.toJsonRequestBody(),
+        false,
+    )
+
+    private fun PagesResult.toPages(offset: Int): List<Page> {
+        val fragment = scrambleInfo?.let { "#${it.ticket}|${it.nonce}|${it.cols}|${it.rows}" }.orEmpty()
+        return urls.mapIndexed { i, p -> Page(offset + i, imageUrl = p.getString("url") + fragment) }
+    }
+
+    private fun parseError(response: Response): ErrorInfo {
+        val text = response.use { it.body.string() }
+        val json = runCatching { text.parseAs<JsonObject>() }.getOrNull()
+        val code = json?.getStringOrNull("code")
+        val message = when (code) {
+            "ANON_QUOTA_EXCEEDED" -> "请先在插件设置中登录"
+            "FREE_QUOTA_EXCEEDED" -> "今日超分额度已用完"
+            "TOO_MANY_PAGES" -> "单次请求页数超出限制"
+            else -> json?.getStringOrNull("message")
+                ?: json?.getStringOrNull("error")
+                ?: "请求失败 (HTTP ${response.code})"
+        }
+        return ErrorInfo(code, message)
+    }
+
+    private class ErrorInfo(val code: String?, val message: String)
+
+    private class ClientSignatureRejectedException : Exception()
 }
