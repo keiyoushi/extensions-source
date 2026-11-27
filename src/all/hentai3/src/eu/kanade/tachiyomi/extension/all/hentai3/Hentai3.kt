@@ -21,6 +21,7 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import java.util.Locale
 import kotlin.time.Instant
 
@@ -85,17 +86,23 @@ abstract class Hentai3 :
         return parseMangasPage(doc)
     }
 
-    private fun parseMangasPage(doc: Document): MangasPage {
-        val mangas = doc.select("a[href*=/d/]").mapNotNull { element ->
-            val title = element.selectFirst("div.title")?.ownText() ?: return@mapNotNull null
-            SManga.create().apply {
-                this.title = title.shortenTitle()
-                setUrlWithoutDomain(element.absUrl("href"))
-                thumbnail_url = element.selectFirst("img:not([class])")?.absUrl("src")
-            }
-        }
-        val hasNextPage = doc.selectFirst("a[rel=next]") != null
+    private fun parseMangasPage(document: Document): MangasPage {
+        val mangas = document.select(popularMangaSelector).mapNotNull(::popularMangaFromElement)
+        val hasNextPage = document.selectFirst(popularMangaNextPageSelector) != null
+
         return MangasPage(mangas, hasNextPage)
+    }
+
+    private val popularMangaSelector = "a[href*=/d/]"
+    private val popularMangaNextPageSelector = "a[rel=next]"
+
+    private fun popularMangaFromElement(element: Element): SManga? {
+        val title = element.selectFirst(".title")?.ownText() ?: return null
+        return SManga.create().apply {
+            this.title = title.shortenTitle()
+            setUrlWithoutDomain(element.absUrl("href"))
+            thumbnail_url = element.selectFirst(".cover img")?.getImage()
+        }
     }
 
     // Search
@@ -231,29 +238,19 @@ abstract class Hentai3 :
     // Related manga
     override val supportsRelatedMangas = true
 
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
-        val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
-        return doc.select("#similar-content .doujin-col .doujin a.cover").mapNotNull { link ->
-            val title = link.selectFirst(".title")?.text() ?: return@mapNotNull null
-            SManga.create().apply {
-                this.title = title
-                setUrlWithoutDomain(link.absUrl("href"))
-                thumbnail_url = link.selectFirst("img")?.let { img ->
-                    img.attr("data-src").ifEmpty { img.absUrl("src") }
-                }
-            }
-        }
-    }
+    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
+        .select("#similar-content .doujin-col .doujin a.cover").mapNotNull(::popularMangaFromElement)
 
     // Pages
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val doc = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        return doc.select("img:not([class], [src*=thumb], [src*=cover])")
+        return doc.select("#thumbnail-gallery .single-thumb a > img")
             .mapIndexed { index, image ->
-                val imageUrl = image.absUrl("src")
-                Page(index, imageUrl = imageUrl.replace(REMOVE_THUMB_REGEX, ""))
+                Page(index, imageUrl = image.getImage())
             }
     }
+
+    private fun Element.getImage(): String = attr("abs:data-src").ifEmpty { absUrl("src") }.replace("t.", ".")
 
     // Preferences
     private fun String.shortenTitle() = if (displayFullTitle) {
@@ -274,6 +271,5 @@ abstract class Hentai3 :
 
     companion object {
         private val SHORT_TITLE_REGEX = Regex("""(\[(?:[^\[\]]|\[[^\[\]]*])*\]|[({][^)}]*[)}])""")
-        private val REMOVE_THUMB_REGEX = Regex("t(?=\\.)")
     }
 }
