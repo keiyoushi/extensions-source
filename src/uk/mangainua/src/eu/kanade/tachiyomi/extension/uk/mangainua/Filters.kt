@@ -18,7 +18,7 @@ class TriStateFilter(name: String, val value: String) : Filter.TriState(name)
 
 abstract class TriStateGroup(
     name: String,
-    val options: List<Pair<String, String>>,
+    options: List<Pair<String, String>>,
 ) : Filter.Group<TriStateFilter>(
     name,
     options.map { TriStateFilter(it.first, it.second) },
@@ -27,140 +27,88 @@ abstract class TriStateGroup(
     val excluded get() = state.filter { it.isExcluded() }.map { it.value }.takeUnless { it.isEmpty() }
 }
 
+class MultiValueOption(name: String, val value: String) : Filter.CheckBox(name)
+
+abstract class MultiValueFilter(
+    name: String,
+    options: List<Pair<String, String>>,
+) : Filter.Group<MultiValueOption>(
+    name = name,
+    state = options.map { MultiValueOption(it.first, it.second) },
+) {
+    val selected get() = state.filter { it.state }.map { it.value }.takeIf { it.isNotEmpty() }
+}
+
+internal class MinFilter : Filter.Text("Від")
+internal class MaxFilter : Filter.Text("До")
+
+abstract class RangeFilter(name: String) :
+    Filter.Group<Filter<String>>(
+        name = name,
+        state = listOf(MinFilter(), MaxFilter()),
+    ) {
+    val min: Int?
+        get() = (state[0] as MinFilter).state.toIntOrNull()?.takeIf { it > 0 }
+    val max: Int?
+        get() = (state[1] as MaxFilter).state.toIntOrNull()?.takeIf { it > 0 }
+}
+
 class SortFilter(defaultOrder: String? = null) : SelectFilter("Сортувати", sort, defaultOrder) {
     companion object {
         private val sort = listOf(
-            "За переглядами" to "news_read;desc",
-            "За рейтингом" to "d.mrating;desc",
-            "Спочатку нові" to "date;desc",
-            "За коментарями" to "comm_num;desc",
-            "За назвою" to "nameukr;asc",
-            "Від новинок до старих" to "d.yer;desc",
-            "Від старих до новинок" to "d.yer;asc",
+            "Популярні за місяць" to "pop",
+            "Популярні за тиждень" to "week",
+            "Нові на сайті" to "new",
+            "За оцінкою" to "rate",
+            "Найбільше коментарів" to "comm",
+            "Найбільше переглядів" to "views",
+            "Найбільше розділів" to "ch",
+            "За назвою (А–Я)" to "name",
+            "Рік: новіші" to "year",
+            "Рік: старіші" to "old",
         )
     }
 }
 
 class CategoriesFilter :
-    SelectFilter(
-        name = "Категорії", // b.type
+    MultiValueFilter(
+        name = "Тип",
         options = listOf(
-            "Всі категорї" to "",
-            "МАНҐА" to "manga",
-            "МАНХВА" to "manhwa",
-            "МАНЬХВА" to "manhua",
-            "ВАНШОТ" to "one-shot",
-            "ДОДЖІНШІ" to "dojinshi",
-            "МАЛЬОПИС" to "malopys",
+            "Манґа" to "manga",
+            "Манхва" to "manhwa",
+            "Маньхва" to "manhua",
+            "Вебманхва" to "web-manhwa",
+            "Вебманьхва" to "web-manhua",
+            "Ваншот" to "one-shot",
+            "Доджінші" to "dojinshi",
+            "Мальопис" to "malopys",
         ),
     )
 
-class YearsFilter :
-    SelectFilter(
-        name = "Роки", // c.yer
-        options = listOf(
-            "Всі роки" to "",
-            "2026" to "2026,2026",
-            "2025" to "2025,2025",
-            "2024" to "2024,2024",
-            "2023" to "2023,2023",
-            "2022" to "2022,2022",
-            "2021" to "2021,2021",
-            "2020" to "2020,2020",
-            "2019" to "2019,2019",
-            "2016 - 2026" to "2016,2026",
-            "2010 - 2016" to "2010,2016",
-            "2000 - 2010" to "2000,2010",
-            "1990 - 2000" to "1990,2000",
-            "1980 - 1990" to "1980,1990",
-            "До 80-х" to "1921,1980",
-        ),
-    )
+class YearsFilter : RangeFilter(name = "Рік")
 
-class SizeFilter :
-    SelectFilter(
-        name = "Кількість розділів", // c.lastchappr
-        options = listOf(
-            "Будь-яка кількість" to "",
-            "Від 1 до 20 розділів" to "1,20",
-            "Від 20 до 50 розділів" to "20,50",
-            "Від 50 до 100 розділів" to "50,100",
-            "Більше 100 розділів" to "100,1000",
-        ),
-    )
+class SizeFilter : RangeFilter(name = "Розділів")
 
 class TagFilter(blockedTags: Set<String>) : TriStateGroup("Жанри", options) {
     init {
         if (blockedTags.isNotEmpty()) {
             state.forEach { filter ->
                 if (blockedTags.contains(filter.value)) {
-                    filter.state = 2
+                    filter.state = TriState.STATE_EXCLUDE
                 }
             }
         }
     }
     companion object {
-        val options = listOf(
-            "Божевілля" to "53",
-            "Бойовик" to "12",
-            "Бойові мистецтва" to "13",
-            "Буденність" to "26",
-            "Вампіри" to "14",
-            "Гарем" to "15",
-            "Для дітей" to "3",
-            "Детектив" to "16",
-            "Демони" to "52",
-            "Джьосей" to "10",
-            "Доджінші" to "18",
-            "Драма" to "19",
-            "Еччі" to "39",
-            "Жахи" to "35",
-            "Зміна статі" to "44",
-            "Ігри" to "51",
-            "Ісекай" to "63",
-            "Історія" to "20",
-            "Іяшікей" to "62",
-            "Йонкома" to "42",
-            "Космос" to "50",
-            "Комедія" to "22",
-            "Махо-шьоджьо" to "11",
-            "Машини" to "49",
-            "Меха" to "23",
-            "Містика" to "24",
-            "Музика" to "48",
-            "Надприродне" to "31",
-            "Наукова фантастика" to "25",
-            "Пародія" to "47",
-            "Пригоди" to "28",
-            "Психологія" to "29",
-            "Поліція" to "46",
-            "Постапокаліптика" to "27",
-            "Романтика" to "30",
-            "Самураї" to "45",
-            "Сентай" to "6",
-            "Сейнен" to "9",
-            "Спорт" to "32",
-            "Суперсила" to "43",
-            "Трагедія" to "33",
-            "Трилер" to "34",
-            "Фантастика" to "36",
-            "Фентезі" to "37",
-            "Шьоджьо" to "4",
-            "Шьоджьо-ай" to "60",
-            "Шьонен" to "5",
-            "Шьонен-ай" to "61",
-            "Школа" to "38",
-            "Юрі" to "40",
-            "Яой" to "41",
-        )
+        var options = emptyList<Pair<String, String>>()
     }
 }
 
 class AgeFilter :
-    SelectFilter(
+    MultiValueFilter(
         name = "Вік", // b.vik
         options = listOf(
-            "Будь-який вік" to "",
+            "Будь-який вік" to "0",
             "Від 12 років" to "12",
             "Від 16 років" to "16",
             "Від 18 років" to "18",
@@ -168,10 +116,9 @@ class AgeFilter :
     )
 
 class StatusFilter :
-    SelectFilter(
-        name = "Статус перекладу", // b.tra
+    MultiValueFilter(
+        name = "Статус перекладу",
         options = listOf(
-            "Будь-який статус" to "",
             "Триває" to "Триває",
             "Закінчено" to "Закінчений",
             "Невідомо" to "Невідомо",
