@@ -8,7 +8,7 @@ class SortFilter : Filter.Select<String>("Sort", SORTS.map { it.first }.toTypedA
 }
 
 class SubgenreFilter(
-    default: String,
+    default: String?,
 ) : Filter.Select<String>(
     "Subgenre",
     SUBGENRES.map { it.first }.toTypedArray(),
@@ -30,7 +30,7 @@ class TagFilter : Filter.Group<Tag>("Tags", TAGS.map(::Tag)) {
     val excluded get() = state.filter { it.isExcluded() }.map { it.name }
 }
 
-fun getFilters(subgenre: String) = FilterList(
+fun getFilters(subgenre: String?) = FilterList(
     SortFilter(),
     SubgenreFilter(subgenre),
     TypeFilter(),
@@ -47,7 +47,7 @@ private val SORTS = listOf(
 )
 
 val SUBGENRES = listOf(
-    "All" to "",
+    "All" to null,
     "Boys' Love" to "boys-love",
     "Girls' Love" to "girls-love",
 )

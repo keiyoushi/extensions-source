@@ -28,7 +28,7 @@ abstract class LGBToon :
 
     private val preferences by getPreferencesLazy()
 
-    private val subgenre get() = preferences.getString(SUBGENRE_PREF, "")!!
+    private val subgenre get() = preferences.getString(SUBGENRE_PREF, "")!!.ifEmpty { null }
 
     override suspend fun getPopularManga(page: Int) = getTitles(titlesUrl(page, "views_7d:desc").addSubgenre(subgenre).build())
 
@@ -37,7 +37,7 @@ abstract class LGBToon :
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = titlesUrl(page, filters.firstInstanceOrNull<SortFilter>()?.value ?: LATEST).apply {
             if (query.isNotBlank()) addQueryParameter("keyword", query.trim())
-            addSubgenre(filters.firstInstanceOrNull<SubgenreFilter>()?.value ?: subgenre)
+            addSubgenre(filters.firstInstanceOrNull<SubgenreFilter>()?.value)
             filters.firstInstanceOrNull<TypeFilter>()?.let { addListParameter("type", it.selected) }
             filters.firstInstanceOrNull<TagFilter>()?.let {
                 addListParameter("tag", it.included)
@@ -77,7 +77,7 @@ abstract class LGBToon :
             key = SUBGENRE_PREF
             title = "Subgenre"
             entries = SUBGENRES.map { it.first }.toTypedArray()
-            entryValues = SUBGENRES.map { it.second }.toTypedArray()
+            entryValues = SUBGENRES.map { it.second.orEmpty() }.toTypedArray()
             setDefaultValue("")
             summary = "%s\nShown in Popular and Latest, and the default of the Subgenre filter"
         }.let(screen::addPreference)
@@ -89,8 +89,8 @@ abstract class LGBToon :
         .addQueryParameter("page", page.toString())
         .addQueryParameter("limit", "24")
 
-    private fun HttpUrl.Builder.addSubgenre(value: String) = apply {
-        if (value.isNotEmpty()) addQueryParameter("demographics", value)
+    private fun HttpUrl.Builder.addSubgenre(value: String?) = apply {
+        if (value != null) addQueryParameter("demographics", value)
     }
 
     private fun HttpUrl.Builder.addListParameter(name: String, values: List<String>) {
