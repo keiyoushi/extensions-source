@@ -364,12 +364,16 @@ abstract class YuriNeko : KeiSource() {
 
     private fun chapterSortValue(chapter: ChapterDto): Double {
         chapter.order?.let { return it }
-        return chapterNumberRegex.find(chapter.chapterNumber)?.value?.toDoubleOrNull()
+        return chapter.chapterNumber?.let { chapterNumberRegex.find(it)?.value?.toDoubleOrNull() }
             ?: Double.NEGATIVE_INFINITY
     }
 
     private fun chapterName(chapter: ChapterDto): String {
-        val chapterNumber = chapter.chapterNumber
+        val chapterTitle = (chapter.title ?: chapter.name)?.takeIf(String::isNotBlank)
+        if (chapterTitle != null && chapterNumberedTitleRegex.containsMatchIn(chapterTitle)) return chapterTitle
+
+        val chapterNumber = chapter.chapterNumber ?: return chapterTitle ?: "Chương ?"
+
         val baseName = if (
             chapterNumber.startsWith("Chương", ignoreCase = true) ||
             chapterNumber.startsWith("Chapter", ignoreCase = true)
@@ -378,9 +382,6 @@ abstract class YuriNeko : KeiSource() {
         } else {
             "Chương $chapterNumber"
         }
-
-        val chapterTitle = (chapter.title ?: chapter.name)
-            ?.takeIf(String::isNotBlank)
 
         return chapterTitle?.let { "$baseName: $it" } ?: baseName
     }
@@ -544,6 +545,7 @@ abstract class YuriNeko : KeiSource() {
         RegexOption.IGNORE_CASE,
     )
     private val chapterNumberRegex = Regex("""\d+(?:\.\d+)?""")
+    private val chapterNumberedTitleRegex = Regex("""^(chap|chương|chapter)\s*\d""", RegexOption.IGNORE_CASE)
     private val chapterPageUrlRegex = Regex("""(?:/api/img\?[^"'\s]+|/?chapters/[^"'\\\s]+)""")
     private val chapterImagePathRegex = Regex("""(?:^|/)chapters/""")
 }
