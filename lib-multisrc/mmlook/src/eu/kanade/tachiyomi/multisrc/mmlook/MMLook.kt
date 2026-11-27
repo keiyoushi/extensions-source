@@ -51,7 +51,7 @@ abstract class MMLook : KeiSource() {
                 title = element.selectFirst(".le-t")!!.text()
                 author = element.selectFirst(".likeinfo > p")?.text()?.removePrefix("作者：")
                 description = MarkdownDescription.Builder().description(element.selectFirst(".le-j")).build()
-                thumbnail_url = element.selectFirst("img")?.attrOrNull("data-src")
+                thumbnail_url = element.selectFirst("img")?.attrOrNull("abs:data-src")
             }.formatUrl()
         }
         return MangasPage(entries, false)
@@ -98,7 +98,7 @@ abstract class MMLook : KeiSource() {
                 url = element.selectFirst("a")!!.attr("href").mustRemoveSurrounding("/", "/")
                 title = element.selectFirst(".e-title, .title")!!.text()
                 author = element.selectFirst(".tip")?.text()
-                thumbnail_url = element.selectFirst("img")?.attrOrNull("data-src")
+                thumbnail_url = element.selectFirst("img")?.attrOrNull("abs:data-src")
             }.formatUrl()
         }
         return MangasPage(entries, false)
@@ -138,7 +138,7 @@ abstract class MMLook : KeiSource() {
 
     private fun mangaDetailsParse(document: Document) = SManga.create().apply {
         val comicInfo = document.selectFirst(".comicInfo")!!
-        thumbnail_url = comicInfo.selectFirst("img")?.attrOrNull("data-src")
+        thumbnail_url = comicInfo.selectFirst("img")?.attrOrNull("abs:data-src")
 
         val container = comicInfo.selectFirst(".detinfo")!!
         title = container.selectFirst("h1")!!.text()
