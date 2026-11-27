@@ -120,6 +120,7 @@ abstract class Mangainua :
         fetchChapters: Boolean,
     ): SMangaUpdate = coroutineScope {
         val newUrl = manga.url
+        val mangaId = manga.memo.getStringOrNull("id") ?: newUrl.getMangaId()
 
         val mangaNew = async {
             if (fetchDetails) {
@@ -147,7 +148,7 @@ abstract class Mangainua :
                         addAll(document.select(".mt-genres a").eachText())
                     }.joinToString()
                     memo = buildJsonObject {
-                        put("id", manga.memo.getStringOrNull("id") ?: newUrl.getMangaId())
+                        put("id", mangaId)
                     }
                 }
             } else {
@@ -157,7 +158,6 @@ abstract class Mangainua :
 
         val chaptersNew = async {
             if (fetchChapters) {
-                val mangaId = manga.memo.getStringOrNull("id") ?: newUrl.getMangaId()
                 val body = FormBody.Builder()
                     .add("news_id", mangaId)
                     .build()
