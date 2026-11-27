@@ -256,9 +256,9 @@ abstract class Hentai3 :
 
     // Preferences
     private fun String.shortenTitle() = if (displayFullTitle) {
-        this
+        trim()
     } else {
-        replace(SHORT_TITLE_REGEX, "").trim().ifBlank { this }
+        replace(SHORT_TITLE_REGEX, "").trim().ifBlank { trim() }
     }
 
     private val displayFullTitle
