@@ -11,9 +11,7 @@ import eu.kanade.tachiyomi.multisrc.hiper.Hiper
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
-import keiyoushi.network.rateLimit
 import okhttp3.Headers
-import okhttp3.OkHttpClient
 import okhttp3.Response
 
 @Source
@@ -21,9 +19,6 @@ abstract class Hiperdex : Hiper() {
 
     override fun Headers.Builder.configureHeaders(): Headers.Builder = this
         .set("x-cfg-auth", "yceqt7qgu004")
-
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addHiperAuthInterceptor()
-        .rateLimit(3)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         super.setupPreferenceScreen(screen)
