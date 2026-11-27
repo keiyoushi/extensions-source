@@ -147,17 +147,19 @@ abstract class MangaKutuphanem : KeiSource() {
     // Also runs inside the page interceptor, so it only throws IOException.
     private fun Response.toManifest(): ChapterPagesDto {
         if (isSuccessful) return parseAs<ChapterPagesDto>()
-        val error = if (body.contentType()?.subtype == "json") parseAs<ErrorDto>().error else null
+        val error = if (body.contentType()?.subtype == "json") parseAs<ErrorDto>() else null
         close()
-        if (error == "LINK_ONLY") {
-            throw IOException("This chapter is only readable on the source site. Open it in WebView")
+        if (error?.error == "LINK_ONLY") {
+            throw IOException("Bu bölüm yalnızca kaynak sitede okunabilir. WebView'da açın")
         }
-        throw IOException("HTTP error $code")
+        throw IOException(error?.message ?: "HTTP hatası $code")
     }
 
     private fun chapterManifestUrl(chapterUrl: String) = "$apiUrl/chapter".toHttpUrl().newBuilder()
         .addQueryParameter("url", chapterUrl)
         .addQueryParameter("device", deviceId)
+        // The site reader's read-along mode, which doesn't count toward the guest chapter quota.
+        .addQueryParameter("auto", "1")
         .build()
 
     private fun imageUrl(source: String, page: PageDto, chapterUrl: String) = "$apiUrl/image".toHttpUrl().newBuilder()
@@ -196,7 +198,7 @@ abstract class MangaKutuphanem : KeiSource() {
                     .also { lastManifest = chapterUrl to it }
         }
         val ref = request.url.queryParameter("ref")
-        val page = manifest.pages.firstOrNull { it.ref == ref } ?: throw IOException("Page not found")
+        val page = manifest.pages.firstOrNull { it.ref == ref } ?: throw IOException("Sayfa bulunamadı")
         return chain.proceed(request.newBuilder().url(imageUrl(manifest.source, page, chapterUrl)).build())
     }
 

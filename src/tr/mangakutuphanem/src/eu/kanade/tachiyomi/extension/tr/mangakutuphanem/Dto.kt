@@ -126,7 +126,8 @@ class PageDto(
 
 @Serializable
 class ErrorDto(
-    val error: String,
+    val error: String? = null,
+    val message: String? = null,
 )
 
 @Serializable
