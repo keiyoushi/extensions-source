@@ -175,7 +175,7 @@ abstract class MMLook : KeiSource() {
     private fun SChapter.fullUrl(): String {
         val url = this.url
         if (url.startsWith('/')) throw Exception("请刷新章节列表")
-        return "$baseUrl/$url.html"
+        return "$desktopUrl/$url.html"
     }
 
     override fun getChapterUrl(chapter: SChapter) = chapter.fullUrl().certificateWorkaround()
