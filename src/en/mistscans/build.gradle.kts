@@ -6,14 +6,14 @@ plugins {
 
 keiyoushi {
     name = "Mist Scans"
-    versionCode = 2
+    versionCode = 3
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
     theme = "keyoapp"
 
     source {
         lang = "en"
-        baseUrl = "https://mistscans.org"
+        baseUrl = "https://mistscans.to"
         versionId = 2
     }
 }
