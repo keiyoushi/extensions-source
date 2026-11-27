@@ -28,6 +28,8 @@ class MangaItemDto(
     private val cover: String? = null,
     private val url: String,
 ) {
+    fun titleMatches(text: String) = name.contains(text, ignoreCase = true)
+
     fun toSManga() = SManga.create().apply {
         title = name
         thumbnail_url = cover
@@ -41,6 +43,7 @@ class MangaItemDto(
 @Serializable
 class PaginationDto(
     @SerialName("has_next") val hasNext: Boolean,
+    @SerialName("total") val total: Int = 0,
 )
 
 @Serializable
@@ -57,6 +60,20 @@ class ChapterItemDto(
     fun toSChapter() = SChapter.create().apply {
         url = this@ChapterItemDto.url
         name = this@ChapterItemDto.name
+        date_upload = Instant.tryParse(updatedAt)
+    }
+}
+
+// The series page's SSR payload uses camelCase dates and has no comments_count.
+@Serializable
+class SsrChapterDto(
+    private val url: String,
+    private val name: String,
+    private val updatedAt: String? = null,
+) {
+    fun toSChapter() = SChapter.create().apply {
+        url = this@SsrChapterDto.url
+        name = this@SsrChapterDto.name
         date_upload = Instant.tryParse(updatedAt)
     }
 }
@@ -102,6 +119,8 @@ class InitialMangaDto(
     private val tags: List<EntityDto>? = null,
     private val altNames: List<EntityDto>? = null,
     private val trackers: List<TrackerDto>? = null,
+    // Only the 50 most recent chapters; used as a fallback when the chapter API fails.
+    val chapters: List<SsrChapterDto>? = null,
 ) {
     fun toSManga(mangaUrl: String = url, includeTags: Boolean = true) = SManga.create().apply {
         url = mangaUrl
@@ -161,6 +180,7 @@ class GenreDataDto(
 class GenreItemDto(
     val name: String,
     val slug: String,
+    @SerialName("titles_count") val titlesCount: Int = 0,
 )
 
 private val TRACKER_NAMES = mapOf(
