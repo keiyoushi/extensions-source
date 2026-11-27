@@ -12,7 +12,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
 import keiyoushi.network.Fetch
-import keiyoushi.network.addCookie
 import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
@@ -49,9 +48,6 @@ abstract class HotComics :
 
     override val supportsFilterFetching = true
 
-    // The site's German "new" list is empty
-    override val supportsLatest get() = lang == "en"
-
     private val preferences by getPreferencesLazy()
 
     private val intl = Intl(
@@ -61,8 +57,7 @@ abstract class HotComics :
         classLoader = this::class.java.classLoader!!,
     )
 
-    override fun OkHttpClient.Builder.configureClient() = addCookie("hc_vfs" to "Y")
-        .addInterceptor(::imageBackupInterceptor)
+    override fun OkHttpClient.Builder.configureClient() = addInterceptor(::imageBackupInterceptor)
 
     override suspend fun getPopularManga(page: Int): MangasPage = parseMangaList(client.get("$baseUrl/$lang/ranking", Fetch.DOCUMENT).asJsoup())
 
@@ -90,7 +85,7 @@ abstract class HotComics :
                 thumbnail_url = element.selectFirst("div.visual img")?.imgAttr()
                 title = element.selectFirst("div.main-text > h4.title")!!.text()
             }
-        }.distinctBy { it.url }
+        }
         val hasNextPage = document.selectFirst("div.pagination a.vnext:not(.disabled)") != null
 
         return MangasPage(entries, hasNextPage)
@@ -216,11 +211,11 @@ abstract class HotComics :
         .toJsonElement()
 
     override fun getFilterList(data: JsonElement?): FilterList {
-        val pages = listOfNotNull(
+        val pages = listOf(
             intl["browse_ranking"] to "$lang/ranking",
             intl["browse_home"] to lang,
             intl["browse_weekly"] to "$lang/weekly",
-            (intl["browse_new"] to "$lang/new").takeIf { supportsLatest },
+            intl["browse_new"] to "$lang/new",
         )
         val genres = data?.parseAs<List<Pair<String, String>>>().orEmpty().map { (name, path) -> intl.format("browse_genre", name) to path }
 
