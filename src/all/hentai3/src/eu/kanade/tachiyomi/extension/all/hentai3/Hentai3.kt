@@ -85,11 +85,12 @@ abstract class Hentai3 :
     }
 
     private fun parseMangasPage(doc: Document): MangasPage {
-        val mangas = doc.select("a[href*=/d/]").map { element ->
+        val mangas = doc.select("a[href*=/d/]").mapNotNull { element ->
+            val title = element.selectFirst("div.title")?.ownText() ?: return@mapNotNull null
             SManga.create().apply {
-                title = element.selectFirst("div.title")!!.ownText().shortenTitle()
+                this.title = title.shortenTitle()
                 setUrlWithoutDomain(element.absUrl("href"))
-                thumbnail_url = element.selectFirst("img:not([class])")!!.absUrl("src")
+                thumbnail_url = element.selectFirst("img:not([class])")?.absUrl("src")
             }
         }
         val hasNextPage = doc.selectFirst("a[rel=next]") != null
@@ -232,10 +233,11 @@ abstract class Hentai3 :
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val doc = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         return doc.select("#similar-content .doujin-col .doujin a.cover").mapNotNull { link ->
+            val title = link.selectFirst(".title")?.text() ?: return@mapNotNull null
             SManga.create().apply {
-                title = link.selectFirst(".title")!!.text()
+                this.title = title
                 setUrlWithoutDomain(link.absUrl("href"))
-                thumbnail_url = link.selectFirst("img")!!.let { img ->
+                thumbnail_url = link.selectFirst("img")?.let { img ->
                     img.attr("data-src").ifEmpty { img.absUrl("src") }
                 }
             }
