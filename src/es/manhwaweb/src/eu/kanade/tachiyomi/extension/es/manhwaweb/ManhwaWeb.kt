@@ -128,10 +128,10 @@ abstract class ManhwaWeb : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val slug = chapter.url.removeSuffix("/").substringAfterLast("/")
 
-        val response = client.get("$apiUrl/chapters/see/$slug", Fetch.XHR)
+        val response = client.get("$apiUrl/chapters/see_new/$slug", Fetch.XHR)
 
-        val result = response.parseAs<PayloadPageDto>()
-        return result.data.images.filter { it.startsWith("http") }
+        val result = response.parseAs<PageDto>()
+        return result.images.filter { it.startsWith("http") }
             .mapIndexed { i, img -> Page(i, imageUrl = img) }
     }
 

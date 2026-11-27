@@ -27,14 +27,5 @@
     }
     const options = [...field.parentElement.querySelectorAll('label')].filter((label) => label.querySelector('input[type=checkbox]'));
     if (!options.length) return { ...base, tap: point(field.parentElement.querySelector('button')) };
-    // Ids the site's cached series lists show for their genres
-    const ids = {};
-    for (let i = 0; i < sessionStorage.length; i++) {
-        const key = sessionStorage.key(i);
-        if (!key.startsWith('catha_swr_mangas_')) continue;
-        for (const series of JSON.parse(sessionStorage.getItem(key)).data?.data ?? []) {
-            for (const genre of series.fk_generos ?? []) if (genre.generos_id) ids[genre.generos_id.nombre] = genre.generos_id.id;
-        }
-    }
-    return { ...base, names: options.map((label) => label.textContent.trim()), ids };
+    return { ...base, names: options.map((label) => label.textContent.trim()) };
 }

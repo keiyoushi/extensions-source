@@ -34,19 +34,21 @@ abstract class ArvenScans :
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
+    private val apiUrl get() = "https://api.${baseUrl.toHttpUrl().host}"
+
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val url = "$API_URL/works/most-read".toHttpUrl().newBuilder()
+        val url = "$apiUrl/works/most-read".toHttpUrl().newBuilder()
             .addQueryParameter("limit", "20")
             .build()
         val works = client.get(url, Fetch.XHR).parseAs<DataDto<List<WorkDto>>>().data
-        return MangasPage(works.map { it.toSManga(API_URL) }, false)
+        return MangasPage(works.map { it.toSManga(apiUrl) }, false)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(SortFilter()))
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val genre = filters.firstInstanceOrNull<GenreFilter>()?.slug
-        val url = API_URL.toHttpUrl().newBuilder().apply {
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
             if (query.isBlank() && genre != null) {
                 addPathSegments("genres/$genre/works")
             } else {
@@ -58,7 +60,7 @@ abstract class ArvenScans :
             addQueryParameter("limit", "24")
         }.build()
         val data = client.get(url, Fetch.XHR).parseAs<PagedDto<WorkDto>>()
-        return MangasPage(data.data.map { it.toSManga(API_URL) }, data.hasNextPage)
+        return MangasPage(data.data.map { it.toSManga(apiUrl) }, data.hasNextPage)
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
@@ -67,7 +69,7 @@ abstract class ArvenScans :
         val workId = when (segments.firstOrNull()) {
             "series" -> {
                 val slug = segments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
-                val resolveUrl = API_URL.toHttpUrl().newBuilder()
+                val resolveUrl = apiUrl.toHttpUrl().newBuilder()
                     .addPathSegments("resolve/work")
                     .addPathSegment(slug)
                     .build()
@@ -75,7 +77,7 @@ abstract class ArvenScans :
             }
             "reader" -> {
                 val chapterId = segments.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
-                val chapterUrl = API_URL.toHttpUrl().newBuilder()
+                val chapterUrl = apiUrl.toHttpUrl().newBuilder()
                     .addPathSegment("chapters")
                     .addPathSegment(chapterId)
                     .build()
@@ -97,9 +99,9 @@ abstract class ArvenScans :
     ): SMangaUpdate = coroutineScope {
         val details = if (fetchDetails) {
             async {
-                val genres = async { client.get("$API_URL/works/${manga.url}/genres", Fetch.XHR).parseAs<DataDto<List<GenreDto>>>().data }
-                val work = client.get("$API_URL/works/${manga.url}", Fetch.XHR).parseAs<WorkDto>()
-                work.toSManga(API_URL, genres.await())
+                val genres = async { client.get("$apiUrl/works/${manga.url}/genres", Fetch.XHR).parseAs<DataDto<List<GenreDto>>>().data }
+                val work = client.get("$apiUrl/works/${manga.url}", Fetch.XHR).parseAs<WorkDto>()
+                work.toSManga(apiUrl, genres.await())
             }
         } else {
             null
@@ -109,7 +111,7 @@ abstract class ArvenScans :
     }
 
     private suspend fun fetchChapters(workId: String): List<SChapter> = coroutineScope {
-        fun pageUrl(page: Int) = "$API_URL/works/$workId/chapters".toHttpUrl().newBuilder()
+        fun pageUrl(page: Int) = "$apiUrl/works/$workId/chapters".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", "100")
             .addQueryParameter("order", "desc")
@@ -127,13 +129,13 @@ abstract class ArvenScans :
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/reader/${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val images = client.get("$API_URL/chapters/${chapter.url}", Fetch.XHR).parseAs<ChapterPagesDto>().images
-        return images.mapIndexed { index, path -> Page(index, imageUrl = API_URL + path) }
+        val images = client.get("$apiUrl/chapters/${chapter.url}", Fetch.XHR).parseAs<ChapterPagesDto>().images
+        return images.mapIndexed { index, path -> Page(index, imageUrl = apiUrl + path) }
     }
 
     override val supportsFilterFetching: Boolean get() = true
 
-    override suspend fun fetchFilterData(): JsonElement = client.get("$API_URL/genres", Fetch.XHR).parseAs<DataDto<List<GenreDto>>>().data
+    override suspend fun fetchFilterData(): JsonElement = client.get("$apiUrl/genres", Fetch.XHR).parseAs<DataDto<List<GenreDto>>>().data
         .filter { (it.workCount ?: 0) > 0 }
         .toJsonElement()
 
@@ -157,7 +159,6 @@ abstract class ArvenScans :
     }
 
     companion object {
-        private const val API_URL = "https://api.arvenscans.net"
         private const val SHOW_PAID_PREF = "show_paid_chapters"
     }
 }

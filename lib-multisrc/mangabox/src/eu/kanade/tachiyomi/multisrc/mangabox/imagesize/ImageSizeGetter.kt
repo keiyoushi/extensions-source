@@ -11,8 +11,7 @@ abstract class ImageSizeGetter(
         } else {
             null
         }
-    } catch (e: Exception) {
-        e.printStackTrace()
+    } catch (_: Exception) {
         null
     } finally {
         stream.close()

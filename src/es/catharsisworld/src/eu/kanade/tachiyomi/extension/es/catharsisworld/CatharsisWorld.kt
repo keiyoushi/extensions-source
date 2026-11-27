@@ -128,8 +128,9 @@ abstract class CatharsisWorld :
         val listing = siteView.drive(pageUrl.toString(), "(${siteView.asset("listing.js")})(${query.toJsonString()}, $pick)") { result ->
             val page = result.parseAs<ListingPage>()
             when {
+                page.error != null -> throw IOException("Error HTTP ${page.error}")
                 page.tap != null -> touch(page.scale, page.width, page.height, page.tap)
-                page.list != null -> Step.Done(page)
+                page.cards != null -> Step.Done(page)
                 else -> Step.Wait
             }
         }
@@ -138,9 +139,7 @@ abstract class CatharsisWorld :
             // The panel showed page 1; a later page loads by the ids it gave
             if ((url.queryParameter("page")?.toInt() ?: 1) > 1) return readListing(url)
         }
-        val list = listing.list!!
-        val page = query.getValue("page").toInt()
-        return MangasPage(list.data.map { it.toSManga(baseUrl) }, page < list.totalPages)
+        return MangasPage(listing.cards!!.map { it.toSManga(baseUrl) }, listing.next)
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/$MANGA_PATH/${manga.url}"
@@ -179,13 +178,7 @@ abstract class CatharsisWorld :
             thumbnail_url = series.cover?.let { baseUrl.toHttpUrl().resolve(it)?.newBuilder()?.query(null)?.build()?.toString() }
             author = series.author?.takeUnless { it == UNKNOWN_AUTHOR }
             val statusBadge = series.badges.firstOrNull { it in STATUSES }
-            status = when (statusBadge?.let(STATUSES::get)) {
-                "curso" -> SManga.ONGOING
-                "pausado" -> SManga.ON_HIATUS
-                "terminado" -> SManga.COMPLETED
-                "abandonado" -> SManga.CANCELLED
-                else -> SManga.UNKNOWN
-            }
+            status = statusOf(series.badges)
             genre = series.badges.filter { it != statusBadge }.joinToString { badgeName(it) }.ifEmpty { null }
             description = MarkdownDescription.Builder()
                 .rating(series.rating?.takeIf { (series.votes ?: 0) > 0 }, max = 5, votes = series.votes)
@@ -256,7 +249,7 @@ abstract class CatharsisWorld :
         val panel = result.parseAs<GenrePanel>()
         when {
             panel.tap != null -> touch(panel.scale, panel.width, panel.height, panel.tap)
-            panel.names != null -> Step.Done(panel.names.map { GenreOption(it, panel.ids[it]) }.toJsonElement())
+            panel.names != null -> Step.Done(panel.names.map { GenreOption(it, null) }.toJsonElement())
             else -> Step.Wait
         }
     }
@@ -378,8 +371,9 @@ private const val CHAPTER_SEGMENT = "chapter/"
 
 private const val PRELUDE = "pass.js"
 
-// The reader's page elements, each a canvas, in reading order, and its text reader for novels
-private const val READER_PAGES = "[data-page-index]"
+// The reader's page elements, each holding the canvas its page is drawn on, in reading order, and its text reader for
+// novels
+private const val READER_PAGES = ":has(> canvas)"
 private const val READER_TEXT = ".catha-novel-body"
 
 // The series list's sorts as its page url takes them
@@ -412,6 +406,15 @@ private val STATUSES = mapOf(
     "Terminado" to "terminado",
     "Abandonado" to "abandonado",
 )
+
+/** The status of the first of [labels] that is a status label. */
+internal fun statusOf(labels: List<String>) = when (labels.firstNotNullOfOrNull(STATUSES::get)) {
+    "curso" -> SManga.ONGOING
+    "pausado" -> SManga.ON_HIATUS
+    "terminado" -> SManga.COMPLETED
+    "abandonado" -> SManga.CANCELLED
+    else -> SManga.UNKNOWN
+}
 
 private val AGE_REGEX = Regex("""Hace (\d+|una?) (\S+)""")
 private val AGE_UNITS = mapOf(

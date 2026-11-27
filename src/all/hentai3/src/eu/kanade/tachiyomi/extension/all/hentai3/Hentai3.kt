@@ -21,8 +21,8 @@ import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
-import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Instant
 
 @Source
 abstract class Hentai3 :
@@ -212,7 +212,7 @@ abstract class Hentai3 :
         SChapter.create().apply {
             name = "Chapter"
             setUrlWithoutDomain(doc.location())
-            date_upload = dateFormat.tryParse(doc.select("time").attr("datetime"))
+            date_upload = Instant.tryParse(doc.select("time").attr("datetime"))
         },
     )
 
@@ -256,7 +256,7 @@ abstract class Hentai3 :
     private fun String.shortenTitle() = if (displayFullTitle) {
         this
     } else {
-        replace(SHORT_TITLE_REGEX, "").trim()
+        replace(SHORT_TITLE_REGEX, "").trim().ifBlank { this }
     }
 
     private val displayFullTitle
@@ -270,8 +270,7 @@ abstract class Hentai3 :
     }
 
     companion object {
-        private val SHORT_TITLE_REGEX = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
+        private val SHORT_TITLE_REGEX = Regex("""(\[(?:[^\[\]]|\[[^\[\]]*])*\]|[({][^)}]*[)}])""")
         private val REMOVE_THUMB_REGEX = Regex("t(?=\\.)")
-        private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZZZZZ", Locale.ROOT)
     }
 }

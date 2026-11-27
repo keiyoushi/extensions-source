@@ -1,5 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.lgbtoon
 
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,22 +15,29 @@ import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
-abstract class LGBToon : KeiSource() {
+abstract class LGBToon :
+    KeiSource(),
+    ConfigurableSource {
 
-    override suspend fun getPopularManga(page: Int) = getTitles(titlesUrl(page, "views_7d:desc").build())
+    private val preferences by getPreferencesLazy()
 
-    override suspend fun getLatestUpdates(page: Int) = getTitles(titlesUrl(page, LATEST).build())
+    private val subgenre get() = preferences.getString(SUBGENRE_PREF, "")!!.ifEmpty { null }
+
+    override suspend fun getPopularManga(page: Int) = getTitles(titlesUrl(page, "views_7d:desc").addSubgenre(subgenre).build())
+
+    override suspend fun getLatestUpdates(page: Int) = getTitles(titlesUrl(page, LATEST).addSubgenre(subgenre).build())
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
         val url = titlesUrl(page, filters.firstInstanceOrNull<SortFilter>()?.value ?: LATEST).apply {
             if (query.isNotBlank()) addQueryParameter("keyword", query.trim())
-            filters.firstInstanceOrNull<SubgenreFilter>()?.value?.let { addQueryParameter("demographics", it) }
+            addSubgenre(filters.firstInstanceOrNull<SubgenreFilter>()?.value)
             filters.firstInstanceOrNull<TypeFilter>()?.let { addListParameter("type", it.selected) }
             filters.firstInstanceOrNull<TagFilter>()?.let {
                 addListParameter("tag", it.included)
@@ -45,21 +55,6 @@ abstract class LGBToon : KeiSource() {
         return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
     }
 
-    private fun titlesUrl(page: Int, sort: String) = baseUrl.toHttpUrl().newBuilder()
-        .addPathSegments("api/titles")
-        .addQueryParameter("sort", sort)
-        .addQueryParameter("page", page.toString())
-        .addQueryParameter("limit", "24")
-
-    private fun HttpUrl.Builder.addListParameter(name: String, values: List<String>) {
-        if (values.isNotEmpty()) addQueryParameter(name, values.joinToString(","))
-    }
-
-    private suspend fun getTitles(url: HttpUrl): MangasPage {
-        val data = client.get(url, Fetch.XHR).parseAs<TitlesDto>().data
-        return MangasPage(data.items.map { it.toSManga() }, data.page < data.totalPages)
-    }
-
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -75,9 +70,40 @@ abstract class LGBToon : KeiSource() {
         .extractNextJs<ReaderDto>()?.initialPages.orEmpty()
         .mapIndexed { index, url -> Page(index, imageUrl = url) }
 
-    override fun getFilterList(data: JsonElement?): FilterList = getFilters()
+    override fun getFilterList(data: JsonElement?): FilterList = getFilters(subgenre)
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = SUBGENRE_PREF
+            title = "Subgenre"
+            entries = SUBGENRES.map { it.first }.toTypedArray()
+            entryValues = SUBGENRES.map { it.second.orEmpty() }.toTypedArray()
+            setDefaultValue("")
+            summary = "%s\nShown in Popular and Latest, and the default of the Subgenre filter"
+        }.let(screen::addPreference)
+    }
+
+    private fun titlesUrl(page: Int, sort: String) = baseUrl.toHttpUrl().newBuilder()
+        .addPathSegments("api/titles")
+        .addQueryParameter("sort", sort)
+        .addQueryParameter("page", page.toString())
+        .addQueryParameter("limit", "24")
+
+    private fun HttpUrl.Builder.addSubgenre(value: String?) = apply {
+        if (value != null) addQueryParameter("demographics", value)
+    }
+
+    private fun HttpUrl.Builder.addListParameter(name: String, values: List<String>) {
+        if (values.isNotEmpty()) addQueryParameter(name, values.joinToString(","))
+    }
+
+    private suspend fun getTitles(url: HttpUrl): MangasPage {
+        val data = client.get(url, Fetch.XHR).parseAs<TitlesDto>().data
+        return MangasPage(data.items.map { it.toSManga() }, data.page < data.totalPages)
+    }
 
     companion object {
         private const val LATEST = "chapter_updated_at:desc"
+        private const val SUBGENRE_PREF = "subgenre"
     }
 }

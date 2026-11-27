@@ -12,10 +12,14 @@ import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 
@@ -45,10 +49,9 @@ abstract class MMLook : KeiSource() {
             SManga.create().apply {
                 url = element.select("a").attr("href").mustRemoveSurrounding("/", "/")
                 title = element.selectFirst(".le-t")!!.text()
-                author = element.selectFirst(".likeinfo > p")!!.text()
-                    .mustRemoveSurrounding("作者：", "")
-                description = element.selectFirst(".le-j")!!.text()
-                thumbnail_url = element.selectFirst("img")!!.attr("data-src")
+                author = element.selectFirst(".likeinfo > p")?.text()?.removePrefix("作者：")
+                description = MarkdownDescription.Builder().description(element.selectFirst(".le-j")).build()
+                thumbnail_url = element.selectFirst("img")?.attrOrNull("abs:data-src")
             }.formatUrl()
         }
         return MangasPage(entries, false)
@@ -94,11 +97,22 @@ abstract class MMLook : KeiSource() {
             SManga.create().apply {
                 url = element.selectFirst("a")!!.attr("href").mustRemoveSurrounding("/", "/")
                 title = element.selectFirst(".e-title, .title")!!.text()
-                author = element.selectFirst(".tip")!!.text()
-                thumbnail_url = element.selectFirst("img")!!.attr("data-src")
+                author = element.selectFirst(".tip")?.text()
+                thumbnail_url = element.selectFirst("img")?.attrOrNull("abs:data-src")
             }.formatUrl()
         }
         return MangasPage(entries, false)
+    }
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        val siteHost = baseUrl.toHttpUrl().host.removePrefix("m.")
+        if (url.host != siteHost && !url.host.endsWith(".$siteHost")) return null
+        val id = url.pathSegments.first().takeIf { MANGA_ID.matches(it) } ?: return null
+        val document = client.get("$desktopUrl/$id/", Fetch.DOCUMENT).asJsoup()
+        return mangaDetailsParse(document).apply {
+            this.url = id
+            initialized = true
+        }.formatUrl()
     }
 
     override fun getMangaUrl(manga: SManga): String {
@@ -124,19 +138,19 @@ abstract class MMLook : KeiSource() {
 
     private fun mangaDetailsParse(document: Document) = SManga.create().apply {
         val comicInfo = document.selectFirst(".comicInfo")!!
-        thumbnail_url = comicInfo.selectFirst("img")!!.attr("data-src")
+        thumbnail_url = comicInfo.selectFirst("img")?.attrOrNull("abs:data-src")
 
         val container = comicInfo.selectFirst(".detinfo")!!
         title = container.selectFirst("h1")!!.text()
 
-        var updated = ""
+        var updated: String? = null
         for (span in container.select("span")) {
             val text = span.ownText()
             val value = text.substring(4).trimStart()
             when (val key = text.substring(0, 4)) {
                 "作 者：" -> author = value
 
-                "更新时间" -> updated = "$text\n\n"
+                "更新时间" -> updated = value.removePrefix("：")
 
                 "标 签：" -> genre = value.replace(" ", ", ")
 
@@ -146,11 +160,14 @@ abstract class MMLook : KeiSource() {
                     else -> SManga.UNKNOWN
                 }
 
-                else -> throw Exception("Unknown field: $key")
+                else -> throw Exception("未知字段：$key")
             }
         }
 
-        description = updated + container.selectFirst(".content")!!.text()
+        description = MarkdownDescription.Builder()
+            .field("更新时间", updated)
+            .description(container.selectFirst(".content"))
+            .build()
     }
 
     private suspend fun fetchChapterList(document: Document, mangaId: String): List<SChapter> {
@@ -175,7 +192,7 @@ abstract class MMLook : KeiSource() {
     private fun SChapter.fullUrl(): String {
         val url = this.url
         if (url.startsWith('/')) throw Exception("请刷新章节列表")
-        return "$baseUrl/$url.html"
+        return "$desktopUrl/$url.html"
     }
 
     override fun getChapterUrl(chapter: SChapter) = chapter.fullUrl().certificateWorkaround()
@@ -191,6 +208,8 @@ abstract class MMLook : KeiSource() {
             .mapIndexed { i, imageUrl -> Page(i, imageUrl = imageUrl) }
     }
 }
+
+private val MANGA_ID = Regex("[A-Za-z]{7}")
 
 private fun String.mustRemoveSurrounding(prefix: String, suffix: String): String {
     check(startsWith(prefix) && endsWith(suffix)) { "string doesn't match $prefix[...]$suffix" }

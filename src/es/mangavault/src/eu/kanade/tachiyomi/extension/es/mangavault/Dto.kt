@@ -7,6 +7,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @Serializable
 class SearchResponse(
@@ -19,7 +20,6 @@ class MangaDto(
     private val slug: String,
     private val title: String,
     @SerialName("cover_url") private val coverUrl: String?,
-    @SerialName("content_type") val contentType: String?,
 ) {
     fun toSManga() = SManga.create().apply {
         url = "/manga/$slug"
@@ -64,4 +64,4 @@ class GenreOption(
     val label: String,
 )
 
-private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT)

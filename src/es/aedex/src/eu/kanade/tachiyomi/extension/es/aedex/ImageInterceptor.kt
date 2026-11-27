@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.multisrc.catharsis.descramble
 import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.sha256
 import keiyoushi.utils.toJsonRequestBody
 import keiyoushi.utils.xor
 import keiyoushi.utils.xorInPlace
@@ -15,7 +16,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
-import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
@@ -39,8 +39,8 @@ class ImageInterceptor(
         val index = parts[4].toInt()
         val chapterKey = parts[5]
 
-        val response = try {
-            proceedPage(chain, request, keys)
+        val (response, visit) = try {
+            proceedPage(chain, request, keys) to keys
         } catch (_: OutdatedVisitException) {
             // The site forgot the visit this URL came from, so take the page from a new one
             val session = renewSession(chapterKey, keys.seed)?.takeIf { index < it.pageCount } ?: throw OutdatedVisitException()
@@ -48,29 +48,28 @@ class ImageInterceptor(
                 .url(session.imageUrl(index, chapterKey))
                 .fetch(Fetch.XHR.from(session.readerUrl))
                 .build()
-            proceedPage(chain, renewed, session.keys)
+            proceedPage(chain, renewed, session.keys) to session.keys
         }
         if (!response.isSuccessful) return response
 
-        val handle = request.url.pathSegments[2]
-        val bytes = response.body.use { it.bytes() }
-        // The scramble key, XOR key and gutter ride in a masked trailer after the image; the plain headers are a fallback
-        val meta = listOf(keys.token, keys.signer.sessionKey).firstNotNullOfOrNull { PageMeta.fromTrailer(bytes, it, handle) }
-        val data = if (meta != null) bytes.copyOf(meta.imageLength) else bytes
-        val pageXorKey = meta?.xor ?: response.header("X-Page-Xor")?.toIntOrNull()
-        val scrambleKey = meta?.key ?: response.header("X-Page-Key").orEmpty()
+        // Newer pages carry their keys in a trailer, the headers are then a decoy
+        val trailer = response.body.source().peek().readByteArray().pageTrailer(visit.token, response.request.url.pathSegments[2])
+        val pageXorKey = trailer?.xorKey ?: response.header("X-Page-Xor")?.toIntOrNull()
+        val scrambleKey = trailer?.key ?: response.header("X-Page-Key").orEmpty()
         // The reader spaces the shuffled strips apart by this many px
-        val tileGutter = (meta?.gutter ?: response.header("X-Tile-Gutter")?.toIntOrNull() ?: 0).takeIf { it in 1..63 } ?: 0
+        val tileGutter = trailer?.gutter ?: response.header("X-Tile-Gutter")?.toIntOrNull() ?: 0
 
         // Plain, the page's XOR key, then 0x43 for older chapters, like the site's reader
-        val header = data.copyOf(minOf(data.size, HEADER_SIZE))
+        val header = response.body.source().peek().readByteArray(HEADER_SIZE)
         val xorKey = listOfNotNull(0, pageXorKey, LEGACY_XOR_KEY).firstOrNull { isImageHeader(header.xor(it)) }
-            ?: throw IOException("Unknown page image format")
-        if (xorKey != 0) data.xorInPlace(xorKey)
-        if (scrambleKey.isBlank()) {
-            return response.newBuilder().body(data.toResponseBody(response.body.contentType())).build()
+        if (xorKey == null) {
+            response.close()
+            throw IOException("Unknown page image format")
         }
-        val image = BitmapFactory.decodeByteArray(data, 0, data.size) ?: throw IOException("Undecodable page image")
+        val plain = if (xorKey == 0) response else response.xor(xorKey)
+        if (scrambleKey.isBlank()) return plain
+        val image = plain.body.use { BitmapFactory.decodeStream(it.byteStream()) }
+            ?: throw IOException("Undecodable page image")
         val result = descramble(image, tileGutter) { width, height -> tilePlan(mulberry32(scrambleKey.hashCode()), width, height) }
         image.recycle()
 
@@ -135,12 +134,30 @@ class ImageInterceptor(
 
     companion object {
         private const val LEGACY_XOR_KEY = 0x43
-        private const val HEADER_SIZE = 12
+        private const val HEADER_SIZE = 12L
         private const val MIN_LIVE_TTL = 5_000L
         private const val LIVE_MARGIN = 5_000L
         private val MEDIA_TYPE = "image/jpeg".toMediaType()
     }
 }
+
+private class PageTrailer(val key: String, val xorKey: Int, val gutter: Int)
+
+// Like the reader's extract_trailer: magic, XOR key, gutter, key length and key, masked with
+// sha256("t:m0:handle") + sha256("t:m1:handle"), then its length in 2 bytes
+private fun ByteArray.pageTrailer(token: String, handle: String): PageTrailer? {
+    if (size < 2) return null
+    val length = ((this[size - 2].toInt() and 0xFF) shl 8) or (last().toInt() and 0xFF)
+    val mask = "$token:m0:$handle".sha256() + "$token:m1:$handle".sha256()
+    if (length !in TRAILER_MAGIC.size + 3..minOf(mask.size, size - 2)) return null
+    val data = copyOfRange(size - 2 - length, size - 2).xorInPlace(mask)
+    if (!data.copyOf(TRAILER_MAGIC.size).contentEquals(TRAILER_MAGIC)) return null
+    val keyLength = data[6].toInt() and 0xFF
+    if (7 + keyLength > length) return null
+    return PageTrailer(data.copyOfRange(7, 7 + keyLength).decodeToString(), data[4].toInt() and 0xFF, data[5].toInt() and 0xFF)
+}
+
+private val TRAILER_MAGIC = byteArrayOf(0xAE.toByte(), 0xDE.toByte(), 0x58, 0x01)
 
 // The reader's page shuffle generator
 private fun mulberry32(seed: Int): () -> Double {

@@ -10,12 +10,16 @@ import keiyoushi.network.Fetch
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
+import keiyoushi.source.MirrorPreferences
 import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.HttpUrl
@@ -30,10 +34,12 @@ import java.util.Locale
 @Source
 abstract class NameeToon : KeiSource() {
 
-    // Old domains redirect to the current one
-    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = listOf(
-        client.get(baseUrl, Fetch.DOCUMENT).use { it.request.url.toString() },
-    )
+    // Each front's old domains redirect to its current one
+    override suspend fun fetchBaseUrls(client: OkHttpClient): List<String> = coroutineScope {
+        (fetchableBaseUrl as MirrorPreferences).mirrors.map { (_, url) ->
+            async { client.get(url, Fetch.DOCUMENT).use { it.request.url.toString() } }
+        }.awaitAll()
+    }
 
     override val supportsLatest = false
 
@@ -42,17 +48,24 @@ abstract class NameeToon : KeiSource() {
     override suspend fun getLatestUpdates(page: Int): MangasPage = throw UnsupportedOperationException()
 
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val params = if (query.isNotBlank()) {
-            listOf(searchParam(query))
-        } else {
-            val day = filters.firstInstanceOrNull<DayFilter>()?.selected
-            listOf(
-                "wt_fin" to (filters.firstInstanceOrNull<StatusFilter>()?.selected ?: ONGOING),
-                if (day != null) "w" to day else "cate" to (filters.firstInstanceOrNull<GenreFilter>()?.selected ?: ALL_GENRES),
-            )
+        if (query.isNotBlank()) {
+            val results = searchEntries(page, query)
+            return MangasPage(results.flatten().map { it.toSManga(baseUrl) }, results.any { it.size == PAGE_SIZE })
         }
+        val day = filters.firstInstanceOrNull<DayFilter>()?.selected
+        val params = listOf(
+            "wt_fin" to (filters.firstInstanceOrNull<StatusFilter>()?.selected ?: ONGOING),
+            if (day != null) "w" to day else "cate" to (filters.firstInstanceOrNull<GenreFilter>()?.selected ?: ALL_GENRES),
+        )
         val entries = getEntries(page, params)
         return MangasPage(entries.map { it.toSManga(baseUrl) }, entries.size == PAGE_SIZE)
+    }
+
+    // The site's search only looks through ongoing series unless told to look through completed ones
+    private suspend fun searchEntries(page: Int, text: String): List<List<WebtoonDto>> = coroutineScope {
+        listOf(ONGOING, COMPLETED).map { status ->
+            async { getEntries(page, listOf(searchParam(text), "wt_fin" to status)) }
+        }.awaitAll()
     }
 
     // The site's search fails on apostrophes, and "_" matches any one character there
@@ -67,7 +80,7 @@ abstract class NameeToon : KeiSource() {
     }
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
-        if (url.host != baseUrl.toHttpUrl().host || url.pathSegments.lastOrNull() != "list.php") return null
+        if (!FRONT_HOST.matches(url.host) || url.pathSegments.lastOrNull() != "list.php") return null
         val id = url.queryParameter("i")?.takeIf { it.all(Char::isDigit) } ?: return null
         val manga = SManga.create().apply { this.url = id }
         return getMangaUpdate(manga, emptyList(), fetchDetails = true, fetchChapters = false).manga
@@ -88,21 +101,23 @@ abstract class NameeToon : KeiSource() {
         )
     }
 
+    // Each front lays the series page out its own way
     private suspend fun parseDetails(id: String, document: Document): SManga {
         // A missing series still answers with the page template, without a title
-        val title = document.selectFirst("h1.list_p_title")?.text()?.takeIf(String::isNotEmpty)!!
+        val title = document.selectFirst(".book[data-title]")?.attr("data-title")?.takeIf(String::isNotEmpty)!!
         // The series page shows neither the author nor the status, the list API does
-        val entry = getEntries(1, listOf(searchParam(title))).firstOrNull { it.id == id }
+        val entry = searchEntries(1, title).flatten().firstOrNull { it.id == id }
         return SManga.create().apply {
             url = id
             this.title = title
-            thumbnail_url = document.selectFirst(".list_p_img img")?.absUrl("src")
+            thumbnail_url = document.selectFirst(".list_p_img img, .toon_sum_img img, .list_page_head img")?.absUrl("src")
             author = entry?.author
             description = MarkdownDescription.Builder()
                 .info(entry?.company)
-                .description(document.selectFirst(".list_p_detail"))
+                .description(document.selectFirst(".list_p_detail, .td_txt, .list_page_head_content p"))
                 .build()
-            genre = document.select(".cate_type span").last()?.text()
+            // 머니툰's series page has no genres
+            genre = (document.selectFirst(".cate_type span:last-child, .toon_cate_btn")?.text() ?: entry?.genre)
                 ?.split(GENRE_SEPARATOR)
                 ?.map { it.trim() }
                 ?.filter { it.isNotEmpty() }
@@ -123,15 +138,18 @@ abstract class NameeToon : KeiSource() {
     }
 
     private fun parseDate(text: String?): Long = when (text) {
-        "오늘" -> LocalDate.now(KOREA_ZONE).atStartOfDay(KOREA_ZONE).toInstant().toEpochMilli()
+        "오늘" -> daysAgo(0)
+        "어제" -> daysAgo(1)
         else -> dateFormat.tryParseDate(text, KOREA_ZONE)
     }
+
+    private fun daysAgo(days: Long): Long = LocalDate.now(KOREA_ZONE).minusDays(days).atStartOfDay(KOREA_ZONE).toInstant().toEpochMilli()
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/detail.php?wi=${chapter.url}"
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        return document.select(".toon_view .list_p_img img").mapIndexed { i, img ->
+        return document.select(".toon_view img").mapIndexed { i, img ->
             Page(i, imageUrl = img.absUrl("src"))
         }
     }
@@ -141,9 +159,13 @@ abstract class NameeToon : KeiSource() {
     companion object {
         private const val PAGE_SIZE = 30
         private const val ONGOING = "연재중"
+        private const val COMPLETED = "완결"
         private const val ALL_GENRES = "전체"
         private val KOREA_ZONE = ZoneId.of("Asia/Seoul")
         private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
         private val GENRE_SEPARATOR = Regex("[,/]")
+
+        // 나미툰, 무료툰 and 머니툰 domains, the current ones and the older numbered ones
+        private val FRONT_HOST = Regex("""(?:www\.)?(?:namee|foc|mtoon)\d+\.asia""")
     }
 }
