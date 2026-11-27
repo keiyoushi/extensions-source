@@ -23,7 +23,7 @@ class SearchManga(
     fun toSManga(baseUrl: String): SManga? {
         // If there is no img, it's (probably) deleted manga, but site still shows it in search results
         // Example: https://manga.in.ua/mangas/?sort=name
-        if (name == "." && img.isBlank()) return null
+        if (name == "." && img.isEmpty()) return null
 
         return SManga.create().apply {
             title = name
@@ -60,12 +60,12 @@ class Chapter(
         } else {
             link
         }
-        scanlator = team.takeIf(String::isNotBlank)
+        scanlator = team.takeIf(String::isNotEmpty)
         date_upload = date.times(1000L)
-        chapter_number = num.toFloatOrNull() ?: 0f
+        chapter_number = num.toFloatOrNull() ?: -1f
         name = buildString {
             append("Том $tom Розділ $num")
-            this@Chapter.name.takeIf(String::isNotBlank)?.let { append(" $it") }
+            this@Chapter.name.takeIf(String::isNotEmpty)?.let { append(" $it") }
         }
     }
 }
