@@ -49,13 +49,14 @@ class SortFilter :
         "Sort",
         "sortby",
         arrayOf(
-            Pair("Default", "random"),
-            Pair("Views", "view"),
-            Pair("Popular", "comment_count"),
-            Pair("New Manga", "create_date"),
-            Pair("Latest Update", "update_date"),
+            "Default" to "random",
+            "Views" to "view",
+            "Popular" to "comment_count",
+            "New Manga" to "create_date",
+            "Latest Update" to "update_date",
         ),
         firstIsUnspecified = false,
+        state = 1,
     )
 
 class GenreFilter(name: String) : Filter.TriState(name)

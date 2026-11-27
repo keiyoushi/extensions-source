@@ -16,6 +16,8 @@ keiyoushi {
     }
 
     deeplink {
+        host("www.mangago.me")
+        host("mangago.me")
         path("/read-manga/..*")
     }
 }
