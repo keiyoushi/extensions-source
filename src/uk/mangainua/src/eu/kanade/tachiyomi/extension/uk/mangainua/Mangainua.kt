@@ -22,6 +22,7 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.getStringOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
+import keiyoushi.utils.stringOrNull
 import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -146,7 +147,9 @@ abstract class Mangainua :
                         add(document.selectFirst(".mt-tag--type")?.text())
                         addAll(document.select(".mt-genres a").eachText())
                     }.joinToString()
-                    memo = buildJsonObject { put("id", newUrl.getMangaId()) }
+                    memo = buildJsonObject {
+                        put("id", manga.memo.getStringOrNull("id") ?: newUrl.getMangaId())
+                    }
                 }
             } else {
                 manga
