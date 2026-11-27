@@ -66,7 +66,8 @@ class ChapterDto(
     val title: String,
     val slug: String,
     val pages: List<PageDto>? = null,
-    val deliverySystem: String,
+    // Older chapters with direct image URLs omit the delivery system.
+    val deliverySystem: String = "legacy",
     val isLocked: Boolean,
     val releaseDate: String? = null,
     val createdAt: String? = null,

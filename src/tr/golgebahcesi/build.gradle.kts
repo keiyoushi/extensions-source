@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Gölge Bahçesi"
-    versionCode = 3
+    versionCode = 4
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
@@ -19,4 +19,9 @@ keiyoushi {
     deeplink {
         path("/manga/..*")
     }
+}
+
+// The @Source processor only applies to the main source set.
+tasks.matching { it.name.startsWith("ksp") && it.name.contains("UnitTest") }.configureEach {
+    enabled = false
 }
