@@ -166,9 +166,12 @@ abstract class Hentai3 :
             .joinToString(" ") { it.trim() }
             .trim()
 
+        val offsetPage =
+            filterList.firstInstanceOrNull<OffsetPageFilter>()?.state?.toIntOrNull()?.coerceAtLeast(0)?.plus(page) ?: page
+
         return "$baseUrl/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("q", queries.ifEmpty { "pages:>0" })
-            addQueryParameter("page", page.toString())
+            addQueryParameter("page", offsetPage.toString())
             filterList.firstInstanceOrNull<SelectFilter>()?.let { f ->
                 addQueryParameter("sort", f.getValue())
             }
