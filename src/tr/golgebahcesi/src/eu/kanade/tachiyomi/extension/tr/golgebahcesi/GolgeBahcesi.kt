@@ -13,6 +13,7 @@ import keiyoushi.network.get
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.WebViewTimeoutException
+import keiyoushi.utils.applicationContext
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
 import keiyoushi.utils.toJsonElement
@@ -108,29 +109,57 @@ abstract class GolgeBahcesi : KeiSource() {
         },
     )
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        val segments = "$baseUrl${chapter.url}".toHttpUrl().pathSegments
+    override fun getChapterUrl(chapter: SChapter): String = readerUrl(chapter.url)
+
+    private fun readerUrl(chapterPath: String): String {
+        val segments = "$baseUrl$chapterPath".toHttpUrl().pathSegments
         return "$baseUrl/manga/${segments[1]}/bolum/${segments[2]}"
     }
 
+    private suspend fun chapterDetails(chapterPath: String): ChapterDto {
+        val chapterId = "$baseUrl$chapterPath".toHttpUrl().pathSegments[0]
+        return client.get("$apiBaseUrl/chapters/$chapterId", Fetch.XHR).parseAs<ChapterDto>()
+    }
+
+    private val captures by lazy {
+        SecureChapterCaptures(applicationContext.cacheDir.resolve("golgebahcesi-reader"))
+    }
+
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterId = "$baseUrl${chapter.url}".toHttpUrl().pathSegments[0]
-        val dto = client.get("$apiBaseUrl/chapters/$chapterId", Fetch.XHR).parseAs<ChapterDto>()
+        val dto = chapterDetails(chapter.url)
         if (dto.isLocked) return emptyList()
         if (dto.deliverySystem != "secure") {
             return dto.pages.orEmpty().map { Page(it.index, imageUrl = it.url) }
         }
-        return captureSecurePages(getChapterUrl(chapter)).mapIndexed { index, data ->
-            val imageUrl = HttpUrl.Builder().scheme("https").host(PAGE_HOST)
-                .addPathSegment(index.toString())
-                .fragment(data)
-                .build()
-            Page(index, imageUrl = imageUrl.toString())
+        val capture = captures.get(chapter.url) { onCount, onPage ->
+            captureSecurePages(readerUrl(chapter.url), onCount, onPage)
         }
+        return List(capture.pageCount()) { Page(it, url = chapter.url) }
+    }
+
+    override suspend fun getImageUrl(page: Page): String {
+        val chapterPath = page.url
+        val data = captures.readPage(chapterPath, page.index) { onCount, onPage ->
+            // Mihon can restore a page list after the capture has expired or the app has restarted.
+            val dto = chapterDetails(chapterPath)
+            if (dto.isLocked || dto.deliverySystem != "secure") {
+                throw IOException("The chapter has changed. Clear the chapter cache and try again.")
+            }
+            captureSecurePages(readerUrl(chapterPath), onCount, onPage)
+        }
+        return HttpUrl.Builder().scheme("https").host(PAGE_HOST)
+            .addPathSegment(page.index.toString())
+            .fragment(data)
+            .build()
+            .toString()
     }
 
     // Secure chapters decoded by the site's reader
-    private suspend fun captureSecurePages(chapterUrl: String): List<String> {
+    private suspend fun captureSecurePages(
+        chapterUrl: String,
+        onCount: (Int) -> Unit,
+        onPage: (Int, String) -> Unit,
+    ) {
         val bridge = randomName()
         val channel = randomName()
         val workerHook = "(${asset("worker_hook.js")})(${channel.toJsonString()});\n"
@@ -139,12 +168,12 @@ abstract class GolgeBahcesi : KeiSource() {
         val siteHost = baseUrl.toHttpUrl().host
         val count = AtomicInteger()
         val challengeSeen = AtomicBoolean()
-        return try {
-            runWebView(timeout = 2.minutes) {
+        try {
+            runWebView<Unit>(timeout = 2.minutes) {
                 domStorageEnabled = true
                 userAgent = headers["User-Agent"]!!
 
-                val pages = ConcurrentHashMap<Int, String>()
+                val received = ConcurrentHashMap.newKeySet<Int>()
 
                 interceptRequest { request ->
                     val host = request.url.host
@@ -160,12 +189,19 @@ abstract class GolgeBahcesi : KeiSource() {
                 webMessageBridge(bridge, setOf(baseUrl)) { message ->
                     val data = message.substringAfter(':')
                     when (message.substringBefore(':')) {
-                        "count" -> count.set(data.toInt())
+                        "count" -> {
+                            val total = data.toInt()
+                            require(total > 0)
+                            onCount(total)
+                            count.set(total)
+                        }
                         "page" -> {
                             val index = data.substringBefore(',').toInt()
                             require(index in 0 until count.get())
-                            pages[index] = data.substringAfter("base64,")
-                            if (pages.size == count.get()) resolve(List(pages.size) { pages.getValue(it) })
+                            if (received.add(index)) {
+                                onPage(index, data.substringAfter("base64,"))
+                                if (received.size == count.get()) resolve(Unit)
+                            }
                         }
                         "error" -> reject(Exception(data))
                     }
