@@ -9,9 +9,15 @@ keiyoushi {
     versionCode = 6
     contentWarning = ContentWarning.MIXED
     libVersion = "1.6"
+    theme = "rawspa"
 
     source {
         lang = "ja"
         baseUrl = "https://rawdevart.art"
+    }
+
+    deeplink {
+        path("/g/..*")
+        path("/read/..*")
     }
 }

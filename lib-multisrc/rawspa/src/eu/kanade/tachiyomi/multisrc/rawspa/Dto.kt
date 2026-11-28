@@ -1,9 +1,10 @@
-package eu.kanade.tachiyomi.extension.ja.rawsakura
+package eu.kanade.tachiyomi.multisrc.rawspa
 
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -42,31 +43,22 @@ class MangaDetailResponseDto(
     private val detail: MangaDetailDto,
     private val authors: List<AuthorDto>,
     private val tags: List<TagDto>,
-    private val chapters: List<ChapterDto>,
+    val chapters: List<ChapterDto>,
 ) {
+    val mangaId get() = detail.mangaId
+
     fun toSManga() = SManga.create().apply {
         url = detail.mangaId.toString()
         title = detail.mangaName
         thumbnail_url = detail.mangaCoverImgFull ?: detail.mangaCoverImg
-        author = authors.joinToString { it.authorName.toTitleCase() }.ifEmpty { null }
+        author = authors.joinToString { it.authorName }.ifEmpty { null }
         genre = tags.joinToString { it.tagName.toTitleCase() }.ifEmpty { null }
         status = if (detail.mangaStatus) SManga.COMPLETED else SManga.ONGOING
-        description = buildString {
-            detail.mangaDescription?.takeIf(String::isNotBlank)?.let(::append)
-
-            val altNames = detail.mangaOthersName.orEmpty()
-                .split(',', ';')
-                .map(String::trim)
-                .filter(String::isNotEmpty)
-            if (altNames.isNotEmpty()) {
-                if (isNotEmpty()) append("\n\n")
-                append("Alternative names:")
-                altNames.forEach { append("\n- $it") }
-            }
-        }.ifEmpty { null }
+        description = MarkdownDescription.Builder()
+            .description(detail.mangaDescription)
+            .altTitles(detail.mangaOthersName.orEmpty().split(',', ';'))
+            .build()
     }
-
-    fun toSChapterList() = chapters.map { it.toSChapter(detail.mangaId) }
 }
 
 @Serializable
@@ -92,9 +84,10 @@ class ChapterDto(
     @SerialName("chapter_number") private val chapterNumber: Float,
     @SerialName("chapter_date_published") private val chapterDatePublished: String?,
 ) {
-    fun toSChapter(mangaId: Int) = SChapter.create().apply {
-        val number = chapterNumber.toString().removeSuffix(".0")
-        url = "/reader/sa$mangaId/chapter-$number"
+    val number get() = chapterNumber.toString().removeSuffix(".0")
+
+    fun toSChapter(chapterUrl: String) = SChapter.create().apply {
+        url = chapterUrl
         name = chapterTitle?.takeIf(String::isNotBlank)
             ?.let { "Ch. $number - $it" }
             ?: "Chapter $number"
@@ -114,7 +107,7 @@ class ChapterPageDto(
     @SerialName("chapter_content") private val chapterContent: String,
 ) {
     fun toPageList() = Jsoup.parseBodyFragment(chapterContent, server)
-        .select("img")
+        .select("img[data-src]")
         .mapIndexed { index, img -> Page(index, imageUrl = img.absUrl("data-src")) }
 }
 
