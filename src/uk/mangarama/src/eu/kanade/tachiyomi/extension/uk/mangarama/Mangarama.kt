@@ -47,10 +47,8 @@ abstract class Mangarama :
         intl["order_by_filter_trending"] to "popular",
         intl["order_by_filter_latest"] to "updated",
         intl["order_by_filter_new"] to "new",
-        intl["order_by_filter_az"] to "title_asc",
-        "За назвою Я-А" to "title_desc",
-        "За роком: новіші" to "year_desc",
-        "За роком: старіші" to "year_asc",
+        "Найстарші" to "old",
+        "За кількістю розділів" to "chapters",
     )
 
     // ============================ Popular =============================

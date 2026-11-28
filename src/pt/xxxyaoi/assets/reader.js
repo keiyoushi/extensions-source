@@ -1,16 +1,14 @@
-() => {
-    const ORIGIN = `${location.origin}/`;
-
-    const urlIn = (image) =>
+(startSize) => {
+    const fingerprint = (image) =>
         fetch(image.src)
             .then((response) => response.blob())
-            .then((blob) => blob.slice(-1024).arrayBuffer())
-            .then((buffer) => {
-                const text = new TextDecoder('latin1').decode(buffer);
-                const start = text.lastIndexOf(ORIGIN);
-                if (start < 0) throw new Error();
-                return text.slice(start).match(/^[\x21-\x7e]+/)[0];
-            });
+            .then((blob) => blob.slice(0, startSize).arrayBuffer())
+            .then((buffer) =>
+                crypto.subtle.digest('SHA-256', buffer).then((hash) => ({
+                    length: buffer.byteLength,
+                    hash: [...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2, '0')).join(''),
+                })),
+            );
 
     let pages = null;
     let state = '';
@@ -31,7 +29,7 @@
         const pending = slots.filter((image) => !image.src.startsWith('blob:'));
         const loaded = slots.length && !pending.length;
         if (loaded && state !== 'ordering') {
-            Promise.all(slots.map(urlIn)).then(
+            Promise.all(slots.map(fingerprint)).then(
                 (list) => {
                     pages = list;
                 },

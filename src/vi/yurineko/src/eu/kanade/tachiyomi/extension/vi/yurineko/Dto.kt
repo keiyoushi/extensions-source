@@ -53,7 +53,7 @@ class ChapterDto(
     val id: String,
     val title: String? = null,
     val name: String? = null,
-    val chapterNumber: String,
+    val chapterNumber: String? = null,
     val order: Double? = null,
     val publishedAt: String? = null,
     val createdAt: String? = null,

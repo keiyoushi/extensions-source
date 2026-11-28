@@ -1,16 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.mangago
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.Rect
 import android.util.Base64
 import android.util.LruCache
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import app.cash.quickjs.QuickJs
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -25,14 +19,14 @@ import keiyoushi.network.get
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
-import keiyoushi.utils.aesDecrypt
+import keiyoushi.utils.MarkdownDescription
 import keiyoushi.utils.asJsoup
-import keiyoushi.utils.decodeHex
+import keiyoushi.utils.attrOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.md5
-import keiyoushi.utils.newAesCipher
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.string
+import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
 import kotlinx.coroutines.sync.Mutex
@@ -43,19 +37,14 @@ import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.ResponseBody
-import okhttp3.ResponseBody.Companion.asResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.io.InputStream
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import javax.crypto.spec.IvParameterSpec
 
 @Source
 abstract class Mangago :
@@ -70,12 +59,19 @@ abstract class Mangago :
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
-        val response = client.get("$baseUrl/genre/all/$page/?f=1&o=1&sortby=view&e=", Fetch.DOCUMENT)
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments("genre/all/$page/")
+            .addQueryParameter("f", "1")
+            .addQueryParameter("o", "1")
+            .addQueryParameter("sortby", "view")
+            .addQueryParameter("e", "")
+            .build()
+        val response = client.get(url, Fetch.DOCUMENT)
         return parseMangasPage(response)
     }
 
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        val response = client.get("$baseUrl/genre/all/$page/?f=1&o=1&sortby=update_date&e=", Fetch.DOCUMENT)
+        val response = client.get("$baseUrl/list/latest/all/$page/", Fetch.DOCUMENT)
         return parseMangasPage(response)
     }
 
@@ -89,7 +85,7 @@ abstract class Mangago :
 
     private fun mangaFromElement(element: Element): SManga? {
         val link = element.selectFirst(".thm-effect") ?: return null
-        val title = link.attr("title").takeIf { it.isNotBlank() } ?: return null
+        val title = link.attrOrNull("title") ?: return null
         return SManga.create().apply {
             setUrlWithoutDomain(link.absUrl("href"))
             this.title = title
@@ -132,7 +128,7 @@ abstract class Mangago :
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (
-            url.host != baseUrl.toHttpUrl().host ||
+            url.host.removePrefix("www.") != baseUrl.toHttpUrl().host.removePrefix("www.") ||
             url.pathSegments.firstOrNull() != "read-manga" ||
             url.pathSegments.getOrNull(1).isNullOrEmpty()
         ) {
@@ -165,41 +161,48 @@ abstract class Mangago :
         }
 
         document.getElementById("information")?.let { info ->
-            thumbnail_url = info.selectFirst("img")?.attr("abs:src")
-            description = info.selectFirst(".manga_summary")
+            thumbnail_url = info.selectFirst("img")?.absUrl("src")
+            val summary = info.selectFirst(".manga_summary")
                 ?.text()
-                ?.takeIf { it.isNotEmpty() && !it.equals("not found...", ignoreCase = true) }
+                ?.takeUnless { it.equals("not found...", ignoreCase = true) }
+            val rating = info.selectFirst("#interest_sectl .rating_num")?.text()?.toDoubleOrNull()
+            val votes = info.selectFirst("#interest_sectl a[href*=/home/manga/status/]")
+                ?.text()
+                ?.substringBefore(" ")
+                ?.toIntOrNull()
+            var released: String? = null
+            var altNames = emptyList<String>()
 
             info.select(".manga_info li, .manga_right tr").forEach { element ->
                 val label = element.selectFirst("b, label")?.text().orEmpty()
                 when (label.lowercase()) {
                     "alternative:" -> {
-                        val raw = element.text().removePrefix(label).trim()
-                        val altNames = if ('/' in raw || ';' in raw) {
+                        val raw = element.text().removePrefix(label)
+                        altNames = if ('/' in raw || ';' in raw) {
                             raw.split('/', ';')
                         } else {
                             raw.split(',')
-                        }.map { it.trim() }
-                            .filter { it.isNotEmpty() && !it.equals("None", ignoreCase = true) }
-                        if (altNames.isNotEmpty()) {
-                            description = buildString {
-                                append(description.orEmpty())
-                                if (isNotEmpty()) append("\n\n")
-                                append(ALT_NAME_PREFIX)
-                                append("\n")
-                                altNames.joinTo(this, "\n") { "- $it" }
-                            }
-                        }
+                        }.filterNot { it.trim().equals("None", ignoreCase = true) }
                     }
                     "status:" -> status = when (element.selectFirst("span")?.text()?.lowercase()) {
                         "ongoing" -> SManga.ONGOING
                         "completed" -> SManga.COMPLETED
                         else -> SManga.UNKNOWN
                     }
-                    "author(s):", "author:" -> author = element.select("a").joinToString { it.text() }
+                    "author(s):", "author:" -> {
+                        author = element.select("a").joinToString { it.text() }
+                        released = RELEASED_REGEX.find(element.text())?.groupValues?.get(1)
+                    }
                     "genre(s):" -> genre = element.select("a").joinToString { it.text() }
                 }
             }
+
+            description = MarkdownDescription.Builder()
+                .rating(rating, votes = votes)
+                .field("Released", released)
+                .description(summary)
+                .altTitles(altNames)
+                .build()
         }
     }
 
@@ -209,11 +212,9 @@ abstract class Mangago :
             .mapNotNull { element ->
                 val link = element.selectFirst("a.chico") ?: return@mapNotNull null
                 if (link.attr("href").contains("/raw/") && removeRaws) return@mapNotNull null
-                val name = link.text().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-                val date = DATE_FORMAT.tryParseDate(element.select("td:last-child").text(), ZoneOffset.UTC)
-                val scanlator = element.selectFirst("td.no a, td.uk-table-shrink a")
-                    ?.text()
-                    ?.takeIf { it.isNotEmpty() }
+                val name = link.textOrNull() ?: return@mapNotNull null
+                val date = DATE_FORMAT.tryParseDate(element.selectFirst("td:last-child")?.text(), ZoneOffset.UTC)
+                val scanlator = element.selectFirst("td.no a, td.uk-table-shrink a")?.textOrNull()
                 if (scanlator != null && scanlator.lowercase() in blacklist) return@mapNotNull null
                 val chapterUrl = link.absUrl("href")
 
@@ -232,13 +233,13 @@ abstract class Mangago :
     override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
         val document = client.get(getMangaUrl(manga), Fetch.DOCUMENT).asJsoup()
         val sameAuthor = document
-            .select("div.also_like:has(h4:contains(Other manga by the same author)) + .pic_list .updatesli")
+            .select(".pic_list .updatesli")
             .mapNotNull(::mangaFromElement)
         val alsoLiked = document.select(".also-like li").mapNotNull { element ->
             val link = element.selectFirst("h4 a[href*=\"/read-manga/\"][title]")
                 ?: return@mapNotNull null
-            val title = link.attr("title").takeIf { it.isNotBlank() }
-                ?: link.text().takeIf { it.isNotEmpty() }
+            val title = link.attrOrNull("title")
+                ?: link.textOrNull()
                 ?: return@mapNotNull null
 
             SManga.create().apply {
@@ -314,13 +315,12 @@ abstract class Mangago :
     private fun SChapter.readerUrl(): String = memo["chapterUrl"]?.string ?: error("Refresh chapter list")
 
     override fun getImageRequest(page: Page): Request {
-        val url = page.imageUrl!!.toHttpUrl()
-        val imageUrl = if (url.host.contains("_")) {
-            url.newBuilder().scheme("http").build()
-        } else {
-            url
-        }
-        return GET(imageUrl, headers)
+        val request = super.getImageRequest(page)
+        // Image hosts with an underscore (iweb_12) fail the TLS handshake
+        if (!request.url.host.contains("_")) return request
+        return request.newBuilder()
+            .url(request.url.newBuilder().scheme("http").build())
+            .build()
     }
 
     private fun imageDescrambler(chain: Interceptor.Chain): Response {
@@ -331,7 +331,7 @@ abstract class Mangago :
             ?: return response
         val key = fragment.substringAfter("desckey=").substringBefore("&")
         val cols = fragment.substringAfter("&cols=").toIntOrNull() ?: return response
-        val body = response.body.byteStream().use { unscrambleImage(it, key, cols) }
+        val body = response.body.byteStream().use { Descrambler.unscrambleImage(it, key, cols) }
 
         return response.newBuilder()
             .body(body)
@@ -370,112 +370,11 @@ abstract class Mangago :
 
         val chapterJsUrl = document.selectFirst("script[src*=chapter.js]")?.absUrl("src")
             ?: return emptyList()
-        val chapterJs = client.get(chapterJsUrl, Fetch.SCRIPT).use {
-            SoJsonV4Deobfuscator.decode(it.body.string())
-        }
-        val key = findHexEncodedVariable(chapterJs, "key").decodeHex()
-        val iv = findHexEncodedVariable(chapterJs, "iv").decodeHex()
-        var imageList = encryptedImages.aesDecrypt(newAesCipher("AES/CBC/ZEROBYTEPADDING", key, IvParameterSpec(iv))).decodeToString()
-        imageList = unscrambleImageList(imageList, chapterJs)
-        val cols = COLS_REGEX.find(chapterJs)?.groupValues?.get(1).orEmpty()
-        val imageKeyScript = chapterJs
-            .substringAfter("var renImg = function(img,width,height,id){")
-            .substringBefore("key = key.split(")
-            .lineSequence()
-            .filter { line -> JS_FILTERS.none(line::contains) }
-            .joinToString("\n")
-            .replace("img.src", "url")
-
-        return QuickJs.create().use { quickJs ->
-            quickJs.execute(REPLACE_POS_BYTECODE)
-            quickJs.evaluate("function getDescramblingKey(url) { $imageKeyScript; return key; }")
-            imageList.split(",").map { imageUrl ->
-                if (imageUrl.contains("cspiclink")) {
-                    val descKey = quickJs.evaluate("""getDescramblingKey("$imageUrl");""") as String
-                    "$imageUrl#desckey=$descKey&cols=$cols"
-                } else {
-                    imageUrl
-                }
-            }
-        }
+        val chapterJs = SoJsonV4Deobfuscator.decode(client.get(chapterJsUrl, Fetch.SCRIPT).body.string())
+        return Descrambler.decodeImageList(encryptedImages, chapterJs)
     }
 
-    private fun findHexEncodedVariable(input: String, variable: String): String = HEX_VARIABLE_REGEX.findAll(input)
-        .firstOrNull { it.groupValues[1] == variable }
-        ?.groupValues
-        ?.get(2)
-        .orEmpty()
-
-    private fun String.unscramble(keys: List<Int>): String {
-        var result = this
-        keys.reversed().forEach { key ->
-            for (index in result.length - 1 downTo key) {
-                if (index % 2 != 0) {
-                    val previous = result[index - key]
-                    result = result.replaceRange(index - key..index - key, result[index].toString())
-                    result = result.replaceRange(index..index, previous.toString())
-                }
-            }
-        }
-        return result
-    }
-
-    private fun unscrambleImageList(imageList: String, js: String): String {
-        var result = imageList
-        try {
-            val keyLocations = KEY_LOCATION_REGEX.findAll(js)
-                .map { it.groupValues[1].toInt() }
-                .distinct()
-                .toList()
-            val keys = keyLocations.map { result[it].toString().toInt() }
-            keyLocations.forEachIndexed { index, location ->
-                result = result.removeRange(location - index..location - index)
-            }
-            result = result.unscramble(keys)
-        } catch (_: NumberFormatException) {
-            // The image list is already unscrambled.
-        }
-        return result
-    }
-
-    private fun unscrambleImage(image: InputStream, key: String, cols: Int): ResponseBody {
-        val bitmap = BitmapFactory.decodeStream(image)
-        val result = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(result)
-        val unitWidth = bitmap.width / cols
-        val unitHeight = bitmap.height / cols
-        val keyArray = key.split("a")
-
-        for (index in 0 until cols * cols) {
-            val keyValue = keyArray[index].ifEmpty { "0" }.toInt()
-            val destinationRow = keyValue.floorDiv(cols)
-            val sourceRow = index.floorDiv(cols)
-            val sourceX = (index - sourceRow * cols) * unitWidth
-            val sourceY = sourceRow * unitHeight
-            val destinationX = (keyValue - destinationRow * cols) * unitWidth
-            val destinationY = destinationRow * unitHeight
-            canvas.drawBitmap(
-                bitmap,
-                Rect(sourceX, sourceY, sourceX + unitWidth, sourceY + unitHeight),
-                Rect(destinationX, destinationY, destinationX + unitWidth, destinationY + unitHeight),
-                null,
-            )
-        }
-
-        val buffer = okio.Buffer()
-        result.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
-        bitmap.recycle()
-        result.recycle()
-        return buffer.asResponseBody("image/jpeg".toMediaTypeOrNull())
-    }
-
-    private fun Element.imgAttr() = when {
-        hasAttr("data-cfsrc") -> absUrl("data-cfsrc")
-        hasAttr("data-src") -> absUrl("data-src")
-        hasAttr("data-lazy-src") -> absUrl("data-lazy-src")
-        hasAttr("srcset") -> absUrl("srcset").substringBefore(" ")
-        else -> absUrl("src")
-    }
+    private fun Element.imgAttr() = absUrl(if (hasAttr("data-src")) "data-src" else "src")
 
     private fun getReaderPrefix(document: Document, urlTemplate: String): HttpUrl {
         val location = document.location().toHttpUrl()
@@ -542,38 +441,12 @@ abstract class Mangago :
 private const val REMOVE_RAW_PREF = "pref_remove_raw"
 private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
 private const val PREF_SCANLATOR_BLACKLIST = "pref_scanlator_blacklist"
-private const val ALT_NAME_PREFIX = "Alternative Names:"
 
+private val RELEASED_REGEX = Regex("""(\d{4}) released""")
 private val DATE_FORMAT = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
-private val KEY_LOCATION_REGEX = Regex("""str\.charAt\(\s*(\d+)\s*\)""")
 private val IMG_SRCS_REGEX = Regex("""var imgsrcs\s*=\s*['"]([a-zA-Z0-9+=/]+)['"]""")
-private val COLS_REGEX = Regex("""var\s*widthnum\s*=\s*heightnum\s*=\s*(\d+);""")
 private val TOTAL_PAGES_REGEX = Regex("""total_pages\s*=\s*(\d+)""")
-private val HEX_VARIABLE_REGEX =
-    Regex("""var\s+(key|iv)\s*=\s*CryptoJS\.enc\.Hex\.parse\("([0-9a-zA-Z]+)"\)""")
-private val JS_FILTERS = listOf(
-    "jQuery",
-    "document",
-    "getContext",
-    "toDataURL",
-    "getImageData",
-    "width",
-    "height",
-)
 private val TITLE_REGEX = Regex(
     """^(?:\s*(?:\([^()]*\)|\{[^{}]*\}|\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|𖤍.+?𖤍|《[^》]*》|⌜.+?⌝|⟨[^⟩]*⟩)\s*)+|(?:\s*(?:\([^()]*\)|\{[^{}]*\}|\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|𖤍.+?𖤍|《[^》]*》|⌜.+?⌝|⟨[^⟩]*⟩|/\s*Official)\s*)+$""",
     RegexOption.IGNORE_CASE,
 )
-private val REPLACE_POS_BYTECODE by lazy {
-    QuickJs.create().use {
-        it.compile(
-            """
-                    function replacePos(strObj, pos, replacetext) {
-                        var str = strObj.substr(0, pos) + replacetext + strObj.substring(pos + 1, strObj.length);
-                        return str;
-                    }
-            """.trimIndent(),
-            "?",
-        )
-    }
-}

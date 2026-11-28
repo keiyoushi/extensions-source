@@ -3,10 +3,14 @@ plugins {
 }
 
 keiyoushi {
-    baseVersionCode = 4
+    baseVersionCode = 5
     libVersion = "1.6"
 
     deeplink {
         path("/..*/user/..*")
     }
+}
+
+dependencies {
+    implementation("com.github.gpanther:java-nat-sort:natural-comparator-1.1")
 }
