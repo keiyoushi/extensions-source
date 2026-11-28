@@ -9,13 +9,10 @@ keiyoushi {
     versionCode = 4
     contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
+    theme = "komikindo"
 
     source {
         lang = "id"
         baseUrl = "https://bacakomik.my"
-    }
-
-    deeplink {
-        path("/komik/..*")
     }
 }
