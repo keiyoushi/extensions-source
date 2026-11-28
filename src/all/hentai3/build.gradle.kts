@@ -6,14 +6,14 @@ plugins {
 
 keiyoushi {
     name = "3Hentai"
-    versionCode = 8
+    versionCode = 9
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
     listOf(
         "all", "en", "ja", "ko", "zh", "es", "pt", "id", "jv",
         "tl", "vi", "th", "my", "tr", "ru", "uk", "pl", "de",
-        "it", "fr", "nl", "cs", "hu", "bg", "is", "la", "ar",
+        "it", "fr", "nl", "cs", "hu", "bg", "is", "la", "ar", "ceb",
     ).forEach {
         source {
             lang = it
