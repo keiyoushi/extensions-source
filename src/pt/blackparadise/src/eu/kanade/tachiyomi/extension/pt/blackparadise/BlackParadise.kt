@@ -13,10 +13,5 @@ abstract class BlackParadise : Madara() {
     override val hiatusStatus = super.hiatusStatus + "hiato"
     override val cancelledStatus = super.cancelledStatus + "dropado"
 
-    override fun processThumbnail(url: String?, fromSearch: Boolean): String? = url?.replace(THUMBNAIL_SIZE_REGEX, "")
-
-    companion object {
-        // WordPress resizes ("-175x238") of the original cover
-        private val THUMBNAIL_SIZE_REGEX = Regex("""-\d+x\d+(?=\.\w+$)""")
-    }
+    override fun processThumbnail(url: String?, fromSearch: Boolean): String? = url?.withoutWordPressSize()
 }

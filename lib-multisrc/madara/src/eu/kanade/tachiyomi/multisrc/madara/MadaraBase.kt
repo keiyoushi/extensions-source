@@ -30,6 +30,8 @@ import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -67,7 +69,7 @@ abstract class MadaraBase : KeiSource() {
     protected val intl = Intl(
         language = lang,
         baseLanguage = "en",
-        availableLanguages = setOf("en", "pt-BR", "es", "uk"),
+        availableLanguages = setOf("en", "ar", "pt-BR", "es", "tr", "uk"),
         classLoader = this::class.java.classLoader!!,
     )
 
@@ -76,6 +78,7 @@ abstract class MadaraBase : KeiSource() {
         intl["status_filter_ongoing"] to "on-going",
         intl["status_filter_canceled"] to "canceled",
         intl["status_filter_on_hold"] to "on-hold",
+        intl["status_filter_upcoming"] to "upcoming",
     )
 
     protected open val orderByFilterOptions = listOf(
@@ -141,10 +144,10 @@ abstract class MadaraBase : KeiSource() {
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         if (url.host != baseUrl.toHttpUrl().host) return null
         val page = client.get(url, Fetch.DOCUMENT).asJsoup()
-        // A chapter page carries the post id of its series, and ?p= leads to the series
+        // A chapter page carries the post id of its series
         val document = if (page.body().hasClass("reading-manga")) {
             val seriesId = page.mangaId() ?: return null
-            client.get("$baseUrl/?p=$seriesId", Fetch.DOCUMENT.from(page.location())).asJsoup()
+            client.get(postUrl(seriesId), Fetch.DOCUMENT.from(page.location())).asJsoup()
         } else {
             page
         }
@@ -161,7 +164,7 @@ abstract class MadaraBase : KeiSource() {
     override fun getMangaUrl(manga: SManga): String = memoPath(manga)
         ?.let { baseUrl.toHttpUrl().resolve(it)?.toString() }
         ?: manga.url.takeIf { !it.all(Char::isDigit) }?.let { baseUrl.toHttpUrl().resolve(it)?.toString() }
-        ?: "$baseUrl/?p=${mangaId(manga) ?: manga.url}"
+        ?: postUrl(mangaId(manga) ?: manga.url).toString()
 
     override suspend fun fetchMangaUpdate(
         manga: SManga,
@@ -211,7 +214,7 @@ abstract class MadaraBase : KeiSource() {
             }
             id = id ?: redirectedId
         }
-        return client.get("$baseUrl/?p=${id ?: error("Missing Madara post ID from redirection")}", Fetch.DOCUMENT)
+        return client.get(postUrl(id ?: error("Missing Madara post ID from redirection")), Fetch.DOCUMENT)
     }
 
     protected open fun parseDetails(document: Document, id: String, preserveUrl: String?): SManga = SManga.create().apply {
@@ -426,11 +429,16 @@ abstract class MadaraBase : KeiSource() {
     protected open fun parsePages(document: Document): List<Page> {
         val protector = document.selectFirst("#chapter-protector-data")
         if (protector == null) {
-            return document.select(pageListParseSelector).mapIndexedNotNull { index, element ->
+            val pages = document.select(pageListParseSelector).mapIndexedNotNull { index, element ->
                 element.selectFirst("img")?.let {
-                    Page(index, document.location(), imageFromElement(it) ?: return@mapIndexedNotNull null)
+                    Page(index, document.location(), imageUrl = imageFromElement(it) ?: return@mapIndexedNotNull null)
                 }
             }
+            // The notice WP Manga shows guests on chapters set to need an account
+            if (pages.isEmpty() && document.selectFirst(".content-blocked.login-required") != null) {
+                throw Exception(intl["login_required"])
+            }
+            return pages
         }
         val script = protector.attr("src").takeIf { it.startsWith("data:text/javascript;base64,") }
             ?.substringAfter(',')?.let { Base64.decode(it, Base64.DEFAULT).toString(Charsets.UTF_8) } ?: protector.html()
@@ -477,6 +485,14 @@ abstract class MadaraBase : KeiSource() {
 
     protected open fun processThumbnail(url: String?, fromSearch: Boolean = false): String? = url
 
+    // Imunify360 WebShield, which some hosts show to some IPs instead of the site
+    protected fun OkHttpClient.Builder.answerWebShield(): OkHttpClient.Builder = addInterceptor(
+        WebShieldInterceptor(intl["webshield_error"]) { client },
+    )
+
+    /** The original upload of a WordPress resize ("cover-175x238.jpg") */
+    protected fun String.withoutWordPressSize() = replace(WORDPRESS_SIZE_REGEX, "")
+
     protected fun String.getSrcSetImage(): String? {
         val images = split(',')
             .map { it.trim().split(WHITESPACE_REGEX, limit = 2) }
@@ -510,7 +526,14 @@ abstract class MadaraBase : KeiSource() {
     protected open fun mangaId(manga: SManga): String? = manga.url.takeIf { it.all(Char::isDigit) }
         ?: manga.memo.getStringOrNull("id")
 
-    protected fun memoPath(manga: SManga): String? = manga.memo.getStringOrNull("path")
+    // Entries refreshed while ?p= led to the home page stored "/" as their path
+    protected fun memoPath(manga: SManga): String? = manga.memo.getStringOrNull("path")?.takeIf { it != "/" }
+
+    // Some sites send a bare ?p= to the home page
+    private fun postUrl(id: String): HttpUrl = "$baseUrl/".toHttpUrl().newBuilder()
+        .addQueryParameter("post_type", "wp-manga")
+        .addQueryParameter("p", id)
+        .build()
 
     protected fun mangaMemo(path: String, genres: List<GenreRoute>, legacyId: String? = null): JsonObject = buildJsonObject {
         put("path", path)
@@ -521,8 +544,7 @@ abstract class MadaraBase : KeiSource() {
     protected open fun Document.mangaId(): String? = selectFirst("[id^=manga-chapters-holder]")?.attr("data-id")?.takeIf(String::isNotBlank)
         ?: selectFirst("input.rating-post-id")?.attr("value")?.takeIf(String::isNotBlank)
         ?: selectFirst("a[data-post]")?.attr("data-post")?.takeIf(String::isNotBlank)
-        ?: selectFirst("link[rel=shortlink]")?.attr("href")?.takeIf { it.contains("?p=") }
-            ?.substringAfter("?p=")?.substringBefore('&')?.takeIf(String::isNotBlank)
+        ?: selectFirst("link[rel=shortlink]")?.attr("abs:href")?.toHttpUrlOrNull()?.queryParameter("p")?.takeIf(String::isNotBlank)
 
     protected open val completedStatus = arrayOf(
         "completed", "completo", "completado", "concluído", "concluido", "finalizado",
@@ -600,6 +622,7 @@ abstract class MadaraBase : KeiSource() {
         private val WHITESPACE_REGEX = Regex("""\s+""")
         private val IMAGE_DESCRIPTOR_REGEX = Regex("""^(\d+|\d+\.\d+)[wx]$""")
         private val NUMBER_REGEX = Regex("""\d+""")
+        private val WORDPRESS_SIZE_REGEX = Regex("""-\d+x\d+(?=\.\w+$)""")
 
         // Keywords must not be preceded by a letter, otherwise "ay" matches inside "mayıs", "may" and "days"
         private fun wordRegex(vararg words: String) = Regex("""(?<!\p{L})(?:${words.joinToString("|") { Regex.escape(it) }})""")

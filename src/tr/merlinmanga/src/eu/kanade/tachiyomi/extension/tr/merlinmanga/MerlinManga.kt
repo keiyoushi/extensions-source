@@ -32,7 +32,7 @@ abstract class MerlinManga : Madara() {
         genre = document.select(mangaDetailsSelectorGenre).joinToString { it.text() }.ifEmpty { null }
     }
 
-    override fun processThumbnail(url: String?, fromSearch: Boolean): String? = url?.replace(THUMBNAIL_SIZE_REGEX, "")
+    override fun processThumbnail(url: String?, fromSearch: Boolean): String? = url?.withoutWordPressSize()
 
     override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
         val segments = url.encodedPathSegments.filter(String::isNotEmpty)
@@ -49,15 +49,12 @@ abstract class MerlinManga : Madara() {
     // The latest chapters of each series are for members (a free account)
     override fun parsePages(document: Document): List<Page> {
         if (document.selectFirst("div.mp-lock") != null) {
-            throw Exception("Log in to the site in WebView to read this chapter (a free account is enough)")
+            throw Exception(intl["login_required"])
         }
         return super.parsePages(document)
     }
 
     companion object {
         private val UPDATING_REGEX = Regex("Güncelleme")
-
-        // WordPress resizes ("-350x476") of the original cover
-        private val THUMBNAIL_SIZE_REGEX = Regex("""-\d+x\d+(?=\.\w+$)""")
     }
 }

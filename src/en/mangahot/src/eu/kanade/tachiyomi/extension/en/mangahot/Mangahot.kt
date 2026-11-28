@@ -15,7 +15,6 @@ import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.textOrNull
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -34,7 +33,7 @@ abstract class Mangahot : Madara() {
         intl["status_filter_completed"] to "end",
         intl["status_filter_canceled"] to "canceled",
         intl["status_filter_on_hold"] to "on-hold",
-        "Upcoming" to "upcoming",
+        intl["status_filter_upcoming"] to "upcoming",
     )
 
     override fun parseArchive(document: Document): List<SManga> = document.select(archiveSelector()).mapNotNull { element ->
@@ -79,8 +78,6 @@ abstract class Mangahot : Madara() {
         return MangasPage(parseArchive(document), document.selectFirst("a.nextpostslink") != null)
     }
 
-    // ============================ Manga Details ===========================
-
     override fun parseDetails(document: Document, id: String, preserveUrl: String?): SManga = super.parseDetails(document, id, preserveUrl).apply {
         description = MarkdownDescription.Builder().apply {
             description(document.selectFirst(mangaDetailsSelectorDescription))
@@ -98,13 +95,11 @@ abstract class Mangahot : Madara() {
         }.build()
     }
 
-    override fun processThumbnail(url: String?, fromSearch: Boolean): String? = url?.replace(THUMBNAIL_SIZE_SUFFIX, "$1")
+    override fun processThumbnail(url: String?, fromSearch: Boolean): String? = url?.withoutWordPressSize()
 
     private fun Document.summaryRow(label: String): Element? = select(".post-content_item")
         .firstOrNull { it.selectFirst("h5")?.text() == label }
         ?.selectFirst(".summary-content")
-
-    // ============================== Chapters ==============================
 
     override suspend fun fetchChapters(mangaPath: String, id: String, mangaPage: Document?): List<SChapter> {
         val document = mangaPage ?: error("Manga page is required")
@@ -137,7 +132,6 @@ abstract class Mangahot : Madara() {
     }
 
     companion object {
-        private val THUMBNAIL_SIZE_SUFFIX = Regex("""-\d+x\d+(\.\w+)$""")
         private val COUNTS_SUFFIX = Regex("""\s*\(\d+\)\s*$""")
         private val CONTENT_RATING_OPTIONS = listOf(
             "All (include 18+)" to "",
@@ -146,13 +140,3 @@ abstract class Mangahot : Madara() {
         )
     }
 }
-
-@Serializable
-private class ChaptersResponseDto(
-    val data: ChaptersDataDto? = null,
-)
-
-@Serializable
-private class ChaptersDataDto(
-    val html: String? = null,
-)
