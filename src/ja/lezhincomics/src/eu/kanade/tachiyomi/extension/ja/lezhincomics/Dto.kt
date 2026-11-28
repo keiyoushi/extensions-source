@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.MarkdownDescription
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.JsonObject
 import org.jsoup.Jsoup
 
@@ -42,8 +43,8 @@ class RankingDto(
 
 @Serializable
 class ComicItemDto(
-    @SerialName("title_id") private val titleId: String? = null,
-    private val id: String,
+    // Ranking and search items carry the title id as `id`; serialization items as `title_id`, after an unrelated `id`
+    @JsonNames("title_id") private val id: String,
     private val name: String,
     @SerialName("cover_thumbnail_url") private val thumbnail: String? = null,
     private val author: List<NamedDto>? = null,
@@ -51,8 +52,7 @@ class ComicItemDto(
     private val tag: List<NamedDto>? = null,
 ) {
     fun toSManga() = SManga.create().apply {
-        // Ranking and search items carry the title id as `id`; serialization items as `title_id`
-        url = titleId ?: id
+        url = id
         title = name
         thumbnail_url = thumbnail
         author = this@ComicItemDto.author?.joinToString { it.name }?.ifEmpty { null }
