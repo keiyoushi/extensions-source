@@ -14,21 +14,23 @@ import keiyoushi.lib.i18n.Intl
 import keiyoushi.network.Fetch
 import keiyoushi.network.fetch
 import keiyoushi.network.get
+import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.get
 import keiyoushi.utils.getLongOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
+import keiyoushi.utils.toJsonElement
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.add
-import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
@@ -52,7 +54,7 @@ abstract class Hiper :
 
     private val wvMutex = Mutex()
 
-    protected fun OkHttpClient.Builder.addHiperAuthInterceptor(): OkHttpClient.Builder = addInterceptor { chain ->
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addInterceptor { chain ->
         var request = chain.request()
 
         wvHeaders?.let {
@@ -70,13 +72,11 @@ abstract class Hiper :
                 .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
                 .build()
             network.client.newCall(GET(baseUrl, acceptHeaders).newBuilder().fetch(Fetch.DOCUMENT).build()).execute().close()
-            chain.proceed(chain.request())
+            chain.proceed(request)
         } else {
             response
         }
-    }
-
-    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = addHiperAuthInterceptor()
+    }.rateLimit(3)
 
     protected val intl = Intl(
         language = lang,
@@ -85,75 +85,43 @@ abstract class Hiper :
         classLoader = this::class.java.classLoader!!,
     )
 
+    private suspend fun trpc(procedure: String, input: JsonObject? = null, ensureSuccess: Boolean = true): Response {
+        val url = "$baseUrl/api/trpc/$procedure".toHttpUrl().newBuilder().apply {
+            if (input != null) addQueryParameter("input", buildJsonObject { put("json", input) }.toString())
+        }.build()
+        return client.get(url, Fetch.XHR, ensureSuccess = ensureSuccess)
+    }
+
+    private inline fun <reified T> Response.parseTrpc(): T? = parseAs<JsonElement>()["result"]["data"]["json"]?.parseAs<T>()
+
     // ============================ Popular ====================================
 
-    protected open val popularFilter = FilterList(OrderByFilter("", arrayOf("" to "popular")))
-
-    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", popularFilter)
+    override suspend fun getPopularManga(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(OrderByFilter("", arrayOf("" to "popular"))))
 
     // ============================ Latest ====================================
-    protected open val latestFilter = FilterList(OrderByFilter("", arrayOf("" to "recent")))
 
-    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", latestFilter)
+    override suspend fun getLatestUpdates(page: Int): MangasPage = getSearchMangaList(page, "", FilterList(OrderByFilter("", arrayOf("" to "recent"))))
 
     // ============================ Search ====================================
+
     override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
-        val limit = 30
-        val typeValue = filters.filterIsInstance<TypeFilter>().firstOrNull()?.selected()
-        val statusValue = filters.filterIsInstance<StatusFilter>().firstOrNull()?.selected()
-        val ratingValue = filters.filterIsInstance<RatingFilter>().firstOrNull()?.selected()
-        val genresValue = filters.filterIsInstance<GenresFilter>().firstOrNull()?.checked.orEmpty()
-
         val input = buildJsonObject {
-            putJsonObject("0") {
-                putJsonObject("json") {
-                    put("q", query)
-                    filters.filterIsInstance<OrderByFilter>().forEach { filter ->
-                        put("sort", filter.selected())
-                    }
-                    putJsonObject("filters") {
-                        if (genresValue.isEmpty()) {
-                            put("genres", null)
-                        } else {
-                            putJsonArray("genres") { genresValue.forEach { add(it) } }
-                        }
-                        put("type", typeValue)
-                        put("status", statusValue)
-                        put("contentRating", ratingValue)
-                        put("author", null)
-                        put("artist", null)
-                        put("year", null)
-                    }
-
-                    put("limit", limit)
-                    put("offset", (page - 1) * limit)
-                    put("maxRating", preferences.getString(MAX_RATING_PREF, MAX_RATING_DEFAULT))
-                }
-                putJsonObject("meta") {
-                    putJsonObject("values") {
-                        if (genresValue.isEmpty()) put("filters.genres", buildJsonArray { add("undefined") })
-                        if (typeValue == null) put("filters.type", buildJsonArray { add("undefined") })
-                        if (statusValue == null) put("filters.status", buildJsonArray { add("undefined") })
-                        if (ratingValue == null) put("filters.contentRating", buildJsonArray { add("undefined") })
-                        put("filters.author", buildJsonArray { add("undefined") })
-                        put("filters.artist", buildJsonArray { add("undefined") })
-                        put("filters.year", buildJsonArray { add("undefined") })
-                    }
-                }
+            put("q", query)
+            filters.firstInstanceOrNull<OrderByFilter>()?.let { put("sort", it.selected()) }
+            putJsonObject("filters") {
+                filters.firstInstanceOrNull<GenresFilter>()?.checked?.takeIf { it.isNotEmpty() }
+                    ?.let { genres -> putJsonArray("genres") { genres.forEach { add(it) } } }
+                filters.filterIsInstance<SelectFilter>().forEach { filter -> filter.selected()?.let { put(filter.key, it) } }
             }
-        }.toString()
-
-        val url = "$baseUrl/api/trpc/search.query".toHttpUrl().newBuilder()
-            .addQueryParameter("batch", "1")
-            .addQueryParameter("input", input)
-            .build()
-
-        return parseSearchMangaList(client.get(url, Fetch.XHR))
+            put("limit", LIMIT)
+            put("offset", (page - 1) * LIMIT)
+            put("maxRating", preferences.getString(MAX_RATING_PREF, MAX_RATING_DEFAULT))
+        }
+        return parseSearchMangaList(trpc("search.query", input))
     }
 
     protected open fun parseSearchMangaList(response: Response): MangasPage {
-        val element = response.parseAs<List<JsonElement>>().first()
-        val dto = element["result"]["data"]["json"]?.parseAs<WrapperContent>() ?: return MangasPage(emptyList(), false)
+        val dto = response.parseTrpc<WrapperContent>() ?: return MangasPage(emptyList(), false)
         return MangasPage(dto.hits.map { it.toSManga(mangaPath) }, dto.hits.isNotEmpty())
     }
 
@@ -171,37 +139,9 @@ abstract class Hiper :
         return getMangaBySlug(slug)
     }
 
-    protected open suspend fun getMangaBySlug(slug: String): SManga? {
-        if (slug.isBlank()) return null
+    protected open suspend fun getMangaBySlug(slug: String): SManga? = parseMangaDetails(trpc("series.bySlugWithGenres", buildJsonObject { put("slug", slug) }))
 
-        val input = buildJsonObject {
-            putJsonObject("0") {
-                put("json", null)
-                putJsonObject("meta") {
-                    putJsonArray("values") {
-                        add("undefined")
-                    }
-                }
-            }
-            putJsonObject("1") {
-                putJsonObject("json") {
-                    put("slug", slug)
-                }
-            }
-        }
-
-        val url = "$baseUrl/api/trpc/auth.me,series.bySlugWithGenres".toHttpUrl().newBuilder()
-            .addQueryParameter("batch", "1")
-            .addQueryParameter("input", input.toString())
-            .build()
-
-        return parseMangaDetails(client.get(url, Fetch.XHR))
-    }
-
-    protected open fun parseMangaDetails(response: Response): SManga {
-        val element = response.parseAs<List<JsonElement>>().last()
-        return element["result"]["data"]["json"]!!.parseAs<MangaDto>().toSManga(mangaPath)
-    }
+    protected open fun parseMangaDetails(response: Response): SManga = response.parseTrpc<MangaDto>()!!.toSManga(mangaPath)
 
     // ============================ Chapters ==================================
 
@@ -215,45 +155,7 @@ abstract class Hiper :
             ?: manga.url.substringAfterLast("#").toLongOrNull() // Fallback for old manga URLs
             ?: return null
 
-        val input = buildJsonObject {
-            putJsonObject("0") {
-                putJsonObject("json") {
-                    putJsonArray("values") {
-                        add("undefined")
-                    }
-                }
-            }
-
-            putJsonObject("1") {
-                putJsonObject("json") {
-                    put("seriesId", mangaId)
-                    put("chapterId", null)
-                    put("sort", "best")
-                    put("page", 1)
-                    put("limit", 20)
-                }
-                putJsonObject("meta") {
-                    putJsonObject("values") {
-                        put("chapterId", buildJsonArray { add("undefined") })
-                    }
-                }
-            }
-
-            putJsonObject("2") {
-                putJsonObject("json") {
-                    put("seriesId", mangaId)
-                }
-            }
-        }
-
-        val url = "$baseUrl/api/trpc/auth.me,series.chapters".toHttpUrl().newBuilder()
-            .addQueryParameter("batch", "1")
-            .addQueryParameter("input", input.toString())
-            .build()
-
-        val response = client.get(url, Fetch.XHR)
-        val element = response.parseAs<List<JsonElement>>().last()
-        val chaptersDTO = element["result"]["data"]["json"]!!.parseAs<List<ChapterDto>>()
+        val chaptersDTO = trpc("series.chapters", buildJsonObject { put("seriesId", mangaId) }).parseTrpc<List<ChapterDto>>()!!
 
         // Make chapter url unique only when needed
         val seen = mutableSetOf<Float>()
@@ -290,70 +192,22 @@ abstract class Hiper :
 
     // ============================ Pages =====================================
 
-    protected open fun pageListUrl(chapter: SChapter): HttpUrl {
-        val slug = chapter.url.getSlug()
+    private suspend fun fetchPages(chapter: SChapter): List<Page>? = trpc(
+        "reader.chapterPages",
+        buildJsonObject {
+            put("seriesSlug", chapter.url.getSlug())
+            put("chapterNumber", chapter.getNumber())
+            chapter.memo["chapterId"]?.let { put("chapterId", it) }
+        },
+        ensureSuccess = false,
+    ).parseTrpc<List<PageDto>>()?.map(PageDto::toPage)
 
-        val input = buildJsonObject {
-            putJsonObject("0") {
-                put("json", null)
-                putJsonObject("meta") {
-                    putJsonArray("values") {
-                        add("undefined")
-                    }
-                }
-            }
-            putJsonObject("1") {
-                putJsonObject("json") {
-                    put("slug", slug)
-                }
-            }
-            putJsonObject("2") {
-                putJsonObject("json") {
-                    put("seriesSlug", slug)
-                    put("chapterNumber", chapter.getNumber())
-                    chapter.memo["chapterId"]?.let { put("chapterId", it) }
-                }
-            }
-            putJsonObject("3") {
-                putJsonObject("json") {
-                    put("position", "footer_bottom")
-                }
-            }
-        }
+    override suspend fun getPageList(chapter: SChapter): List<Page> = fetchPages(chapter)?.takeIf { it.isNotEmpty() } ?: run {
+        fetchHeadersWv(getChapterUrl(chapter))
 
-        return "$baseUrl/api/trpc/auth.me,series.bySlug,reader.chapterPages".toHttpUrl().newBuilder()
-            .addQueryParameter("batch", "1")
-            .addQueryParameter("input", input.toString())
-            .build()
-    }
-
-    override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val chapterUrl = getChapterUrl(chapter)
-        val url = pageListUrl(chapter)
-
-        val pages = parsePages(client.get(url, Fetch.XHR, ensureSuccess = false))
-
-        return pages?.takeIf { it.isNotEmpty() } ?: run {
-            fetchHeadersWv(chapterUrl)
-
-            wvHeaders?.let {
-                parsePages(client.get(url, Fetch.XHR, ensureSuccess = false)) ?: emptyList()
-            } ?: error("Failed to get headers")
-        }
-    }
-
-    protected open fun parsePages(response: Response): List<Page>? {
-        val elements = response.parseAs<List<JsonElement>>()
-
-        for (element in elements) {
-            if ("error" in element.jsonObject) {
-                return null
-            }
-        }
-
-        val lastElement = elements.last()
-        val pages = lastElement["result"]["data"]["json"]?.parseAs<List<PageDto>>() ?: return emptyList()
-        return pages.map(PageDto::toPage)
+        wvHeaders?.let {
+            fetchPages(chapter) ?: emptyList()
+        } ?: error("Failed to get headers")
     }
 
     protected open suspend fun fetchHeadersWv(url: String) {
@@ -400,12 +254,18 @@ abstract class Hiper :
 
     // ============================ Filters ====================================
 
+    override val supportsFilterFetching = true
+
+    override suspend fun fetchFilterData(): JsonElement = trpc("search.genres").parseTrpc<List<GenreDto>>()!!.map { it.name }.toJsonElement()
+
     override fun getFilterList(data: JsonElement?): FilterList = FilterList(
-        SortFilter(intl),
-        RatingFilter(intl),
-        TypeFilter(intl),
-        StatusFilter(intl),
-        GenresFilter(genresList, intl),
+        listOfNotNull<Filter<*>>(
+            SortFilter(intl),
+            RatingFilter(intl),
+            TypeFilter(intl),
+            StatusFilter(intl),
+            data?.parseAs<List<String>>()?.takeIf { it.isNotEmpty() }?.let { GenresFilter(it, intl) },
+        ),
     )
 
     open class OrderByFilter(displayName: String, private val vals: Array<Pair<String, String>>, state: Int = 0) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
@@ -426,13 +286,14 @@ abstract class Hiper :
             ),
         )
 
-    open class SelectFilter(displayName: String, private val vals: Array<Pair<String, String?>>, state: Int = 0) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
+    open class SelectFilter(displayName: String, val key: String, private val vals: Array<Pair<String, String?>>, state: Int = 0) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
         fun selected(): String? = vals[state].second
     }
 
     class RatingFilter(intl: Intl) :
         SelectFilter(
             intl["rating_filter_title"],
+            "contentRating",
             (
                 listOf(
                     intl["status_all"] to null,
@@ -444,6 +305,7 @@ abstract class Hiper :
     class TypeFilter(intl: Intl) :
         SelectFilter(
             intl["type_filter_title"],
+            "type",
             arrayOf(
                 intl["status_all"] to null,
                 "Manga" to "manga",
@@ -458,6 +320,7 @@ abstract class Hiper :
     class StatusFilter(intl: Intl) :
         SelectFilter(
             intl["status_filter_title"],
+            "status",
             arrayOf(
                 intl["status_all"] to null,
                 intl["status_ongoing"] to "ongoing",
@@ -477,9 +340,8 @@ abstract class Hiper :
         val checked get() = state.filter { it.state }.map { it.value }
     }
 
-    protected open val genresList: List<String> = emptyList()
-
     companion object {
+        private const val LIMIT = 30
         private const val MAX_RATING_PREF = "MAX_RATING"
         private const val MAX_RATING_DEFAULT = "pornographic"
         private val MAX_RATING_ENTRIES = arrayOf("Pornographic", "Erotica", "Suggestive", "Safe")

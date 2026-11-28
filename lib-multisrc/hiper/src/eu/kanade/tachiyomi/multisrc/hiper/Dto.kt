@@ -73,12 +73,17 @@ class ChapterDto(
         }
     } ?: labelNumber
 
-    private val labelNumber: String get() = "Chapter ${number.toString().replace(".0", "")}"
+    private val labelNumber: String get() = "Chapter ${number.toString().removeSuffix(".0")}"
 
     companion object {
         private val NUMBER_REGEX = """\d+(?:\.\d+)?""".toRegex()
     }
 }
+
+@Serializable
+class GenreDto(
+    val name: String,
+)
 
 @Serializable
 class PageDto(
