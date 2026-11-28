@@ -31,6 +31,7 @@ import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -68,7 +69,7 @@ abstract class MadaraBase : KeiSource() {
     protected val intl = Intl(
         language = lang,
         baseLanguage = "en",
-        availableLanguages = setOf("en", "pt-BR", "es", "uk"),
+        availableLanguages = setOf("en", "ar", "pt-BR", "es", "uk"),
         classLoader = this::class.java.classLoader!!,
     )
 
@@ -477,6 +478,11 @@ abstract class MadaraBase : KeiSource() {
     }
 
     protected open fun processThumbnail(url: String?, fromSearch: Boolean = false): String? = url
+
+    // Imunify360 WebShield, which some hosts show to some IPs instead of the site
+    protected fun OkHttpClient.Builder.answerWebShield(): OkHttpClient.Builder = addInterceptor(
+        WebShieldInterceptor(intl["webshield_error"]) { client },
+    )
 
     protected fun String.getSrcSetImage(): String? {
         val images = split(',')

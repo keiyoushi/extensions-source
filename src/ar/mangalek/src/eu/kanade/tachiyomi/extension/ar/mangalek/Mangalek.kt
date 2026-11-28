@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.ar.mangalek
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParseDate
+import okhttp3.OkHttpClient
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -13,8 +14,10 @@ abstract class Mangalek : Madara() {
 
     override val chapterMode = ChapterMode.AdminAjax
 
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = answerWebShield()
+
     override val chapterDateFormat = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.forLanguageTag("ar"))
-    private val formatTwo = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US)
+    private val formatTwo = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)
 
     override fun parseChapterDate(date: String?) = super.parseChapterDate(date).takeIf {
         it != 0L
