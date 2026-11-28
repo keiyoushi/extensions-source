@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "Aedex"
     pkgName = "es.templescanesp"
-    versionCode = 78
+    versionCode = 79
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
     theme = "catharsis"
@@ -20,4 +20,8 @@ keiyoushi {
     deeplink {
         path("/comic/..*")
     }
+}
+
+dependencies {
+    implementation(project(":lib:webviewpatch"))
 }

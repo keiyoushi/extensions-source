@@ -51,3 +51,17 @@ class LiveTokenDto(
     @SerialName("l") val token: String,
     val ttl: Long,
 )
+
+// The NextAuth session, which carries the backend access token used as a Bearer
+@Serializable
+class AedexSessionDto(
+    @SerialName("access_token") val accessToken: String? = null,
+    private val user: AedexSessionUserDto? = null,
+) {
+    fun token(): String? = accessToken ?: user?.accessToken
+}
+
+@Serializable
+class AedexSessionUserDto(
+    @SerialName("access_token") val accessToken: String? = null,
+)
