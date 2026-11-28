@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.dualeotruyen
 
+import android.webkit.WebResourceResponse
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,21 +13,28 @@ import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.MarkdownDescription
+import keiyoushi.utils.NativeWebViewApi
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
 import keiyoushi.utils.textOrNull
 import keiyoushi.utils.toJsonElement
 import keiyoushi.utils.tryParseDate
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 @Source
 abstract class DuaLeoTruyen : KeiSource() {
@@ -133,36 +141,84 @@ abstract class DuaLeoTruyen : KeiSource() {
     private fun parseDate(dateStr: String?): Long = dateFormat.tryParseDate(dateStr, dateZone)
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        val document = client.get(getChapterUrl(chapter), Fetch.DOCUMENT).asJsoup()
-        val config = V7Config.extract(document)
-            ?: throw Exception("Không tìm thấy cấu hình giải mã trang")
+        val url = getChapterUrl(chapter)
+        val capture = synchronized(pageCaptures) {
+            pageCaptures[url]
+        }
+        if (capture != null) {
+            return capture.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
+        }
 
-        var canvasIndex = 0
-        return document.select("img, canvas")
-            .mapNotNull { element ->
-                val token = when (element.normalName()) {
-                    "img" -> if (element.hasClass(config.imageClass) && element.hasAttr(config.attrA)) {
-                        runCatching { config.imageToken(element) }.getOrNull()
-                    } else {
-                        null
+        val pages = captureMutex.withLock {
+            synchronized(pageCaptures) {
+                pageCaptures[url]
+            } ?: capturePages(url).also { captured ->
+                synchronized(pageCaptures) {
+                    if (pageCaptures.size >= 10) {
+                        pageCaptures.remove(pageCaptures.entries.first().key)
                     }
-                    "canvas" -> if (element.hasClass(config.canvasClass) && element.hasAttr(config.attrA)) {
-                        // Canvas data attributes are decoys; the real token comes
-                        // from the config, indexed in document order from the end.
-                        runCatching { config.canvasToken(canvasIndex) }.getOrNull()
-                            ?.also { canvasIndex++ }
-                    } else {
-                        null
-                    }
-                    else -> null
-                } ?: return@mapNotNull null
-
-                config.decodeObfuscatedUrl(token)
+                    pageCaptures[url] = captured
+                }
             }
-            .mapIndexed { index, imageUrl ->
-                Page(index, imageUrl = imageUrl)
-            }
+        }
+        return pages.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
+
+    @OptIn(NativeWebViewApi::class)
+    private suspend fun capturePages(chapterUrl: String): List<String> {
+        val bridgeName = randomName()
+        val errorBridgeName = randomName()
+        val passName = randomName()
+        val rejectName = randomName()
+        val siteHost = baseUrl.toHttpUrl().host
+        val siteOrigin = chapterUrl.toHttpUrl().run { "$scheme://$host" }
+        return runWebView<String>(timeout = 60.seconds) {
+            val emptyResponse = WebResourceResponse("text/plain", "utf-8", "".byteInputStream())
+            interceptRequest { request ->
+                val requestUrl = request.url?.toString()?.toHttpUrlOrNull()
+                    ?: return@interceptRequest emptyResponse
+                val host = requestUrl.host
+                val isImage = request.requestHeaders["Accept"]?.startsWith("image/") == true
+                val allowed = host == siteHost ||
+                    host.endsWith(".$siteHost") ||
+                    host.endsWith(".challenges.cloudflare.com") ||
+                    isImage
+                if (allowed) null else emptyResponse
+            }
+
+            webMessageBridge(bridgeName, setOf(siteOrigin)) { payload ->
+                resolve(payload)
+            }
+            webMessageBridge(errorBridgeName, setOf(siteOrigin)) { message ->
+                reject(Exception(message))
+            }
+
+            val hookScript = asset("dualeo_hook.js")
+                .replace("__DUET_PASS__", passName)
+                .replace("__DUET_REJECT__", rejectName)
+                .replace("__DUET_BRIDGE__", bridgeName)
+                .replace("__DUET_ERROR_BRIDGE__", errorBridgeName)
+            injectAtDocumentStart(hookScript, setOf(siteOrigin))
+
+            val captureScript = "((${asset("dualeo_pages.js")})(window.$passName, window.$rejectName));"
+            onPageFinished { evaluateJs(captureScript) }
+
+            // Fallback for the http urls the site's decoder emits
+            withNativeWebView {
+                it.settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            }
+            loadUrl(chapterUrl)
+        }.let { payload ->
+            val result = payload.parseAs<CaptureResult>()
+            result.pages
+        }
+    }
+
+    private fun asset(name: String) = javaClass.getResource("/assets/$name")!!.readText()
+
+    private fun randomName() = (1..(10..20).random())
+        .map { (('a'..'z') + ('A'..'Z')).random() }
+        .joinToString("")
 
     override val supportsFilterFetching get() = true
 
@@ -180,4 +236,12 @@ abstract class DuaLeoTruyen : KeiSource() {
 
     private val dateFormat = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
     private val dateZone = ZoneId.of("Asia/Ho_Chi_Minh")
+
+    private val pageCaptures = LinkedHashMap<String, List<String>>(11, 0.75f, true)
+    private val captureMutex = Mutex()
+
+    @Serializable
+    private class CaptureResult(
+        val pages: List<String>,
+    )
 }
