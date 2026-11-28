@@ -53,6 +53,7 @@ import okhttp3.RequestBody
 import okhttp3.Response
 import java.io.IOException
 import java.time.LocalDate
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
@@ -67,7 +68,9 @@ abstract class Jinmantiantang :
     override fun OkHttpClient.Builder.configureClient() = apply {
         addInterceptor(ScrambledImageInterceptor)
         addInterceptor(::dropFailedApiHost)
-        rateLimit(3, 2.seconds) { it.host == apiHost }
+        rateLimit(3, 2.seconds) { url ->
+            apiServer.get()?.candidates?.any { it.equals(url.host, ignoreCase = true) } == true
+        }
     }
 
     override suspend fun getPopularManga(page: Int): MangasPage {
@@ -82,8 +85,24 @@ abstract class Jinmantiantang :
     override suspend fun getLatestUpdates(page: Int): MangasPage = albumList(apiUrl("categories/filter", "page" to "$page", "c" to "0", "o" to "mr"))
 
     private suspend fun albumList(url: HttpUrl): MangasPage {
-        val list = apiGet<AlbumListDto>(url)
-        val mangas = list.content.map { it.toSManga(coverHost) }.filterGenre()
+        val initial = apiServer.get()
+        val (list, host) =
+            requestCatalogue(url, {
+                forgetCatalogueHost(it.host)
+                apiServer.catalogueAlternate(it, initial)
+            }) { target ->
+                val timestamp = timestamp()
+                val response = client.get(target, apiHeaders(timestamp, token = null), Fetch.XHR, ensureSuccess = false)
+                CatalogueReply(response) { it.decode<AlbumListDto>(timestamp) to target.host }
+            }
+        val confirmed = apiServer.get()?.takeIf { it.host == host }
+        confirmed?.cacheValue(FALLBACK_SERVERS)?.let { hint ->
+            if (preferences.getString(CATALOGUE_HOST_PREF, null) != hint) {
+                preferences.edit().putString(CATALOGUE_HOST_PREF, hint).apply()
+            }
+        }
+        val cover = coverHost
+        val mangas = list.content.map { it.toSManga(cover) }.filterGenre()
         return MangasPage(mangas, list.content.size >= PAGE_SIZE)
     }
 
@@ -218,17 +237,36 @@ abstract class Jinmantiantang :
 
     private val hostMutex = Mutex()
 
-    @Volatile private var apiHost: String? = null
+    private val apiServer = AtomicReference<ApiServer?>()
+    private var checkedSavedHost = false
+
+    private val apiHost get() = apiServer.get()?.host
 
     private suspend fun apiHost(): String = apiHost ?: hostMutex.withLock {
-        apiHost ?: fetchServers().random().also { apiHost = it }
+        apiHost ?: run {
+            val saved = if (checkedSavedHost) null else preferences.getString(CATALOGUE_HOST_PREF, null)
+            checkedSavedHost = true
+            val server = restoreCatalogueServer(saved, FALLBACK_SERVERS, System.currentTimeMillis())
+                ?: fetchServers().let { ApiServer(it.random(), it) }
+            apiServer.set(server)
+            server.host
+        }
+    }
+
+    private fun forgetCatalogueHost(host: String) {
+        if (preferences.getString(CATALOGUE_HOST_PREF, null)?.substringAfter(':') == host) {
+            preferences.edit().remove(CATALOGUE_HOST_PREF).apply()
+        }
     }
 
     // An API host that stops answering is picked again from the list on the next request
     private fun dropFailedApiHost(chain: Interceptor.Chain): Response = try {
         chain.proceed(chain.request())
     } catch (e: IOException) {
-        if (!chain.call().isCanceled() && chain.request().url.host == apiHost) apiHost = null
+        val current = apiServer.get()
+        if (!chain.call().isCanceled() && chain.request().url.host == current?.host) {
+            if (apiServer.compareAndSet(current, null)) forgetCatalogueHost(current.host)
+        }
         throw e
     }
 
@@ -417,6 +455,7 @@ abstract class Jinmantiantang :
         private const val APP_VERSION = "2.1.12"
         private const val TOKEN_SECRET = "185Hcomic3PAPP7R"
         private const val SERVER_LIST_URL = "https://rup4a04-c02.tos-cn-hongkong.bytepluses.com/newsvr-2025.txt"
+        private const val CATALOGUE_HOST_PREF = "last_confirmed_catalogue_host"
         private const val SERVER_LIST_SECRET = "diosfjckwpqpdfjkvnqQjsik"
 
         // The server list on 2026-10-28
