@@ -6,17 +6,25 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.annotation.Source
+import keiyoushi.lib.webviewpatch.stripRequestedWith
 import keiyoushi.network.Fetch
 import keiyoushi.network.post
 import keiyoushi.source.KeiSource
 import keiyoushi.source.SMangaUpdate
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.runWebView
 import keiyoushi.utils.toJsonRequestBody
+import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 @Source
 abstract class Bakaloli : KeiSource() {
+
+    @Volatile
+    private var webViewReady = false
+
+    override fun Headers.Builder.configureHeaders() = set(FULL_VERSION_LIST, FULL_VERSION_LIST_VALUE)
 
     // The whole site is one folder tree (an h5ai index): every series is a folder of the root
     override suspend fun getPopularManga(page: Int) = MangasPage(series().map { it.toSManga(baseUrl) }, false)
@@ -69,11 +77,24 @@ abstract class Bakaloli : KeiSource() {
 
     // The first item is the folder itself, then its content
     private suspend fun list(href: String): List<ItemDto> {
+        prepareWebView()
         val body = ListRequestDto("get", ListItemsDto(href, 1)).toJsonRequestBody()
         return client.post("$baseUrl/", Fetch.XHR, body).parseAs<ListDto>().items
     }
 
+    private suspend fun prepareWebView() {
+        if (webViewReady) return
+        runWebView<Unit> {
+            setOriginMatchedHeader(FULL_VERSION_LIST, FULL_VERSION_LIST_VALUE, setOf(baseUrl))
+            stripRequestedWith()
+            resolve(Unit)
+        }
+        webViewReady = true
+    }
+
     companion object {
+        private const val FULL_VERSION_LIST = "Sec-CH-UA-Full-Version-List"
+        private const val FULL_VERSION_LIST_VALUE = "\"\""
         private const val ONESHOT = "Oneshot"
         private val IMAGE_EXTENSIONS = listOf(".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif")
     }
