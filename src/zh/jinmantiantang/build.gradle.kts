@@ -6,7 +6,7 @@ plugins {
 
 keiyoushi {
     name = "Jinman Tiantang"
-    versionCode = 64
+    versionCode = 65
     contentWarning = ContentWarning.NSFW
     libVersion = "1.6"
 
@@ -27,4 +27,9 @@ keiyoushi {
         path("/album/..*")
         path("/photo/..*")
     }
+}
+
+// The @Source processor only applies to the main source set.
+tasks.matching { it.name.startsWith("ksp") && it.name.contains("UnitTest") }.configureEach {
+    enabled = false
 }
