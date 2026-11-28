@@ -100,17 +100,17 @@ class Filters(
         )
 
         fun getDemographics() = arrayOf(
-            Pair("Josei", "3"),
-            Pair("Seinen", "4"),
-            Pair("Shoujo", "1"),
-            Pair("Shounen", "2"),
+            "Josei" to "3",
+            "Seinen" to "4",
+            "Shoujo" to "1",
+            "Shounen" to "2",
         )
 
         fun getTypes() = arrayOf(
-            Pair("Manga", "manga"),
-            Pair("Manhwa", "manhwa"),
-            Pair("Manhua", "manhua"),
-            Pair("Other", "other"),
+            "Manga" to "manga",
+            "Manhwa" to "manhwa",
+            "Manhua" to "manhua",
+            "Other" to "other",
         )
 
         fun getContentRatingsUpTo(maxRating: String): List<String> {
@@ -126,7 +126,7 @@ class Filters(
         ContentRatingFilter(contentRating),
         TypeFilter(selectedTypes),
         Filter.Separator(),
-        Filter.Header("Tags — comma separated"),
+        Filter.Header("Tags — comma separated, -Tag to exclude"),
         TagsFilter(),
         Filter.Header("Match: AND requires every selection, OR matches any"),
         MatchModeFilter(),
@@ -182,7 +182,6 @@ class Filters(
         UriFilter {
         override fun addToUri(builder: HttpUrl.Builder) {
             val checked = state.filter { it.state }
-            // Ignore when no explicit inclusion (default)
             if (onlyIfSome && checked.size == vals.size) return
 
             checked.forEach {
@@ -193,7 +192,6 @@ class Filters(
 
     private open class UriTriSelectOption(name: String, val value: String) : Filter.TriState(name)
 
-    // Demographics are genre terms on the site
     private class DemographicFilter(
         demographics: Array<Pair<String, String>>,
         selectedValues: Set<String>,
@@ -208,16 +206,16 @@ class Filters(
         PreferenceFilter {
         override fun addToUri(builder: HttpUrl.Builder) {
             state.filter { it.state == TriState.STATE_INCLUDE }
-                .forEach { builder.addQueryParameter("demos", it.value) }
+                .forEach { builder.addQueryParameter("demographics[]", it.value) }
             state.filter { it.state == TriState.STATE_EXCLUDE }
-                .forEach { builder.addQueryParameter("genres_ex", it.value) }
+                .forEach { builder.addQueryParameter("genres_ex[]", it.value) }
         }
     }
 
     private class TypeFilter(selectedValues: Set<String>) :
         UriMultiSelectFilter(
             "Type",
-            "types",
+            "types[]",
             getTypes(),
             selectedValues,
             true,
@@ -243,9 +241,9 @@ class Filters(
 
         override fun addToUri(builder: HttpUrl.Builder) {
             state.filter { it.state == TriState.STATE_INCLUDE }
-                .forEach { builder.addQueryParameter("genres_in", it.value) }
+                .forEach { builder.addQueryParameter("genres_in[]", it.value) }
             state.filter { it.state == TriState.STATE_EXCLUDE }
-                .forEach { builder.addQueryParameter("genres_ex", it.value) }
+                .forEach { builder.addQueryParameter("genres_ex[]", it.value) }
         }
     }
 
@@ -262,13 +260,13 @@ class Filters(
     private class StatusFilter :
         UriMultiSelectFilter(
             "Status",
-            "statuses",
+            "statuses[]",
             arrayOf(
-                Pair("Releasing", "releasing"),
-                Pair("Finished", "finished"),
-                Pair("On Hiatus", "on_hiatus"),
-                Pair("Discontinued", "discontinued"),
-                Pair("Not Yet Released", "not_yet_released"),
+                "Releasing" to "releasing",
+                "Finished" to "finished",
+                "On Hiatus" to "on_hiatus",
+                "Discontinued" to "discontinued",
+                "Not Yet Released" to "not_yet_released",
             ),
         )
 
@@ -315,11 +313,10 @@ class Filters(
             defaultValue,
         ),
         PreferenceFilter {
-        // The site reads one comma-separated content_rating
         override fun addToUri(builder: HttpUrl.Builder) {
             val ratings = getContentRatingsUpTo(CONTENT_RATING_OPTIONS[state].second)
                 .ifEmpty { getContentRatingsUpTo("pornographic") }
-            builder.addQueryParameter("content_rating", ratings.joinToString(","))
+            ratings.forEach { builder.addQueryParameter("content_rating[]", it) }
         }
     }
 
@@ -376,7 +373,7 @@ class Filters(
                 }
                 val value = if (state!!.ascending) "asc" else "desc"
 
-                builder.addQueryParameter("sort", "$order:$value")
+                builder.addQueryParameter("order[$order]", value)
             }
         }
     }
