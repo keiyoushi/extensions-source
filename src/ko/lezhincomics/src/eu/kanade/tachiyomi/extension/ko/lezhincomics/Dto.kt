@@ -7,6 +7,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.util.Locale
+import kotlin.time.Duration.Companion.hours
 
 @Serializable
 class ListDto<T>(
@@ -127,16 +128,30 @@ class ComicMetadataDto(
 @Serializable
 class EpisodeDto(
     @SerialName("name") private val key: String,
+    private val coin: Int,
     private val publishedAt: Long,
     private val freedAt: Long? = null,
+    private val openedAt: Long? = null,
     private val display: EpisodeDisplayDto,
+    private val properties: EpisodePropertiesDto,
 ) {
-    fun isFree(now: Long) = freedAt != null && freedAt <= now
+    // The site's reader rule, with its two hours of leeway on the free and open dates
+    fun isFree(now: Long) = coin == 0 ||
+        display.type == "p" ||
+        listOfNotNull(freedAt, openedAt).any { it < now + FREE_LEEWAY }
+
+    private fun lockMark(now: Long) = when {
+        isFree(now) -> null
+        properties.expired -> "⛔"
+        properties.notForSale -> "🚫"
+        freedAt != null -> "⏳"
+        else -> "🔒"
+    }
 
     fun toSChapter(alias: String, now: Long) = SChapter.create().apply {
         url = "$alias/$key"
         name = buildString {
-            if (!isFree(now)) append("🔒 ")
+            lockMark(now)?.let { append(it).append(' ') }
             val title = display.title?.ifEmpty { null }
             when {
                 title == null -> append(display.displayName)
@@ -145,7 +160,7 @@ class EpisodeDto(
             }
         }
         // The site's episode list shows when an episode became free
-        date_upload = freedAt?.takeIf { it <= now } ?: publishedAt
+        date_upload = freedAt?.takeIf { it < now + FREE_LEEWAY } ?: publishedAt
         // Regular episodes ("g"); prologues, notices, epilogues and extras have no number
         if (display.type == "g") key.toFloatOrNull()?.let { chapter_number = it }
     }
@@ -156,6 +171,14 @@ class EpisodeDto(
         return filterNot(Char::isWhitespace).removeSuffix("화").trimStart('0') == displayName.trimStart('0')
     }
 }
+
+private val FREE_LEEWAY = 2.hours.inWholeMilliseconds
+
+@Serializable
+class EpisodePropertiesDto(
+    val expired: Boolean = false,
+    val notForSale: Boolean = false,
+)
 
 @Serializable
 class EpisodeDisplayDto(

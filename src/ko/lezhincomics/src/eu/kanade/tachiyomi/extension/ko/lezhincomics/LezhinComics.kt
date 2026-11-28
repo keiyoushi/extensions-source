@@ -85,7 +85,7 @@ abstract class LezhinComics :
     private val showAdult get() = preferences.getBoolean(PREF_SHOW_ADULT, false)
 
     // The site's client asks for adult series with these headers once adult mode is on
-    private val listHeaders get() = headers.newBuilder().apply {
+    private val listHeaders get() = headersBuilder().apply {
         if (showAdult) {
             set("x-lz-adult", "1")
             set("x-lz-allowadult", "true")
@@ -302,8 +302,8 @@ abstract class LezhinComics :
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_SHOW_LOCKED
-            title = "유료 회차 표시"
-            summary = "구매가 필요한 회차를 🔒 표시와 함께 목록에 보여줍니다"
+            title = "잠긴 회차 표시"
+            summary = "잠긴 회차도 목록에 보여줍니다: 🔒 유료, ⏳ 무료 예정, 🚫 판매 중지, ⛔ 만료"
             setDefaultValue(false)
         }.also(screen::addPreference)
         SwitchPreferenceCompat(screen.context).apply {
