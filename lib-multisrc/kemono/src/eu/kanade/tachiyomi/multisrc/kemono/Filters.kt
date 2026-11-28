@@ -1,9 +1,7 @@
-package eu.kanade.tachiyomi.extension.all.pawchive
+package eu.kanade.tachiyomi.multisrc.kemono
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-
-private val typesList = listOf("Patreon", "Pixiv Fanbox")
 
 private val sortsList: List<Pair<String, String>> = listOf(
     "Popularity" to "pop",
@@ -34,16 +32,16 @@ class SortFilter(
     fun getValue() = vals[state!!.index].second
 }
 
-fun getLatestUpdatesFilterList(): FilterList = FilterList(
+fun getLatestUpdatesFilterList(types: List<String>): FilterList = FilterList(
     SearchModeFilter(),
     SortFilter("Sort by", Filter.Sort.Selection(2, false), sortsList),
-    TypeFilter("Types", typesList),
+    TypeFilter("Types", types),
     FavoritesFilter(),
 )
 
-fun getDefaultFilterList(): FilterList = FilterList(
+fun getDefaultFilterList(types: List<String>): FilterList = FilterList(
     SearchModeFilter(),
     SortFilter("Sort by", Filter.Sort.Selection(0, false), sortsList),
-    TypeFilter("Types", typesList),
+    TypeFilter("Types", types),
     FavoritesFilter(),
 )
