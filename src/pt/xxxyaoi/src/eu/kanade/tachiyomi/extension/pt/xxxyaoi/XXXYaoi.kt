@@ -165,8 +165,8 @@ abstract class XXXYaoi : KeiSource() {
     override suspend fun getPageList(chapter: SChapter): List<Page> {
         val chapterUrl = getChapterUrl(chapter)
         val seriesUrl = chapterUrl.toHttpUrl().resolve("..")!!.toString()
-        val read = sitePages.read(chapterUrl, "reader.js", carrySession = true, referer = seriesUrl)
-            .let { if (it.document.reload) sitePages.read(chapterUrl, "reader.js", carrySession = true, referer = seriesUrl) else it }
+        val load = suspend { sitePages.read(chapterUrl, "reader.js", SitePages.IMAGE_START_SIZE.toString(), carrySession = true, referer = seriesUrl) }
+        val read = load().let { if (it.document.reload) load() else it }
         val reader = read.document
         if (reader.pages.isEmpty()) {
             val document = reader.html.asJsoup(reader.url)
@@ -174,9 +174,10 @@ abstract class XXXYaoi : KeiSource() {
             if (document.selectFirst("iframe[src*=challenges.cloudflare.com], input[name=cf-turnstile-response]:not([value~=.])") != null) {
                 throw IOException(SitePages.SOLVE_IN_WEBVIEW)
             }
-            throw IOException("As páginas do capítulo não carregaram, tente novamente")
+            throw IOException(PAGES_NOT_LOADED)
         }
-        return reader.pages.mapIndexed { index, imageUrl ->
+        val imageUrls = read.pageUrls() ?: throw IOException(PAGES_NOT_LOADED)
+        return imageUrls.mapIndexed { index, imageUrl ->
             val siteHeaders = read.imageHeaders[imageUrl].orEmpty().toJsonString()
             Page(index, url = reader.url.toHttpUrl().newBuilder().fragment(siteHeaders).build().toString(), imageUrl = imageUrl)
         }
@@ -248,6 +249,7 @@ abstract class XXXYaoi : KeiSource() {
     }
 
     companion object {
+        private const val PAGES_NOT_LOADED = "As páginas do capítulo não carregaram, tente novamente"
         private const val DEFAULT_ORDER = "latest"
         private val SERIES_PATH = Regex("""^/bl/[^/]+/$""")
         private val RESIZED_REGEX = Regex("""-\d+x\d+(?=\.\w+$)""")

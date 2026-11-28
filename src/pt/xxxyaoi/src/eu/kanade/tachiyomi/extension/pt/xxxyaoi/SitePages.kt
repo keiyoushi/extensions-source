@@ -8,17 +8,20 @@ import keiyoushi.utils.WebViewTimeoutException
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.runWebView
+import keiyoushi.utils.sha256
 import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import java.io.IOException
-import java.io.SequenceInputStream
 import java.security.SecureRandom
+import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.time.Duration.Companion.minutes
@@ -26,7 +29,21 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
-internal class SiteRead(val document: PageDocument, val imageHeaders: Map<String, Map<String, String>>)
+internal class SiteRead(
+    val document: PageDocument,
+    val imageHeaders: Map<String, Map<String, String>>,
+    private val imageStarts: Map<String, ByteArray>,
+) {
+
+    /** The image urls of [document]'s pages, in page order. */
+    fun pageUrls(): List<String>? {
+        val unused = synchronized(imageStarts) { LinkedHashMap(imageStarts) }
+        return document.pages.map { page ->
+            val url = unused.entries.firstOrNull { (_, start) -> start.copyOf(page.length).sha256().toHexString() == page.hash }?.key ?: return null
+            url.also(unused::remove)
+        }
+    }
+}
 
 internal class SitePages(
     private val baseUrl: () -> String,
@@ -35,6 +52,8 @@ internal class SitePages(
 ) {
 
     private val mutex = Mutex()
+
+    private val imageClient = client.newBuilder().addInterceptor(::recordImageStart).build()
 
     private var lastLoad: TimeMark? = null
 
@@ -63,6 +82,7 @@ internal class SitePages(
         var shown = false
         val posts = CopyOnWriteArrayList<String>()
         val imageHeaders = ConcurrentHashMap<String, Map<String, String>>()
+        val imageStarts = Collections.synchronizedMap(LinkedHashMap<String, ByteArray>())
 
         val page = try {
             runWebView<PageRead>(timeout = TIMEOUT) {
@@ -79,8 +99,10 @@ internal class SitePages(
                         request.method == "POST" && requestHost == host -> posts += request.url.toString()
                     }
                     if (requestHost == host && request.url.path.orEmpty().contains(IMAGE_PATH)) {
-                        imageHeaders[request.url.toString()] = request.requestHeaders.filterKeys { it.startsWith("X-", ignoreCase = true) }
-                        proxyRequest(request, client)?.apply { data = data?.let { SequenceInputStream(it, (request.url.toString().encodeToByteArray() + 0).inputStream()) } }
+                        val imageUrl = request.url.toString()
+                        imageHeaders[imageUrl] = request.requestHeaders.filterKeys { it.startsWith("X-", ignoreCase = true) }
+                        imageStarts.putIfAbsent(imageUrl, ByteArray(0))
+                        proxyRequest(request, imageClient) { tag(ImageStart::class.java, ImageStart { imageStarts[imageUrl] = it }) }
                     } else {
                         null
                     }
@@ -124,12 +146,19 @@ internal class SitePages(
         }
         val result = page.result!!
         if (carrySession) readerSession = result.session
-        return SiteRead(result, imageHeaders)
+        return SiteRead(result, imageHeaders, imageStarts)
     }
 
     private fun PageRead.waitsFor(posts: List<String>): Boolean = posts.groupingBy { it }.eachCount().any { (url, started) ->
         val ended = finished.filter { it.url == url }
         ended.size < started || ended.any { it.ago < SETTLE_MS }
+    }
+
+    private fun recordImageStart(chain: Interceptor.Chain): Response {
+        val record = chain.request().tag(ImageStart::class.java) ?: return chain.proceed(chain.request())
+        val response = chain.proceed(chain.request())
+        if (response.isSuccessful) record.onStart(response.peekBody(IMAGE_START_SIZE.toLong()).bytes())
+        return response
     }
 
     private fun randomName() = "k" + ByteArray(8).also(SecureRandom()::nextBytes).toHexString()
@@ -138,6 +167,8 @@ internal class SitePages(
 
     companion object {
         const val SOLVE_IN_WEBVIEW = "Abra o WebView para passar pela verificação do site"
+
+        const val IMAGE_START_SIZE = 16384
 
         private const val IMAGE_PATH = "/WP-manga/data/"
 
@@ -150,3 +181,5 @@ internal class SitePages(
         private const val SETTLE_MS = 500
     }
 }
+
+private class ImageStart(val onStart: (ByteArray) -> Unit)
