@@ -94,6 +94,12 @@ internal val readingOptions: Array<Pair<String, String?>> = arrayOf(
     "Page" to "PAGE",
 )
 
+internal val orientationOptions: Array<Pair<String, String?>> = arrayOf(
+    "All" to null,
+    "BL" to "BL",
+    "Straight" to "ST",
+)
+
 internal val seriesTagOptions: Array<Pair<String, String?>> = arrayOf(
     "All" to null,
     "ST8" to "ST8",
